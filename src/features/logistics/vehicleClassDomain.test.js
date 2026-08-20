@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONSUMO_REFERENCIA,
   VEHICLE_CLASSES,
   aceitaUnidadeDeCobranca,
   cargaCabeNaClasse,
   classeEletrificavel,
   cnhExigida,
+  consumoReferencia,
   energiaViavelNaClasse,
   frotaPorClasse,
   inferClassByPayload,
@@ -233,6 +235,67 @@ describe("retrato da frota por classe", () => {
     expect(frotaPorClasse([{ vehicleClass: "carreta", energyType: "diesel" }]).percentualEletrificado)
       .toBeNull();
     expect(frotaPorClasse([]).percentualEletrificado).toBeNull();
+  });
+});
+
+describe("consumo de referência por classe", () => {
+  it("cada classe do VEHICLE_CLASSES tem entrada no CONSUMO_REFERENCIA", () => {
+    for (const classe of VEHICLE_CLASSES) {
+      const ref = consumoReferencia(classe.id);
+      expect(ref).not.toBeNull();
+      expect(ref.convencionalKmPorL).toBeGreaterThan(0);
+      expect(ref.convencionalKgCO2ePorL).toBeGreaterThan(0);
+      expect(ref.convencionalCombustivel).toBeTruthy();
+      expect(ref.fonteConvencional).toBeTruthy();
+    }
+  });
+
+  it("classes eletrificáveis têm consumo elétrico; as demais têm null", () => {
+    for (const classe of VEHICLE_CLASSES) {
+      const ref = consumoReferencia(classe.id);
+      if (classeEletrificavel(classe.id)) {
+        expect(ref.eletricoKwhPorKm).toBeGreaterThan(0);
+        expect(ref.fonteEletrico).toBeTruthy();
+      } else {
+        expect(ref.eletricoKwhPorKm).toBeNull();
+      }
+    }
+  });
+
+  it("o consumo elétrico cresce com o porte: moto < van < vuc", () => {
+    const moto = consumoReferencia("moto").eletricoKwhPorKm;
+    const utilitario = consumoReferencia("utilitario").eletricoKwhPorKm;
+    const van = consumoReferencia("van").eletricoKwhPorKm;
+    const vuc = consumoReferencia("vuc").eletricoKwhPorKm;
+    expect(moto).toBeLessThan(utilitario);
+    expect(utilitario).toBeLessThan(van);
+    expect(van).toBeLessThan(vuc);
+  });
+
+  it("o consumo convencional cai com o porte: moto > van > carreta em km/L", () => {
+    const moto = consumoReferencia("moto").convencionalKmPorL;
+    const van = consumoReferencia("van").convencionalKmPorL;
+    const carreta = consumoReferencia("carreta").convencionalKmPorL;
+    const rodotrem = consumoReferencia("rodotrem").convencionalKmPorL;
+    expect(moto).toBeGreaterThan(van);
+    expect(van).toBeGreaterThan(carreta);
+    expect(carreta).toBeGreaterThan(rodotrem);
+  });
+
+  it("moto usa gasolina E27 como referência, não diesel", () => {
+    const moto = consumoReferencia("moto");
+    expect(moto.convencionalCombustivel).toBe("gasolina_e27");
+    expect(moto.convencionalKgCO2ePorL).toBe(2.12);
+  });
+
+  it("van e carreta usam diesel B14 como referência", () => {
+    expect(consumoReferencia("van").convencionalCombustivel).toBe("diesel_b14");
+    expect(consumoReferencia("carreta").convencionalCombustivel).toBe("diesel_b14");
+  });
+
+  it("classe inexistente devolve null", () => {
+    expect(consumoReferencia("inventada")).toBeNull();
+    expect(consumoReferencia("")).toBeNull();
   });
 });
 

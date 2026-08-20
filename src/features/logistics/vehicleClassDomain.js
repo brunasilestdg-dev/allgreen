@@ -376,6 +376,124 @@ export const frotaPorClasse = (veiculos = []) => {
 };
 
 // ---------------------------------------------------------------------------
+// Consumo e emissão de referência por classe
+// ---------------------------------------------------------------------------
+//
+// Cada classe tem dois lados: quanto um veículo convencional (diesel ou
+// gasolina) consome nesta faixa, e quanto um elétrico consome. É isso que
+// permite calcular o CO2 evitado por classe, em vez de usar um número único
+// para a frota inteira — que subestimaria o ganho da moto elétrica e
+// superestimaria o da van.
+//
+// `eletricoKwhPorKm`: null quando a classe não tem versão elétrica comercial
+// no Brasil. Não é zero: zero diria "não consome nada", e null diz "não se
+// aplica".
+//
+// `convencionalKmPorL`: consumo real em operação de carga urbana ou
+// rodoviária, conforme a classe.
+//
+// `convencionalKgCO2ePorL`: fator de combustão do combustível de referência
+// daquela classe. Para moto é gasolina E27; para todo o resto é diesel B14.
+//
+// Fontes de consumo documentadas para frota de carga no Brasil. Os valores
+// são médias operacionais, não números de fábrica — fábrica mede em bancada,
+// operação mede no trânsito de São Paulo.
+
+export const CONSUMO_REFERENCIA = Object.freeze({
+  moto: {
+    eletricoKwhPorKm: 0.04,
+    convencionalKmPorL: 30,
+    convencionalKgCO2ePorL: 2.12,
+    convencionalCombustivel: "gasolina_e27",
+    fonteEletrico: "Voltz EVS — consumo médio urbano em operação moto-frete SP",
+    fonteConvencional: "Honda CG 160 Cargo — média documentada em moto-frete urbano",
+  },
+  utilitario: {
+    eletricoKwhPorKm: 0.15,
+    convencionalKmPorL: 11,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: "Renault Kangoo Z.E. / FIAT e-Fiorino — média urbana SP",
+    fonteConvencional: "FIAT Fiorino diesel — consumo médio em operação urbana de entrega",
+  },
+  van: {
+    eletricoKwhPorKm: 0.30,
+    convencionalKmPorL: 9,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: "Mercedes eSprinter / IVECO eDaily — média urbana em rota de entrega",
+    fonteConvencional: "Mercedes Sprinter 314 CDI — consumo urbano documentado",
+  },
+  vuc: {
+    eletricoKwhPorKm: 0.47,
+    convencionalKmPorL: 7,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: "BYD eT5 / JAC iEV1200T — média urbana com carga",
+    fonteConvencional: "VUC diesel — média de frota em distribuição urbana SP",
+  },
+  tres_quartos: {
+    eletricoKwhPorKm: 0.65,
+    convencionalKmPorL: 6,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: "Mercedes eActros 300 light — estimativa para 3/4 elétrico",
+    fonteConvencional: "Caminhão 3/4 diesel — média de frota em distribuição urbana",
+  },
+  toco: {
+    eletricoKwhPorKm: null,
+    convencionalKmPorL: 4.5,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: null,
+    fonteConvencional: "Toco diesel 2 eixos — média de frota em carga seca regional",
+  },
+  truck: {
+    eletricoKwhPorKm: null,
+    convencionalKmPorL: 3.5,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: null,
+    fonteConvencional: "Truck diesel 3 eixos — consumo médio em transferência entre CDs",
+  },
+  bitruck: {
+    eletricoKwhPorKm: null,
+    convencionalKmPorL: 3,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: null,
+    fonteConvencional: "Bitruck diesel 4 eixos — consumo típico rodoviário com carga",
+  },
+  carreta: {
+    eletricoKwhPorKm: null,
+    convencionalKmPorL: 2.8,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: null,
+    fonteConvencional: "Carreta diesel — consumo médio rodoviário BR com semirreboque",
+  },
+  bitrem: {
+    eletricoKwhPorKm: null,
+    convencionalKmPorL: 2.3,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: null,
+    fonteConvencional: "Bitrem diesel — consumo médio de longa distância com duplo reboque",
+  },
+  rodotrem: {
+    eletricoKwhPorKm: null,
+    convencionalKmPorL: 2,
+    convencionalKgCO2ePorL: 2.68,
+    convencionalCombustivel: "diesel_b14",
+    fonteEletrico: null,
+    fonteConvencional: "Rodotrem diesel — consumo médio com AET em rota autorizada",
+  },
+});
+
+export const consumoReferencia = (classeId) =>
+  CONSUMO_REFERENCIA[texto(classeId).toLowerCase()] || null;
+
+// ---------------------------------------------------------------------------
 // Validação
 // ---------------------------------------------------------------------------
 

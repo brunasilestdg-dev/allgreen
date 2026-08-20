@@ -622,13 +622,16 @@ export const getProductPricingBlueprint = (productId) =>
     executiveOutputs: ["preço recomendado", "margem", "custo por unidade", "impacto ESG"],
   };
 
+import { consumoReferencia } from "./vehicleClassDomain.js";
+
 export const DEFAULT_ENVIRONMENTAL_FACTORS = {
-  methodologyVersion: "tdg-env-v1",
+  methodologyVersion: "tdg-env-v2",
   dieselKgCo2ePerLiter: 2.68,
+  gasolineKgCo2ePerLiter: 2.12,
   dieselKmPerLiter: 4.2,
-  electricKgCo2ePerKwh: 0.06,
-  electricKwhPerKm: 0.22,
-  treeKgCo2eYear: 21,
+  electricKgCo2ePerKwh: 0.0385,
+  electricKwhPerKm: 0.30,
+  treeKgCo2eYear: 22,
   carKgCo2eYear: 4600,
   flightKgCo2e: 90,
   homeKwhMonth: 152,
@@ -675,7 +678,18 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
   const helpers = Math.max(0, n(inputs.helpers || inputs.ajudantes || 0));
   const distanceTotal = distanceKm * trips;
   const hours = Math.max(0, n(inputs.hoursPerDay));
-  const electricKwhPerKm = n(inputs.electricKwhPerKm || a.electricKwhPerKm || DEFAULT_ENVIRONMENTAL_FACTORS.electricKwhPerKm);
+  // A classe do veículo entra ANTES da premissa genérica: `a.electricKwhPerKm`
+  // já nasce com 0,30 por padrão, então deixá-la na frente faria uma moto
+  // consumir como uma van e a diferenciação por classe nunca valeria. Informar
+  // `vehicleClass` é escolha explícita de quem calcula — só a entrada direta
+  // manda mais que ela.
+  const classRef = inputs.vehicleClass ? consumoReferencia(inputs.vehicleClass) : null;
+  const electricKwhPerKm = n(
+    inputs.electricKwhPerKm
+    || classRef?.eletricoKwhPorKm
+    || a.electricKwhPerKm
+    || DEFAULT_ENVIRONMENTAL_FACTORS.electricKwhPerKm,
+  );
   const energy = distanceTotal * (n(a.energyCostPerKm) > 0
     ? n(a.energyCostPerKm)
     : electricKwhPerKm * n(a.energyCostPerKwh));
@@ -736,10 +750,14 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
 
 export const calculateEnvironmentalImpact = (inputs = {}, factors = {}) => {
   const f = { ...DEFAULT_ENVIRONMENTAL_FACTORS, ...factors };
+  const classRef = inputs.vehicleClass ? consumoReferencia(inputs.vehicleClass) : null;
   const distanceKm = Math.max(0, n(inputs.distanceKm || inputs.kmPerRoute) * Math.max(1, n(inputs.tripsPerMonth || inputs.frequencyPerMonth || inputs.routesPerDay * inputs.daysPerMonth || 1)));
-  const referenceLiters = distanceKm / Math.max(0.1, n(inputs.referenceKmPerLiter || f.dieselKmPerLiter));
-  const referenceKg = referenceLiters * f.dieselKgCo2ePerLiter;
-  const electricKwh = n(inputs.energyKwh) || distanceKm * f.electricKwhPerKm;
+  const refKmPerL = n(inputs.referenceKmPerLiter || (classRef?.convencionalKmPorL) || f.dieselKmPerLiter);
+  const refKgCO2ePerL = classRef?.convencionalKgCO2ePorL ?? f.dieselKgCo2ePerLiter;
+  const referenceLiters = distanceKm / Math.max(0.1, refKmPerL);
+  const referenceKg = referenceLiters * refKgCO2ePerL;
+  const evKwhPerKm = classRef?.eletricoKwhPorKm ?? f.electricKwhPerKm;
+  const electricKwh = n(inputs.energyKwh) || distanceKm * evKwhPerKm;
   const actualKg = electricKwh * f.electricKgCo2ePerKwh;
   const avoidedKg = Math.max(0, referenceKg - actualKg);
   const packages = Math.max(0, n(inputs.packages || inputs.deliveries));
