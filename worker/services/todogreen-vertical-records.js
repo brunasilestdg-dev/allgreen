@@ -39,6 +39,10 @@ import {
   validateParty,
   validateWarehouse,
 } from "../../src/features/logistics/erpCoreDomain.js";
+import {
+  bloqueioPorFechamento,
+  validateBankAccount,
+} from "../../src/features/logistics/treasuryDomain.js";
 import { doBanco as pedidoDoBanco } from "./todogreen-deal-desk.js";
 import { liberacaoDaProposta } from "../../src/features/logistics/dealDeskDomain.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
@@ -412,6 +416,15 @@ const COLECOES = {
       competenciaEm: row.competence_date || "",
       contratoId: row.contract_id || "",
       statusFinanceiro: row.invoice_status || "pending",
+      // Eixos do relatório (migração 0056). As colunas de texto `categoria` e
+      // `centroCusto` continuam valendo como detalhe livre; estas apontam para o
+      // cadastro e é por elas que o relatório soma sem depender de grafia.
+      accountId: row.account_id || "",
+      costCenterId: row.cost_center_id || "",
+      bankAccountId: row.bank_account_id || "",
+      multaPercent: row.late_fee_percent || 0,
+      jurosMesPercent: row.late_interest_month_percent || 0,
+      conciliadoEm: row.reconciled_at || "",
       revision: row.revision,
       criadoEm: row.created_at,
       atualizadoEm: row.updated_at,
@@ -438,6 +451,13 @@ const COLECOES = {
       contract_id: texto(corpo.contratoId, 120),
       invoice_status: ["pending", "partial", "paid", "overdue", "cancelled"].includes(texto(corpo.statusFinanceiro, 40))
         ? texto(corpo.statusFinanceiro, 40) : "pending",
+      account_id: texto(corpo.accountId, 120),
+      cost_center_id: texto(corpo.costCenterId, 120),
+      bank_account_id: texto(corpo.bankAccountId, 120),
+      // Percentual negativo não gera crédito; o encargo do atraso só pode
+      // aumentar o que se deve.
+      late_fee_percent: Math.max(0, numero(corpo.multaPercent)),
+      late_interest_month_percent: Math.max(0, numero(corpo.jurosMesPercent)),
       fields_json: JSON.stringify(objeto(corpo.campos)),
     }),
     exigido: (corpo) =>
@@ -655,6 +675,50 @@ const COLECOES = {
     }),
     exigido: (corpo) => validateCostCenter({ name: corpo.nome }),
   },
+
+  // Conta bancária é CRUD puro; o que tem regra — importar extrato, conciliar,
+  // fechar período — mora em `todogreen-treasury.js`. O saldo NÃO fica aqui:
+  // `opening_balance` é o saldo inicial (premissa), e o saldo de hoje é ele mais
+  // o que foi conciliado, calculado por `saldoDaConta`.
+  bankAccounts: {
+    tabela: "todogreen_bank_accounts",
+    permissao: "finance:manage",
+    escopoDeCarteira: false,
+    ordem: "name ASC",
+    daLinha: (row) => ({
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      bancoCodigo: row.bank_code,
+      agencia: row.branch,
+      conta: row.account_number,
+      chavePix: row.pix_key,
+      saldoInicial: row.opening_balance,
+      aberturaEm: row.opening_date || "",
+      situacao: row.status,
+      campos: parse(row.fields_json, {}),
+      revision: row.revision,
+      criadoEm: row.created_at,
+      atualizadoEm: row.updated_at,
+    }),
+    colunas: (corpo) => ({
+      name: texto(corpo.name ?? corpo.nome, 200),
+      kind: ["corrente", "poupanca", "caixa", "aplicacao", "cartao"].includes(texto(corpo.kind))
+        ? texto(corpo.kind)
+        : "corrente",
+      bank_code: texto(corpo.bancoCodigo, 20),
+      branch: texto(corpo.agencia, 20),
+      account_number: texto(corpo.conta, 40),
+      pix_key: texto(corpo.chavePix, 200),
+      // Saldo inicial pode ser negativo: conta com limite usado começa no
+      // vermelho, e forçar zero mentiria sobre a posição de caixa.
+      opening_balance: numero(corpo.saldoInicial),
+      opening_date: texto(corpo.aberturaEm, 20) || null,
+      status: texto(corpo.situacao, 40) || "ativa",
+      fields_json: JSON.stringify(objeto(corpo.campos)),
+    }),
+    exigido: (corpo) => validateBankAccount({ name: corpo.name ?? corpo.nome, kind: corpo.kind }),
+  },
 };
 
 const nomeDaColecao = (colecao) =>
@@ -843,12 +907,37 @@ const proposalLiberada = async (env, access, cenarioId) => {
   return liberacaoDaProposta(cenarioId, (results || []).map(pedidoDoBanco));
 };
 
+// A trava do fechamento de período (migração 0056). Um mês fechado não aceita
+// lançamento novo, alteração nem arquivamento — é o que faz um resultado
+// publicado continuar valendo. Sem isso, o resultado de janeiro poderia mudar em
+// dezembro e nenhum relatório emitido antes continuaria verdadeiro.
+//
+// Vale para as DUAS competências numa alteração: a de onde o lançamento está e a
+// para onde ele iria. Checar só uma permitiria tirar um lançamento de um mês
+// fechado (mudando o resultado dele) ou empurrar um lançamento para dentro dele.
+const bloqueioDeCompetencia = async (env, access, ...entradas) => {
+  const { results } = await env.DB.prepare(
+    `SELECT reference_month AS referenceMonth, status FROM todogreen_financial_periods
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND status = 'fechado'`,
+  ).bind(TENANT_ID, access.ownerId).all();
+  const periodos = results || [];
+  if (!periodos.length) return "";
+  for (const entrada of entradas) {
+    if (!entrada) continue;
+    const bloqueio = bloqueioPorFechamento(entrada, periodos);
+    if (bloqueio) return bloqueio;
+  }
+  return "";
+};
+
 const criar = async (env, colecao, access, user, corpo) => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);
   if (colecao === COLECOES.financial) {
     const erroFinanceiro = validarFinanceiro(corpo);
     if (erroFinanceiro) return json({ error: erroFinanceiro }, 400);
+    const travado = await bloqueioDeCompetencia(env, access, corpo);
+    if (travado) return json({ error: travado }, 409);
   }
 
   if (colecao === COLECOES.proposals) {
@@ -952,6 +1041,9 @@ const atualizar = async (env, colecao, access, user, id, corpo) => {
   if (colecao === COLECOES.financial) {
     const erroFinanceiro = validarFinanceiro(corpo, atual);
     if (erroFinanceiro) return json({ error: erroFinanceiro }, 400);
+    // As duas competências: de onde sai e para onde vai.
+    const travado = await bloqueioDeCompetencia(env, access, colecao.daLinha(atual), proximo);
+    if (travado) return json({ error: travado }, 409);
   }
 
   if (colecao === COLECOES.operations) {
@@ -1010,6 +1102,13 @@ const arquivar = async (env, colecao, access, user, id) => {
     `SELECT * FROM ${colecao.tabela}
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(id, TENANT_ID, access.ownerId).first();
+
+  // Arquivar um lançamento de mês fechado mudaria um resultado já publicado.
+  if (colecao === COLECOES.financial && atual) {
+    const travado = await bloqueioDeCompetencia(env, access, colecao.daLinha(atual));
+    if (travado) return json({ error: travado }, 409);
+  }
+
   const agora = new Date().toISOString();
   // Arquiva em vez de apagar: o histórico é a única defesa quando alguém
   // pergunta, meses depois, de onde veio um número.

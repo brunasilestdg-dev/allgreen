@@ -608,6 +608,7 @@ describe("a vertical inteira numa chamada só", () => {
     const corpo = await r.json();
     expect(Object.keys(corpo).sort()).toEqual([
       "accounts",
+      "bankAccounts",
       "contracts",
       "costCenters",
       "financial",

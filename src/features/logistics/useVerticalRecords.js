@@ -29,6 +29,7 @@ const VAZIO = Object.freeze({
   parties: [],
   accounts: [],
   costCenters: [],
+  bankAccounts: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {
