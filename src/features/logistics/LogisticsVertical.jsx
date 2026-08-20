@@ -29,6 +29,7 @@ import {
   Network,
   PackageCheck,
   Plus,
+  ReceiptText,
   Route,
   Search,
   Settings,
@@ -94,6 +95,7 @@ const TrackerPage = lazy(() => import("./pages/TrackerPage.jsx"));
 const StockPage = lazy(() => import("./pages/StockPage.jsx"));
 const ErpRegistriesPage = lazy(() => import("./pages/ErpRegistriesPage.jsx"));
 const PurchasingPage = lazy(() => import("./pages/PurchasingPage.jsx"));
+const FiscalPage = lazy(() => import("./pages/FiscalPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
 const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage.jsx"));
@@ -139,6 +141,7 @@ const iconMap = {
   LockKeyhole,
   Network,
   PackageCheck,
+  ReceiptText,
   Route,
   Settings,
   ShieldCheck,
@@ -253,6 +256,10 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "juridico",
   "indicadores",
   "administracao",
+  "fiscal",
+  "cte",
+  "mdfe",
+  "nfse",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -472,6 +479,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     description: "Requisições, aprovações, pedidos e recebimentos.",
   },
+  fiscal: {
+    title: "Fiscal — CT-e, MDF-e e NFS-e",
+    navLabel: "Fiscal",
+    route: "/todogreen/fiscal",
+    area: "financeiro",
+    status: "functional",
+    permission: "fiscal:manage",
+    description: "Documentos fiscais da transportadora com impostos calculados, XML e DACTE gerados localmente. A transmissão à SEFAZ aguarda o certificado digital.",
+  },
   receita: {
     title: "Receita, forecast e faturamento",
     navLabel: "Receita",
@@ -680,7 +696,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes", "central-trabalho"] },
   { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
-  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes"] },
+  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "fiscal"] },
   { id: "dp", label: "DP", route: "/todogreen/dp", pages: ["dp-rh"] },
   { id: "rh", label: "RH", route: "/todogreen/rh", pages: ["rh", "escalas"] },
   { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
@@ -2369,6 +2385,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       )}
       {page === "estoque" && <Suspense fallback={<section className="tdg-panel">Carregando estoque...</section>}><StockPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
+      {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}

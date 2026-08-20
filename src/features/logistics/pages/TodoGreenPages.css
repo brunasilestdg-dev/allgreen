@@ -1175,4 +1175,62 @@
   .df-title-actions button {
     width: 100%;
   }
+/* ── Fiscal: CT-e, MDF-e e NFS-e ─────────────────────────────
+   A prévia de impostos mostra o cálculo antes de gravar; os filtros por tipo e
+   os botões de transição do documento reusam o visual de `.tdg-action`. */
+.tdg-fiscal-previa {
+  background: var(--tdg-bg);
+  border: 1px solid var(--tdg-line);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.tdg-fiscal-previa ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.tdg-fiscal-previa li {
+  color: var(--tdg-ink);
+  padding: 3px 0;
+}
+
+.tdg-fiscal-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tdg-fiscal-filtros .tdg-action.ativo {
+  background: var(--tdg-green);
+  color: #fff;
+}
+
+.tdg-fiscal-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tdg-fiscal-acoes button {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  color: var(--tdg-ink);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.tdg-fiscal-acoes button:hover {
+  border-color: var(--tdg-green);
+}
+
+.tdg-fiscal-nota {
+  color: var(--tdg-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 6px 2px 0;
 }

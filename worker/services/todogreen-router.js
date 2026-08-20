@@ -20,6 +20,7 @@ import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
 import { handleTodoGreenServiceOrders } from "./todogreen-service-orders.js";
+import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenTms } from "./todogreen-tms.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
@@ -190,6 +191,18 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenServiceOrders(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Fiscal da transportadora: CT-e (modelo 57), MDF-e (modelo 58) e NFS-e — não
+  // NF-e, que é de quem vende mercadoria. O documento tem ciclo de vida, os
+  // impostos são calculados no servidor e o XML é gerado localmente; a
+  // transmissão à SEFAZ fica desligada por ausência de certificado digital.
+  if (path.startsWith("/api/todogreen/fiscal")) {
+    return guarded("To Do Green fiscal error", "Não foi possível processar o documento fiscal.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenFiscal(request, env, resolved.access, resolved.user);
     });
   }
 
