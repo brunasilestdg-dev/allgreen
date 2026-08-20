@@ -20,6 +20,7 @@ import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
 import { handleTodoGreenServiceOrders } from "./todogreen-service-orders.js";
+import { handleTodoGreenTms } from "./todogreen-tms.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
 import { handleTodoGreenClientIntelligence } from "./todogreen-client-intelligence.js";
@@ -173,6 +174,17 @@ export async function routeTodoGreenApi(request, env, ctx) {
   // Ordem de serviço: consumir material é saída de estoque de verdade, conferida
   // contra o saldo na mesma instrução que grava; o avanço é derivado dos
   // apontamentos, nunca gravado.
+  // TMS TRACK3R. Não confundir com `/tracker`, que é a Sistemas Tracker — outro
+  // fornecedor, outro assunto: o TRACK3R traz o DOCUMENTO (o que foi coletado e
+  // entregue), a Sistemas Tracker traz a POSIÇÃO (onde o veículo está).
+  if (path.startsWith("/api/todogreen/tms")) {
+    return guarded("To Do Green TMS error", "Não foi possível falar com a integração do TMS.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenTms(request, env, resolved.access, resolved.user);
+    });
+  }
+
   if (path.startsWith("/api/todogreen/service-orders")) {
     return guarded("To Do Green service orders error", "Não foi possível processar a ordem de serviço.", async () => {
       const resolved = await internalAccess(request, env);

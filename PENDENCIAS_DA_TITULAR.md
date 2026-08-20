@@ -255,3 +255,39 @@ parcial, ele já está construído e está dito abaixo.
   sistema conferir que veio mesmo de nós
 - Automações executadas de hora em hora no servidor, mesmo com o app fechado,
   com prevenção de duplicidade, snapshots e registro relacional das execuções
+
+## Integração com o TMS TRACK3R — o que perguntar ao fornecedor
+
+A integração está **construída e funcionando no modo arquivo**: você exporta o
+relatório da Consulta de Coletas no TRACK3R e sobe na tela do TMS. Isso não
+exige credencial, não exige contrato novo e não tem custo. Reimportar o arquivo
+do dia seguinte não duplica nada — o sistema reconhece o que já entrou e só
+atualiza o status.
+
+Os modos **API** e **webhook** estão prontos e desligados, esperando duas coisas
+que só você pode conseguir. Enquanto elas não vierem, o modo arquivo cobre a
+operação inteira.
+
+**Segredos a cadastrar no cofre do Worker** (quando a API existir):
+`TODOGREEN_TRACK3R_API_TOKEN` e `TODOGREEN_TRACK3R_WEBHOOK_SECRET`.
+
+**Perguntas ao suporte do TRACK3R** (as mesmas estão na tela, em
+`PERGUNTAS_AO_TRACK3R`):
+
+1. Existe API REST? Qual a URL base e onde está a documentação?
+2. Como se emite o token de acesso, e em qual cabeçalho ele vai?
+3. Existe webhook de mudança de status de coleta e de entrega? Como o segredo é
+   validado?
+4. Quais campos vêm em Consulta Dados Nota Fiscal (número, série, chave de 44
+   dígitos, valor)?
+5. O relatório exportado sai em CSV ou XLSX, e com quais colunas exatas no
+   cabeçalho?
+6. O embarcador vem com CNPJ, ou só com nome e agrupador?
+7. O tipo de veículo vem no documento? Com que vocabulário (moto, van, VUC,
+   truck, carreta)?
+8. Existe identificador estável do documento que não muda quando o status muda?
+
+**Não confundir com a Sistemas Tracker.** São dois fornecedores diferentes: o
+TRACK3R traz o DOCUMENTO (o que foi coletado e entregue); a Sistemas Tracker traz
+a POSIÇÃO (onde o veículo está). As duas integrações convivem e não se
+substituem.

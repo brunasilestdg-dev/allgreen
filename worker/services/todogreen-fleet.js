@@ -1,4 +1,13 @@
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
+// A classe do veículo, de moto a carreta. Até aqui a frota só tinha `category`
+// em texto livre, e texto livre faz custo por km, unidade de cobrança,
+// habilitação exigida e restrição urbana caírem no mesmo balde.
+import {
+  isVehicleClass,
+  normalizeVehicleClass,
+  validateVehicleClass,
+  vehicleClass,
+} from "../../src/features/logistics/vehicleClassDomain.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const clean = (value, max = 500) => String(value || "").trim().slice(0, max);
@@ -13,7 +22,14 @@ const canWrite = (access) => podeNaVertical(access, "fleet:manage");
 
 const mapVehicle = (row) => ({
   id: row.id, prefix: row.prefix, plate: row.plate, manufacturer: row.manufacturer, model: row.model, modelYear: row.model_year,
-  category: row.category, energyType: row.energy_type, status: row.status, operationalUnit: row.operational_unit, costCenter: row.cost_center,
+  category: row.category,
+  // A classe canônica, de moto a carreta. Quando o cadastro antigo só tem
+  // `category` em texto livre, deriva dela — assim a frota herdada aparece
+  // classificada sem ninguém redigitar. `vehicleClassLabel` é vazio quando não
+  // dá para reconhecer, e a tela pede a escolha em vez de chutar.
+  vehicleClass: row.vehicle_class || normalizeVehicleClass(row.category),
+  vehicleClassLabel: vehicleClass(row.vehicle_class || normalizeVehicleClass(row.category))?.name || "",
+  energyType: row.energy_type, status: row.status, operationalUnit: row.operational_unit, costCenter: row.cost_center,
   payloadKg: row.payload_kg, volumeM3: row.volume_m3, palletCapacity: row.pallet_capacity, odometerKm: row.odometer_km,
   acquisitionValue: row.acquisition_value, monthlyFixedCost: row.monthly_fixed_cost, revenueAccumulated: row.revenue_accumulated,
   costAccumulated: row.cost_accumulated, energyConsumptionKwhPerKm: row.energy_consumption_kwh_per_km,
@@ -63,16 +79,29 @@ export async function handleTodoGreenFleet(request, env, access, user) {
   if (request.method === "POST" && !vehicleId) {
     const body = await request.json().catch(() => ({}));
     if (!clean(body.prefix, 50)) return json({ error: "Informe o prefixo do veículo." }, 400);
+    // A classe vem declarada ou é derivada de `category`. Quando nenhuma das
+    // duas dá uma classe conhecida, fica vazia — e a tela pede a escolha, em vez
+    // de chutar: classificar carreta como van erraria custo, cobrança,
+    // habilitação e restrição urbana de uma vez.
+    const classeNova = isVehicleClass(body.vehicleClass)
+      ? clean(body.vehicleClass, 40).toLowerCase()
+      : normalizeVehicleClass(body.category);
+    // Energia impossível na classe é recusada com a lista do que é possível —
+    // é o que impede a proposta de prometer emissão zero numa carreta.
+    if (classeNova) {
+      const erroClasse = validateVehicleClass({ vehicleClass: classeNova, energyType: body.energyType });
+      if (erroClasse) return json({ error: erroClasse }, 400);
+    }
     const id = crypto.randomUUID(); const now = new Date().toISOString();
     await env.DB.prepare(`INSERT INTO todogreen_fleet_vehicles
-      (id, tenant_id, workspace_owner_id, prefix, plate, manufacturer, model, model_year, category, energy_type, status,
+      (id, tenant_id, workspace_owner_id, prefix, plate, manufacturer, model, model_year, category, vehicle_class, energy_type, status,
        operational_unit, cost_center, payload_kg, volume_m3, pallet_capacity, odometer_km, acquisition_value, monthly_fixed_cost,
        revenue_accumulated, cost_accumulated, energy_consumption_kwh_per_km, emission_factor_kgco2e_per_kwh, battery_capacity_kwh,
        battery_soh_percent, nominal_range_km, real_range_km, next_maintenance_at, next_document_due_at, fields_json, revision,
        created_by, updated_by, created_at, updated_at, archived_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)`)
       .bind(id, TENANT_ID, access.ownerId, clean(body.prefix, 50), clean(body.plate, 20).toUpperCase(), clean(body.manufacturer, 100), clean(body.model, 100), Number(body.modelYear) || null,
-        clean(body.category, 80), clean(body.energyType, 40) || "electric", clean(body.status, 40) || "available", clean(body.operationalUnit, 120), clean(body.costCenter, 120),
+        clean(body.category, 80), classeNova, clean(body.energyType, 40) || "electric", clean(body.status, 40) || "available", clean(body.operationalUnit, 120), clean(body.costCenter, 120),
         num(body.payloadKg), num(body.volumeM3), num(body.palletCapacity), num(body.odometerKm), num(body.acquisitionValue), num(body.monthlyFixedCost), num(body.revenueAccumulated),
         num(body.costAccumulated), num(body.energyConsumptionKwhPerKm), num(body.emissionFactorKgCo2ePerKwh), num(body.batteryCapacityKwh), Math.min(100, num(body.batterySohPercent || 100)),
         num(body.nominalRangeKm), num(body.realRangeKm), clean(body.nextMaintenanceAt, 20) || null, clean(body.nextDocumentDueAt, 20) || null, JSON.stringify(vehicleFields(body)), user.id, user.id, now, now).run();
@@ -85,9 +114,20 @@ export async function handleTodoGreenFleet(request, env, access, user) {
     const current = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ? AND workspace_owner_id = ? AND archived_at IS NULL").bind(vehicleId, access.ownerId).first();
     if (!current) return json({ error: "Veículo não encontrado." }, 404);
     if (body.revision && Number(body.revision) !== Number(current.revision)) return json({ error: "Veículo alterado por outra pessoa. Recarregue.", code: "revision_conflict", current: mapVehicle(current) }, 409);
+    // União: o merge de campos do `vehicleFields` (que preserva o que já estava
+    // gravado) com a classe de veículo. A classe pode ser corrigida à mão; na
+    // falta dela, é derivada de `category`. Trocar a classe sem conferir a
+    // energia deixaria uma carreta marcada como elétrica.
     const before = mapVehicle(current); const next = { ...before, ...body, fields: vehicleFields(body, before.fields) }; const now = new Date().toISOString();
-    await env.DB.prepare(`UPDATE todogreen_fleet_vehicles SET prefix=?, plate=?, manufacturer=?, model=?, model_year=?, category=?, energy_type=?, status=?, operational_unit=?, cost_center=?, payload_kg=?, volume_m3=?, pallet_capacity=?, odometer_km=?, acquisition_value=?, monthly_fixed_cost=?, revenue_accumulated=?, cost_accumulated=?, energy_consumption_kwh_per_km=?, emission_factor_kgco2e_per_kwh=?, battery_capacity_kwh=?, battery_soh_percent=?, nominal_range_km=?, real_range_km=?, next_maintenance_at=?, next_document_due_at=?, fields_json=?, revision=revision+1, updated_by=?, updated_at=? WHERE id=? AND workspace_owner_id=? AND revision=?`)
-      .bind(clean(next.prefix,50), clean(next.plate,20).toUpperCase(), clean(next.manufacturer,100), clean(next.model,100), Number(next.modelYear)||null, clean(next.category,80), clean(next.energyType,40), clean(next.status,40), clean(next.operationalUnit,120), clean(next.costCenter,120), num(next.payloadKg), num(next.volumeM3), num(next.palletCapacity), num(next.odometerKm), num(next.acquisitionValue), num(next.monthlyFixedCost), num(next.revenueAccumulated), num(next.costAccumulated), num(next.energyConsumptionKwhPerKm), num(next.emissionFactorKgCo2ePerKwh), num(next.batteryCapacityKwh), Math.min(100,num(next.batterySohPercent)), num(next.nominalRangeKm), num(next.realRangeKm), clean(next.nextMaintenanceAt,20)||null, clean(next.nextDocumentDueAt,20)||null, JSON.stringify(next.fields||{}), user.id, now, vehicleId, access.ownerId, current.revision).run();
+    const classeNext = isVehicleClass(next.vehicleClass)
+      ? clean(next.vehicleClass, 40).toLowerCase()
+      : normalizeVehicleClass(next.category);
+    if (classeNext) {
+      const erroClasse = validateVehicleClass({ vehicleClass: classeNext, energyType: next.energyType });
+      if (erroClasse) return json({ error: erroClasse }, 400);
+    }
+    await env.DB.prepare(`UPDATE todogreen_fleet_vehicles SET prefix=?, plate=?, manufacturer=?, model=?, model_year=?, category=?, vehicle_class=?, energy_type=?, status=?, operational_unit=?, cost_center=?, payload_kg=?, volume_m3=?, pallet_capacity=?, odometer_km=?, acquisition_value=?, monthly_fixed_cost=?, revenue_accumulated=?, cost_accumulated=?, energy_consumption_kwh_per_km=?, emission_factor_kgco2e_per_kwh=?, battery_capacity_kwh=?, battery_soh_percent=?, nominal_range_km=?, real_range_km=?, next_maintenance_at=?, next_document_due_at=?, fields_json=?, revision=revision+1, updated_by=?, updated_at=? WHERE id=? AND workspace_owner_id=? AND revision=?`)
+      .bind(clean(next.prefix,50), clean(next.plate,20).toUpperCase(), clean(next.manufacturer,100), clean(next.model,100), Number(next.modelYear)||null, clean(next.category,80), classeNext, clean(next.energyType,40), clean(next.status,40), clean(next.operationalUnit,120), clean(next.costCenter,120), num(next.payloadKg), num(next.volumeM3), num(next.palletCapacity), num(next.odometerKm), num(next.acquisitionValue), num(next.monthlyFixedCost), num(next.revenueAccumulated), num(next.costAccumulated), num(next.energyConsumptionKwhPerKm), num(next.emissionFactorKgCo2ePerKwh), num(next.batteryCapacityKwh), Math.min(100,num(next.batterySohPercent)), num(next.nominalRangeKm), num(next.realRangeKm), clean(next.nextMaintenanceAt,20)||null, clean(next.nextDocumentDueAt,20)||null, JSON.stringify(next.fields||{}), user.id, now, vehicleId, access.ownerId, current.revision).run();
     const row = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ?").bind(vehicleId).first();
     return json({ vehicle: mapVehicle(row) });
   }
