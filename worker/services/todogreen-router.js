@@ -19,7 +19,6 @@ import { handleTodoGreenStock } from "./todogreen-stock.js";
 import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
-import { handleTodoGreenServiceOrders } from "./todogreen-service-orders.js";
 import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenTms } from "./todogreen-tms.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
@@ -172,9 +171,6 @@ export async function routeTodoGreenApi(request, env, ctx) {
     });
   }
 
-  // Ordem de serviço: consumir material é saída de estoque de verdade, conferida
-  // contra o saldo na mesma instrução que grava; o avanço é derivado dos
-  // apontamentos, nunca gravado.
   // TMS TRACK3R. Não confundir com `/tracker`, que é a Sistemas Tracker — outro
   // fornecedor, outro assunto: o TRACK3R traz o DOCUMENTO (o que foi coletado e
   // entregue), a Sistemas Tracker traz a POSIÇÃO (onde o veículo está).
@@ -183,14 +179,6 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenTms(request, env, resolved.access, resolved.user);
-    });
-  }
-
-  if (path.startsWith("/api/todogreen/service-orders")) {
-    return guarded("To Do Green service orders error", "Não foi possível processar a ordem de serviço.", async () => {
-      const resolved = await internalAccess(request, env);
-      if (resolved.response) return resolved.response;
-      return handleTodoGreenServiceOrders(request, env, resolved.access, resolved.user);
     });
   }
 
