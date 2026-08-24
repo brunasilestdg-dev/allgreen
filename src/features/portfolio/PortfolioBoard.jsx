@@ -38,7 +38,7 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 const br = (d) => (d ? d.split("-").reverse().join("/") : "—");
 
 export default function PortfolioBoard({ db, update, business, setToast }) {
-  const [aba, setAba] = useState("projetos");
+  const [aba, setAba] = useState("visao");
   const [simulacao, setSimulacao] = useState({ projectId: "", days: 7 });
   const [novoVinculo, setNovoVinculo] = useState({ fromId: "", toId: "", lagDays: 0 });
   const [novoRisco, setNovoRisco] = useState({
