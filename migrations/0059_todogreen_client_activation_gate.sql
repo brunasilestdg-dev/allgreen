@@ -31,7 +31,7 @@ BEFORE UPDATE OF fields_json ON todogreen_clients
 WHEN json_extract(NEW.fields_json, '$.stage') = 'Cliente ativo'
  AND COALESCE(json_extract(OLD.fields_json, '$.stage'), '') <> 'Cliente ativo'
 BEGIN
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:contract') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_contracts c
      WHERE c.tenant_id = NEW.tenant_id
@@ -48,9 +48,9 @@ BEGIN
        AND COALESCE(c.responsible_user_id, '') <> ''
        AND (c.start_date IS NULL OR c.start_date = '' OR c.start_date <= date('now'))
        AND (c.end_date IS NULL OR c.end_date = '' OR c.end_date >= date('now'))
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:contract') END;
+  );
 
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:cost_center') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_cost_centers cc
      WHERE cc.tenant_id = NEW.tenant_id
@@ -58,9 +58,9 @@ BEGIN
        AND cc.archived_at IS NULL
        AND cc.status = 'ativo'
        AND json_extract(cc.fields_json, '$.clientId') = NEW.id
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:cost_center') END;
+  );
 
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:operation') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_client_operations o
      WHERE o.tenant_id = NEW.tenant_id
@@ -68,42 +68,42 @@ BEGIN
        AND o.client_id = NEW.id
        AND o.archived_at IS NULL
        AND lower(o.status) NOT IN ('cancelada','cancelado','cancelled','canceled')
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:operation') END;
+  );
 
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:responsible') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_client_assignments a
      WHERE a.tenant_id = NEW.tenant_id
        AND a.client_id = NEW.id
        AND a.status = 'active'
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:responsible') END;
+  );
 
-  SELECT CASE WHEN NEW.portal_enabled <> 1 OR NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:portal') WHERE NEW.portal_enabled <> 1 OR NOT EXISTS (
     SELECT 1
       FROM todogreen_client_users u
      WHERE u.tenant_id = NEW.tenant_id
        AND u.client_id = NEW.id
        AND u.status = 'active'
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:portal') END;
+  );
 
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:state') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_client_activation_state s
      WHERE s.tenant_id = NEW.tenant_id
        AND s.workspace_owner_id = NEW.workspace_owner_id
        AND s.client_id = NEW.id
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:state') END;
+  );
 
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:integration') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_client_activation_state s
      WHERE s.tenant_id = NEW.tenant_id
        AND s.workspace_owner_id = NEW.workspace_owner_id
        AND s.client_id = NEW.id
        AND s.integration_status IN ('ready','not_required')
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:integration') END;
+  );
 
-  SELECT CASE WHEN
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:tracking') WHERE
     NOT EXISTS (
       SELECT 1
         FROM todogreen_client_activation_state s
@@ -121,9 +121,9 @@ BEGIN
          AND lower(ti.status) IN ('ready','active')
          AND (ti.last_success_at IS NOT NULL OR ti.last_test_at IS NOT NULL)
     )
-  THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:tracking') END;
+  ;
 
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:esg') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_client_activation_state s
      WHERE s.tenant_id = NEW.tenant_id
@@ -137,9 +137,9 @@ BEGIN
        AND sw.status = 'active'
        AND sw.effective_from <= datetime('now')
        AND (sw.effective_to IS NULL OR sw.effective_to = '' OR sw.effective_to >= datetime('now'))
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:esg') END;
+  );
 
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:dashboard') WHERE NOT EXISTS (
     SELECT 1
       FROM todogreen_dashboards d
      WHERE d.tenant_id = NEW.tenant_id
@@ -147,5 +147,5 @@ BEGIN
        AND d.archived_at IS NULL
        AND d.status = 'active'
        AND json_extract(d.filters_json, '$.clientId') = NEW.id
-  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:dashboard') END;
+  );
 END;
