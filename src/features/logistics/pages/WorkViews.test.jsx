@@ -48,6 +48,17 @@ describe("Espaço · Visualizações", () => {
     expect(screen.getByText((_, el) => el?.className === "tdg-workload-num" && /2 itens/.test(el.textContent))).toBeTruthy();
   });
 
+  it("usa a capacidade real dos perfis para medir a carga", async () => {
+    vi.stubGlobal("fetch", montarFetch());
+    // Ana: 2 itens × 4h = 8h; capacidade semanal 6h → sobrecarga.
+    render(<WorkViews setToast={() => {}} profiles={[{ userId: "", name: "Ana", weeklyHours: 6 }]} />);
+    await waitFor(() => expect(screen.getByText("20d")).toBeTruthy());
+    fireEvent.click(screen.getByRole("tab", { name: /Workload/ }));
+    await waitFor(() => expect(
+      screen.getByText((_, el) => el?.className === "tdg-workload-num" && /8h \/ 6h ⚠/.test(el.textContent)),
+    ).toBeTruthy());
+  });
+
   it("troca para Calendário e agrupa por dia de vencimento", async () => {
     vi.stubGlobal("fetch", montarFetch());
     render(<WorkViews setToast={() => {}} />);

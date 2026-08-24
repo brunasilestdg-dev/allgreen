@@ -322,7 +322,7 @@ export default function TodoGreenWorkspace({ db, update, verticalData, setToast,
           {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} />}
           {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}
-          {tool === "visoes" && <WorkViews setToast={setToast} />}
+          {tool === "visoes" && <WorkViews setToast={setToast} profiles={db?.resourceProfiles || []} />}
           {tool === "bases" && <DataBases {...commonProps} excludedTemplates={["Clientes"]} />}
           {tool === "processos" && <ProcessStudio {...commonProps} />}
           {tool === "capacidade" && <CapacityPlanner {...commonProps} />}

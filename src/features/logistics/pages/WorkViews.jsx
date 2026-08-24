@@ -56,7 +56,7 @@ const dataCurta = (iso) => {
   return `${d}/${MES[Number(m) - 1] || "?"}`;
 };
 
-export default function WorkViews({ setToast }) {
+export default function WorkViews({ setToast, profiles = [] }) {
   const [boards, setBoards] = useState([]);
   const [boardId, setBoardId] = useState("");
   const [itens, setItens] = useState([]);
@@ -92,7 +92,20 @@ export default function WorkViews({ setToast }) {
     try { return caminhoCritico(itens); } catch { return { duracaoTotal: 0, itensCriticos: [] }; }
   }, [itens]);
   const calendario = useMemo(() => itensNoCalendario(itens), [itens]);
-  const carga = useMemo(() => cargaPorResponsavel(itens), [itens]);
+  // Capacidade real vem dos perfis do planejamento (capacityDomain): a carga é
+  // comparada com as horas semanais de cada pessoa, por id e por nome, para
+  // casar tanto o item que guarda o userId quanto o que só tem o rótulo.
+  const capacidades = useMemo(() => {
+    const mapa = {};
+    for (const p of profiles) {
+      const horas = Number(p?.weeklyHours) || 0;
+      if (!horas) continue;
+      if (p.userId) mapa[p.userId] = horas;
+      if (p.name) mapa[p.name] = horas;
+    }
+    return mapa;
+  }, [profiles]);
+  const carga = useMemo(() => cargaPorResponsavel(itens, { capacidades }), [itens, capacidades]);
   const porGrupo = useMemo(() => agruparPorGrupo(itens, grupos), [itens, grupos]);
 
   if (ocupado === "carregando") {
