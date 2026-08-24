@@ -14,6 +14,29 @@ export const PROJECT_STATUSES = [
   "Cancelado",
 ];
 
+export const PROJECT_AREAS = [
+  "Comercial",
+  "Operações",
+  "Planejamento",
+  "Financeiro",
+  "Fiscal",
+  "Compras",
+  "Estoque",
+  "Logística",
+  "TI e Dados",
+  "Produto",
+  "Marketing",
+  "RH e Pessoas",
+  "Jurídico",
+  "ESG e Sustentabilidade",
+  "Diretoria",
+  "PMO",
+  "Outros",
+];
+
+export const projectArea = (project = {}) =>
+  String(project.area || "Outros").trim() || "Outros";
+
 export const MILESTONE_TYPES = [
   "Entrega",
   "Contratual",
@@ -46,10 +69,12 @@ export const normalizeMilestone = (milestone = {}) => ({
 
 export const createProjectRecord = (input = {}, context = {}, existing = {}) => {
   const now = new Date().toISOString();
+  const requestedArea = String(input.area ?? existing.area ?? "Outros").trim();
   return {
     ...existing,
     id: existing.id || input.id || crypto.randomUUID(),
     name: String(input.name || existing.name || "").trim(),
+    area: requestedArea || "Outros",
     description: String(input.description || "").trim(),
     objective: String(input.objective || "").trim(),
     justification: String(input.justification || "").trim(),
@@ -82,7 +107,7 @@ export const createProjectRecord = (input = {}, context = {}, existing = {}) => 
       : String(input.holidays || "").split(/[\n,;]/)
     )
       .map((date) => ymd(String(date).trim()))
-      .filter(validDate => /^\d{4}-\d{2}-\d{2}$/.test(validDate)),
+      .filter((validDate) => /^\d{4}-\d{2}-\d{2}$/.test(validDate)),
     milestones: (input.milestones || []).map(normalizeMilestone).filter((m) => m.title),
     risks: Array.isArray(input.risks) ? input.risks : existing.risks || [],
     issues: Array.isArray(input.issues) ? input.issues : existing.issues || [],
