@@ -8,6 +8,15 @@ import { sendWhatsAppText, whatsappEnabled } from "../mensageria/envio.js";
 
 const TENANT_ID = "todogreen";
 const MAX_LIMIT = 200;
+const DEFAULT_STATUSES = [
+  { id: "novo", label: "Novo", color: "#64748b" },
+  { id: "em-andamento", label: "Em andamento", color: "#2563eb" },
+  { id: "aguardando", label: "Aguardando", color: "#d97706" },
+  { id: "bloqueado", label: "Bloqueado", color: "#dc2626" },
+  { id: "concluido", label: "Concluído", color: "#15803d" },
+];
+const DEFAULT_VIEWS = ["table", "kanban", "calendar", "timeline", "gantt", "dashboard", "workload", "gallery", "form", "map"];
+const DEFAULT_GROUPS = [{ id: "principal", name: "Principal", color: "#176a4a" }];
 const AUTOMATION_TRIGGERS = new Set([
   "item-created",
   "item-updated",
@@ -49,6 +58,45 @@ const parse = (value, fallback) => {
     return fallback;
   }
 };
+
+const cleanId = (value, fallback = "") => {
+  const normalized = clean(value, 80).toLocaleLowerCase("pt-BR")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return normalized || fallback;
+};
+
+const normalizeBoardConfig = (raw = {}) => {
+  const statuses = (Array.isArray(raw.statuses) ? raw.statuses : DEFAULT_STATUSES)
+    .map((entry, index) => ({
+      id: cleanId(entry?.id || entry?.label, `status-${index + 1}`),
+      label: clean(entry?.label || entry?.id, 60) || `Status ${index + 1}`,
+      color: /^#[0-9a-f]{6}$/i.test(String(entry?.color || "")) ? entry.color : DEFAULT_STATUSES[index % DEFAULT_STATUSES.length].color,
+    })).slice(0, 20);
+  const groups = (Array.isArray(raw.groups) ? raw.groups : DEFAULT_GROUPS)
+    .map((entry, index) => ({
+      id: cleanId(entry?.id || entry?.name, `grupo-${index + 1}`),
+      name: clean(entry?.name || entry?.id, 80) || `Grupo ${index + 1}`,
+      color: /^#[0-9a-f]{6}$/i.test(String(entry?.color || "")) ? entry.color : "#176a4a",
+    })).slice(0, 30);
+  const fields = (Array.isArray(raw.fields) ? raw.fields : []).map((entry, index) => ({
+    id: cleanId(entry?.id || entry?.label, `campo-${index + 1}`),
+    label: clean(entry?.label || entry?.id, 80) || `Campo ${index + 1}`,
+    type: clean(entry?.type, 40) || "text",
+    options: (Array.isArray(entry?.options) ? entry.options : []).map((option) => clean(option, 80)).filter(Boolean).slice(0, 50),
+    formula: clean(entry?.formula, 500),
+    required: Boolean(entry?.required),
+  })).slice(0, 60);
+  const views = (Array.isArray(raw.views) ? raw.views : DEFAULT_VIEWS)
+    .map((view) => cleanId(view)).filter((view) => DEFAULT_VIEWS.includes(view));
+  return {
+    statuses: statuses.length ? statuses : DEFAULT_STATUSES,
+    groups: groups.length ? groups : DEFAULT_GROUPS,
+    fields,
+    views: views.length ? [...new Set(views)] : DEFAULT_VIEWS,
+    defaultView: DEFAULT_VIEWS.includes(raw.defaultView) ? raw.defaultView : "table",
+  };
+};
 // Autenticação e autorização moram em todogreen-access.js. Reexportadas aqui
 // só para não quebrar quem já importava deste módulo — a decisão acontece num
 // lugar só.
@@ -69,18 +117,23 @@ const canWrite = (access) =>
   access.permissions.includes("work:manage") ||
   access.permissions.includes("work:item:write");
 
-const mapBoard = (row) => ({
-  id: row.id,
-  name: row.name,
-  description: row.description,
-  specialist: row.specialist,
-  types: parse(row.object_types_json, []),
-  permissions: parse(row.permissions_json, {}),
-  status: row.status,
-  order: row.display_order,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+const mapBoard = (row) => {
+  const stored = parse(row.permissions_json, {});
+  const config = normalizeBoardConfig(stored.config || stored);
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    specialist: row.specialist,
+    types: parse(row.object_types_json, []),
+    permissions: stored.permissions || {},
+    config,
+    status: row.status,
+    order: row.display_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 const mapItem = (row) => ({
   id: row.id,
@@ -103,6 +156,27 @@ const mapItem = (row) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,
+});
+
+const mapComment = (row) => ({
+  id: row.id,
+  itemId: row.item_id,
+  authorId: row.author_user_id,
+  author: row.author_name || row.author_email || "Colaborador",
+  body: row.body,
+  mentions: parse(row.mentions_json, []),
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const mapEvent = (row) => ({
+  id: row.id,
+  actorId: row.actor_user_id,
+  actor: row.actor_name || row.actor_email || row.actor_user_id,
+  action: row.action,
+  before: parse(row.before_json, {}),
+  after: parse(row.after_json, {}),
+  createdAt: row.created_at,
 });
 
 const mapAutomationRule = (row) => ({
@@ -162,9 +236,10 @@ async function runAutomationRules(env, ownerId, item, { before = null, eventType
      ORDER BY created_at, id`,
   ).bind(ownerId, item.boardId).all();
   const boardRows = await env.DB.prepare(
-    "SELECT id FROM todogreen_work_boards WHERE workspace_owner_id = ? AND status = 'active'",
+    "SELECT * FROM todogreen_work_boards WHERE workspace_owner_id = ? AND status = 'active'",
   ).bind(ownerId).all();
   const boardIds = new Set((boardRows.results || []).map((row) => row.id));
+  const boardStatusIds = new Map((boardRows.results || []).map((row) => [row.id, new Set(mapBoard(row).config.statuses.map((status) => status.id))]));
   const executed = [];
   const sideEffects = [];
   const matchedIds = [];
@@ -175,8 +250,8 @@ async function runAutomationRules(env, ownerId, item, { before = null, eventType
     const value = clean(rule.action.value, rule.action.type === "prepare-whatsapp" ? 1000 : 200);
     let changed = false;
     let executionMessage = `Regra “${rule.name}” executada.`;
-    if (rule.action.type === "change-status" && item.status !== value && ["novo", "em-andamento", "aguardando", "bloqueado", "concluido"].includes(value)) {
-      item.status = value;
+    if (rule.action.type === "change-status" && item.status !== value && boardStatusIds.get(item.boardId)?.has(cleanId(value))) {
+      item.status = cleanId(value);
       changed = true;
     } else if (rule.action.type === "change-priority" && item.priority !== value && ["baixa", "media", "alta", "critica"].includes(value)) {
       item.priority = value;
@@ -417,6 +492,127 @@ async function handleAutomationRules(request, env, access, user, parts) {
   return response({ error: "Método não permitido." }, 405);
 }
 
+async function handleBoards(request, env, access, user, parts) {
+  const boardId = parts[4] || "";
+  if (request.method === "GET" && !boardId) {
+    const rows = await env.DB.prepare(
+      "SELECT * FROM todogreen_work_boards WHERE workspace_owner_id = ? AND status = 'active' ORDER BY display_order, name",
+    ).bind(access.ownerId).all();
+    return response({ boards: (rows.results || []).map(mapBoard), access: { canWrite: canWrite(access) } });
+  }
+  if (!canWrite(access)) return response({ error: "Você não pode configurar quadros." }, 403);
+  if (request.method === "POST" && !boardId) {
+    const body = await request.json().catch(() => ({}));
+    const name = clean(body.name, 120);
+    if (!name) return response({ error: "Informe o nome do quadro." }, 400);
+    const id = `${access.ownerId}:${cleanId(name, crypto.randomUUID())}-${crypto.randomUUID().slice(0, 8)}`;
+    const now = new Date().toISOString();
+    const config = normalizeBoardConfig(body.config || {});
+    const types = (Array.isArray(body.types) ? body.types : ["tarefa", "projeto", "processo", "aprovacao"])
+      .map((type) => cleanId(type)).filter(Boolean).slice(0, 40);
+    const last = await env.DB.prepare(
+      "SELECT COALESCE(MAX(display_order), 0) AS last_order FROM todogreen_work_boards WHERE workspace_owner_id = ?",
+    ).bind(access.ownerId).first();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_work_boards
+       (id, tenant_id, workspace_owner_id, name, description, specialist, object_types_json,
+        permissions_json, status, display_order, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
+    ).bind(id, TENANT_ID, access.ownerId, name, clean(body.description, 800), cleanId(body.specialist, "projects"),
+      JSON.stringify(types.length ? types : ["tarefa"]), JSON.stringify({ config }), Number(last?.last_order || 0) + 10,
+      user.id, now, now).run();
+    const row = await env.DB.prepare("SELECT * FROM todogreen_work_boards WHERE id = ?").bind(id).first();
+    return response({ board: mapBoard(row) }, 201);
+  }
+  const current = await env.DB.prepare(
+    "SELECT * FROM todogreen_work_boards WHERE id = ? AND workspace_owner_id = ? AND status = 'active'",
+  ).bind(boardId, access.ownerId).first();
+  if (!current) return response({ error: "Quadro não encontrado." }, 404);
+  if (request.method === "PATCH") {
+    const body = await request.json().catch(() => ({}));
+    const previous = mapBoard(current);
+    const config = normalizeBoardConfig(body.config || previous.config);
+    const name = clean(body.name ?? previous.name, 120);
+    if (!name) return response({ error: "Informe o nome do quadro." }, 400);
+    const types = (Array.isArray(body.types) ? body.types : previous.types).map((type) => cleanId(type)).filter(Boolean).slice(0, 40);
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `UPDATE todogreen_work_boards SET name=?,description=?,specialist=?,object_types_json=?,
+       permissions_json=?,updated_at=? WHERE id=? AND workspace_owner_id=?`,
+    ).bind(name, clean(body.description ?? previous.description, 800), cleanId(body.specialist ?? previous.specialist, "projects"),
+      JSON.stringify(types.length ? types : ["tarefa"]), JSON.stringify({ config, permissions: previous.permissions }),
+      now, boardId, access.ownerId).run();
+    const row = await env.DB.prepare("SELECT * FROM todogreen_work_boards WHERE id = ?").bind(boardId).first();
+    return response({ board: mapBoard(row) });
+  }
+  if (request.method === "DELETE") {
+    const count = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM todogreen_work_items WHERE board_id=? AND workspace_owner_id=? AND archived_at IS NULL",
+    ).bind(boardId, access.ownerId).first();
+    if (Number(count?.total || 0) > 0)
+      return response({ error: "Arquive ou mova os itens antes de arquivar o quadro." }, 409);
+    await env.DB.prepare(
+      "UPDATE todogreen_work_boards SET status='archived',updated_at=? WHERE id=? AND workspace_owner_id=?",
+    ).bind(new Date().toISOString(), boardId, access.ownerId).run();
+    return response({ ok: true });
+  }
+  return response({ error: "Método não permitido." }, 405);
+}
+
+async function handleItemCollaboration(request, env, access, user, itemId, action) {
+  const current = await env.DB.prepare(
+    "SELECT * FROM todogreen_work_items WHERE id=? AND workspace_owner_id=? AND archived_at IS NULL",
+  ).bind(itemId, access.ownerId).first();
+  if (!current) return response({ error: "Item não encontrado." }, 404);
+  if (request.method === "GET" && action === "detail") {
+    const comments = await env.DB.prepare(
+      `SELECT c.*,u.name AS author_name,u.email AS author_email FROM todogreen_work_comments c
+       LEFT JOIN users u ON u.id=c.author_user_id
+       WHERE c.workspace_owner_id=? AND c.item_id=? AND c.archived_at IS NULL ORDER BY c.created_at`,
+    ).bind(access.ownerId, itemId).all();
+    const events = await env.DB.prepare(
+      `SELECT e.*,u.name AS actor_name,u.email AS actor_email FROM todogreen_work_item_events e
+       LEFT JOIN users u ON u.id=e.actor_user_id
+       WHERE e.workspace_owner_id=? AND e.item_id=? ORDER BY e.created_at DESC LIMIT 200`,
+    ).bind(access.ownerId, itemId).all();
+    const children = await env.DB.prepare(
+      `SELECT * FROM todogreen_work_items WHERE workspace_owner_id=? AND archived_at IS NULL
+       AND json_extract(fields_json, '$.parentId')=? ORDER BY updated_at DESC`,
+    ).bind(access.ownerId, itemId).all();
+    return response({
+      item: mapItem(current),
+      comments: (comments.results || []).map(mapComment),
+      events: (events.results || []).map(mapEvent),
+      subitems: (children.results || []).map(mapItem),
+      access: { canWrite: canWrite(access) },
+    });
+  }
+  if (request.method === "POST" && action === "comments") {
+    if (!canWrite(access)) return response({ error: "Você não pode comentar neste item." }, 403);
+    const body = await request.json().catch(() => ({}));
+    const text = clean(body.body, 4000);
+    if (!text) return response({ error: "Escreva uma atualização antes de publicar." }, 400);
+    const mentions = [...new Set([
+      ...(Array.isArray(body.mentions) ? body.mentions : []),
+      ...[...text.matchAll(/@([\p{L}\p{N}._-]+)/gu)].map((match) => match[1]),
+    ].map((mention) => clean(mention, 120)).filter(Boolean))].slice(0, 30);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_work_comments
+       (id,workspace_owner_id,item_id,author_user_id,body,mentions_json,created_at,updated_at,archived_at)
+       VALUES (?,?,?,?,?,?,?,?,NULL)`,
+    ).bind(id, access.ownerId, itemId, user.id, text, JSON.stringify(mentions), now, now).run();
+    await event(env, access.ownerId, current.board_id, itemId, user.id, mentions.length ? "commented-and-mentioned" : "commented", {}, { commentId: id, mentions });
+    const row = await env.DB.prepare(
+      `SELECT c.*,u.name AS author_name,u.email AS author_email FROM todogreen_work_comments c
+       LEFT JOIN users u ON u.id=c.author_user_id WHERE c.id=?`,
+    ).bind(id).first();
+    return response({ comment: mapComment(row) }, 201);
+  }
+  return response({ error: "Método não permitido." }, 405);
+}
+
 async function seedBoards(env, ownerId, userId) {
   const now = new Date().toISOString();
   const templates = [
@@ -448,6 +644,50 @@ async function event(env, ownerId, boardId, itemId, actorId, action, before, aft
     .run();
 }
 
+const nextRecurringDate = (dateValue, frequency) => {
+  const date = new Date(`${dateValue || new Date().toISOString().slice(0, 10)}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  if (frequency === "daily") date.setUTCDate(date.getUTCDate() + 1);
+  else if (frequency === "weekly") date.setUTCDate(date.getUTCDate() + 7);
+  else if (frequency === "biweekly") date.setUTCDate(date.getUTCDate() + 14);
+  else if (frequency === "monthly") date.setUTCMonth(date.getUTCMonth() + 1);
+  else if (frequency === "quarterly") date.setUTCMonth(date.getUTCMonth() + 3);
+  else return "";
+  return date.toISOString().slice(0, 10);
+};
+
+async function createRecurringSuccessor(env, access, user, item, now) {
+  const recurrence = item.fields?.recurrence;
+  if (!recurrence?.frequency || item.fields?.recurrenceSuccessorId) return null;
+  const dueDate = nextRecurringDate(item.dueDate, recurrence.frequency);
+  if (!dueDate) return null;
+  const id = crypto.randomUUID();
+  const fields = {
+    ...item.fields,
+    completedAt: undefined,
+    completedBy: undefined,
+    recurrenceOriginId: item.fields?.recurrenceOriginId || item.id,
+  };
+  delete fields.recurrenceSuccessorId;
+  await env.DB.prepare(
+    `INSERT INTO todogreen_work_items
+     (id,tenant_id,workspace_owner_id,board_id,type,title,description,status,priority,
+      responsible_user_id,responsible_label,client_label,due_date,fields_json,relations_json,
+      dependencies_json,revision,created_by,updated_by,created_at,updated_at,archived_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,NULL)`,
+  ).bind(id, TENANT_ID, access.ownerId, item.boardId, item.type, item.title, item.description,
+    "novo", item.priority, item.responsibleUserId || null, item.responsible, item.client,
+    dueDate, JSON.stringify(fields), JSON.stringify(item.relations || []), JSON.stringify([]),
+    user.id, user.id, now, now).run();
+  await env.DB.prepare(
+    "UPDATE todogreen_work_items SET fields_json=? WHERE id=? AND workspace_owner_id=?",
+  ).bind(JSON.stringify({ ...item.fields, recurrenceSuccessorId: id }), item.id, access.ownerId).run();
+  const row = await env.DB.prepare("SELECT * FROM todogreen_work_items WHERE id=?").bind(id).first();
+  const successor = mapItem(row);
+  await event(env, access.ownerId, successor.boardId, successor.id, user.id, "recurrence-created", {}, successor);
+  return successor;
+}
+
 export async function handleTodoGreenWorkCenter(request, env, ctx) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/todogreen/work-center")) return null;
@@ -458,9 +698,13 @@ export async function handleTodoGreenWorkCenter(request, env, ctx) {
   await seedBoards(env, access.ownerId, user.id);
 
   const parts = url.pathname.split("/").filter(Boolean);
+  if (parts[3] === "boards")
+    return handleBoards(request, env, access, user, parts);
   if (parts[3] === "automations")
     return handleAutomationRules(request, env, access, user, parts);
   const itemId = parts[3] || "";
+  if (itemId && ["detail", "comments"].includes(parts[4] || ""))
+    return handleItemCollaboration(request, env, access, user, itemId, parts[4]);
   if (request.method === "POST" && itemId && parts[4] === "whatsapp-confirm") {
     if (!canWrite(access)) return response({ error: "Você não pode confirmar este envio." }, 403);
     const current = await env.DB.prepare(
@@ -556,15 +800,19 @@ export async function handleTodoGreenWorkCenter(request, env, ctx) {
     if (!normalizedBoardId || !clean(body.title, 240))
       return response({ error: "Informe quadro e título." }, 400);
     const board = await env.DB.prepare(
-      "SELECT id FROM todogreen_work_boards WHERE id = ? AND workspace_owner_id = ? AND status = 'active'",
+      "SELECT * FROM todogreen_work_boards WHERE id = ? AND workspace_owner_id = ? AND status = 'active'",
     ).bind(normalizedBoardId, access.ownerId).first();
     if (!board) return response({ error: "Quadro inválido." }, 400);
-    const initialStatus = clean(body.status, 40) || "novo";
+    const boardConfig = mapBoard(board).config;
+    const allowedStatuses = new Set(boardConfig.statuses.map((status) => status.id));
+    const requestedStatus = cleanId(body.status, "novo");
+    const initialStatus = allowedStatuses.has(requestedStatus) ? requestedStatus : boardConfig.statuses[0]?.id || "novo";
     const initialDueDate = clean(body.dueDate, 20) || null;
     const requestedPriority = clean(body.priority, 40) || "media";
     const elevateOverdue = initialDueDate && initialDueDate < new Date().toISOString().slice(0, 10) && initialStatus !== "concluido" && !["alta", "critica"].includes(requestedPriority);
     const initialPriority = elevateOverdue ? "alta" : requestedPriority;
     const initialFields = body.fields && typeof body.fields === "object" ? { ...body.fields } : {};
+    if (!initialFields.groupId) initialFields.groupId = boardConfig.groups[0]?.id || "principal";
     if (elevateOverdue) initialFields.automation = "Prazo vencido: prioridade elevada automaticamente.";
     const crmLink = await normalizeItemCrmLink(env, access, user, initialFields);
     if (crmLink.error) return response({ error: crmLink.error }, 400);
@@ -617,7 +865,13 @@ export async function handleTodoGreenWorkCenter(request, env, ctx) {
     if (crmLink.error) return response({ error: crmLink.error }, 400);
     const nextFields = crmLink.fields;
     const now = new Date().toISOString();
-    const nextStatus = clean(body.status ?? before.status, 40);
+    const boardRow = await env.DB.prepare(
+      "SELECT * FROM todogreen_work_boards WHERE id=? AND workspace_owner_id=? AND status='active'",
+    ).bind(current.board_id, access.ownerId).first();
+    const boardConfig = normalizeBoardConfig(parse(boardRow?.permissions_json, {}).config || parse(boardRow?.permissions_json, {}));
+    const allowedStatuses = new Set(boardConfig.statuses.map((status) => status.id));
+    const requestedStatus = cleanId(body.status ?? before.status, before.status);
+    const nextStatus = allowedStatuses.has(requestedStatus) ? requestedStatus : before.status;
     const nextDueDate = clean(body.dueDate ?? before.dueDate, 20) || null;
     let nextPriority = clean(body.priority ?? before.priority, 40);
     const automationsExecuted = [];
@@ -648,6 +902,19 @@ export async function handleTodoGreenWorkCenter(request, env, ctx) {
       relations: body.relations ?? before.relations,
       dependencies: body.dependencies ?? before.dependencies,
     };
+    if (candidate.status === "concluido" && before.status !== "concluido") {
+      const dependencyIds = (Array.isArray(candidate.dependencies) ? candidate.dependencies : [])
+        .map((dependency) => clean(typeof dependency === "string" ? dependency : dependency?.id || dependency?.itemId, 80))
+        .filter(Boolean);
+      if (dependencyIds.length) {
+        const rows = await env.DB.batch(dependencyIds.map((dependencyId) => env.DB.prepare(
+          "SELECT id,title,status FROM todogreen_work_items WHERE id=? AND workspace_owner_id=? AND archived_at IS NULL",
+        ).bind(dependencyId, access.ownerId)));
+        const pending = rows.map((result) => result.results?.[0]).filter((dependency) => !dependency || dependency.status !== "concluido");
+        if (pending.length)
+          return response({ error: "Conclua primeiro as dependências deste item.", code: "pending_dependencies", dependencies: pending }, 409);
+      }
+    }
     const eventType = candidate.status !== before.status ? "status-changed" : "item-updated";
     const automationRun = await runAutomationRules(env, access.ownerId, candidate, { before, eventType, now });
     automationsExecuted.push(...automationRun.executed);
@@ -669,13 +936,21 @@ export async function handleTodoGreenWorkCenter(request, env, ctx) {
       user.id, now, itemId, access.ownerId, current.revision,
     ).run();
     const row = await env.DB.prepare("SELECT * FROM todogreen_work_items WHERE id = ?").bind(itemId).first();
-    const item = mapItem(row);
+    let item = mapItem(row);
     await event(env, access.ownerId, item.boardId, item.id, user.id, "updated", before, item);
+    let recurrenceCreated = null;
+    if (item.status === "concluido" && before.status !== "concluido") {
+      recurrenceCreated = await createRecurringSuccessor(env, access, user, item, now);
+      if (recurrenceCreated) {
+        const refreshed = await env.DB.prepare("SELECT * FROM todogreen_work_items WHERE id=?").bind(item.id).first();
+        item = mapItem(refreshed);
+      }
+    }
     if (automationRun.sideEffects.length) {
       const work = executeAutomationSideEffects(env, access.ownerId, user.id, automationRun.sideEffects);
       if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
     }
-    return response({ item, automationsExecuted });
+    return response({ item, automationsExecuted, recurrenceCreated });
   }
 
   if (request.method === "DELETE" && itemId) {

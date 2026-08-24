@@ -193,4 +193,82 @@ describe("automações configuráveis da Central de Trabalho", () => {
     expect(confirmedData.item.fields.pendingWhatsapp.status).toBe("sent");
     expect(confirmedData.delivery.provider).toBeTruthy();
   });
+
+  it("cria e configura quadros com grupos, campos e visualizações próprias", async () => {
+    const response = await pedir("/api/todogreen/work-center/boards", {
+      method: "POST",
+      body: {
+        name: "Novos Negócios",
+        description: "Pipeline operacional da área comercial",
+        specialist: "commercial",
+        config: {
+          statuses: [{ id: "qualificacao", label: "Qualificação", color: "#2563eb" }, { id: "concluido", label: "Concluído", color: "#15803d" }],
+          groups: [{ id: "rfqs", name: "RFQs", color: "#176a4a" }],
+          fields: [{ id: "margem", label: "Margem", type: "percentage" }],
+          views: ["table", "kanban", "gantt", "dashboard"],
+          defaultView: "kanban",
+        },
+      },
+    });
+    expect(response.status).toBe(201);
+    const board = (await response.json()).board;
+    expect(board.config.statuses.map((status) => status.id)).toEqual(["qualificacao", "concluido"]);
+    expect(board.config.groups[0].name).toBe("RFQs");
+    expect(board.config.fields[0]).toEqual(expect.objectContaining({ id: "margem", type: "percentage" }));
+    expect(board.config.views).toContain("gantt");
+  });
+
+  it("expõe comentários, menções, subitens e histórico no detalhe", async () => {
+    const parentResponse = await pedir("/api/todogreen/work-center", {
+      method: "POST",
+      body: { boardId, title: "Implantar cliente", fields: { groupId: "principal" } },
+    });
+    const parent = (await parentResponse.json()).item;
+    const subitemResponse = await pedir("/api/todogreen/work-center", {
+      method: "POST",
+      body: { boardId, title: "Validar integração", fields: { parentId: parent.id } },
+    });
+    expect(subitemResponse.status).toBe(201);
+    const commentResponse = await pedir(`/api/todogreen/work-center/${parent.id}/comments`, {
+      method: "POST",
+      body: { body: "@Bruna validar SLA antes da ativação" },
+    });
+    expect(commentResponse.status).toBe(201);
+    const comment = (await commentResponse.json()).comment;
+    expect(comment.mentions).toContain("Bruna");
+
+    const detailResponse = await pedir(`/api/todogreen/work-center/${parent.id}/detail`);
+    expect(detailResponse.status).toBe(200);
+    const detail = await detailResponse.json();
+    expect(detail.comments).toHaveLength(1);
+    expect(detail.subitems).toContainEqual(expect.objectContaining({ title: "Validar integração" }));
+    expect(detail.events.some((entry) => entry.action === "commented-and-mentioned")).toBe(true);
+  });
+
+  it("bloqueia conclusão com dependência pendente e cria a próxima recorrência", async () => {
+    const dependency = (await (await pedir("/api/todogreen/work-center", {
+      method: "POST", body: { boardId, title: "Aprovar escopo" },
+    })).json()).item;
+    let recurring = (await (await pedir("/api/todogreen/work-center", {
+      method: "POST",
+      body: { boardId, title: "Revisão semanal", dueDate: "2026-08-24", dependencies: [dependency.id], fields: { recurrence: { frequency: "weekly" } } },
+    })).json()).item;
+
+    const blocked = await pedir(`/api/todogreen/work-center/${recurring.id}`, {
+      method: "PATCH", body: { status: "concluido", revision: recurring.revision },
+    });
+    expect(blocked.status).toBe(409);
+    expect((await blocked.json()).code).toBe("pending_dependencies");
+
+    const dependencyDone = await pedir(`/api/todogreen/work-center/${dependency.id}`, {
+      method: "PATCH", body: { status: "concluido", revision: dependency.revision },
+    });
+    expect(dependencyDone.status).toBe(200);
+    const completed = await pedir(`/api/todogreen/work-center/${recurring.id}`, {
+      method: "PATCH", body: { status: "concluido", revision: recurring.revision },
+    });
+    expect(completed.status).toBe(200);
+    const data = await completed.json();
+    expect(data.recurrenceCreated).toEqual(expect.objectContaining({ title: "Revisão semanal", dueDate: "2026-08-31", status: "novo" }));
+  });
 });
