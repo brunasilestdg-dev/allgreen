@@ -20,6 +20,7 @@ import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
 import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
+import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
 import { handleTodoGreenTms } from "./todogreen-tms.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
@@ -191,6 +192,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenFiscal(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Pessoas e folha. Dado sensível (CPF, salário): o módulo inteiro exige
+  // hr:manage, que só rh/admin/owner têm — quem não é do RH nem chega ao handler.
+  if (path.startsWith("/api/todogreen/payroll")) {
+    return guarded("To Do Green payroll error", "Não foi possível processar a folha.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPayroll(request, env, resolved.access, resolved.user);
     });
   }
 

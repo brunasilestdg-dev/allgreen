@@ -1289,3 +1289,7 @@
 .tdg-chart-bar { height:14px; background:var(--tdg-bg); border-radius:7px; border:1px solid var(--tdg-line); overflow:hidden; }
 .tdg-chart-bar span { display:block; height:100%; background:var(--tdg-green); }
 .tdg-chart-num { font-family:"IBM Plex Mono",monospace; font-size:.76rem; color:var(--tdg-muted); }
+
+/* ── DP/RH: pessoas e folha ─────────────────────────────────── */
+.tdg-people-folha-abrir { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin-bottom:1rem; }
+.tdg-people-folha-abrir input { padding:.5rem .7rem; border:1px solid var(--tdg-line); border-radius:10px; background:var(--tdg-card); color:var(--tdg-ink); }
