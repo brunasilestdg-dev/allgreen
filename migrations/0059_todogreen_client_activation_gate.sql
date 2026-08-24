@@ -94,25 +94,14 @@ BEGIN
        AND s.client_id = NEW.id
   ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:state') END;
 
-  SELECT CASE WHEN
-    NOT EXISTS (
-      SELECT 1
-        FROM todogreen_client_activation_state s
-       WHERE s.tenant_id = NEW.tenant_id
-         AND s.workspace_owner_id = NEW.workspace_owner_id
-         AND s.client_id = NEW.id
-         AND s.integration_status = 'not_required'
-    )
-    AND NOT EXISTS (
-      SELECT 1
-        FROM todogreen_tracker_integrations ti
-       WHERE ti.tenant_id = NEW.tenant_id
-         AND ti.workspace_owner_id = NEW.workspace_owner_id
-         AND ti.archived_at IS NULL
-         AND lower(ti.status) IN ('ready','active')
-         AND (ti.last_success_at IS NOT NULL OR ti.last_test_at IS NOT NULL)
-    )
-  THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:integration') END;
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+      FROM todogreen_client_activation_state s
+     WHERE s.tenant_id = NEW.tenant_id
+       AND s.workspace_owner_id = NEW.workspace_owner_id
+       AND s.client_id = NEW.id
+       AND s.integration_status IN ('ready','not_required')
+  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:integration') END;
 
   SELECT CASE WHEN
     NOT EXISTS (
