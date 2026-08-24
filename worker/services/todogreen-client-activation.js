@@ -14,13 +14,22 @@ const text = (value, max = 500) => String(value ?? "").trim().slice(0, max);
 const parse = (value, fallback = {}) => {
   try { return JSON.parse(value || ""); } catch { return fallback; }
 };
-const object = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : {};
 
 const mayRead = (access) => ["*", "clients:read", "clients:manage", "operations:manage", "operation:manage"]
   .some((permission) => podeNaVertical(access, permission));
 const mayManage = (access) => ["*", "clients:manage"].some((permission) => podeNaVertical(access, permission));
 
-const clientView = (row) => {
+const activationView = (row) => ({
+  status: row?.status || "implementation",
+  integrationStatus: row?.integration_status || "pending",
+  trackingRequired: row ? row.tracking_required !== 0 : true,
+  esgEnabled: row?.esg_enabled === 1,
+  activatedAt: row?.activated_at || "",
+  activatedBy: row?.activated_by || "",
+  revision: row?.revision || 0,
+});
+
+const clientView = (row, activation) => {
   const fields = parse(row?.fields_json, {});
   return row ? {
     id: row.id,
@@ -28,8 +37,8 @@ const clientView = (row) => {
     accountCode: row.account_code || "",
     status: row.status,
     portalEnabled: row.portal_enabled === 1,
-    crm: object(fields.crm),
-    activation: object(fields.activation),
+    crm: fields,
+    activation: activationView(activation),
     revision: row.revision,
   } : null;
 };
@@ -63,7 +72,11 @@ async function loadSnapshot(env, access, clientId) {
                updated_at DESC LIMIT 1`,
   ).bind(TENANT_ID, access.ownerId, clientId).first();
 
-  const [costCenter, operation, portalUsers, assignments, tracker, scoreWeights, dashboard] = await Promise.all([
+  const [activation, costCenter, operation, portalUsers, assignments, tracker, scoreWeights, dashboard] = await Promise.all([
+    env.DB.prepare(
+      `SELECT * FROM todogreen_client_activation_state
+        WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? LIMIT 1`,
+    ).bind(TENANT_ID, access.ownerId, clientId).first(),
     env.DB.prepare(
       `SELECT id,code,name FROM todogreen_cost_centers
         WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL AND status='ativo'
@@ -102,7 +115,7 @@ async function loadSnapshot(env, access, clientId) {
   ]);
 
   const snapshot = {
-    client: clientView(clientRow),
+    client: clientView(clientRow, activation),
     contract: contractView(contractRow),
     costCenter: costCenter || null,
     operation: operation || null,
@@ -126,11 +139,46 @@ const costCenterCode = (client) => {
   return `CLI-${source || client.id.slice(0, 8).toUpperCase()}`.slice(0, 40);
 };
 
+const trackerReady = (snapshot) => Boolean(
+  snapshot.trackerIntegration &&
+  ["ready", "active"].includes(text(snapshot.trackerIntegration.status, 20).toLowerCase()) &&
+  (snapshot.trackerIntegration.lastSuccessAt || snapshot.trackerIntegration.lastTestAt),
+);
+
+async function ensureActivationState(env, access, user, clientId, snapshot, now) {
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO todogreen_client_activation_state
+     (client_id,tenant_id,workspace_owner_id,status,integration_status,tracking_required,esg_enabled,
+      activated_at,activated_by,revision,created_by,updated_by,created_at,updated_at)
+     VALUES (?,?,?,'implementation','pending',1,0,NULL,NULL,1,?,?,?,?)`,
+  ).bind(clientId, TENANT_ID, access.ownerId, user.id, user.id, now, now).run();
+
+  if (snapshot.activeScoreWeights || trackerReady(snapshot)) {
+    await env.DB.prepare(
+      `UPDATE todogreen_client_activation_state
+          SET integration_status=CASE WHEN ?=1 THEN 'ready' ELSE integration_status END,
+              esg_enabled=CASE WHEN ?=1 THEN 1 ELSE esg_enabled END,
+              revision=revision+1,updated_by=?,updated_at=?
+        WHERE client_id=? AND tenant_id=? AND workspace_owner_id=?`,
+    ).bind(
+      trackerReady(snapshot) ? 1 : 0,
+      snapshot.activeScoreWeights ? 1 : 0,
+      user.id,
+      now,
+      clientId,
+      TENANT_ID,
+      access.ownerId,
+    ).run();
+  }
+}
+
 async function prepare(env, access, user, clientId) {
   let snapshot = await loadSnapshot(env, access, clientId);
   if (!snapshot) return null;
   const now = new Date().toISOString();
   const created = [];
+
+  await ensureActivationState(env, access, user, clientId, snapshot, now);
 
   if (!snapshot.costCenter) {
     await env.DB.prepare(
@@ -168,24 +216,12 @@ async function prepare(env, access, user, clientId) {
     created.push("dashboard");
   }
 
-  const row = await env.DB.prepare(
-    "SELECT portal_enabled,fields_json,revision FROM todogreen_clients WHERE id=? AND tenant_id=? AND workspace_owner_id=?",
-  ).bind(clientId, TENANT_ID, access.ownerId).first();
-  const fields = parse(row.fields_json, {});
-  const activation = { ...object(fields.activation) };
-  if (!activation.status) activation.status = "implementation";
-  if (snapshot.activeScoreWeights) activation.esgEnabled = true;
-  if (snapshot.trackerIntegration && ["ready", "active"].includes(text(snapshot.trackerIntegration.status, 20).toLowerCase()) &&
-      (snapshot.trackerIntegration.lastSuccessAt || snapshot.trackerIntegration.lastTestAt))
-    activation.integrationStatus = "ready";
-  fields.activation = activation;
-  await env.DB.prepare(
-    `UPDATE todogreen_clients SET portal_enabled=?,fields_json=?,revision=revision+1,updated_by=?,updated_at=?
-      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
-  ).bind(
-    snapshot.portalUsers > 0 ? 1 : Number(row.portal_enabled || 0), JSON.stringify(fields), user.id, now,
-    clientId, TENANT_ID, access.ownerId, row.revision,
-  ).run();
+  if (snapshot.portalUsers > 0 && !snapshot.client.portalEnabled) {
+    await env.DB.prepare(
+      `UPDATE todogreen_clients SET portal_enabled=1,revision=revision+1,updated_by=?,updated_at=?
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+    ).bind(user.id, now, clientId, TENANT_ID, access.ownerId).run();
+  }
 
   snapshot = await loadSnapshot(env, access, clientId);
   await registrarAuditoriaTodoGreen(env, {
@@ -196,31 +232,41 @@ async function prepare(env, access, user, clientId) {
 }
 
 async function configure(env, access, user, clientId, body) {
-  const row = await env.DB.prepare(
-    "SELECT fields_json,revision FROM todogreen_clients WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL",
+  const client = await env.DB.prepare(
+    `SELECT id FROM todogreen_clients
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(clientId, TENANT_ID, access.ownerId).first();
-  if (!row) return null;
-  const fields = parse(row.fields_json, {});
-  const before = object(fields.activation);
-  const activation = { ...before };
-  if (Object.prototype.hasOwnProperty.call(body, "integrationStatus")) {
-    const value = text(body.integrationStatus, 30).toLowerCase();
-    if (!["pending", "ready", "not_required"].includes(value)) throw new Error("Situação de integração inválida.");
-    activation.integrationStatus = value;
-  }
-  if (Object.prototype.hasOwnProperty.call(body, "trackingRequired"))
-    activation.trackingRequired = body.trackingRequired !== false;
-  fields.activation = activation;
-  await env.DB.prepare(
-    `UPDATE todogreen_clients SET fields_json=?,revision=revision+1,updated_by=?,updated_at=?
-      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
-  ).bind(JSON.stringify(fields), user.id, new Date().toISOString(), clientId, TENANT_ID, access.ownerId, row.revision).run();
+  if (!client) return null;
+  const now = new Date().toISOString();
   const snapshot = await loadSnapshot(env, access, clientId);
+  await ensureActivationState(env, access, user, clientId, snapshot, now);
+  const row = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_activation_state
+      WHERE client_id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(clientId, TENANT_ID, access.ownerId).first();
+  const before = activationView(row);
+  const integrationStatus = Object.prototype.hasOwnProperty.call(body, "integrationStatus")
+    ? text(body.integrationStatus, 30).toLowerCase()
+    : before.integrationStatus;
+  if (!["pending", "ready", "not_required"].includes(integrationStatus))
+    throw new Error("Situação de integração inválida.");
+  const trackingRequired = Object.prototype.hasOwnProperty.call(body, "trackingRequired")
+    ? body.trackingRequired !== false
+    : before.trackingRequired;
+  await env.DB.prepare(
+    `UPDATE todogreen_client_activation_state
+        SET integration_status=?,tracking_required=?,revision=revision+1,updated_by=?,updated_at=?
+      WHERE client_id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
+  ).bind(
+    integrationStatus, trackingRequired ? 1 : 0, user.id, now,
+    clientId, TENANT_ID, access.ownerId, row.revision,
+  ).run();
+  const next = await loadSnapshot(env, access, clientId);
   await registrarAuditoriaTodoGreen(env, {
     access, user, action: "client_activation_configured", resourceType: "client_activation",
-    resourceId: clientId, clientId, before, after: activation,
+    resourceId: clientId, clientId, before, after: next.client.activation,
   });
-  return snapshot;
+  return next;
 }
 
 async function activate(env, access, user, clientId) {
@@ -232,17 +278,22 @@ async function activate(env, access, user, clientId) {
     "SELECT fields_json,revision FROM todogreen_clients WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL",
   ).bind(clientId, TENANT_ID, access.ownerId).first();
   const fields = parse(row.fields_json, {});
-  const before = { crm: object(fields.crm), activation: object(fields.activation) };
-  fields.crm = { ...object(fields.crm), stage: "Cliente ativo" };
-  fields.activation = { ...object(fields.activation), status: "active", activatedAt: new Date().toISOString(), activatedBy: user.id };
+  const before = { stage: fields.stage || "", activation: prepared.snapshot.client.activation };
+  fields.stage = "Cliente ativo";
+  const now = new Date().toISOString();
   await env.DB.prepare(
     `UPDATE todogreen_clients SET status='ativo',fields_json=?,revision=revision+1,updated_by=?,updated_at=?
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
-  ).bind(JSON.stringify(fields), user.id, new Date().toISOString(), clientId, TENANT_ID, access.ownerId, row.revision).run();
+  ).bind(JSON.stringify(fields), user.id, now, clientId, TENANT_ID, access.ownerId, row.revision).run();
+  await env.DB.prepare(
+    `UPDATE todogreen_client_activation_state
+        SET status='active',activated_at=?,activated_by=?,revision=revision+1,updated_by=?,updated_at=?
+      WHERE client_id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(now, user.id, user.id, now, clientId, TENANT_ID, access.ownerId).run();
   const snapshot = await loadSnapshot(env, access, clientId);
   await registrarAuditoriaTodoGreen(env, {
     access, user, action: "client_activated", resourceType: "client_activation", resourceId: clientId,
-    clientId, before, after: { crm: fields.crm, activation: fields.activation, readiness: snapshot.readiness },
+    clientId, before, after: { stage: "Cliente ativo", activation: snapshot.client.activation, readiness: snapshot.readiness },
   });
   return { snapshot, created: prepared.created };
 }
@@ -281,7 +332,7 @@ export async function handleTodoGreenClientActivation(request, env, access, user
     return json({ error: "Ação de implantação inválida." }, 400);
   } catch (error) {
     const message = text(error?.message || "Não foi possível processar a implantação.", 240);
-    if (message.startsWith("CLIENT_ACTIVATION_BLOCKED:"))
+    if (message.includes("CLIENT_ACTIVATION_BLOCKED:"))
       return json({ error: "A ativação foi bloqueada pelo gate de implantação.", code: message }, 409);
     return json({ error: message }, 400);
   }
