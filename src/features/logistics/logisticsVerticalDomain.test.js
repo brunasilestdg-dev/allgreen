@@ -133,10 +133,10 @@ describe("logistics vertical domain", () => {
     expect(result.productName).toBe("Last Mile");
     expect(result.inputs.packages).toBe(9000);
     expect(result.impact.distanceKm).toBeGreaterThan(20_000);
-    expect(result.recommendation.reasons.join(" ")).toMatch(/ESG|parâmetros|Deal Desk/i);
+    expect(result.recommendation.reasons.join(" ")).toMatch(/ESG|parâmetros|aprovação comercial/i);
   });
 
-  it("triggers Deal Desk when target is below minimum or data quality is low", () => {
+  it("triggers commercial approval when target is below minimum or data quality is low", () => {
     const result = centralPricingEngine("middle-mile", {
       distanceKm: 220,
       tripsPerMonth: 30,
@@ -147,7 +147,7 @@ describe("logistics vertical domain", () => {
     expect(result.approval.required).toBe(true);
     expect(result.approval.triggers).toContain("Target incompatível com preço mínimo");
     expect(result.approval.triggers).toContain("Dados insuficientes ou pouco confiáveis");
-    expect(result.recommendation.decision).toBe("Encaminhar ao Deal Desk");
+    expect(result.recommendation.decision).toBe("Enviar para aprovação comercial");
     const decision = pricingDecisionSummary(result);
     expect(decision.decision).toBe("AVANÇAR COM APROVAÇÃO");
     expect(decision.floor).toBe(result.minimumPrice);
@@ -156,7 +156,7 @@ describe("logistics vertical domain", () => {
     expect(decision.approval).toContain("Target incompatível");
   });
 
-  it("triggers Deal Desk for large contracts even with healthy margin", () => {
+  it("triggers commercial approval for large contracts even with healthy margin", () => {
     const result = centralPricingEngine("middle-mile", {
       distanceKm: 1800,
       tripsPerMonth: 320,

@@ -39,7 +39,7 @@ describe("automações da To Do Green", () => {
         }, 201);
       }
       return json({
-        boards: [{ id: "board-1", name: "Comercial e Deal Desk" }],
+        boards: [{ id: "board-1", name: "Comercial e aprovações" }],
         automationRules: [{
           id: "r1",
           boardId: "board-1",

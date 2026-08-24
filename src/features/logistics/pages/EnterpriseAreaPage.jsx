@@ -1,4 +1,4 @@
-import { ArrowRight, Boxes, CheckCircle2, FileText, Route, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, BadgeCheck, Boxes, BriefcaseBusiness, CheckCircle2, FileText, Gauge, Megaphone, Route, Scale, Settings, Target, TrendingUp, Users } from "lucide-react";
 
 const cards = {
   products: {
@@ -42,6 +42,26 @@ const cards = {
       ["Operação recebe somente o que foi aceito", "Operação"],
     ],
   },
+  dp: {
+    kicker: "DEPARTAMENTO PESSOAL",
+    title: "Rotinas de DP",
+    description: "DP concentra documentação, vínculos, regras trabalhistas, vencimentos e dados sensíveis de pessoas, separado da gestão de capacidade do RH.",
+    icon: BriefcaseBusiness,
+    actions: [
+      ["Ver cadastros", "/todogreen/cadastros"],
+      ["Ver RH", "/todogreen/rh"],
+    ],
+    responsibilities: [
+      "Controlar documentos, vínculos, vencimentos e dados cadastrais sensíveis.",
+      "Apoiar admissões, desligamentos, afastamentos e obrigações recorrentes.",
+      "Separar rotina trabalhista de custos operacionais e faturamento.",
+    ],
+    handoff: [
+      ["RH acompanha capacidade e escala", "RH"],
+      ["Operação consulta disponibilidade liberada", "Operação"],
+      ["Administração governa acesso aos dados sensíveis", "Administração"],
+    ],
+  },
   hr: {
     kicker: "DP/RH",
     title: "Pessoas, motoristas e escalas",
@@ -62,6 +82,26 @@ const cards = {
       ["Gestão acompanha metas e planos", "Gestão"],
     ],
   },
+  quality: {
+    kicker: "QUALIDADE",
+    title: "Qualidade, SLA e melhoria contínua",
+    description: "Qualidade acompanha SLA, BSC, não conformidades, planos de ação e reincidências operacionais.",
+    icon: BadgeCheck,
+    actions: [
+      ["Ver ocorrências", "/todogreen/ocorrencias"],
+      ["Ver indicadores", "/todogreen/indicadores"],
+    ],
+    responsibilities: [
+      "Medir cumprimento de SLA e registrar não conformidades.",
+      "Tratar causa raiz, recorrência, plano de ação e dono da correção.",
+      "Conectar qualidade ao contrato, ao cliente e ao frete afetado.",
+    ],
+    handoff: [
+      ["Operação registra a ocorrência", "Operação"],
+      ["Qualidade define tratamento e prevenção", "Qualidade"],
+      ["Indicadores consolidam SLA e recorrência", "Indicadores"],
+    ],
+  },
   marketing: {
     kicker: "MARKETING",
     title: "Campanhas, marca e materiais comerciais",
@@ -80,6 +120,86 @@ const cards = {
       ["ESG fornece evidências auditáveis", "ESG"],
       ["Comercial usa materiais e campanhas", "Comercial"],
       ["Produtos ajusta oferta com o retorno do mercado", "Produtos"],
+    ],
+  },
+  legal: {
+    kicker: "JURÍDICO",
+    title: "Contratos, riscos e formalizações",
+    description: "Jurídico organiza minutas, aprovações, riscos, anexos, vigências, aditivos e evidências formais ligadas ao cliente e à operação.",
+    icon: Scale,
+    actions: [
+      ["Ver propostas e contratos", "/todogreen/propostas"],
+      ["Ver documentos", "/todogreen/documentos"],
+    ],
+    responsibilities: [
+      "Acompanhar versão, aprovação, assinatura, vigência e reajuste contratual.",
+      "Formalizar riscos, exceções, anexos e condições especiais.",
+      "Garantir que implantação e faturamento só avancem com base contratual válida.",
+    ],
+    handoff: [
+      ["Comercial negocia condição", "Comercial"],
+      ["Jurídico formaliza e controla risco", "Jurídico"],
+      ["Implantação usa o contrato como gate", "Implantação"],
+    ],
+  },
+  indicators: {
+    kicker: "INDICADORES",
+    title: "KPIs e painéis executivos",
+    description: "Indicadores consolida KPIs comerciais, operacionais, financeiros, ESG, qualidade, implantação e produtividade.",
+    icon: Gauge,
+    actions: [
+      ["Criar painel", "/todogreen/dashboards"],
+      ["Ver relatórios", "/todogreen/relatorios"],
+    ],
+    responsibilities: [
+      "Consolidar dados de múltiplas áreas sem duplicar origem.",
+      "Separar indicador real, estimativa, pendência e dado demonstrativo.",
+      "Dar visão executiva de margem, SLA, receita, implantação, fretes e impacto ESG.",
+    ],
+    handoff: [
+      ["Áreas registram na fonte transacional", "Áreas"],
+      ["Indicadores consolida e compara", "Indicadores"],
+      ["Administração audita permissões e rastreabilidade", "Administração"],
+    ],
+  },
+  admin: {
+    kicker: "ADMINISTRAÇÃO",
+    title: "Governança da vertical",
+    description: "Administração concentra acessos, permissões, integrações, auditoria, configurações e regras de governança da vertical.",
+    icon: Settings,
+    actions: [
+      ["Usuários e acessos", "/todogreen/acessos"],
+      ["Integrações", "/todogreen/integracoes"],
+    ],
+    responsibilities: [
+      "Controlar perfis, permissões e segregação por área.",
+      "Auditar alterações relevantes em cliente, contrato, frete, financeiro e ESG.",
+      "Manter integrações e configurações sem expor credenciais ao usuário final.",
+    ],
+    handoff: [
+      ["Todas as áreas usam permissões por papel", "Áreas"],
+      ["Administração governa acesso e auditoria", "Administração"],
+      ["Indicadores acompanha aderência e risco", "Indicadores"],
+    ],
+  },
+  communication: {
+    kicker: "COMUNICAÇÃO INTERNA",
+    title: "Alinhamentos, conhecimento e trabalho",
+    description: "Comunicação interna organiza documentos, comunicados, quadros, decisões e contexto compartilhado da To Do Green.",
+    icon: Megaphone,
+    actions: [
+      ["Abrir espaço de trabalho", "/todogreen/espaco"],
+      ["Abrir quadros", "/todogreen/central-trabalho"],
+    ],
+    responsibilities: [
+      "Manter decisões, materiais internos e contexto de projetos acessíveis.",
+      "Evitar que alinhamentos comerciais, operacionais e financeiros se percam em mensagens soltas.",
+      "Conectar tarefas, responsáveis e documentos ao processo certo.",
+    ],
+    handoff: [
+      ["Áreas registram decisões e pendências", "Áreas"],
+      ["Comunicação organiza contexto", "Comunicação"],
+      ["Gestores acompanham execução", "Indicadores"],
     ],
   },
 };

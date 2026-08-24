@@ -425,7 +425,7 @@ const decidir = ({ economia, volume, regua, faltando, receitaBruta }) => {
     return {
       recomendacao: RECOMENDACOES.recusar,
       motivo: `Margem de ${economia.margemPercent}%, abaixo do piso de ${regua.minimumMarginPercent}% da régua em vigor.`,
-      acao: `Peça ${moeda(economia.precoMinimo)}${volume.viagens > 1 ? ` (${moeda(economia.precoMinimoPorViagem)} por viagem)` : ""} para chegar ao piso, ou leve ao Deal Desk com justificativa.`,
+      acao: `Peça ${moeda(economia.precoMinimo)}${volume.viagens > 1 ? ` (${moeda(economia.precoMinimoPorViagem)} por viagem)` : ""} para chegar ao piso, ou leve para aprovação comercial com justificativa.`,
     };
 
   if (economia.margemPercent < num(regua.targetMarginPercent))

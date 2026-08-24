@@ -60,7 +60,7 @@ const LABELS = new Map([
   ["Oportunidades e pipeline", "Oportunidades"],
   ["Clientes e contatos", "Clientes"],
   ["Propostas e contratos", "Propostas"],
-  ["Precificação e Deal Desk", "Precificação"],
+  ["Precificação e aprovação comercial", "Precificação"],
   ["Receita e forecast", "Receita"],
   ["Custos e margem", "Custos"],
   ["Auditoria e governança", "Auditoria"],
@@ -121,7 +121,7 @@ const ROUTINES = [
     route: "/todogreen/precificacao",
     score: "8.5",
     text: "Custo, margem, preço mínimo, preço recomendado e aprovação comercial.",
-    subs: ["Produtos", "Margem", "Deal Desk", "Simulações"],
+    subs: ["Produtos", "Margem", "Aprovações", "Simulações"],
   },
   {
     title: "Propostas",

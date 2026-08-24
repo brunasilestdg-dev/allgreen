@@ -8,7 +8,7 @@ import {
   situacaoVisivel,
 } from "../dealDeskDomain.js";
 
-// A fila do Deal Desk.
+// A fila de aprovação comercial.
 //
 // Antes esta tela não existia: havia um alerta na calculadora dizendo que a
 // condição precisava de aprovação, e nada acontecia. O pedido não tinha dono,
@@ -260,7 +260,7 @@ export default function DealDeskPage({ authHeaders, quem = {}, setToast }) {
     <section className="tdg-panel tdg-page tdg-dd-page">
       <header className="tdg-page-title">
         <div>
-          <span>DEAL DESK</span>
+          <span>APROVAÇÃO COMERCIAL</span>
           <h2>Aprovação de condição comercial</h2>
           <p>
             Toda condição fora da régua passa por aqui antes de virar proposta. A alçada, o prazo e o

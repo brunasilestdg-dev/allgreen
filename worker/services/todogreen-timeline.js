@@ -153,7 +153,7 @@ export async function reunirEventos(env, { ownerId, clientId, conta }) {
 
   for (const item of linhas(aprovacoes))
     add({ id: `deal-${item.id}`, tipo: "aprovacao", quando: item.created_at,
-      titulo: `Deal Desk — ${clean(item.kind, 80) || "movimentação"}`,
+      titulo: `Aprovação comercial — ${clean(item.kind, 80) || "movimentação"}`,
       detalhe: clean(item.body, 400), autor: clean(item.author_name, 160) });
 
   for (const item of linhas(tarefas)) {

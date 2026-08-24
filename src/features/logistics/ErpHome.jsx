@@ -76,7 +76,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     opportunities: ["Oportunidades", String(decision.counts.openOpportunities), "em andamento"],
     margin: ["Margem", margin.margemPercent === null ? "Sem cálculo" : `${NUM.format(margin.margemPercent)}%`, margin.leitura],
     scenarios: ["Simulações", String(data.pricingScenarios?.length || 0), "com premissas confirmadas"],
-    approvals: ["Aprovações", String(dashboard.aprovacoesPendentes || 0), "pendentes no Deal Desk"],
+    approvals: ["Aprovações", String(dashboard.aprovacoesPendentes || 0), "pendentes de decisão comercial"],
     products: ["Produtos", String(products.length), "modelos logísticos ativos"],
     trips: ["Viagens", NUM.format(dashboard.viagens || 0), "registradas no período"],
     operations: ["Operações", String(data.operations?.length || 0), "registros operacionais"],

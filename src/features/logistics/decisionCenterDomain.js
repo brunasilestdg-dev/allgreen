@@ -100,7 +100,7 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
       tone: "risk",
       title: `${countLabel(Number(dashboard.aprovacoesPendentes), "aprovação comercial pendente", "aprovações comerciais pendentes")}`,
       detail: "Há propostas aguardando decisão de alçada.",
-      action: "Abrir Deal Desk",
+      action: "Abrir aprovações",
       route: "/todogreen/deal-desk",
     },
     lowMarginScenarios.length && {

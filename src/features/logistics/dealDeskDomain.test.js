@@ -84,7 +84,7 @@ describe("quem pode decidir", () => {
     ).toBe(true);
   });
 
-  it("sem permissão de Deal Desk, nem o papel certo decide", () => {
+  it("sem permissão de aprovação comercial, nem o papel certo decide", () => {
     const r = podeDecidir(pedido, { userId: "chefe", role: "lideranca_comercial", permissions: [] });
     expect(r.pode).toBe(false);
     expect(r.motivo).toMatch(/permissão/);
@@ -110,7 +110,7 @@ describe("quem pode decidir", () => {
   });
 
   it("permissão de aprovar não substitui a alçada", () => {
-    // `deal:approve` diz que a pessoa participa do Deal Desk, não que ela
+    // `deal:approve` diz que a pessoa participa da aprovação comercial, não que ela
     // libera qualquer desvio. Se substituísse, a escada não existiria.
     const r = podeDecidir(pedido, { userId: "x", role: "auditor", permissions: ["deal:approve"] });
     expect(r.pode).toBe(false);
@@ -142,7 +142,7 @@ describe("prazo", () => {
 describe("a proposta sai ou não sai", () => {
   const base = { cenarioId: "c1", alcadaId: "gestao_comercial", versao: 1, criadoEm: AGORA, prazoEm: new Date(new Date(AGORA).getTime() + horas(24)).toISOString() };
 
-  it("sem pedido nenhum, sai — nem toda condição precisa de Deal Desk", () => {
+  it("sem pedido nenhum, sai — nem toda condição precisa de aprovação comercial", () => {
     expect(liberacaoDaProposta("c1", []).liberada).toBe(true);
   });
 

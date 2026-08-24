@@ -110,9 +110,14 @@ export const TODO_GREEN_PRODUCTION_DATA_POLICY = Object.freeze({
 
 export const TODO_GREEN_MODULE_AREAS = [
   {
-    id: "esg",
-    name: "Inteligência ESG",
-    description: "Impacto ambiental, Green Score, emissões da cadeia logística, relatórios e documentos.",
+    id: "principal",
+    name: "Principal",
+    description: "Resumo executivo, pendências e atalhos do ERP.",
+  },
+  {
+    id: "cadastros",
+    name: "Cadastros",
+    description: "Clientes, motoristas, veículos, tabelas, rotas, parceiros, materiais, depósitos e centros de custo.",
   },
   {
     id: "comercial",
@@ -120,19 +125,24 @@ export const TODO_GREEN_MODULE_AREAS = [
     description: "Clientes, oportunidades, propostas, preços, aprovações comerciais e comparação de mercado.",
   },
   {
-    id: "produtos",
-    name: "Produtos",
-    description: "Catálogo de produtos logísticos, regras de precificação, SLA, restrições e insumos para aceite.",
-  },
-  {
-    id: "planejamento",
-    name: "Planejamento",
-    description: "Viabilidade, capacidade, aceite de viagem, liberação de OS e handoff para execução.",
-  },
-  {
-    id: "operacional",
+    id: "operacao",
     name: "Operação",
-    description: "Execução de rotas, viagens, veículos, entregas, estoque, compras, energia e ocorrências.",
+    description: "Fretes, OS, aceite, execução, rota, tracking, CIOT, entregas, frota, energia e produtividade.",
+  },
+  {
+    id: "implantacao",
+    name: "Implantação",
+    description: "Go-live de cliente com contrato, SLA, operação, faturamento, portal, integrações e responsáveis.",
+  },
+  {
+    id: "ocorrencias",
+    name: "Ocorrências",
+    description: "Falhas, atrasos, insucessos, desvios, evidências, tratamento e prevenção.",
+  },
+  {
+    id: "documentos",
+    name: "Documentos",
+    description: "Contratos, comprovantes, laudos, evidências, anexos, versões e links temporários.",
   },
   {
     id: "financeiro",
@@ -140,9 +150,19 @@ export const TODO_GREEN_MODULE_AREAS = [
     description: "CT-e, documentos fiscais, faturamento, títulos, recebíveis, baixas, custos e conciliação.",
   },
   {
+    id: "dp",
+    name: "DP",
+    description: "Documentação, vínculos, vencimentos, dados sensíveis e rotinas trabalhistas.",
+  },
+  {
     id: "rh",
-    name: "DP/RH",
-    description: "Pessoas, motoristas, escalas, documentos, alocação e dados sensíveis de pessoal.",
+    name: "RH",
+    description: "Pessoas, disponibilidade, escalas, treinamento, capacidade e alocação.",
+  },
+  {
+    id: "qualidade",
+    name: "Qualidade",
+    description: "SLA, BSC, não conformidades, planos de ação e melhoria contínua.",
   },
   {
     id: "marketing",
@@ -150,9 +170,39 @@ export const TODO_GREEN_MODULE_AREAS = [
     description: "Campanhas, materiais comerciais, marca, relacionamento e evidências para comunicação.",
   },
   {
-    id: "gestao",
-    name: "Gestão",
-    description: "Tarefas, documentos, aprovações, inbox, auditoria, usuários e permissões.",
+    id: "comunicacao-interna",
+    name: "Comunicação Interna",
+    description: "Comunicados, conhecimento, decisões, tarefas e alinhamentos entre áreas.",
+  },
+  {
+    id: "esg",
+    name: "ESG",
+    description: "Impacto ambiental, Green Score, emissões da cadeia logística, relatórios e metodologia.",
+  },
+  {
+    id: "juridico",
+    name: "Jurídico",
+    description: "Contratos, minutas, aprovações, riscos, aditivos e formalizações.",
+  },
+  {
+    id: "suprimentos",
+    name: "Suprimentos",
+    description: "Compras, requisições, fornecedores, recebimentos e estoque.",
+  },
+  {
+    id: "produtos",
+    name: "Produtos",
+    description: "Catálogo de produtos logísticos, regras de precificação, SLA, restrições e insumos para aceite.",
+  },
+  {
+    id: "indicadores",
+    name: "Indicadores",
+    description: "KPIs comerciais, operacionais, financeiros, ESG, qualidade e implantação.",
+  },
+  {
+    id: "administracao",
+    name: "Administração",
+    description: "Acessos, permissões, integrações, auditoria, configurações e governança.",
   },
 ];
 
@@ -177,6 +227,11 @@ const module = (id, name, area, route, config = {}) => ({
 });
 
 export const TODO_GREEN_MODULE_CATALOG = [
+  module("dashboard", "Principal", "principal", "/todogreen/dashboard", {
+    icon: "Gauge",
+    order: 0,
+    description: "Resumo executivo, minha fila, indicadores e atalhos do ERP.",
+  }),
   module("dashboard-esg", "Dashboard ESG", "esg", "/todogreen/esg", {
     icon: "Leaf",
     order: 1,
@@ -263,6 +318,11 @@ export const TODO_GREEN_MODULE_CATALOG = [
     permissions: ["read", "commission:manage"],
   }),
   module("benchmark", "Benchmark", "comercial", "/todogreen/precificacao", { icon: "BarChart3", order: 21 }),
+  module("cadastros", "Cadastros logísticos", "cadastros", "/todogreen/cadastros", {
+    icon: "Boxes",
+    order: 21.5,
+    description: "Clientes, motoristas, veículos, tabelas, rotas e cadastros mestres do ERP.",
+  }),
   module("produtos", "Produtos", "produtos", "/todogreen/produtos", {
     icon: "Boxes",
     order: 22,
@@ -281,28 +341,43 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Regras, restrições, premissas, indicadores e evidências de cada produto logístico.",
     permissions: ["read", "product:manage"],
   }),
-  module("planejamento", "Planejamento e aceite", "planejamento", "/todogreen/planejamento", {
+  module("implantacao", "Implantação de cliente", "implantacao", "/todogreen/implantacao", {
+    icon: "CheckCircle2",
+    order: 24.5,
+    description: "Go-live com contrato, operação, financeiro, portal, tracking, ESG e governança.",
+  }),
+  module("planejamento", "Planejamento operacional", "operacao", "/todogreen/planejamento", {
     icon: "Route",
     order: 25,
     description: "Decisão de aceite da viagem ou OS com capacidade, produto, SLA, risco, margem e janela operacional.",
     permissions: ["read", "planning:manage", "product:manage"],
   }),
-  module("aceite-viagens", "Aceite de viagens", "planejamento", "/todogreen/ordens-servico", {
+  module("aceite-viagens", "Aceite de viagens", "operacao", "/todogreen/ordens-servico", {
     icon: "CheckCircle2",
     order: 26,
     description: "Planejamento/Produtos libera a OS antes da execução, sem depender de Financeiro.",
     permissions: ["read", "planning:manage", "product:manage"],
   }),
-  module("ciot", "CIOT", "planejamento", "/todogreen/ciot", {
+  module("ciot", "CIOT", "operacao", "/todogreen/ciot", {
     icon: "FileCheck",
     order: 27,
     description: "Preparação, validação de piso mínimo, payload regulatório, contingência e registro do código CIOT emitido.",
     permissions: ["read", "ciot:manage", "planning:manage", "fiscal:manage"],
   }),
-  module("solicitacoes", "Solicitações de clientes", "planejamento", "/todogreen/solicitacoes", {
+  module("solicitacoes", "Solicitações de clientes", "implantacao", "/todogreen/solicitacoes", {
     icon: "Inbox",
     order: 28,
     description: "Fila do que os clientes pediram pelo portal, ordenada por prazo, com responsável, conversa e histórico.",
+  }),
+  module("compras", "Compras", "suprimentos", "/todogreen/compras", {
+    icon: "ListChecks",
+    order: 28.5,
+    description: "Requisições, aprovações, pedidos e recebimentos.",
+  }),
+  module("estoque", "Estoque", "suprimentos", "/todogreen/estoque", {
+    icon: "Boxes",
+    order: 28.7,
+    description: "Saldos, entradas, saídas, transferências e contagens.",
   }),
   module("receita", "Receita", "financeiro", "/todogreen/receita", { icon: "DollarSign", order: 30 }),
   module("forecast", "Forecast", "financeiro", "/todogreen/receita", { icon: "TrendingUp", order: 31 }),
@@ -318,24 +393,24 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("rentabilidade", "Rentabilidade", "financeiro", "/todogreen/dashboard", { icon: "Activity", order: 37 }),
   module("orcamento", "Orçamento", "financeiro", "/todogreen/custos", { icon: "ListChecks", order: 38 }),
   module("centros-custo", "Centros de custo", "financeiro", "/todogreen/rateios", { icon: "Network", order: 39 }),
-  module("operacoes", "Operações", "operacional", "/todogreen/operacoes", { icon: "Workflow", order: 40 }),
-  module("rotas", "Rotas", "operacional", "/todogreen/operacoes", { icon: "Route", order: 42 }),
-  module("viagens", "Viagens", "operacional", "/todogreen/operacoes", { icon: "Navigation", order: 43 }),
-  module("veiculos", "Veículos", "operacional", "/todogreen/operacoes", { icon: "Truck", order: 44 }),
-  module("rastreamento", "TMS Tracker", "operacional", "/todogreen/rastreamento", {
+  module("operacoes", "Fretes", "operacao", "/todogreen/operacoes", { icon: "Workflow", order: 40 }),
+  module("rotas", "Rotas", "operacao", "/todogreen/operacoes", { icon: "Route", order: 42 }),
+  module("viagens", "Viagens", "operacao", "/todogreen/operacoes", { icon: "Navigation", order: 43 }),
+  module("veiculos", "Veículos", "cadastros", "/todogreen/cadastros", { icon: "Truck", order: 44 }),
+  module("rastreamento", "TMS Tracker", "operacao", "/todogreen/rastreamento", {
     icon: "Route",
     order: 44.5,
     description: "Receba posições e eventos da frota conectada ao Tracker.",
     permissions: ["read", "fleet:manage", "integration:manage"],
   }),
-  module("motoristas", "Motoristas", "rh", "/todogreen/rh", { icon: "UserRound", order: 45 }),
-  module("entregas", "Entregas", "operacional", "/todogreen/operacoes", { icon: "PackageCheck", order: 46 }),
-  module("pacotes", "Pacotes", "operacional", "/todogreen/operacoes", { icon: "Boxes", order: 47 }),
-  module("ocupacao", "Ocupação", "operacional", "/todogreen/dashboard", { icon: "Gauge", order: 48 }),
-  module("produtividade", "Produtividade", "operacional", "/todogreen/dashboard", { icon: "Activity", order: 49 }),
-  module("energia", "Energia", "operacional", "/todogreen/esg", { icon: "Zap", order: 50 }),
-  module("ocorrencias", "Ocorrências", "operacional", "/todogreen/operacoes", { icon: "AlertTriangle", order: 51 }),
-  module("dp-rh", "DP/RH", "rh", "/todogreen/rh", {
+  module("motoristas", "Motoristas", "cadastros", "/todogreen/cadastros", { icon: "UserRound", order: 45 }),
+  module("entregas", "Entregas", "operacao", "/todogreen/operacoes", { icon: "PackageCheck", order: 46 }),
+  module("pacotes", "Pacotes", "operacao", "/todogreen/operacoes", { icon: "Boxes", order: 47 }),
+  module("ocupacao", "Ocupação", "indicadores", "/todogreen/indicadores", { icon: "Gauge", order: 48 }),
+  module("produtividade", "Produtividade", "indicadores", "/todogreen/indicadores", { icon: "Activity", order: 49 }),
+  module("energia", "Energia", "esg", "/todogreen/esg", { icon: "Zap", order: 50 }),
+  module("ocorrencias", "Ocorrências", "ocorrencias", "/todogreen/ocorrencias", { icon: "AlertTriangle", order: 51 }),
+  module("dp-rh", "Departamento Pessoal", "dp", "/todogreen/dp", {
     icon: "Users",
     order: 52,
     description: "Administração de pessoal, documentos, dados sensíveis, alocação e rotinas trabalhistas.",
@@ -359,25 +434,28 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Planejamento de campanhas por segmento, produto, cliente e objetivo de crescimento.",
     permissions: ["read", "marketing:manage"],
   }),
-  module("tarefas", "Tarefas", "gestao", "/todogreen/dashboard", { icon: "ListTodo", order: 60 }),
-  module("espaco", "Espaço de trabalho", "gestao", "/todogreen/espaco", {
+  module("tarefas", "Tarefas", "comunicacao-interna", "/todogreen/espaco", { icon: "ListTodo", order: 60 }),
+  module("espaco", "Comunicação interna", "comunicacao-interna", "/todogreen/espaco", {
     icon: "BriefcaseBusiness",
     order: 60.5,
     description: "Notas conectadas, estrutura, bases relacionais, processos, capacidade e quadros no mesmo contexto.",
   }),
-  module("documentos", "Documentos", "gestao", "/todogreen/relatorios", { icon: "FileText", order: 61 }),
-  module("aprovacoes", "Aprovações", "gestao", "/todogreen/precificacao", { icon: "ShieldCheck", order: 62 }),
-  module("notificacoes", "Notificações", "gestao", "/todogreen/dashboard", { icon: "Bell", order: 63 }),
-  module("inbox", "Inbox", "gestao", "/todogreen/dashboard", { icon: "Inbox", order: 64 }),
-  module("relatorios", "Relatórios", "gestao", "/todogreen/relatorios", { icon: "FileText", order: 65 }),
-  module("auditoria", "Auditoria", "gestao", "/todogreen/auditoria", {
+  module("documentos", "Documentos", "documentos", "/todogreen/documentos", { icon: "FileText", order: 61 }),
+  module("aprovacoes", "Aprovações", "comercial", "/todogreen/deal-desk", { icon: "ShieldCheck", order: 62 }),
+  module("notificacoes", "Notificações", "comunicacao-interna", "/todogreen/espaco", { icon: "Bell", order: 63 }),
+  module("inbox", "Inbox", "comunicacao-interna", "/todogreen/espaco", { icon: "Inbox", order: 64 }),
+  module("relatorios", "Relatórios", "indicadores", "/todogreen/relatorios", { icon: "FileText", order: 65 }),
+  module("indicadores", "Indicadores", "indicadores", "/todogreen/indicadores", { icon: "Gauge", order: 65.5 }),
+  module("juridico", "Jurídico", "juridico", "/todogreen/juridico", { icon: "FileCheck", order: 65.7 }),
+  module("qualidade", "Qualidade", "qualidade", "/todogreen/qualidade", { icon: "CheckCircle2", order: 65.8 }),
+  module("auditoria", "Auditoria", "administracao", "/todogreen/auditoria", {
     icon: "History",
     order: 66,
     permissions: ["read", "audit:read"],
   }),
-  module("usuarios", "Usuários", "gestao", "/todogreen/acessos", { icon: "Users", order: 67 }),
-  module("permissoes", "Permissões", "gestao", "/todogreen/acessos", { icon: "LockKeyhole", order: 68 }),
-  module("configuracoes", "Configurações", "gestao", "/todogreen/acessos", { icon: "Settings", order: 69 }),
+  module("usuarios", "Usuários", "administracao", "/todogreen/acessos", { icon: "Users", order: 67 }),
+  module("permissoes", "Permissões", "administracao", "/todogreen/acessos", { icon: "LockKeyhole", order: 68 }),
+  module("configuracoes", "Configurações", "administracao", "/todogreen/acessos", { icon: "Settings", order: 69 }),
 ];
 
 export const TODO_GREEN_FEATURE_COUNT = TODO_GREEN_MODULE_CATALOG.length;
@@ -463,7 +541,7 @@ export const PRODUCT_PRICING_BLUEPRINTS = Object.freeze({
       ["Comercial", ["customerTargetPrice", "contractMonths", "sla", "strategicContract"]],
     ],
     requiredEvidence: ["janela de carregamento", "perfil de carga", "rota validada", "SLA esperado"],
-    executiveOutputs: ["preço por viagem", "custo por km", "margem mensal", "CO2 evitado por rota", "gatilhos Deal Desk"],
+    executiveOutputs: ["preço por viagem", "custo por km", "margem mensal", "CO2 evitado por rota", "gatilhos de aprovação"],
   },
   "middle-mile-spot": {
     title: "Middle Mile Spot",
@@ -475,7 +553,7 @@ export const PRODUCT_PRICING_BLUEPRINTS = Object.freeze({
       ["Negociação", ["customerTargetPrice", "sla", "strategicContract"]],
     ],
     requiredEvidence: ["rota validada", "perfil de carga", "janela de coleta", "valor negociado"],
-    executiveOutputs: ["preço por viagem", "custo por km", "margem da viagem", "CO2 evitado por rota", "gatilhos Deal Desk"],
+    executiveOutputs: ["preço por viagem", "custo por km", "margem da viagem", "CO2 evitado por rota", "gatilhos de aprovação"],
   },
   "last-mile": {
     title: "Last Mile e-commerce",
@@ -919,7 +997,7 @@ export const commercialRecommendation = ({
   inputs,
 }) => {
   const reasons = [];
-  if (approval?.required) reasons.push(`Requer Deal Desk: ${approval.triggers.join(", ")}.`);
+  if (approval?.required) reasons.push(`Requer aprovação comercial: ${approval.triggers.join(", ")}.`);
   if (n(marginPercent) >= 26) reasons.push("Margem acima do alvo comercial.");
   if (n(marginPercent) < 18) reasons.push("Margem abaixo do piso interno.");
   if (n(targetPrice) && n(selectedPrice) > n(targetPrice)) reasons.push("Preço recomendado acima do target informado.");
@@ -927,7 +1005,7 @@ export const commercialRecommendation = ({
   if (n(greenScore?.score) >= 70) reasons.push("Green Score estimado saudável.");
   if (n(inputs?.dataQuality) < 60) reasons.push("Qualidade dos dados precisa ser melhorada.");
   let decision = "Aceitar";
-  if (approval?.required) decision = "Encaminhar ao Deal Desk";
+  if (approval?.required) decision = "Enviar para aprovação comercial";
   else if (n(marginPercent) < 18) decision = "Renegociar preço";
   else if (n(targetPrice) && n(selectedPrice) > n(targetPrice) * 1.15) decision = "Renegociar escopo";
   else if (n(marginValue) < 0) decision = "Rejeitar";

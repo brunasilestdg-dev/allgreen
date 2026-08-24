@@ -382,7 +382,7 @@ describe("oportunidade ganha abre handoff operacional", () => {
   });
 });
 
-// A tela recusa gerar a proposta quando o Deal Desk não liberou a simulação —
+// A tela recusa gerar a proposta quando a aprovação comercial não liberou a simulação —
 // mas isso morava só no componente React. Estes testes existem para que uma
 // chamada direta ao endpoint não passe por cima do mesmo controle.
 async function pedidoDeDealDesk(cenarioId, { situacao = "pendente" } = {}) {
@@ -411,7 +411,7 @@ async function pedidoDeDealDesk(cenarioId, { situacao = "pendente" } = {}) {
     .run();
 }
 
-describe("proposta não sai por cima de um Deal Desk pendente", () => {
+describe("proposta não sai por cima de uma aprovação comercial pendente", () => {
   it("pedido pendente para a simulação bloqueia a proposta direto no servidor", async () => {
     const cenarioId = `cen-dd-pendente-${crypto.randomUUID()}`;
     await pedidoDeDealDesk(cenarioId);
@@ -421,7 +421,7 @@ describe("proposta não sai por cima de um Deal Desk pendente", () => {
       corpo: { cliente: "Alfa", titulo: "Proposta sem liberação", cenarioId },
     });
     expect(r.status).toBe(409);
-    expect((await r.json()).error).toMatch(/Deal Desk/i);
+    expect((await r.json()).error).toMatch(/aprovação comercial|decisão comercial/i);
   });
 
   it("pedido aprovado libera a proposta", async () => {

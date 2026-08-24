@@ -322,7 +322,7 @@ describe("próxima ação", () => {
     expect(acao.acao).toMatch(/levantar os dados/i);
   });
 
-  it("alvo abaixo do piso vai para o Deal Desk antes do cliente", () => {
+  it("alvo abaixo do piso vai para aprovação comercial antes do cliente", () => {
     const acao = proximaAcao(
       oportunidade({ precoAlvoCliente: 8000, precoMinimo: 9500 }),
     );

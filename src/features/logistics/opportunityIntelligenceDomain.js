@@ -363,7 +363,7 @@ export const proximaAcao = (oportunidade = {}, riscos = null) => {
     };
   if (critico?.tipo === "preco-abaixo-do-piso")
     return {
-      acao: "Levar ao Deal Desk antes de responder ao cliente",
+      acao: "Levar para aprovação comercial antes de responder ao cliente",
       porque: "O alvo está abaixo do piso da régua comercial em vigor.",
       urgencia: "alta",
     };

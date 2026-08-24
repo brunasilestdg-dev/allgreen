@@ -162,8 +162,8 @@ describe("LogisticsVertical", () => {
 
   it("renders the private hub for authorized To Do Green users", async () => {
     await renderarAutorizada();
-    expect(screen.getByRole("heading", { name: "Meu trabalho", level: 1 }).hidden).toBe(false);
-    expect(screen.getByRole("navigation", { name: "Navegação To Do Green" }).querySelectorAll("button")).toHaveLength(10);
+    expect(screen.getByRole("heading", { name: "Principal", level: 1 }).hidden).toBe(false);
+    expect(screen.getByRole("navigation", { name: "Navegação To Do Green" }).querySelectorAll("button")).toHaveLength(19);
     expect(screen.getByText("Configurações")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Olá, Bruna" })).toBeTruthy();
     expect(screen.getByText("Novos Negócios e Comercial. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.")).toBeTruthy();
@@ -199,7 +199,7 @@ describe("LogisticsVertical", () => {
   it("abre o espaço de trabalho conectado dentro da vertical", async () => {
     window.history.pushState({}, "", "/todogreen/espaco");
     await renderarAutorizada();
-    expect(await screen.findByRole("heading", { name: "Espaço de Trabalho", level: 1 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Projetos e tarefas", level: 1 })).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "O contexto fica junto do trabalho" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Notas conectadas/ }).length).toBeGreaterThan(0);
 
@@ -564,9 +564,9 @@ describe("LogisticsVertical", () => {
     expect(gravados[0].valor).toBe(900);
   });
 
-  // ===== Deal Desk =====
+  // ===== Aprovação comercial =====
 
-  it("proposta com premissa confirmada ainda não sai se o Deal Desk está pendente", async () => {
+  it("proposta com premissa confirmada ainda não sai se a aprovação comercial está pendente", async () => {
     window.history.pushState({}, "", "/todogreen/propostas");
     stubDeRede({
       "/api/todogreen/clients": () => jsonOk({ clientes: [{ id: "c1", name: "Cliente Alfa" }] }),
@@ -599,14 +599,14 @@ describe("LogisticsVertical", () => {
         }),
     });
     await renderarAutorizada();
-    // Antes o Deal Desk era só um alerta e a proposta saía do mesmo jeito.
-    expect(await screen.findByText(/Aguardando decisão do Deal Desk/)).toBeTruthy();
+    // Antes a aprovação era só um alerta e a proposta saía do mesmo jeito.
+    expect(await screen.findByText(/Aguardando decisão comercial/)).toBeTruthy();
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Salvar proposta/ }).disabled).toBe(true),
     );
   });
 
-  it("com o Deal Desk aprovado, a proposta sai e diz quem aprovou", async () => {
+  it("com a aprovação comercial concluída, a proposta sai e diz quem aprovou", async () => {
     window.history.pushState({}, "", "/todogreen/propostas");
     stubDeRede({
       "/api/todogreen/clients": () => jsonOk({ clientes: [{ id: "c1", name: "Cliente Alfa" }] }),
@@ -646,11 +646,11 @@ describe("LogisticsVertical", () => {
     );
   });
 
-  it("a aba do Deal Desk existe e não é apelido da precificação", async () => {
+  it("a aba de aprovações existe e não é apelido da precificação", async () => {
     window.history.pushState({}, "", "/todogreen/precificacao");
     await renderarAutorizada();
     const secoes = screen.getByRole("navigation", { name: /Seções de Comercial/ });
-    expect(secoes.textContent).toContain("Deal Desk");
+    expect(secoes.textContent).toContain("Aprovações");
   });
 
   it("loads the independent client page from the real CRM service", async () => {
@@ -670,7 +670,7 @@ describe("LogisticsVertical", () => {
     window.history.pushState({}, "", "/todogreen/ordens-servico");
     await renderarAutorizada();
     expect(await screen.findByRole("heading", { name: "Aceite e ordens de serviço", level: 2 })).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: /Seções de Planejamento/ }).textContent).toContain("CIOT");
+    expect(screen.getByRole("navigation", { name: /Seções de Operação/ }).textContent).toContain("CIOT");
     fireEvent.click(screen.getByRole("button", { name: "Financeiro" }));
     expect(await screen.findByRole("heading", { name: "Fila de faturamento", level: 2 })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: /Seções de Financeiro/ }).textContent).toContain("Títulos e baixas");

@@ -783,7 +783,7 @@ const ensureTab = () => {
   const button = document.createElement("button");
   button.type = "button";
   button.dataset.tdgWorkCenterTab = "true";
-  button.textContent = "Gestão de Projetos";
+  button.textContent = "Projetos e tarefas";
   button.addEventListener("click", () => { history.pushState({}, "", "/todogreen/central-trabalho"); window.dispatchEvent(new PopStateEvent("popstate")); render(); });
   nav.appendChild(button);
 };

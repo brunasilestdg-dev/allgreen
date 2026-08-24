@@ -205,7 +205,7 @@ describe("Metas To Do Green", () => {
         narrative: "Contratos aprovados no mês.",
         risks: "Uma proposta ainda depende de aprovação.",
         blockers: "",
-        nextSteps: "Acompanhar o Deal Desk e concluir a assinatura.",
+        nextSteps: "Acompanhar a aprovação comercial e concluir a assinatura.",
         evidenceNote: "Contratos registrados no módulo de propostas.",
         nextReviewAt: "2026-08-31",
       },

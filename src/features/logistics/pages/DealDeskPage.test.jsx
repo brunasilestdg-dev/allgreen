@@ -51,7 +51,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("fila do Deal Desk", () => {
+describe("fila de aprovação comercial", () => {
   it("mostra o pedido com alçada, prazo e motivo", async () => {
     stub([pedidoBase]);
     render(<DealDeskPage authHeaders={authHeaders} quem={chefe} setToast={vi.fn()} />);

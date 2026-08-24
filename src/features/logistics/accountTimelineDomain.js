@@ -29,7 +29,7 @@ export const TIPOS_DE_EVENTO = Object.freeze({
   oportunidade: { rotulo: "Oportunidade", cor: "comercial" },
   proposta: { rotulo: "Proposta", cor: "comercial" },
   contrato: { rotulo: "Contrato", cor: "comercial" },
-  aprovacao: { rotulo: "Deal Desk", cor: "aprovacao" },
+  aprovacao: { rotulo: "Aprovação comercial", cor: "aprovacao" },
   tarefa: { rotulo: "Tarefa", cor: "trabalho" },
   operacao: { rotulo: "Operação", cor: "operacao" },
   solicitacao: { rotulo: "Solicitação", cor: "operacao" },

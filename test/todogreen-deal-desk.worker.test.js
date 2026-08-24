@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import worker from "../worker-entry.js";
 
-// O Deal Desk era um aviso: a tela dizia "precisa de aprovação comercial" e a
+// A aprovação comercial era um aviso: a tela dizia "precisa de aprovação comercial" e a
 // simulação era salva do mesmo jeito. Estes testes existem para que ele volte a
 // ser aviso só por cima do cadáver de um deles.
 

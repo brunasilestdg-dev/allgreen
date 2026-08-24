@@ -1,6 +1,6 @@
-// ===== Deal Desk =====
+// ===== Aprovação comercial =====
 //
-// Hoje o Deal Desk é um aviso: a tela mostra "esta condição precisa de
+// Hoje a aprovação comercial é um aviso: a tela mostra "esta condição precisa de
 // aprovação comercial" e a simulação é salva do mesmo jeito. Um alerta que não
 // impede nada não é controle — é decoração. Quem quer o desconto lê o aviso,
 // salva, e a proposta sai.
@@ -122,14 +122,14 @@ export const podeDecidir = (pedido, quem = {}) => {
 
   // Duas perguntas separadas, e as duas precisam responder sim.
   //
-  // A permissão diz se a pessoa participa do Deal Desk. A alçada diz até onde
+  // A permissão diz se a pessoa participa da aprovação comercial. A alçada diz até onde
   // ela vai. Tratar `deal:approve` como se fosse alçada — que é a confusão
   // fácil — daria a qualquer aprovador o poder de liberar qualquer desvio, e a
   // escada inteira deixaria de existir.
   const concedidas = Array.isArray(quem.permissions) ? quem.permissions : [];
   const participa = concedidas.includes("*") || concedidas.includes("deal:approve");
   if (!participa)
-    return { pode: false, motivo: "Você não tem permissão para decidir no Deal Desk." };
+    return { pode: false, motivo: "Você não tem permissão para decidir esta aprovação comercial." };
 
   const papel = texto(quem.role, 60);
   if (!nivel.papeis.includes(papel))
@@ -158,7 +158,7 @@ export const situacaoVisivel = (pedido, agora = Date.now()) =>
 
 // A proposta daquela simulação sai ou não sai.
 //
-// Sem pedido nenhum, sai — nem toda condição precisa de Deal Desk. Com pedido
+// Sem pedido nenhum, sai — nem toda condição precisa de aprovação comercial. Com pedido
 // pendente ou vencido, não sai. Com pedido recusado, não sai enquanto ninguém
 // abrir e aprovar um novo. Aprovado, sai — e aponta para a versão aprovada.
 export const liberacaoDaProposta = (cenarioId, pedidos = [], agora = Date.now()) => {
@@ -179,24 +179,24 @@ export const liberacaoDaProposta = (cenarioId, pedidos = [], agora = Date.now())
   if (situacao === SITUACOES.expirado)
     return {
       liberada: false,
-      motivo: `O pedido ao Deal Desk venceu em ${ultimo.prazoEm} sem resposta. Cobre a decisão ou abra um novo pedido.`,
+      motivo: `A aprovação comercial venceu em ${ultimo.prazoEm} sem resposta. Cobre a decisão ou abra um novo pedido.`,
       pedido: ultimo,
     };
   if (situacao === SITUACOES.recusado)
     return {
       liberada: false,
-      motivo: `Condição recusada pelo Deal Desk: ${ultimo.decisaoJustificativa || "sem justificativa registrada"}. Revise a condição e abra um novo pedido.`,
+      motivo: `Condição recusada na aprovação comercial: ${ultimo.decisaoJustificativa || "sem justificativa registrada"}. Revise a condição e abra um novo pedido.`,
       pedido: ultimo,
     };
   if (situacao === SITUACOES.cancelado)
     return {
       liberada: false,
-      motivo: "O pedido ao Deal Desk foi cancelado. Abra um novo para seguir.",
+      motivo: "O pedido de aprovação comercial foi cancelado. Abra um novo para seguir.",
       pedido: ultimo,
     };
   return {
     liberada: false,
-    motivo: `Aguardando decisão do Deal Desk (${alcadaPorId(ultimo.alcadaId)?.nome || "alçada"}), prazo até ${ultimo.prazoEm}.`,
+    motivo: `Aguardando decisão comercial (${alcadaPorId(ultimo.alcadaId)?.nome || "alçada"}), prazo até ${ultimo.prazoEm}.`,
     pedido: ultimo,
   };
 };

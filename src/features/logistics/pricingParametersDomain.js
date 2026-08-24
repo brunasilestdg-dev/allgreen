@@ -14,7 +14,7 @@ const numero = (rotulo, descricao, categoria, max = 100_000) => ({
 });
 
 export const PARAMETROS = Object.freeze({
-  minimumMarginPercent: percentual("Margem mínima", "Piso de margem. Abaixo dele a proposta exige aprovação do Deal Desk.", 80),
+  minimumMarginPercent: percentual("Margem mínima", "Piso de margem. Abaixo dele a proposta exige aprovação comercial.", 80),
   targetMarginPercent: percentual("Margem alvo", "Margem usada para calcular o preço recomendado.", 90),
   opexPercent: percentual("OPEX", "Overhead e despesas operacionais rateados sobre o custo direto.", 60),
   adminPercent: percentual("Administrativo", "Rateio da estrutura administrativa sobre o custo direto.", 60),

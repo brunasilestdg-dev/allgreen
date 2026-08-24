@@ -104,9 +104,11 @@ const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
 const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
 const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
+const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
 const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
 const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
 const EnterpriseAreaPage = lazy(() => import("./pages/EnterpriseAreaPage.jsx"));
+const ClientActivationPage = lazy(() => import("./ClientActivationPage.jsx"));
 
 const iconMap = {
   Activity,
@@ -182,6 +184,7 @@ const friendlyCommercialText = (value) =>
     .replace(/parâmetros/gi, "dados da operação");
 
 const IMPLEMENTED_MODULE_IDS = new Set([
+  "dashboard",
   "dashboard-esg",
   "green-score",
   "calculadora-ambiental",
@@ -199,6 +202,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "simulacoes",
   "precificacao",
   "deal-desk",
+  "implantacao",
   "produtos",
   "catalogo-produtos",
   "planejamento",
@@ -238,16 +242,21 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "dp-rh",
   "motoristas",
   "escalas",
+  "qualidade",
   "marketing",
   "campanhas",
+  "comunicacao-interna",
+  "juridico",
+  "indicadores",
+  "administracao",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
   dashboard: {
-    title: "Meu trabalho",
-    navLabel: "Início",
+    title: "Principal",
+    navLabel: "Principal",
     route: "/todogreen/dashboard",
-    area: "gestao",
+    area: "principal",
     status: "functional",
     description: "Indicadores, pendências e atalhos do ERP.",
   },
@@ -260,12 +269,12 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Criação de painéis pessoais ou compartilhados com indicadores escolhidos por cada usuário.",
   },
   espaco: {
-    title: "Espaço de Trabalho",
-    navLabel: "Espaço",
+    title: "Comunicação interna",
+    navLabel: "Comunicação",
     route: "/todogreen/espaco",
-    area: "gestao",
+    area: "comunicacao-interna",
     status: "functional",
-    description: "Conhecimento, estrutura, bases, processos, capacidade e quadros conectados ao trabalho e ao CRM.",
+    description: "Conhecimento, tarefas, quadros, documentos internos e acompanhamento do trabalho entre áreas.",
   },
   metas: {
     title: "Metas e acompanhamento",
@@ -315,6 +324,14 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     description: "Calculadoras por produto, margem, custo, target, gatilhos de aprovação e evidências obrigatórias.",
   },
+  implantacao: {
+    title: "Implantação de cliente",
+    navLabel: "Implantação",
+    route: "/todogreen/implantacao",
+    area: "implantacao",
+    status: "functional",
+    description: "Implantação dentro do ERP, conectando contrato, operação, faturamento, portal, integrações, SLA, ESG, responsáveis e go-live.",
+  },
   produtos: {
     title: "Produtos logísticos",
     navLabel: "Produtos",
@@ -340,10 +357,10 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Serviços logísticos que Comercial vende, Produtos governa, Planejamento aceita e Operação executa.",
   },
   planejamento: {
-    title: "Planejamento e aceite",
+    title: "Planejamento operacional",
     navLabel: "Planejamento",
     route: "/todogreen/planejamento",
-    area: "planejamento",
+    area: "operacao",
     status: "functional",
     description: "Decide aceite de viagem ou OS com capacidade, produto, SLA, risco, margem e janela operacional.",
   },
@@ -351,7 +368,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     title: "Aceite de viagens",
     navLabel: "Aceite",
     route: "/todogreen/ordens-servico",
-    area: "planejamento",
+    area: "operacao",
     status: "functional",
     description: "Planejamento/Produtos libera a OS para execução depois da validação de contrato, produto, capacidade e premissas.",
   },
@@ -359,7 +376,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     title: "CIOT",
     navLabel: "CIOT",
     route: "/todogreen/ciot",
-    area: "planejamento",
+    area: "operacao",
     status: "functional",
     description: "Preparação do CIOT com OS, transportador, veículo, rota, valor do frete, piso mínimo, contingência e protocolo emitido.",
   },
@@ -391,55 +408,55 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     title: "Solicitações de clientes",
     navLabel: "Solicitações",
     route: "/todogreen/solicitacoes",
-    area: "planejamento",
+    area: "implantacao",
     status: "functional",
     description: "Entrada do cliente antes do aceite, com prazo, produto provável, responsável, conversa e histórico.",
   },
   operacoes: {
-    title: "Operações logísticas",
-    navLabel: "Operações",
+    title: "Fretes e execução operacional",
+    navLabel: "Fretes",
     route: "/todogreen/operacoes",
-    area: "operacional",
+    area: "operacao",
     status: "functional",
-    description: "Execução depois do aceite: rotas, viagens, entregas, frota, ocupação, produtividade, energia e ocorrências.",
+    description: "Ficha operacional do frete com OS, execução, rota, entregas, documentos, fiscal, financeiro, SLA e histórico.",
   },
   "ordens-servico": {
-    title: "Aceite e ordens de serviço",
+    title: "Fretes, OS e aceite",
     navLabel: "OS e aceite",
     route: "/todogreen/ordens-servico",
-    area: "planejamento",
+    area: "operacao",
     status: "functional",
-    description: "Planejamento/Produtos aceita e libera a OS; Operação executa; Financeiro só entra quando há elegibilidade de faturamento.",
+    description: "Planejamento e Produtos liberam o frete; Operação executa; Financeiro só entra quando há elegibilidade de faturamento.",
   },
   rastreamento: {
     title: "TMS Tracker",
     navLabel: "TMS Tracker",
     route: "/todogreen/rastreamento",
-    area: "operacional",
+    area: "operacao",
     status: "functional",
     description: "Configuração, teste e sincronização segura de posições e eventos da frota em modo somente leitura.",
   },
   cadastros: {
-    title: "Cadastros do ERP",
+    title: "Cadastros logísticos",
     navLabel: "Cadastros",
     route: "/todogreen/cadastros",
-    area: "operacional",
+    area: "cadastros",
     status: "functional",
-    description: "Materiais, depósitos, fornecedores, centros de custo e plano de contas.",
+    description: "Clientes, motoristas, veículos, tabelas, rotas, materiais, depósitos, parceiros, centros de custo e plano de contas.",
   },
   estoque: {
     title: "Estoque",
     navLabel: "Estoque",
     route: "/todogreen/estoque",
-    area: "operacional",
+    area: "suprimentos",
     status: "functional",
     description: "Saldos, entradas, saídas, transferências e contagens.",
   },
   compras: {
-    title: "Compras",
-    navLabel: "Compras",
+    title: "Suprimentos",
+    navLabel: "Suprimentos",
     route: "/todogreen/compras",
-    area: "operacional",
+    area: "suprimentos",
     status: "functional",
     description: "Requisições, aprovações, pedidos e recebimentos.",
   },
@@ -484,26 +501,26 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Centro de custos operacional, custo por categoria, margem e comparação contra receita/simulações, sem decidir aceite.",
   },
   rh: {
-    title: "DP/RH",
-    navLabel: "Gestão de pessoas",
+    title: "RH",
+    navLabel: "RH",
     route: "/todogreen/rh",
     area: "rh",
     status: "functional",
     description: "Pessoas, motoristas, escalas, documentos, alocação, dados sensíveis e rotinas trabalhistas.",
   },
   "dp-rh": {
-    title: "DP/RH",
-    navLabel: "DP/RH",
-    route: "/todogreen/rh",
-    area: "rh",
+    title: "Departamento Pessoal",
+    navLabel: "DP",
+    route: "/todogreen/dp",
+    area: "dp",
     status: "functional",
     description: "Administração de pessoal, documentação, alocação e rotinas trabalhistas separadas do Financeiro.",
   },
   motoristas: {
     title: "Motoristas",
     navLabel: "Motoristas",
-    route: "/todogreen/rh",
-    area: "rh",
+    route: "/todogreen/cadastros",
+    area: "cadastros",
     status: "functional",
     description: "Cadastro, disponibilidade, documentos, alocação e histórico de motoristas.",
   },
@@ -548,19 +565,19 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Fatores ambientais, fórmulas, versão, governança, disclaimer e evidências exigidas por produto.",
   },
   documentos: {
-    title: "Cofre de documentos",
+    title: "Documentos",
     navLabel: "Documentos",
     route: "/todogreen/documentos",
-    area: "esg",
+    area: "documentos",
     status: "functional",
     description:
       "Notas, telemetria, contratos, comprovantes e laudos que sustentam os números. Cada arquivo entra com impressão digital do conteúdo e sai por link temporário.",
   },
   "deal-desk": {
-    title: "Deal Desk — aprovação de condição comercial",
-    navLabel: "Deal Desk",
+    title: "Aprovação de condição comercial",
+    navLabel: "Aprovações",
     route: "/todogreen/deal-desk",
-    area: "gestao",
+    area: "comercial",
     status: "functional",
     description:
       "Pedido, alçada, prazo, versão, comentários, decisão e histórico imutável. Enquanto pende, a proposta daquela simulação não sai.",
@@ -569,7 +586,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     title: "Auditoria e governança",
     navLabel: "Auditoria",
     route: "/todogreen/auditoria",
-    area: "gestao",
+    area: "administracao",
     status: "functional",
     description: "Permissões por papel, rastreabilidade de cálculo, bloqueios e fluxo de aprovação.",
   },
@@ -577,7 +594,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     title: "Acessos",
     navLabel: "Acessos",
     route: "/todogreen/acessos",
-    area: "gestao",
+    area: "administracao",
     status: "functional",
     // Quem não gerencia acessos não vê a aba. A checagem é o papel do vínculo,
     // não a presença da palavra "admin" em algum lugar da tela.
@@ -588,31 +605,80 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     title: "Integrações de IA, busca e automação",
     navLabel: "Integrações",
     route: "/todogreen/integracoes",
-    area: "gestao",
+    area: "administracao",
     status: "functional",
     permission: "integration:manage",
     description: "Estado da cascata de IA, pesquisa web e automações autohospedadas, sem expor credenciais.",
   },
+  qualidade: {
+    title: "Qualidade",
+    navLabel: "Qualidade",
+    route: "/todogreen/qualidade",
+    area: "qualidade",
+    status: "functional",
+    description: "SLA, BSC, auditoria de execução, não conformidades, planos de ação e melhoria contínua.",
+  },
+  "comunicacao-interna": {
+    title: "Comunicação interna",
+    navLabel: "Comunicados",
+    route: "/todogreen/espaco",
+    area: "comunicacao-interna",
+    status: "functional",
+    description: "Comunicados, conhecimento, tarefas, documentos internos e alinhamentos entre áreas.",
+  },
+  juridico: {
+    title: "Jurídico",
+    navLabel: "Jurídico",
+    route: "/todogreen/juridico",
+    area: "juridico",
+    status: "functional",
+    description: "Contratos, minutas, riscos jurídicos, aprovações e documentos formais vinculados à operação.",
+  },
+  indicadores: {
+    title: "Indicadores",
+    navLabel: "Indicadores",
+    route: "/todogreen/indicadores",
+    area: "indicadores",
+    status: "functional",
+    description: "KPIs comerciais, operacionais, financeiros, ESG, qualidade, implantação e produtividade por área.",
+  },
+  administracao: {
+    title: "Administração",
+    navLabel: "Administração",
+    route: "/todogreen/administracao",
+    area: "administracao",
+    status: "functional",
+    description: "Acessos, permissões, auditoria, integrações, configurações e governança da vertical.",
+  },
 });
 
 const PRIMARY_NAVIGATION = Object.freeze([
-  { id: "overview", label: "Início", route: "/todogreen/dashboard", pages: ["dashboard"] },
+  { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
+  { id: "cadastros", label: "Cadastros", route: "/todogreen/cadastros", pages: ["cadastros", "motoristas"] },
   { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "propostas", "deal-desk", "metas", "performance-comercial"] },
-  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "produtos-logisticos", "catalogo-produtos", "regua"] },
-  { id: "planning", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento", "aceite-viagens", "ordens-servico", "ciot", "solicitacoes"] },
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "rastreamento", "cadastros", "estoque", "compras"] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "planejamento", "aceite-viagens", "ordens-servico", "ciot", "rastreamento"] },
+  { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes"] },
+  { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
+  { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos", "relatorios"] },
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes"] },
-  { id: "hr", label: "DP/RH", route: "/todogreen/rh", pages: ["rh", "dp-rh", "motoristas", "escalas"] },
+  { id: "dp", label: "DP", route: "/todogreen/dp", pages: ["dp-rh"] },
+  { id: "rh", label: "RH", route: "/todogreen/rh", pages: ["rh", "escalas"] },
+  { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing", "campanhas"] },
-  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia", "documentos"] },
-  { id: "management", label: "Gestão", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "dashboards", "relatorios", "auditoria", "integracoes", "acessos"] },
+  { id: "comunicacao-interna", label: "Comunicação Interna", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "comunicacao-interna"] },
+  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
+  { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
+  { id: "suprimentos", label: "Suprimentos", route: "/todogreen/compras", pages: ["compras", "estoque"] },
+  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "produtos-logisticos", "catalogo-produtos", "regua"] },
+  { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "auditoria", "integracoes", "acessos"] },
 ]);
 
 const MANAGEMENT_TOOLS = Object.freeze([
   {
     id: "projects",
-    label: "Gestão de Projetos",
-    title: "Gestão de Projetos",
+    label: "Projetos e tarefas",
+    title: "Projetos e tarefas",
     description: "Quadros, responsáveis, prazos, automações e acompanhamento das entregas da To Do Green.",
     route: "/todogreen/central-trabalho",
     permission: "",
@@ -930,11 +996,12 @@ const TODO_GREEN_PAGE_ALIASES = Object.freeze({
   "produtos-logisticos": "produtos",
   "catalogo-produtos": "produtos",
   "aceite-viagens": "ordens-servico",
+  fretes: "operacoes",
   rotas: "operacoes",
   viagens: "operacoes",
   veiculos: "operacoes",
-  motoristas: "rh",
-  "dp-rh": "rh",
+  motoristas: "cadastros",
+  dp: "dp-rh",
   escalas: "rh",
   campanhas: "marketing",
   entregas: "operacoes",
@@ -942,7 +1009,6 @@ const TODO_GREEN_PAGE_ALIASES = Object.freeze({
   ocupacao: "dashboard",
   produtividade: "dashboard",
   energia: "esg",
-  ocorrencias: "operacoes",
   tarefas: "dashboard",
   notificacoes: "dashboard",
   inbox: "dashboard",
@@ -1512,7 +1578,7 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
       const corpo = await resposta.json().catch(() => ({}));
       if (!resposta.ok) throw new Error(corpo.error || "Não foi possível abrir o pedido.");
       setJustificativaDeAprovacao("");
-      setToast?.("Pedido enviado ao Deal Desk. A proposta fica bloqueada até a decisão.");
+      setToast?.("Pedido enviado para aprovação comercial. A proposta fica bloqueada até a decisão.");
     } catch (razao) {
       setToast?.(razao.message);
     } finally {
@@ -1672,7 +1738,7 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
       {result.approval.required && (
         <div className="tdg-dd-pedido">
           <label>
-            <span>Justificativa comercial para o Deal Desk</span>
+            <span>Justificativa comercial para aprovação</span>
             <input
               value={justificativaDeAprovacao}
               onChange={(event) => setJustificativaDeAprovacao(event.target.value)}
@@ -1686,7 +1752,7 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
             onClick={pedirAprovacao}
           >
             <ShieldCheck size={16} />
-            {enviandoAprovacao ? "Enviando..." : "Enviar ao Deal Desk"}
+            {enviandoAprovacao ? "Enviando..." : "Enviar para aprovação"}
           </button>
           <small>
             {!cenarioSalvoId
@@ -2108,7 +2174,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
       <header className="tdg-shell-header">
         <div className="tdg-shell-location">
-          <span>TO DO GREEN · {activeManagement ? "GESTÃO" : primaryNavigation.label.toUpperCase()}</span>
+          <span>TO DO GREEN · {activeManagement ? "ADMINISTRAÇÃO" : primaryNavigation.label.toUpperCase()}</span>
           <h1 id="tdg-title">{currentPage.title}</h1>
           <p>{currentPage.description}</p>
         </div>
@@ -2187,6 +2253,11 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "performance-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando performance comercial...</section>}><SalesPerformancePage authHeaders={authHeaders} onNavigate={navigate} /></Suspense>}
       {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} setToast={setToast} /></Suspense>}
+      {page === "implantacao" && (
+        <Suspense fallback={<section className="tdg-panel">Carregando implantação...</section>}>
+          <ClientActivationPage db={db} update={update} authHeaders={authHeaders} setToast={setToast} />
+        </Suspense>
+      )}
       {page === "estoque" && <Suspense fallback={<section className="tdg-panel">Carregando estoque...</section>}><StockPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
@@ -2207,6 +2278,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "produtos" && <Suspense fallback={<section className="tdg-panel">Carregando produtos...</section>}><EnterpriseAreaPage area="products" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
       {page === "planejamento" && <Suspense fallback={<section className="tdg-panel">Carregando planejamento...</section>}><EnterpriseAreaPage area="planning" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /><TripViabilityPage authHeaders={authHeaders} /></Suspense>}
       {page === "operacoes" && <Suspense fallback={<section className="tdg-panel">Carregando operações...</section>}><OperationsPage operations={registros.operations} clients={clientes} contracts={registros.contracts} criar={criar} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
+      {page === "ocorrencias" && <Suspense fallback={<section className="tdg-panel">Carregando ocorrências...</section>}><OccurrencesPage operations={registros.operations} clients={clientes} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "ordens-servico" && <Suspense fallback={<section className="tdg-panel">Carregando ordens de serviço...</section>}><TransactionalSpinePage mode="service-orders" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
       {page === "ciot" && <Suspense fallback={<section className="tdg-panel">Carregando CIOT...</section>}><TransactionalSpinePage mode="ciot" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
       {page === "rastreamento" && <Suspense fallback={<section className="tdg-panel">Carregando TMS Tracker...</section>}><TrackerPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
@@ -2216,8 +2288,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "rateios" && <Suspense fallback={<section className="tdg-panel">Carregando rateios...</section>}><TransactionalSpinePage mode="costs" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
       {page === "custos" && <Suspense fallback={<section className="tdg-panel">Carregando custos e margem...</section>}><FinancePage type="cost" entries={registros.financial.filter((item) => item.tipo === "cost")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "comissoes" && <Suspense fallback={<section className="tdg-panel">Carregando comissões...</section>}><FinancePage type="commission" entries={registros.financial.filter((item) => item.tipo === "commission")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
+      {page === "dp-rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP...</section>}><EnterpriseAreaPage area="dp" onNavigate={navigate} /></Suspense>}
       {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><EnterpriseAreaPage area="hr" onNavigate={navigate} /></Suspense>}
+      {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><EnterpriseAreaPage area="quality" onNavigate={navigate} /></Suspense>}
       {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando marketing...</section>}><EnterpriseAreaPage area="marketing" onNavigate={navigate} /></Suspense>}
+      {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><EnterpriseAreaPage area="legal" onNavigate={navigate} /></Suspense>}
+      {page === "indicadores" && <Suspense fallback={<section className="tdg-panel">Carregando indicadores...</section>}><EnterpriseAreaPage area="indicators" onNavigate={navigate} /></Suspense>}
+      {page === "administracao" && <Suspense fallback={<section className="tdg-panel">Carregando administração...</section>}><EnterpriseAreaPage area="admin" onNavigate={navigate} /></Suspense>}
       {page === "relatorios" && <Suspense fallback={<section className="tdg-panel">Carregando relatórios...</section>}><ReportsPage dashboard={dashboard} data={verticalData} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "metodologia" && <MethodologyPanel />}
       {page === "documentos" && (
@@ -2226,7 +2303,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </Suspense>
       )}
       {page === "deal-desk" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando o Deal Desk...</section>}>
+        <Suspense fallback={<section className="tdg-panel">Carregando aprovações...</section>}>
           <DealDeskPage
             authHeaders={authHeaders}
             quem={{ userId: db?.user?.id || "", role, permissions: remoteAccess.permissions || [] }}
