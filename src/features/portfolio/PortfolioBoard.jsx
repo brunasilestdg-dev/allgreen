@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Columns3,
   GitBranch,
   Link2,
   Plus,
@@ -9,6 +10,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { projectMetrics } from "../projects/projectDomain.js";
+import ProjectPortfolioViews from "./ProjectPortfolioViews.jsx";
 import {
   RACI_ROLES,
   RISK_SCALE,
@@ -36,7 +38,7 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 const br = (d) => (d ? d.split("-").reverse().join("/") : "—");
 
 export default function PortfolioBoard({ db, update, business, setToast }) {
-  const [aba, setAba] = useState("visao");
+  const [aba, setAba] = useState("projetos");
   const [simulacao, setSimulacao] = useState({ projectId: "", days: 7 });
   const [novoVinculo, setNovoVinculo] = useState({ fromId: "", toId: "", lagDays: 0 });
   const [novoRisco, setNovoRisco] = useState({
@@ -212,6 +214,7 @@ export default function PortfolioBoard({ db, update, business, setToast }) {
   }, [db.teamMembers, racis, projetos]);
 
   const abas = [
+    ["projetos", "Projetos", Columns3],
     ["visao", "Visão geral", GitBranch],
     ["dependencias", "Dependências", Link2],
     ["riscos", "Riscos", ShieldAlert],
@@ -224,8 +227,7 @@ export default function PortfolioBoard({ db, update, business, setToast }) {
         <div>
           <h2>Portfólio de projetos</h2>
           <p className="muted">
-            Um andar acima do cronograma de cada projeto: aqui você vê o conjunto
-            e descobre o que atrasa junto quando um escorrega.
+            Projetos de qualquer área, com visão operacional e executiva no mesmo portfólio.
           </p>
         </div>
       </header>
@@ -245,10 +247,13 @@ export default function PortfolioBoard({ db, update, business, setToast }) {
         ))}
       </div>
 
-      {!projetos.length && (
+      {aba === "projetos" && (
+        <ProjectPortfolioViews db={db} update={update} business={business} />
+      )}
+
+      {!projetos.length && aba !== "projetos" && (
         <p className="muted">
-          Nenhum projeto cadastrado ainda. Crie projetos em “Operação” e eles
-          aparecem aqui.
+          Nenhum projeto cadastrado ainda. Projetos podem pertencer a qualquer área do negócio.
         </p>
       )}
 
