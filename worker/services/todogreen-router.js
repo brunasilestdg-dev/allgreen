@@ -3,6 +3,7 @@ import { exigirAcessoTodoGreen } from "./todogreen-access.js";
 import { handleTodoGreenFleet } from "./todogreen-fleet.js";
 import { handleTodoGreenTracker } from "./todogreen-tracker.js";
 import { handleTodoGreenTrackerReadiness } from "./todogreen-tracker-readiness.js";
+import { handleTodoGreenClientActivation } from "./todogreen-client-activation.js";
 import {
   handleTodoGreenCustomerPortal,
   handleTodoGreenClientPortalPreview,
@@ -39,9 +40,6 @@ const guarded = async (label, message, handler) => {
   }
 };
 
-// A porta é uma só, em todogreen-access.js. Antes cada serviço repetia estes
-// dois passos — e a repetição é o que deixou passar o acesso por domínio e o
-// espaço de trabalho vindo da query string.
 const internalAccess = (request, env) => exigirAcessoTodoGreen(request, env);
 
 export async function routeTodoGreenApi(request, env, ctx) {
@@ -49,10 +47,6 @@ export async function routeTodoGreenApi(request, env, ctx) {
   const path = url.pathname;
   if (!path.startsWith("/api/todogreen/")) return null;
 
-  // O download em si não passa pela porta de sessão: quem autoriza é a
-  // concessão temporária, que já carrega o cliente e o espaço para os quais foi
-  // emitida. Exigir sessão aqui quebraria o link aberto em outra aba ou num
-  // gerenciador de download, sem ganhar segurança — o token é a credencial.
   if (path === "/api/todogreen/arquivo") {
     return guarded("To Do Green document error", "Não foi possível entregar o documento.", () =>
       entregarArquivo(env, url.searchParams.get("t") || ""),
@@ -72,6 +66,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenClientPortalPreview(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  if (path.startsWith("/api/todogreen/client-activation")) {
+    return guarded("To Do Green client activation error", "Não foi possível processar a implantação do cliente.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenClientActivation(request, env, resolved.access, resolved.user);
     });
   }
 
@@ -132,9 +134,6 @@ export async function routeTodoGreenApi(request, env, ctx) {
     });
   }
 
-  // Estoque tem serviço próprio porque não é CRUD: movimento é INSERT sempre, e
-  // a saída é recusada quando o saldo não cobre — conferido na mesma instrução
-  // que grava, para duas saídas simultâneas não passarem as duas.
   if (path.startsWith("/api/todogreen/stock")) {
     return guarded("To Do Green stock error", "Não foi possível movimentar o estoque.", async () => {
       const resolved = await internalAccess(request, env);
@@ -143,9 +142,6 @@ export async function routeTodoGreenApi(request, env, ctx) {
     });
   }
 
-  // Compras tem serviço próprio porque o pedido tem linhas em tabela separada,
-  // a mudança de status obedece a uma máquina de estados declarada, e o
-  // recebimento tem efeito: gera movimento de estoque e título a pagar.
   if (path.startsWith("/api/todogreen/purchasing")) {
     return guarded("To Do Green purchasing error", "Não foi possível processar a compra.", async () => {
       const resolved = await internalAccess(request, env);
@@ -154,8 +150,6 @@ export async function routeTodoGreenApi(request, env, ctx) {
     });
   }
 
-  // Espinha transacional: contrato -> OS -> execução -> faturamento -> título
-  // -> baixa, com custos rateados pelas mesmas chaves canônicas.
   if (path.startsWith("/api/todogreen/transactions")) {
     return guarded("To Do Green transactions error", "Não foi possível processar a transação.", async () => {
       const resolved = await internalAccess(request, env);
