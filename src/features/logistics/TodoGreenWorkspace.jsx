@@ -7,6 +7,7 @@ import {
   CircleAlert,
   CircleHelp,
   Database,
+  GanttChartSquare,
   GitBranch,
   LayoutDashboard,
   FileText,
@@ -33,6 +34,7 @@ const TodoGreenAutomations = lazy(() => import("./TodoGreenAutomations.jsx"));
 const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
 const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
 const WorkStructure = lazy(() => import("../work/WorkStructure.jsx"));
+const WorkViews = lazy(() => import("./pages/WorkViews.jsx"));
 const DataBases = lazy(() => import("../databases/DataBasesScreen.jsx"));
 const ProcessStudio = lazy(() => import("../processes/ProcessStudio.jsx"));
 const CapacityPlanner = lazy(() => import("../resources/CapacityPlanner.jsx"));
@@ -47,6 +49,7 @@ const TOOL_ICONS = {
   automacoes: Workflow,
   ajuda: CircleHelp,
   estrutura: Network,
+  visoes: GanttChartSquare,
   bases: Database,
   processos: GitBranch,
   capacidade: Users,
@@ -319,6 +322,7 @@ export default function TodoGreenWorkspace({ db, update, verticalData, setToast,
           {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} />}
           {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}
+          {tool === "visoes" && <WorkViews setToast={setToast} />}
           {tool === "bases" && <DataBases {...commonProps} excludedTemplates={["Clientes"]} />}
           {tool === "processos" && <ProcessStudio {...commonProps} />}
           {tool === "capacidade" && <CapacityPlanner {...commonProps} />}
