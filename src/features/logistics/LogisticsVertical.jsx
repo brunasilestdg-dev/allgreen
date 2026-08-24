@@ -2243,7 +2243,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       )}
 
       {page === "dashboard" && <ErpHome role={role} user={db?.user || {}} data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} products={LOGISTICS_PRODUCTS} preferences={db?.preferences?.todoGreenHome} onSave={saveHomePreferences} onNavigate={navigate} />}
-      {page === "espaco" && (
+      {["espaco", "central-trabalho"].includes(page) && (
         <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
           <TodoGreenWorkspace db={db} update={update} verticalData={verticalData} setToast={setToast} onNavigate={navigate} />
         </Suspense>

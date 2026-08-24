@@ -177,7 +177,7 @@ describe("o catálogo de verdade", () => {
         grupos.filter((g) => grupoAtendeBusca(g, termo)),
         termo,
       )[0];
-    expect(melhor("motorista").rota).toBe("/todogreen/rh");
+    expect(melhor("motorista").rota).toBe("/todogreen/cadastros");
     expect(melhor("forecast").rota).toBe("/todogreen/receita");
     expect(melhor("pipeline").rota).toBe("/todogreen/oportunidades");
     // "contrato" também aparece na descrição do ESG; o assunto de Propostas

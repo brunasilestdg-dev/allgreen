@@ -175,7 +175,7 @@ describe("LogisticsVertical", () => {
     expect(screen.queryByText(/Recursos organizados por área/i)).toBeNull();
     expect(screen.getByText("Middle Mile")).toBeTruthy();
     expect(screen.getByText("Operação a granel")).toBeTruthy();
-    expect(screen.getByText("Inteligência ESG")).toBeTruthy();
+    expect(screen.getAllByText("ESG").length).toBeGreaterThan(0);
   });
 
   it("salva uma configuração de início diferente para cada colaborador", async () => {
@@ -197,7 +197,7 @@ describe("LogisticsVertical", () => {
   });
 
   it("abre o espaço de trabalho conectado dentro da vertical", async () => {
-    window.history.pushState({}, "", "/todogreen/espaco");
+    window.history.pushState({}, "", "/todogreen/central-trabalho");
     await renderarAutorizada();
     expect(await screen.findByRole("heading", { name: "Projetos e tarefas", level: 1 })).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "O contexto fica junto do trabalho" })).toBeTruthy();
@@ -696,7 +696,7 @@ describe("LogisticsVertical", () => {
     );
     expect(card.textContent).not.toMatch(/abrir/i);
     fireEvent.click(card);
-    expect(open).toHaveBeenCalledWith("/todogreen/clientes", "_blank", "noopener,noreferrer");
+    expect(open).toHaveBeenCalledWith("/todogreen/cadastros", "_blank", "noopener,noreferrer");
   });
 
   it("shows the access panel for admins", async () => {

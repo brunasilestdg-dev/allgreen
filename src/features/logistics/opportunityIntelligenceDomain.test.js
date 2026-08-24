@@ -326,7 +326,7 @@ describe("próxima ação", () => {
     const acao = proximaAcao(
       oportunidade({ precoAlvoCliente: 8000, precoMinimo: 9500 }),
     );
-    expect(acao.acao).toMatch(/deal desk/i);
+    expect(acao.acao).toMatch(/aprovação comercial/i);
   });
 
   it("sem risco alto, a ação segue o estágio", () => {
