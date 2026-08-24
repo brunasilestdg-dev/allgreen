@@ -1,0 +1,64 @@
+.pv-root { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pv-toolbar, .pv-filters, .pv-board-controls { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.pv-toolbar { justify-content: space-between; }
+.pv-search { min-width: min(100%, 320px); flex: 1; max-width: 520px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 9px; padding: 0 10px; background: var(--surface); }
+.pv-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; padding: 9px 0; color: var(--text); }
+.pv-view-switch, .pv-mode-switch { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+.pv-view-switch button, .pv-mode-switch button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); padding: 7px 10px; cursor: pointer; }
+.pv-view-switch button.active, .pv-mode-switch button.active { background: var(--surface); color: var(--text); font-weight: 600; }
+.pv-filters label, .pv-group-select { display: flex; flex-direction: column; gap: 4px; font-size: .76rem; color: var(--text-muted); }
+.pv-filters select, .pv-group-select select, .pv-card select, .pv-task-card select, .pv-table select { border: 1px solid var(--border); border-radius: 7px; padding: 7px 8px; background: var(--surface); color: var(--text); min-height: 36px; }
+.pv-board-controls { justify-content: space-between; }
+.pv-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr); gap: 12px; overflow-x: auto; padding: 2px 2px 10px; align-items: start; }
+.pv-column { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.pv-column > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 11px; border-bottom: 1px solid var(--border); }
+.pv-column > header > span:first-child { display: flex; flex-direction: column; min-width: 0; }
+.pv-column > header small { color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+.pv-column > header > span:last-child { border: 1px solid var(--border); border-radius: 999px; min-width: 24px; padding: 2px 7px; text-align: center; font-size: .76rem; background: var(--surface); }
+.pv-column-body { display: flex; flex-direction: column; gap: 8px; padding: 9px; min-height: 70px; }
+.pv-column-body > p { color: var(--text-muted); margin: 8px; font-size: .82rem; }
+.pv-card { border: 1px solid var(--border); border-radius: 9px; background: var(--surface); padding: 10px; display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.pv-card[draggable="true"] { cursor: grab; }
+.pv-card > header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.pv-card > header span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pv-card > header strong { overflow-wrap: anywhere; }
+.pv-card > header small { color: var(--text-muted); }
+.pv-card > header b { font-size: .8rem; white-space: nowrap; }
+.pv-card.health-risk { border-left: 3px solid #a86f12; }
+.pv-card.health-blocked { border-left: 3px solid #9b2e2e; }
+.pv-card.health-done { border-left: 3px solid #35774b; }
+.pv-progress { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.pv-progress span { display: block; height: 100%; background: currentColor; opacity: .45; border-radius: inherit; }
+.pv-card dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; }
+.pv-card dl div { min-width: 0; }
+.pv-card dt { font-size: .68rem; color: var(--text-muted); }
+.pv-card dd { margin: 2px 0 0; font-size: .78rem; overflow-wrap: anywhere; }
+.pv-card footer { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.pv-card footer label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pv-card footer label span { font-size: .68rem; color: var(--text-muted); }
+.pv-card footer select { min-width: 0; width: 100%; }
+.pv-task-card { display: flex; flex-direction: column; gap: 5px; padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.pv-task-card small, .pv-task-card span { color: var(--text-muted); font-size: .74rem; }
+.pv-task-card.overdue { border-left: 3px solid #9b2e2e; }
+.pv-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 11px; }
+.pv-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.pv-table { width: 100%; border-collapse: collapse; min-width: 860px; }
+.pv-table th, .pv-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; font-size: .84rem; }
+.pv-table th { color: var(--text-muted); font-weight: 600; background: var(--surface-2); }
+.pv-table td:first-child { display: flex; flex-direction: column; gap: 2px; }
+.pv-table td:first-child small { color: var(--text-muted); }
+.pv-health { display: inline-flex; padding: 3px 8px; border-radius: 999px; font-size: .74rem; border: 1px solid var(--border); }
+.pv-health.risk { color: #7a5a10; background: #fdf3d8; }
+.pv-health.blocked { color: #8c2020; background: #fbe4e4; }
+.pv-health.done { color: #1a6b34; background: #e6f4ea; }
+.pv-empty { border: 1px dashed var(--border); border-radius: 10px; padding: 26px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; color: var(--text-muted); }
+.pv-empty strong { color: var(--text); }
+.pv-empty p, .pv-no-results { margin: 0; color: var(--text-muted); font-size: .86rem; }
+@media (max-width: 720px) {
+  .pv-view-switch, .pv-mode-switch { width: 100%; }
+  .pv-view-switch button, .pv-mode-switch button { flex: 1; justify-content: center; min-height: 44px; }
+  .pv-filters label { flex: 1 1 145px; }
+  .pv-filters select { width: 100%; min-height: 44px; }
+  .pv-card footer { grid-template-columns: 1fr; }
+  .pv-kanban { grid-auto-columns: minmax(250px, 86vw); }
+}
