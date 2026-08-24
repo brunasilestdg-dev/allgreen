@@ -1,11 +1,35 @@
 -- Cliente ativo deixa de ser apenas um rótulo de CRM.
--- A transição só passa quando as fontes canônicas da implantação estão prontas.
--- O gatilho protege qualquer caminho de escrita, inclusive edições diretas pelo CRM.
+-- O estado da implantação fica fora de fields_json para sobreviver a qualquer
+-- edição comercial do cliente, que normaliza o CRM e descarta chaves desconhecidas.
+
+CREATE TABLE IF NOT EXISTS todogreen_client_activation_state (
+  client_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'todogreen',
+  workspace_owner_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'implementation'
+    CHECK (status IN ('implementation','active')),
+  integration_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (integration_status IN ('pending','ready','not_required')),
+  tracking_required INTEGER NOT NULL DEFAULT 1,
+  esg_enabled INTEGER NOT NULL DEFAULT 0,
+  activated_at TEXT,
+  activated_by TEXT,
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL,
+  updated_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (client_id) REFERENCES todogreen_clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_owner_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_todogreen_client_activation_scope
+  ON todogreen_client_activation_state (tenant_id, workspace_owner_id, status, updated_at DESC);
 
 CREATE TRIGGER IF NOT EXISTS trg_todogreen_client_activation_gate
 BEFORE UPDATE OF fields_json ON todogreen_clients
-WHEN json_extract(NEW.fields_json, '$.crm.stage') = 'Cliente ativo'
- AND COALESCE(json_extract(OLD.fields_json, '$.crm.stage'), '') <> 'Cliente ativo'
+WHEN json_extract(NEW.fields_json, '$.stage') = 'Cliente ativo'
+ AND COALESCE(json_extract(OLD.fields_json, '$.stage'), '') <> 'Cliente ativo'
 BEGIN
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1
@@ -62,8 +86,23 @@ BEGIN
        AND u.status = 'active'
   ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:portal') END;
 
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+      FROM todogreen_client_activation_state s
+     WHERE s.tenant_id = NEW.tenant_id
+       AND s.workspace_owner_id = NEW.workspace_owner_id
+       AND s.client_id = NEW.id
+  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:state') END;
+
   SELECT CASE WHEN
-    COALESCE(json_extract(NEW.fields_json, '$.activation.integrationStatus'), 'pending') <> 'not_required'
+    NOT EXISTS (
+      SELECT 1
+        FROM todogreen_client_activation_state s
+       WHERE s.tenant_id = NEW.tenant_id
+         AND s.workspace_owner_id = NEW.workspace_owner_id
+         AND s.client_id = NEW.id
+         AND s.integration_status = 'not_required'
+    )
     AND NOT EXISTS (
       SELECT 1
         FROM todogreen_tracker_integrations ti
@@ -76,7 +115,14 @@ BEGIN
   THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:integration') END;
 
   SELECT CASE WHEN
-    COALESCE(json_extract(NEW.fields_json, '$.activation.trackingRequired'), 1) <> 0
+    NOT EXISTS (
+      SELECT 1
+        FROM todogreen_client_activation_state s
+       WHERE s.tenant_id = NEW.tenant_id
+         AND s.workspace_owner_id = NEW.workspace_owner_id
+         AND s.client_id = NEW.id
+         AND s.tracking_required = 0
+    )
     AND NOT EXISTS (
       SELECT 1
         FROM todogreen_tracker_integrations ti
@@ -88,17 +134,21 @@ BEGIN
     )
   THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:tracking') END;
 
-  SELECT CASE WHEN
-    COALESCE(json_extract(NEW.fields_json, '$.activation.esgEnabled'), 0) <> 1
-    OR NOT EXISTS (
-      SELECT 1
-        FROM todogreen_score_weights sw
-       WHERE sw.tenant_id = NEW.tenant_id
-         AND sw.status = 'active'
-         AND sw.effective_from <= datetime('now')
-         AND (sw.effective_to IS NULL OR sw.effective_to = '' OR sw.effective_to >= datetime('now'))
-    )
-  THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:esg') END;
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+      FROM todogreen_client_activation_state s
+     WHERE s.tenant_id = NEW.tenant_id
+       AND s.workspace_owner_id = NEW.workspace_owner_id
+       AND s.client_id = NEW.id
+       AND s.esg_enabled = 1
+  ) OR NOT EXISTS (
+    SELECT 1
+      FROM todogreen_score_weights sw
+     WHERE sw.tenant_id = NEW.tenant_id
+       AND sw.status = 'active'
+       AND sw.effective_from <= datetime('now')
+       AND (sw.effective_to IS NULL OR sw.effective_to = '' OR sw.effective_to >= datetime('now'))
+  ) THEN RAISE(ABORT, 'CLIENT_ACTIVATION_BLOCKED:esg') END;
 
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1
