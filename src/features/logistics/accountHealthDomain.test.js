@@ -86,7 +86,9 @@ describe("white space", () => {
     expect(resultado.atuais.map((item) => item.id).sort()).toEqual(["last-mile", "middle-mile"]);
     expect(resultado.espacos.map((item) => item.id)).toContain("dedicated");
     expect(resultado.espacos.map((item) => item.id)).not.toContain("last-mile");
-    expect(resultado.penetracao).toBe(22);
+    // Dois produtos ativos em um catálogo de dez, agora com Middle Mile Spot
+    // separado do contrato recorrente.
+    expect(resultado.penetracao).toBe(20);
   });
 
   it("sai do catálogo real, não de uma lista escrita à mão", () => {

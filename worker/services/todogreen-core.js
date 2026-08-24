@@ -8,6 +8,7 @@ import {
   createPricingScenarioSnapshot,
   summarizeTodoGreenDashboard,
 } from "../../src/features/logistics/logisticsVerticalDomain.js";
+import { parametrosResolvidos } from "./todogreen-pricing-parameters.js";
 
 import { resolveTodoGreenAccess } from "./todogreen-access.js";
 import { handleTodoGreenGoals } from "./todogreen-goals.js";
@@ -187,10 +188,21 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies)
   }
   if (request.method === "POST" && resource === "simulate") {
     const body = await request.json().catch(() => ({}));
+    const productId = String(body.productId || "");
+    const inputs = body.inputs || {};
     let scenario;
-    try { scenario = createPricingScenarioSnapshot(String(body.productId || ""),body.inputs || {},{
+    try {
+      const product = LOGISTICS_PRODUCTS.find((item) => item.id === productId);
+      const resolved = await parametrosResolvidos(env, access.ownerId, {
+        productId, modality: inputs.modality || product?.modality, vehicleType: inputs.vehicleType,
+        region: inputs.region || inputs.city, clientId: body.clientId || inputs.clientId,
+        contractId: inputs.contractId,
+      });
+      scenario = createPricingScenarioSnapshot(productId,inputs,{
       tenantId:TODO_GREEN_TENANT.id,userId:user.id,clientId:body.clientId || "",
-      opportunityId:body.opportunityId || "",justification:body.justification || ""}); }
+      opportunityId:body.opportunityId || "",justification:body.justification || ""},
+      { assumptions: resolved.parametros, parameterVersion: resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica" });
+    }
     catch (error) { return response({error:error.message || "Simulação inválida."},400); }
     if (body.persist === true) {
       await env.DB.prepare(
@@ -213,7 +225,19 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies)
   }
   if (request.method === "POST" && resource === "calculate") {
     const body = await request.json().catch(() => ({}));
-    try { return response({result:centralPricingEngine(String(body.productId || ""),body.inputs || {})}); }
+    try {
+      const productId = String(body.productId || "");
+      const inputs = body.inputs || {};
+      const product = LOGISTICS_PRODUCTS.find((item) => item.id === productId);
+      const resolved = await parametrosResolvidos(env, access.ownerId, {
+        productId, modality: inputs.modality || product?.modality, vehicleType: inputs.vehicleType,
+        region: inputs.region || inputs.city, clientId: inputs.clientId, contractId: inputs.contractId,
+      });
+      return response({result:centralPricingEngine(productId, inputs, {
+        assumptions: resolved.parametros,
+        parameterVersion: resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
+      })});
+    }
     catch (error) { return response({error:error.message || "Cálculo inválido."},400); }
   }
   return response({error:"Recurso To Do Green não encontrado."},404);

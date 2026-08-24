@@ -1149,3 +1149,118 @@
   .tdg-ledger-row, .tdg-operation-card dl, .tdg-timeline-list article, .tdg-audit-stream article { grid-template-columns: 1fr; }
   .tdg-operation-grid { grid-template-columns: 1fr; }
 }
+
+/* Parâmetros do simulador: uma tela densa de ERP, organizada por escopo. */
+.tdg-parameter-scope,
+.tdg-parameter-publish {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+.tdg-parameter-inheritance {
+  background: color-mix(in srgb, var(--tdg-green) 7%, var(--tdg-card));
+  border-left: 3px solid var(--tdg-green);
+  display: grid;
+  gap: 4px;
+  min-height: 40px;
+  padding: 9px 12px;
+}
+.tdg-parameter-inheritance small { color: var(--tdg-muted); }
+.tdg-parameter-templates {
+  align-items: center;
+  border-bottom: 1px solid var(--tdg-line);
+  border-top: 1px solid var(--tdg-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+  padding: 14px 0;
+}
+.tdg-parameter-templates > div { align-items: center; display: flex; flex: 1 1 260px; flex-wrap: wrap; gap: 7px; }
+.tdg-parameter-templates small { color: var(--tdg-muted); width: 100%; }
+.tdg-parameter-templates button {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 8px;
+  color: var(--tdg-green);
+  cursor: pointer;
+  font-weight: 750;
+  min-height: 38px;
+  padding: 8px 11px;
+}
+.tdg-parameter-group { border: 0; border-top: 1px solid var(--tdg-line); margin: 18px 0 0; padding: 18px 0 0; }
+.tdg-parameter-group legend { color: var(--tdg-ink); font-size: 1rem; font-weight: 850; padding-right: 10px; }
+.tdg-parameter-group .tdg-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tdg-parameter-group .tdg-esg-nota { font-size: .75rem; line-height: 1.35; margin: 0; }
+.tdg-parameter-publish { border-top: 1px solid var(--tdg-line); grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 18px; }
+.tdg-parameter-why { grid-column: 1 / -2; }
+.tdg-parameter-publish .tdg-action { align-self: end; }
+
+@media (max-width: 1050px) {
+  .tdg-parameter-group .tdg-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tdg-parameter-publish { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tdg-parameter-why { grid-column: 1 / -1; }
+}
+@media (max-width: 680px) {
+  .tdg-parameter-scope, .tdg-parameter-publish, .tdg-parameter-group .tdg-form { grid-template-columns: 1fr; }
+}
+
+/* Estrutura principal do ERP: módulos estáveis à esquerda e contexto de trabalho à direita. */
+.tdg-erp-layout {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 205px minmax(0, 1fr);
+  min-width: 0;
+}
+.tdg-erp-sidebar {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  min-width: 0;
+  padding: 12px;
+  position: sticky;
+  top: 12px;
+}
+.tdg-erp-sidebar > div {
+  border-bottom: 1px solid var(--tdg-line);
+  display: grid;
+  gap: 3px;
+  padding: 3px 6px 12px;
+}
+.tdg-erp-sidebar > div strong { color: var(--tdg-ink); font-size: .82rem; letter-spacing: .08em; }
+.tdg-erp-sidebar > div small { color: var(--tdg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-erp-sidebar .tdg-tabs {
+  display: grid;
+  gap: 3px;
+  overflow: visible;
+  padding: 8px 0 0;
+}
+.tdg-erp-sidebar .tdg-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  justify-content: flex-start;
+  min-height: 38px;
+  min-width: 0;
+  padding: 9px 10px;
+  text-align: left;
+  width: 100%;
+}
+.tdg-erp-sidebar .tdg-tabs button.active {
+  background: var(--tdg-soft);
+  box-shadow: inset 3px 0 0 var(--tdg-green);
+  color: var(--tdg-green);
+}
+.tdg-erp-stage { display: grid; gap: 14px; min-width: 0; }
+
+@media (max-width: 900px) {
+  .tdg-erp-layout { grid-template-columns: 1fr; }
+  .tdg-erp-sidebar { padding: 8px; position: static; }
+  .tdg-erp-sidebar > div { display: none; }
+  .tdg-erp-sidebar .tdg-tabs { display: flex; overflow-x: auto; padding: 0; }
+  .tdg-erp-sidebar .tdg-tabs button { min-width: max-content; width: auto; }
+  .tdg-erp-sidebar .tdg-tabs button.active { box-shadow: inset 0 -3px 0 var(--tdg-green); }
+}

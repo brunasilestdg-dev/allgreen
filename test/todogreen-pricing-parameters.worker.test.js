@@ -200,4 +200,30 @@ describe("mudar a régua", () => {
     // A justificativa fica no registro.
     expect(d.historico.find((h) => h.versao === "v2.ago").justificativa).toMatch(/OPEX/);
   });
+
+  it("Middle Mile Spot substitui só o custo específico e herda a base global", async () => {
+    const r = await pedir("/api/todogreen/pricing-parameters", {
+      method: "POST",
+      token: gestor.token,
+      body: {
+        versao: "spot.ago.1",
+        nome: "Middle Mile Spot",
+        scopeType: "product",
+        scopeKey: "middle-mile-spot",
+        parametros: { opexPercent: 5, waitingCostPerHour: 125 },
+        justificativa: "Referência spot atualizada após cotação operacional.",
+      },
+    });
+    expect(r.status).toBe(201);
+
+    const d = await (await pedir(
+      "/api/todogreen/pricing-parameters?productId=middle-mile-spot",
+      { token: gestor.token },
+    )).json();
+    expect(d.atual.parametros.targetMarginPercent).toBe(28);
+    expect(d.resolvido.parametros.targetMarginPercent).toBe(28);
+    expect(d.resolvido.parametros.opexPercent).toBe(5);
+    expect(d.resolvido.parametros.waitingCostPerHour).toBe(125);
+    expect(d.resolvido.aplicados.at(-1).versao).toBe("spot.ago.1");
+  });
 });

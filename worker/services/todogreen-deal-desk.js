@@ -14,6 +14,7 @@
 //   • a decisão registra a versão vigente, e revisar reabre.
 
 import { TENANT_ID, paginacao, podeNaVertical, podeVerTodaCarteira } from "./todogreen-access.js";
+import { reguaEmVigor } from "./todogreen-pricing-parameters.js";
 import {
   SITUACOES,
   alcadaPorId,
@@ -112,18 +113,7 @@ const buscarPedido = (env, id, ownerId) =>
 // A régua é do tenant, não do espaço: é a mesma consulta de
 // todogreen-pricing-parameters.js, e ler por outro critério aqui faria a tela
 // mostrar um piso e o Deal Desk usar outro.
-const reguaVigente = async (env) => {
-  const row = await env.DB
-    .prepare(
-      `SELECT parameters_json FROM todogreen_pricing_parameters
-        WHERE tenant_id = ? AND status = 'active'
-        ORDER BY effective_from DESC LIMIT 1`,
-    )
-    .bind(TENANT_ID)
-    .first()
-    .catch(() => null);
-  return parse(row?.parameters_json, {}) || {};
-};
+const reguaVigente = async (env, ownerId) => (await reguaEmVigor(env, ownerId)).parametros;
 
 const cenarioDoEspaco = (env, cenarioId, ownerId) =>
   env.DB.prepare(
@@ -161,7 +151,7 @@ async function abrir(env, access, user, corpo) {
   if (!cenario) return json({ error: "Simulação não encontrada." }, 404);
 
   const resultado = parse(cenario.result_json, {});
-  const regua = await reguaVigente(env);
+  const regua = await reguaVigente(env, access.ownerId);
   // Alçada, desvio e prazo saem do resultado gravado e da régua vigente —
   // nunca do corpo do pedido. Deixar quem pede escolher a própria alçada é o
   // controle virando autoatendimento.
@@ -299,7 +289,7 @@ async function revisar(env, access, user, id, corpo) {
 
   const cenario = await cenarioDoEspaco(env, atual.cenarioId, access.ownerId);
   const resultado = parse(cenario?.result_json, {});
-  const regua = await reguaVigente(env);
+  const regua = await reguaVigente(env, access.ownerId);
 
   const { valido, problemas, pedido } = revisarPedido(atual, {
     resultado,

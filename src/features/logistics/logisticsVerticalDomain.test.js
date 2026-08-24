@@ -21,6 +21,7 @@ describe("logistics vertical domain", () => {
     expect(TODO_GREEN_MODULE_CATALOG.some((item) => item.id === "green-score")).toBe(true);
     expect(LOGISTICS_PRODUCTS.map((item) => item.id)).toEqual([
       "middle-mile",
+      "middle-mile-spot",
       "last-mile",
       "dedicated",
       "transfer",
@@ -31,6 +32,41 @@ describe("logistics vertical domain", () => {
       "custom-project",
     ]);
     expect(LOGISTICS_PRODUCTS.find((item) => item.id === "bulk").requiredFields).toContain("materialType");
+  });
+
+  it("keeps Middle Mile Spot as a first-class per-trip product", () => {
+    const result = centralPricingEngine("middle-mile-spot", {
+      distanceKm: 180,
+      tripsPerMonth: 1,
+      vehicleType: "VUC elétrico",
+      tollCost: 80,
+      dataQuality: 90,
+    });
+    expect(result.productName).toBe("Middle Mile Spot");
+    expect(result.blueprint.pricingUnit).toBe("preço por viagem");
+    expect(result.cost.lines.find((line) => line.id === "tolls")?.amount).toBe(80);
+  });
+
+  it("uses editable monthly and journey costs for dedicated courier", () => {
+    const result = centralPricingEngine("dedicated", {
+      distanceKm: 50,
+      tripsPerMonth: 22,
+      vehicles: 1,
+      drivers: 1,
+      hoursPerDay: 4,
+      daysPerMonth: 22,
+      vehicleType: "Moto elétrica",
+      dataQuality: 90,
+    }, { assumptions: {
+      vehicleMonthlyCost: 1850,
+      driverDailyCost4h: 160,
+      energyCostPerKm: 0.12,
+      maintenanceMonthly: 200,
+      maintenancePerKm: 0,
+    } });
+    expect(result.cost.lines.find((line) => line.id === "vehicle")?.amount).toBe(1850);
+    expect(result.cost.lines.find((line) => line.id === "team")?.amount).toBe(3520);
+    expect(result.cost.lines.find((line) => line.id === "energy")?.amount).toBe(132);
   });
 
   it("does not let read access imply sensitive To Do Green permissions", () => {

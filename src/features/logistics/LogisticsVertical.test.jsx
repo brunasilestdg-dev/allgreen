@@ -162,18 +162,38 @@ describe("LogisticsVertical", () => {
 
   it("renders the private hub for authorized To Do Green users", async () => {
     await renderarAutorizada();
-    expect(screen.getByRole("heading", { name: "Visão Geral", level: 1 }).hidden).toBe(false);
-    expect(screen.getByRole("heading", { name: "Painel de Gerenciamento" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Meu trabalho", level: 1 }).hidden).toBe(false);
     expect(screen.getByRole("navigation", { name: "Navegação To Do Green" }).querySelectorAll("button")).toHaveLength(10);
     expect(screen.getByText("Configurações")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /ERP To Do Green/ })).toBeTruthy();
-    expect(screen.getByText("Indicadores, pendências e atalhos principais da operação.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Olá, Bruna" })).toBeTruthy();
+    expect(screen.getByText("Novos Negócios e Comercial. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Minha fila" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Minhas responsabilidades" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Configurar meu início/ })).toBeTruthy();
     expect(screen.queryByText(/Painel operacional/i)).toBeNull();
     expect(screen.queryByText(/ativas.*planejado/i)).toBeNull();
     expect(screen.queryByText(/Recursos organizados por área/i)).toBeNull();
     expect(screen.getByText("Middle Mile")).toBeTruthy();
     expect(screen.getByText("Operação a granel")).toBeTruthy();
     expect(screen.getByText("Inteligência ESG")).toBeTruthy();
+  });
+
+  it("salva uma configuração de início diferente para cada colaborador", async () => {
+    const update = vi.fn();
+    await renderarAutorizada({ update });
+
+    fireEvent.click(screen.getByRole("button", { name: /Configurar meu início/ }));
+    fireEvent.change(screen.getByLabelText("Minha área principal"), { target: { value: "finance" } });
+    fireEvent.change(screen.getByLabelText("Minha função"), { target: { value: "Controladoria" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar meu início" }));
+
+    expect(update).toHaveBeenCalledTimes(1);
+    const next = update.mock.calls[0][0](baseDb);
+    expect(next.preferences.todoGreenHome).toMatchObject({
+      areaId: "finance",
+      functionLabel: "Controladoria",
+    });
+    expect(next.preferences.todoGreenHome.shortcutIds).toContain("billing");
   });
 
   it("abre o espaço de trabalho conectado dentro da vertical", async () => {
@@ -255,7 +275,6 @@ describe("LogisticsVertical", () => {
     await renderarAutorizada();
     expect(screen.getByText("Sem dados operacionais")).toBeTruthy();
     expect(screen.getByText("Cadastre clientes, oportunidades ou simulações para alimentar o painel.")).toBeTruthy();
-    expect(screen.getByText("Sem medição")).toBeTruthy();
     expect(screen.getAllByText("Sem cálculo").length).toBeGreaterThan(0);
     expect(screen.queryByText("Cliente enterprise")).toBeNull();
     expect(screen.queryByText("Operação e-commerce")).toBeNull();

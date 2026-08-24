@@ -81,6 +81,7 @@ import {
   resumirAssuntos,
 } from "./moduleGroupingDomain.js";
 import Semente from "./Semente.jsx";
+import ErpHome from "./ErpHome.jsx";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
 const PricingParametersPanel = lazy(() => import("./PricingParametersPanel.jsx"));
@@ -243,8 +244,8 @@ const IMPLEMENTED_MODULE_IDS = new Set([
 
 const MODULE_IMPLEMENTATION = Object.freeze({
   dashboard: {
-    title: "Visão Geral",
-    navLabel: "Visão Geral",
+    title: "Meu trabalho",
+    navLabel: "Início",
     route: "/todogreen/dashboard",
     area: "gestao",
     status: "functional",
@@ -371,12 +372,12 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "CO2 evitado, diesel não consumido, equivalências, metodologia e textos comerciais auditáveis.",
   },
   regua: {
-    title: "Régua comercial",
-    navLabel: "Régua comercial",
-    route: "/todogreen/regua",
-    area: "financeiro",
+    title: "Parâmetros do simulador",
+    navLabel: "Parâmetros do simulador",
+    route: "/todogreen/parametros-simulador",
+    area: "produtos",
     status: "functional",
-    description: "Margem mínima, margem alvo, OPEX, administrativo, impostos, risco e comissão — versionados, com justificativa e efeito no preço antes de valer.",
+    description: "Custos, jornadas, frota, overhead, impostos, risco e margem por escopo, com versão, fonte, justificativa e efeito antes de valer.",
   },
   "central-esg": {
     title: "Central ESG",
@@ -596,8 +597,8 @@ const MODULE_IMPLEMENTATION = Object.freeze({
 
 const PRIMARY_NAVIGATION = Object.freeze([
   { id: "overview", label: "Início", route: "/todogreen/dashboard", pages: ["dashboard"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "deal-desk", "metas", "performance-comercial"] },
-  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "produtos-logisticos", "catalogo-produtos"] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "propostas", "deal-desk", "metas", "performance-comercial"] },
+  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "produtos-logisticos", "catalogo-produtos", "regua"] },
   { id: "planning", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento", "aceite-viagens", "ordens-servico", "ciot", "solicitacoes"] },
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "rastreamento", "cadastros", "estoque", "compras"] },
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes"] },
@@ -605,18 +606,6 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing", "campanhas"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia", "documentos"] },
   { id: "management", label: "Gestão", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "dashboards", "relatorios", "auditoria", "integracoes", "acessos"] },
-]);
-
-const WORK_AREAS = Object.freeze([
-  { id: "commercial", label: "Comercial", outcome: "Clientes, pipeline e contratos", icon: BriefcaseBusiness, links: [["Clientes", "/todogreen/clientes"], ["Oportunidades", "/todogreen/oportunidades"], ["Precificação", "/todogreen/precificacao"], ["Propostas e contratos", "/todogreen/propostas"]] },
-  { id: "products", label: "Produtos", outcome: "Serviços, SLA e tabela", icon: Boxes, links: [["Produtos logísticos", "/todogreen/produtos"], ["Catálogo", "/todogreen/produtos"], ["Precificação", "/todogreen/precificacao"], ["Régua comercial", "/todogreen/regua"]] },
-  { id: "planning", label: "Planejamento", outcome: "OS, aceite e CIOT", icon: Route, links: [["Planejamento", "/todogreen/planejamento"], ["OS e aceite", "/todogreen/ordens-servico"], ["CIOT", "/todogreen/ciot"], ["Solicitações", "/todogreen/solicitacoes"]] },
-  { id: "operations", label: "Operação", outcome: "Execução, tracking e estoque", icon: Truck, links: [["Operações", "/todogreen/operacoes"], ["Rastreamento", "/todogreen/rastreamento"], ["Cadastros", "/todogreen/cadastros"], ["Estoque e compras", "/todogreen/estoque"]] },
-  { id: "finance", label: "Financeiro", outcome: "Faturamento, títulos e custos", icon: WalletCards, links: [["Faturamento e CT-e", "/todogreen/faturamento"], ["CIOT", "/todogreen/ciot"], ["Títulos e baixas", "/todogreen/titulos"], ["Rateio de custos", "/todogreen/rateios"]] },
-  { id: "hr", label: "DP/RH", outcome: "Motoristas, escalas e metas", icon: Users, links: [["DP/RH", "/todogreen/rh"], ["Motoristas", "/todogreen/rh"], ["Escalas", "/todogreen/rh"], ["Metas", "/todogreen/metas"]] },
-  { id: "marketing", label: "Marketing", outcome: "Campanhas e materiais", icon: TrendingUp, links: [["Marketing", "/todogreen/marketing"], ["Campanhas", "/todogreen/marketing"], ["Materiais ESG", "/todogreen/documentos"], ["Relatórios", "/todogreen/relatorios"]] },
-  { id: "esg", label: "ESG", outcome: "Indicadores e evidências", icon: Leaf, links: [["Central ESG", "/todogreen/central-esg"], ["Indicadores", "/todogreen/esg"], ["Documentos", "/todogreen/documentos"], ["Metodologia", "/todogreen/metodologia"]] },
-  { id: "management", label: "Gestão", outcome: "Projetos, dashboards e acessos", icon: Settings, links: [["Espaço de trabalho", "/todogreen/espaco"], ["Projetos", "/todogreen/central-trabalho"], ["Dashboards", "/todogreen/dashboards"], ["Relatórios", "/todogreen/relatorios"]] },
 ]);
 
 const MANAGEMENT_TOOLS = Object.freeze([
@@ -777,6 +766,22 @@ const productDefaults = {
     occupancyPercent: "",
     dataQuality: "",
   },
+  "middle-mile-spot": {
+    client: "",
+    origin: "",
+    destination: "",
+    distanceKm: "",
+    tripsPerMonth: 1,
+    vehicleType: "",
+    pallets: "",
+    weightKg: "",
+    tollCost: 0,
+    waitingHours: "",
+    customerTargetPrice: 0,
+    occupancyPercent: "",
+    dataQuality: "",
+    modality: "spot",
+  },
   "last-mile": {
     client: "",
     city: "",
@@ -911,6 +916,7 @@ const TODO_GREEN_PAGE_ALIASES = Object.freeze({
   pipeline: "oportunidades",
   contratos: "propostas",
   simulacoes: "precificacao",
+  "parametros-simulador": "regua",
   // "deal-desk" era apelido de "precificacao" porque não havia tela. Agora há.
   aprovacoes: "deal-desk",
   alcada: "deal-desk",
@@ -1405,32 +1411,6 @@ function DashboardPanel({ data, dashboard, tasks, onNavigate }) {
   );
 }
 
-function WorkAreaMap({ onNavigate }) {
-  return (
-    <section className="tdg-work-map" aria-labelledby="tdg-work-map-title">
-      <header>
-        <div>
-          <span className="tdg-kicker">ROTINAS</span>
-          <h2 id="tdg-work-map-title">ERP To Do Green</h2>
-        </div>
-      </header>
-      <div className="tdg-work-area-grid">
-        {WORK_AREAS.map((area) => {
-          const Icon = area.icon;
-          return (
-            <article className={`tdg-work-area ${area.id}`} key={area.id}>
-              <div className="tdg-work-area-heading"><span><Icon size={20} /></span><div><strong>{area.label}</strong><small>{area.outcome}</small></div></div>
-              <div className="tdg-work-area-links">
-                {area.links.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = [] }) {
   const opportunityId =
     typeof window === "undefined"
@@ -1457,22 +1437,37 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
   const [cenarioSalvoId, setCenarioSalvoId] = useState("");
   const [justificativaDeAprovacao, setJustificativaDeAprovacao] = useState("");
   const [enviandoAprovacao, setEnviandoAprovacao] = useState(false);
-  // A régua comercial em vigor, administrada pelo gestor em /todogreen/regua.
+  // Os parâmetros em vigor, administrados pelo gestor na tela de parâmetros.
   // Sem ela carregada ainda, a calculadora usa o padrão — e diz qual régua
   // está aplicando, porque preço sem régua identificada não se defende.
   const [regua, setRegua] = useState(null);
   useEffect(() => {
     let vivo = true;
-    fetch("/api/todogreen/pricing-parameters", { headers: authHeaders?.() || {} })
+    const consulta = new URLSearchParams({ productId });
+    if (inputs.modality) consulta.set("modality", inputs.modality);
+    if (inputs.vehicleType) consulta.set("vehicleType", inputs.vehicleType);
+    if (inputs.region || inputs.city) consulta.set("region", inputs.region || inputs.city);
+    if (inputs.clientId) consulta.set("clientId", inputs.clientId);
+    if (inputs.contractId) consulta.set("contractId", inputs.contractId);
+    fetch(`/api/todogreen/pricing-parameters?${consulta}`, { headers: authHeaders?.() || {} })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (vivo && d?.atual) setRegua(d.atual);
+        if (vivo && d?.atual) {
+          const aplicados = d.resolvido?.aplicados || [];
+          setRegua({
+            ...d.atual,
+            deFabrica: d.atual.deFabrica && aplicados.length === 0,
+            parametros: d.resolvido?.parametros || d.atual.parametros,
+            aplicados,
+            versao: aplicados.map((item) => item.versao).join(" + ") || d.atual.versao,
+          });
+        }
       })
       .catch(() => {});
     return () => {
       vivo = false;
     };
-  }, [authHeaders]);
+  }, [authHeaders, productId, inputs.modality, inputs.vehicleType, inputs.region, inputs.city, inputs.clientId, inputs.contractId]);
   const allowed = hasTodoGreenPermission(role, "pricing:simulate");
   const blueprint = getProductPricingBlueprint(productId);
   const product = LOGISTICS_PRODUCTS.find((item) => item.id === productId);
@@ -1481,7 +1476,7 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
       centralPricingEngine(
         productId,
         inputs,
-        regua?.parametros ? { assumptions: regua.parametros } : {},
+        regua?.parametros ? { assumptions: regua.parametros, parameterVersion: regua.versao } : {},
       ),
     [inputs, productId, regua],
   );
@@ -1547,7 +1542,7 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
       productId,
       inputs,
       { userId: db?.user?.id || "local", tenantId: TODO_GREEN_TENANT.id, justification: `Simulação criada pela calculadora To Do Green (régua ${regua?.versao || "padrão"}).` },
-      regua?.parametros ? { assumptions: regua.parametros } : {},
+      regua?.parametros ? { assumptions: regua.parametros, parameterVersion: regua.versao } : {},
     );
     // A simulação vai para o banco, não para o JSON do espaço. Era daqui que
     // saía a gravação genérica que sobrescrevia o trabalho de quem estivesse
@@ -1588,8 +1583,8 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
       <div className="tdg-section-head"><div><span className="tdg-kicker">CALCULAR PREÇO</span><h2>{blueprint.title}</h2><p>Preencha os dados da operação. O preço e a margem são atualizados automaticamente.</p></div><strong>{friendlyCommercialText(result.recommendation.decision)}</strong></div>
       <p className="tdg-esg-nota">
         {regua && !regua.deFabrica
-          ? `Regra de preço ${regua.versao} · margem mínima ${regua.parametros.minimumMarginPercent}% · alvo ${regua.parametros.targetMarginPercent}% · definida por ${regua.responsavel || "—"}`
-          : "Usando os valores padrão de margem e custos. Um gestor pode definir os seus em Régua comercial."}
+          ? `Parâmetros ${regua.versao} · margem mínima ${regua.parametros.minimumMarginPercent}% · alvo ${regua.parametros.targetMarginPercent}% · ${regua.aplicados?.length || 1} regra(s) aplicada(s)`
+          : "Usando os valores padrão de margem e custos. Um gestor pode definir os seus em Parâmetros do simulador."}
       </p>
       <div className="tdg-product-strip">{LOGISTICS_PRODUCTS.map((item) => <ProductCard product={item} active={item.id === productId} onSelect={selectProduct} key={item.id} />)}</div>
       <div className={`tdg-premissas tdg-premissas-${situacao.nivel}`} role="status">
@@ -2104,6 +2099,10 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   if (!allowed) return <AccessDenied db={db} />;
 
   const openPricing = () => navigate("/todogreen/precificacao");
+  const saveHomePreferences = (preferences) => update?.((current) => ({
+    ...current,
+    preferences: { ...(current.preferences || {}), todoGreenHome: preferences },
+  }));
 
   return (
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
@@ -2138,33 +2137,38 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </div>
       </header>
 
-      <nav className="tdg-tabs" aria-label="Navegação To Do Green">
-        {PRIMARY_NAVIGATION.map((item) => (
-          <button
-            type="button"
-            className={primaryNavigation.id === item.id ? "active" : ""}
-            onClick={() => navigate(item.route)}
-            key={item.id}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {!isWorkCenter && primaryNavigation.pages.length > 1 && (
-        <nav className="tdg-subtabs" aria-label={`Seções de ${primaryNavigation.label}`}>
-          {primaryNavigation.pages
-            .map((id) => [id, MODULE_IMPLEMENTATION[id]])
-            .filter(([, item]) => item && (!item.permission || hasTodoGreenPermission(role, item.permission)))
-            .map(([id, item]) => (
-              <button type="button" className={page === id ? "active" : ""} onClick={() => navigate(item.route)} key={id}>
-                {item.navLabel}
+      <div className="tdg-erp-layout">
+        <aside className="tdg-erp-sidebar">
+          <div><strong>ERP</strong><small>{remoteAccess.email || db?.user?.email || "To Do Green"}</small></div>
+          <nav className="tdg-tabs" aria-label="Navegação To Do Green">
+            {PRIMARY_NAVIGATION.map((item) => (
+              <button
+                type="button"
+                className={primaryNavigation.id === item.id ? "active" : ""}
+                onClick={() => navigate(item.route)}
+                key={item.id}
+              >
+                {item.label}
               </button>
             ))}
-        </nav>
-      )}
+          </nav>
+        </aside>
 
-      <div data-tdg-page-content="true">
+        <section className="tdg-erp-stage">
+          {!isWorkCenter && primaryNavigation.pages.length > 1 && (
+            <nav className="tdg-subtabs" aria-label={`Seções de ${primaryNavigation.label}`}>
+              {primaryNavigation.pages
+                .map((id) => [id, MODULE_IMPLEMENTATION[id]])
+                .filter(([, item]) => item && (!item.permission || hasTodoGreenPermission(role, item.permission)))
+                .map(([id, item]) => (
+                  <button type="button" className={page === id ? "active" : ""} onClick={() => navigate(item.route)} key={id}>
+                    {item.navLabel}
+                  </button>
+                ))}
+            </nav>
+          )}
+
+          <div data-tdg-page-content="true">
       {erroDosRegistros && (
         <div className="tdg-alert" role="alert">
           <AlertTriangle size={18} />
@@ -2172,8 +2176,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </div>
       )}
 
-      {page === "dashboard" && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
-      {page === "dashboard" && <WorkAreaMap onNavigate={navigate} />}
+      {page === "dashboard" && <ErpHome role={role} user={db?.user || {}} data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} products={LOGISTICS_PRODUCTS} preferences={db?.preferences?.todoGreenHome} onSave={saveHomePreferences} onNavigate={navigate} />}
       {page === "espaco" && (
         <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
           <TodoGreenWorkspace db={db} update={update} verticalData={verticalData} setToast={setToast} onNavigate={navigate} />
@@ -2192,7 +2195,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "precificacao" && <PricingPanel key={new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
       {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} />}
       {page === "regua" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando régua comercial...</section>}>
+        <Suspense fallback={<section className="tdg-panel">Carregando parâmetros do simulador...</section>}>
           <PricingParametersPanel authHeaders={authHeaders} setToast={setToast} />
         </Suspense>
       )}
@@ -2253,6 +2256,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           </div>
         </details>
       )}
+          </div>
+        </section>
       </div>
 
       {/* A Semente fica por último no DOM de propósito: quem navega por teclado

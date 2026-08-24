@@ -395,7 +395,7 @@ const product = (id, name, code, modality, billingUnit, fields, config = {}) => 
   pricingRules: config.pricingRules || {},
   distanceBands: config.distanceBands || [],
   weightBands: config.weightBands || [],
-  marginRules: config.marginRules || { minimumMarginPercent: 18, targetMarginPercent: 26 },
+  marginRules: config.marginRules || {},
   approvalRules: config.approvalRules || {
     minimumMarginPercent: 18,
     maximumDiscountPercent: 8,
@@ -413,6 +413,10 @@ export const LOGISTICS_PRODUCTS = [
   product("middle-mile", "Middle Mile", "MM", "line-haul", "viagem", {
     required: ["client", "origin", "destination", "distanceKm", "tripsPerMonth", "vehicleType"],
     optional: ["returnLoaded", "weeklyFrequency", "pallets", "weightKg", "waitingHours", "tollCost", "sla", "customerTargetPrice"],
+  }),
+  product("middle-mile-spot", "Middle Mile Spot", "MMS", "line-haul-spot", "viagem", {
+    required: ["client", "origin", "destination", "distanceKm", "vehicleType"],
+    optional: ["returnLoaded", "pallets", "weightKg", "waitingHours", "tollCost", "customerTargetPrice"],
   }),
   product("last-mile", "Last Mile", "LM", "last-mile", "pacote", {
     required: ["client", "city", "packages", "routesPerDay", "daysPerMonth", "kmPerRoute", "vehicleType"],
@@ -460,6 +464,18 @@ export const PRODUCT_PRICING_BLUEPRINTS = Object.freeze({
     ],
     requiredEvidence: ["janela de carregamento", "perfil de carga", "rota validada", "SLA esperado"],
     executiveOutputs: ["preço por viagem", "custo por km", "margem mensal", "CO2 evitado por rota", "gatilhos Deal Desk"],
+  },
+  "middle-mile-spot": {
+    title: "Middle Mile Spot",
+    pricingUnit: "preço por viagem",
+    inputGroups: [
+      ["Rota", ["origin", "destination", "distanceKm", "returnLoaded"]],
+      ["Carga", ["pallets", "weightKg", "volumeM3", "hazmat", "temperatureControlled"]],
+      ["Viagem", ["waitingHours", "tollCost", "vehicleType", "driverShift"]],
+      ["Negociação", ["customerTargetPrice", "sla", "strategicContract"]],
+    ],
+    requiredEvidence: ["rota validada", "perfil de carga", "janela de coleta", "valor negociado"],
+    executiveOutputs: ["preço por viagem", "custo por km", "margem da viagem", "CO2 evitado por rota", "gatilhos Deal Desk"],
   },
   "last-mile": {
     title: "Last Mile e-commerce",
@@ -534,6 +550,21 @@ export const DEFAULT_PRICING_ASSUMPTIONS = {
   vehicleDailyCost: 430,
   maintenancePerKm: 0.42,
   reserveVehiclePercent: 6,
+  vehicleMonthlyCost: 0,
+  maintenanceMonthly: 0,
+  energyCostPerKm: 0,
+  electricKwhPerKm: DEFAULT_ENVIRONMENTAL_FACTORS.electricKwhPerKm,
+  vehicleInsuranceMonthly: 0,
+  licensingMonthly: 0,
+  driverDailyCost4h: 0,
+  driverDailyCost8h: 0,
+  driverHourlyCost: 0,
+  supervisionMonthly: 0,
+  waitingCostPerHour: 90,
+  tollMarkupPercent: 0,
+  trackingMonthly: 0,
+  cargoInsuranceMonthly: 0,
+  contingencyPercent: 0,
 };
 
 export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
@@ -545,17 +576,31 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
   const drivers = Math.max(1, n(inputs.drivers || vehicles));
   const helpers = Math.max(0, n(inputs.helpers || inputs.ajudantes || 0));
   const distanceTotal = distanceKm * trips;
-  const electricKwhPerKm = n(inputs.electricKwhPerKm || DEFAULT_ENVIRONMENTAL_FACTORS.electricKwhPerKm);
-  const energy = distanceTotal * electricKwhPerKm * a.energyCostPerKwh;
-  const vehicle = vehicles * days * a.vehicleDailyCost;
-  const driver = drivers * days * a.driverDailyCost;
+  const hours = Math.max(0, n(inputs.hoursPerDay));
+  const electricKwhPerKm = n(inputs.electricKwhPerKm || a.electricKwhPerKm || DEFAULT_ENVIRONMENTAL_FACTORS.electricKwhPerKm);
+  const energy = distanceTotal * (n(a.energyCostPerKm) > 0
+    ? n(a.energyCostPerKm)
+    : electricKwhPerKm * n(a.energyCostPerKwh));
+  const monthlyVehicle = n(a.vehicleMonthlyCost);
+  const vehicle = vehicles * (monthlyVehicle > 0 ? monthlyVehicle : days * n(a.vehicleDailyCost));
+  const jornadaDriver = hours > 0 && hours <= 4 && n(a.driverDailyCost4h) > 0
+    ? n(a.driverDailyCost4h)
+    : hours > 0 && hours <= 8 && n(a.driverDailyCost8h) > 0
+      ? n(a.driverDailyCost8h)
+      : hours > 0 && n(a.driverHourlyCost) > 0
+        ? hours * n(a.driverHourlyCost)
+        : n(a.driverDailyCost);
+  const driver = drivers * days * jornadaDriver;
   const helper = helpers * days * a.helperDailyCost;
-  const maintenance = distanceTotal * a.maintenancePerKm;
-  const tolls = n(inputs.tollCost || inputs.pedagios) * trips;
-  const waiting = n(inputs.waitingHours) * 90;
-  const insurance = n(inputs.insuranceCost || inputs.seguro);
+  const maintenance = vehicles * n(a.maintenanceMonthly) + distanceTotal * n(a.maintenancePerKm);
+  const tolls = n(inputs.tollCost || inputs.pedagios) * trips * (1 + n(a.tollMarkupPercent) / 100);
+  const waiting = n(inputs.waitingHours) * n(a.waitingCostPerHour);
+  const insurance = n(inputs.insuranceCost || inputs.seguro) + vehicles * (n(a.vehicleInsuranceMonthly) + n(a.cargoInsuranceMonthly));
   const risk = n(inputs.riskManagementCost || inputs.riskCost);
-  const technology = n(inputs.technologyCost || inputs.trackingCost);
+  const technology = n(inputs.technologyCost || inputs.trackingCost) + vehicles * n(a.trackingMonthly);
+  const licensing = vehicles * n(a.licensingMonthly);
+  const supervision = n(inputs.supervisionCost) || n(a.supervisionMonthly);
+  const reserve = inputs.reserveVehicle ? vehicle * n(a.reserveVehiclePercent) / 100 : 0;
   const implementation = n(inputs.implementationCost || 0) / Math.max(1, n(inputs.contractMonths || 12));
   const cleaning = n(inputs.cleaningCost || 0);
   const licenses = n(inputs.licenseCost || 0);
@@ -570,6 +615,9 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
     ["insurance", "Seguro", insurance],
     ["risk", "Gerenciamento de risco", risk],
     ["technology", "Tecnologia e rastreamento", technology],
+    ["licensing", "IPVA e licenciamento", licensing],
+    ["supervision", "Supervisão", supervision],
+    ["reserve", "Frota reserva", reserve],
     ["implementation", "Implantação rateada", implementation],
     ["cleaning", "Limpeza/preparação", cleaning],
     ["licenses", "Licenças/requisitos", licenses],
@@ -577,9 +625,13 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
   ]
     .filter(([, , amount]) => amount > 0)
     .map(([id, label, amount]) => ({ id, label, amount: roundMoney(amount) }));
+  const subtotal = lines.reduce((sum, item) => sum + item.amount, 0);
+  const contingency = subtotal * n(a.contingencyPercent) / 100;
+  if (contingency > 0)
+    lines.push({ id: "contingency", label: "Contingência operacional", amount: roundMoney(contingency) });
   return {
     lines,
-    directCost: roundMoney(lines.reduce((sum, item) => sum + item.amount, 0)),
+    directCost: roundMoney(subtotal + contingency),
     drivers: { distanceKm, trips, days, vehicles, drivers, helpers },
   };
 };
@@ -660,24 +712,25 @@ export const centralPricingEngine = (productId, inputs = {}, config = {}) => {
   const assumptions = { ...DEFAULT_PRICING_ASSUMPTIONS, ...(config.assumptions || {}) };
   const cost = buildCostBreakdown(inputs, assumptions);
   const directCost = cost.directCost;
-  const tax = directCost * (assumptions.taxPercent / 100);
   const opex = directCost * (assumptions.opexPercent / 100);
   const admin = directCost * (assumptions.adminPercent / 100);
   const risk = directCost * (assumptions.riskPercent / 100);
-  const loadedCost = directCost + tax + opex + admin + risk;
-  const minimumMargin = n(productConfig.approvalRules.minimumMarginPercent ?? assumptions.minimumMarginPercent) / 100;
+  const loadedCost = directCost + opex + admin + risk;
+  const minimumMargin = n(productConfig.marginRules.minimumMarginPercent ?? assumptions.minimumMarginPercent) / 100;
   const targetMargin = n(productConfig.marginRules.targetMarginPercent ?? assumptions.targetMarginPercent) / 100;
-  const minimumPrice = loadedCost / Math.max(0.01, 1 - minimumMargin - n(assumptions.commissionPercent) / 100);
-  const recommendedPrice = loadedCost / Math.max(0.01, 1 - targetMargin - n(assumptions.commissionPercent) / 100);
+  const taxRate = n(assumptions.taxPercent) / 100;
+  const minimumPrice = loadedCost / Math.max(0.01, 1 - minimumMargin - n(assumptions.commissionPercent) / 100 - taxRate);
+  const recommendedPrice = loadedCost / Math.max(0.01, 1 - targetMargin - n(assumptions.commissionPercent) / 100 - taxRate);
   const targetPrice = n(inputs.customerTargetPrice || inputs.targetPrice);
   const selectedPrice = n(inputs.price) || recommendedPrice;
   const commission = selectedPrice * (assumptions.commissionPercent / 100);
-  const marginValue = selectedPrice - loadedCost - commission;
+  const tax = selectedPrice * taxRate;
+  const marginValue = selectedPrice - loadedCost - commission - tax;
   const marginPercent = selectedPrice ? (marginValue / selectedPrice) * 100 : 0;
   const impact = calculateEnvironmentalImpact(inputs, config.environmentalFactors);
   const greenScore = calculateGreenScore(impact, inputs, config.greenScoreWeights);
   const approval = dealDeskTriggers(
-    { marginPercent, selectedPrice, minimumPrice, targetPrice, inputs },
+    { marginPercent, selectedPrice, minimumPrice, minimumMarginPercent: minimumMargin * 100, targetPrice, inputs },
     productConfig,
   );
   const blueprint = getProductPricingBlueprint(productId);
@@ -690,6 +743,7 @@ export const centralPricingEngine = (productId, inputs = {}, config = {}) => {
     assumptions,
     cost,
     loadedCost: roundMoney(loadedCost),
+    tax: roundMoney(tax),
     minimumPrice: roundMoney(minimumPrice),
     recommendedPrice: roundMoney(recommendedPrice),
     selectedPrice: roundMoney(selectedPrice),
@@ -716,9 +770,9 @@ export const centralPricingEngine = (productId, inputs = {}, config = {}) => {
     }),
     approval,
     traceability: {
-      formula: "loadedCost / (1 - margin - commission)",
+      formula: "loadedCost / (1 - margin - commission - tax)",
       calculatedAt: new Date().toISOString(),
-      ruleVersion: productConfig.version,
+      ruleVersion: config.parameterVersion || productConfig.version,
       methodologyVersion: impact.methodologyVersion,
       requiredEvidence: blueprint.requiredEvidence,
     },
@@ -783,7 +837,7 @@ export const productSpecificOutputs = (productId, result = {}) => {
     resultadoAnual: result.resultAnnual,
     impactoAmbiental: result.impact?.co2AvoidedKg,
   };
-  if (productId === "middle-mile")
+  if (["middle-mile", "middle-mile-spot"].includes(productId))
     return {
       ...base,
       custoPorViagem: trips ? roundMoney(cost / trips) : 0,
@@ -807,14 +861,14 @@ export const productSpecificOutputs = (productId, result = {}) => {
       ...base,
       custoPorVeiculo: n(i.vehicles) ? roundMoney(cost / n(i.vehicles)) : cost,
       custoPorDia: n(i.daysPerMonth) ? roundMoney(cost / n(i.daysPerMonth)) : cost,
-      impactoVeiculoReserva: i.reserveVehicle ? roundMoney(cost * 0.06) : 0,
+      impactoVeiculoReserva: result.cost?.lines?.find((line) => line.id === "reserve")?.amount || 0,
     };
   if (productId === "bulk")
     return {
       ...base,
       custoPorTonelada: tons ? roundMoney(cost / tons) : 0,
       custoDeLimpeza: roundMoney(n(i.cleaningCost)),
-      custoDeEspera: roundMoney(n(i.waitingHours) * 90),
+      custoDeEspera: result.cost?.lines?.find((line) => line.id === "waiting")?.amount || 0,
       ocupacao: n(i.occupancyPercent || 76),
     };
   return {
@@ -827,7 +881,7 @@ export const productSpecificOutputs = (productId, result = {}) => {
 export const dealDeskTriggers = (summary = {}, productConfig = {}) => {
   const triggers = [];
   const approval = productConfig.approvalRules || {};
-  if (n(summary.marginPercent) < n(approval.minimumMarginPercent || 18))
+  if (n(summary.marginPercent) < n(summary.minimumMarginPercent ?? approval.minimumMarginPercent ?? 18))
     triggers.push("Margem abaixo do mínimo");
   if (n(summary.targetPrice) && n(summary.targetPrice) < n(summary.minimumPrice))
     triggers.push("Target incompatível com preço mínimo");
@@ -894,7 +948,7 @@ export const createPricingScenarioSnapshot = (productId, inputs, context = {}, c
     opportunityId: context.opportunityId || inputs.opportunityId || "",
     createdBy: context.userId || "",
     createdAt: context.createdAt || new Date().toISOString(),
-    ruleVersion: result.version,
+    ruleVersion: result.traceability.ruleVersion,
     inputs: { ...inputs },
     formulas: result.traceability,
     parameters: result.assumptions,

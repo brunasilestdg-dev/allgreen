@@ -8,7 +8,7 @@ const cards = {
     icon: Boxes,
     actions: [
       ["Abrir precificação", "/todogreen/precificacao"],
-      ["Ver régua comercial", "/todogreen/regua"],
+      ["Parâmetros do simulador", "/todogreen/parametros-simulador"],
     ],
     responsibilities: [
       "Governar escopo, SLA, unidade de cobrança e restrições de cada produto.",

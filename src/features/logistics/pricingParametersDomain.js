@@ -1,176 +1,217 @@
-// ===== Parâmetros comerciais: margem, OPEX, imposto, comissão =====
-// Camada pura.
-//
-// Até aqui esses números viviam fixos no código: mudar a margem mínima exigia
-// alterar um arquivo e publicar. Para uma transportadora isso é inviável —
-// margem muda por produto, por cliente e por período, e quem decide é o gestor
-// comercial.
-//
-// Mesmo padrão do Green Score: régua tem versão. Cadastrar uma versão nova não
-// recalcula proposta antiga; cada simulação guarda com qual régua nasceu. Sem
-// isso, uma decisão de julho reescreveria silenciosamente o preço aprovado em
-// janeiro — e ninguém conseguiria explicar ao cliente por que o número mudou.
+// Parâmetros versionados do simulador. A régua comercial é uma das categorias,
+// não o sistema inteiro: frota, equipe e operação também precisam sair do código.
 
 export const PARAMETROS_VERSAO_PADRAO = "v1.2026";
 
-// Cada parâmetro com faixa aceitável e o que ele significa na conta. A
-// descrição não é enfeite: é o que o gestor lê antes de mexer.
-export const PARAMETROS = {
-  minimumMarginPercent: {
-    rotulo: "Margem mínima",
-    descricao: "Piso de margem. Abaixo disso a proposta exige aprovação do Deal Desk.",
-    min: 0,
-    max: 80,
-    sufixo: "%",
-  },
-  targetMarginPercent: {
-    rotulo: "Margem alvo",
-    descricao: "Margem usada para calcular o preço recomendado.",
-    min: 0,
-    max: 90,
-    sufixo: "%",
-  },
-  opexPercent: {
-    rotulo: "OPEX",
-    descricao: "Despesa operacional aplicada sobre o custo direto.",
-    min: 0,
-    max: 60,
-    sufixo: "%",
-  },
-  adminPercent: {
-    rotulo: "Administrativo",
-    descricao: "Rateio de estrutura sobre o custo direto.",
-    min: 0,
-    max: 60,
-    sufixo: "%",
-  },
-  taxPercent: {
-    rotulo: "Impostos",
-    descricao: "Carga tributária sobre o custo direto.",
-    min: 0,
-    max: 60,
-    sufixo: "%",
-  },
-  riskPercent: {
-    rotulo: "Risco",
-    descricao: "Provisão para avaria, atraso e reentrega.",
-    min: 0,
-    max: 40,
-    sufixo: "%",
-  },
-  commissionPercent: {
-    rotulo: "Comissão",
-    descricao: "Percentual sobre o preço de venda, não sobre o custo.",
-    min: 0,
-    max: 30,
-    sufixo: "%",
-  },
-};
+const percentual = (rotulo, descricao, max = 100) => ({
+  rotulo, descricao, min: 0, max, sufixo: "%", categoria: "comercial",
+});
+const moeda = (rotulo, descricao, categoria, max = 1_000_000) => ({
+  rotulo, descricao, min: 0, max, sufixo: "R$", categoria,
+});
+const numero = (rotulo, descricao, categoria, max = 100_000) => ({
+  rotulo, descricao, min: 0, max, sufixo: "", categoria,
+});
 
+export const PARAMETROS = Object.freeze({
+  minimumMarginPercent: percentual("Margem mínima", "Piso de margem. Abaixo dele a proposta exige aprovação do Deal Desk.", 80),
+  targetMarginPercent: percentual("Margem alvo", "Margem usada para calcular o preço recomendado.", 90),
+  opexPercent: percentual("OPEX", "Overhead e despesas operacionais rateados sobre o custo direto.", 60),
+  adminPercent: percentual("Administrativo", "Rateio da estrutura administrativa sobre o custo direto.", 60),
+  taxPercent: percentual("Impostos", "Carga tributária usada na formação do preço.", 60),
+  riskPercent: percentual("Risco", "Provisão para avaria, atraso e reentrega.", 40),
+  commissionPercent: percentual("Comissão", "Percentual sobre o preço de venda.", 30),
+  reserveVehiclePercent: percentual("Frota reserva", "Adicional de capacidade para cobrir indisponibilidade de frota.", 50),
+
+  vehicleDailyCost: moeda("Veículo por dia", "Locação ou depreciação diária quando não houver valor mensal.", "frota"),
+  vehicleMonthlyCost: moeda("Veículo por mês", "Locação ou depreciação mensal. Tem precedência em operação dedicada.", "frota"),
+  maintenancePerKm: moeda("Manutenção por km", "Manutenção variável, pneus e desgaste por quilômetro.", "frota", 10_000),
+  maintenanceMonthly: moeda("Manutenção mensal", "Manutenção fixa mensal por veículo.", "frota"),
+  energyCostPerKwh: moeda("Energia por kWh", "Tarifa efetiva de energia e recarga.", "frota", 1_000),
+  electricKwhPerKm: numero("Consumo elétrico por km", "Consumo do veículo elétrico em kWh por quilômetro.", "frota", 100),
+  energyCostPerKm: moeda("Energia por km", "Custo direto por km, quando conhecido. Substitui kWh × tarifa.", "frota", 1_000),
+  vehicleInsuranceMonthly: moeda("Seguro mensal do veículo", "Seguro mensal por veículo.", "frota"),
+  licensingMonthly: moeda("IPVA e licenciamento mensal", "Provisionamento mensal por veículo.", "frota"),
+
+  driverDailyCost: moeda("Motorista por dia", "Custo diário padrão do motorista.", "pessoas"),
+  driverDailyCost4h: moeda("Motorista por dia, 4h", "Custo diário para jornada de até quatro horas.", "pessoas"),
+  driverDailyCost8h: moeda("Motorista por dia, 8h", "Custo diário para jornada de até oito horas.", "pessoas"),
+  driverHourlyCost: moeda("Motorista por hora", "Custo por hora usado quando a jornada não segue uma diária cadastrada.", "pessoas"),
+  helperDailyCost: moeda("Ajudante por dia", "Custo diário por ajudante.", "pessoas"),
+  supervisionMonthly: moeda("Supervisão mensal", "Custo mensal de supervisão da operação.", "pessoas"),
+
+  waitingCostPerHour: moeda("Espera por hora", "Custo de permanência em fila ou doca.", "operacao"),
+  tollMarkupPercent: percentual("Adicional sobre pedágio", "Taxa aplicada ao pedágio informado na rota.", 100),
+  trackingMonthly: moeda("Tecnologia e rastreamento", "Custo mensal de tecnologia por veículo.", "operacao"),
+  cargoInsuranceMonthly: moeda("Seguro de carga mensal", "Seguro mensal alocado à operação.", "operacao"),
+  contingencyPercent: percentual("Contingência operacional", "Reserva sobre o custo direto para variações não previstas.", 40),
+});
+
+export const CATEGORIAS_PARAMETROS = Object.freeze([
+  { id: "comercial", rotulo: "Formação do preço" },
+  { id: "frota", rotulo: "Frota e energia" },
+  { id: "pessoas", rotulo: "Equipe e jornada" },
+  { id: "operacao", rotulo: "Operação" },
+]);
+
+export const ESCOPO_PARAMETROS = Object.freeze([
+  { id: "global", rotulo: "Global", dica: "Base do ERP" },
+  { id: "product", rotulo: "Produto", dica: "Ex.: Middle Mile Spot" },
+  { id: "modality", rotulo: "Modalidade", dica: "Ex.: spot ou recorrente" },
+  { id: "vehicle", rotulo: "Veículo", dica: "Ex.: moto elétrica" },
+  { id: "region", rotulo: "Região ou base", dica: "Ex.: São Paulo" },
+  { id: "client", rotulo: "Cliente", dica: "Condição negociada" },
+  { id: "contract", rotulo: "Contrato", dica: "Exceção contratual" },
+]);
+
+export const PARAMETROS_OBRIGATORIOS_GLOBAIS = Object.freeze([
+  "minimumMarginPercent", "targetMarginPercent", "opexPercent", "adminPercent",
+  "taxPercent", "riskPercent", "commissionPercent",
+]);
 export const CHAVES_PARAMETROS = Object.keys(PARAMETROS);
+
+// Referências importadas da planilha CCN. São pontos de partida editáveis e
+// nunca entram em vigor sem versão, justificativa e ação explícita do gestor.
+export const MODELOS_PARAMETROS = Object.freeze([
+  {
+    id: "middle-mile-spot",
+    nome: "Middle Mile Spot",
+    descricao: "Viagem avulsa com preço por viagem. Complete veículo, equipe, rota e pedágio conforme a cotação.",
+    scopeType: "product",
+    scopeKey: "middle-mile-spot",
+    source: "Modelo operacional To Do Green",
+    parametros: {},
+  },
+  {
+    id: "courier-eletrico-8h-ccn",
+    nome: "Courier elétrico dedicado, 8h",
+    descricao: "Referência CCN da planilha de maio/2026. Revise antes de ativar.",
+    scopeType: "product",
+    scopeKey: "dedicated",
+    source: "CCN_Precificacao_Courier_Eletrico_TodoGreen.xlsx",
+    parametros: {
+      vehicleMonthlyCost: 1850, driverDailyCost8h: 220, energyCostPerKm: 0.12,
+      maintenanceMonthly: 200, licensingMonthly: 80, cargoInsuranceMonthly: 150,
+      opexPercent: 10, adminPercent: 0, targetMarginPercent: 26,
+      minimumMarginPercent: 18, taxPercent: 14.25, riskPercent: 0, commissionPercent: 0,
+    },
+  },
+  {
+    id: "courier-eletrico-4h-ccn",
+    nome: "Courier elétrico dedicado, 4h",
+    descricao: "Referência CCN para jornada reduzida. Revise antes de ativar.",
+    scopeType: "product",
+    scopeKey: "dedicated",
+    source: "CCN_Precificacao_Courier_Eletrico_TodoGreen.xlsx",
+    parametros: {
+      vehicleMonthlyCost: 1850, driverDailyCost4h: 160, energyCostPerKm: 0.12,
+      maintenanceMonthly: 200, licensingMonthly: 80, cargoInsuranceMonthly: 150,
+      opexPercent: 10, adminPercent: 0, targetMarginPercent: 26,
+      minimumMarginPercent: 18, taxPercent: 14.25, riskPercent: 0, commissionPercent: 0,
+    },
+  },
+]);
 
 const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : NaN;
 };
-
 const arredondar = (v, casas = 2) => {
   const f = 10 ** casas;
   return Math.round(v * f) / f;
 };
-
-// Onde a fórmula do motor quebra em silêncio:
-//
-//   preço = custoCarregado / max(0.01, 1 − margem − comissão)
-//
-// Se margem + comissão chegar a 100%, o divisor é travado em 0,01 e o preço
-// vira cem vezes o custo. Não dá erro; devolve um número absurdo com cara de
-// cálculo. Por isso a soma é barrada aqui, antes de virar régua.
 export const LIMITE_MARGEM_MAIS_COMISSAO = 90;
 
-export const validarParametros = (valores = {}) => {
+export const validarParametros = (valores = {}, opcoes = {}) => {
+  const parcial = opcoes.parcial === true;
   const erros = [];
   const limpos = {};
+  const chaves = parcial
+    ? Object.keys(valores)
+    : [...new Set([...PARAMETROS_OBRIGATORIOS_GLOBAIS, ...Object.keys(valores)])];
 
-  for (const [chave, definicao] of Object.entries(PARAMETROS)) {
+  for (const chave of chaves) {
+    const definicao = PARAMETROS[chave];
+    if (!definicao) {
+      erros.push(`Parâmetro desconhecido: ${chave}.`);
+      continue;
+    }
     const valor = num(valores[chave]);
     if (Number.isNaN(valor)) {
       erros.push(`${definicao.rotulo}: informe um número.`);
       continue;
     }
     if (valor < definicao.min || valor > definicao.max) {
-      erros.push(
-        `${definicao.rotulo}: use um valor entre ${definicao.min}% e ${definicao.max}%.`,
-      );
+      const unidade = definicao.sufixo === "%" ? "%" : "";
+      erros.push(`${definicao.rotulo}: use um valor entre ${definicao.min}${unidade} e ${definicao.max}${unidade}.`);
       continue;
     }
-    limpos[chave] = arredondar(valor);
+    limpos[chave] = arredondar(valor, 4);
   }
-
   if (erros.length) return { valido: false, erros, parametros: null };
 
-  // Margem alvo abaixo da mínima significa que o preço recomendado nasce
-  // abaixo do piso: toda proposta cairia em aprovação, e o "recomendado"
-  // deixaria de recomendar coisa alguma.
-  if (limpos.targetMarginPercent < limpos.minimumMarginPercent)
-    erros.push(
-      "A margem alvo não pode ser menor que a margem mínima — o preço recomendado nasceria abaixo do piso.",
-    );
-
-  const soma = limpos.targetMarginPercent + limpos.commissionPercent;
-  if (soma >= LIMITE_MARGEM_MAIS_COMISSAO)
-    erros.push(
-      `Margem alvo (${limpos.targetMarginPercent}%) mais comissão (${limpos.commissionPercent}%) somam ${arredondar(soma)}%. Acima de ${LIMITE_MARGEM_MAIS_COMISSAO}% a fórmula de preço perde o sentido e devolve um valor irreal.`,
-    );
-
-  const somaMinima = limpos.minimumMarginPercent + limpos.commissionPercent;
-  if (somaMinima >= LIMITE_MARGEM_MAIS_COMISSAO)
-    erros.push(
-      `Margem mínima mais comissão somam ${arredondar(somaMinima)}%, acima do limite de ${LIMITE_MARGEM_MAIS_COMISSAO}%.`,
-    );
-
-  if (erros.length) return { valido: false, erros, parametros: null };
-  return { valido: true, erros: [], parametros: limpos };
+  const contexto = { ...opcoes.base, ...limpos };
+  const minimo = num(contexto.minimumMarginPercent);
+  const alvo = num(contexto.targetMarginPercent);
+  const comissao = num(contexto.commissionPercent);
+  if (Number.isFinite(alvo) && Number.isFinite(minimo) && alvo < minimo)
+    erros.push("A margem alvo não pode ser menor que a margem mínima — o preço recomendado nasceria abaixo do piso.");
+  if (Number.isFinite(alvo) && Number.isFinite(comissao) && alvo + comissao >= LIMITE_MARGEM_MAIS_COMISSAO)
+    erros.push(`Margem alvo (${alvo}%) mais comissão (${comissao}%) somam ${arredondar(alvo + comissao)}%. Acima de ${LIMITE_MARGEM_MAIS_COMISSAO}% a fórmula de preço perde o sentido e devolve um valor irreal.`);
+  if (Number.isFinite(minimo) && Number.isFinite(comissao) && minimo + comissao >= LIMITE_MARGEM_MAIS_COMISSAO)
+    erros.push(`Margem mínima mais comissão somam ${arredondar(minimo + comissao)}%, acima do limite de ${LIMITE_MARGEM_MAIS_COMISSAO}%.`);
+  const imposto = num(contexto.taxPercent);
+  if (Number.isFinite(alvo) && Number.isFinite(comissao) && Number.isFinite(imposto)
+      && alvo + comissao + imposto >= 95)
+    erros.push("Margem alvo, comissão e impostos deixam menos de 5% do preço para cobrir o custo. Revise a formação do preço.");
+  return erros.length ? { valido: false, erros, parametros: null } : { valido: true, erros: [], parametros: limpos };
 };
 
-// Efeito da mudança em cima de um custo de referência. É o que responde
-// "quanto isso muda o preço?" antes de a régua entrar em vigor — sem isso, o
-// gestor mexe às cegas.
+export const resolverParametros = (padrao, perfis = [], contexto = {}) => {
+  const ordem = ESCOPO_PARAMETROS.map((item) => item.id);
+  const chaves = {
+    global: "global", product: contexto.productId, modality: contexto.modality,
+    vehicle: contexto.vehicleType, region: contexto.region, client: contexto.clientId,
+    contract: contexto.contractId,
+  };
+  const aplicados = [];
+  const parametros = { ...padrao };
+  for (const tipo of ordem) {
+    const chave = chaves[tipo];
+    if (!chave) continue;
+    const perfil = perfis.find((item) => item.status === "active" && item.scopeType === tipo && item.scopeKey === chave);
+    if (!perfil) continue;
+    Object.assign(parametros, perfil.parametros || {});
+    aplicados.push({ id: perfil.id, versao: perfil.versao, scopeType: tipo, scopeKey: chave, parametros: perfil.parametros || {} });
+  }
+  return { parametros, aplicados };
+};
+
 export const simularEfeito = (parametros, custoDireto = 10000) => {
   const { valido, parametros: p } = validarParametros(parametros);
   if (!valido) return null;
   const custo = Math.max(0, num(custoDireto) || 0);
-  const carregado =
-    custo *
-    (1 + (p.taxPercent + p.opexPercent + p.adminPercent + p.riskPercent) / 100);
-  const divisorMinimo = 1 - (p.minimumMarginPercent + p.commissionPercent) / 100;
-  const divisorAlvo = 1 - (p.targetMarginPercent + p.commissionPercent) / 100;
+  const carregado = custo * (1 + (p.opexPercent + p.adminPercent + p.riskPercent) / 100);
+  const divisorMinimo = 1 - (p.minimumMarginPercent + p.commissionPercent + p.taxPercent) / 100;
+  const divisorAlvo = 1 - (p.targetMarginPercent + p.commissionPercent + p.taxPercent) / 100;
   return {
-    custoDireto: arredondar(custo),
-    custoCarregado: arredondar(carregado),
-    precoMinimo: arredondar(carregado / divisorMinimo),
-    precoRecomendado: arredondar(carregado / divisorAlvo),
-    // Quanto do preço recomendado é custo, e quanto é margem — a leitura que
-    // o gestor precisa para defender a régua.
-    pesoDoCustoPercent: arredondar(
-      (carregado / (carregado / divisorAlvo)) * 100,
-      1,
-    ),
+    custoDireto: arredondar(custo), custoCarregado: arredondar(carregado),
+    precoMinimo: arredondar(carregado / divisorMinimo), precoRecomendado: arredondar(carregado / divisorAlvo),
+    pesoDoCustoPercent: arredondar(divisorAlvo * 100, 1),
   };
 };
 
-// Compara duas réguas e descreve o que mudou, em português, para o registro de
-// auditoria e para a tela.
 export const explicarMudanca = (nova, anterior) => {
   if (!anterior) return "Primeira régua cadastrada.";
   const partes = [];
-  for (const [chave, definicao] of Object.entries(PARAMETROS)) {
+  for (const [chave, paraBruto] of Object.entries(nova || {})) {
+    const definicao = PARAMETROS[chave];
+    if (!definicao) continue;
     const de = num(anterior[chave]);
-    const para = num(nova[chave]);
-    if (Number.isNaN(de) || Number.isNaN(para) || de === para) continue;
-    partes.push(
-      `${definicao.rotulo}: ${de}${definicao.sufixo} → ${para}${definicao.sufixo}`,
-    );
+    const para = num(paraBruto);
+    if (Number.isNaN(para) || de === para) continue;
+    const deTexto = Number.isNaN(de) ? "herdado" : `${de}${definicao.sufixo}`;
+    partes.push(`${definicao.rotulo}: ${deTexto} → ${para}${definicao.sufixo}`);
   }
   return partes.length ? partes.join(" · ") : "Nenhum parâmetro mudou.";
 };

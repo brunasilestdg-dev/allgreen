@@ -5,6 +5,7 @@ import {
   LIMITE_MARGEM_MAIS_COMISSAO,
   PARAMETROS,
   explicarMudanca,
+  resolverParametros,
   simularEfeito,
   validarParametros,
 } from "./pricingParametersDomain.js";
@@ -141,5 +142,18 @@ describe("o que mudou de uma régua para a outra", () => {
 
   it("régua igual diz que nada mudou", () => {
     expect(explicarMudanca(regua(), regua())).toMatch(/nenhum parâmetro mudou/i);
+  });
+});
+
+describe("herança por escopo", () => {
+  it("aplica produto sobre global sem perder os demais parâmetros", () => {
+    const resolvido = resolverParametros(regua(), [
+      { id: "g", versao: "g1", scopeType: "global", scopeKey: "global", status: "active", parametros: { opexPercent: 8 } },
+      { id: "p", versao: "spot1", scopeType: "product", scopeKey: "middle-mile-spot", status: "active", parametros: { opexPercent: 4, waitingCostPerHour: 120 } },
+    ], { productId: "middle-mile-spot" });
+    expect(resolvido.parametros.opexPercent).toBe(4);
+    expect(resolvido.parametros.targetMarginPercent).toBe(26);
+    expect(resolvido.parametros.waitingCostPerHour).toBe(120);
+    expect(resolvido.aplicados.map((item) => item.versao)).toEqual(["g1", "spot1"]);
   });
 });
