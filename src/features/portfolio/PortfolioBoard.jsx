@@ -38,6 +38,8 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 const br = (d) => (d ? d.split("-").reverse().join("/") : "—");
 
 export default function PortfolioBoard({ db, update, business, setToast }) {
+  // A visão executiva abre primeiro para que riscos, dependências e atrasos
+  // continuem visíveis; o quadro operacional permanece na aba Projetos.
   const [aba, setAba] = useState("visao");
   const [simulacao, setSimulacao] = useState({ projectId: "", days: 7 });
   const [novoVinculo, setNovoVinculo] = useState({ fromId: "", toId: "", lagDays: 0 });
