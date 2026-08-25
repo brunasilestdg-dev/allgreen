@@ -4,12 +4,8 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), { status
 const clean = (value, max = 500) => String(value || "").trim().slice(0, max);
 const parse = (value, fallback) => { try { return JSON.parse(value || ""); } catch { return fallback; } };
 
-// A Frota tinha a própria autenticação e a própria regra de acesso, e dentro
-// dela ainda estava `email.endsWith("@todogreen.com.br")`. Quem entrasse por
-// ali enxergava e alterava os veículos do espaço inteiro, mesmo depois de o
-// domínio ter saído dos outros serviços. Agora quem decide é a mesma porta,
-// resolvida no roteador antes de chegar aqui.
-const canWrite = (access) => podeNaVertical(access, "fleet:manage");
+const canWrite = (access) => ["fleet:manage", "operations:manage", "operation:manage", "planning:manage"]
+  .some((permission) => podeNaVertical(access, permission));
 
 const mapVehicle = (row) => ({
   id: row.id, prefix: row.prefix, plate: row.plate, manufacturer: row.manufacturer, model: row.model, modelYear: row.model_year,
