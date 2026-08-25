@@ -1277,6 +1277,64 @@ const registrarPagamento = async (env, access, user, entryId, corpo) => {
   }, 201);
 };
 
+// Estornar uma baixa. O razão é imutável: não se apaga o pagamento, lança-se um
+// compensatório negativo que referencia o original e reabre o saldo. É como se
+// ajusta um lançamento sem corromper o histórico — a mesma filosofia do estoque
+// e do deal desk. Estornar duas vezes o mesmo pagamento é recusado.
+const estornarPagamento = async (env, access, user, entryId, paymentId) => {
+  if (!(await noAlcanceDaCarteira(env, COLECOES.financial, access, user.email, entryId)))
+    return json({ error: "Lançamento não encontrado." }, 404);
+  const pagamento = await env.DB.prepare(
+    `SELECT * FROM todogreen_financial_payments
+      WHERE id=? AND entry_id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(paymentId, entryId, TENANT_ID, access.ownerId).first();
+  if (!pagamento) return json({ error: "Baixa não encontrada." }, 404);
+  if (numero(pagamento.amount) < 0)
+    return json({ error: "Este lançamento já é um estorno." }, 409);
+  const jaEstornado = await env.DB.prepare(
+    `SELECT 1 FROM todogreen_financial_payments
+      WHERE entry_id=? AND tenant_id=? AND workspace_owner_id=? AND reference=?`,
+  ).bind(entryId, TENANT_ID, access.ownerId, `estorno:${paymentId}`).first();
+  if (jaEstornado) return json({ error: "Esta baixa já foi estornada." }, 409);
+
+  const lancamento = await env.DB.prepare(
+    `SELECT * FROM todogreen_financial_entries
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(entryId, TENANT_ID, access.ownerId).first();
+  if (!lancamento) return json({ error: "Lançamento não encontrado." }, 404);
+
+  const valor = numero(pagamento.amount);
+  const novoPago = Math.max(0, numero(lancamento.paid_amount) - valor);
+  const novoStatus = novoPago <= 0.0001 ? "pending" : "partial";
+  const agora = new Date().toISOString();
+  const estornoId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE todogreen_financial_entries
+          SET paid_amount=?, invoice_status=?, revision=revision+1, updated_by=?, updated_at=?
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+    ).bind(novoPago, novoStatus, user.id, agora, entryId, TENANT_ID, access.ownerId),
+    env.DB.prepare(
+      `INSERT INTO todogreen_financial_payments
+         (id,tenant_id,workspace_owner_id,entry_id,amount,paid_at,payment_method,reference,notes,created_by,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(
+      estornoId, TENANT_ID, access.ownerId, entryId, -valor, agora,
+      pagamento.payment_method || "", `estorno:${paymentId}`,
+      `Estorno da baixa ${paymentId}`, user.id, agora,
+    ),
+  ]);
+  const atualizada = await env.DB.prepare(
+    `SELECT * FROM todogreen_financial_entries WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(entryId, TENANT_ID, access.ownerId).first();
+  await registrarAuditoriaTodoGreen(env, {
+    access, user, action: "payment_reversed", resourceType: "financial", resourceId: entryId,
+    clientId: lancamento.client_id, before: COLECOES.financial.daLinha(lancamento),
+    after: COLECOES.financial.daLinha(atualizada), details: `Estorno ${estornoId} da baixa ${paymentId}`,
+  });
+  return json({ estorno: { id: estornoId, valor: -valor, referencia: `estorno:${paymentId}` }, registro: COLECOES.financial.daLinha(atualizada) }, 201);
+};
+
 const listarEventosContrato = async (env, access, user, contractId) => {
   if (!(await noAlcanceDaCarteira(env, COLECOES.contracts, access, user.email, contractId)))
     return json({ error: "Contrato não encontrado." }, 404);
@@ -1300,6 +1358,7 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
   const nome = partes[3] || "";
   const id = texto(partes[4], 120);
   const subrecurso = texto(partes[5], 80);
+  const subId = texto(partes[6], 120);
 
   // Sem coleção na URL: a vertical inteira de uma vez, sem filtro nem
   // página — é a carga do painel, que precisa do total para somar, não de um
@@ -1356,6 +1415,13 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
       if (!podeNaVertical(access, colecao.permissao))
         return json({ error: "Seu papel não pode registrar baixas." }, 403);
       return registrarPagamento(env, access, user, id, await request.json().catch(() => ({})));
+    }
+    // Estorno de uma baixa específica: DELETE .../payments/:paymentId — lança o
+    // compensatório, não apaga o histórico.
+    if (request.method === "DELETE" && subId) {
+      if (!podeNaVertical(access, colecao.permissao))
+        return json({ error: "Seu papel não pode estornar baixas." }, 403);
+      return estornarPagamento(env, access, user, id, subId);
     }
     return json({ error: "Método não permitido." }, 405);
   }

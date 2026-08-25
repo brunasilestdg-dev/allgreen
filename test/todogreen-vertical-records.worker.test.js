@@ -487,6 +487,39 @@ describe("lançamentos financeiros", () => {
       expect.objectContaining({ valor: 400, meioPagamento: "pix", referencia: "PIX-001" }),
     ]);
   });
+
+  it("estorna uma baixa lançando compensatório e reabrindo o saldo, sem apagar o histórico", async () => {
+    const criado = await pedir("/api/todogreen/records/financial", {
+      metodo: "POST", token: gestora.token,
+      corpo: { tipo: "cost", valor: 500, descricao: "Baixa a estornar", vencimentoEm: "2026-08-20" },
+    });
+    const lancamento = (await criado.json()).registro;
+    const baixa = await pedir(`/api/todogreen/records/financial/${lancamento.id}/payments`, {
+      metodo: "POST", token: gestora.token,
+      corpo: { revision: lancamento.revision, valor: 500, pagoEm: "2026-08-14", meioPagamento: "pix" },
+    });
+    const pagamentoId = (await baixa.json()).pagamento.id;
+    expect((await pedir(`/api/todogreen/records/financial`, { token: gestora.token })).status).toBe(200);
+
+    const estorno = await pedir(`/api/todogreen/records/financial/${lancamento.id}/payments/${pagamentoId}`, {
+      metodo: "DELETE", token: gestora.token,
+    });
+    expect(estorno.status).toBe(201);
+    const registro = (await estorno.json()).registro;
+    // Saldo reabre: pago volta a zero e o status deixa de ser 'paid'.
+    expect(registro).toEqual(expect.objectContaining({ valorPago: 0, statusFinanceiro: "pending" }));
+
+    // O histórico guarda a baixa E o compensatório negativo — nada é apagado.
+    const historico = await (await pedir(`/api/todogreen/records/financial/${lancamento.id}/payments`, { token: gestora.token })).json();
+    expect(historico.pagamentos.some((p) => p.valor === 500)).toBe(true);
+    expect(historico.pagamentos.some((p) => p.valor === -500 && p.referencia === `estorno:${pagamentoId}`)).toBe(true);
+
+    // Estornar de novo a mesma baixa é recusado.
+    const denovo = await pedir(`/api/todogreen/records/financial/${lancamento.id}/payments/${pagamentoId}`, {
+      metodo: "DELETE", token: gestora.token,
+    });
+    expect(denovo.status).toBe(409);
+  });
 });
 
 describe("linha do tempo operacional", () => {

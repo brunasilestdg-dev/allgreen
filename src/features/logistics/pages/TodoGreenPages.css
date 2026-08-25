@@ -1435,3 +1435,13 @@
   font: inherit; min-height: 36px; padding: 7px 10px; width: 100%;
 }
 .df-maint-add input:focus { border-style: solid; border-color: var(--tdg-green); outline: none; }
+
+/* ── Financeiro: histórico de baixas com estorno ────────────── */
+.tdg-payment-history { border: 1px solid var(--tdg-line); border-radius: 12px; display: grid; gap: 6px; margin-top: 10px; padding: 12px; }
+.tdg-payment-history > strong { color: var(--tdg-muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.tdg-payment-row { align-items: center; display: grid; gap: 10px; grid-template-columns: 1fr auto auto; }
+.tdg-payment-row > span { color: var(--tdg-ink); font-size: 13px; }
+.tdg-payment-row.estorno { color: #a23b2d; }
+.tdg-payment-row.estorno strong { color: #a23b2d; }
+.tdg-payment-row button { background: #fff; border: 1px solid #e0c9c4; border-radius: 8px; color: #a23b2d; cursor: pointer; font-size: 12px; font-weight: 700; padding: 5px 10px; }
+.tdg-payment-row em { color: var(--tdg-muted); font-size: 11px; font-style: normal; }
