@@ -112,7 +112,7 @@ export default function TrackerPage({ authHeaders, setToast }) {
         <div>
           <span>FROTA E RASTREAMENTO</span>
           <h2>Integração com o TMS Tracker</h2>
-          <p>Conecte posições e eventos da frota em modo somente leitura. Senhas e tokens ficam protegidos no Cloudflare, nunca nesta tela.</p>
+          <p>Posições da frota em modo leitura; credenciais protegidas.</p>
         </div>
         <div className={`tdg-tracker-status status-${integration?.status || "draft"}`}>
           <Satellite size={18} />

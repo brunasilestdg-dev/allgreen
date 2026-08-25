@@ -129,7 +129,7 @@ export default function WorkViews({ setToast, profiles = [] }) {
         <div>
           <span>ESPAÇO · VISUALIZAÇÕES</span>
           <h2>Gantt, Timeline, Calendário, Workload e Gráfico</h2>
-          <p>Todas as visões saem dos mesmos itens do quadro — o Gantt marca o caminho crítico, o Workload soma a carga por pessoa.</p>
+          <p>Mesma base do quadro: Gantt e Workload.</p>
         </div>
         <div className="tdg-page-actions">
           {boards.length > 1 && (

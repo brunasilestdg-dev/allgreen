@@ -174,7 +174,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
         <div>
           <span>DP/RH</span>
           <h2>Pessoas e folha</h2>
-          <p>Cadastro de colaboradores, ponto, férias e fechamento de folha. CPF e salário são dados sensíveis — só o RH vê.</p>
+          <p>Colaboradores, ponto, férias e folha (só o RH vê).</p>
         </div>
         <div className="tdg-page-actions">
           <button className="tdg-action" type="button" onClick={carregar}><RefreshCw size={16} />Atualizar</button>

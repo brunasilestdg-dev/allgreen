@@ -137,7 +137,7 @@ export const TODO_GREEN_MODULE_AREAS = [
   {
     id: "produtividade",
     name: "Produtividade",
-    description: "Planner, planos com baldes e tarefas, privados ou compartilhados, com prazo, prioridade e progresso.",
+    description: "Planos com tarefas, prazo, prioridade e progresso.",
   },
   {
     id: "ocorrencias",
@@ -472,7 +472,7 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("planner", "Planner", "produtividade", "/todogreen/planner", {
     icon: "LayoutGrid",
     order: 60.2,
-    description: "Planos com baldes e tarefas no estilo Microsoft Planner — privados ou compartilhados, com responsável, prazo, prioridade, progresso e checklist.",
+    description: "Planos com tarefas, prazo, prioridade e checklist.",
     permissions: ["read", "planner:manage"],
   }),
   module("espaco", "Comunicação interna", "comunicacao-interna", "/todogreen/espaco", {

@@ -38,7 +38,7 @@ export default function SalesPerformancePage({ authHeaders, onNavigate }) {
   return (
     <section className="tdg-panel tdg-page tdg-performance-page">
       <header className="tdg-page-title">
-        <div><span>EXECUÇÃO DA CARTEIRA</span><h2>Performance comercial</h2><p>Acompanhe disciplina de relacionamento, atualização da carteira, próximas ações e atingimento das metas. Oportunidades e pipeline permanecem em uma tela independente.</p></div>
+        <div><span>EXECUÇÃO DA CARTEIRA</span><h2>Performance comercial</h2><p>Execução da carteira e atingimento de metas.</p></div>
         <button className="tdg-action" type="button" onClick={() => onNavigate?.("/todogreen/metas")}><Target size={16} />Abrir metas</button>
       </header>
       <div className="tdg-performance-boundary"><CheckCircle2 size={17} /><span>Esta página não usa oportunidades, pipeline, forecast nem faturamento para calcular performance.</span></div>

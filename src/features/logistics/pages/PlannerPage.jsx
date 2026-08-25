@@ -254,7 +254,7 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
         <div>
           <span>Produtividade</span>
           <h2>Planner</h2>
-          <p>Planos com baldes e tarefas, privados ou compartilhados com o espaço. Progresso, prazo, prioridade e checklist.</p>
+          <p>Planos com tarefas, prazo, prioridade e checklist.</p>
         </div>
         <div className="tdg-page-actions">
           <button type="button" className="tdg-planner-toggle" data-ativo={vendoMinhas} onClick={() => setVendoMinhas((v) => !v)}>

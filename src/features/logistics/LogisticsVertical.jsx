@@ -296,7 +296,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/metas",
     area: "comercial",
     status: "functional",
-    description: "Metas com fonte de medição, responsável, período, ritmo, projeção, check-ins, planos de ação, desdobramento e histórico.",
+    description: "Metas com medição, check-ins e planos de ação.",
   },
   "performance-comercial": {
     title: "Performance comercial",
@@ -352,7 +352,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/implantacao",
     area: "implantacao",
     status: "functional",
-    description: "Implantação dentro do ERP, conectando contrato, operação, faturamento, portal, integrações, SLA, ESG, responsáveis e go-live.",
+    description: "Go-live do cliente: contrato, operação, SLA e portal.",
   },
   produtos: {
     title: "Produtos logísticos",
@@ -400,7 +400,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/ciot",
     area: "operacao",
     status: "functional",
-    description: "Preparação do CIOT com OS, transportador, veículo, rota, valor do frete, piso mínimo, contingência e protocolo emitido.",
+    description: "Emissão de CIOT com piso mínimo e protocolo.",
   },
   esg: {
     title: "ESG, Green Score e emissões da cadeia logística",
@@ -412,11 +412,11 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
   regua: {
     title: "Parâmetros do simulador",
-    navLabel: "Parâmetros do simulador",
+    navLabel: "Parâmetros",
     route: "/todogreen/parametros-simulador",
     area: "produtos",
     status: "functional",
-    description: "Custos, jornadas, frota, overhead, impostos, risco e margem por escopo, com versão, fonte, justificativa e efeito antes de valer.",
+    description: "Parâmetros de custo e margem, com versão e fonte.",
   },
   "central-esg": {
     title: "Central ESG",
@@ -489,7 +489,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "financeiro",
     status: "functional",
     permission: "fiscal:manage",
-    description: "Documentos fiscais da transportadora com impostos calculados, XML e DACTE gerados localmente. A transmissão à SEFAZ aguarda o certificado digital.",
+    description: "CT-e, MDF-e e NFS-e; SEFAZ aguarda certificado.",
   },
   receita: {
     title: "Receita, forecast e faturamento",
@@ -696,31 +696,31 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "produtividade",
     status: "functional",
     permission: "planner:manage",
-    description: "Planos com baldes e tarefas, no estilo do Microsoft Planner — privados ou compartilhados com o espaço, com responsável, prazo, prioridade, progresso e checklist.",
+    description: "Planos com tarefas, prazo, prioridade e checklist.",
   },
 });
 
 const PRIMARY_NAVIGATION = Object.freeze([
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
   { id: "cadastros", label: "Cadastros", route: "/todogreen/cadastros", pages: ["cadastros"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial"] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial", "marketing", "campanhas"] },
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "motorista-frota", "planejamento", "aceite-viagens", "ordens-servico", "ciot", "rastreamento"] },
   { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes", "central-trabalho"] },
   { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "fiscal"] },
-  { id: "dp", label: "DP", route: "/todogreen/dp", pages: ["dp-rh"] },
-  { id: "rh", label: "RH", route: "/todogreen/rh", pages: ["rh", "escalas"] },
-  { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
-  { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing", "campanhas"] },
-  { id: "comunicacao-interna", label: "Comunicação Interna", route: "/todogreen/espaco", pages: ["espaco", "comunicacao-interna"] },
-  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
-  { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
+  // DP e RH eram a mesma área de pessoas partida em dois itens que abriam quase o
+  // mesmo conteúdo. Viraram um só: "Pessoas".
+  { id: "pessoas", label: "Pessoas", route: "/todogreen/rh", pages: ["rh", "dp-rh", "escalas"] },
   { id: "suprimentos", label: "Suprimentos", route: "/todogreen/compras", pages: ["compras", "estoque"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "produtos-logisticos", "catalogo-produtos", "regua"] },
   { id: "planner", label: "Planner", route: "/todogreen/planner", pages: ["planner"] },
+  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
+  { id: "comunicacao-interna", label: "Comunicação", route: "/todogreen/espaco", pages: ["espaco", "comunicacao-interna"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "auditoria", "integracoes", "acessos"] },
+  // Qualidade e Jurídico são telas de governança de página única; ficam sob
+  // Administração em vez de dois itens soltos no topo.
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "auditoria", "integracoes", "acessos", "qualidade", "juridico"] },
 ]);
 
 const MANAGEMENT_TOOLS = Object.freeze([
