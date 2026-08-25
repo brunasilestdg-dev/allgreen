@@ -40,7 +40,7 @@ const REQUISICAO_VAZIA = {
   prioridade: "media",
   precisaEm: "",
   costCenterId: "",
-  linhas: [{ itemId: "", quantity: "", estimatedUnitPrice: "" }],
+  linhas: [{ itemId: "", descricao: "", quantity: "", estimatedUnitPrice: "" }],
 };
 
 export default function PurchasingPage({ authHeaders, setToast, registros }) {
@@ -100,7 +100,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
   }));
   const novaLinha = () => setForm((atual) => ({
     ...atual,
-    linhas: [...atual.linhas, { itemId: "", quantity: "", estimatedUnitPrice: "" }],
+    linhas: [...atual.linhas, { itemId: "", descricao: "", quantity: "", estimatedUnitPrice: "" }],
   }));
   const removerLinha = (indice) => setForm((atual) => ({
     ...atual,
@@ -119,10 +119,12 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
           prioridade: form.prioridade,
           precisaEm: form.precisaEm || undefined,
           costCenterId: form.costCenterId || undefined,
+          status: "pendente",
           items: form.linhas
-            .filter((linha) => linha.itemId && linha.quantity)
+            .filter((linha) => (linha.itemId || linha.descricao) && linha.quantity)
             .map((linha) => ({
               itemId: linha.itemId,
+              descricao: linha.descricao,
               quantity: Number(linha.quantity),
               estimatedUnitPrice: linha.estimatedUnitPrice === ""
                 ? undefined
@@ -242,6 +244,12 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
                     <option value={item.id} key={item.id}>{nomeDoItem(item.id)}</option>
                   ))}
                 </select>
+                <input
+                  placeholder="Descrição livre"
+                  aria-label="Descrição do item"
+                  value={linha.descricao}
+                  onChange={(e) => alterarLinha(indice, "descricao", e.target.value)}
+                />
                 <input
                   type="number"
                   step="0.001"

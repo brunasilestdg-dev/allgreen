@@ -2,7 +2,6 @@ import { Suspense, lazy, useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
-  BookOpenCheck,
   Boxes,
   BriefcaseBusiness,
   CircleAlert,
@@ -46,7 +45,6 @@ const TOOL_ICONS = {
   notas: BookOpen,
   paginas: FileText,
   automacoes: Workflow,
-  playbook: BookOpenCheck,
   ajuda: CircleHelp,
   estrutura: Network,
   bases: Database,
@@ -83,7 +81,6 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
     notas: summary.notes,
     paginas: summary.pages,
     automacoes: "Ao vivo",
-    playbook: "Abrir",
     ajuda: "Abrir",
     estrutura: summary.workNodes,
     bases: summary.bases,
@@ -320,7 +317,6 @@ export default function TodoGreenWorkspace({ db, update, verticalData, setToast,
           )}
           {tool === "inteligencia" && <TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={onNavigate} />}
           {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} />}
-          {tool === "playbook" && <TodoGreenGuides mode="playbook" onNavigate={onNavigate} />}
           {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}
           {tool === "bases" && <DataBases {...commonProps} excludedTemplates={["Clientes"]} />}

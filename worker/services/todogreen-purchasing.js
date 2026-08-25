@@ -273,9 +273,9 @@ const criarRequisicao = async (env, access, user, corpo) => {
       // é a pessoa pedir para si.
       texto(corpo.requisitanteId, 120) || user.id,
       texto(corpo.costCenterId, 120),
-      ["baixa", "normal", "alta", "urgente"].includes(texto(corpo.prioridade)) ? texto(corpo.prioridade) : "normal",
+      ({ baixa: "baixa", media: "normal", média: "normal", normal: "normal", alta: "alta", critica: "urgente", crítica: "urgente", urgente: "urgente" }[texto(corpo.prioridade).toLowerCase()] || "normal"),
       texto(corpo.precisaEm, 20) || null,
-      ["rascunho", "pendente"].includes(texto(corpo.status)) ? texto(corpo.status) : "rascunho",
+      ["rascunho", "pendente"].includes(texto(corpo.status)) ? texto(corpo.status) : "pendente",
       JSON.stringify(lista(corpo.items)),
       JSON.stringify(objeto(corpo.campos)), user.id, user.id, agora, agora,
     )

@@ -15,7 +15,7 @@ import "./TodoGreenPages.css";
 const ABAS = [
   { id: "items", titulo: "Materiais", icone: Boxes, singular: "material" },
   { id: "warehouses", titulo: "Depósitos", icone: Warehouse, singular: "depósito" },
-  { id: "parties", titulo: "Fornecedores e parceiros", icone: Building2, singular: "parceiro" },
+  { id: "parties", titulo: "Fornecedores, parceiros e colaboradores", icone: Building2, singular: "pessoa ou parceiro" },
   { id: "costCenters", titulo: "Centros de custo", icone: Layers, singular: "centro de custo" },
   { id: "accounts", titulo: "Plano de contas", icone: Landmark, singular: "conta" },
 ];
@@ -55,7 +55,10 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
       // `papeis` é lista no servidor; no formulário é um seletor único porque
       // quase todo cadastro nasce com um papel só, e quem precisa de mais de um
       // edita depois.
-      if (aba === "parties") corpo.papeis = [form.papeis];
+      if (aba === "parties") {
+        corpo.papeis = [form.papeis];
+        corpo.razaoSocial = form.nome;
+      }
       if (aba === "items") {
         corpo.estoqueMinimo = form.estoqueMinimo === "" ? 0 : Number(form.estoqueMinimo);
         corpo.custoReferencia = form.custoReferencia === "" ? 0 : Number(form.custoReferencia);
@@ -74,7 +77,7 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
   const colunas = useMemo(() => ({
     items: ["Código", "Material", "Unidade", "Categoria", "Estoque mínimo"],
     warehouses: ["Código", "Depósito", "Tipo", "Endereço"],
-    parties: ["Parceiro", "Documento", "Papéis", "Contato"],
+    parties: ["Pessoa ou parceiro", "Documento", "Papéis", "Canal"],
     costCenters: ["Código", "Centro de custo"],
     accounts: ["Código", "Conta", "Tipo"],
   }[aba]), [aba]);
@@ -88,7 +91,7 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
       registro.codigo, registro.nome, registro.tipo, registro.endereco || "—",
     ];
     if (aba === "parties") return [
-      registro.nome,
+      registro.razaoSocial || registro.nome,
       registro.documento ? formatDocument(registro.documento) : "—",
       (registro.papeis || []).join(", ") || "—",
       registro.email || registro.telefone || "—",
@@ -177,7 +180,7 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
                   <option value="fornecedor">Fornecedor</option>
                   <option value="cliente">Cliente</option>
                   <option value="transportador">Transportador</option>
-                  <option value="funcionario">Funcionário</option>
+                  <option value="colaborador">Colaborador</option>
                 </select>
               </label>
               <label><span>E-mail</span><input type="email" value={form.email} onChange={(e) => alterar("email", e.target.value)} maxLength={160} /></label>

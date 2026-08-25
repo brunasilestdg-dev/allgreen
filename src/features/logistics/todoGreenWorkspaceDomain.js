@@ -32,11 +32,6 @@ export const TODO_GREEN_WORKSPACE_TOOLS = Object.freeze([
     description: "Gatilhos, condições e ações executadas no servidor com histórico.",
   },
   {
-    id: "playbook",
-    label: "Playbook comercial",
-    description: "Jornada de venda, critérios de avanço e atalhos para executar cada etapa.",
-  },
-  {
     id: "ajuda",
     label: "Central de ajuda",
     description: "Onde encontrar cada rotina e como usar os recursos da To Do Green.",

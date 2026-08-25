@@ -170,6 +170,7 @@ describe("LogisticsVertical", () => {
     expect(screen.getByRole("heading", { name: "Minha fila" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Minhas responsabilidades" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Configurar meu início/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Projetos e tarefas/ }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Painel operacional/i)).toBeNull();
     expect(screen.queryByText(/ativas.*planejado/i)).toBeNull();
     expect(screen.queryByText(/Recursos organizados por área/i)).toBeNull();
@@ -230,7 +231,7 @@ describe("LogisticsVertical", () => {
     expect(await screen.findByRole("heading", { name: "Quando isso acontecer, faça aquilo" })).toBeTruthy();
   });
 
-  it("mantém notícias, contatos, playbook, ajuda e rotinas anteriores visíveis no espaço", async () => {
+  it("mantém notícias, contatos, ajuda e rotinas anteriores visíveis no espaço", async () => {
     window.history.pushState({}, "", "/todogreen/espaco");
     stubDeRede({
       "/api/todogreen/clients": () => jsonOk({
@@ -256,8 +257,8 @@ describe("LogisticsVertical", () => {
 
     expect(await screen.findByText("O que já existia continua acessível")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Clientes e contatos.*Contas, decisores/ })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /Playbook comercial/ }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Central de ajuda/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Playbook comercial.*Jornada de venda/ })).toBeNull();
 
     fireEvent.click(screen.getAllByRole("button", { name: /Notícias e inteligência/ })[0]);
     expect(await screen.findByRole("heading", { name: "Notícias, RFQs e mercado" })).toBeTruthy();
@@ -266,6 +267,17 @@ describe("LogisticsVertical", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /^Contatos/ })[0]);
     expect(await screen.findByRole("heading", { name: "Contatos e decisores" })).toBeTruthy();
     expect(screen.getByText("Ana Compras")).toBeTruthy();
+  });
+
+  it("mantém o Playbook comercial em Comercial, não no Espaço", async () => {
+    window.history.pushState({}, "", "/todogreen/clientes");
+    await renderarAutorizada();
+
+    const comercial = screen.getByRole("navigation", { name: /Seções de Comercial/ });
+    expect(within(comercial).getByRole("button", { name: "Playbook" })).toBeTruthy();
+
+    fireEvent.click(within(comercial).getByRole("button", { name: "Playbook" }));
+    expect(await screen.findByRole("heading", { name: /Playbook comercial/i })).toBeTruthy();
   });
 
   it("mantém a busca de funções disponível em qualquer página", async () => {
@@ -714,7 +726,7 @@ describe("LogisticsVertical", () => {
     );
     expect(card.textContent).not.toMatch(/abrir/i);
     fireEvent.click(card);
-    expect(open).toHaveBeenCalledWith("/todogreen/cadastros", "_blank", "noopener,noreferrer");
+    expect(open).toHaveBeenCalledWith("/todogreen/clientes", "_blank", "noopener,noreferrer");
   });
 
   it("shows the access panel for admins", async () => {

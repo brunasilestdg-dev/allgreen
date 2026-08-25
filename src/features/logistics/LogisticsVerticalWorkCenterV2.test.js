@@ -12,7 +12,7 @@ const board = {
     statuses: [{ id: "novo", label: "Novo", color: "#64748b" }, { id: "concluido", label: "Concluído", color: "#15803d" }],
     groups: [{ id: "rfqs", name: "RFQs", color: "#176a4a" }],
     fields: [{ id: "margem", label: "Margem", type: "percentage" }],
-    views: ["table", "kanban", "gantt", "dashboard", "workload", "map"],
+    views: ["table", "kanban", "gantt", "dashboard", "workload", "map", "pivot"],
     defaultView: "table",
   },
 };
@@ -43,10 +43,18 @@ describe("Central de Implantação To Do Green", () => {
     expect(document.body.textContent).toContain("Configurar quadro");
     expect(document.body.textContent).toContain("Carga");
     expect(document.body.textContent).toContain("Mapa");
+    expect(document.body.textContent).toContain("Pivô");
 
     fireEvent.click([...document.querySelectorAll("[data-work-view]")].find((button) => button.textContent === "Gantt"));
     expect(document.querySelector(".tdg-work-gantt")?.textContent).toContain("RFQ Mercado Livre");
 
+    fireEvent.click([...document.querySelectorAll("[data-work-view]")].find((button) => button.textContent === "Gráficos"));
+    expect(document.querySelector(".tdg-work-dashboard")?.textContent).toContain("BI multi-board");
+
+    fireEvent.click([...document.querySelectorAll("[data-work-view]")].find((button) => button.textContent === "Pivô"));
+    expect(document.querySelector(".tdg-work-pivot")?.textContent).toContain("Bruna");
+
+    fireEvent.click([...document.querySelectorAll("[data-work-view]")].find((button) => button.textContent === "Tabela"));
     fireEvent.click(document.querySelector("[data-work-open]"));
     await waitFor(() => expect(document.querySelector(".tdg-work-drawer")?.textContent).toContain("Atualizações (0)"));
     expect(document.querySelector(".tdg-work-drawer")?.textContent).toContain("Dependências");

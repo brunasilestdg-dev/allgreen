@@ -127,14 +127,14 @@ beforeAll(async () => {
 });
 
 describe("requisição", () => {
-  it("cria em rascunho e exige item válido", async () => {
+  it("cria pendente para Suprimentos e aceita item por descrição livre", async () => {
     const ok = await pedir("/api/todogreen/purchasing/requisicoes", {
       metodo: "POST", token: gestora.token,
-      corpo: { title: "Pneus para a frota", items: [{ itemId: material.id, quantidade: 8, unidade: "UN" }] },
+      corpo: { title: "Pneus para a frota", items: [{ descricao: "Pneu 295/80", quantidade: 8, unidade: "UN" }] },
     });
     expect(ok.status).toBe(201);
     const { registro } = await ok.json();
-    expect(registro.status).toBe("rascunho");
+    expect(registro.status).toBe("pendente");
     // Sem requisitante informado, é quem criou — o caso comum é pedir para si.
     expect(registro.requisitanteId).toBe(gestora.id);
 
@@ -150,19 +150,15 @@ describe("requisição", () => {
     });
     const { registro } = await criada.json();
 
-    // rascunho não vai direto a atendida.
+    // Pendente não vai direto a atendida.
     const pulo = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
       metodo: "PATCH", token: gestora.token, corpo: { status: "atendida", revision: registro.revision },
     });
     expect(pulo.status).toBe(409);
 
-    const pendente = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
-      metodo: "PATCH", token: gestora.token, corpo: { status: "pendente", revision: registro.revision },
-    });
-    expect(pendente.status).toBe(200);
     const aprovada = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
       metodo: "PATCH", token: gestora.token,
-      corpo: { status: "aprovada", revision: (await pendente.json()).registro.revision },
+      corpo: { status: "aprovada", revision: registro.revision },
     });
     expect(aprovada.status).toBe(200);
     const final = (await aprovada.json()).registro;

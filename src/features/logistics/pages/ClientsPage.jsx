@@ -535,6 +535,7 @@ function AccountEditor({ client, onClose, onSave }) {
 }
 
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
+const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
 export default function ClientsPage({ authHeaders, opportunities = [], onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
   const [clients, setClients] = useState([]);
@@ -567,6 +568,8 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
   const [researchWatches, setResearchWatches] = useState({});
   const [showCreate, setShowCreate] = useState(false);
   const [clientForm, setClientForm] = useState({ nome: "", documento: "", segmento: "", tier: "Enterprise", stage: "Mapeamento" });
+  const [quickContactOpen, setQuickContactOpen] = useState(false);
+  const [quickContact, setQuickContact] = useState(contatoVazio);
   const [assignment, setAssignment] = useState({ clientId: "", sellerEmail: "", note: "" });
   const [importProgress, setImportProgress] = useState("");
 
@@ -712,11 +715,11 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
   }, [detailTab, selected?.id, authHeaders]);
 
   const openClient = (clientId) => {
-    setSelectedId(clientId); setDetailTab("summary"); setAccountInteractions([]); setPortalPreviewOpen(false); setResearchError("");
+    setSelectedId(clientId); setDetailTab("summary"); setAccountInteractions([]); setPortalPreviewOpen(false); setResearchError(""); setQuickContactOpen(false); setQuickContact(contatoVazio());
     onNavigate?.(`/todogreen/clientes?client=${encodeURIComponent(clientId)}`);
   };
   const closeClient = () => {
-    setSelectedId(""); setDetailTab("summary"); setAccountInteractions([]); setPortalPreviewOpen(false); setResearchError("");
+    setSelectedId(""); setDetailTab("summary"); setAccountInteractions([]); setPortalPreviewOpen(false); setResearchError(""); setQuickContactOpen(false); setQuickContact(contatoVazio());
     onNavigate?.("/todogreen/clientes");
   };
   const openDetailTab = async (tabId) => {
@@ -827,6 +830,39 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
       setToast?.("Visão 360º atualizada."); await load();
     } catch (reason) { setError(reason.message); throw reason; }
   };
+  const saveQuickContact = async (event) => {
+    event.preventDefault();
+    if (!selected) return;
+    const name = quickContact.name.trim();
+    if (!name) {
+      setToast?.("Informe o nome do contato do cliente.");
+      return;
+    }
+    const novoContato = {
+      ...quickContact,
+      id: crypto.randomUUID(),
+      name,
+      email: quickContact.email.trim().toLowerCase(),
+      phone: quickContact.phone.trim(),
+      source: "Cadastro manual",
+      active: true,
+    };
+    try {
+      await saveClient(selected, {
+        revision: selected.revision,
+        crm: {
+          ...(selected.crm || {}),
+          contacts: [...(selected.crm?.contacts || []), novoContato],
+        },
+      });
+      setQuickContact(contatoVazio());
+      setQuickContactOpen(false);
+      setDetailTab("relationship");
+      setToast?.("Contato do cliente registrado.");
+    } catch (reason) {
+      setError(reason.message);
+    }
+  };
   const assign = async (event) => {
     event.preventDefault(); setError("");
     try {
@@ -899,7 +935,24 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-strategy"><header><strong>Account Plan</strong><small>Cadastro e recomendações derivadas do CRM</small></header><dl className="tdg-crm-account-data"><div><dt>Objetivo</dt><dd>{selectedStrategy.accountPlan.objective || "Não definido"}{selectedStrategy.accountPlan.generated?.objective && <small>Sugerido pelos dados atuais</small>}</dd></div><div><dt>Barreiras</dt><dd>{selectedStrategy.accountPlan.barriers || "Não mapeadas"}{selectedStrategy.accountPlan.generated?.barriers && <small>Derivadas dos alertas reais</small>}</dd></div><div><dt>Concorrentes</dt><dd>{selectedStrategy.accountPlan.competitors || "Não mapeados"}</dd></div><div><dt>30 dias</dt><dd>{selectedStrategy.accountPlan.plan30 || "Não definido"}{selectedStrategy.accountPlan.generated?.plan30 && <small>Próxima melhor ação calculada</small>}</dd></div><div><dt>60 dias</dt><dd>{selectedStrategy.accountPlan.plan60 || "Não definido"}{selectedStrategy.accountPlan.generated?.plan60 && <small>Sugerido pelos dados atuais</small>}</dd></div><div><dt>90 dias</dt><dd>{selectedStrategy.accountPlan.plan90 || "Não definido"}{selectedStrategy.accountPlan.generated?.plan90 && <small>Sugerido pelos dados atuais</small>}</dd></div></dl></section>
         <div className="tdg-account-panel tdg-account-intelligence"><ExternalIntelligence report={selectedReport} researching={researching} error={researchError} onResearch={researchSelected} watch={selectedWatch} onToggleWatch={toggleResearchWatch} /></div>
         <div className="tdg-account-panel tdg-account-relationship"><RelationshipMap contatos={selectedAccount.contacts} conta={selected.name} /></div>
-        <section className="tdg-crm-detail-section tdg-account-panel tdg-account-relationship"><header><strong>Contatos</strong><small>{selectedAccount.contacts.length} contato(s)</small></header><div className="tdg-crm-roles">{selectedAccount.contacts.map((contact) => <ContactCard key={contact.id} contact={contact} clientName={selected.name} />)}{selectedAccount.contacts.length === 0 && <p>Nenhum decisor ou patrocinador mapeado.</p>}</div></section>
+        <section className="tdg-crm-detail-section tdg-account-panel tdg-account-relationship">
+          <header>
+            <strong>Contatos do cliente</strong>
+            <small>{selectedAccount.contacts.length} contato(s)</small>
+            {access.podeEditar && <button type="button" onClick={() => setQuickContactOpen((value) => !value)}><UserPlus size={13} />Adicionar contato</button>}
+          </header>
+          {quickContactOpen && (
+            <form className="tdg-crm-contact-form tdg-crm-quick-contact" onSubmit={saveQuickContact}>
+              <input aria-label="Nome do novo contato" placeholder="Nome" value={quickContact.name} onChange={(event) => setQuickContact({ ...quickContact, name: event.target.value })} />
+              <input aria-label="Cargo do novo contato" placeholder="Cargo" value={quickContact.title} onChange={(event) => setQuickContact({ ...quickContact, title: event.target.value })} />
+              <select aria-label="Papel do novo contato" value={quickContact.relationshipRole} onChange={(event) => setQuickContact({ ...quickContact, relationshipRole: event.target.value })}>{TODO_GREEN_RELATIONSHIP_ROLES.map((item) => <option key={item}>{item}</option>)}</select>
+              <input aria-label="E-mail do novo contato" type="email" placeholder="E-mail" value={quickContact.email} onChange={(event) => setQuickContact({ ...quickContact, email: event.target.value })} />
+              <input aria-label="Telefone do novo contato" placeholder="Telefone" value={quickContact.phone} onChange={(event) => setQuickContact({ ...quickContact, phone: event.target.value })} />
+              <button className="tdg-action" type="submit"><UserPlus size={15} />Registrar contato</button>
+            </form>
+          )}
+          <div className="tdg-crm-roles">{selectedAccount.contacts.map((contact) => <ContactCard key={contact.id} contact={contact} clientName={selected.name} />)}{selectedAccount.contacts.length === 0 && <p>Nenhum decisor ou patrocinador mapeado.</p>}</div>
+        </section>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-activity"><header><strong>Atividade da conta</strong><small>Mensagens e movimentações realmente registradas</small></header>{activityLoading ? <p>Carregando histórico...</p> : accountInteractions.length ? <div className="tdg-crm-activity-feed">{accountInteractions.map((item) => <article key={item.id}><span><strong>{item.contactName || item.contactHandle || "Contato"}</strong><small>{item.channel || "atividade"} · {item.direction === "out" ? "enviado" : "recebido"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("pt-BR") : "data não informada"}</small></span>{item.subject && <b>{item.subject}</b>}{item.body && <p>{item.body}</p>}</article>)}</div> : <div className="tdg-crm-activity-empty"><strong>Nenhuma mensagem ou reunião registrada</strong><span>WhatsApp e e-mails enviados pelo app aparecem aqui quando associados a esta conta ou a um de seus contatos.</span></div>}<div className="tdg-crm-activity-list"><article><span>Última atualização da conta</span><strong>{selected.updatedAt ? new Date(selected.updatedAt).toLocaleString("pt-BR") : "Ainda não registrada"}</strong></article><article><span>Próxima ação</span><strong>{selected.crm?.nextAction || selectedIntelligence.nextTask || "Ainda não definida"}</strong><small>{selected.crm?.nextActionAt || "Sem prazo registrado"}</small></article><article><span>Histórico comercial</span><strong>{selectedOpportunities.length} oportunidade(s) vinculada(s)</strong></article></div><p>O CRM não cria atividades que não aconteceram.</p></section>
       </main><aside>
         <section className="tdg-crm-alerts tdg-account-panel tdg-account-summary tdg-account-strategy"><strong><AlertTriangle size={15} />Health comercial</strong>{selectedStrategy.commercialHealth.map((alert) => <span key={alert}>{alert}</span>)}</section>

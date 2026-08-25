@@ -129,6 +129,7 @@ export const PARTY_ROLES = Object.freeze([
   { id: "fornecedor", name: "Fornecedor" },
   { id: "transportador", name: "Transportadora" },
   { id: "prestador", name: "Prestador de serviço" },
+  { id: "colaborador", name: "Colaborador" },
 ]);
 
 const PARTY_ROLE_IDS = new Set(PARTY_ROLES.map((item) => item.id));

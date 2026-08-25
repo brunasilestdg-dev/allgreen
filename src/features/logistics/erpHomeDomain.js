@@ -25,7 +25,7 @@ export const ERP_SHORTCUTS = Object.freeze([
   { id: "billing", label: "Faturamento", route: "/todogreen/faturamento", area: "finance" },
   { id: "receivables", label: "Contas a receber", route: "/todogreen/receita", area: "finance" },
   { id: "costs", label: "Custos e margem", route: "/todogreen/custos", area: "finance" },
-  { id: "people", label: "DP/RH", route: "/todogreen/rh", area: "hr" },
+  { id: "people", label: "Colaboradores", route: "/todogreen/dp", area: "hr" },
   { id: "goals", label: "Metas", route: "/todogreen/metas", area: "hr" },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", area: "marketing" },
   { id: "esg", label: "Central ESG", route: "/todogreen/central-esg", area: "esg" },
@@ -114,15 +114,15 @@ export const ERP_HOME_AREAS = Object.freeze([
     routeTerms: ["faturamento", "receita", "custos", "titulos", "rateios"],
   },
   {
-    id: "hr", label: "DP/RH", functionLabel: "Pessoas e Escalas",
+    id: "hr", label: "DP/RH", functionLabel: "Colaboradores, Escalas e Capacidade",
     metrics: ["tasks", "operations", "trips", "goals"],
     shortcuts: ["people", "goals", "planning", "operations", "implementation"],
     responsibilities: [
-      "Manter motoristas, documentos, disponibilidade e escalas atualizados.",
-      "Acompanhar metas, treinamento e capacidade humana da operação.",
+      "Manter colaboradores, vínculos, documentos e disponibilidade atualizados.",
+      "Acompanhar escala, treinamento, capacidade humana e alocação.",
       "Proteger dados pessoais e respeitar a segregação de acesso.",
     ],
-    routeTerms: ["rh", "metas", "planejamento", "operacoes"],
+    routeTerms: ["dp", "rh", "metas", "planejamento", "motorista-frota"],
   },
   {
     id: "marketing", label: "Marketing", functionLabel: "Marketing e Marca",

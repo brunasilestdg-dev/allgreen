@@ -15,7 +15,7 @@ const DEFAULT_STATUSES = [
   { id: "bloqueado", label: "Bloqueado", color: "#dc2626" },
   { id: "concluido", label: "Concluído", color: "#15803d" },
 ];
-const DEFAULT_VIEWS = ["table", "kanban", "calendar", "timeline", "gantt", "dashboard", "workload", "gallery", "form", "map"];
+const DEFAULT_VIEWS = ["table", "kanban", "calendar", "timeline", "gantt", "dashboard", "workload", "gallery", "form", "map", "pivot"];
 const DEFAULT_GROUPS = [{ id: "principal", name: "Principal", color: "#176a4a" }];
 const AUTOMATION_TRIGGERS = new Set([
   "item-created",
@@ -85,6 +85,7 @@ const normalizeBoardConfig = (raw = {}) => {
     type: clean(entry?.type, 40) || "text",
     options: (Array.isArray(entry?.options) ? entry.options : []).map((option) => clean(option, 80)).filter(Boolean).slice(0, 50),
     formula: clean(entry?.formula, 500),
+    sourceField: clean(entry?.sourceField, 120),
     required: Boolean(entry?.required),
   })).slice(0, 60);
   const views = (Array.isArray(raw.views) ? raw.views : DEFAULT_VIEWS)

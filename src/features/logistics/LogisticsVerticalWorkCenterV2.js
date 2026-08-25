@@ -20,6 +20,7 @@ const supportedViews = [
   ["table", "Tabela"], ["kanban", "Kanban"], ["calendar", "Calendário"],
   ["timeline", "Timeline"], ["gantt", "Gantt"], ["dashboard", "Gráficos"],
   ["workload", "Carga"], ["gallery", "Cards"], ["form", "Formulário"], ["map", "Mapa"],
+  ["pivot", "Pivô"],
 ];
 const labels = {
   "item-created": "item criado",
@@ -250,7 +251,12 @@ const saveBoard = async (formElement) => {
   });
   const fields = parseConfigLines(values.get("fields"), (line) => {
     const [name, type = "text", settings = ""] = line.split("|").map((part) => part.trim());
-    return { id: name, label: name, type, formula: type === "formula" ? settings : "", options: type === "dropdown" ? settings.split(",").map((option) => option.trim()).filter(Boolean) : [] };
+    return {
+      id: name, label: name, type,
+      formula: type === "formula" ? settings : "",
+      sourceField: ["mirror", "lookup", "rollup"].includes(type) ? settings : "",
+      options: type === "dropdown" ? settings.split(",").map((option) => option.trim()).filter(Boolean) : [],
+    };
   });
   const views = [...formElement.querySelectorAll('[name="views"]:checked')].map((input) => input.value);
   const body = {
@@ -328,7 +334,9 @@ const readDetailPatch = (formElement) => {
   const item = state.detail.item;
   const custom = { ...(item.fields?.custom || {}) };
   boardFields().forEach((field) => {
-    if (field.type !== "formula") custom[field.id] = values.get(`custom:${field.id}`) || "";
+    if (field.type === "formula" || ["mirror", "lookup", "rollup"].includes(field.type)) return;
+    if (field.type === "relation") custom[field.id] = values.getAll(`custom:${field.id}`);
+    else custom[field.id] = values.get(`custom:${field.id}`) || "";
   });
   const checklist = parseConfigLines(values.get("checklist"), (line) => ({
     id: crypto.randomUUID(), text: line.replace(/^\[[xX ]\]\s*/, ""), done: /^\[[xX]\]/.test(line),
@@ -489,7 +497,7 @@ const boardFormHtml = () => {
     <label class="full"><span>Descrição</span><textarea name="description" maxlength="800">${editing ? esc(board.description) : ""}</textarea></label>
     <label><span>Status, um por linha</span><textarea name="statuses" required>${esc(config.statuses.map((status) => `${status.label}|${status.color}`).join("\n"))}</textarea><small>Formato: Nome | cor hexadecimal</small></label>
     <label><span>Grupos, um por linha</span><textarea name="groups" required>${esc(config.groups.map((group) => `${group.name}|${group.color}`).join("\n"))}</textarea><small>Formato: Nome | cor hexadecimal</small></label>
-    <label class="full"><span>Campos personalizados</span><textarea name="fields" placeholder="Margem|number&#10;Tipo de operação|dropdown|First Mile,Middle Mile,Last Mile&#10;Receita projetada|formula|Volume * Tarifa">${esc(config.fields.map((field) => `${field.label}|${field.type}|${field.formula || field.options?.join(",") || ""}`).join("\n"))}</textarea><small>Tipos: text, number, currency, percentage, date, checkbox, dropdown, formula, location, relation.</small></label>
+    <label class="full"><span>Campos personalizados</span><textarea name="fields" placeholder="Margem|number&#10;Tipo de operação|dropdown|First Mile,Middle Mile,Last Mile&#10;Receita projetada|formula|Volume * Tarifa&#10;Cliente espelhado|mirror|Cliente&#10;Receita por vínculo|rollup|Receita">${esc(config.fields.map((field) => `${field.label}|${field.type}|${field.formula || field.sourceField || field.options?.join(",") || ""}`).join("\n"))}</textarea><small>Tipos: text, number, currency, percentage, date, checkbox, dropdown, formula, location, relation, mirror, lookup e rollup.</small></label>
     <fieldset class="full"><legend>Visualizações disponíveis</legend><div class="tdg-view-checks">${supportedViews.map(([id, text]) => `<label><input type="checkbox" name="views" value="${id}" ${config.views.includes(id) ? "checked" : ""}> ${text}</label>`).join("")}</div></fieldset>
     <label><span>Visualização inicial</span><select name="defaultView">${supportedViews.map(([id, text]) => `<option value="${id}" ${id === config.defaultView ? "selected" : ""}>${text}</option>`).join("")}</select></label>
     <footer class="full"><button class="tdg-login-secondary" type="button" data-board-cancel>Cancelar</button><button class="tdg-action" type="submit">Salvar quadro</button></footer>
@@ -524,6 +532,22 @@ const customFieldInputHtml = (field, item) => {
   if (field.type === "formula") {
     const values = Object.fromEntries(boardFields().filter((candidate) => candidate.type !== "formula").map((candidate) => [candidate.label, custom[candidate.id] || 0]));
     return `<label><span>${esc(field.label)}</span><output>${esc(evalFormula(field.formula, values))}</output><small>${esc(field.formula)}</small></label>`;
+  }
+  if (["mirror", "lookup", "rollup"].includes(field.type)) {
+    const relatedItems = (item.relations || [])
+      .map((relation) => state.items.find((candidate) => candidate.id === relation.id || candidate.id === relation))
+      .filter(Boolean);
+    const source = field.sourceField || field.formula || field.label;
+    const values = relatedItems.map((related) => related.fields?.custom?.[source] ?? related[source] ?? related.client ?? related.title).filter((value) => value !== "" && value != null);
+    const display = field.type === "rollup"
+      ? values.reduce((sum, value) => sum + Number(value || 0), 0)
+      : values.join(", ");
+    return `<label><span>${esc(field.label)}</span><output>${esc(display || "Sem vínculo")}</output><small>${esc(label(field.type))}: ${esc(source || "campo vinculado")}</small></label>`;
+  }
+  if (field.type === "relation") {
+    const ids = Array.isArray(custom[field.id]) ? custom[field.id] : String(custom[field.id] || "").split(",").map((value) => value.trim()).filter(Boolean);
+    const candidates = state.items.filter((candidate) => candidate.id !== item.id && !candidate.archivedAt);
+    return `<label><span>${esc(field.label)}</span><select name="custom:${esc(field.id)}" multiple>${candidates.map((candidate) => `<option value="${esc(candidate.id)}" ${ids.includes(candidate.id) ? "selected" : ""}>${esc(candidate.title)}</option>`).join("")}</select><small>Selecione itens relacionados para espelhar, consultar ou somar dados.</small></label>`;
   }
   if (field.type === "checkbox") return `<label class="tdg-inline-check"><input type="checkbox" name="custom:${esc(field.id)}" value="1" ${custom[field.id] ? "checked" : ""}><span>${esc(field.label)}</span></label>`;
   if (field.type === "dropdown") return `<label><span>${esc(field.label)}</span><select name="custom:${esc(field.id)}"><option value="">Selecione</option>${(field.options || []).map((option) => `<option value="${esc(option)}" ${custom[field.id] === option ? "selected" : ""}>${esc(option)}</option>`).join("")}</select></label>`;
@@ -651,7 +675,13 @@ const itemsViewHtml = () => {
   if (state.view === "dashboard") {
     const total = Math.max(1, items.length);
     const ownerCounts = Object.entries(items.reduce((acc, item) => ({ ...acc, [item.responsible || "Sem responsável"]: (acc[item.responsible || "Sem responsável"] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
-    return `<div class="tdg-work-dashboard"><section><header><strong>Status</strong><small>${items.length} itens</small></header>${boardStatuses().map((status) => { const count = items.filter((item) => item.status === status.id).length; return `<div><span>${esc(status.label)}</span><i><b style="width:${count / total * 100}%;background:${esc(status.color)}"></b></i><strong>${count}</strong></div>`; }).join("")}</section><section><header><strong>Responsáveis</strong><small>Distribuição atual</small></header>${ownerCounts.slice(0, 8).map(([owner, count]) => `<div><span>${esc(owner)}</span><i><b style="width:${count / total * 100}%"></b></i><strong>${count}</strong></div>`).join("")}</section></div>`;
+    const boardCounts = Object.entries(state.items.filter((item) => !item.archivedAt).reduce((acc, item) => {
+      const name = state.boards.find((board) => board.id === item.boardId)?.name || "Sem quadro";
+      acc[name] = (acc[name] || 0) + 1;
+      return acc;
+    }, {})).sort((a, b) => b[1] - a[1]);
+    const crossTotal = Math.max(1, boardCounts.reduce((sum, [, count]) => sum + count, 0));
+    return `<div class="tdg-work-dashboard"><section><header><strong>Status</strong><small>${items.length} itens</small></header>${boardStatuses().map((status) => { const count = items.filter((item) => item.status === status.id).length; return `<div><span>${esc(status.label)}</span><i><b style="width:${count / total * 100}%;background:${esc(status.color)}"></b></i><strong>${count}</strong></div>`; }).join("")}</section><section><header><strong>Responsáveis</strong><small>Distribuição atual</small></header>${ownerCounts.slice(0, 8).map(([owner, count]) => `<div><span>${esc(owner)}</span><i><b style="width:${count / total * 100}%"></b></i><strong>${count}</strong></div>`).join("")}</section><section><header><strong>BI multi-board</strong><small>Todos os quadros carregados</small></header>${boardCounts.slice(0, 8).map(([name, count]) => `<div><span>${esc(name)}</span><i><b style="width:${count / crossTotal * 100}%"></b></i><strong>${count}</strong></div>`).join("")}</section></div>`;
   }
   if (state.view === "workload") {
     const owners = Object.entries(items.reduce((acc, item) => {
@@ -667,6 +697,15 @@ const itemsViewHtml = () => {
   if (state.view === "map") {
     const located = items.filter((item) => item.fields?.location);
     return `<div class="tdg-work-map"><div class="tdg-map-canvas"><span>Visualização geográfica</span>${located.map((item, index) => `<button type="button" data-item-id="${esc(item.id)}" data-work-open style="--x:${12 + (index * 23) % 76}%;--y:${16 + (index * 31) % 68}%" title="${esc(item.fields.location)}">${index + 1}</button>`).join("")}</div><aside>${located.length ? located.map((item, index) => `<article data-item-id="${esc(item.id)}"><b>${index + 1}</b><button type="button" data-work-open>${esc(item.title)}</button><small>${esc(item.fields.location)}</small><a href="https://www.openstreetmap.org/search?query=${encodeURIComponent(item.fields.location)}" target="_blank" rel="noopener noreferrer">Abrir mapa</a></article>`).join("") : '<p class="tdg-work-empty">Adicione uma localização aos itens para vê-los no mapa.</p>'}</aside></div>`;
+  }
+  if (state.view === "pivot") {
+    const statuses = boardStatuses();
+    const owners = [...new Set(items.map((item) => item.responsible || "Sem responsável"))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const statusTotals = statuses.map((status) => items.filter((item) => item.status === status.id).length);
+    return `<div class="tdg-work-pivot" style="--pivot-columns:${statuses.length}"><header><strong>Responsável</strong>${statuses.map((status) => `<span>${esc(status.label)}</span>`).join("")}<b>Total</b></header>${owners.map((owner) => {
+      const row = statuses.map((status) => items.filter((item) => (item.responsible || "Sem responsável") === owner && item.status === status.id).length);
+      return `<article><strong>${esc(owner)}</strong>${row.map((count) => `<span>${count}</span>`).join("")}<b>${row.reduce((sum, count) => sum + count, 0)}</b></article>`;
+    }).join("")}<footer><strong>Total</strong>${statusTotals.map((count) => `<span>${count}</span>`).join("")}<b>${items.length}</b></footer></div>`;
   }
   return `<div class="tdg-work-list">${boardGroups().map((group) => {
     const grouped = items.filter((item) => (item.fields?.groupId || boardGroups()[0]?.id) === group.id);

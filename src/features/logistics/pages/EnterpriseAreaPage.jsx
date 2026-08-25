@@ -44,17 +44,17 @@ const cards = {
   },
   dp: {
     kicker: "DEPARTAMENTO PESSOAL",
-    title: "Rotinas de DP",
-    description: "DP concentra documentação, vínculos, regras trabalhistas, vencimentos e dados sensíveis de pessoas, separado da gestão de capacidade do RH.",
+    title: "Colaboradores, vínculos e documentação",
+    description: "DP concentra colaboradores, contratos, documentos, férias, afastamentos, vencimentos e dados sensíveis, separado de clientes e contatos comerciais.",
     icon: BriefcaseBusiness,
     actions: [
-      ["Ver cadastros", "/todogreen/cadastros"],
+      ["Cadastro de colaboradores", "/todogreen/cadastros"],
       ["Ver RH", "/todogreen/rh"],
     ],
     responsibilities: [
-      "Controlar documentos, vínculos, vencimentos e dados cadastrais sensíveis.",
-      "Apoiar admissões, desligamentos, afastamentos e obrigações recorrentes.",
-      "Separar rotina trabalhista de custos operacionais e faturamento.",
+      "Controlar colaboradores, vínculos, documentos, vencimentos e dados cadastrais sensíveis.",
+      "Apoiar admissões, desligamentos, férias, afastamentos e obrigações recorrentes.",
+      "Separar pessoa interna de contato de cliente, fornecedor ou parceiro.",
     ],
     handoff: [
       ["RH acompanha capacidade e escala", "RH"],
@@ -63,18 +63,18 @@ const cards = {
     ],
   },
   hr: {
-    kicker: "DP/RH",
-    title: "Pessoas, motoristas e escalas",
-    description: "DP/RH fica separado de Financeiro porque dados de pessoal, folha, documentos e disponibilidade exigem governança própria.",
+    kicker: "RH",
+    title: "Capacidade, escalas e desenvolvimento",
+    description: "RH acompanha disponibilidade, escala, treinamento, capacidade e alocação. Motorista em rota e veículo operacional ficam na Central de Frota.",
     icon: Users,
     actions: [
+      ["Abrir Frota e motoristas", "/todogreen/motorista-frota"],
       ["Ver metas", "/todogreen/metas"],
-      ["Ver operações", "/todogreen/operacoes"],
     ],
     responsibilities: [
-      "Gerir motoristas, equipes, documentos, disponibilidade e dados sensíveis.",
-      "Apoiar escalas e alocação por operação, janela, produto e capacidade.",
-      "Conectar metas, treinamentos e planos de ação sem expor remuneração indevida.",
+      "Planejar escala, disponibilidade, capacidade e alocação de colaboradores.",
+      "Acompanhar treinamento, metas e planos de desenvolvimento.",
+      "Consultar motoristas operacionais pela Central de Frota, sem tratá-los como contatos de cliente.",
     ],
     handoff: [
       ["Planejamento consulta capacidade humana", "Planejamento"],
@@ -204,6 +204,44 @@ const cards = {
   },
 };
 
+const rasciDefaults = {
+  products: ["Produtos", "Comercial", "Planejamento", "Operação, Financeiro, ESG", "Gestão"],
+  planning: ["Planejamento", "Produtos", "Comercial, Operação", "Financeiro, Jurídico", "Gestão"],
+  dp: ["DP", "Administração", "RH", "Operação, Financeiro", "Gestores"],
+  hr: ["RH", "Gestão", "DP", "Operação", "Gestores"],
+  quality: ["Qualidade", "Operação", "Indicadores", "Comercial, Cliente", "Gestão"],
+  marketing: ["Marketing", "Comercial", "ESG, Produtos", "Operação, Jurídico", "Gestão"],
+  legal: ["Jurídico", "Administração", "Comercial", "Financeiro, Implantação", "Gestão"],
+  indicators: ["Indicadores", "Gestão", "Todas as áreas", "Administração", "Diretoria"],
+  admin: ["Administração", "Titular", "Tecnologia", "Áreas", "Gestão"],
+  communication: ["Comunicação", "Gestores", "Todas as áreas", "Administração", "Times"],
+};
+
+function RasciTable({ area }) {
+  const values = rasciDefaults[area] || ["Área dona", "Gestão", "Áreas de apoio", "Áreas impactadas", "Times envolvidos"];
+  const rows = [
+    ["R", "Executa", values[0]],
+    ["A", "Aprova", values[1]],
+    ["S", "Apoia", values[2]],
+    ["C", "Consulta", values[3]],
+    ["I", "Informa", values[4]],
+  ];
+  return (
+    <article className="tdg-work-area tdg-rasci-card">
+      <div className="tdg-work-area-heading"><span><Gauge size={20} /></span><div><strong>RASCI</strong><small>Papel de cada área</small></div></div>
+      <div className="tdg-rasci-table">
+        {rows.map(([letter, role, owner]) => (
+          <div key={letter}>
+            <b>{letter}</b>
+            <span>{role}</span>
+            <strong>{owner}</strong>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function ProductStrip({ products = [] }) {
   if (!products.length) return null;
   return (
@@ -252,6 +290,7 @@ export default function EnterpriseAreaPage({ area, products = [], onNavigate }) 
             {config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}
           </div>
         </article>
+        <RasciTable area={area} />
       </div>
 
       {area === "products" && <ProductStrip products={products} />}

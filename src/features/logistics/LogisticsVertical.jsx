@@ -102,6 +102,7 @@ const DealDeskPage = lazy(() => import("./pages/DealDeskPage.jsx"));
 const DocumentVaultPage = lazy(() => import("./pages/DocumentVaultPage.jsx"));
 const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
 const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
+const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
 const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
 const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
@@ -109,6 +110,7 @@ const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
 const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
 const EnterpriseAreaPage = lazy(() => import("./pages/EnterpriseAreaPage.jsx"));
 const ClientActivationPage = lazy(() => import("./ClientActivationPage.jsx"));
+const DriverFleetCenterPage = lazy(() => import("./pages/DriverFleetCenterPage.jsx"));
 
 const iconMap = {
   Activity,
@@ -221,6 +223,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "rotas",
   "viagens",
   "veiculos",
+  "motorista-frota",
   "entregas",
   "ocupacao",
   "produtividade",
@@ -234,6 +237,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "dashboards",
   "metas",
   "performance-comercial",
+  "playbook-comercial",
   "rastreamento",
   "solicitacoes",
   "estoque",
@@ -264,7 +268,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     title: "Painéis personalizados",
     navLabel: "Meus painéis",
     route: "/todogreen/dashboards",
-    area: "gestao",
+    area: "indicadores",
     status: "functional",
     description: "Criação de painéis pessoais ou compartilhados com indicadores escolhidos por cada usuário.",
   },
@@ -274,7 +278,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/espaco",
     area: "comunicacao-interna",
     status: "functional",
-    description: "Conhecimento, tarefas, quadros, documentos internos e acompanhamento do trabalho entre áreas.",
+    description: "Comunicados, decisões, bases de conhecimento e alinhamentos internos.",
   },
   metas: {
     title: "Metas e acompanhamento",
@@ -291,6 +295,14 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "comercial",
     status: "functional",
     description: "Execução da carteira e atingimento de metas, sem misturar oportunidades, pipeline ou faturamento.",
+  },
+  "playbook-comercial": {
+    title: "Playbook comercial",
+    navLabel: "Playbook",
+    route: "/todogreen/playbook-comercial",
+    area: "comercial",
+    status: "functional",
+    description: "Jornada de venda, critérios de avanço e atalhos comerciais.",
   },
   clientes: {
     title: "Clientes e contatos",
@@ -519,10 +531,18 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   motoristas: {
     title: "Motoristas",
     navLabel: "Motoristas",
-    route: "/todogreen/cadastros",
-    area: "cadastros",
+    route: "/todogreen/motorista-frota",
+    area: "operacao",
     status: "functional",
-    description: "Cadastro, disponibilidade, documentos, alocação e histórico de motoristas.",
+    description: "Motoristas vinculados às operações, rotas ativas, jornada, produtividade e ocorrências.",
+  },
+  "motorista-frota": {
+    title: "Frota e motoristas",
+    navLabel: "Frota",
+    route: "/todogreen/motorista-frota",
+    area: "operacao",
+    status: "functional",
+    description: "Gestão operacional de frota, motoristas, telemetria disponível, custo, bateria, manutenção e alertas.",
   },
   escalas: {
     title: "Escalas",
@@ -624,7 +644,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/espaco",
     area: "comunicacao-interna",
     status: "functional",
-    description: "Comunicados, conhecimento, tarefas, documentos internos e alinhamentos entre áreas.",
+    description: "Comunicados, conhecimento, documentos internos e alinhamentos entre áreas.",
   },
   juridico: {
     title: "Jurídico",
@@ -654,10 +674,10 @@ const MODULE_IMPLEMENTATION = Object.freeze({
 
 const PRIMARY_NAVIGATION = Object.freeze([
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
-  { id: "cadastros", label: "Cadastros", route: "/todogreen/cadastros", pages: ["cadastros", "motoristas"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "propostas", "deal-desk", "metas", "performance-comercial"] },
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "planejamento", "aceite-viagens", "ordens-servico", "ciot", "rastreamento"] },
-  { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes"] },
+  { id: "cadastros", label: "Cadastros", route: "/todogreen/cadastros", pages: ["cadastros"] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial"] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "motorista-frota", "planejamento", "aceite-viagens", "ordens-servico", "ciot", "rastreamento"] },
+  { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes", "central-trabalho"] },
   { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes"] },
@@ -665,7 +685,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "rh", label: "RH", route: "/todogreen/rh", pages: ["rh", "escalas"] },
   { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing", "campanhas"] },
-  { id: "comunicacao-interna", label: "Comunicação Interna", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "comunicacao-interna"] },
+  { id: "comunicacao-interna", label: "Comunicação Interna", route: "/todogreen/espaco", pages: ["espaco", "comunicacao-interna"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "suprimentos", label: "Suprimentos", route: "/todogreen/compras", pages: ["compras", "estoque"] },
@@ -999,8 +1019,8 @@ const TODO_GREEN_PAGE_ALIASES = Object.freeze({
   fretes: "operacoes",
   rotas: "operacoes",
   viagens: "operacoes",
-  veiculos: "operacoes",
-  motoristas: "cadastros",
+  veiculos: "motorista-frota",
+  motoristas: "motorista-frota",
   dp: "dp-rh",
   escalas: "rh",
   campanhas: "marketing",
@@ -1331,8 +1351,7 @@ function ModuleCard({ grupo }) {
       <span className="tdg-module-icon"><Icon size={22} /></span>
       <span>
         <strong>{grupo.nome}</strong>
-        {implemented && grupo.descricao && <small>{grupo.descricao}</small>}
-        {implemented && assuntos && <small className="tdg-module-assuntos">Inclui: {assuntos}.</small>}
+        {implemented && assuntos && <small className="tdg-module-assuntos">{assuntos}</small>}
         {!implemented && <small>Em implantação.</small>}
       </span>
       {!implemented && <em>Em implantação</em>}
@@ -1948,22 +1967,54 @@ function ProposalPanel({ data, criar, atualizar, pedidosDeAprovacao = [], setToa
   );
 }
 
-function EsgPanel({ dashboard, data }) {
+function EsgPanel({ dashboard, data, onNavigate }) {
   const translator = esgTranslator(dashboard.co2Evitado);
   const latest = data.pricingScenarios[0]?.result?.impact;
+  const hasImpact = Number(dashboard.co2Evitado || 0) > 0 || Boolean(latest);
+  const dataState = hasImpact ? "Impacto calculado" : "Sem simulação validada";
+  const nextActions = hasImpact
+    ? [
+        ["Emitir relatório", "/todogreen/relatorios"],
+        ["Abrir evidências", "/todogreen/documentos"],
+        ["Revisar metodologia", "/todogreen/metodologia"],
+      ]
+    : [
+        ["Gerar simulação", "/todogreen/precificacao"],
+        ["Parâmetros ESG", "/todogreen/parametros-simulador"],
+        ["Ver oportunidades", "/todogreen/oportunidades"],
+      ];
   return (
-    <section className="tdg-panel tdg-esg">
-      <div className="tdg-section-head"><div><span className="tdg-kicker">IMPACTO AMBIENTAL</span><h2>Green Score e emissões evitadas nas operações dos clientes</h2><p>Consulte os resultados ambientais em linguagem clara. Os termos técnicos ficam nos relatórios.</p></div><strong>{number.format(dashboard.greenScore)} / 100</strong></div>
-      <div className="tdg-result">
-        <MetricCard label="CO2 evitado" value={`${number.format(dashboard.co2Evitado / 1000)} t`} detail="estimativa auditável" tone="good" />
-        <MetricCard label="Diesel não consumido" value={`${number.format(dashboard.dieselNaoConsumido)} L`} detail="referência diesel" />
-        <MetricCard label="Redução" value={`${number.format(dashboard.reducaoEmissoesPercent)}%`} detail="sustentável vs convencional" />
-        <MetricCard label="Árvores equivalentes" value={number.format(translator.equivalents.treesYear)} detail="equivalência ilustrativa anual" />
+    <section className={`tdg-panel tdg-esg tdg-esg-ops ${hasImpact ? "" : "empty"}`}>
+      <div className="tdg-esg-command">
+        <div>
+          <span className="tdg-kicker">ESG OPERACIONAL</span>
+          <h2>Green Score e emissões</h2>
+          <p>{hasImpact ? "Resultado ambiental ligado a simulações, evidências e relatórios." : "Calcule uma simulação confirmada para liberar números ambientais auditáveis."}</p>
+        </div>
+        <strong>{dataState}</strong>
       </div>
-      <div className="tdg-method"><strong>Texto para proposta</strong><p>{translator.proposalText}</p><small>{translator.disclaimer}</small></div>
+      <div className="tdg-esg-layout">
+        <div className="tdg-esg-score">
+          <span>Green Score</span>
+          <strong>{hasImpact ? number.format(dashboard.greenScore) : "Pendente"}</strong>
+          <small>{hasImpact ? "Indicador proprietário, não certificação" : "Depende de preço, rota, distância e evidências"}</small>
+        </div>
+        <div className="tdg-result tdg-esg-kpis">
+          <MetricCard label="CO2 evitado" value={hasImpact ? `${number.format(dashboard.co2Evitado / 1000)} t` : "Pendente"} detail="com memória de cálculo" tone={hasImpact ? "good" : "neutral"} />
+          <MetricCard label="Diesel evitado" value={hasImpact ? `${number.format(dashboard.dieselNaoConsumido)} L` : "Pendente"} detail="comparação operacional" />
+          <MetricCard label="Redução" value={hasImpact ? `${number.format(dashboard.reducaoEmissoesPercent)}%` : "Pendente"} detail="vs referência" />
+        </div>
+        <aside className="tdg-esg-next">
+          <strong>Próximas ações</strong>
+          {nextActions.map(([label, route]) => (
+            <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>
+          ))}
+        </aside>
+      </div>
+      {hasImpact ? <div className="tdg-method"><strong>Texto para proposta</strong><p>{translator.proposalText}</p><small>{translator.disclaimer}</small></div> : <div className="tdg-method tdg-esg-empty-state"><strong>Sem número publicado</strong><p>Evitei mostrar zero como resultado. Zero aqui significa ausência de simulação confirmada, não ausência de impacto.</p><small>Use Precificação para gerar a memória de cálculo e depois publique relatório.</small></div>}
       <div className="tdg-output-grid">
         <span><small>Versão metodologia</small><strong>{latest?.methodologyVersion || "tdg-env-v1"}</strong></span>
-        <span><small>Fórmula</small><strong>{latest?.formula || "sem simulação"}</strong></span>
+        <span><small>Fórmula</small><strong>{latest?.formula || "Aguardando simulação"}</strong></span>
         <span><small>Unidades</small><strong>{latest?.units || "kgCO2e, litros, km, kWh"}</strong></span>
       </div>
     </section>
@@ -2226,6 +2277,14 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       <div className="tdg-erp-layout">
         <aside className="tdg-erp-sidebar">
           <div><strong>ERP</strong><small>{remoteAccess.email || db?.user?.email || "To Do Green"}</small></div>
+          <button
+            type="button"
+            className={`tdg-work-entry ${isWorkCenter ? "active" : ""}`}
+            onClick={() => navigate("/todogreen/central-trabalho")}
+          >
+            <strong>Projetos e tarefas</strong>
+            <small>Boards, Kanban, Gantt e Workload</small>
+          </button>
           <div className="tdg-nav-switch" role="tablist" aria-label="Modo de navegação">
             <button type="button" className={navigationMode === "area" ? "active" : ""} onClick={() => setNavigationMode("area")}>Por área</button>
             <button type="button" className={navigationMode === "function" ? "active" : ""} onClick={() => setNavigationMode("function")}>Funcionalidades</button>
@@ -2300,6 +2359,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "dashboards" && <Suspense fallback={<section className="tdg-panel">Carregando seus painéis...</section>}><DashboardBuilderPage authHeaders={authHeaders} summary={dashboard} setToast={setToast} /></Suspense>}
       {page === "metas" && <Suspense fallback={<section className="tdg-panel">Carregando metas...</section>}><GoalsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "performance-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando performance comercial...</section>}><SalesPerformancePage authHeaders={authHeaders} onNavigate={navigate} /></Suspense>}
+      {page === "playbook-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando playbook comercial...</section>}><TodoGreenGuides mode="playbook" onNavigate={navigate} /></Suspense>}
       {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} setToast={setToast} /></Suspense>}
       {page === "implantacao" && (
@@ -2313,7 +2373,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
       {page === "precificacao" && <PricingPanel key={new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
-      {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} />}
+      {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}
       {page === "regua" && (
         <Suspense fallback={<section className="tdg-panel">Carregando parâmetros do simulador...</section>}>
           <PricingParametersPanel authHeaders={authHeaders} setToast={setToast} />
@@ -2327,6 +2387,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "produtos" && <Suspense fallback={<section className="tdg-panel">Carregando produtos...</section>}><EnterpriseAreaPage area="products" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
       {page === "planejamento" && <Suspense fallback={<section className="tdg-panel">Carregando planejamento...</section>}><EnterpriseAreaPage area="planning" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /><TripViabilityPage authHeaders={authHeaders} /></Suspense>}
       {page === "operacoes" && <Suspense fallback={<section className="tdg-panel">Carregando operações...</section>}><OperationsPage operations={registros.operations} clients={clientes} contracts={registros.contracts} criar={criar} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
+      {page === "motorista-frota" && <Suspense fallback={<section className="tdg-panel">Carregando frota e motoristas...</section>}><DriverFleetCenterPage authHeaders={authHeaders} operations={registros.operations} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "ocorrencias" && <Suspense fallback={<section className="tdg-panel">Carregando ocorrências...</section>}><OccurrencesPage operations={registros.operations} clients={clientes} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "ordens-servico" && <Suspense fallback={<section className="tdg-panel">Carregando ordens de serviço...</section>}><TransactionalSpinePage mode="service-orders" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
       {page === "ciot" && <Suspense fallback={<section className="tdg-panel">Carregando CIOT...</section>}><TransactionalSpinePage mode="ciot" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
