@@ -14,6 +14,7 @@ const slaEfetivo = (operation, now = new Date()) => {
   if (delivered) return delivered <= deadline ? "no prazo" : "atrasado";
   return now <= deadline ? "em curso" : "atrasado";
 };
+const isLate = (operation) => slaEfetivo(operation) === "atrasado";
 
 export default function OperationsPage({ operations = [], clients = [], contracts = [], criar, registrarEventoOperacao, listarSubrecurso, setToast, mode = "operations" }) {
   const empty = { clientId: "", contractId: "", productId: "middle-mile", reference: "", serviceDate: "", origin: "", destination: "", promisedAt: "", etaAt: "", plate: "", driver: "", trips: "", deliveries: "", packages: "", distanceKm: "", occupancyPercent: "", status: "planned" };
