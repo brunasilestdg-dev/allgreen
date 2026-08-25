@@ -1422,3 +1422,16 @@
   .tdg-planner-grid3 { grid-template-columns: 1fr; }
   .tdg-planner-controls { align-items: stretch; flex-direction: column; }
 }
+
+/* ── Frota: cartão clicável e ordens de manutenção no modal ─── */
+.df-clickable { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.df-clickable:hover { border-color: var(--tdg-green); box-shadow: 0 4px 14px rgba(20, 45, 36, .08); }
+.df-maint-row { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 7px; }
+.df-maint-row span { display: grid; }
+.df-maint-row small { color: var(--tdg-muted); font-size: 11px; }
+.df-maint-add { margin-top: 8px; }
+.df-maint-add input {
+  background: #fff; border: 1px dashed var(--tdg-line); border-radius: 9px; color: var(--tdg-ink);
+  font: inherit; min-height: 36px; padding: 7px 10px; width: 100%;
+}
+.df-maint-add input:focus { border-style: solid; border-color: var(--tdg-green); outline: none; }

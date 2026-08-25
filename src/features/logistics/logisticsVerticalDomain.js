@@ -60,21 +60,21 @@ export const TODO_GREEN_ROLES = [
 export const TODO_GREEN_PERMISSIONS = {
   owner: ["*"],
   admin: ["*"],
-  lideranca_comercial: ["read", "crm:manage", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage"],
-  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "goal:read", "goal:checkin", "planner:manage"],
-  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "planner:manage"],
-  produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
-  planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
-  financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
-  operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
-  marketing: ["read", "marketing:manage", "evidence:manage", "goal:read", "goal:checkin", "planner:manage"],
-  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
+  lideranca_comercial: ["read", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
+  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "fleet:manage", "integration:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  marketing: ["read", "marketing:manage", "evidence:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   auditor: ["read", "audit:read", "export:read", "goal:read", "goal:export"],
   // RH lê a vertical e administra pessoal — e nada além disso. Em particular,
   // não recebe `finance:manage`: fechar a folha não é o mesmo que lançar no
   // caixa, e juntar os dois num papel só tiraria a segregação que a auditoria
   // de folha depende.
-  rh: ["read", "hr:manage", "goal:read", "goal:checkin", "planner:manage"],
+  rh: ["read", "hr:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
 };
 
 // A regra de permissão da vertical, uma só, usada pelo front e pelo worker.

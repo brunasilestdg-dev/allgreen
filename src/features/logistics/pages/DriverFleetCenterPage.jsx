@@ -5,14 +5,40 @@ import {
   Clock3,
   Gauge,
   MapPin,
+  Plus,
   RefreshCw,
   Route,
   ShieldCheck,
+  Trash2,
   Truck,
   UserRoundCheck,
+  Wrench,
 } from "lucide-react";
+import Modal from "../../../components/Modal.jsx";
+import { VEHICLE_CLASSES, vehicleClass } from "../vehicleClassDomain.js";
 import { fleetAlerts, fleetVehicleMetrics, summarizeFleet } from "../todoGreenFleetDomain.js";
 import "./TodoGreenPages.css";
+
+const ENERGY_LABELS = { electric: "Elétrico", hybrid: "Híbrido", biomethane: "Biometano", diesel: "Diesel" };
+const STATUS_OPTIONS = [
+  { id: "available", label: "Disponível" },
+  { id: "in-operation", label: "Em operação" },
+  { id: "maintenance", label: "Manutenção" },
+  { id: "reserved", label: "Reserva" },
+  { id: "blocked", label: "Bloqueado" },
+  { id: "inactive", label: "Inativo" },
+];
+const MAINT_STATUS = { open: "Aberta", in_progress: "Em andamento", done: "Concluída", canceled: "Cancelada" };
+
+const fleetApi = async (path, authHeaders, options = {}) => {
+  const result = await fetch(`/api/todogreen/fleet${path}`, {
+    ...options,
+    headers: { "content-type": "application/json", ...(authHeaders?.() || {}), ...(options.headers || {}) },
+  });
+  const payload = await result.json().catch(() => ({}));
+  if (!result.ok) throw new Error(payload.error || "Não foi possível falar com a Frota.");
+  return payload;
+};
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const NUM = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -108,13 +134,19 @@ function DriverCard({ row }) {
   );
 }
 
-function FleetCard({ vehicle, operations }) {
+function FleetCard({ vehicle, operations, onEdit }) {
   const metrics = fleetVehicleMetrics(vehicle);
   const alerts = fleetAlerts(vehicle);
   const fields = vehicle.fields || {};
   const latest = latestOperationForVehicle(operations, vehicle);
   return (
-    <article className={`df-fleet-card ${alerts.length ? "risk" : ""}`}>
+    <article
+      className={`df-fleet-card ${alerts.length ? "risk" : ""}${onEdit ? " df-clickable" : ""}`}
+      onClick={onEdit ? () => onEdit(vehicle) : undefined}
+      role={onEdit ? "button" : undefined}
+      tabIndex={onEdit ? 0 : undefined}
+      onKeyDown={onEdit ? (e) => { if (e.key === "Enter") onEdit(vehicle); } : undefined}
+    >
       <header>
         <Truck size={19} />
         <span><strong>{text(vehicle.prefix, vehicle.plate || "Veículo")}</strong><small>{text(vehicle.plate, "sem placa")} · {text(vehicle.operationalUnit, "sem unidade")}</small></span>
@@ -148,6 +180,8 @@ export default function DriverFleetCenterPage({
   const [operationsFromApi, setOperationsFromApi] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [canWrite, setCanWrite] = useState(false);
+  const [editing, setEditing] = useState(null); // null | {} (novo) | veículo (editar)
   const isPortal = mode === "driver-portal";
   const operations = providedOperations || operationsFromApi;
 
@@ -168,6 +202,7 @@ export default function DriverFleetCenterPage({
         providedOperations ? Promise.resolve(providedOperations) : requestOperations(authHeaders),
       ]);
       setFleet(payload.vehicles || []);
+      setCanWrite(Boolean(payload.access?.canWrite));
       if (!providedOperations) setOperationsFromApi(loadedOperations || []);
     } catch (reason) {
       setError(reason.message);
@@ -178,6 +213,33 @@ export default function DriverFleetCenterPage({
   }, [authHeaders, providedOperations, setToast]);
 
   useEffect(() => { load(); }, [load]);
+
+  const salvarVeiculo = async (dados) => {
+    try {
+      if (dados.id) {
+        await fleetApi(`/${dados.id}`, authHeaders, { method: "PATCH", body: JSON.stringify(dados) });
+      } else {
+        await fleetApi("", authHeaders, { method: "POST", body: JSON.stringify(dados) });
+      }
+      setEditing(null);
+      setToast?.("Veículo salvo.");
+      await load();
+    } catch (reason) {
+      setToast?.(reason.message);
+    }
+  };
+
+  const arquivarVeiculo = async (veiculo) => {
+    if (typeof window !== "undefined" && !window.confirm(`Arquivar o veículo ${veiculo.prefix || veiculo.plate}?`)) return;
+    try {
+      await fleetApi(`/${veiculo.id}`, authHeaders, { method: "DELETE" });
+      setEditing(null);
+      setToast?.("Veículo arquivado.");
+      await load();
+    } catch (reason) {
+      setToast?.(reason.message);
+    }
+  };
 
   const summary = useMemo(() => summarizeFleet(fleet), [fleet]);
   const drivers = useMemo(() => driverRows(operations), [operations]);
@@ -198,6 +260,11 @@ export default function DriverFleetCenterPage({
           </p>
         </div>
         <div className="df-title-actions">
+          {!isPortal && canWrite && (
+            <button type="button" className="tdg-action" onClick={() => setEditing({})}>
+              <Plus size={17} />Novo veículo
+            </button>
+          )}
           {!isPortal && (
             <button type="button" className="tdg-secondary-action" onClick={() => go("/portal-motorista")}>
               <UserRoundCheck size={17} />Abrir portal motorista
@@ -227,7 +294,9 @@ export default function DriverFleetCenterPage({
         <article>
           <BatteryCharging size={20} />
           <span><strong>Frota elétrica</strong><small>Controle autonomia real, SOH da bateria, manutenção e disponibilidade.</small></span>
-          <button type="button" onClick={() => go("/todogreen/frota")}>Abrir frota</button>
+          {canWrite
+            ? <button type="button" onClick={() => setEditing({})}>Cadastrar veículo</button>
+            : <button type="button" onClick={load}>Atualizar frota</button>}
         </article>
         <article>
           <ShieldCheck size={20} />
@@ -247,7 +316,7 @@ export default function DriverFleetCenterPage({
         <section>
           <header className="df-section-head"><div><Gauge size={18} /><span><strong>{isPortal ? "Veículo e telemetria" : "Gestão da frota"}</strong><small>Veículo, telemetria, bateria, custo e alertas.</small></span></div></header>
           <div className="df-fleet-list">
-            {fleet.length ? fleet.map((vehicle) => <FleetCard key={vehicle.id} vehicle={vehicle} operations={operations} />) : <p className="tdg-empty-access">Nenhum veículo cadastrado na frota.</p>}
+            {fleet.length ? fleet.map((vehicle) => <FleetCard key={vehicle.id} vehicle={vehicle} operations={operations} onEdit={!isPortal && canWrite ? setEditing : undefined} />) : <p className="tdg-empty-access">{canWrite ? "Nenhum veículo cadastrado ainda. Use “Novo veículo”." : "Nenhum veículo cadastrado na frota."}</p>}
           </div>
         </section>
       </div>
@@ -260,6 +329,145 @@ export default function DriverFleetCenterPage({
           <span><UserRoundCheck size={15} /> Jornada do motorista fica operacional com check-in/check-out e app dedicado numa próxima etapa.</span>
         </div>
       </section>
+
+      {editing && (
+        <VehicleModal
+          vehicle={editing}
+          authHeaders={authHeaders}
+          onClose={() => setEditing(null)}
+          onSave={salvarVeiculo}
+          onArchive={arquivarVeiculo}
+          setToast={setToast}
+        />
+      )}
     </section>
+  );
+}
+
+const VEHICLE_BLANK = {
+  prefix: "", plate: "", manufacturer: "", model: "", vehicleClass: "", energyType: "electric",
+  status: "available", operationalUnit: "", costCenter: "", payloadKg: "", odometerKm: "", batterySohPercent: "",
+};
+
+function VehicleModal({ vehicle, authHeaders, onClose, onSave, onArchive, setToast }) {
+  const vehicleId = vehicle?.id || "";
+  const editando = Boolean(vehicleId);
+  const [form, setForm] = useState({ ...VEHICLE_BLANK, ...vehicle });
+  const [orders, setOrders] = useState([]);
+  const [novaOrdem, setNovaOrdem] = useState("");
+  const set = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
+
+  // Só as energias que a classe aceita — o servidor recusa carreta elétrica, e a
+  // tela não deve nem oferecer.
+  const energiasDaClasse = vehicleClass(form.vehicleClass)?.energias || Object.keys(ENERGY_LABELS);
+
+  const carregarOrdens = useCallback(async () => {
+    if (!vehicleId) return;
+    try {
+      const { orders: lista } = await fleetApi(`/${vehicleId}/maintenance`, authHeaders);
+      setOrders(lista || []);
+    } catch { /* silencioso: a manutenção é secundária ao cadastro */ }
+  }, [vehicleId, authHeaders]);
+
+  useEffect(() => { carregarOrdens(); }, [carregarOrdens]);
+
+  const submeter = (e) => {
+    e.preventDefault();
+    if (!String(form.prefix).trim()) { setToast?.("Informe o prefixo do veículo."); return; }
+    onSave(form);
+  };
+
+  const criarOrdem = async () => {
+    if (!novaOrdem.trim()) return;
+    try {
+      await fleetApi(`/${vehicleId}/maintenance`, authHeaders, { method: "POST", body: JSON.stringify({ title: novaOrdem }) });
+      setNovaOrdem("");
+      await carregarOrdens();
+    } catch (reason) { setToast?.(reason.message); }
+  };
+
+  const mudarOrdem = async (ordem, status) => {
+    try {
+      await fleetApi(`/${vehicleId}/maintenance/${ordem.id}`, authHeaders, {
+        method: "PATCH", body: JSON.stringify({ status, revision: ordem.revision }),
+      });
+      await carregarOrdens();
+    } catch (reason) { setToast?.(reason.message); }
+  };
+
+  return (
+    <Modal title={editando ? `Veículo ${vehicle.prefix || vehicle.plate || ""}`.trim() : "Novo veículo"} onClose={onClose} wide>
+      <form className="tdg-planner-form" onSubmit={submeter}>
+        <div className="tdg-planner-grid3">
+          <label>Prefixo<input autoFocus value={form.prefix} onChange={set("prefix")} maxLength={50} placeholder="TG-001" /></label>
+          <label>Placa<input value={form.plate} onChange={set("plate")} maxLength={20} placeholder="ABC1D23" /></label>
+          <label>Status
+            <select value={form.status} onChange={set("status")}>
+              {STATUS_OPTIONS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="tdg-planner-grid3">
+          <label>Classe
+            <select value={form.vehicleClass} onChange={(e) => {
+              const classe = e.target.value;
+              const energias = vehicleClass(classe)?.energias || [];
+              // Se a energia atual não cabe na nova classe, recua para a primeira válida.
+              setForm((f) => ({ ...f, vehicleClass: classe, energyType: energias.includes(f.energyType) ? f.energyType : (energias[0] || f.energyType) }));
+            }}>
+              <option value="">— selecione —</option>
+              {VEHICLE_CLASSES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label>Energia
+            <select value={form.energyType} onChange={set("energyType")}>
+              {energiasDaClasse.map((en) => <option key={en} value={en}>{ENERGY_LABELS[en] || en}</option>)}
+            </select>
+          </label>
+          <label>Unidade operacional<input value={form.operationalUnit} onChange={set("operationalUnit")} maxLength={120} /></label>
+        </div>
+        <div className="tdg-planner-grid3">
+          <label>Fabricante<input value={form.manufacturer} onChange={set("manufacturer")} maxLength={100} /></label>
+          <label>Modelo<input value={form.model} onChange={set("model")} maxLength={100} /></label>
+          <label>Centro de custo<input value={form.costCenter} onChange={set("costCenter")} maxLength={120} /></label>
+        </div>
+        <div className="tdg-planner-grid3">
+          <label>Capacidade (kg)<input type="number" min="0" value={form.payloadKg} onChange={set("payloadKg")} /></label>
+          <label>Hodômetro (km)<input type="number" min="0" value={form.odometerKm} onChange={set("odometerKm")} /></label>
+          <label>SOH bateria (%)<input type="number" min="0" max="100" value={form.batterySohPercent} onChange={set("batterySohPercent")} /></label>
+        </div>
+
+        {editando && (
+          <div className="tdg-planner-checklist">
+            <div className="tdg-section-head">
+              <h3><Wrench size={15} /> Ordens de manutenção</h3>
+            </div>
+            {orders.length === 0 && <p className="tdg-planner-col-empty">Nenhuma ordem registrada.</p>}
+            {orders.map((o) => (
+              <div className="df-maint-row" key={o.id}>
+                <span><strong>{o.title}</strong><small>{MAINT_STATUS[o.status] || o.status}</small></span>
+                {o.status !== "done" && o.status !== "canceled" && (
+                  <button type="button" className="tdg-planner-icon" title="Concluir" onClick={() => mudarOrdem(o, "done")}>✓</button>
+                )}
+              </div>
+            ))}
+            <div className="df-maint-add">
+              <input value={novaOrdem} onChange={(e) => setNovaOrdem(e.target.value)} placeholder="+ Nova ordem de manutenção" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); criarOrdem(); } }} maxLength={200} />
+            </div>
+          </div>
+        )}
+
+        <div className="tdg-form-actions tdg-planner-taskactions">
+          {editando && (
+            <button type="button" className="tdg-planner-danger" onClick={() => onArchive(vehicle)}>
+              <Trash2 size={15} /> Arquivar
+            </button>
+          )}
+          <span className="tdg-planner-spacer" />
+          <button type="button" onClick={onClose}>Cancelar</button>
+          <button type="submit" className="tdg-action">Salvar</button>
+        </div>
+      </form>
+    </Modal>
   );
 }

@@ -60,6 +60,7 @@ export async function handleTodoGreenFleet(request, env, access, user) {
   const parts = url.pathname.split("/").filter(Boolean);
   const vehicleId = parts[3] || "";
   const subresource = parts[4] || "";
+  const subresourceId = parts[5] || "";
 
   if (request.method === "GET" && !vehicleId) {
     const rows = await env.DB.prepare(`SELECT * FROM todogreen_fleet_vehicles WHERE workspace_owner_id = ? AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 500`)
@@ -139,6 +140,40 @@ export async function handleTodoGreenFleet(request, env, access, user) {
     await env.DB.prepare(`INSERT INTO todogreen_fleet_maintenance_orders (id, workspace_owner_id, vehicle_id, maintenance_type, status, title, description, supplier, scheduled_at, downtime_hours, parts_cost, labor_cost, other_cost, fields_json, revision, created_by, updated_by, created_at, updated_at, archived_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, 0, 0, 0, 0, '{}', 1, ?, ?, ?, ?, NULL)`)
       .bind(id, access.ownerId, vehicleId, clean(body.maintenanceType,60)||"preventive", clean(body.title,200), clean(body.description,2000), clean(body.supplier,160), clean(body.scheduledAt,30)||null, user.id, user.id, now, now).run();
     return json({ ok: true, id }, 201);
+  }
+
+  // Atualizar/fechar uma ordem de manutenção. Sem isto uma OS aberta ficava
+  // aberta para sempre: dava para criar, nunca para concluir ou corrigir.
+  if (request.method === "PATCH" && vehicleId && subresource === "maintenance" && subresourceId) {
+    const body = await request.json().catch(() => ({}));
+    const current = await env.DB.prepare("SELECT * FROM todogreen_fleet_maintenance_orders WHERE id=? AND workspace_owner_id=? AND vehicle_id=? AND archived_at IS NULL")
+      .bind(subresourceId, access.ownerId, vehicleId).first();
+    if (!current) return json({ error: "Ordem de manutenção não encontrada." }, 404);
+    if (body.revision && Number(body.revision) !== Number(current.revision))
+      return json({ error: "Ordem alterada por outra pessoa. Recarregue.", code: "revision_conflict" }, 409);
+    const status = ["open", "in_progress", "done", "canceled"].includes(clean(body.status, 20)) ? clean(body.status, 20) : current.status;
+    const now = new Date().toISOString();
+    // Fechar carimba a conclusão; reabrir a limpa — derivado do status, não
+    // enviado solto.
+    const completedAt = status === "done" ? (clean(body.completedAt, 30) || now) : null;
+    await env.DB.prepare(`UPDATE todogreen_fleet_maintenance_orders SET maintenance_type=?, status=?, title=?, description=?, supplier=?, scheduled_at=?, completed_at=?, downtime_hours=?, parts_cost=?, labor_cost=?, other_cost=?, revision=revision+1, updated_by=?, updated_at=? WHERE id=? AND workspace_owner_id=? AND revision=?`)
+      .bind(
+        clean(body.maintenanceType, 60) || current.maintenance_type, status,
+        clean(body.title, 200) || current.title, clean(body.description, 2000),
+        clean(body.supplier, 160), clean(body.scheduledAt, 30) || current.scheduled_at || null, completedAt,
+        num(body.downtimeHours ?? current.downtime_hours), num(body.partsCost ?? current.parts_cost),
+        num(body.laborCost ?? current.labor_cost), num(body.otherCost ?? current.other_cost),
+        user.id, now, subresourceId, access.ownerId, current.revision,
+      ).run();
+    const row = await env.DB.prepare("SELECT * FROM todogreen_fleet_maintenance_orders WHERE id=?").bind(subresourceId).first();
+    return json({ order: row });
+  }
+
+  if (request.method === "DELETE" && vehicleId && subresource === "maintenance" && subresourceId) {
+    const now = new Date().toISOString();
+    await env.DB.prepare("UPDATE todogreen_fleet_maintenance_orders SET archived_at=?, updated_at=?, updated_by=?, revision=revision+1 WHERE id=? AND workspace_owner_id=? AND vehicle_id=?")
+      .bind(now, now, user.id, subresourceId, access.ownerId, vehicleId).run();
+    return json({ ok: true });
   }
 
   if (request.method === "DELETE" && vehicleId) {
