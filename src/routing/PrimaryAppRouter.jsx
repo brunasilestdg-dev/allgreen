@@ -3,6 +3,7 @@ import { Suspense, lazy } from "react";
 const LogisticsVertical = lazy(() => import("../features/logistics/LogisticsVertical.jsx"));
 const CustomerPortal = lazy(() => import("../features/logistics/CustomerPortal.jsx"));
 const ClientActivationPage = lazy(() => import("../features/logistics/ClientActivationPage.jsx"));
+const DriverFleetCenterPage = lazy(() => import("../features/logistics/pages/DriverFleetCenterPage.jsx"));
 
 export function resolvePrimaryRoute(pathname, authenticated) {
   const path = String(pathname || "/");
@@ -12,6 +13,8 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   if (inviteMatch) return { kind: "invite", token: inviteMatch[1] };
   if (!authenticated) return { kind: "login" };
   if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-portal" };
+  if (/^\/(?:portal-motorista|motorista-frota|central-motorista|central-frota)(?:\/|$)/.test(path))
+    return { kind: "driver-fleet-portal" };
   if (/^\/todogreen\/ativacao(?:\/|$)/.test(path)) return { kind: "todogreen-activation" };
   if (/^\/todogreen(?:\/|$)/.test(path)) return { kind: "todogreen" };
   return { kind: "workspace" };
@@ -36,6 +39,12 @@ export default function PrimaryAppRouter({
     return (
       <Suspense fallback={<div className="inbox-loading">Abrindo seu portal...</div>}>
         <CustomerPortal />
+      </Suspense>
+    );
+  if (route.kind === "driver-fleet-portal")
+    return (
+      <Suspense fallback={<div className="inbox-loading">Abrindo Central do Motorista/Frota...</div>}>
+        <DriverFleetCenterPage authHeaders={authHeaders} setToast={setToast} mode="driver-portal" />
       </Suspense>
     );
   if (route.kind === "todogreen-activation")

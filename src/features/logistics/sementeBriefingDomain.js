@@ -76,7 +76,7 @@ export function montarPauta({ indice = [], tarefasVencidas = [], agora = new Dat
           id: "tarefas-vencidas",
           urgencia: "alta",
           titulo: "Tarefas suas com prazo vencido",
-          porque: "Estão na Central de Trabalho, atribuídas a você, com prazo passado.",
+          porque: "Estão na Central de Implantação, atribuídas a você, com prazo passado.",
           quantidade: tarefasVencidas.length,
           contas: tarefasVencidas.slice(0, NOMES_NA_PAUTA).map((item) => texto(item.titulo)),
           restantes: Math.max(0, tarefasVencidas.length - NOMES_NA_PAUTA),

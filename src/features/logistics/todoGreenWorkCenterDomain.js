@@ -1,8 +1,8 @@
 export const TODO_GREEN_WORK_CENTER = {
   id: "central-trabalho",
-  name: "Central de Trabalho",
+  name: "Central de Implantação",
   route: "/todogreen/central-trabalho",
-  description: "Execução integrada de projetos, processos, aprovações, operações e rotinas da To Do Green.",
+  description: "Execução integrada de implantações de clientes, projetos, processos, aprovações, operações e rotinas da To Do Green.",
 };
 
 export const WORK_CENTER_OBJECT_TYPES = [
@@ -255,7 +255,7 @@ export function buildWorkCenterAiRequest({ action, specialist, item, boardContex
     specialist: specialistName,
     prompt: [
       `Ação: ${safeAction}.`,
-      `Contexto do quadro: ${boardContext || "Central de Trabalho To Do Green"}.`,
+      `Contexto do quadro: ${boardContext || "Central de Implantação To Do Green"}.`,
       `Item: ${JSON.stringify(item || {})}.`,
       instruction ? `Instrução adicional: ${instruction}.` : "",
       "Responda com recomendações objetivas, rastreáveis e sem inventar dados ausentes.",

@@ -272,14 +272,14 @@ describe("proposta não é execução", () => {
     global.fetch = vi.fn((url, opcoes) => {
       const corpo = JSON.parse(opcoes.body);
       if (corpo.briefing) return resposta({ pautas: [], leitura: "" });
-      if (corpo.executar) return resposta({ error: "Seu papel não cria itens na Central de Trabalho." }, false);
+      if (corpo.executar) return resposta({ error: "Seu papel não cria itens na Central de Implantação." }, false);
       return resposta({ resposta: "Sugiro criar a tarefa.", proposta: { tipo: "criar_tarefa", titulo: "Ligar" } });
     });
     render(<Semente pagina="clientes" authHeaders={authHeaders} />);
     abrir();
     await perguntarPor("Cria uma tarefa?");
     fireEvent.click(await screen.findByRole("button", { name: /Confirmar e executar/i }));
-    expect(await screen.findByText("Seu papel não cria itens na Central de Trabalho.")).toBeTruthy();
+    expect(await screen.findByText("Seu papel não cria itens na Central de Implantação.")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Confirmar e executar/i })).toBeTruthy();
   });
 });

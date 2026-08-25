@@ -659,7 +659,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "planejamento", "aceite-viagens", "ordens-servico", "ciot", "rastreamento"] },
   { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes"] },
   { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
-  { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos", "relatorios"] },
+  { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes"] },
   { id: "dp", label: "DP", route: "/todogreen/dp", pages: ["dp-rh"] },
   { id: "rh", label: "RH", route: "/todogreen/rh", pages: ["rh", "escalas"] },
@@ -1368,6 +1368,10 @@ function AreaSection({ area, grupos }) {
   );
 }
 
+function sidebarFunctionLabel(grupo) {
+  return grupo.nome.replace(/\s+To Do Green$/i, "").trim();
+}
+
 function ProductCard({ product, active, onSelect }) {
   return (
     <button className={`tdg-product-card ${active ? "active" : ""}`} type="button" onClick={() => onSelect(product.id)}>
@@ -2046,6 +2050,8 @@ function AccessPanel({ role, authHeaders, setToast }) {
 export default function LogisticsVertical({ db, update, setToast, access = {}, authHeaders }) {
   const [path, setPath] = useState(todoGreenPath());
   const [query, setQuery] = useState("");
+  const [navigationMode, setNavigationMode] = useState("area");
+  const [navigationQuery, setNavigationQuery] = useState("");
   // `access` chega vazio hoje; se um dia vier preenchido, ainda precisa passar
   // pela mesma leitura — a origem é que decide, não o formato.
   const [remoteAccess, setRemoteAccess] = useState(() => lerRespostaDeAcesso(access) || {});
@@ -2160,6 +2166,20 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       query,
     ),
   }));
+  const functionNavigation = useMemo(
+    () => ordenarPorRelevancia(
+      gruposDeTela
+        .filter((grupo) => grupo.ids.some((id) => IMPLEMENTED_MODULE_IDS.has(id)))
+        .filter((grupo) => {
+          const paginaDoGrupo = todoGreenRouteToPage(grupo.rota);
+          const modulo = MODULE_IMPLEMENTATION[paginaDoGrupo];
+          return !modulo?.permission || hasTodoGreenPermission(role, modulo.permission);
+        })
+        .filter((grupo) => grupoAtendeBusca(grupo, navigationQuery)),
+      navigationQuery,
+    ),
+    [gruposDeTela, navigationQuery, role],
+  );
 
   if (estadoDoAcesso === ACESSO.verificando) return <AcessoEmVerificacao />;
   if (!allowed) return <AccessDenied db={db} />;
@@ -2206,18 +2226,47 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       <div className="tdg-erp-layout">
         <aside className="tdg-erp-sidebar">
           <div><strong>ERP</strong><small>{remoteAccess.email || db?.user?.email || "To Do Green"}</small></div>
-          <nav className="tdg-tabs" aria-label="Navegação To Do Green">
-            {PRIMARY_NAVIGATION.map((item) => (
-              <button
-                type="button"
-                className={primaryNavigation.id === item.id ? "active" : ""}
-                onClick={() => navigate(item.route)}
-                key={item.id}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
+          <div className="tdg-nav-switch" role="tablist" aria-label="Modo de navegação">
+            <button type="button" className={navigationMode === "area" ? "active" : ""} onClick={() => setNavigationMode("area")}>Por área</button>
+            <button type="button" className={navigationMode === "function" ? "active" : ""} onClick={() => setNavigationMode("function")}>Funcionalidades</button>
+          </div>
+          {navigationMode === "area" ? (
+            <nav className="tdg-tabs" aria-label="Navegação To Do Green">
+              {PRIMARY_NAVIGATION.map((item) => (
+                <button
+                  type="button"
+                  className={primaryNavigation.id === item.id ? "active" : ""}
+                  onClick={() => navigate(item.route)}
+                  key={item.id}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          ) : (
+            <div className="tdg-function-navigation">
+              <label className="tdg-sidebar-search">
+                <Search size={15} />
+                <input value={navigationQuery} onChange={(event) => setNavigationQuery(event.target.value)} placeholder="Buscar funcionalidade" aria-label="Buscar funcionalidades" />
+              </label>
+              <nav className="tdg-tabs" aria-label="Navegação por funcionalidades">
+                {functionNavigation.map((grupo) => {
+                  const paginaDoGrupo = todoGreenRouteToPage(grupo.rota);
+                  return (
+                    <button
+                      type="button"
+                      className={paginaDoGrupo === page ? "active" : ""}
+                      onClick={() => navigate(grupo.rota)}
+                      key={grupo.rota}
+                    >
+                      <span>{sidebarFunctionLabel(grupo)}</span>
+                      {grupo.assuntos.length > 0 && <small>{resumirAssuntos(grupo.assuntos)}</small>}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
         </aside>
 
         <section className="tdg-erp-stage">

@@ -34,7 +34,7 @@ const TELAS = [
   ["Cadastros do ERP", "/todogreen/cadastros"],
   ["Estoque", "/todogreen/estoque"],
   ["Compras", "/todogreen/compras"],
-  ["Central de trabalho", "/todogreen/central-trabalho"],
+  ["Implementação", "/todogreen/central-trabalho"],
   ["Acessos", "/todogreen/acessos"],
 ];
 

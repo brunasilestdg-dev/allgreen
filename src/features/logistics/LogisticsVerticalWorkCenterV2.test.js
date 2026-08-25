@@ -24,7 +24,7 @@ const item = {
   dependencies: [], relations: [], revision: 1,
 };
 
-describe("Central de Trabalho To Do Green", () => {
+describe("Central de Implantação To Do Green", () => {
   beforeEach(() => {
     vi.resetModules();
     localStorage.clear();
@@ -40,7 +40,7 @@ describe("Central de Trabalho To Do Green", () => {
     await import("./LogisticsVerticalWorkCenterV2.js");
     await waitFor(() => expect(document.querySelector("[data-tdg-work-center-root]")?.textContent).toContain("Novos Negócios"));
 
-    expect(document.body.textContent).toContain("Configurar quadro");
+    expect(document.body.textContent).toContain("Configurar fluxo");
     expect(document.body.textContent).toContain("Carga");
     expect(document.body.textContent).toContain("Mapa");
 

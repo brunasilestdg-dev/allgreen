@@ -21,6 +21,10 @@ const blocoDosModulos = fonte.slice(
   fonte.indexOf("const MODULE_IMPLEMENTATION"),
   fonte.indexOf("const fieldLabels"),
 );
+const blocoDaNavegacaoPrincipal = fonte.slice(
+  fonte.indexOf("const PRIMARY_NAVIGATION"),
+  fonte.indexOf("const MANAGEMENT_TOOLS"),
+);
 
 const modulos = [...blocoDosModulos.matchAll(/^ {2}"?([a-z-]+)"?: \{/gm)].map((m) => m[1]);
 const rotulos = [...blocoDosModulos.matchAll(/navLabel: "([^"]+)"/g)].map((m) => m[1]);
@@ -52,6 +56,28 @@ describe("rótulos da navegação da vertical", () => {
   it("a barra usa o rótulo declarado, não a primeira palavra do título", () => {
     expect(fonte).toContain("{item.navLabel}");
     expect(fonte).not.toContain('item.title.split(" ")[0]');
+  });
+});
+
+describe("propriedade das abas principais", () => {
+  it("nenhuma tela aparece em duas abas principais", () => {
+    const paginas = [...blocoDaNavegacaoPrincipal.matchAll(/pages: \[([^\]]*)\]/g)]
+      .flatMap((match) => [...match[1].matchAll(/"([^"]+)"/g)].map((page) => page[1]));
+
+    expect(paginas.length).toBeGreaterThan(0);
+    expect(new Set(paginas).size).toBe(paginas.length);
+  });
+
+  it("funções que tinham dono errado ficam em abas próprias", () => {
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "Cadastros"');
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "Ocorrências"');
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "Suprimentos"');
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "Documentos"');
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "Administração"');
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "Operação", route: "/todogreen/operacoes"');
+    expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Operação"[^\n]+ocorrencias/);
+    expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Documentos"[^\n]+relatorios/);
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"]');
   });
 });
 

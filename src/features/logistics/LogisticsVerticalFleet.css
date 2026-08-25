@@ -66,6 +66,26 @@
   background: var(--tdg-card);
 }
 
+.tdg-fleet-telemetry {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tdg-fleet-telemetry span {
+  background: #f5f9f7;
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  min-width: 0;
+  padding: 9px;
+}
+
+.tdg-fleet-telemetry strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .tdg-fleet-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -112,6 +132,10 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .tdg-fleet-telemetry {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tdg-fleet-card header {
     grid-column: 1 / -1;
   }
@@ -123,7 +147,8 @@
 
 @media (max-width: 560px) {
   .tdg-fleet-card,
-  .tdg-fleet-form {
+  .tdg-fleet-form,
+  .tdg-fleet-telemetry {
     grid-template-columns: 1fr;
   }
 

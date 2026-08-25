@@ -899,7 +899,280 @@
   padding: 10px 14px;
 }
 
+/* ===== Gestão de Motoristas/Frota ===== */
+.df-center {
+  display: grid;
+  gap: 16px;
+}
+
+.df-metrics,
+.df-command,
+.df-layout,
+.df-fleet-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.df-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.df-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.df-metric,
+.df-command article,
+.df-driver-card,
+.df-fleet-card,
+.df-readiness {
+  background: #f5f9f7;
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.df-metric {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.df-metric span,
+.df-metric small,
+.df-driver-card small,
+.df-fleet-card small,
+.df-driver-card dt {
+  color: var(--tdg-muted);
+}
+
+.df-metric strong {
+  color: var(--tdg-ink);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.df-metric.good {
+  border-color: color-mix(in srgb, #16a34a 35%, var(--tdg-line));
+}
+
+.df-metric.risk,
+.df-driver-card.risk,
+.df-fleet-card.risk {
+  border-color: color-mix(in srgb, #d97706 42%, var(--tdg-line));
+}
+
+.df-command {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.df-command article {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.df-command svg,
+.df-section-head svg {
+  color: var(--tdg-green);
+}
+
+.df-command span,
+.df-section-head span,
+.df-driver-card header span,
+.df-fleet-card header span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.df-command button {
+  background: #fff;
+  border: 1px solid var(--tdg-line);
+  border-radius: 9px;
+  color: var(--tdg-green);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.df-layout {
+  align-items: start;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr);
+}
+
+.df-section-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.df-section-head > div,
+.df-driver-card header,
+.df-fleet-card header,
+.df-readiness header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.df-driver-list,
+.df-fleet-list {
+  display: grid;
+  gap: 10px;
+}
+
+.df-driver-card,
+.df-fleet-card {
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+}
+
+.df-driver-card header b,
+.df-fleet-card header b {
+  background: var(--tdg-soft);
+  border-radius: 999px;
+  color: var(--tdg-green);
+  font-size: 11px;
+  margin-left: auto;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.df-driver-card.risk header b,
+.df-fleet-card.risk header b {
+  background: color-mix(in srgb, #d97706 14%, transparent);
+  color: #92400e;
+}
+
+.df-driver-card dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.df-driver-card dl div,
+.df-fleet-grid span {
+  background: #fff;
+  border: 1px solid #e2eee8;
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px;
+}
+
+.df-driver-card dd,
+.df-driver-card p {
+  margin: 0;
+}
+
+.df-driver-card dd,
+.df-fleet-grid strong {
+  font-weight: 850;
+}
+
+.df-driver-card p {
+  color: var(--tdg-ink);
+  font-size: 13px;
+}
+
+.df-fleet-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.df-fleet-card footer {
+  border-top: 1px solid var(--tdg-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 10px;
+}
+
+.df-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.df-alerts em {
+  background: color-mix(in srgb, #d97706 12%, transparent);
+  border-radius: 999px;
+  color: #92400e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 750;
+  padding: 6px 8px;
+}
+
+.df-readiness {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+}
+
+.df-readiness > div {
+  display: grid;
+  gap: 7px;
+}
+
+.df-readiness span {
+  align-items: flex-start;
+  color: var(--tdg-muted);
+  display: flex;
+  gap: 7px;
+  line-height: 1.45;
+}
+
+.df-readiness svg {
+  flex: 0 0 auto;
+}
+
 @media (max-width: 560px) {
   .tdg-table th,
   .tdg-table td { padding: 9px 10px; }
+}
+
+@media (max-width: 1080px) {
+  .df-metrics,
+  .df-command {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .df-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .df-metrics,
+  .df-command,
+  .df-fleet-grid,
+  .df-driver-card dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .df-command article {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .df-command button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .df-title-actions,
+  .df-title-actions button {
+    width: 100%;
+  }
 }

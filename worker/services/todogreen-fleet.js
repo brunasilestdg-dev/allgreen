@@ -23,6 +23,20 @@ const mapVehicle = (row) => ({
   fields: parse(row.fields_json, {}), revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at,
 });
 const num = (value) => Math.max(0, Number(value) || 0);
+const FIELD_KEYS = [
+  "currentDriver", "lastAddress", "speedKmh", "hourmeter", "batteryVoltage", "currentRoute",
+  "referencePoint", "geofence", "lastEvent", "movementState", "driverRfid", "journeyStatus",
+];
+const vehicleFields = (body = {}, previous = {}) => {
+  const fields = { ...(previous && typeof previous === "object" ? previous : {}), ...(body.fields && typeof body.fields === "object" ? body.fields : {}) };
+  for (const key of FIELD_KEYS) {
+    if (!(key in body)) continue;
+    fields[key] = ["speedKmh", "hourmeter", "batteryVoltage"].includes(key)
+      ? num(body[key])
+      : clean(body[key], key === "lastEvent" ? 500 : 160);
+  }
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== "" && value !== null && value !== undefined));
+};
 
 export async function handleTodoGreenFleet(request, env, access, user) {
   const url = new URL(request.url);
@@ -61,7 +75,7 @@ export async function handleTodoGreenFleet(request, env, access, user) {
         clean(body.category, 80), clean(body.energyType, 40) || "electric", clean(body.status, 40) || "available", clean(body.operationalUnit, 120), clean(body.costCenter, 120),
         num(body.payloadKg), num(body.volumeM3), num(body.palletCapacity), num(body.odometerKm), num(body.acquisitionValue), num(body.monthlyFixedCost), num(body.revenueAccumulated),
         num(body.costAccumulated), num(body.energyConsumptionKwhPerKm), num(body.emissionFactorKgCo2ePerKwh), num(body.batteryCapacityKwh), Math.min(100, num(body.batterySohPercent || 100)),
-        num(body.nominalRangeKm), num(body.realRangeKm), clean(body.nextMaintenanceAt, 20) || null, clean(body.nextDocumentDueAt, 20) || null, JSON.stringify(body.fields || {}), user.id, user.id, now, now).run();
+        num(body.nominalRangeKm), num(body.realRangeKm), clean(body.nextMaintenanceAt, 20) || null, clean(body.nextDocumentDueAt, 20) || null, JSON.stringify(vehicleFields(body)), user.id, user.id, now, now).run();
     const row = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ?").bind(id).first();
     return json({ vehicle: mapVehicle(row) }, 201);
   }
@@ -71,7 +85,7 @@ export async function handleTodoGreenFleet(request, env, access, user) {
     const current = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ? AND workspace_owner_id = ? AND archived_at IS NULL").bind(vehicleId, access.ownerId).first();
     if (!current) return json({ error: "Veículo não encontrado." }, 404);
     if (body.revision && Number(body.revision) !== Number(current.revision)) return json({ error: "Veículo alterado por outra pessoa. Recarregue.", code: "revision_conflict", current: mapVehicle(current) }, 409);
-    const before = mapVehicle(current); const next = { ...before, ...body, fields: body.fields || before.fields }; const now = new Date().toISOString();
+    const before = mapVehicle(current); const next = { ...before, ...body, fields: vehicleFields(body, before.fields) }; const now = new Date().toISOString();
     await env.DB.prepare(`UPDATE todogreen_fleet_vehicles SET prefix=?, plate=?, manufacturer=?, model=?, model_year=?, category=?, energy_type=?, status=?, operational_unit=?, cost_center=?, payload_kg=?, volume_m3=?, pallet_capacity=?, odometer_km=?, acquisition_value=?, monthly_fixed_cost=?, revenue_accumulated=?, cost_accumulated=?, energy_consumption_kwh_per_km=?, emission_factor_kgco2e_per_kwh=?, battery_capacity_kwh=?, battery_soh_percent=?, nominal_range_km=?, real_range_km=?, next_maintenance_at=?, next_document_due_at=?, fields_json=?, revision=revision+1, updated_by=?, updated_at=? WHERE id=? AND workspace_owner_id=? AND revision=?`)
       .bind(clean(next.prefix,50), clean(next.plate,20).toUpperCase(), clean(next.manufacturer,100), clean(next.model,100), Number(next.modelYear)||null, clean(next.category,80), clean(next.energyType,40), clean(next.status,40), clean(next.operationalUnit,120), clean(next.costCenter,120), num(next.payloadKg), num(next.volumeM3), num(next.palletCapacity), num(next.odometerKm), num(next.acquisitionValue), num(next.monthlyFixedCost), num(next.revenueAccumulated), num(next.costAccumulated), num(next.energyConsumptionKwhPerKm), num(next.emissionFactorKgCo2ePerKwh), num(next.batteryCapacityKwh), Math.min(100,num(next.batterySohPercent)), num(next.nominalRangeKm), num(next.realRangeKm), clean(next.nextMaintenanceAt,20)||null, clean(next.nextDocumentDueAt,20)||null, JSON.stringify(next.fields||{}), user.id, now, vehicleId, access.ownerId, current.revision).run();
     const row = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ?").bind(vehicleId).first();

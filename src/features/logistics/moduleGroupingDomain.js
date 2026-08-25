@@ -65,7 +65,7 @@ export const agruparModulosPorTela = (modulos = [], titulosPorTela = {}) => {
       // descreveria só uma parte dela.
       descricao: texto(base?.description),
       icone: base?.icon || "Boxes",
-      area: base?.area || "gestao",
+      area: base?.area || "administracao",
       order: base?.order ?? 999,
       assuntos,
       // Todos os ids que caem aqui: é o que permite dizer se a tela está

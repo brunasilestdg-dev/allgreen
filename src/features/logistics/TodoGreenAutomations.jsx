@@ -334,7 +334,7 @@ export default function TodoGreenAutomations({ setToast, onNavigate }) {
       )}
 
       <section className="tdg-automation-list">
-        <header><div><span className="tdg-kicker">REGRAS</span><h3>Automações configuradas</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/central-trabalho")}>Abrir Central de Trabalho <ArrowRight /></button></header>
+        <header><div><span className="tdg-kicker">REGRAS</span><h3>Automações configuradas</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/central-trabalho")}>Abrir Central de Implantação <ArrowRight /></button></header>
         {loading ? <p className="tdg-work-empty">Carregando automações...</p> : rules.length === 0 ? <p className="tdg-work-empty">Nenhuma automação criada. Use um atalho ou monte a primeira regra.</p> : <div>{rules.map((rule) => (
           <article className={rule.enabled ? "" : "paused"} key={rule.id}>
             <span className="tdg-automation-rule-icon"><Workflow /></span>

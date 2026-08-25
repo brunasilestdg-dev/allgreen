@@ -11,6 +11,7 @@ describe("roteador principal", () => {
 
   it("separa portal do cliente e vertical interna", () => {
     expect(resolvePrimaryRoute("/portal-cliente/operacoes", true).kind).toBe("customer-portal");
+    expect(resolvePrimaryRoute("/portal-motorista/rotas", true).kind).toBe("driver-fleet-portal");
     expect(resolvePrimaryRoute("/todogreen/precificacao", true).kind).toBe("todogreen");
   });
 

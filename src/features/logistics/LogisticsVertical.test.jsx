@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LogisticsVertical from "./LogisticsVertical.jsx";
 
@@ -176,6 +176,24 @@ describe("LogisticsVertical", () => {
     expect(screen.getByText("Middle Mile")).toBeTruthy();
     expect(screen.getByText("Operação a granel")).toBeTruthy();
     expect(screen.getAllByText("ESG").length).toBeGreaterThan(0);
+  });
+
+  it("alterna entre navegação por área e por funcionalidades sem duplicar a entrada principal", async () => {
+    await renderarAutorizada();
+
+    fireEvent.click(screen.getByRole("button", { name: "Funcionalidades" }));
+
+    expect(screen.queryByRole("navigation", { name: "Navegação To Do Green" })).toBeNull();
+    const funcionalidades = screen.getByRole("navigation", { name: "Navegação por funcionalidades" });
+    expect(within(funcionalidades).getAllByRole("button", { name: /Ocorrências/ })).toHaveLength(1);
+    expect(within(funcionalidades).getAllByRole("button", { name: /Precificação/ })).toHaveLength(1);
+
+    fireEvent.change(screen.getByLabelText("Buscar funcionalidades"), { target: { value: "ocorrência" } });
+    expect(within(funcionalidades).getAllByRole("button", { name: /Ocorrências/ })).toHaveLength(1);
+    expect(within(funcionalidades).queryByRole("button", { name: /Precificação/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Por área" }));
+    expect(screen.getByRole("navigation", { name: "Navegação To Do Green" })).toBeTruthy();
   });
 
   it("salva uma configuração de início diferente para cada colaborador", async () => {

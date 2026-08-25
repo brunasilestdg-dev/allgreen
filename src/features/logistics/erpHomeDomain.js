@@ -17,8 +17,11 @@ export const ERP_SHORTCUTS = Object.freeze([
   { id: "service-orders", label: "Ordens de serviço", route: "/todogreen/ordens-servico", area: "planning" },
   { id: "ciot", label: "CIOT", route: "/todogreen/ciot", area: "planning" },
   { id: "operations", label: "Operações", route: "/todogreen/operacoes", area: "operations" },
+  { id: "incidents", label: "Ocorrências", route: "/todogreen/ocorrencias", area: "incidents" },
+  { id: "driver-fleet-management", label: "Gestão operacional de frota", route: "/todogreen/motorista-frota", area: "operations" },
   { id: "tracking", label: "Rastreamento", route: "/todogreen/rastreamento", area: "operations" },
-  { id: "stock", label: "Estoque", route: "/todogreen/estoque", area: "operations" },
+  { id: "stock", label: "Estoque", route: "/todogreen/estoque", area: "supply" },
+  { id: "purchasing", label: "Compras", route: "/todogreen/compras", area: "supply" },
   { id: "billing", label: "Faturamento", route: "/todogreen/faturamento", area: "finance" },
   { id: "receivables", label: "Contas a receber", route: "/todogreen/receita", area: "finance" },
   { id: "costs", label: "Custos e margem", route: "/todogreen/custos", area: "finance" },
@@ -26,10 +29,10 @@ export const ERP_SHORTCUTS = Object.freeze([
   { id: "goals", label: "Metas", route: "/todogreen/metas", area: "hr" },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", area: "marketing" },
   { id: "esg", label: "Central ESG", route: "/todogreen/central-esg", area: "esg" },
-  { id: "documents", label: "Documentos e evidências", route: "/todogreen/documentos", area: "esg" },
+  { id: "documents", label: "Documentos e evidências", route: "/todogreen/documentos", area: "documents" },
   { id: "workspace", label: "Espaço de trabalho", route: "/todogreen/espaco", area: "management" },
-  { id: "projects", label: "Projetos", route: "/todogreen/central-trabalho", area: "management" },
-  { id: "reports", label: "Relatórios", route: "/todogreen/relatorios", area: "management" },
+  { id: "implementation", label: "Implantação", route: "/todogreen/central-trabalho", area: "management" },
+  { id: "reports", label: "Relatórios", route: "/todogreen/relatorios", area: "indicators" },
 ]);
 
 export const ERP_HOME_AREAS = Object.freeze([
@@ -69,13 +72,35 @@ export const ERP_HOME_AREAS = Object.freeze([
   {
     id: "operations", label: "Operações", functionLabel: "Execução Operacional",
     metrics: ["operations", "trips", "occupancy", "deliveries"],
-    shortcuts: ["operations", "tracking", "service-orders", "stock", "ciot"],
+    shortcuts: ["operations", "driver-fleet-management", "tracking", "service-orders"],
     responsibilities: [
       "Executar a operação conforme OS, SLA e janela contratada.",
       "Registrar ocorrências, evidências e marcos da viagem no mesmo fluxo.",
-      "Controlar frota, capacidade, estoque e rastreamento da execução.",
+      "Controlar frota, capacidade e rastreamento da execução.",
     ],
-    routeTerms: ["operacoes", "rastreamento", "estoque", "ordens-servico"],
+    routeTerms: ["operacoes", "rastreamento", "ordens-servico"],
+  },
+  {
+    id: "incidents", label: "Ocorrências", functionLabel: "Ocorrências e Qualidade Operacional",
+    metrics: ["operations", "trips", "tasks", "occupancy"],
+    shortcuts: ["incidents", "operations", "tracking", "reports"],
+    responsibilities: [
+      "Tratar atrasos, insucessos, reentregas, avarias e documentos pendentes.",
+      "Registrar histórico vinculado à operação, sem abrir cadastro paralelo.",
+      "Separar causa, responsável, ação corretiva e evidência de encerramento.",
+    ],
+    routeTerms: ["ocorrencias", "operacoes", "rastreamento", "relatorios"],
+  },
+  {
+    id: "supply", label: "Suprimentos", functionLabel: "Suprimentos e Estoque",
+    metrics: ["tasks", "cost", "operations", "billing"],
+    shortcuts: ["stock", "purchasing", "reports", "costs"],
+    responsibilities: [
+      "Manter estoque, entradas, saídas, requisições e recebimentos.",
+      "Controlar compras e fornecedores sem misturar execução operacional.",
+      "Conectar custo e centro de custo ao financeiro quando aplicável.",
+    ],
+    routeTerms: ["estoque", "compras", "cadastros", "custos"],
   },
   {
     id: "finance", label: "Financeiro", functionLabel: "Financeiro e Faturamento",
@@ -91,7 +116,7 @@ export const ERP_HOME_AREAS = Object.freeze([
   {
     id: "hr", label: "DP/RH", functionLabel: "Pessoas e Escalas",
     metrics: ["tasks", "operations", "trips", "goals"],
-    shortcuts: ["people", "goals", "planning", "operations", "projects"],
+    shortcuts: ["people", "goals", "planning", "operations", "implementation"],
     responsibilities: [
       "Manter motoristas, documentos, disponibilidade e escalas atualizados.",
       "Acompanhar metas, treinamento e capacidade humana da operação.",
@@ -102,7 +127,7 @@ export const ERP_HOME_AREAS = Object.freeze([
   {
     id: "marketing", label: "Marketing", functionLabel: "Marketing e Marca",
     metrics: ["clients", "opportunities", "impact", "tasks"],
-    shortcuts: ["marketing", "clients", "documents", "reports", "projects"],
+    shortcuts: ["marketing", "clients", "documents", "reports", "implementation"],
     responsibilities: [
       "Transformar provas operacionais e ESG em materiais verificáveis.",
       "Apoiar campanhas por segmento, produto e estágio da conta.",
@@ -124,7 +149,7 @@ export const ERP_HOME_AREAS = Object.freeze([
   {
     id: "management", label: "Gestão", functionLabel: "Gestão do ERP",
     metrics: ["revenue", "margin", "operations", "tasks"],
-    shortcuts: ["workspace", "projects", "reports", "goals", "deal-desk"],
+    shortcuts: ["workspace", "implementation", "reports", "goals", "deal-desk"],
     responsibilities: [
       "Priorizar decisões e remover bloqueios entre áreas.",
       "Acompanhar resultado, capacidade, risco e execução do plano.",

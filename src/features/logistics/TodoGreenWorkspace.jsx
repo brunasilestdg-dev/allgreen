@@ -100,7 +100,7 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
     ["Operações", "Rotas, viagens, entregas e ocorrências", "/todogreen/operacoes"],
     ["ESG", "Green Score, emissões, método e evidências", "/todogreen/central-esg"],
     ["Relatórios", "Leitura executiva comercial, operacional e ambiental", "/todogreen/relatorios"],
-    ["Central de trabalho", "Projetos, tarefas, quadros e execução", "/todogreen/central-trabalho"],
+    ["Central de implementação", "Implantações, projetos, tarefas, marcos e dependências", "/todogreen/central-trabalho"],
   ];
 
   return (
@@ -136,7 +136,7 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
               {summary.openCases > 0 ? ` · ${summary.openCases} caso(s) em andamento` : ""}
             </span>
           </div>
-          <button type="button" onClick={() => onNavigate("/todogreen/central-trabalho")}>Abrir trabalho</button>
+          <button type="button" onClick={() => onNavigate("/todogreen/central-trabalho")}>Abrir implementação</button>
         </section>
       )}
 
@@ -169,7 +169,7 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
           </div>
         </div>
         {clients.length === 0 && opportunities.length === 0 && (
-          <p className="tdg-space-empty">Cadastre um cliente ou uma oportunidade para criar conhecimento conectado ao CRM.</p>
+          <p className="tdg-space-empty">Cadastre um cliente ou uma oportunidade para criar conhecimento conectado à carteira do ERP.</p>
         )}
       </section>
 

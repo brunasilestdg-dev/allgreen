@@ -6,7 +6,7 @@
 //
 //   1) contexto real     — a carteira de quem está perguntando, sempre pelo
 //                          mesmo recorte que o resto da vertical usa
-//   2) consulta ao CRM   — ferramentas de leitura que ela escolhe e o servidor
+//   2) consulta ao ERP   — ferramentas de leitura que ela escolhe e o servidor
 //                          executa, com os dados voltando para a segunda volta
 //   3) poder de ação     — criar tarefa, definir próxima ação, disparar
 //                          pesquisa da empresa
@@ -52,7 +52,7 @@ export const FERRAMENTAS = Object.freeze({
   cliente: "abre uma conta inteira: dados cadastrais, potencial de carteira, Account Plan, qualificação, contatos com cargo/e-mail/telefone/LinkedIn, responsáveis comerciais e próxima ação. Requer {\"cliente\":\"nome ou id\"}.",
   contatos: "procura pessoas em toda a carteira por cargo, área ou nome. Requer {\"termo\":\"compras\"}.",
   inteligencia: "devolve a pesquisa externa já feita de uma conta: site oficial, LinkedIn, portais de fornecedor, RFQs, sinais ESG e notícias, com as fontes. Requer {\"cliente\":\"nome ou id\"}.",
-  tarefas: "lista as tarefas abertas da Central de Trabalho, com responsável, prazo e situação.",
+  tarefas: "lista as tarefas abertas da Central de Implantação, com responsável, prazo e situação.",
   financeiro: "analisa lançamentos, saldo aberto, vencimentos e baixas de receita, custo ou comissão. Aceita {\"tipo\":\"revenue|cost|commission\"} e {\"cliente\":\"nome ou id\"}.",
   operacoes: "lista execução real, SLA, prazo prometido, ETA, entrega, frota, distância e ocorrências. Aceita {\"cliente\":\"nome ou id\"}.",
   contratos: "consulta assinatura, vigência, renovação, aviso e valores dos contratos. Aceita {\"cliente\":\"nome ou id\"}.",
@@ -61,12 +61,12 @@ export const FERRAMENTAS = Object.freeze({
 });
 
 export const ACOES = Object.freeze({
-  criar_tarefa: "cria uma tarefa na Central de Trabalho. Campos: titulo (obrigatório), descricao, cliente, responsavel (nome ou e-mail; se omitido vai para o vendedor da conta), prazo (AAAA-MM-DD), prioridade (baixa|media|alta|critica).",
+  criar_tarefa: "cria uma tarefa na Central de Implantação. Campos: titulo (obrigatório), descricao, cliente, responsavel (nome ou e-mail; se omitido vai para o vendedor da conta), prazo (AAAA-MM-DD), prioridade (baixa|media|alta|critica).",
   definir_proxima_acao: "grava a próxima ação de uma conta. Campos: cliente (obrigatório), acao (obrigatório), prazo (AAAA-MM-DD).",
   pesquisar_empresa: "dispara a pesquisa externa de uma conta na web. Campo: cliente (obrigatório).",
 });
 
-export const INSTRUCAO = `Você é o Plantû, assistente operacional do ERP To Do Green. Você cruza CRM, propostas, contratos, preço, frota, financeiro, execução logística, notícias, RFQs e ESG, sempre dentro das permissões da pessoa.
+export const INSTRUCAO = `Você é o Plantû, assistente operacional do ERP To Do Green. Você cruza carteira comercial, propostas, contratos, preço, frota, financeiro, execução logística, notícias, RFQs e ESG, sempre dentro das permissões da pessoa.
 
 QUEM É A TO DO GREEN
 Transportadora brasileira de logística sustentável, com frota elétrica própria. Vende operação de transporte para embarcadores — varejo, e-commerce, indústria, alimentos, farmacêutico — e o argumento não é só preço: é preço competitivo COM redução comprovada de emissões na cadeia do cliente. Quem compra costuma ter meta pública de descarbonização e precisa de fornecedor que entregue evidência auditável, não promessa.
@@ -97,7 +97,7 @@ Você responde sobre a carteira de quem está perguntando, e só sobre ela. Nunc
 
 Se faltar dado para concluir, diga qual falta. Nunca estime, complete ou suponha número, nome, cargo, telefone ou e-mail. Um dado inventado sobre a carteira de um cliente vale menos que dizer "não sei". Saber a diferença entre medição e estimativa é o que a To Do Green vende — você não pode ser a parte do produto que inventa.
 
-Você trabalha DENTRO do CRM da To Do Green. Nunca recomende planilha, Google Sheets, HubSpot ou qualquer ferramenta externa: os dados vivem aqui. Se algo não está cadastrado, diga em qual tela da To Do Green cadastrar (Clientes, Oportunidades, Central de Trabalho) — ou proponha uma das suas ações. Nunca mencione outro negócio que não seja a To Do Green e as contas desta carteira.
+Você trabalha DENTRO do ERP da To Do Green. Nunca recomende planilha, Google Sheets, HubSpot ou qualquer ferramenta externa: os dados vivem aqui. Se algo não está cadastrado, diga em qual tela da To Do Green cadastrar (Clientes, Oportunidades, Central de Implantação) ou proponha uma das suas ações. Nunca mencione outro negócio que não seja a To Do Green e as contas desta carteira.
 
 Responda em português do Brasil, direto, sem repetir a pergunta e sem se apresentar de novo. Prefira a frase curta com o número certo à explicação longa.
 
@@ -487,7 +487,7 @@ export async function executarAcao(env, { access, user, email, acao, linhas }) {
   const agora = new Date().toISOString();
 
   if (tipo === "criar_tarefa") {
-    if (!podeEscrever(access)) return { erro: "Seu papel não cria itens na Central de Trabalho.", status: 403 };
+    if (!podeEscrever(access)) return { erro: "Seu papel não cria itens na Central de Implantação.", status: 403 };
     const titulo = clean(acao?.titulo, 240);
     if (titulo.length < 3) return { erro: "A tarefa precisa de um título.", status: 400 };
     const quadro = await env.DB.prepare(
@@ -495,7 +495,7 @@ export async function executarAcao(env, { access, user, email, acao, linhas }) {
         WHERE workspace_owner_id=? AND status='active' ORDER BY display_order LIMIT 1`,
     ).bind(access.ownerId).first();
     if (!quadro)
-      return { erro: "Não há quadro ativo na Central de Trabalho para receber a tarefa.", status: 409 };
+      return { erro: "Não há fluxo ativo na Central de Implantação para receber a tarefa.", status: 409 };
 
     // A tarefa vai para o dono da conta na carteira, não para quem pediu.
     // Antes ela era sempre atribuída a quem falou com a Semente — e o

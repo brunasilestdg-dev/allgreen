@@ -30,8 +30,9 @@ const HELP_LINKS = [
   { icon: Gauge, title: "Precificação", text: "Custos, margens e preços recomendados.", route: "/todogreen/precificacao" },
   { icon: FileCheck2, title: "Propostas", text: "Condições comerciais e contratos.", route: "/todogreen/propostas" },
   { icon: Route, title: "Operação", text: "Rotas, viagens, frota, entregas e ocorrências.", route: "/todogreen/operacoes" },
+  { icon: Route, title: "Gestão operacional de frota", text: "Jornada, veículo, telemetria disponível e alertas.", route: "/todogreen/motorista-frota" },
   { icon: Leaf, title: "ESG", text: "CO₂ evitado, Green Score, método e evidências.", route: "/todogreen/central-esg" },
-  { icon: Workflow, title: "Central de trabalho", text: "Projetos, tarefas, quadros e automações.", route: "/todogreen/central-trabalho" },
+  { icon: Workflow, title: "Central de implementação", text: "Implantações, projetos, tarefas, marcos, dependências e automações.", route: "/todogreen/central-trabalho" },
 ];
 
 function Playbook({ onNavigate }) {
@@ -53,7 +54,7 @@ function Help({ onNavigate }) {
     <section className="tdg-help-answers">
       <details><summary>Onde vejo notícias, RFQs e portais de fornecedores?</summary><p>Em Espaço, abra Notícias e inteligência. Os itens vêm das pesquisas realizadas nas contas e sempre mantêm o link da fonte.</p></details>
       <details><summary>Onde ficam os contatos?</summary><p>O Espaço mostra uma agenda rápida. O cadastro completo, mapa de relacionamento, histórico e atualização de contatos continuam em Clientes.</p></details>
-      <details><summary>Onde crio tarefas e automações?</summary><p>A Central de trabalho concentra projetos e tarefas. No Espaço, a aba Automações permite criar, ativar, pausar e acompanhar regras.</p></details>
+      <details><summary>Onde acompanho implantações, tarefas e automações?</summary><p>A Central de implementação concentra implantações de clientes, projetos, tarefas, marcos e dependências. No Espaço, a aba Automações permite criar, ativar, pausar e acompanhar regras.</p></details>
       <details><summary>Como encontro uma rotina que não aparece no menu?</summary><p>Use Buscar ferramenta no topo da To Do Green. A busca inclui as rotinas do ERP sem lotar o menu principal.</p></details>
     </section>
     <button type="button" className="tdg-help-search" onClick={() => onNavigate?.("/todogreen/dashboard?ferramentas=1")}><Search size={16} />Buscar todas as ferramentas</button>

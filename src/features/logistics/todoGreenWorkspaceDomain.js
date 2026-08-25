@@ -14,17 +14,17 @@ export const TODO_GREEN_WORKSPACE_TOOLS = Object.freeze([
   {
     id: "contatos",
     label: "Contatos",
-    description: "Decisores e canais já registrados no CRM da To Do Green.",
+    description: "Decisores e canais já registrados na carteira comercial da To Do Green.",
   },
   {
     id: "notas",
     label: "Notas conectadas",
-    description: "Cadernos, diário, backlinks, grafo e notas ligadas ao CRM.",
+    description: "Cadernos, diário, backlinks, grafo e notas ligadas à carteira do ERP.",
   },
   {
     id: "paginas",
     label: "Páginas e documentos",
-    description: "Editor em blocos, arquivos, versões e páginas ligadas ao CRM.",
+    description: "Editor em blocos, arquivos, versões e páginas ligadas à carteira do ERP.",
   },
   {
     id: "automacoes",
