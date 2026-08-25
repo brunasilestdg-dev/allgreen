@@ -73,7 +73,18 @@ export default function WorkViews({ setToast, profiles = [] }) {
       setBoards(dados.boards || []);
       const board = alvo || dados.boards?.[0]?.id || "";
       setBoardId(board);
-      setItens((dados.items || []).filter((i) => !i.parentItemId || board));
+      // Normaliza para o formato que as visões esperam: o Work Center unificado
+      // guarda grupo, início, marco e recorrência dentro de `fields`. Subir para
+      // o topo faz Gantt, Timeline, Calendário e Workload funcionarem sem tocar
+      // no resto do componente nem no domínio.
+      const itensNorm = (dados.items || []).map((i) => ({
+        ...i,
+        groupId: i.groupId || i.fields?.groupId || "",
+        parentItemId: i.parentItemId || i.fields?.parentId || "",
+        startDate: i.startDate || i.fields?.startDate || "",
+        isMilestone: i.isMilestone ?? i.fields?.milestone ?? false,
+      }));
+      setItens(itensNorm.filter((i) => !i.parentItemId));
       if (board) setGrupos(await carregarGrupos(board));
       setOcupado("");
     } catch (motivo) {
