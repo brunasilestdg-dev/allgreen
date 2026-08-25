@@ -9,7 +9,7 @@ import {
   summarizeTodoGreenDashboard,
 } from "../../src/features/logistics/logisticsVerticalDomain.js";
 import { parametrosResolvidos } from "./todogreen-pricing-parameters.js";
-import { resolveTodoGreenAccess } from "./todogreen-access.js";
+import { podeNaVertical, resolveTodoGreenAccess } from "./todogreen-access.js";
 import { handleTodoGreenGoals } from "./todogreen-goals.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { routeTodoGreenApi } from "./todogreen-router.js";
@@ -37,6 +37,23 @@ async function resolveCoreAccess(env, user, ownerId) {
 }
 
 const canManage = (access) => ["owner", "admin"].includes(access?.role) || access?.permissions?.includes("*");
+const canAny = (access, permissions = []) => canManage(access) || permissions.some((permission) => podeNaVertical(access, permission));
+
+const MASTER_PERMISSIONS = Object.freeze({
+  "company-profiles": ["fiscal:manage", "finance:manage"],
+  "company-documents": ["fiscal:manage", "finance:manage"],
+  employees: ["hr:manage"],
+  "employee-documents": ["hr:manage"],
+  drivers: ["hr:manage", "operations:manage", "operation:manage", "fleet:manage"],
+  "driver-documents": ["hr:manage", "operations:manage", "operation:manage", "fleet:manage"],
+  "operational-units": ["operations:manage", "operation:manage", "planning:manage"],
+  routes: ["operations:manage", "operation:manage", "planning:manage", "product:manage"],
+  "price-tables": ["pricing:manage", "proposal:manage", "finance:manage"],
+  "price-rows": ["pricing:manage", "proposal:manage", "finance:manage"],
+  "bank-accounts": ["finance:manage", "hr:manage"],
+  "implementation-projects": ["operations:manage", "operation:manage", "planning:manage", "product:manage"],
+  "implementation-gates": ["operations:manage", "operation:manage", "planning:manage", "product:manage"],
+});
 
 async function seedCatalog(env) {
   const now = new Date().toISOString();
@@ -67,21 +84,10 @@ async function seedCatalog(env) {
         version=excluded.version,permissions_json=excluded.permissions_json,
         settings_json=excluded.settings_json,display_order=excluded.display_order,updated_at=excluded.updated_at`,
     ).bind(
-      item.id,
-      item.name,
-      item.description,
-      item.icon,
-      item.category,
-      item.route,
-      item.status,
-      item.version,
-      JSON.stringify(item.dependencies || []),
-      JSON.stringify(item.permissions || []),
-      JSON.stringify(item.settings || {}),
-      item.availability,
-      item.exclusiveTenant || TODO_GREEN_TENANT.id,
-      item.order,
-      now,
+      item.id, item.name, item.description, item.icon, item.category, item.route,
+      item.status, item.version, JSON.stringify(item.dependencies || []),
+      JSON.stringify(item.permissions || []), JSON.stringify(item.settings || {}),
+      item.availability, item.exclusiveTenant || TODO_GREEN_TENANT.id, item.order, now,
     ));
     statements.push(env.DB.prepare(
       `INSERT INTO tenant_modules (tenant_id,module_id,status,settings_json,enabled_at)
@@ -102,22 +108,11 @@ async function seedCatalog(env) {
         pricing_rules_json=excluded.pricing_rules_json,approval_rules_json=excluded.approval_rules_json,
         indicators_json=excluded.indicators_json,status=excluded.status,version=excluded.version,updated_at=excluded.updated_at`,
     ).bind(
-      item.id,
-      TODO_GREEN_TENANT.id,
-      item.code,
-      item.name,
-      item.modality,
-      item.billingUnit,
-      item.description,
-      JSON.stringify(item.requiredFields || []),
-      JSON.stringify(item.optionalFields || []),
-      JSON.stringify(item.pricingRules || {}),
-      JSON.stringify(item.approvalRules || {}),
+      item.id, TODO_GREEN_TENANT.id, item.code, item.name, item.modality, item.billingUnit,
+      item.description, JSON.stringify(item.requiredFields || []), JSON.stringify(item.optionalFields || []),
+      JSON.stringify(item.pricingRules || {}), JSON.stringify(item.approvalRules || {}),
       JSON.stringify({ operational:item.operationalIndicators || [], environmental:item.environmentalIndicators || [] }),
-      item.status,
-      item.version,
-      now,
-      now,
+      item.status, item.version, now, now,
     ));
   }
   if (statements.length) await env.DB.batch(statements);
@@ -137,20 +132,20 @@ const masterCompanyProfile = async (env, access) => {
       ORDER BY kind,expires_at`,
   ).bind(TODO_GREEN_TENANT.id, access.ownerId, row.id).all().catch(() => ({ results: [] }));
   return {
-    id: row.id,
-    legalName: row.legal_name,
-    tradeName: row.trade_name,
-    document: row.document,
-    stateRegistration: row.state_registration,
-    cityRegistration: row.city_registration,
-    rntrc: row.rntrc,
-    rntrcCategory: row.rntrc_category,
-    rntrcStatus: row.rntrc_status,
-    rntrcCheckedAt: row.rntrc_checked_at || "",
-    address: parse(row.address_json, {}),
-    status: row.status,
-    documents: documents.results || [],
-    revision: row.revision,
+    id:row.id,
+    legalName:row.legal_name,
+    tradeName:row.trade_name,
+    document:row.document,
+    stateRegistration:row.state_registration,
+    cityRegistration:row.city_registration,
+    rntrc:row.rntrc,
+    rntrcCategory:row.rntrc_category,
+    rntrcStatus:row.rntrc_status,
+    rntrcCheckedAt:row.rntrc_checked_at || "",
+    address:parse(row.address_json, {}),
+    status:row.status,
+    documents:documents.results || [],
+    revision:row.revision,
   };
 };
 
@@ -171,8 +166,7 @@ async function handleTransactionsWithControls(request, env, access, user) {
       ).bind(id, TODO_GREEN_TENANT.id, access.ownerId).first();
       if (order) {
         const rules = parse(order.billing_rules_json, {}) || {};
-        const podRequired = rules.podRequired !== false;
-        if (podRequired) {
+        if (rules.podRequired !== false) {
           const pod = await env.DB.prepare(
             `SELECT id FROM todogreen_proofs_of_delivery
               WHERE tenant_id=? AND workspace_owner_id=? AND service_order_id=?
@@ -180,9 +174,9 @@ async function handleTransactionsWithControls(request, env, access, user) {
           ).bind(TODO_GREEN_TENANT.id, access.ownerId, id).first();
           if (!pod) {
             return response({
-              error: "A OS não pode ser concluída para faturamento sem POD. Registre a evidência de entrega antes de concluir.",
-              code: "pod_required",
-            }, 409);
+              error:"A OS não pode ser concluída para faturamento sem POD. Registre a evidência de entrega antes de concluir.",
+              code:"pod_required",
+            },409);
           }
         }
       }
@@ -190,14 +184,10 @@ async function handleTransactionsWithControls(request, env, access, user) {
   }
 
   const original = await handleTodoGreenTransactions(request, env, access, user);
-
   if (resource === "ciot-integration" && request.method === "GET" && original?.ok) {
     const payload = await original.clone().json().catch(() => null);
     if (payload && typeof payload === "object") {
-      return response({
-        ...payload,
-        regulatoryProfile: await masterCompanyProfile(env, access),
-      }, original.status);
+      return response({ ...payload, regulatoryProfile:await masterCompanyProfile(env, access) }, original.status);
     }
   }
   return original;
@@ -206,57 +196,46 @@ async function handleTransactionsWithControls(request, env, access, user) {
 export async function handleTodoGreenCore(request, env, user, url, dependencies = {}) {
   const requestedOwnerId = url.searchParams.get("owner");
   const access = await resolveCoreAccess(env, user, requestedOwnerId);
-  if (!access) return response({ error: "Você não tem acesso à To Do Green." }, 403);
+  if (!access) return response({ error:"Você não tem acesso à To Do Green." },403);
 
   const path = url.pathname;
   const resource = path.split("/").filter(Boolean)[2] || "access";
 
-  // A espinha transacional passa primeiro pelos gates do ERP. O serviço original
-  // continua sendo a fonte da operação; aqui entram apenas os bloqueios que
-  // precisam acontecer antes do handler, como POD obrigatório.
   if (path.startsWith("/api/todogreen/transactions"))
     return handleTransactionsWithControls(request, env, access, user);
 
-  // Cadastros mestres vazios: a estrutura existe antes dos dados reais.
-  if (path.startsWith("/api/todogreen/master-data"))
+  if (path.startsWith("/api/todogreen/master-data")) {
+    const masterResource = path.replace(/^\/api\/todogreen\/master-data\/?/, "").split("/").filter(Boolean)[0] || "";
+    const required = MASTER_PERMISSIONS[masterResource] || [];
+    if (required.length && !canAny(access, required))
+      return response({ error:"Seu papel não pode acessar este cadastro." },403);
     return handleTodoGreenMasterData(request, env, access, user);
+  }
 
-  // Os serviços especializados já existiam, mas não estavam ligados à porta
-  // principal usada por worker.js. A partir daqui eles passam a responder.
   const routed = await routeTodoGreenApi(request, env);
   if (routed) return routed;
 
   if (resource === "goals") return handleTodoGreenGoals(request, env, user, access, url);
 
   if (request.method === "GET" && resource === "access") {
-    return response({
-      tenant: TODO_GREEN_TENANT,
-      role: access.role,
-      permissions: access.permissions,
-      ownerId: access.ownerId,
-      source: access.source,
-    });
+    return response({ tenant:TODO_GREEN_TENANT, role:access.role, permissions:access.permissions, ownerId:access.ownerId, source:access.source });
   }
 
   if (resource === "access-list") {
-    if (!canManage(access)) return response({ error: "Você não pode gerenciar acessos da To Do Green." }, 403);
+    if (!canManage(access)) return response({ error:"Você não pode gerenciar acessos da To Do Green." },403);
     await seedCatalog(env);
-
     if (request.method === "GET") {
       const rows = await env.DB.prepare(
         `SELECT email,role,status,note,expires_at AS expiresAt,revoked_at AS revokedAt,
                 last_access_at AS lastAccessAt,created_at AS createdAt,updated_at AS updatedAt
-           FROM todogreen_access_emails
-          WHERE tenant_id=? ORDER BY status='active' DESC,email`,
+           FROM todogreen_access_emails WHERE tenant_id=? ORDER BY status='active' DESC,email`,
       ).bind(TODO_GREEN_TENANT.id).all();
-      return response({ emails: rows.results || [] });
+      return response({ emails:rows.results || [] });
     }
-
     if (request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const normalized = email(body.email);
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized))
-        return response({ error: "Informe um e-mail válido." }, 400);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return response({ error:"Informe um e-mail válido." },400);
       const role = TODO_GREEN_ROLES.includes(body.role) ? body.role : "auditor";
       const permissions = Array.isArray(body.permissions)
         ? body.permissions.map((item) => String(item).slice(0,80)).slice(0,30)
@@ -264,65 +243,40 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       const now = new Date().toISOString();
       const expiresAt = String(body.expiresAt || "").trim().slice(0,40) || null;
       if (expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now()))
-        return response({ error: "A validade do acesso precisa estar no futuro." }, 400);
-
+        return response({ error:"A validade do acesso precisa estar no futuro." },400);
       await env.DB.prepare(
         `INSERT INTO todogreen_access_emails
          (id,tenant_id,email,role,status,permissions_json,note,expires_at,revoked_at,created_by,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?)
-         ON CONFLICT(tenant_id,email) DO UPDATE SET
+         VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?) ON CONFLICT(tenant_id,email) DO UPDATE SET
           role=excluded.role,status=excluded.status,permissions_json=excluded.permissions_json,
           note=excluded.note,expires_at=excluded.expires_at,revoked_at=NULL,updated_at=excluded.updated_at`,
       ).bind(
-        crypto.randomUUID(),
-        TODO_GREEN_TENANT.id,
-        normalized,
-        role,
-        body.status === "inactive" ? "inactive" : "active",
-        JSON.stringify(permissions),
-        String(body.note || "").trim().slice(0,240),
-        expiresAt,
-        user.id,
-        now,
-        now,
+        crypto.randomUUID(), TODO_GREEN_TENANT.id, normalized, role,
+        body.status === "inactive" ? "inactive" : "active", JSON.stringify(permissions),
+        String(body.note || "").trim().slice(0,240), expiresAt, user.id, now, now,
       ).run();
-
-      if (dependencies.audit) {
-        await dependencies.audit(env, access.ownerId, user, "todogreen_acesso_autorizado", normalized, `papel: ${role}`);
-      }
+      if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_acesso_autorizado",normalized,`papel: ${role}`);
       await registrarAuditoriaTodoGreen(env, {
-        access,
-        user,
-        action: "authorized",
-        resourceType: "access",
-        resourceId: normalized,
-        after: { email:normalized, role, status:body.status === "inactive" ? "inactive" : "active", expiresAt },
+        access,user,action:"authorized",resourceType:"access",resourceId:normalized,
+        after:{ email:normalized, role, status:body.status === "inactive" ? "inactive" : "active", expiresAt },
       });
-      return response({ ok:true, email:normalized, role, status:body.status === "inactive" ? "inactive" : "active", permissions, expiresAt }, 201);
+      return response({ ok:true,email:normalized,role,status:body.status === "inactive" ? "inactive" : "active",permissions,expiresAt },201);
     }
-
     if (request.method === "DELETE") {
       const normalized = email(url.searchParams.get("email"));
       if (!normalized) return response({ error:"Informe o e-mail." },400);
       const current = await env.DB.prepare(
         `SELECT email,role,status,note,expires_at AS expiresAt,last_access_at AS lastAccessAt
            FROM todogreen_access_emails WHERE tenant_id=? AND email=?`,
-      ).bind(TODO_GREEN_TENANT.id, normalized).first();
+      ).bind(TODO_GREEN_TENANT.id,normalized).first();
       const now = new Date().toISOString();
       await env.DB.prepare(
         "UPDATE todogreen_access_emails SET status='inactive',revoked_at=?,updated_at=? WHERE tenant_id=? AND email=?",
-      ).bind(now, now, TODO_GREEN_TENANT.id, normalized).run();
-      if (dependencies.audit) {
-        await dependencies.audit(env, access.ownerId, user, "todogreen_acesso_removido", normalized, "");
-      }
+      ).bind(now,now,TODO_GREEN_TENANT.id,normalized).run();
+      if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_acesso_removido",normalized,"");
       await registrarAuditoriaTodoGreen(env, {
-        access,
-        user,
-        action: "revoked",
-        resourceType: "access",
-        resourceId: normalized,
-        before: current || {},
-        after: { ...(current || {}), status:"inactive", revokedAt:now },
+        access,user,action:"revoked",resourceType:"access",resourceId:normalized,
+        before:current || {},after:{ ...(current || {}),status:"inactive",revokedAt:now },
       });
       return response({ ok:true });
     }
@@ -330,25 +284,18 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
   }
 
   if (["catalog","dashboard","products"].includes(resource)) await seedCatalog(env);
-
   if (request.method === "GET" && resource === "catalog")
-    return response({ tenant:TODO_GREEN_TENANT, modules:TODO_GREEN_MODULE_CATALOG, products:LOGISTICS_PRODUCTS, access });
-
-  if (request.method === "GET" && resource === "products")
-    return response({ products:LOGISTICS_PRODUCTS });
+    return response({ tenant:TODO_GREEN_TENANT,modules:TODO_GREEN_MODULE_CATALOG,products:LOGISTICS_PRODUCTS,access });
+  if (request.method === "GET" && resource === "products") return response({ products:LOGISTICS_PRODUCTS });
 
   if (request.method === "GET" && resource === "dashboard") {
     const rows = await env.DB.prepare(
       `SELECT id,product_id,client_id,result_json,status,created_at FROM pricing_scenarios
        WHERE tenant_id=? AND workspace_owner_id=? ORDER BY created_at DESC LIMIT 200`,
-    ).bind(TODO_GREEN_TENANT.id, access.ownerId).all().catch(() => ({ results:[] }));
+    ).bind(TODO_GREEN_TENANT.id,access.ownerId).all().catch(() => ({ results:[] }));
     const pricingScenarios = (rows.results || []).map((row) => ({
-      id:row.id,
-      productId:row.product_id,
-      clientId:row.client_id,
-      status:row.status,
-      result:parse(row.result_json,{}),
-      createdAt:row.created_at,
+      id:row.id,productId:row.product_id,clientId:row.client_id,status:row.status,
+      result:parse(row.result_json,{}),createdAt:row.created_at,
     }));
     return response({ summary:summarizeTodoGreenDashboard({ pricingScenarios }) });
   }
@@ -360,33 +307,20 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
     let scenario;
     try {
       const product = LOGISTICS_PRODUCTS.find((item) => item.id === productId);
-      const resolved = await parametrosResolvidos(env, access.ownerId, {
-        productId,
-        modality:inputs.modality || product?.modality,
-        vehicleType:inputs.vehicleType,
-        region:inputs.region || inputs.city,
-        clientId:body.clientId || inputs.clientId,
-        contractId:inputs.contractId,
+      const resolved = await parametrosResolvidos(env,access.ownerId,{
+        productId,modality:inputs.modality || product?.modality,vehicleType:inputs.vehicleType,
+        region:inputs.region || inputs.city,clientId:body.clientId || inputs.clientId,contractId:inputs.contractId,
       });
-      scenario = createPricingScenarioSnapshot(
-        productId,
-        inputs,
-        {
-          tenantId:TODO_GREEN_TENANT.id,
-          userId:user.id,
-          clientId:body.clientId || "",
-          opportunityId:body.opportunityId || "",
-          justification:body.justification || "",
-        },
-        {
-          assumptions:resolved.parametros,
-          parameterVersion:resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
-        },
-      );
+      scenario = createPricingScenarioSnapshot(productId,inputs,{
+        tenantId:TODO_GREEN_TENANT.id,userId:user.id,clientId:body.clientId || "",
+        opportunityId:body.opportunityId || "",justification:body.justification || "",
+      },{
+        assumptions:resolved.parametros,
+        parameterVersion:resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
+      });
     } catch (error) {
       return response({ error:error.message || "Simulação inválida." },400);
     }
-
     if (body.persist === true) {
       await env.DB.prepare(
         `INSERT INTO pricing_scenarios
@@ -394,22 +328,11 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
          rule_version,inputs_json,result_json,approvals_json,status,created_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,'draft',?)`,
       ).bind(
-        scenario.id,
-        TODO_GREEN_TENANT.id,
-        access.ownerId,
-        productId,
-        scenario.clientId,
-        scenario.opportunityId,
-        user.id,
-        scenario.ruleVersion,
-        JSON.stringify(scenario.inputs),
-        JSON.stringify(scenario.result),
-        JSON.stringify(scenario.approvals),
-        scenario.createdAt,
+        scenario.id,TODO_GREEN_TENANT.id,access.ownerId,productId,scenario.clientId,
+        scenario.opportunityId,user.id,scenario.ruleVersion,JSON.stringify(scenario.inputs),
+        JSON.stringify(scenario.result),JSON.stringify(scenario.approvals),scenario.createdAt,
       ).run();
-      if (dependencies.audit) {
-        await dependencies.audit(env, access.ownerId, user, "todogreen_simulacao_criada", scenario.id, scenario.result.productName);
-      }
+      if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_simulacao_criada",scenario.id,scenario.result.productName);
     }
     return response({ scenario });
   }
@@ -418,12 +341,8 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
     const body = await request.json().catch(() => ({}));
     if (dependencies.audit) {
       await dependencies.audit(
-        env,
-        access.ownerId,
-        user,
-        String(body.action || "todogreen_event").slice(0,80),
-        String(body.target || "").slice(0,160),
-        String(body.details || "").slice(0,600),
+        env,access.ownerId,user,String(body.action || "todogreen_event").slice(0,80),
+        String(body.target || "").slice(0,160),String(body.details || "").slice(0,600),
       );
     }
     return response({ ok:true });
@@ -435,20 +354,14 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       const productId = String(body.productId || "");
       const inputs = body.inputs || {};
       const product = LOGISTICS_PRODUCTS.find((item) => item.id === productId);
-      const resolved = await parametrosResolvidos(env, access.ownerId, {
-        productId,
-        modality:inputs.modality || product?.modality,
-        vehicleType:inputs.vehicleType,
-        region:inputs.region || inputs.city,
-        clientId:inputs.clientId,
-        contractId:inputs.contractId,
+      const resolved = await parametrosResolvidos(env,access.ownerId,{
+        productId,modality:inputs.modality || product?.modality,vehicleType:inputs.vehicleType,
+        region:inputs.region || inputs.city,clientId:inputs.clientId,contractId:inputs.contractId,
       });
-      return response({
-        result:centralPricingEngine(productId, inputs, {
-          assumptions:resolved.parametros,
-          parameterVersion:resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
-        }),
-      });
+      return response({ result:centralPricingEngine(productId,inputs,{
+        assumptions:resolved.parametros,
+        parameterVersion:resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
+      }) });
     } catch (error) {
       return response({ error:error.message || "Cálculo inválido." },400);
     }
