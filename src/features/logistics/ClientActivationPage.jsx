@@ -5,6 +5,7 @@ import {
   CircleAlert,
   ExternalLink,
   LoaderCircle,
+  Plus,
   RefreshCw,
   Rocket,
   Settings2,
@@ -37,28 +38,51 @@ const api = async (path, authHeaders, options = {}) => {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(payload.error || "Não foi possível processar a implantação.");
+    const error = new Error(payload.error || "Não foi possível processar a solicitação.");
     error.payload = payload;
     throw error;
   }
   return payload;
 };
 
-const projectIdForClient = (clientId) => `todogreen-implantation-${clientId}`;
+const statusLabel = (status) => ({
+  planning:"Planejamento",
+  in_progress:"Em andamento",
+  ready:"Pronta para go-live",
+  go_live:"Go-live",
+  completed:"Concluída",
+  on_hold:"Em espera",
+  cancelled:"Cancelada",
+  pending:"Pendente",
+  blocked:"Bloqueado",
+  done:"Concluído",
+  waived:"Dispensado",
+}[status] || String(status || "Não informado").replaceAll("_", " "));
 
-export default function ClientActivationPage({ db, update, authHeaders, setToast }) {
-  const initialClient = new URLSearchParams(location.search).get("client") || "";
+export default function ClientActivationPage({ authHeaders, setToast }) {
+  const params = new URLSearchParams(location.search);
+  const initialClient = params.get("client") || "";
+  const [view, setView] = useState(params.get("mode") === "activation" ? "activation" : "implementation");
   const [clients, setClients] = useState([]);
   const [clientId, setClientId] = useState(initialClient);
   const [snapshot, setSnapshot] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [gates, setGates] = useState([]);
   const [status, setStatus] = useState("loading");
   const [action, setAction] = useState("");
   const [error, setError] = useState("");
-  const [config, setConfig] = useState({ integrationStatus: "pending", trackingRequired: true });
+  const [config, setConfig] = useState({ integrationStatus:"pending", trackingRequired:true });
+  const [projectForm, setProjectForm] = useState({ title:"", contractId:"", operationId:"", targetGoLiveAt:"", ownerUserId:"" });
+  const [gateForm, setGateForm] = useState({ phase:"", code:"", title:"", dueAt:"", blocking:true, evidenceRequired:false });
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === clientId) || snapshot?.client || null,
     [clientId, clients, snapshot],
+  );
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
+    [projects, selectedProjectId],
   );
 
   const loadClients = async () => {
@@ -76,19 +100,16 @@ export default function ClientActivationPage({ db, update, authHeaders, setToast
     }
   };
 
-  const loadSnapshot = async (id = clientId) => {
-    if (!id) {
-      setSnapshot(null);
-      return;
-    }
+  const loadActivation = async (id = clientId) => {
+    if (!id) { setSnapshot(null); return; }
     setAction("loading");
     setError("");
     try {
       const data = await api(`/api/todogreen/client-activation?clientId=${encodeURIComponent(id)}`, authHeaders);
       setSnapshot(data);
       setConfig({
-        integrationStatus: data.client?.activation?.integrationStatus || "pending",
-        trackingRequired: data.client?.activation?.trackingRequired !== false,
+        integrationStatus:data.client?.activation?.integrationStatus || "pending",
+        trackingRequired:data.client?.activation?.trackingRequired !== false,
       });
     } catch (reason) {
       setError(reason.message);
@@ -98,87 +119,112 @@ export default function ClientActivationPage({ db, update, authHeaders, setToast
     }
   };
 
+  const loadProjects = async (id = clientId) => {
+    if (!id) { setProjects([]); setGates([]); return; }
+    setAction("loading-projects");
+    setError("");
+    try {
+      const data = await api(`/api/todogreen/master-data/implementation-projects?clientId=${encodeURIComponent(id)}&limit=200`, authHeaders);
+      const list = data.records || [];
+      setProjects(list);
+      setSelectedProjectId((current) => list.some((project) => project.id === current) ? current : list[0]?.id || "");
+      if (!projectForm.title && selectedClient?.name) {
+        setProjectForm((current) => ({ ...current, title:`Implantação · ${selectedClient.name}` }));
+      }
+    } catch (reason) {
+      setError(reason.message);
+      setProjects([]);
+    } finally {
+      setAction("");
+    }
+  };
+
+  const loadGates = async (projectId) => {
+    if (!projectId) { setGates([]); return; }
+    try {
+      const data = await api(`/api/todogreen/master-data/implementation-gates?projectId=${encodeURIComponent(projectId)}&limit=200`, authHeaders);
+      setGates(data.records || []);
+    } catch (reason) {
+      setError(reason.message);
+      setGates([]);
+    }
+  };
+
   useEffect(() => { loadClients(); }, []);
-  useEffect(() => { if (clientId) loadSnapshot(clientId); }, [clientId]);
+  useEffect(() => {
+    if (!clientId) return;
+    if (view === "activation") loadActivation(clientId);
+    else loadProjects(clientId);
+  }, [clientId, view]);
+  useEffect(() => {
+    if (view === "implementation") loadGates(selectedProject?.id || "");
+  }, [selectedProject?.id, view]);
+  useEffect(() => {
+    if (selectedClient?.name && !projects.length) {
+      setProjectForm((current) => ({ ...current, title:current.title || `Implantação · ${selectedClient.name}` }));
+    }
+  }, [selectedClient?.name, projects.length]);
 
-  const ensureImplementationProject = (client, readiness) => {
-    if (!client?.id || !update) return;
-    const id = projectIdForClient(client.id);
-    update((current) => {
-      const projects = current.projects || [];
-      if (projects.some((project) => project.id === id)) return current;
-      const now = new Date().toISOString();
-      return {
-        ...current,
-        projects: [
-          {
-            id,
-            name: `Implantação · ${client.name}`,
-            area: "Operações",
-            description: "Projeto criado a partir do gate de implantação da To Do Green. A área pode ser alterada no Portfólio global.",
-            objective: "Levar a conta do estágio de implantação para cliente ativo com todos os requisitos operacionais validados.",
-            status: readiness?.ready ? "Concluído" : "Em andamento",
-            priority: "Alta",
-            manager: "",
-            sponsor: "",
-            startDate: new Date().toISOString().slice(0, 10),
-            dueDate: "",
-            milestones: [],
-            risks: [],
-            issues: [],
-            decisions: [],
-            changeRequests: [],
-            sourceType: "todogreen_client_activation",
-            sourceId: client.id,
-            businessId: null,
-            ownerId: current.user?.id || null,
-            createdAt: now,
-            updatedAt: now,
-          },
-          ...projects,
-        ],
-      };
-    });
+  const createProject = async (event) => {
+    event.preventDefault();
+    if (!clientId) return;
+    setAction("create-project");
+    setError("");
+    try {
+      const data = await api("/api/todogreen/master-data/implementation-projects", authHeaders, {
+        method:"POST",
+        body:JSON.stringify({ clientId, ...projectForm, status:"planning" }),
+      });
+      const project = data.record;
+      setProjects((current) => [project, ...current]);
+      setSelectedProjectId(project.id);
+      setProjectForm({ title:`Implantação · ${selectedClient?.name || "cliente"}`, contractId:"", operationId:"", targetGoLiveAt:"", ownerUserId:"" });
+      setToast?.("Projeto de implantação criado.");
+    } catch (reason) {
+      setError(reason.message);
+    } finally {
+      setAction("");
+    }
   };
 
-  const syncProjectStatus = (client, completed) => {
-    if (!client?.id || !update) return;
-    const id = projectIdForClient(client.id);
-    update((current) => ({
-      ...current,
-      projects: (current.projects || []).map((project) =>
-        project.id === id
-          ? { ...project, status: completed ? "Concluído" : project.status, actualEndDate: completed ? new Date().toISOString().slice(0, 10) : project.actualEndDate, updatedAt: new Date().toISOString() }
-          : project,
-      ),
-    }));
+  const createGate = async (event) => {
+    event.preventDefault();
+    if (!selectedProject?.id) return;
+    setAction("create-gate");
+    setError("");
+    try {
+      const data = await api("/api/todogreen/master-data/implementation-gates", authHeaders, {
+        method:"POST",
+        body:JSON.stringify({ projectId:selectedProject.id, ...gateForm, status:"pending" }),
+      });
+      setGates((current) => [...current, data.record]);
+      setGateForm({ phase:"", code:"", title:"", dueAt:"", blocking:true, evidenceRequired:false });
+      setToast?.("Gate de implantação cadastrado.");
+    } catch (reason) {
+      setError(reason.message);
+    } finally {
+      setAction("");
+    }
   };
 
-  const run = async (nextAction, body = {}) => {
+  const runActivation = async (nextAction, body = {}) => {
     if (!clientId) return;
     setAction(nextAction);
     setError("");
     try {
       const data = await api(`/api/todogreen/client-activation?clientId=${encodeURIComponent(clientId)}`, authHeaders, {
-        method: "POST",
-        body: JSON.stringify({ action: nextAction, ...body }),
+        method:"POST",
+        body:JSON.stringify({ action:nextAction, ...body }),
       });
       const nextSnapshot = data.snapshot || data;
       setSnapshot(nextSnapshot);
       setConfig({
-        integrationStatus: nextSnapshot.client?.activation?.integrationStatus || "pending",
-        trackingRequired: nextSnapshot.client?.activation?.trackingRequired !== false,
+        integrationStatus:nextSnapshot.client?.activation?.integrationStatus || "pending",
+        trackingRequired:nextSnapshot.client?.activation?.trackingRequired !== false,
       });
-      if (nextAction === "prepare") {
-        ensureImplementationProject(nextSnapshot.client, nextSnapshot.readiness);
-        setToast?.("Implantação preparada e checklist atualizado.");
-      }
-      if (nextAction === "configure") setToast?.("Configuração da implantação salva.");
-      if (nextAction === "activate") {
-        ensureImplementationProject(nextSnapshot.client, nextSnapshot.readiness);
-        syncProjectStatus(nextSnapshot.client, true);
-        setToast?.("Cliente ativado.");
-      }
+      if (nextAction === "prepare") setToast?.("Checklist de ativação atualizado.");
+      if (nextAction === "configure") setToast?.("Configuração de ativação salva.");
+      if (nextAction === "activate") setToast?.("Cliente ativado.");
     } catch (reason) {
       if (reason.payload?.snapshot) setSnapshot(reason.payload.snapshot);
       setError(reason.message);
@@ -193,15 +239,22 @@ export default function ClientActivationPage({ db, update, authHeaders, setToast
     <main className="ca-page">
       <header className="ca-head">
         <div>
-          <a href="/todogreen/clientes" className="ca-back"><ArrowLeft size={16} />Clientes</a>
-          <span className="ca-eyebrow">IMPLANTAÇÃO &amp; GO-LIVE</span>
-          <h1>Ativação de cliente</h1>
-          <p>“Cliente ativo” só é liberado quando contrato, operação, financeiro, portal, tracking, ESG e governança estão realmente prontos.</p>
+          <a href="/todogreen/clientes" className="ca-back"><ArrowLeft size={16}/>Clientes</a>
+          <span className="ca-eyebrow">IMPLANTAÇÃO</span>
+          <h1>Implantação e ativação</h1>
+          <p>Implantação operacional é um projeto interno. Ativação é o gate final que libera o cliente para operar.</p>
         </div>
-        <a className="ca-portfolio-link" href="/?page=portfolio"><ExternalLink size={16} />Portfólio global</a>
+        <a className="ca-portfolio-link" href="/?page=portfolio"><ExternalLink size={16}/>Portfólio global</a>
       </header>
 
       <section className="ca-client-picker">
+        <label>
+          <span>Processo</span>
+          <select value={view} onChange={(event) => setView(event.target.value)}>
+            <option value="implementation">Implantação operacional</option>
+            <option value="activation">Ativação do cliente</option>
+          </select>
+        </label>
         <label>
           <span>Cliente</span>
           <select value={clientId} onChange={(event) => setClientId(event.target.value)} disabled={status === "loading"}>
@@ -209,15 +262,81 @@ export default function ClientActivationPage({ db, update, authHeaders, setToast
             {clients.map((client) => <option key={client.id} value={client.id}>{client.name}{client.crm?.stage ? ` · ${client.crm.stage}` : ""}</option>)}
           </select>
         </label>
-        <button type="button" onClick={() => loadSnapshot()} disabled={!clientId || action === "loading"}><RefreshCw size={16} />Atualizar</button>
+        <button type="button" onClick={() => view === "activation" ? loadActivation() : loadProjects()} disabled={!clientId || Boolean(action)}><RefreshCw size={16}/>Atualizar</button>
       </section>
 
-      {error && <div className="ca-error"><CircleAlert size={17} /><span>{error}</span></div>}
+      {error && <div className="ca-error"><CircleAlert size={17}/><span>{error}</span></div>}
+      {!clientId && status !== "loading" && <div className="ca-empty">Cadastre um cliente para iniciar.</div>}
+      {status === "loading" && <div className="ca-loading"><LoaderCircle className="spin"/>Carregando clientes...</div>}
 
-      {!clientId && status !== "loading" && <div className="ca-empty">Cadastre um cliente para iniciar a implantação.</div>}
-      {(status === "loading" || action === "loading") && !snapshot && <div className="ca-loading"><LoaderCircle className="spin" />Carregando implantação...</div>}
+      {clientId && view === "implementation" && (
+        <section className="ca-layout">
+          <div className="ca-checklist">
+            <header>
+              <div><span className="ca-eyebrow">PROJETO INTERNO</span><h2>Implantação operacional</h2></div>
+            </header>
+            {!projects.length ? (
+              <div className="ca-empty">Nenhuma implantação cadastrada para este cliente.</div>
+            ) : (
+              <div className="ca-checks">
+                {projects.map((project) => (
+                  <article key={project.id} className={project.status === "completed" ? "ready" : "blocked"}>
+                    {project.status === "completed" ? <CheckCircle2/> : <Settings2/>}
+                    <div>
+                      <strong>{project.title}</strong>
+                      <p>{statusLabel(project.status)} · Go-live alvo: {project.targetGoLiveAt ? new Date(project.targetGoLiveAt).toLocaleDateString("pt-BR") : "não definido"}</p>
+                    </div>
+                    <button type="button" onClick={() => setSelectedProjectId(project.id)}>{selectedProject?.id === project.id ? "Selecionada" : "Abrir"}</button>
+                  </article>
+                ))}
+              </div>
+            )}
 
-      {snapshot && readiness && (
+            {selectedProject && (
+              <>
+                <header><div><span className="ca-eyebrow">GATES</span><h2>{selectedProject.title}</h2></div></header>
+                <div className="ca-checks">
+                  {!gates.length && <div className="ca-empty">Nenhum gate cadastrado. Inclua os marcos reais da implantação abaixo.</div>}
+                  {gates.map((gate) => (
+                    <article key={gate.id} className={gate.status === "done" ? "ready" : "blocked"}>
+                      {gate.status === "done" ? <CheckCircle2/> : <CircleAlert/>}
+                      <div><strong>{gate.phase ? `${gate.phase} · ` : ""}{gate.title}</strong><p>{statusLabel(gate.status)}{gate.dueAt ? ` · prazo ${new Date(gate.dueAt).toLocaleDateString("pt-BR")}` : ""}{gate.blocking ? " · bloqueia go-live" : ""}</p></div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <aside className="ca-side">
+            <form onSubmit={createProject}>
+              <span className="ca-eyebrow">NOVA IMPLANTAÇÃO</span>
+              <h3>Projeto operacional</h3>
+              <label><span>Nome</span><input value={projectForm.title} onChange={(event) => setProjectForm({ ...projectForm, title:event.target.value })} required/></label>
+              <label><span>Contrato, quando disponível</span><input value={projectForm.contractId} onChange={(event) => setProjectForm({ ...projectForm, contractId:event.target.value })}/></label>
+              <label><span>Operação, quando disponível</span><input value={projectForm.operationId} onChange={(event) => setProjectForm({ ...projectForm, operationId:event.target.value })}/></label>
+              <label><span>Go-live alvo</span><input type="date" value={projectForm.targetGoLiveAt} onChange={(event) => setProjectForm({ ...projectForm, targetGoLiveAt:event.target.value })}/></label>
+              <button type="submit" disabled={action === "create-project"}><Plus size={15}/>{action === "create-project" ? "Criando..." : "Criar implantação"}</button>
+            </form>
+
+            <form onSubmit={createGate}>
+              <span className="ca-eyebrow">NOVO GATE</span>
+              <h3>Marco da implantação</h3>
+              <label><span>Fase</span><input value={gateForm.phase} onChange={(event) => setGateForm({ ...gateForm, phase:event.target.value })}/></label>
+              <label><span>Código</span><input value={gateForm.code} onChange={(event) => setGateForm({ ...gateForm, code:event.target.value })}/></label>
+              <label><span>Entrega / gate</span><input value={gateForm.title} onChange={(event) => setGateForm({ ...gateForm, title:event.target.value })} required/></label>
+              <label><span>Prazo</span><input type="date" value={gateForm.dueAt} onChange={(event) => setGateForm({ ...gateForm, dueAt:event.target.value })}/></label>
+              <label className="ca-check"><input type="checkbox" checked={gateForm.blocking} onChange={(event) => setGateForm({ ...gateForm, blocking:event.target.checked })}/><span>Bloqueia go-live se pendente</span></label>
+              <label className="ca-check"><input type="checkbox" checked={gateForm.evidenceRequired} onChange={(event) => setGateForm({ ...gateForm, evidenceRequired:event.target.checked })}/><span>Exige evidência</span></label>
+              <button type="submit" disabled={!selectedProject || action === "create-gate"}><Plus size={15}/>{action === "create-gate" ? "Criando..." : "Adicionar gate"}</button>
+            </form>
+          </aside>
+        </section>
+      )}
+
+      {clientId && view === "activation" && !snapshot && action === "loading" && <div className="ca-loading"><LoaderCircle className="spin"/>Carregando ativação...</div>}
+
+      {clientId && view === "activation" && snapshot && readiness && (
         <>
           <section className="ca-summary">
             <div className="ca-progress-copy">
@@ -225,39 +344,41 @@ export default function ClientActivationPage({ db, update, authHeaders, setToast
               <strong>{readiness.completed} de {readiness.total} requisitos prontos</strong>
               <small>{readiness.ready ? "Pronto para ativar" : "Ainda há bloqueios de go-live"}</small>
             </div>
-            <div className="ca-progress" aria-label={`${readiness.percentage}% concluído`}><span style={{ width: `${readiness.percentage}%` }} /></div>
+            <div className="ca-progress" aria-label={`${readiness.percentage}% concluído`}><span style={{ width:`${readiness.percentage}%` }}/></div>
             <b>{readiness.percentage}%</b>
           </section>
 
           <section className="ca-layout">
             <div className="ca-checklist">
-              <header><div><span className="ca-eyebrow">GATE</span><h2>Checklist de ativação</h2></div><button type="button" className="ca-primary" onClick={() => run("prepare")} disabled={!!action}><Settings2 size={16} />{action === "prepare" ? "Preparando..." : "Preparar automaticamente"}</button></header>
+              <header><div><span className="ca-eyebrow">ATIVAÇÃO</span><h2>Checklist final</h2></div><button type="button" className="ca-primary" onClick={() => runActivation("prepare")} disabled={Boolean(action)}><Settings2 size={16}/>{action === "prepare" ? "Preparando..." : "Atualizar checklist"}</button></header>
               <div className="ca-checks">
                 {readiness.checks.map((check) => {
                   const link = CHECK_LINKS[check.id];
-                  return <article key={check.id} className={check.ready ? "ready" : "blocked"}>
-                    {check.ready ? <CheckCircle2 /> : <CircleAlert />}
-                    <div><strong>{check.label}</strong><p>{check.detail}</p></div>
-                    {link && <a href={link[1]}>{link[0]}<ExternalLink size={13} /></a>}
-                  </article>;
+                  return (
+                    <article key={check.id} className={check.ready ? "ready" : "blocked"}>
+                      {check.ready ? <CheckCircle2/> : <CircleAlert/>}
+                      <div><strong>{check.label}</strong><p>{check.detail}</p></div>
+                      {link && <a href={link[1]}>{link[0]}<ExternalLink size={13}/></a>}
+                    </article>
+                  );
                 })}
               </div>
             </div>
 
             <aside className="ca-side">
               <section>
-                <span className="ca-eyebrow">CONFIGURAÇÃO DA IMPLANTAÇÃO</span>
+                <span className="ca-eyebrow">PARAMETRIZAÇÃO DE ATIVAÇÃO</span>
                 <h3>Integração e tracking</h3>
-                <label><span>Integração</span><select value={config.integrationStatus} onChange={(event) => setConfig({ ...config, integrationStatus: event.target.value })}><option value="pending">Pendente</option><option value="ready">Validada</option><option value="not_required">Não necessária</option></select></label>
-                <label className="ca-check"><input type="checkbox" checked={config.trackingRequired} onChange={(event) => setConfig({ ...config, trackingRequired: event.target.checked })} /><span>Tracking é obrigatório nesta operação</span></label>
-                <button type="button" onClick={() => run("configure", config)} disabled={!!action}>Salvar configuração</button>
+                <label><span>Integração</span><select value={config.integrationStatus} onChange={(event) => setConfig({ ...config, integrationStatus:event.target.value })}><option value="pending">Pendente</option><option value="ready">Validada</option><option value="not_required">Não necessária</option></select></label>
+                <label className="ca-check"><input type="checkbox" checked={config.trackingRequired} onChange={(event) => setConfig({ ...config, trackingRequired:event.target.checked })}/><span>Tracking é obrigatório nesta operação</span></label>
+                <button type="button" onClick={() => runActivation("configure", config)} disabled={Boolean(action)}>Salvar configuração</button>
               </section>
 
               <section className={readiness.ready ? "ca-go-live ready" : "ca-go-live"}>
-                <Rocket />
+                <Rocket/>
                 <h3>{readiness.ready ? "Go-live liberado" : "Go-live bloqueado"}</h3>
-                <p>{readiness.ready ? "Todos os requisitos foram validados. A ativação registra a mudança e conclui o projeto de implantação." : `${readiness.missing.length} requisito(s) ainda impedem a mudança para Cliente ativo.`}</p>
-                <button type="button" className="ca-primary" disabled={!readiness.ready || !!action} onClick={() => run("activate")}>{action === "activate" ? "Ativando..." : "Ativar cliente"}</button>
+                <p>{readiness.ready ? "Todos os requisitos de ativação foram validados." : `${readiness.missing.length} requisito(s) ainda impedem a mudança para Cliente ativo.`}</p>
+                <button type="button" className="ca-primary" disabled={!readiness.ready || Boolean(action)} onClick={() => runActivation("activate")}>{action === "activate" ? "Ativando..." : "Ativar cliente"}</button>
               </section>
             </aside>
           </section>
