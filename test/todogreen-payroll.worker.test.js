@@ -130,6 +130,31 @@ describe("fechamento da folha trava", () => {
   });
 });
 
+describe("ponto e férias", () => {
+  it("registra ponto e férias de um colaborador e lista de volta", async () => {
+    const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Carla Ponto", cpf: "111.444.777-35", salarioBase: 2500, admissaoEm: "2026-01-05" },
+    })).json();
+
+    const ponto = await pedir("/api/todogreen/payroll/ponto", {
+      metodo: "POST", token: rh.token,
+      corpo: { employeeId: colab.id, dia: "2026-03-10", entrada: "08:00", saida: "18:00", horasExtras: 2 },
+    });
+    expect(ponto.status).toBe(201);
+    const listaPonto = await (await pedir("/api/todogreen/payroll/ponto?colaborador=" + colab.id, { token: rh.token })).json();
+    expect(listaPonto.registros.some((p) => p.dia === "2026-03-10" && p.horasExtras === 2)).toBe(true);
+
+    const ferias = await pedir("/api/todogreen/payroll/ferias", {
+      metodo: "POST", token: rh.token,
+      corpo: { employeeId: colab.id, periodoAquisitivoInicio: "2026-01-05", periodoAquisitivoFim: "2027-01-04", dias: 30 },
+    });
+    expect(ferias.status).toBe(201);
+    const listaFerias = await (await pedir("/api/todogreen/payroll/ferias?colaborador=" + colab.id, { token: rh.token })).json();
+    expect(listaFerias.registros.some((f) => f.dias === 30 && f.status === "programada")).toBe(true);
+  });
+});
+
 describe("escopo", () => {
   it("um espaço não vê o colaborador do outro", async () => {
     const doColega = await (await pedir("/api/todogreen/payroll/colaboradores", {

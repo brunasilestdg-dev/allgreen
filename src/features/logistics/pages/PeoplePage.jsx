@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, Lock, RefreshCw, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, CalendarClock, Clock, Lock, Plane, RefreshCw, UserPlus, Users } from "lucide-react";
 import "./TodoGreenPages.css";
 
 // Pessoas e folha. Dado sensível: o servidor só entrega isto a quem tem
@@ -40,6 +40,11 @@ export default function PeoplePage({ authHeaders, setToast }) {
   const [form, setForm] = useState(COLABORADOR_VAZIO);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [competencia, setCompetencia] = useState("");
+  const [pontos, setPontos] = useState([]);
+  const [ferias, setFerias] = useState([]);
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const [formPonto, setFormPonto] = useState({ employeeId: "", dia: hojeISO, entrada: "", saida: "", horasExtras: "", horasNoturnas: "", falta: false, observacao: "" });
+  const [formFerias, setFormFerias] = useState({ employeeId: "", periodoAquisitivoInicio: "", periodoAquisitivoFim: "", gozoInicio: "", gozoFim: "", dias: 30, abonoPecuniario: false, adiantarDecimo: false });
 
   const avisar = (mensagem, tom = "info") => (setToast ? setToast({ mensagem, tom }) : undefined);
 
@@ -107,6 +112,45 @@ export default function PeoplePage({ authHeaders, setToast }) {
     } catch (motivo) { avisar(motivo.message, "erro"); }
   };
 
+  const carregarPonto = async () => {
+    try { setPontos((await request("/ponto", authHeaders)).registros || []); }
+    catch (motivo) { avisar(motivo.message, "erro"); }
+  };
+  const carregarFerias = async () => {
+    try { setFerias((await request("/ferias", authHeaders)).registros || []); }
+    catch (motivo) { avisar(motivo.message, "erro"); }
+  };
+
+  const registrarPonto = async (evento) => {
+    evento.preventDefault();
+    if (!formPonto.employeeId) { avisar("Escolha o colaborador.", "erro"); return; }
+    try {
+      await request("/ponto", authHeaders, { method: "POST", body: JSON.stringify(formPonto) });
+      avisar("Ponto registrado.", "sucesso");
+      setFormPonto((f) => ({ ...f, entrada: "", saida: "", horasExtras: "", horasNoturnas: "", falta: false, observacao: "" }));
+      await carregarPonto();
+    } catch (motivo) { avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro"); }
+  };
+
+  const criarFerias = async (evento) => {
+    evento.preventDefault();
+    if (!formFerias.employeeId) { avisar("Escolha o colaborador.", "erro"); return; }
+    try {
+      await request("/ferias", authHeaders, { method: "POST", body: JSON.stringify(formFerias) });
+      avisar("Férias registradas.", "sucesso");
+      setFormFerias((f) => ({ ...f, gozoInicio: "", gozoFim: "" }));
+      await carregarFerias();
+    } catch (motivo) { avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro"); }
+  };
+
+  const nomeColaborador = (id) => colaboradores.find((c) => c.id === id)?.nome || id || "—";
+
+  useEffect(() => {
+    if (aba === "ponto" && !pontos.length) carregarPonto();
+    if (aba === "ferias" && !ferias.length) carregarFerias();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba]);
+
   if (ocupado === "carregando") {
     return <div className="tdg-page"><section className="tdg-panel">Carregando pessoas e folha...</section></div>;
   }
@@ -171,6 +215,8 @@ export default function PeoplePage({ authHeaders, setToast }) {
 
       <div className="tdg-workviews-switch" role="tablist" aria-label="Seções">
         <button type="button" role="tab" aria-selected={aba === "pessoas"} className={aba === "pessoas" ? "active" : ""} onClick={() => setAba("pessoas")}><Users size={15} />Colaboradores</button>
+        <button type="button" role="tab" aria-selected={aba === "ponto"} className={aba === "ponto" ? "active" : ""} onClick={() => setAba("ponto")}><Clock size={15} />Ponto</button>
+        <button type="button" role="tab" aria-selected={aba === "ferias"} className={aba === "ferias" ? "active" : ""} onClick={() => setAba("ferias")}><Plane size={15} />Férias</button>
         <button type="button" role="tab" aria-selected={aba === "folha"} className={aba === "folha" ? "active" : ""} onClick={() => setAba("folha")}><CalendarClock size={15} />Folha</button>
       </div>
 
@@ -191,6 +237,84 @@ export default function PeoplePage({ authHeaders, setToast }) {
                         <td>{c.vinculo?.toUpperCase()}</td>
                         <td>{dinheiro(c.salarioBase)}</td>
                         <td>{NOME_STATUS[c.status] || c.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </section>
+      )}
+
+      {aba === "ponto" && (
+        <section className="tdg-panel">
+          <form className="tdg-form tdg-people-subform" onSubmit={registrarPonto}>
+            <label><span>Colaborador *</span>
+              <select value={formPonto.employeeId} onChange={(e) => setFormPonto({ ...formPonto, employeeId: e.target.value })} required>
+                <option value="">— selecione —</option>
+                {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </label>
+            <label><span>Dia *</span><input type="date" value={formPonto.dia} onChange={(e) => setFormPonto({ ...formPonto, dia: e.target.value })} required /></label>
+            <label><span>Entrada</span><input type="time" value={formPonto.entrada} onChange={(e) => setFormPonto({ ...formPonto, entrada: e.target.value })} /></label>
+            <label><span>Saída</span><input type="time" value={formPonto.saida} onChange={(e) => setFormPonto({ ...formPonto, saida: e.target.value })} /></label>
+            <label><span>Horas extras</span><input type="number" min="0" step="0.5" value={formPonto.horasExtras} onChange={(e) => setFormPonto({ ...formPonto, horasExtras: e.target.value })} /></label>
+            <label><span>Horas noturnas</span><input type="number" min="0" step="0.5" value={formPonto.horasNoturnas} onChange={(e) => setFormPonto({ ...formPonto, horasNoturnas: e.target.value })} /></label>
+            <label className="tdg-check-field"><input type="checkbox" checked={formPonto.falta} onChange={(e) => setFormPonto({ ...formPonto, falta: e.target.checked })} /><span>Falta</span></label>
+            <label><span>Observação</span><input value={formPonto.observacao} onChange={(e) => setFormPonto({ ...formPonto, observacao: e.target.value })} /></label>
+            <div className="tdg-form-actions full"><button className="tdg-action" type="submit">Registrar ponto</button></div>
+          </form>
+          {!pontos.length
+            ? <p className="tdg-empty">Nenhum ponto registrado ainda.</p>
+            : (
+              <div className="tdg-table-wrap">
+                <table className="tdg-table">
+                  <thead><tr><th>Colaborador</th><th>Dia</th><th>Entrada</th><th>Saída</th><th>Extras</th><th>Noturnas</th><th>Falta</th></tr></thead>
+                  <tbody>
+                    {pontos.map((p) => (
+                      <tr key={p.id}>
+                        <td>{nomeColaborador(p.employeeId)}</td><td>{p.dia}</td><td>{p.entrada || "—"}</td><td>{p.saida || "—"}</td>
+                        <td>{p.horasExtras || 0}</td><td>{p.horasNoturnas || 0}</td><td>{p.falta ? "Sim" : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </section>
+      )}
+
+      {aba === "ferias" && (
+        <section className="tdg-panel">
+          <form className="tdg-form tdg-people-subform" onSubmit={criarFerias}>
+            <label><span>Colaborador *</span>
+              <select value={formFerias.employeeId} onChange={(e) => setFormFerias({ ...formFerias, employeeId: e.target.value })} required>
+                <option value="">— selecione —</option>
+                {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </label>
+            <label><span>Aquisitivo início</span><input type="date" value={formFerias.periodoAquisitivoInicio} onChange={(e) => setFormFerias({ ...formFerias, periodoAquisitivoInicio: e.target.value })} /></label>
+            <label><span>Aquisitivo fim</span><input type="date" value={formFerias.periodoAquisitivoFim} onChange={(e) => setFormFerias({ ...formFerias, periodoAquisitivoFim: e.target.value })} /></label>
+            <label><span>Gozo início</span><input type="date" value={formFerias.gozoInicio} onChange={(e) => setFormFerias({ ...formFerias, gozoInicio: e.target.value })} /></label>
+            <label><span>Gozo fim</span><input type="date" value={formFerias.gozoFim} onChange={(e) => setFormFerias({ ...formFerias, gozoFim: e.target.value })} /></label>
+            <label><span>Dias</span><input type="number" min="1" max="30" value={formFerias.dias} onChange={(e) => setFormFerias({ ...formFerias, dias: e.target.value })} /></label>
+            <label className="tdg-check-field"><input type="checkbox" checked={formFerias.abonoPecuniario} onChange={(e) => setFormFerias({ ...formFerias, abonoPecuniario: e.target.checked })} /><span>Abono pecuniário (vender 1/3)</span></label>
+            <label className="tdg-check-field"><input type="checkbox" checked={formFerias.adiantarDecimo} onChange={(e) => setFormFerias({ ...formFerias, adiantarDecimo: e.target.checked })} /><span>Adiantar 13º</span></label>
+            <div className="tdg-form-actions full"><button className="tdg-action" type="submit">Registrar férias</button></div>
+          </form>
+          {!ferias.length
+            ? <p className="tdg-empty">Nenhuma férias programada ainda.</p>
+            : (
+              <div className="tdg-table-wrap">
+                <table className="tdg-table">
+                  <thead><tr><th>Colaborador</th><th>Aquisitivo</th><th>Gozo</th><th>Dias</th><th>Abono</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {ferias.map((f) => (
+                      <tr key={f.id}>
+                        <td>{nomeColaborador(f.employeeId)}</td>
+                        <td>{f.periodoAquisitivoInicio || "—"} a {f.periodoAquisitivoFim || "—"}</td>
+                        <td>{f.gozoInicio ? `${f.gozoInicio} a ${f.gozoFim || "?"}` : "a programar"}</td>
+                        <td>{f.dias}</td><td>{f.abonoPecuniario ? "Sim" : "—"}</td><td>{f.status}</td>
                       </tr>
                     ))}
                   </tbody>

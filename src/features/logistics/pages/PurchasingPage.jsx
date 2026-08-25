@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ClipboardCheck, FileText, PackageCheck, RefreshCw } from "lucide-react";
+import Modal from "../../../components/Modal.jsx";
 import {
   ORDER_STATUSES,
   REQUEST_STATUSES,
@@ -51,9 +52,13 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
   const [erro, setErro] = useState("");
   const [form, setForm] = useState(REQUISICAO_VAZIA);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [formPedido, setFormPedido] = useState(null); // { requestId, supplierPartyId, warehouseId, esperadoEm, notas }
+  const [recebimento, setRecebimento] = useState(null); // { pedido, linhas:{}, warehouseId, receivedAt, invoiceNumber, gerarConta }
 
   const itens = registros?.items || [];
   const centrosDeCusto = registros?.costCenters || [];
+  const fornecedores = registros?.parties || [];
+  const depositos = registros?.warehouses || [];
 
   // Campos em português, como o resto dos registros da vertical.
   const nomeDoItem = (id) => {
@@ -141,6 +146,89 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
     } finally {
       setOcupado("");
     }
+  };
+
+  const aprovarRequisicao = async (req) => {
+    try {
+      await request(`/requisicoes/${req.id}`, authHeaders, { method: "PATCH", body: JSON.stringify({ status: "aprovada", revision: req.revision }) });
+      setToast?.("Requisição aprovada.");
+      await carregar();
+    } catch (motivo) { setToast?.(motivo.message); }
+  };
+
+  const abrirPedido = (req) => setFormPedido({
+    requestId: req?.id || "", supplierPartyId: "", warehouseId: "", esperadoEm: "", notas: "",
+    titulo: req?.title || "",
+  });
+
+  const enviarPedido = async (evento) => {
+    evento.preventDefault();
+    if (!formPedido.supplierPartyId) { setToast?.("Escolha o fornecedor."); return; }
+    setOcupado("salvando");
+    try {
+      await request("/pedidos", authHeaders, {
+        method: "POST",
+        body: JSON.stringify({
+          requestId: formPedido.requestId || undefined,
+          supplierPartyId: formPedido.supplierPartyId,
+          warehouseId: formPedido.warehouseId || undefined,
+          esperadoEm: formPedido.esperadoEm || undefined,
+          notas: formPedido.notas || undefined,
+        }),
+      });
+      setToast?.("Pedido criado. Aprove e envie para poder receber.");
+      setFormPedido(null);
+      await carregar();
+    } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(""); }
+  };
+
+  const mudarStatusPedido = async (pedido, status) => {
+    try {
+      await request(`/pedidos/${pedido.id}`, authHeaders, { method: "PATCH", body: JSON.stringify({ status, revision: pedido.revision }) });
+      setToast?.(`Pedido: ${NOME_DO_STATUS_DO_PEDIDO[status] || status}.`);
+      await carregar();
+    } catch (motivo) { setToast?.(motivo.message); }
+  };
+
+  const abrirRecebimento = async (pedido) => {
+    try {
+      const { registro } = await request(`/pedidos/${pedido.id}`, authHeaders);
+      const linhas = (registro.recepcao?.linhas || []).filter((l) => l.pendente > 0);
+      if (!linhas.length) { setToast?.("Nada pendente para receber neste pedido."); return; }
+      setRecebimento({
+        pedido: registro,
+        linhasPendentes: linhas,
+        quantidades: Object.fromEntries(linhas.map((l) => [l.orderItemId, String(l.pendente)])),
+        warehouseId: registro.warehouseId || depositos[0]?.id || "",
+        receivedAt: new Date().toISOString().slice(0, 10),
+        invoiceNumber: "",
+        gerarConta: true,
+      });
+    } catch (motivo) { setToast?.(motivo.message); }
+  };
+
+  const enviarRecebimento = async (evento) => {
+    evento.preventDefault();
+    if (!recebimento.warehouseId) { setToast?.("Escolha o depósito que recebeu."); return; }
+    setOcupado("salvando");
+    try {
+      await request("/recebimentos", authHeaders, {
+        method: "POST",
+        body: JSON.stringify({
+          orderId: recebimento.pedido.id,
+          warehouseId: recebimento.warehouseId,
+          receivedAt: recebimento.receivedAt,
+          invoiceNumber: recebimento.invoiceNumber || undefined,
+          gerarConta: recebimento.gerarConta,
+          linhas: recebimento.linhasPendentes
+            .map((l) => ({ orderItemId: l.orderItemId, quantidade: Number(recebimento.quantidades[l.orderItemId] || 0) }))
+            .filter((l) => l.quantidade > 0),
+        }),
+      });
+      setToast?.("Recebimento lançado: estoque e conta a pagar atualizados.");
+      setRecebimento(null);
+      await carregar();
+    } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(""); }
   };
 
   if (ocupado === "carregando" && !requisicoes.length && !pedidos.length)
@@ -300,7 +388,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
             <div className="tdg-table-wrap">
               <table className="tdg-table">
                 <thead>
-                  <tr><th>Documento</th><th>O quê</th><th>Prioridade</th><th>Precisa em</th><th>Situação</th></tr>
+                  <tr><th>Documento</th><th>O quê</th><th>Prioridade</th><th>Precisa em</th><th>Situação</th>{acesso.podeComprar && <th>Ações</th>}</tr>
                 </thead>
                 <tbody>
                   {requisicoes.map((requisicao) => (
@@ -310,6 +398,12 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
                       <td>{requisicao.prioridade}</td>
                       <td>{dia(requisicao.precisaEm)}</td>
                       <td>{NOME_DO_STATUS_DA_REQUISICAO[requisicao.status] || requisicao.status}</td>
+                      {acesso.podeComprar && (
+                        <td className="tdg-fiscal-acoes">
+                          {requisicao.status === "pendente" && <button type="button" onClick={() => aprovarRequisicao(requisicao)}>Aprovar</button>}
+                          {requisicao.status === "aprovada" && <button type="button" onClick={() => abrirPedido(requisicao)}>Gerar pedido</button>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -321,7 +415,9 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
       <section className="tdg-panel">
         <div className="tdg-section-head">
           <div><span className="tdg-kicker">PEDIDOS</span><h2>O que foi comprado</h2></div>
-          <PackageCheck size={22} />
+          {acesso.podeComprar
+            ? <button type="button" className="tdg-action" onClick={() => abrirPedido(null)}><PackageCheck size={16} />Novo pedido</button>
+            : <PackageCheck size={22} />}
         </div>
         {!pedidos.length
           ? <p className="tdg-empty">Nenhum pedido de compra emitido.</p>
@@ -329,7 +425,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
             <div className="tdg-table-wrap">
               <table className="tdg-table">
                 <thead>
-                  <tr><th>Documento</th><th>Fornecedor</th><th>Total</th><th>Previsto para</th><th>Situação</th></tr>
+                  <tr><th>Documento</th><th>Fornecedor</th><th>Total</th><th>Previsto para</th><th>Situação</th>{acesso.podeComprar && <th>Ações</th>}</tr>
                 </thead>
                 <tbody>
                   {pedidos.map((pedido) => (
@@ -339,6 +435,14 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
                       <td>{dinheiro(totalDoPedido(pedido, pedido.items || []).total)}</td>
                       <td>{dia(pedido.esperadoEm)}</td>
                       <td>{NOME_DO_STATUS_DO_PEDIDO[pedido.status] || pedido.status}</td>
+                      {acesso.podeComprar && (
+                        <td className="tdg-fiscal-acoes">
+                          {pedido.status === "rascunho" && <button type="button" onClick={() => mudarStatusPedido(pedido, "aprovado")}>Aprovar</button>}
+                          {pedido.status === "aprovado" && <button type="button" onClick={() => mudarStatusPedido(pedido, "enviado")}>Enviar</button>}
+                          {["aprovado", "enviado"].includes(pedido.status) && <button type="button" onClick={() => abrirRecebimento(pedido)}>Receber</button>}
+                          {pedido.status === "enviado" && <button type="button" onClick={() => mudarStatusPedido(pedido, "encerrado")}>Encerrar</button>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -346,6 +450,76 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
             </div>
           )}
       </section>
+
+      {formPedido && (
+        <Modal title={formPedido.requestId ? `Pedido da requisição: ${formPedido.titulo}` : "Novo pedido de compra"} onClose={() => setFormPedido(null)}>
+          <form className="tdg-planner-form" onSubmit={enviarPedido}>
+            {formPedido.requestId
+              ? <p className="tdg-fiscal-nota">Os itens vêm da requisição aprovada. Escolha o fornecedor e o depósito.</p>
+              : <p className="tdg-fiscal-nota">Sem requisição vinculada, o pedido nasce vazio: gere-o a partir de uma requisição aprovada para trazer os itens.</p>}
+            <label>Fornecedor *
+              <select value={formPedido.supplierPartyId} onChange={(e) => setFormPedido((f) => ({ ...f, supplierPartyId: e.target.value }))} required>
+                <option value="">— selecione —</option>
+                {fornecedores.map((p) => <option key={p.id} value={p.id}>{p.razaoSocial || p.nomeFantasia || p.id}</option>)}
+              </select>
+            </label>
+            <div className="tdg-planner-grid3">
+              <label>Depósito
+                <select value={formPedido.warehouseId} onChange={(e) => setFormPedido((f) => ({ ...f, warehouseId: e.target.value }))}>
+                  <option value="">— opcional —</option>
+                  {depositos.map((d) => <option key={d.id} value={d.id}>{d.nome || d.id}</option>)}
+                </select>
+              </label>
+              <label>Previsto para<input type="date" value={formPedido.esperadoEm} onChange={(e) => setFormPedido((f) => ({ ...f, esperadoEm: e.target.value }))} /></label>
+              <label>Observações<input value={formPedido.notas} onChange={(e) => setFormPedido((f) => ({ ...f, notas: e.target.value }))} maxLength={400} /></label>
+            </div>
+            <div className="tdg-form-actions">
+              <button type="button" onClick={() => setFormPedido(null)}>Cancelar</button>
+              <button type="submit" className="tdg-action" disabled={ocupado === "salvando"}>Criar pedido</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {recebimento && (
+        <Modal title={`Receber pedido ${recebimento.pedido.numeroDocumento || ""}`.trim()} onClose={() => setRecebimento(null)} wide>
+          <form className="tdg-planner-form" onSubmit={enviarRecebimento}>
+            <div className="tdg-planner-grid3">
+              <label>Depósito *
+                <select value={recebimento.warehouseId} onChange={(e) => setRecebimento((r) => ({ ...r, warehouseId: e.target.value }))} required>
+                  <option value="">— selecione —</option>
+                  {depositos.map((d) => <option key={d.id} value={d.id}>{d.nome || d.id}</option>)}
+                </select>
+              </label>
+              <label>Data *<input type="date" value={recebimento.receivedAt} onChange={(e) => setRecebimento((r) => ({ ...r, receivedAt: e.target.value }))} required /></label>
+              <label>Nota fiscal<input value={recebimento.invoiceNumber} onChange={(e) => setRecebimento((r) => ({ ...r, invoiceNumber: e.target.value }))} maxLength={60} /></label>
+            </div>
+            <div className="tdg-table-wrap">
+              <table className="tdg-table">
+                <thead><tr><th>Item</th><th>Pendente</th><th>Receber agora</th></tr></thead>
+                <tbody>
+                  {recebimento.linhasPendentes.map((l) => (
+                    <tr key={l.orderItemId}>
+                      <td>{nomeDoItem(l.itemId) || l.descricao || l.orderItemId}</td>
+                      <td>{l.pendente}</td>
+                      <td>
+                        <input type="number" min="0" max={l.pendente} step="0.001"
+                          value={recebimento.quantidades[l.orderItemId] || ""}
+                          onChange={(e) => setRecebimento((r) => ({ ...r, quantidades: { ...r.quantidades, [l.orderItemId]: e.target.value } }))} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <label className="tdg-check-field"><input type="checkbox" checked={recebimento.gerarConta} onChange={(e) => setRecebimento((r) => ({ ...r, gerarConta: e.target.checked }))} /><span>Gerar conta a pagar deste recebimento</span></label>
+            <div className="tdg-form-actions">
+              <button type="button" onClick={() => setRecebimento(null)}>Cancelar</button>
+              <button type="submit" className="tdg-action" disabled={ocupado === "salvando"}>Lançar recebimento</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
