@@ -60,21 +60,21 @@ export const TODO_GREEN_ROLES = [
 export const TODO_GREEN_PERMISSIONS = {
   owner: ["*"],
   admin: ["*"],
-  lideranca_comercial: ["read", "crm:manage", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export"],
-  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "goal:read", "goal:checkin"],
-  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin"],
-  produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate"],
-  planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate"],
-  financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate"],
-  operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate"],
-  marketing: ["read", "marketing:manage", "evidence:manage", "goal:read", "goal:checkin"],
-  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "goal:read", "goal:checkin", "goal:validate"],
+  lideranca_comercial: ["read", "crm:manage", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage"],
+  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "goal:read", "goal:checkin", "planner:manage"],
+  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "planner:manage"],
+  produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
+  planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
+  financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
+  operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
+  marketing: ["read", "marketing:manage", "evidence:manage", "goal:read", "goal:checkin", "planner:manage"],
+  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage"],
   auditor: ["read", "audit:read", "export:read", "goal:read", "goal:export"],
   // RH lê a vertical e administra pessoal — e nada além disso. Em particular,
   // não recebe `finance:manage`: fechar a folha não é o mesmo que lançar no
   // caixa, e juntar os dois num papel só tiraria a segregação que a auditoria
   // de folha depende.
-  rh: ["read", "hr:manage", "goal:read", "goal:checkin"],
+  rh: ["read", "hr:manage", "goal:read", "goal:checkin", "planner:manage"],
 };
 
 // A regra de permissão da vertical, uma só, usada pelo front e pelo worker.
@@ -133,6 +133,11 @@ export const TODO_GREEN_MODULE_AREAS = [
     id: "implantacao",
     name: "Implantação",
     description: "Go-live de cliente com contrato, SLA, operação, faturamento, portal, integrações e responsáveis.",
+  },
+  {
+    id: "produtividade",
+    name: "Produtividade",
+    description: "Planner, planos com baldes e tarefas, privados ou compartilhados, com prazo, prioridade e progresso.",
   },
   {
     id: "ocorrencias",
@@ -463,6 +468,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
     icon: "ListTodo",
     order: 60,
     description: "Boards, responsáveis, prazos, automações, Kanban, Gantt, workload e entregas entre áreas.",
+  }),
+  module("planner", "Planner", "produtividade", "/todogreen/planner", {
+    icon: "LayoutGrid",
+    order: 60.2,
+    description: "Planos com baldes e tarefas no estilo Microsoft Planner — privados ou compartilhados, com responsável, prazo, prioridade, progresso e checklist.",
+    permissions: ["read", "planner:manage"],
   }),
   module("espaco", "Comunicação interna", "comunicacao-interna", "/todogreen/espaco", {
     icon: "BriefcaseBusiness",

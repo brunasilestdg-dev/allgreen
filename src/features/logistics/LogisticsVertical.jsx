@@ -97,6 +97,7 @@ const ErpRegistriesPage = lazy(() => import("./pages/ErpRegistriesPage.jsx"));
 const PurchasingPage = lazy(() => import("./pages/PurchasingPage.jsx"));
 const FiscalPage = lazy(() => import("./pages/FiscalPage.jsx"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage.jsx"));
+const PlannerPage = lazy(() => import("./pages/PlannerPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
 const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage.jsx"));
@@ -261,6 +262,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "cte",
   "mdfe",
   "nfse",
+  "planner",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -687,6 +689,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     description: "Acessos, permissões, auditoria, integrações, configurações e governança da vertical.",
   },
+  planner: {
+    title: "Planner",
+    navLabel: "Planner",
+    route: "/todogreen/planner",
+    area: "produtividade",
+    status: "functional",
+    permission: "planner:manage",
+    description: "Planos com baldes e tarefas, no estilo do Microsoft Planner — privados ou compartilhados com o espaço, com responsável, prazo, prioridade, progresso e checklist.",
+  },
 });
 
 const PRIMARY_NAVIGATION = Object.freeze([
@@ -707,6 +718,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "suprimentos", label: "Suprimentos", route: "/todogreen/compras", pages: ["compras", "estoque"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "produtos-logisticos", "catalogo-produtos", "regua"] },
+  { id: "planner", label: "Planner", route: "/todogreen/planner", pages: ["planner"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
   { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "auditoria", "integracoes", "acessos"] },
 ]);
@@ -2418,6 +2430,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "comissoes" && <Suspense fallback={<section className="tdg-panel">Carregando comissões...</section>}><FinancePage type="commission" entries={registros.financial.filter((item) => item.tipo === "commission")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "dp-rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP...</section>}><EnterpriseAreaPage area="dp" onNavigate={navigate} /></Suspense>}
       {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><PeoplePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "planner" && <Suspense fallback={<section className="tdg-panel">Carregando o Planner...</section>}><PlannerPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} role={role} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><EnterpriseAreaPage area="quality" onNavigate={navigate} /></Suspense>}
       {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando marketing...</section>}><EnterpriseAreaPage area="marketing" onNavigate={navigate} /></Suspense>}
       {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><EnterpriseAreaPage area="legal" onNavigate={navigate} /></Suspense>}

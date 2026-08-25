@@ -21,6 +21,7 @@ import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
 import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
+import { handleTodoGreenPlanner } from "./todogreen-planner.js";
 import { handleTodoGreenTms } from "./todogreen-tms.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
@@ -202,6 +203,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenPayroll(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Planner (estilo Microsoft Planner): planos privados ou compartilhados, com
+  // baldes e tarefas. A visibilidade é imposta no handler, em SQL.
+  if (path.startsWith("/api/todogreen/planner")) {
+    return guarded("To Do Green planner error", "Não foi possível abrir o Planner.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPlanner(request, env, resolved.access);
     });
   }
 
