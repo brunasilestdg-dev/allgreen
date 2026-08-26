@@ -1,4 +1,4 @@
--- 0063_todogreen_payroll.sql
+-- 0066_todogreen_payroll.sql
 -- Pessoas e folha. Dado sensível (LGPD): CPF, salário e dependentes só saem
 -- para rh/admin/owner — a coluna existe aqui, mas o handler decide quem lê.
 -- Vocabulário "colaborador", nunca "funcionário" (no produto, funcionário é a
@@ -6,40 +6,22 @@
 -- archived_at, período travado após fechamento.
 
 -- ── Colaboradores ───────────────────────────────────────────
+-- A tabela `todogreen_employees` é o cadastro mestre criado na 0062
+-- (master data). NÃO criar uma segunda coleção de colaboradores: a folha
+-- estende o cadastro existente com as colunas que só ela usa. CPF mora em
+-- `document`, nome em `full_name`, cargo em `job_title` — o handler da folha
+-- traduz o vocabulário da API para essas colunas.
 
-CREATE TABLE IF NOT EXISTS todogreen_employees (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL DEFAULT 'todogreen',
-  workspace_owner_id TEXT NOT NULL,
-  nome TEXT NOT NULL,
-  cpf TEXT NOT NULL DEFAULT '',
-  matricula TEXT NOT NULL DEFAULT '',
-  cargo TEXT NOT NULL DEFAULT '',
-  departamento TEXT NOT NULL DEFAULT '',
-  cost_center_id TEXT NOT NULL DEFAULT '',
-  vinculo TEXT NOT NULL DEFAULT 'clt'
-    CHECK (vinculo IN ('clt', 'pj', 'estagio', 'temporario', 'autonomo', 'aprendiz')),
-  salario_base REAL NOT NULL DEFAULT 0,
-  dependentes INTEGER NOT NULL DEFAULT 0,
-  jornada_semanal REAL NOT NULL DEFAULT 44,
-  admissao_em TEXT NOT NULL DEFAULT '',
-  desligamento_em TEXT,
-  motivo_desligamento TEXT NOT NULL DEFAULT '',
-  regime_horas TEXT NOT NULL DEFAULT 'mensalista',
-  user_id TEXT,
-  resource_profile_id TEXT,
-  status TEXT NOT NULL DEFAULT 'ativo'
-    CHECK (status IN ('ativo', 'afastado', 'ferias', 'desligado')),
-  fields_json TEXT NOT NULL DEFAULT '{}',
-  revision INTEGER NOT NULL DEFAULT 1,
-  created_by TEXT NOT NULL DEFAULT '',
-  updated_by TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  archived_at TEXT
-);
+ALTER TABLE todogreen_employees ADD COLUMN salario_base REAL NOT NULL DEFAULT 0;
+ALTER TABLE todogreen_employees ADD COLUMN dependentes INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE todogreen_employees ADD COLUMN jornada_semanal REAL NOT NULL DEFAULT 44;
+ALTER TABLE todogreen_employees ADD COLUMN regime_horas TEXT NOT NULL DEFAULT 'mensalista';
+ALTER TABLE todogreen_employees ADD COLUMN motivo_desligamento TEXT NOT NULL DEFAULT '';
+ALTER TABLE todogreen_employees ADD COLUMN user_id TEXT;
+ALTER TABLE todogreen_employees ADD COLUMN resource_profile_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_employees_ws
-  ON todogreen_employees (workspace_owner_id, archived_at, status, nome);
+  ON todogreen_employees (workspace_owner_id, archived_at, status, full_name);
 
 -- ── Ponto (distinto de db.timeEntries, que é hora faturável) ─
 -- O ponto registra a jornada real do colaborador; a hora faturável ao cliente

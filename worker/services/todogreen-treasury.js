@@ -127,7 +127,7 @@ const lerPeriodos = async (env, ownerId) => {
 const importarExtrato = async (env, access, user, corpo) => {
   const contaId = texto(corpo.bankAccountId, 120);
   const conta = await env.DB.prepare(
-    `SELECT id FROM todogreen_bank_accounts
+    `SELECT id FROM todogreen_treasury_accounts
       WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
   ).bind(contaId, TENANT_ID, access.ownerId).first();
   if (!conta) return json({ error: "Conta bancária não encontrada neste espaço." }, 404);
@@ -215,7 +215,7 @@ const listarSaldos = async (env, access) => {
                WHERE l.bank_account_id = c.id AND l.workspace_owner_id = c.workspace_owner_id
                  AND l.reconciled_at IS NULL
             ), 0) AS pendentes
-       FROM todogreen_bank_accounts c
+       FROM todogreen_treasury_accounts c
       WHERE c.tenant_id = ? AND c.workspace_owner_id = ? AND c.archived_at IS NULL
       ORDER BY c.name`,
   ).bind(TENANT_ID, access.ownerId).all();

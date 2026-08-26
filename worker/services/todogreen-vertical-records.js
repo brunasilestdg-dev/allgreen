@@ -681,7 +681,7 @@ const COLECOES = {
   // `opening_balance` é o saldo inicial (premissa), e o saldo de hoje é ele mais
   // o que foi conciliado, calculado por `saldoDaConta`.
   bankAccounts: {
-    tabela: "todogreen_bank_accounts",
+    tabela: "todogreen_treasury_accounts",
     permissao: "finance:manage",
     escopoDeCarteira: false,
     ordem: "name ASC",

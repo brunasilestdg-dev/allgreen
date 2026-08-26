@@ -49,33 +49,58 @@ const lista = (valor) => (Array.isArray(valor) ? valor : []);
 // Mapeamento
 // ---------------------------------------------------------------------------
 
+// A tabela `todogreen_employees` é o cadastro mestre (migração 0062, colunas
+// em inglês: full_name, document, job_title…). A folha NÃO tem tabela própria
+// de colaborador — ela estende o cadastro (0066) e traduz o vocabulário aqui,
+// para a API continuar falando português com o front.
+const VINCULO_PARA_TIPO = {
+  clt: "employee", pj: "pj", estagio: "intern",
+  temporario: "temporary", autonomo: "other", aprendiz: "apprentice",
+};
+const TIPO_PARA_VINCULO = {
+  employee: "clt", pj: "pj", intern: "estagio",
+  temporary: "temporario", other: "autonomo", apprentice: "aprendiz",
+  third_party: "pj",
+};
+// "ferias" e "afastado" viram os dois 'leave' no cadastro mestre; a distinção
+// da folha fica em fields_json.situacaoFolha para não se perder na volta.
+const STATUS_PARA_MESTRE = { ativo: "active", afastado: "leave", ferias: "leave", desligado: "terminated" };
+const statusDaLinha = (row, campos) => {
+  if (row.status === "leave") return campos.situacaoFolha === "ferias" ? "ferias" : "afastado";
+  if (row.status === "terminated" || row.status === "inactive") return "desligado";
+  return "ativo";
+};
+
 // `revelarCpf` só quando pedido explicitamente. Mascarar por padrão evita o CPF
 // vazar em toda listagem — mesmo para o RH, que raramente precisa do número
 // inteiro numa tabela.
-const colaboradorDaLinha = (row, { revelarCpf = false } = {}) => ({
-  id: row.id,
-  nome: row.nome,
-  cpf: revelarCpf ? row.cpf : mascararCpf(row.cpf),
-  matricula: row.matricula,
-  cargo: row.cargo,
-  departamento: row.departamento,
-  costCenterId: row.cost_center_id,
-  vinculo: row.vinculo,
-  salarioBase: row.salario_base,
-  dependentes: row.dependentes,
-  jornadaSemanal: row.jornada_semanal,
-  admissaoEm: row.admissao_em,
-  desligamentoEm: row.desligamento_em || "",
-  motivoDesligamento: row.motivo_desligamento,
-  regimeHoras: row.regime_horas,
-  userId: row.user_id || "",
-  resourceProfileId: row.resource_profile_id || "",
-  status: row.status,
-  campos: parse(row.fields_json, {}),
-  revision: row.revision,
-  criadoEm: row.created_at,
-  atualizadoEm: row.updated_at,
-});
+const colaboradorDaLinha = (row, { revelarCpf = false } = {}) => {
+  const campos = parse(row.fields_json, {});
+  return {
+    id: row.id,
+    nome: row.full_name,
+    cpf: revelarCpf ? row.document : mascararCpf(row.document),
+    matricula: row.employee_code,
+    cargo: row.job_title,
+    departamento: row.department,
+    costCenterId: row.cost_center_id,
+    vinculo: TIPO_PARA_VINCULO[row.employment_type] || "clt",
+    salarioBase: row.salario_base,
+    dependentes: row.dependentes,
+    jornadaSemanal: row.jornada_semanal,
+    admissaoEm: row.hire_date || "",
+    desligamentoEm: row.termination_date || "",
+    motivoDesligamento: row.motivo_desligamento,
+    regimeHoras: row.regime_horas,
+    userId: row.user_id || "",
+    resourceProfileId: row.resource_profile_id || "",
+    status: statusDaLinha(row, campos),
+    campos,
+    revision: row.revision,
+    criadoEm: row.created_at,
+    atualizadoEm: row.updated_at,
+  };
+};
 
 const runDaLinha = (row) => ({
   id: row.id,
@@ -136,12 +161,15 @@ const feriasDaLinha = (row) => ({
 const listarColaboradores = async (env, access, url) => {
   const { limit, offset } = paginacao(url);
   const status = texto(url.searchParams.get("status"), 20);
-  const filtro = status ? "AND status = ?" : "";
-  const params = [TENANT_ID, access.ownerId, ...(status ? [status] : [])];
+  // O filtro chega no vocabulário da API (ativo/afastado/ferias/desligado) e é
+  // traduzido para o status do cadastro mestre antes de ir ao SQL.
+  const statusMestre = STATUS_PARA_MESTRE[status] || "";
+  const filtro = statusMestre ? "AND status = ?" : "";
+  const params = [TENANT_ID, access.ownerId, ...(statusMestre ? [statusMestre] : [])];
   const base = `FROM todogreen_employees
     WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL ${filtro}`;
   const [{ results }, totalRow] = await Promise.all([
-    env.DB.prepare(`SELECT * ${base} ORDER BY nome LIMIT ? OFFSET ?`).bind(...params, limit, offset).all(),
+    env.DB.prepare(`SELECT * ${base} ORDER BY full_name LIMIT ? OFFSET ?`).bind(...params, limit, offset).all(),
     env.DB.prepare(`SELECT COUNT(*) AS total ${base}`).bind(...params).first(),
   ]);
   return json({
@@ -162,28 +190,35 @@ const obterColaborador = async (env, access, id) => {
   return json(colaboradorDaLinha(row, { revelarCpf: true }));
 };
 
-const colunasColaborador = (corpo) => ({
-  nome: texto(corpo.nome, 200),
-  cpf: texto(corpo.cpf, 14).replace(/\D/g, ""),
-  matricula: texto(corpo.matricula, 40),
-  cargo: texto(corpo.cargo, 120),
-  departamento: texto(corpo.departamento, 120),
-  cost_center_id: texto(corpo.costCenterId, 120),
-  vinculo: ["clt", "pj", "estagio", "temporario", "autonomo", "aprendiz"].includes(texto(corpo.vinculo, 20))
-    ? texto(corpo.vinculo, 20) : "clt",
-  salario_base: numero(corpo.salarioBase),
-  dependentes: Math.max(0, inteiro(corpo.dependentes)),
-  jornada_semanal: numero(corpo.jornadaSemanal) || 44,
-  admissao_em: texto(corpo.admissaoEm, 20),
-  desligamento_em: texto(corpo.desligamentoEm, 20) || null,
-  motivo_desligamento: texto(corpo.motivoDesligamento, 300),
-  regime_horas: texto(corpo.regimeHoras, 30) || "mensalista",
-  user_id: texto(corpo.userId, 120) || null,
-  resource_profile_id: texto(corpo.resourceProfileId, 120) || null,
-  status: ["ativo", "afastado", "ferias", "desligado"].includes(texto(corpo.status, 20))
-    ? texto(corpo.status, 20) : "ativo",
-  fields_json: JSON.stringify(objeto(corpo.campos)),
-});
+const colunasColaborador = (corpo) => {
+  const statusApi = ["ativo", "afastado", "ferias", "desligado"].includes(texto(corpo.status, 20))
+    ? texto(corpo.status, 20) : "ativo";
+  const campos = objeto(corpo.campos);
+  // A distinção férias/afastado não existe no cadastro mestre (ambos 'leave');
+  // fica registrada nos campos livres para a leitura devolver o valor certo.
+  if (statusApi === "ferias" || statusApi === "afastado") campos.situacaoFolha = statusApi;
+  else delete campos.situacaoFolha;
+  return {
+    full_name: texto(corpo.nome, 200),
+    document: texto(corpo.cpf, 14).replace(/\D/g, ""),
+    employee_code: texto(corpo.matricula, 40),
+    job_title: texto(corpo.cargo, 120),
+    department: texto(corpo.departamento, 120),
+    cost_center_id: texto(corpo.costCenterId, 120),
+    employment_type: VINCULO_PARA_TIPO[texto(corpo.vinculo, 20)] || "employee",
+    salario_base: numero(corpo.salarioBase),
+    dependentes: Math.max(0, inteiro(corpo.dependentes)),
+    jornada_semanal: numero(corpo.jornadaSemanal) || 44,
+    hire_date: texto(corpo.admissaoEm, 20) || null,
+    termination_date: texto(corpo.desligamentoEm, 20) || null,
+    motivo_desligamento: texto(corpo.motivoDesligamento, 300),
+    regime_horas: texto(corpo.regimeHoras, 30) || "mensalista",
+    user_id: texto(corpo.userId, 120) || null,
+    resource_profile_id: texto(corpo.resourceProfileId, 120) || null,
+    status: STATUS_PARA_MESTRE[statusApi],
+    fields_json: JSON.stringify(campos),
+  };
+};
 
 const criarColaborador = async (env, access, user, corpo) => {
   const erros = validarColaborador({
@@ -192,6 +227,15 @@ const criarColaborador = async (env, access, user, corpo) => {
   if (erros.length) return json({ error: "Cadastro com pendências.", erros }, 400);
 
   const dados = colunasColaborador(corpo);
+  // O cadastro mestre tem CPF único por espaço (índice da 0062). Verificar
+  // antes devolve um erro legível em vez do estouro do índice.
+  if (dados.document) {
+    const repetido = await env.DB.prepare(
+      `SELECT id FROM todogreen_employees
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND document = ? AND archived_at IS NULL`,
+    ).bind(TENANT_ID, access.ownerId, dados.document).first();
+    if (repetido) return json({ error: "Já existe um colaborador com este CPF." }, 409);
+  }
   const id = crypto.randomUUID();
   const agora = new Date().toISOString();
   const colunas = Object.keys(dados).join(", ");
@@ -225,7 +269,7 @@ const atualizarColaborador = async (env, access, user, id, corpo) => {
 const arquivarColaborador = async (env, access, user, id) => {
   const agora = new Date().toISOString();
   await env.DB.prepare(
-    `UPDATE todogreen_employees SET archived_at = ?, status = 'desligado', updated_by = ?, updated_at = ?, revision = revision + 1
+    `UPDATE todogreen_employees SET archived_at = ?, status = 'terminated', updated_by = ?, updated_at = ?, revision = revision + 1
       WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
   ).bind(agora, user.id, agora, id, TENANT_ID, access.ownerId).run();
   return json({ ok: true });
@@ -323,7 +367,7 @@ const fecharRun = async (env, access, user, runId) => {
 
   const { results: colaboradores } = await env.DB.prepare(
     `SELECT * FROM todogreen_employees
-      WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL AND status IN ('ativo','ferias','afastado')`,
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL AND status IN ('active','leave')`,
   ).bind(TENANT_ID, access.ownerId).all();
   if (!(colaboradores || []).length) return json({ error: "Nenhum colaborador ativo para calcular." }, 400);
 
@@ -462,7 +506,7 @@ const obterResumo = async (env, access) => {
   const [ativos, ultimaRun] = await Promise.all([
     env.DB.prepare(
       `SELECT COUNT(*) AS total, COALESCE(SUM(salario_base),0) AS folha
-        FROM todogreen_employees WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL AND status != 'desligado'`,
+        FROM todogreen_employees WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL AND status NOT IN ('terminated','inactive')`,
     ).bind(TENANT_ID, access.ownerId).first(),
     env.DB.prepare(
       `SELECT * FROM todogreen_payroll_runs WHERE tenant_id = ? AND workspace_owner_id = ? AND status = 'fechada'

@@ -1,4 +1,4 @@
--- ===== Tesouraria: conta bancária, conciliação e trava de período =====
+-- 0068_todogreen_treasury.sql
 --
 -- A migração 0052 deu ao `todogreen_financial_entries` o que faltava para ser
 -- contas a pagar e receber de verdade: vencimento, baixa parcial (em
@@ -29,7 +29,7 @@
 -- ---------------------------------------------------------------------------
 -- Onde o dinheiro está
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS todogreen_bank_accounts (
+CREATE TABLE IF NOT EXISTS todogreen_treasury_accounts (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL DEFAULT 'todogreen',
   workspace_owner_id TEXT NOT NULL,
@@ -56,8 +56,8 @@ CREATE TABLE IF NOT EXISTS todogreen_bank_accounts (
   FOREIGN KEY (workspace_owner_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_todogreen_bank_accounts_espaco
-  ON todogreen_bank_accounts (workspace_owner_id, archived_at, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_todogreen_treasury_accounts_espaco
+  ON todogreen_treasury_accounts (workspace_owner_id, archived_at, updated_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- O eixo estável do relatório
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS todogreen_bank_statement_lines (
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY (workspace_owner_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (bank_account_id) REFERENCES todogreen_bank_accounts(id) ON DELETE CASCADE
+  FOREIGN KEY (bank_account_id) REFERENCES todogreen_treasury_accounts(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_todogreen_statement_dedup
   ON todogreen_bank_statement_lines (workspace_owner_id, bank_account_id, import_hash);

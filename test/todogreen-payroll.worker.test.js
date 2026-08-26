@@ -103,7 +103,7 @@ describe("fechamento da folha trava", () => {
     // Garante ao menos um colaborador ativo.
     await pedir("/api/todogreen/payroll/colaboradores", {
       metodo: "POST", token: rh.token,
-      corpo: { nome: "Beto Ajudante", cpf: "111.444.777-35", salarioBase: 2000, admissaoEm: "2026-02-01" },
+      corpo: { nome: "Beto Ajudante", cpf: "526.018.159-06", salarioBase: 2000, admissaoEm: "2026-02-01" },
     });
     const run = await (await pedir("/api/todogreen/payroll/folhas", {
       metodo: "POST", token: rh.token, corpo: { competencia: "2026-03", tipo: "mensal" },
@@ -134,7 +134,7 @@ describe("ponto e férias", () => {
   it("registra ponto e férias de um colaborador e lista de volta", async () => {
     const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {
       metodo: "POST", token: rh.token,
-      corpo: { nome: "Carla Ponto", cpf: "111.444.777-35", salarioBase: 2500, admissaoEm: "2026-01-05" },
+      corpo: { nome: "Carla Ponto", cpf: "083.016.613-05", salarioBase: 2500, admissaoEm: "2026-01-05" },
     })).json();
 
     const ponto = await pedir("/api/todogreen/payroll/ponto", {
