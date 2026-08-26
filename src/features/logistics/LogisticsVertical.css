@@ -43,6 +43,37 @@
 .tdg textarea { font: inherit; }
 .tdg button { touch-action: manipulation; }
 
+/* Scrollbar moderna em toda a vertical: fina, arredondada, no tema, e só
+   aparece por cima do conteúdo (overlay). A barra nativa grossa do SO era o
+   que dava cara "arcaica". Vale para qualquer container rolável do .tdg. */
+.tdg *,
+.cp-app *,
+.tdg-driver-app * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(23, 98, 79, .38) transparent;
+}
+.tdg ::-webkit-scrollbar,
+.cp-app ::-webkit-scrollbar,
+.tdg-driver-app ::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.tdg ::-webkit-scrollbar-track,
+.cp-app ::-webkit-scrollbar-track,
+.tdg-driver-app ::-webkit-scrollbar-track { background: transparent; }
+.tdg ::-webkit-scrollbar-thumb,
+.cp-app ::-webkit-scrollbar-thumb,
+.tdg-driver-app ::-webkit-scrollbar-thumb {
+  background: rgba(23, 98, 79, .32);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+.tdg ::-webkit-scrollbar-thumb:hover,
+.cp-app ::-webkit-scrollbar-thumb:hover,
+.tdg-driver-app ::-webkit-scrollbar-thumb:hover { background: rgba(23, 98, 79, .55); background-clip: padding-box; }
+.tdg ::-webkit-scrollbar-corner { background: transparent; }
+
 .tdg-shell-header {
   align-items: center;
   background: var(--tdg-card);

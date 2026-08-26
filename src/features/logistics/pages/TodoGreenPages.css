@@ -1543,3 +1543,19 @@
 .tdg-driver-form small { color: #6d8377; }
 .tdg-driver-historico summary { cursor: pointer; font-weight: 700; padding: 6px 2px; }
 .tdg-driver-historico { display: grid; gap: 8px; }
+
+/* ── Matriz RASCI (aba única de responsabilidades) ────────────────────── */
+.tdg-rasci-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 12px; }
+.tdg-rasci-legend span { align-items: baseline; color: var(--tdg-ink); display: flex; font-size: .85rem; gap: 5px; }
+.tdg-rasci-legend b {
+  background: var(--tdg-soft); border-radius: 6px; color: var(--tdg-green);
+  font-size: .8rem; padding: 1px 7px;
+}
+.tdg-rasci-legend small { color: var(--tdg-muted); font-size: .72rem; }
+.tdg-rasci-matrix th[scope="row"] { background: #f7faf8; font-weight: 700; white-space: nowrap; }
+.tdg-rasci-matrix td { color: var(--tdg-ink); font-size: .85rem; }
+
+/* Utilitários de página usados por Tesouraria, RASCI e novas telas. */
+.tdg-page-block { display: grid; gap: 12px; }
+.tdg-table-scroll { overflow-x: auto; width: 100%; }
+.tdg-table-scroll > table { min-width: 640px; }

@@ -115,6 +115,7 @@ const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
 const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
 const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
 const EnterpriseAreaPage = lazy(() => import("./pages/EnterpriseAreaPage.jsx"));
+const RasciMatrixPage = lazy(() => import("./pages/RasciMatrixPage.jsx"));
 const ClientActivationPage = lazy(() => import("./ClientActivationPage.jsx"));
 const DriverFleetCenterPage = lazy(() => import("./pages/DriverFleetCenterPage.jsx"));
 
@@ -267,6 +268,9 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "mdfe",
   "nfse",
   "planner",
+  "rasci",
+  "comissoes",
+  "espaco",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -287,12 +291,12 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Criação de painéis pessoais ou compartilhados com indicadores escolhidos por cada usuário.",
   },
   espaco: {
-    title: "Comunicação interna",
-    navLabel: "Comunicação",
+    title: "Espaço de trabalho",
+    navLabel: "Espaço",
     route: "/todogreen/espaco",
-    area: "comunicacao-interna",
+    area: "espaco-trabalho",
     status: "functional",
-    description: "Comunicados, decisões, bases de conhecimento e alinhamentos internos.",
+    description: "Notas, bases relacionais, processos, automações, capacidade e quadros — o hub de trabalho da vertical.",
   },
   metas: {
     title: "Metas e acompanhamento",
@@ -406,6 +410,30 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     description: "Emissão de CIOT com piso mínimo e protocolo.",
   },
+  ocorrencias: {
+    title: "Ocorrências e exceções operacionais",
+    navLabel: "Ocorrências",
+    route: "/todogreen/ocorrencias",
+    area: "operacao",
+    status: "functional",
+    description: "Atrasos, insucessos, reentregas e eventos críticos ligados à operação.",
+  },
+  comissoes: {
+    title: "Comissões",
+    navLabel: "Comissões",
+    route: "/todogreen/comissoes",
+    area: "financeiro",
+    status: "functional",
+    description: "Comissão por lançamento, com baixa e estorno pelo mesmo razão.",
+  },
+  rasci: {
+    title: "Matriz RASCI",
+    navLabel: "RASCI",
+    route: "/todogreen/rasci",
+    area: "administracao",
+    status: "functional",
+    description: "Quem executa, aprova, apoia, consulta e é informado em cada área — numa aba só.",
+  },
   esg: {
     title: "ESG, Green Score e emissões da cadeia logística",
     navLabel: "ESG",
@@ -415,12 +443,12 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "CO2 evitado, diesel não consumido, equivalências, metodologia e textos comerciais auditáveis.",
   },
   regua: {
-    title: "Parâmetros do simulador",
-    navLabel: "Parâmetros",
+    title: "Parâmetros de preço",
+    navLabel: "Parâmetros de preço",
     route: "/todogreen/parametros-simulador",
-    area: "produtos",
+    area: "commercial",
     status: "functional",
-    description: "Parâmetros de custo e margem, com versão e fonte.",
+    description: "Custo de veículo, motorista, energia e margem que a precificação usa — com versão e fonte.",
   },
   "central-esg": {
     title: "Central ESG",
@@ -716,7 +744,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
 const PRIMARY_NAVIGATION = Object.freeze([
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
   { id: "cadastros", label: "Cadastros", route: "/todogreen/cadastros", pages: ["cadastros"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial", "marketing", "campanhas"] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial", "marketing", "campanhas"] },
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "motorista-frota", "planejamento", "aceite-viagens", "ordens-servico", "ciot", "rastreamento"] },
   { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes", "central-trabalho"] },
   { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
@@ -726,14 +754,14 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // mesmo conteúdo. Viraram um só: "Pessoas".
   { id: "pessoas", label: "Pessoas", route: "/todogreen/rh", pages: ["rh", "dp-rh", "escalas"] },
   { id: "suprimentos", label: "Suprimentos", route: "/todogreen/compras", pages: ["compras", "estoque"] },
-  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "produtos-logisticos", "catalogo-produtos", "regua"] },
+  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "catalogo-produtos"] },
   { id: "planner", label: "Planner", route: "/todogreen/planner", pages: ["planner"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
-  { id: "comunicacao-interna", label: "Comunicação", route: "/todogreen/espaco", pages: ["espaco", "comunicacao-interna"] },
+  { id: "espaco-trabalho", label: "Espaço de trabalho", route: "/todogreen/espaco", pages: ["espaco"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
   // Qualidade e Jurídico são telas de governança de página única; ficam sob
   // Administração em vez de dois itens soltos no topo.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "auditoria", "integracoes", "acessos", "qualidade", "juridico"] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "auditoria", "integracoes", "acessos", "qualidade", "juridico"] },
 ]);
 
 const MANAGEMENT_TOOLS = Object.freeze([
@@ -2445,6 +2473,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "titulos" && <Suspense fallback={<section className="tdg-panel">Carregando títulos...</section>}><TransactionalSpinePage mode="titles" authHeaders={authHeaders} clients={clientes} setToast={setToast} /></Suspense>}
       {page === "rateios" && <Suspense fallback={<section className="tdg-panel">Carregando rateios...</section>}><TransactionalSpinePage mode="costs" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
       {page === "custos" && <Suspense fallback={<section className="tdg-panel">Carregando custos e margem...</section>}><FinancePage type="cost" entries={registros.financial.filter((item) => item.tipo === "cost")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
+      {page === "rasci" && <Suspense fallback={<section className="tdg-panel">Carregando matriz RASCI...</section>}><RasciMatrixPage /></Suspense>}
       {page === "comissoes" && <Suspense fallback={<section className="tdg-panel">Carregando comissões...</section>}><FinancePage type="commission" entries={registros.financial.filter((item) => item.tipo === "commission")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "dp-rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP...</section>}><EnterpriseAreaPage area="dp" onNavigate={navigate} /></Suspense>}
       {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><PeoplePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
