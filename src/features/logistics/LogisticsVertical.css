@@ -29,6 +29,10 @@
   margin: 0 auto;
   max-width: 1440px;
   padding: clamp(14px, 2vw, 28px);
+  /* Respiro no rodapé para o conteúdo não ficar atrás do botão flutuante do
+     Plantû (fixo no canto inferior direito). Sem isto, o último cartão/ação da
+     página ficava coberto pela bolha. */
+  padding-bottom: 104px;
   width: 100%;
 }
 
