@@ -224,6 +224,12 @@
 .tdg-pipeline-strip button.active::after { background: var(--tdg-green); }
 .tdg-pipeline-strip button strong { font-size: 12px; }
 .tdg-pipeline-strip button span,.tdg-pipeline-strip button small { color: var(--tdg-muted); font-size: 10.5px; }
+/* O forecast mensal usa <article>, não <button>: sem estas regras strong/span/
+   small fluíam na mesma linha e o ano colava no número ("20260 negócio(s)"). */
+.tdg-pipeline-strip article { background: #f5f9f7; border: 1px solid var(--tdg-line); border-radius: 10px; display: grid; gap: 3px; min-height: 76px; padding: 10px; }
+.tdg-pipeline-strip article strong { font-size: 12px; }
+.tdg-pipeline-strip article span,.tdg-pipeline-strip article small { color: var(--tdg-muted); font-size: 10.5px; }
+.tdg-pipeline-strip article.attention { border-color: color-mix(in srgb, #c4700b 45%, var(--tdg-line)); background: #fff8ef; }
 .tdg-opp-toolbar { align-items: center; border: 1px solid var(--tdg-line); border-radius: 10px; display: flex; gap: 9px; padding-left: 11px; }
 .tdg-opp-toolbar input { border: 0; color: var(--tdg-text); flex: 1; font: inherit; min-height: 42px; outline: 0; }
 .tdg-opp-toolbar button { background: transparent; border: 0; border-left: 1px solid var(--tdg-line); color: var(--tdg-green); font-weight: 750; min-height: 42px; padding: 0 12px; }
@@ -1175,6 +1181,7 @@
   .df-title-actions button {
     width: 100%;
   }
+}
 /* ── Fiscal: CT-e, MDF-e e NFS-e ─────────────────────────────
    A prévia de impostos mostra o cálculo antes de gravar; os filtros por tipo e
    os botões de transição do documento reusam o visual de `.tdg-action`. */
