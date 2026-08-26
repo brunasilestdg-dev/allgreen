@@ -1070,6 +1070,13 @@
   font-size: clamp(2rem, 5vw, 3.1rem);
   letter-spacing: -.04em;
   line-height: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tdg-esg-score.pending strong {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 .tdg-esg-ops.empty .tdg-esg-score {
   background: #f7faf8;

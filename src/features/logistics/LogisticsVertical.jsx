@@ -2023,7 +2023,7 @@ function EsgPanel({ dashboard, data, onNavigate }) {
         <strong>{dataState}</strong>
       </div>
       <div className="tdg-esg-layout">
-        <div className="tdg-esg-score">
+        <div className={`tdg-esg-score${hasImpact ? "" : " pending"}`}>
           <span>Green Score</span>
           <strong>{hasImpact ? number.format(dashboard.greenScore) : "Pendente"}</strong>
           <small>{hasImpact ? "Indicador proprietário, não certificação" : "Depende de preço, rota, distância e evidências"}</small>
