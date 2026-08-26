@@ -363,10 +363,10 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Decisão de aceite da viagem ou OS com capacidade, produto, SLA, risco, margem e janela operacional.",
     permissions: ["read", "planning:manage", "product:manage"],
   }),
-  module("aceite-viagens", "Aceite de viagens", "operacao", "/todogreen/ordens-servico", {
+  module("aceite-viagens", "Aceito esta viagem?", "operacao", "/todogreen/aceite-viagens", {
     icon: "CheckCircle2",
     order: 26,
-    description: "Planejamento/Produtos libera a OS antes da execução, sem depender de Financeiro.",
+    description: "Simulador de aceite: custos obrigatórios, margem calculada e decisão registrada antes de virar OS.",
     permissions: ["read", "planning:manage", "product:manage"],
   }),
   module("ciot", "CIOT", "operacao", "/todogreen/ciot", {

@@ -387,12 +387,12 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Decide aceite de viagem ou OS com capacidade, produto, SLA, risco, margem e janela operacional.",
   },
   "aceite-viagens": {
-    title: "Aceite de viagens",
+    title: "Aceito esta viagem?",
     navLabel: "Aceite",
-    route: "/todogreen/ordens-servico",
+    route: "/todogreen/aceite-viagens",
     area: "operacao",
     status: "functional",
-    description: "Planejamento/Produtos libera a OS para execução depois da validação de contrato, produto, capacidade e premissas.",
+    description: "Simulador de aceite: custos obrigatórios, margem calculada e decisão registrada antes de virar OS.",
   },
   ciot: {
     title: "CIOT",
@@ -1044,7 +1044,6 @@ const TODO_GREEN_PAGE_ALIASES = Object.freeze({
   rentabilidade: "custos",
   "produtos-logisticos": "produtos",
   "catalogo-produtos": "produtos",
-  "aceite-viagens": "ordens-servico",
   fretes: "operacoes",
   rotas: "operacoes",
   viagens: "operacoes",
@@ -2416,7 +2415,11 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </Suspense>
       )}
       {page === "produtos" && <Suspense fallback={<section className="tdg-panel">Carregando produtos...</section>}><EnterpriseAreaPage area="products" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
-      {page === "planejamento" && <Suspense fallback={<section className="tdg-panel">Carregando planejamento...</section>}><EnterpriseAreaPage area="planning" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /><TripViabilityPage authHeaders={authHeaders} /></Suspense>}
+      {page === "planejamento" && <Suspense fallback={<section className="tdg-panel">Carregando planejamento...</section>}><EnterpriseAreaPage area="planning" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
+      {/* O simulador de aceite tem tela própria de novo: ele nasceu em
+          Financeiro → Custos, foi parar no rodapé do Planejamento e o menu
+          "Aceite" apontava para Ordens de Serviço — na prática, sumiu. */}
+      {page === "aceite-viagens" && <Suspense fallback={<section className="tdg-panel">Carregando o simulador de aceite...</section>}><TripViabilityPage authHeaders={authHeaders} /></Suspense>}
       {page === "operacoes" && <Suspense fallback={<section className="tdg-panel">Carregando operações...</section>}><OperationsPage operations={registros.operations} clients={clientes} contracts={registros.contracts} criar={criar} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "motorista-frota" && <Suspense fallback={<section className="tdg-panel">Carregando frota e motoristas...</section>}><DriverFleetCenterPage authHeaders={authHeaders} operations={registros.operations} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "ocorrencias" && <Suspense fallback={<section className="tdg-panel">Carregando ocorrências...</section>}><OccurrencesPage operations={registros.operations} clients={clientes} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}

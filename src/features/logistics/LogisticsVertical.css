@@ -1512,9 +1512,15 @@
   padding-right: 2px;
 }
 .tdg-function-navigation .tdg-tabs button {
-  display: grid;
-  gap: 3px;
+  /* Era display:grid com gap. O grid distribuía a altura fixa do botão entre
+     as duas linhas (título e legenda), esmagando cada uma para ~9px e cortando
+     o texto no meio — era o menu "Funcionalidades" inteiro ilegível. Bloco
+     normal deixa cada linha com a altura do próprio texto. */
+  display: block;
   min-height: 40px;
+}
+.tdg-function-navigation .tdg-tabs button small {
+  margin-top: 3px;
 }
 .tdg-function-navigation .tdg-tabs button span {
   overflow: hidden;

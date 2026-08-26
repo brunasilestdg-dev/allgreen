@@ -18,6 +18,10 @@ const regua = (extra = {}) => ({
   taxPercent: 8.65,
   riskPercent: 3,
   commissionPercent: 2.5,
+  // Custo de veículo e motorista são obrigatórios na régua global: sem eles o
+  // motor cairia em silêncio nos padrões do código.
+  vehicleDailyCost: 430,
+  driverDailyCost: 280,
   ...extra,
 });
 
@@ -53,6 +57,25 @@ describe("a régua só entra se fizer sentido", () => {
     const r = validarParametros(regua({ targetMarginPercent: 10 }));
     expect(r.valido).toBe(false);
     expect(r.erros[0]).toMatch(/menor que a margem mínima/i);
+  });
+
+  it("régua global sem custo de veículo ou de motorista é recusada", () => {
+    // Este era o furo: os custos eram opcionais e o motor caía em silêncio nos
+    // padrões do código (430/280) — preço calculado sobre custo que ninguém
+    // confirmou. Mensal no lugar da diária também satisfaz.
+    const semVeiculo = validarParametros(regua({ vehicleDailyCost: 0 }));
+    expect(semVeiculo.valido).toBe(false);
+    expect(semVeiculo.erros.join(" ")).toMatch(/custo do veículo/i);
+
+    const semMotorista = validarParametros(regua({ driverDailyCost: 0 }));
+    expect(semMotorista.valido).toBe(false);
+    expect(semMotorista.erros.join(" ")).toMatch(/custo do motorista/i);
+
+    expect(validarParametros(regua({ vehicleDailyCost: 0, vehicleMonthlyCost: 1850 })).valido).toBe(true);
+    expect(validarParametros(regua({ driverDailyCost: 0, driverDailyCost8h: 220 })).valido).toBe(true);
+
+    // Escopo parcial (produto, cliente…) herda da global e não repete custos.
+    expect(validarParametros({ opexPercent: 10 }, { parcial: true }).valido).toBe(true);
   });
 });
 

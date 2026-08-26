@@ -59,6 +59,9 @@ const parametros = (extra = {}) => ({
   taxPercent: 8.65,
   riskPercent: 3,
   commissionPercent: 2.5,
+  // Obrigatórios na régua global: sem eles o motor cai nos padrões do código.
+  vehicleDailyCost: 430,
+  driverDailyCost: 280,
   ...extra,
 });
 
