@@ -7,6 +7,7 @@
 // A autenticação, a sessão, os usuários, a auditoria e o banco são os mesmos
 // do resto do Seu Funcionário. Isto é outra experiência, não outro sistema.
 
+import { emailEnabled, escMail, sendEmail } from "../mensageria/envio.js";
 import {
   filtrarOperacoes,
   ocorrenciasDaLinha,
@@ -827,6 +828,79 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     });
   }
 
+  // Faturas do cliente: títulos a receber DELE, com vencimento, saldo e a
+  // 2ª via do documento fiscal quando existir. Nenhum número interno (margem,
+  // custo, comissão) passa por aqui — a consulta lê títulos filtrados pelo
+  // cliente da sessão, e o valor de face é exatamente o que ele já recebeu na
+  // fatura.
+  if (request.method === "GET" && resource === "financeiro" && !documentoPedido) {
+    if (!clientCan(escopo, "portal:document:download"))
+      return response({ error: "Seu papel no portal não vê faturas." }, 403);
+    const { results } = await env.DB.prepare(
+      `SELECT t.id, t.number, t.issue_date, t.due_date, t.original_amount, t.open_amount, t.status,
+              f.id AS fiscal_id, f.doc_type AS fiscal_tipo, f.numero AS fiscal_numero,
+              f.chave_acesso AS fiscal_chave, f.status AS fiscal_status,
+              CASE WHEN COALESCE(f.xml_content, '') <> '' THEN 1 ELSE 0 END AS xml_disponivel
+         FROM todogreen_financial_titles t
+         LEFT JOIN todogreen_fiscal_documents f
+           ON f.tenant_id = t.tenant_id AND f.workspace_owner_id = t.workspace_owner_id
+          AND f.invoice_id = t.invoice_id AND f.invoice_id <> '' AND f.archived_at IS NULL
+        WHERE t.tenant_id = ? AND t.workspace_owner_id = ? AND t.client_id = ?
+          AND t.kind = 'receivable' AND t.archived_at IS NULL
+        ORDER BY t.due_date DESC
+        LIMIT 200`,
+    ).bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId).all().catch(() => ({ results: [] }));
+    const titulos = (results || []).map((linha) => ({
+      id: linha.id,
+      numero: linha.number,
+      emitidoEm: linha.issue_date,
+      venceEm: linha.due_date,
+      valor: linha.original_amount,
+      emAberto: linha.open_amount,
+      status: linha.status,
+      documento: linha.fiscal_id ? {
+        tipo: linha.fiscal_tipo,
+        numero: linha.fiscal_numero,
+        chave: linha.fiscal_chave || "",
+        status: linha.fiscal_status,
+        xmlDisponivel: linha.xml_disponivel === 1,
+      } : null,
+    }));
+    await logPortalEvent(env, escopo, user, "billing_viewed");
+    return response({
+      titulos,
+      totais: titulos.reduce((soma, titulo) => ({
+        emAberto: Math.round((soma.emAberto + (["open", "partial", "overdue"].includes(titulo.status) ? titulo.emAberto : 0)) * 100) / 100,
+        quitado: Math.round((soma.quitado + (titulo.status === "settled" ? titulo.valor : 0)) * 100) / 100,
+      }), { emAberto: 0, quitado: 0 }),
+    });
+  }
+
+  // 2ª via do XML do documento fiscal de um título do próprio cliente.
+  if (request.method === "GET" && resource === "financeiro" && documentoPedido && subresource === "xml") {
+    if (!clientCan(escopo, "portal:document:download"))
+      return response({ error: "Seu papel no portal não baixa documentos." }, 403);
+    const linha = await env.DB.prepare(
+      `SELECT f.xml_content, f.doc_type, f.numero
+         FROM todogreen_financial_titles t
+         JOIN todogreen_fiscal_documents f
+           ON f.tenant_id = t.tenant_id AND f.workspace_owner_id = t.workspace_owner_id
+          AND f.invoice_id = t.invoice_id AND f.invoice_id <> '' AND f.archived_at IS NULL
+        WHERE t.id = ? AND t.tenant_id = ? AND t.workspace_owner_id = ? AND t.client_id = ?
+          AND t.kind = 'receivable' AND t.archived_at IS NULL`,
+    ).bind(documentoPedido, escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId).first().catch(() => null);
+    if (!linha || !linha.xml_content) return response({ error: "Documento não encontrado." }, 404);
+    await logPortalEvent(env, escopo, user, "invoice_xml_downloaded", documentoPedido);
+    return new Response(linha.xml_content, {
+      status: 200,
+      headers: {
+        "content-type": "application/xml; charset=utf-8",
+        "content-disposition": `attachment; filename="${linha.doc_type}-${linha.numero || "documento"}.xml"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
+
   // O detalhe de uma operação: linha do tempo, ocorrências, prazo prometido
   // contra realizado, veículo, última posição e comprovante de entrega.
   if (request.method === "GET" && resource === "operacoes" && documentoPedido) {
@@ -863,6 +937,31 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     );
 
     const operacao = operacaoDoBanco(linha);
+
+    // Rastreio de verdade: sem posição lançada à mão, a última posição vem do
+    // TRACKER, casando a placa da operação com o vínculo de rastreamento. O
+    // dado já era coletado por veículo e nunca chegava à operação do cliente.
+    if (!operacao.ultimaPosicao && linha.vehicle_plate) {
+      const rastreada = await env.DB.prepare(
+        `SELECT p.latitude, p.longitude, p.recorded_at, p.address
+           FROM todogreen_tracker_positions p
+           JOIN todogreen_tracker_vehicle_links l ON l.id = p.vehicle_link_id
+          WHERE p.workspace_owner_id = ? AND l.active = 1
+            AND UPPER(REPLACE(l.plate, '-', '')) = UPPER(REPLACE(?, '-', ''))
+          ORDER BY p.recorded_at DESC
+          LIMIT 1`,
+      ).bind(escopo.workspaceOwnerId, linha.vehicle_plate).first().catch(() => null);
+      if (rastreada) {
+        operacao.ultimaPosicao = {
+          em: rastreada.recorded_at,
+          latitude: rastreada.latitude,
+          longitude: rastreada.longitude,
+          endereco: rastreada.address || "",
+          origem: "rastreador",
+        };
+      }
+    }
+
     return response({
       operacao,
       sla: slaDaOperacao(operacao),
@@ -1408,6 +1507,30 @@ export async function handleTodoGreenClients(request, env, access, user) {
   const podeVerTodos = podeVerTodaCarteira(access);
   const emailSessao = normalizeEmail(user?.email);
   const clientIdDaRota = clean(url.pathname.split("/").filter(Boolean)[3], 60);
+  const subRotaDoCliente = clean(url.pathname.split("/").filter(Boolean)[4], 40);
+
+  // Quem tem acesso ao portal deste cliente. Sem esta lista na tela, liberar
+  // acesso era cego: o PUT existia e ninguém via quem já estava dentro.
+  if (request.method === "GET" && clientIdDaRota && subRotaDoCliente === "portal-usuarios") {
+    if (!podeGerenciar)
+      return response({ error: "Somente uma pessoa autorizada vê os usuários do portal." }, 403);
+    const cliente = await env.DB.prepare(
+      "SELECT id FROM todogreen_clients WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ? AND archived_at IS NULL",
+    ).bind(TENANT_ID, access.ownerId, clientIdDaRota).first();
+    if (!cliente) return response({ error: "Cliente não encontrado." }, 404);
+    const { results } = await env.DB.prepare(
+      `SELECT email, role, status, note, created_at, updated_at
+         FROM todogreen_client_users
+        WHERE tenant_id = ? AND client_id = ?
+        ORDER BY created_at`,
+    ).bind(TENANT_ID, clientIdDaRota).all();
+    return response({
+      usuarios: (results || []).map((linha) => ({
+        email: linha.email, papel: linha.role, status: linha.status,
+        observacao: linha.note, criadoEm: linha.created_at, atualizadoEm: linha.updated_at,
+      })),
+    });
+  }
 
   if (request.method === "GET") {
     const linhas = await env.DB.prepare(
@@ -1482,10 +1605,15 @@ export async function handleTodoGreenClients(request, env, access, user) {
     if (!Number.isFinite(revisao) || revisao <= 0)
       return response({ error: "Informe a revisão do cliente que você leu." }, 400);
     const crm = crmFields({ ...parse(atual.fields_json, {}), ...(body.crm || {}) }, clean(body.name ?? atual.name, 200));
+    // Liberar/bloquear o portal era impossível pela tela: o PATCH nem aceitava
+    // o campo. Sem isso, cliente novo só entrava por migração de banco.
+    const portalEnabled = body.portalEnabled === undefined
+      ? atual.portal_enabled
+      : (body.portalEnabled ? 1 : 0);
     const { meta } = await env.DB.prepare(
       `UPDATE todogreen_clients
           SET name = ?, legal_name = ?, document = ?, segment = ?, status = ?, notes = ?,
-              fields_json = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+              portal_enabled = ?, fields_json = ?, revision = revision + 1, updated_by = ?, updated_at = ?
         WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND revision = ?`,
     ).bind(
       clean(body.name ?? atual.name, 200) || atual.name,
@@ -1494,6 +1622,7 @@ export async function handleTodoGreenClients(request, env, access, user) {
       clean(body.segment ?? atual.segment, 80),
       clean(body.status ?? atual.status, 20) || "ativo",
       clean(body.notes ?? atual.notes, 1000),
+      portalEnabled,
       JSON.stringify(crm), user.id, agora,
       clientIdDaRota, TENANT_ID, access.ownerId, revisao,
     ).run();
@@ -1702,7 +1831,35 @@ export async function handleTodoGreenClients(request, env, access, user) {
         agora,
       )
       .run();
-    return response({ ok: true, email, papel });
+
+    // Convite por e-mail: a pessoa entra no portal com uma conta comum do
+    // produto, criada com este mesmo e-mail. Sem o convite, "liberar acesso"
+    // era gravar uma linha que ninguém ficava sabendo. O envio nunca derruba a
+    // liberação: sem BREVO_API_KEY, a tela mostra o aviso e o link é passado
+    // por fora.
+    let conviteEnviado = false;
+    if (body.status !== "inactive" && emailEnabled(env) && body.enviarConvite !== false) {
+      const nomeCliente = await env.DB.prepare(
+        "SELECT name FROM todogreen_clients WHERE id = ? AND tenant_id = ?",
+      ).bind(clientId, TENANT_ID).first();
+      const linkPortal = `${url.origin}/portal-cliente`;
+      const html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#1e1b35">
+        <div style="background:#173d31;border-radius:14px;padding:20px;text-align:center">
+          <span style="color:#fff;font-size:18px;font-weight:bold">To Do Green · Portal do Cliente</span>
+        </div>
+        <h2 style="margin:24px 0 8px">Seu acesso ao portal foi liberado</h2>
+        <p style="color:#555;margin:0 0 18px">Você foi cadastrado como <strong>${escMail(papel)}</strong> no portal de <strong>${escMail(nomeCliente?.name || "sua empresa")}</strong>. Acompanhe entregas, comprovantes, indicadores e solicitações em um lugar só.</p>
+        <p style="color:#555;margin:0 0 18px">Crie sua conta (ou entre) usando exatamente este e-mail: <strong>${escMail(email)}</strong>.</p>
+        <div style="text-align:center;margin:22px 0">
+          <a href="${linkPortal}" style="display:inline-block;background:#0b9f8f;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:bold">Abrir o portal</a>
+        </div>
+        <p style="color:#888;font-size:12px;margin:20px 0 0">Se você não esperava este acesso, ignore esta mensagem.</p>
+      </div>`;
+      conviteEnviado = await sendEmail(env, email, "Seu acesso ao Portal To Do Green", html)
+        .then(() => true)
+        .catch(() => false);
+    }
+    return response({ ok: true, email, papel, conviteEnviado, emailConfigurado: emailEnabled(env) });
   }
 
   if (request.method === "DELETE") {

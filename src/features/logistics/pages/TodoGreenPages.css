@@ -1463,3 +1463,21 @@
 }
 .tdg-widget-card.size-large { grid-column: span 2; }
 @media (max-width: 620px) { .tdg-widget-card.size-large { grid-column: auto; } }
+
+/* ── Liberação do portal do cliente (ClientsPage) ─────────────────────── */
+.tdg-portal-access { display: grid; gap: 8px; }
+.tdg-portal-access > span { align-items: center; display: flex; gap: 8px; }
+.tdg-portal-access > span button {
+  background: var(--tdg-soft);
+  border: 1px solid var(--tdg-line);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+.tdg-portal-users { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.tdg-portal-users li { align-items: center; display: flex; gap: 6px; justify-content: space-between; }
+.tdg-portal-users li span { display: grid; }
+.tdg-portal-users li small { color: var(--tdg-muted); font-size: .68rem; }
+.tdg-portal-users li button { background: none; border: 0; color: var(--tdg-muted); cursor: pointer; }

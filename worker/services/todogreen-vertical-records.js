@@ -25,6 +25,7 @@
 //    a outra pessoa acabou de escrever, que é o defeito do JSON único.
 
 import { TENANT_ID, paginacao, podeNaVertical, recorteDeCarteira } from "./todogreen-access.js";
+import { notificarPortalDoCliente } from "./todogreen-notify.js";
 // A validação e a normalização dos cadastros vêm do domínio, não daqui: é a
 // mesma regra que a tela aplica, e uma segunda cópia no worker seria a
 // divergência entre o botão liberado e a resposta recusada.
@@ -1148,7 +1149,7 @@ const listarEventosOperacao = async (env, access, user, operationId) => {
   });
 };
 
-const registrarEventoOperacao = async (env, access, user, operationId, corpo) => {
+const registrarEventoOperacao = async (env, access, user, operationId, corpo, origem = "") => {
   if (!(await noAlcanceDaCarteira(env, COLECOES.operations, access, user.email, operationId)))
     return json({ error: "Operação não encontrada." }, 404);
   const operacao = await env.DB.prepare(
@@ -1227,6 +1228,18 @@ const registrarEventoOperacao = async (env, access, user, operationId, corpo) =>
     clientId: operacao.client_id, before: COLECOES.operations.daLinha(operacao),
     after: COLECOES.operations.daLinha(atualizada), details: `${tipo}: ${titulo || descricao}`,
   });
+  // Entrega e ocorrência são os dois eventos que o embarcador quer saber na
+  // hora — os demais ele acompanha pela linha do tempo quando quiser.
+  if (tipo === "entrega" || tipo === "ocorrencia") {
+    await notificarPortalDoCliente(env, operacao.client_id, {
+      assunto: tipo === "entrega"
+        ? `Entrega concluída — ${operacao.reference || "operação"}`
+        : `Ocorrência registrada — ${operacao.reference || "operação"}`,
+      titulo: tipo === "entrega" ? "Sua carga foi entregue" : "Registramos uma ocorrência",
+      corpo: `${operacao.reference || "A operação"}: ${titulo || descricao || tipo}. Detalhes e comprovante na linha do tempo do portal.`,
+      origem,
+    });
+  }
   return json({ evento, registro: COLECOES.operations.daLinha(atualizada) }, 201);
 };
 
@@ -1448,7 +1461,7 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
     if (request.method === "POST") {
       if (!podeNaVertical(access, colecao.permissao))
         return json({ error: "Seu papel não pode registrar eventos operacionais." }, 403);
-      return registrarEventoOperacao(env, access, user, id, await request.json().catch(() => ({})));
+      return registrarEventoOperacao(env, access, user, id, await request.json().catch(() => ({})), new URL(request.url).origin);
     }
     return json({ error: "Método não permitido." }, 405);
   }

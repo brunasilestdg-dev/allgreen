@@ -17,6 +17,7 @@ import {
   statusValido,
 } from "../../src/features/logistics/clientRequestDomain.js";
 import { TENANT_ID, podeVerTodaCarteira, recorteDeCarteira } from "./todogreen-access.js";
+import { notificarPortalDoCliente } from "./todogreen-notify.js";
 const MAX_LIMIT = 200;
 
 const response = (data, status = 200) =>
@@ -201,6 +202,17 @@ export async function handleTodoGreenRequests(request, env, access, user) {
           )
           .run();
       }
+    }
+
+    // O cliente fica sabendo que a equipe respondeu — antes, só descobria se
+    // voltasse ao portal sozinho. Nota interna não notifica ninguém.
+    if (!interna) {
+      await notificarPortalDoCliente(env, atual.client_id, {
+        assunto: `Sua solicitação "${clean(atual.subject, 80)}" recebeu resposta`,
+        titulo: "A To Do Green respondeu sua solicitação",
+        corpo: `A equipe respondeu "${clean(atual.subject, 120)}". Abra o portal para ler e continuar a conversa.`,
+        origem: new URL(request.url).origin,
+      });
     }
 
     return response({ ok: true });

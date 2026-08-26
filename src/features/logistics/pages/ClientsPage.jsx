@@ -51,6 +51,90 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
+// Liberação e gestão do acesso ao portal do cliente. O endpoint de liberar
+// (PUT) existia sem NENHUMA tela que o chamasse: cliente novo só entrava no
+// portal por migração de banco. Aqui a liderança liga o portal, convida por
+// e-mail e vê quem já está dentro.
+function PortalAccessPanel({ client, canManage, authHeaders, onToggle, setToast }) {
+  const [usuarios, setUsuarios] = useState([]);
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoPapel, setNovoPapel] = useState("cliente_gestor");
+  const [ocupado, setOcupado] = useState(false);
+
+  const clientId = client?.id || "";
+  const portalLigado = Boolean(client?.portalEnabled);
+  const carregarUsuarios = () => {
+    if (!canManage || !portalLigado || !clientId) { setUsuarios([]); return; }
+    api(`clients/${encodeURIComponent(clientId)}/portal-usuarios`, authHeaders)
+      .then((dados) => setUsuarios(dados.usuarios || []))
+      .catch(() => setUsuarios([]));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { carregarUsuarios(); }, [clientId, portalLigado, canManage]);
+
+  const convidar = async (event) => {
+    event.preventDefault();
+    setOcupado(true);
+    try {
+      const resultado = await api("clients", authHeaders, {
+        method: "PUT",
+        body: JSON.stringify({ clienteId: client.id, email: novoEmail, papel: novoPapel }),
+      });
+      setToast?.(resultado.conviteEnviado
+        ? `Acesso liberado e convite enviado para ${resultado.email}`
+        : resultado.emailConfigurado
+          ? `Acesso liberado para ${resultado.email} — o convite não pôde ser enviado, avise a pessoa`
+          : `Acesso liberado para ${resultado.email}. E-mail de convite desativado (sem BREVO_API_KEY) — envie o link do portal por fora.`);
+      setNovoEmail("");
+      carregarUsuarios();
+    } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(false); }
+  };
+
+  const remover = async (email) => {
+    setOcupado(true);
+    try {
+      await api(`clients?cliente=${encodeURIComponent(client.id)}&email=${encodeURIComponent(email)}`, authHeaders, { method: "DELETE" });
+      setToast?.(`Acesso de ${email} removido`);
+      carregarUsuarios();
+    } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(false); }
+  };
+
+  return (
+    <div className="tdg-portal-access">
+      <span>
+        {client.portalEnabled ? "Liberado" : "Bloqueado"}
+        {canManage && (
+          <button type="button" disabled={ocupado} onClick={onToggle}>
+            {client.portalEnabled ? "Bloquear portal" : "Liberar portal"}
+          </button>
+        )}
+      </span>
+      {client.portalEnabled && canManage && (
+        <>
+          <ul className="tdg-portal-users">
+            {usuarios.map((usuario) => (
+              <li key={usuario.email}>
+                <span>{usuario.email} <small>{usuario.papel} · {usuario.status}</small></span>
+                <button type="button" aria-label={`Remover ${usuario.email}`} disabled={ocupado} onClick={() => remover(usuario.email)}><X size={12} /></button>
+              </li>
+            ))}
+            {!usuarios.length && <li><small>Ninguém tem acesso ainda — convide a primeira pessoa.</small></li>}
+          </ul>
+          <form className="tdg-crm-assign" onSubmit={convidar}>
+            <input required type="email" aria-label="E-mail da pessoa do cliente" placeholder="pessoa@cliente.com" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} />
+            <select aria-label="Papel no portal" value={novoPapel} onChange={(e) => setNovoPapel(e.target.value)}>
+              <option value="cliente_admin">Administrador</option>
+              <option value="cliente_gestor">Gestor</option>
+              <option value="cliente_leitor">Leitura</option>
+            </select>
+            <button type="submit" disabled={ocupado}><UserPlus size={14} />Convidar</button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
 const api = async (path, authHeaders, options = {}) => {
   const result = await fetch(`/api/todogreen/${path}`, {
     ...options,
@@ -961,7 +1045,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-summary"><header><strong>Responsáveis</strong></header><div className="tdg-client-sellers">{(selected.vendedores || []).length === 0 && <small>Sem responsável comercial</small>}{(selected.vendedores || []).map((seller) => <span key={seller.email}>{seller.email}{access.podeGerenciar && <button type="button" aria-label={`Remover ${seller.email}`} onClick={() => unassign(selected.id, seller.email)}><X size={12} /></button>}</span>)}</div>{access.podeGerenciar && <form className="tdg-crm-assign" onSubmit={assign}><input required type="email" aria-label="E-mail do vendedor" placeholder="vendedor@empresa.com" value={assignment.clientId === selected.id ? assignment.sellerEmail : ""} onChange={(e) => setAssignment({ clientId: selected.id, sellerEmail: e.target.value, note: "" })} /><button type="submit"><UserPlus size={14} />Atribuir</button></form>}</section>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-summary tdg-account-intelligence"><header><strong>Dados da conta</strong><small>Cadastro e preenchimento público</small></header><dl className="tdg-crm-account-data">
           <div><dt>ID da conta</dt><dd><code>{selected.accountCode || selected.id}</code><small>Código estável para busca, metas, importações e integrações</small></dd></div>
-          <div><dt>Portal do cliente</dt><dd>{selected.portalEnabled ? "Liberado" : "Bloqueado"}<small>{selected.portalUserCount || 0} acesso(s) ativo(s)</small></dd></div>
+          <div><dt>Portal do cliente</dt><dd><PortalAccessPanel client={selected} canManage={access.podeGerenciar} authHeaders={authHeaders} setToast={setToast} onToggle={() => saveClient(selected, { revision: selected.revision, portalEnabled: !selected.portalEnabled })} /></dd></div>
           <div><dt>Razão social</dt><dd>{selected.legalName || "Não informada"}<AccountSource evidence={selected.crm?.enrichmentEvidence?.legalName} url={selectedReport?.suggestedLegalName?.source?.url} /></dd></div>
           <div><dt>Segmento</dt><dd>{selected.segment || "Não informado"}<AccountSource evidence={selected.crm?.enrichmentEvidence?.segment} url={selectedReport?.suggestedSegment?.source?.url} /></dd></div>
           <div><dt>Sede</dt><dd>{selected.crm?.headquarters || "Não informada"}<AccountSource evidence={selected.crm?.enrichmentEvidence?.headquarters} url={selectedReport?.suggestedHeadquarters?.source?.url} /></dd></div>
