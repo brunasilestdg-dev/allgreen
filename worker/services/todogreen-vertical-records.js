@@ -1164,7 +1164,19 @@ const registrarEventoOperacao = async (env, access, user, operationId, corpo) =>
   const agora = new Date().toISOString();
   const eventoId = crypto.randomUUID();
   const atualizacaoIncidente = tipo === "ocorrencia" ? ", incident_count = incident_count + 1" : "";
-  await env.DB.batch([
+  // O evento "entrega" é o fato que fecha o ciclo: carimba delivered_at,
+  // guarda o comprovante que o portal do cliente baixa e registra o POD que a
+  // régua de faturamento exige (trigger da 0062). Antes, o evento era só uma
+  // linha na timeline — a operação nunca "entregava" e a OS nunca faturava.
+  const comprovanteUrl = tipo === "entrega" ? texto(corpo.comprovanteUrl, 800) : "";
+  const recebedor = tipo === "entrega" ? texto(corpo.recebedor, 200) : "";
+  const atualizacaoEntrega = tipo === "entrega"
+    ? `, delivered_at = COALESCE(delivered_at, ?)${comprovanteUrl ? ", proof_url = ?, proof_hash = ?" : ""}`
+    : "";
+  const paramsEntrega = tipo === "entrega"
+    ? [ocorridoEm, ...(comprovanteUrl ? [comprovanteUrl, texto(corpo.comprovanteHash, 200)] : [])]
+    : [];
+  const instrucoes = [
     env.DB.prepare(
       `INSERT INTO todogreen_client_operation_events
          (id,tenant_id,operation_id,client_id,workspace_owner_id,kind,titulo,descricao,local,
@@ -1176,10 +1188,35 @@ const registrarEventoOperacao = async (env, access, user, operationId, corpo) =>
     ),
     env.DB.prepare(
       `UPDATE todogreen_client_operations
-          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}
+          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-    ).bind(agora, user.id, operationId, TENANT_ID, access.ownerId),
-  ]);
+    ).bind(agora, user.id, ...paramsEntrega, operationId, TENANT_ID, access.ownerId),
+  ];
+  if (tipo === "entrega") {
+    // POD para toda OS amarrada a esta operação. INSERT direto com subselect:
+    // se não houver OS vinculada, nada acontece; se houver, o gate de
+    // faturamento passa a enxergar o comprovante.
+    instrucoes.push(env.DB.prepare(
+      `INSERT INTO todogreen_proofs_of_delivery
+         (id, tenant_id, workspace_owner_id, service_order_id, kind, occurred_at,
+          recipient_name, document_url, document_hash, fields_json, created_by, created_at)
+       SELECT lower(hex(randomblob(16))), os.tenant_id, os.workspace_owner_id, os.id, 'delivery', ?,
+              ?, ?, ?, json_object('operationId', ?, 'eventId', ?), ?, ?
+         FROM todogreen_service_orders os
+        WHERE os.tenant_id = ? AND os.workspace_owner_id = ? AND os.operation_id = ?
+          AND os.archived_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM todogreen_proofs_of_delivery p
+             WHERE p.tenant_id = os.tenant_id AND p.workspace_owner_id = os.workspace_owner_id
+               AND p.service_order_id = os.id
+          )`,
+    ).bind(
+      ocorridoEm, recebedor, comprovanteUrl, texto(corpo.comprovanteHash, 200),
+      operationId, eventoId, user.id, agora,
+      TENANT_ID, access.ownerId, operationId,
+    ));
+  }
+  await env.DB.batch(instrucoes);
   const atualizada = await env.DB.prepare(
     `SELECT * FROM todogreen_client_operations
       WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,

@@ -263,9 +263,87 @@ async function transitionOrder(env, access, user, id, body) {
      VALUES (?,?,?,?,?,?,'eligible',?,?,?,?,?,?)`,
   ).bind(crypto.randomUUID(), TENANT_ID, access.ownerId, id, row.client_id, row.contract_id,
     row.net_amount, completedAt.slice(0, 10), user.id, user.id, now, now));
-  await env.DB.batch(statements);
+  try {
+    await env.DB.batch(statements);
+  } catch (error) {
+    // O trigger da 0062 aborta o item faturável sem POD. Sem este catch o
+    // usuário recebia um 500 opaco e a OS ficava presa sem explicação.
+    if (String(error?.message || error).includes("POD_REQUIRED"))
+      return json({
+        error: "Registre o comprovante de entrega (POD) antes de concluir: sem ele a OS não vira item faturável. Use \"Registrar comprovante\" nesta tela ou o evento de entrega na operação.",
+        code: "pod_required",
+      }, 409);
+    throw error;
+  }
   const updated = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
   return json({ record: orderView(updated), billingEligible: next === "completed" });
+}
+
+// ---------------------------------------------------------------------------
+// Comprovante de entrega (POD). É o dado que a régua de faturamento exige
+// (trigger da 0062) e, até aqui, não tinha NENHUM caminho de escrita no
+// produto: a tabela existia, o gate bloqueava, e a OS nunca faturava.
+// ---------------------------------------------------------------------------
+
+const podView = (row) => ({
+  id: row.id, serviceOrderId: row.service_order_id, kind: row.kind,
+  occurredAt: row.occurred_at, recipientName: row.recipient_name,
+  documentUrl: row.document_url, documentHash: row.document_hash,
+  latitude: row.latitude, longitude: row.longitude, createdAt: row.created_at,
+});
+
+async function listPods(env, access, serviceOrderId) {
+  const order = await serviceOrderInScope(env, access.ownerId, serviceOrderId);
+  if (!order) return json({ error: "Ordem de serviço não encontrada." }, 404);
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM todogreen_proofs_of_delivery
+      WHERE tenant_id=? AND workspace_owner_id=? AND service_order_id=?
+      ORDER BY occurred_at DESC LIMIT 100`,
+  ).bind(TENANT_ID, access.ownerId, serviceOrderId).all();
+  return json({ records: (results || []).map(podView) });
+}
+
+async function createPod(env, access, user, serviceOrderId, body) {
+  if (!canOperateOrder(access) && !canPlanOrder(access))
+    return json({ error: "Somente Operação ou Planejamento registra comprovante de entrega." }, 403);
+  const order = await serviceOrderInScope(env, access.ownerId, serviceOrderId);
+  if (!order) return json({ error: "Ordem de serviço não encontrada." }, 404);
+  const recipientName = text(body.recipientName ?? body.recebedor, 200);
+  const documentUrl = text(body.documentUrl ?? body.comprovanteUrl, 800);
+  if (!recipientName && !documentUrl)
+    return json({ error: "Informe quem recebeu ou o link do comprovante — um dos dois é obrigatório." }, 400);
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const latitude = Number(body.latitude);
+  const longitude = Number(body.longitude);
+  const statements = [env.DB.prepare(
+    `INSERT INTO todogreen_proofs_of_delivery
+       (id, tenant_id, workspace_owner_id, service_order_id, kind, occurred_at,
+        recipient_name, document_url, document_hash, latitude, longitude,
+        fields_json, created_by, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  ).bind(
+    id, TENANT_ID, access.ownerId, serviceOrderId, text(body.kind, 30) || "delivery",
+    text(body.occurredAt, 40) || now, recipientName, documentUrl,
+    text(body.documentHash ?? body.comprovanteHash, 200),
+    Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null,
+    JSON.stringify(object(body.fields)), user.id, now,
+  )];
+  // Espelha o comprovante na operação vinculada: é de lá que o portal do
+  // cliente baixa o arquivo. Um comprovante em dois lugares seria dívida; um
+  // comprovante que o cliente não encontra é pior.
+  if (order.operation_id && documentUrl) statements.push(env.DB.prepare(
+    `UPDATE todogreen_client_operations
+        SET proof_url=?, proof_hash=?, delivered_at=COALESCE(delivered_at, ?),
+            updated_at=?, updated_by=?, revision=revision+1
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+        AND COALESCE(proof_url,'')=''`,
+  ).bind(documentUrl, text(body.documentHash ?? body.comprovanteHash, 200),
+    text(body.occurredAt, 40) || now, now, user.id,
+    order.operation_id, TENANT_ID, access.ownerId));
+  await env.DB.batch(statements);
+  const row = await env.DB.prepare("SELECT * FROM todogreen_proofs_of_delivery WHERE id=?").bind(id).first();
+  return json({ record: podView(row) }, 201);
 }
 
 function ciotPayload(row, body, serviceOrder) {
@@ -725,6 +803,8 @@ export async function handleTodoGreenTransactions(request, env, access, user) {
   if (resource === "service-orders" && request.method === "GET" && !id) return listOrders(env, access, url);
   if (resource === "service-orders" && request.method === "POST" && !id) return createOrder(env, access, user, body);
   if (resource === "service-orders" && request.method === "POST" && id && action === "transition") return transitionOrder(env, access, user, id, body);
+  if (resource === "service-orders" && request.method === "GET" && id && action === "pod") return listPods(env, access, id);
+  if (resource === "service-orders" && request.method === "POST" && id && action === "pod") return createPod(env, access, user, id, body);
   if (resource === "ciot-integration" && request.method === "GET" && !id) return getCiotIntegration(env, access);
   if (resource === "ciot-integration" && request.method === "POST" && !id) return saveCiotIntegration(env, access, user, body);
   if (resource === "ciot-certificate" && request.method === "POST" && !id) return saveCiotCredential(env, access, user, body);

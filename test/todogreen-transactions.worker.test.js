@@ -123,15 +123,28 @@ describe("espinha transacional", () => {
       order = (await response.json()).record;
     }
 
+    // Sem POD, concluir é recusado com 409 LEGÍVEL (antes era um 500 opaco do
+    // trigger) e nada muda na OS.
+    const semPod = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", {
+      status: "completed", revision: order.revision,
+    });
+    expect(semPod.status).toBe(409);
+    expect((await semPod.json()).code).toBe("pod_required");
+
     const beforePod = await request("/api/todogreen/transactions/billing-items?status=eligible");
     expect((await beforePod.json()).records).toHaveLength(0);
 
-    const now = new Date().toISOString();
-    await env.DB.prepare(`INSERT INTO todogreen_proofs_of_delivery
-      (id,tenant_id,workspace_owner_id,service_order_id,delivery_id,kind,occurred_at,recipient_name,
-       document_url,document_hash,fields_json,created_by,created_at)
-      VALUES ('txn-pod','todogreen','txn-user',?,'','delivery',?,'Recebedor','','hash-pod','{}','txn-user',?)`)
-      .bind(order.id, now, now).run();
+    // O POD entra pelo endpoint do produto — não por SQL de teste: é o caminho
+    // que a Operação usa de verdade.
+    const semNada = await request(`/api/todogreen/transactions/service-orders/${order.id}/pod`, "POST", {});
+    expect(semNada.status).toBe(400);
+    const pod = await request(`/api/todogreen/transactions/service-orders/${order.id}/pod`, "POST", {
+      recipientName: "Recebedor", documentUrl: "https://exemplo.test/canhoto.jpg",
+    });
+    expect(pod.status).toBe(201);
+    expect((await pod.json()).record.recipientName).toBe("Recebedor");
+    const listaPod = await request(`/api/todogreen/transactions/service-orders/${order.id}/pod`);
+    expect((await listaPod.json()).records).toHaveLength(1);
 
     const completed = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", {
       status: "completed", revision: order.revision,
@@ -161,11 +174,37 @@ describe("espinha transacional", () => {
     expect(title.open_amount).toBe(250);
   });
 
+  it("o título a receber aparece no razão como receita (ponte 0069)", async () => {
+    // Sem esta ponte, faturar era invisível para a Tesouraria, para a
+    // conciliação e para a receita dos painéis — a planilha paralela.
+    const entry = await env.DB.prepare(
+      "SELECT * FROM todogreen_financial_entries WHERE id = 'entry-' || ?",
+    ).bind(title.id).first();
+    expect(entry).toBeTruthy();
+    expect(entry.kind).toBe("revenue");
+    expect(entry.amount).toBe(250);
+    expect(entry.client_id).toBe("txn-client");
+    expect(entry.invoice_status).toBe("pending");
+    expect(entry.document_number).toBe(title.number);
+  });
+
   it("aceita baixa parcial e depois integral", async () => {
     let response = await request(`/api/todogreen/transactions/titles/${title.id}/settle`, "POST", { amount: 100, method: "pix" });
     expect(await response.json()).toMatchObject({ openAmount: 150, status: "partial" });
     response = await request(`/api/todogreen/transactions/titles/${title.id}/settle`, "POST", { amount: 150, method: "pix" });
     expect(await response.json()).toMatchObject({ openAmount: 0, status: "settled" });
+
+    // A baixa refletiu no razão: pagamentos gravados e lançamento quitado.
+    const entry = await env.DB.prepare(
+      "SELECT * FROM todogreen_financial_entries WHERE id = 'entry-' || ?",
+    ).bind(title.id).first();
+    expect(entry.paid_amount).toBe(250);
+    expect(entry.invoice_status).toBe("paid");
+    const pagamentos = await env.DB.prepare(
+      "SELECT COUNT(*) AS total, SUM(amount) AS soma FROM todogreen_financial_payments WHERE entry_id = 'entry-' || ?",
+    ).bind(title.id).first();
+    expect(pagamentos.total).toBe(2);
+    expect(pagamentos.soma).toBe(250);
   });
 
   it("recusa custo sem rateio integral e grava custo multidimensional", async () => {
@@ -182,5 +221,42 @@ describe("espinha transacional", () => {
     const records = (await listed.json()).records;
     expect(records[0]).toMatchObject({ description: "Energia", amount: 100 });
     expect(records[0].allocations).toHaveLength(2);
+  });
+});
+
+describe("evento de entrega fecha o ciclo da operação", () => {
+  it("carimba delivered_at, guarda o comprovante e cria o POD da OS vinculada", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, status,
+          service_date, origin, destination, fields_json,
+          created_by, updated_by, created_at, updated_at)
+       VALUES ('txn-op','todogreen','txn-client','txn-user','OP-ENTREGA','em_andamento',
+               '2026-08-25','CD','Hub','{}','txn-user','txn-user',?,?)`,
+    ).bind(agora, agora).run();
+
+    // OS amarrada à operação, ainda sem POD.
+    const criada = await request("/api/todogreen/transactions/service-orders", "POST", {
+      clientId: "txn-client", contractId: "txn-contract", operationId: "txn-op",
+      quantity: 2, unitPrice: 50, chargeUnit: "viagem",
+    });
+    expect(criada.status).toBe(201);
+    const os = (await criada.json()).record;
+
+    const evento = await request("/api/todogreen/records/operations/txn-op/events", "POST", {
+      tipo: "entrega", titulo: "Entrega concluída", recebedor: "Portaria",
+      comprovanteUrl: "https://exemplo.test/pod-op.jpg",
+    });
+    expect(evento.status).toBe(201);
+    const registro = (await evento.json()).registro;
+    expect(registro.entregueEm || registro.deliveredAt).toBeTruthy();
+    expect(registro.comprovanteUrl).toBe("https://exemplo.test/pod-op.jpg");
+
+    // O POD nasceu para a OS vinculada — o gate de faturamento passa a vê-lo.
+    const pods = await request(`/api/todogreen/transactions/service-orders/${os.id}/pod`);
+    const lista = (await pods.json()).records;
+    expect(lista).toHaveLength(1);
+    expect(lista[0].recipientName).toBe("Portaria");
   });
 });
