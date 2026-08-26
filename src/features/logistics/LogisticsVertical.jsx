@@ -29,6 +29,7 @@ import {
   Network,
   PackageCheck,
   Plus,
+  Landmark,
   ReceiptText,
   Route,
   Search,
@@ -96,6 +97,7 @@ const StockPage = lazy(() => import("./pages/StockPage.jsx"));
 const ErpRegistriesPage = lazy(() => import("./pages/ErpRegistriesPage.jsx"));
 const PurchasingPage = lazy(() => import("./pages/PurchasingPage.jsx"));
 const FiscalPage = lazy(() => import("./pages/FiscalPage.jsx"));
+const TreasuryPage = lazy(() => import("./pages/TreasuryPage.jsx"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage.jsx"));
 const PlannerPage = lazy(() => import("./pages/PlannerPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
@@ -143,6 +145,7 @@ const iconMap = {
   LockKeyhole,
   Network,
   PackageCheck,
+  Landmark,
   ReceiptText,
   Route,
   Settings,
@@ -259,6 +262,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "indicadores",
   "administracao",
   "fiscal",
+  "tesouraria",
   "cte",
   "mdfe",
   "nfse",
@@ -481,6 +485,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "suprimentos",
     status: "functional",
     description: "Requisições, aprovações, pedidos e recebimentos.",
+  },
+  tesouraria: {
+    title: "Tesouraria, conciliação e fechamento",
+    navLabel: "Tesouraria",
+    route: "/todogreen/tesouraria",
+    area: "financeiro",
+    status: "functional",
+    permission: "finance:manage",
+    description: "Extrato OFX, conciliação, saldo por conta, cobrança com aging e fechamento de competência.",
   },
   fiscal: {
     title: "Fiscal — CT-e, MDF-e e NFS-e",
@@ -708,7 +721,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes", "central-trabalho"] },
   { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
-  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "fiscal"] },
+  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "fiscal"] },
   // DP e RH eram a mesma área de pessoas partida em dois itens que abriam quase o
   // mesmo conteúdo. Viraram um só: "Pessoas".
   { id: "pessoas", label: "Pessoas", route: "/todogreen/rh", pages: ["rh", "dp-rh", "escalas"] },
@@ -2399,6 +2412,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "estoque" && <Suspense fallback={<section className="tdg-panel">Carregando estoque...</section>}><StockPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
+      {page === "tesouraria" && <Suspense fallback={<section className="tdg-panel">Carregando a tesouraria...</section>}><TreasuryPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}

@@ -512,6 +512,23 @@ async function clientScopeForSession(env, user, clientePedido = "") {
   return vinculos[0];
 }
 
+// Campos livres que PODEM sair para o cliente. O fields_json é escrito pela
+// equipe interna sem validação de chave: se um operador digitar "margem",
+// "custoPorKm" ou um CPF num campo livre, isso NÃO pode vazar no portal. O
+// assistente já filtra por lista (CAMPOS_PROIBIDOS); o payload cru não
+// filtrava nada — este allowlist fecha o buraco. Só entra o que é operacional
+// e do interesse legítimo do embarcador.
+const CAMPOS_LIBERADOS_AO_CLIENTE = new Set([
+  "deliveries", "entregas", "packages", "pacotes", "trips", "viagens",
+  "distanceKm", "occupancyPercent", "dataQuality", "energyKwh",
+  "weightKg", "tons", "pallets", "successRate",
+]);
+const camposParaCliente = (bruto) =>
+  Object.fromEntries(
+    Object.entries(bruto && typeof bruto === "object" ? bruto : {})
+      .filter(([chave, valor]) => CAMPOS_LIBERADOS_AO_CLIENTE.has(chave) && typeof valor !== "object"),
+  );
+
 // Uma linha da tabela vira uma operação com os nomes que o domínio entende.
 // A tradução fica num lugar só: espalhá-la faria a lista e o detalhe divergirem
 // justamente nos campos de prazo, que é onde a divergência custa caro.
@@ -537,7 +554,7 @@ const operacaoDoBanco = (linha) => ({
           longitude: linha.last_position_lng,
         }
       : null,
-  campos: parse(linha.fields_json, {}),
+  campos: camposParaCliente(parse(linha.fields_json, {})),
 });
 
 async function logPortalEvent(env, escopo, user, action, target = "", details = "") {
@@ -928,7 +945,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
         id: l.id,
         referencia: l.reference,
         data: l.service_date,
-        campos: parse(l.fields_json, {}),
+        campos: camposParaCliente(parse(l.fields_json, {})),
       })),
       calculos: (calculos.results || []).map((l, i) => ({
         ...parse(l.result_json, {}),
@@ -1091,7 +1108,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
           origem: linha.origin,
           destino: linha.destination,
           status: linha.status,
-          campos: parse(linha.fields_json, {}),
+          campos: camposParaCliente(parse(linha.fields_json, {})),
         })),
       });
       // Se algum campo interno escapou para o contexto, a chamada cai aqui em

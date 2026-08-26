@@ -404,6 +404,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("rentabilidade", "Rentabilidade", "financeiro", "/todogreen/custos", { icon: "Activity", order: 37 }),
   module("orcamento", "Orçamento", "financeiro", "/todogreen/custos", { icon: "ListChecks", order: 38 }),
   module("centros-custo", "Centros de custo", "financeiro", "/todogreen/rateios", { icon: "Network", order: 39 }),
+  module("tesouraria", "Tesouraria", "financeiro", "/todogreen/tesouraria", {
+    icon: "Landmark",
+    order: 39.4,
+    description: "Extrato bancário OFX, conciliação, saldo por conta, cobrança com aging e fechamento de competência.",
+    permissions: ["read", "finance:manage"],
+  }),
   module("fiscal", "Fiscal", "financeiro", "/todogreen/fiscal", {
     icon: "ReceiptText",
     order: 39.5,

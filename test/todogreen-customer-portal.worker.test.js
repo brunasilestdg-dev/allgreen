@@ -180,6 +180,38 @@ describe("o cliente A nunca alcança o cliente B", () => {
     expect(a.cliente.nome).toBe("Cliente A");
     expect(b.cliente.nome).toBe("Cliente B");
   });
+
+  it("campo livre interno (margem, custo, CPF) não vaza no payload do portal", async () => {
+    // O fields_json é escrito pela equipe sem validação de chave. Se um
+    // operador digitar dado interno num campo livre, o portal NÃO pode
+    // repassar — só o allowlist operacional sai.
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, status,
+          service_date, origin, destination, fields_json,
+          created_by, updated_by, created_at, updated_at)
+       VALUES ('op-vazamento','todogreen','cli-a','dono','OP-A-SENSIVEL','concluida',
+               '2026-08-10','CD','Hub',?, 'seed','seed',?,?)`,
+    ).bind(
+      JSON.stringify({
+        deliveries: 12, distanceKm: 80,
+        margem: 41.5, custoPorKm: 2.37, comissao: 3,
+        cpfMotorista: "111.444.777-35", observacaoInterna: "cliente devendo",
+      }),
+      agora, agora,
+    ).run();
+
+    const lista = await (await pedir("/api/todogreen/portal/operacoes", { token: pessoaA.token })).json();
+    const operacao = lista.operacoes.find((o) => o.referencia === "OP-A-SENSIVEL");
+    expect(operacao).toBeTruthy();
+    expect(operacao.campos.deliveries).toBe(12);
+    expect(operacao.campos.distanceKm).toBe(80);
+    expect(JSON.stringify(operacao)).not.toMatch(/margem|custoPorKm|comissao|cpfMotorista|devendo/);
+
+    const detalhe = await (await pedir("/api/todogreen/portal/operacoes/op-vazamento", { token: pessoaA.token })).json();
+    expect(JSON.stringify(detalhe)).not.toMatch(/margem|custoPorKm|comissao|cpfMotorista|devendo/);
+  });
 });
 
 describe("o portal não abre porta para o lado interno", () => {
