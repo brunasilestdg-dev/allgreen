@@ -9,9 +9,15 @@ describe("roteador principal", () => {
     });
   });
 
-  it("separa portal do cliente e vertical interna", () => {
+  it("separa portal do cliente, app do motorista, central de frota e vertical interna", () => {
     expect(resolvePrimaryRoute("/portal-cliente/operacoes", true).kind).toBe("customer-portal");
-    expect(resolvePrimaryRoute("/portal-motorista/rotas", true).kind).toBe("driver-fleet-portal");
+    // /portal-motorista é o APP do motorista (celular, minhas viagens);
+    // /motorista-frota é a central interna DE gestão de frota. São telas
+    // diferentes e a rota precisa distinguir.
+    expect(resolvePrimaryRoute("/portal-motorista/rotas", true).kind).toBe("driver-portal");
+    expect(resolvePrimaryRoute("/central-motorista", true).kind).toBe("driver-portal");
+    expect(resolvePrimaryRoute("/motorista-frota", true).kind).toBe("driver-fleet-portal");
+    expect(resolvePrimaryRoute("/central-frota", true).kind).toBe("driver-fleet-portal");
     expect(resolvePrimaryRoute("/todogreen/precificacao", true).kind).toBe("todogreen");
   });
 
