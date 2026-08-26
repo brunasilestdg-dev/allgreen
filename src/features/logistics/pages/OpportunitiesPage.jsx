@@ -14,6 +14,7 @@ import {
   Target,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import TopScrollRow from "./TopScrollRow.jsx";
 import {
   ESTAGIOS_OPORTUNIDADE,
   analisarOportunidade,
@@ -554,6 +555,10 @@ export default function OpportunitiesPage({
   const [editandoId, setEditandoId] = useState(null);
   const [filtroEstagio, setFiltroEstagio] = useState("todas");
   const [busca, setBusca] = useState("");
+  const [visao, setVisao] = useState(() => {
+    try { return localStorage.getItem("todogreen-opp-view") || "lista"; } catch { return "lista"; }
+  });
+  const trocarVisao = (v) => { setVisao(v); try { localStorage.setItem("todogreen-opp-view", v); } catch { /* ok */ } };
 
   useEffect(() => {
     const clientId = new URLSearchParams(window.location.search).get("client") || "";
@@ -737,7 +742,12 @@ export default function OpportunitiesPage({
         <button type="button" className={filtroEstagio === "todas" ? "active" : ""} onClick={() => setFiltroEstagio("todas")}><strong>Pipeline completo</strong><span>{registros.length} negócio(s)</span><small>{BRL.format(resumo.valorTotal)}</small></button>
         {etapas.map((item) => <button type="button" className={filtroEstagio === item.estagio ? "active" : ""} onClick={() => setFiltroEstagio(item.estagio)} key={item.estagio}><strong>{item.estagio}</strong><span>{item.quantidade} negócio(s)</span><small>{BRL.format(item.valor)}</small></button>)}
       </section>
-      <div className="tdg-opp-toolbar"><Search size={17} /><input aria-label="Buscar oportunidades" placeholder="Buscar por conta, próximo passo ou origem" value={busca} onChange={(event) => setBusca(event.target.value)} />{filtroEstagio !== "todas" && <button type="button" onClick={() => setFiltroEstagio("todas")}>Limpar etapa</button>}</div>
+      <div className="tdg-opp-toolbar"><Search size={17} /><input aria-label="Buscar oportunidades" placeholder="Buscar por conta, próximo passo ou origem" value={busca} onChange={(event) => setBusca(event.target.value)} />{filtroEstagio !== "todas" && <button type="button" onClick={() => setFiltroEstagio("todas")}>Limpar etapa</button>}
+        <div className="tdg-view-switch" role="tablist" aria-label="Visão das oportunidades">
+          <button type="button" role="tab" aria-selected={visao === "lista"} className={visao === "lista" ? "active" : ""} onClick={() => trocarVisao("lista")}>Lista</button>
+          <button type="button" role="tab" aria-selected={visao === "kanban"} className={visao === "kanban" ? "active" : ""} onClick={() => trocarVisao("kanban")}>Kanban</button>
+        </div>
+      </div>
 
       {registros.length === 0 && (
         <p className="tdg-opp-vazio">
@@ -746,7 +756,34 @@ export default function OpportunitiesPage({
         </p>
       )}
 
-      <div className="tdg-opp-lista">
+      {visao === "kanban" && registros.length > 0 && (
+        <TopScrollRow className="tdg-opp-kanban-wrap" ariaLabel="Kanban de oportunidades por etapa">
+          <div className="tdg-opp-kanban">
+            {etapas.map((coluna) => {
+              const itens = visiveis.filter((registro) => registro.estagio === coluna.estagio);
+              return (
+                <section className="tdg-opp-kb-col" key={coluna.estagio}>
+                  <header>
+                    <strong>{coluna.estagio} · {coluna.quantidade}</strong>
+                    <span>{BRL.format(coluna.valor)}</span>
+                  </header>
+                  <div className="tdg-opp-kb-body">
+                    {itens.map((registro) => (
+                      <button type="button" className="tdg-opp-kb-card" key={registro.id} onClick={() => setEditandoId(registro.id)} title={registro.cliente}>
+                        <span>{registro.cliente || "Sem conta"}</span>
+                        <b>{BRL.format(analisarOportunidade(registro).financeiro.valorContrato)}</b>
+                      </button>
+                    ))}
+                    {!itens.length && <p className="tdg-opp-kb-vazio">—</p>}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </TopScrollRow>
+      )}
+
+      <div className="tdg-opp-lista" hidden={visao === "kanban"}>
         {visiveis.map((registro) => (
           <CartaoOportunidade
             key={registro.id}
