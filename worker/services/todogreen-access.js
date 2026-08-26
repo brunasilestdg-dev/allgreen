@@ -157,8 +157,20 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
   const donosDaCarteira = espacosDaCarteira
     .map((item) => item.workspace_owner_id)
     .filter(Boolean);
-  const espacoPadrao = vinculo?.workspace_owner_id || donosDaCarteira[0] || user.id;
-  const permitidos = new Set([user.id, espacoPadrao, ...donosDaCarteira].filter(Boolean));
+  // O motorista pode nunca ter tenant_users: o vínculo dele é o cadastro de
+  // motorista com e-mail de acesso (0070). Sem este caminho, ele entraria num
+  // espaço próprio vazio e o portal não acharia viagem nenhuma.
+  const espacosDeMotorista = await env.DB
+    .prepare(
+      `SELECT DISTINCT workspace_owner_id FROM todogreen_drivers
+        WHERE tenant_id = ? AND lower(user_email) = ? AND archived_at IS NULL`,
+    )
+    .bind(TENANT_ID, email)
+    .all()
+    .then((resultado) => (resultado.results || []).map((item) => item.workspace_owner_id).filter(Boolean))
+    .catch(() => []);
+  const espacoPadrao = vinculo?.workspace_owner_id || donosDaCarteira[0] || espacosDeMotorista[0] || user.id;
+  const permitidos = new Set([user.id, espacoPadrao, ...donosDaCarteira, ...espacosDeMotorista].filter(Boolean));
 
   const pedido = clean(requestedOwnerId, 100);
   if (pedido && !ehAdministrador && !permitidos.has(pedido))

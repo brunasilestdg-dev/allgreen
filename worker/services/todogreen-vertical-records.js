@@ -334,6 +334,7 @@ const COLECOES = {
       etaEm: row.eta_at || "",
       placa: row.vehicle_plate || "",
       motorista: row.driver_name || "",
+      motoristaId: row.driver_id || "",
       sla: row.sla_status || "",
       comprovanteUrl: row.proof_url || "",
       comprovanteHash: row.proof_hash || "",
@@ -369,6 +370,9 @@ const COLECOES = {
       eta_at: texto(corpo.etaEm, 40) || null,
       vehicle_plate: texto(corpo.placa, 20).toUpperCase(),
       driver_name: texto(corpo.motorista, 160),
+      // O motorista como dado: o id liga a operação ao cadastro (0070) e é o
+      // recorte do portal do motorista. O nome continua como rótulo.
+      driver_id: texto(corpo.motoristaId, 120),
       distance_km: numero(corpo.distanciaKm),
       incident_count: numero(corpo.ocorrencias),
       sla_status: texto(corpo.sla, 40),
@@ -1149,18 +1153,18 @@ const listarEventosOperacao = async (env, access, user, operationId) => {
   });
 };
 
-const registrarEventoOperacao = async (env, access, user, operationId, corpo, origem = "") => {
-  if (!(await noAlcanceDaCarteira(env, COLECOES.operations, access, user.email, operationId)))
-    return json({ error: "Operação não encontrada." }, 404);
-  const operacao = await env.DB.prepare(
-    `SELECT * FROM todogreen_client_operations
-      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-  ).bind(operationId, TENANT_ID, access.ownerId).first();
+// O núcleo do evento operacional, compartilhado entre a tela interna e o
+// portal do motorista: são o MESMO fato (a carga chegou, a entrega aconteceu,
+// houve ocorrência) — duas implementações produziriam dois delivered_at e
+// dois PODs diferentes. Quem chama já validou o alcance (carteira interna ou
+// vínculo do motorista); aqui só se aplica.
+export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId, corpo, origem = "" }) => {
   const tipos = new Set(["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"]);
   const tipo = tipos.has(texto(corpo.tipo, 40)) ? texto(corpo.tipo, 40) : "transito";
   const titulo = texto(corpo.titulo, 200);
   const descricao = texto(corpo.descricao, 3000);
-  if (!titulo && !descricao) return json({ error: "Informe o título ou a descrição do evento." }, 400);
+  if (!titulo && !descricao) return { erro: "Informe o título ou a descrição do evento." };
+  const operationId = operacao.id;
   const ocorridoEm = texto(corpo.ocorridoEm, 40) || new Date().toISOString();
   const agora = new Date().toISOString();
   const eventoId = crypto.randomUUID();
@@ -1184,25 +1188,28 @@ const registrarEventoOperacao = async (env, access, user, operationId, corpo, or
           ocorrido_em,registrado_por,created_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(
-      eventoId, TENANT_ID, operationId, operacao.client_id, access.ownerId, tipo, titulo,
-      descricao, texto(corpo.local, 300), ocorridoEm, user.id, agora,
+      eventoId, TENANT_ID, operationId, operacao.client_id, ownerId, tipo, titulo,
+      descricao, texto(corpo.local, 300), ocorridoEm, userId, agora,
     ),
     env.DB.prepare(
       `UPDATE todogreen_client_operations
           SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-    ).bind(agora, user.id, ...paramsEntrega, operationId, TENANT_ID, access.ownerId),
+    ).bind(agora, userId, ...paramsEntrega, operationId, TENANT_ID, ownerId),
   ];
   if (tipo === "entrega") {
     // POD para toda OS amarrada a esta operação. INSERT direto com subselect:
     // se não houver OS vinculada, nada acontece; se houver, o gate de
     // faturamento passa a enxergar o comprovante.
+    const latitude = Number(corpo.latitude);
+    const longitude = Number(corpo.longitude);
     instrucoes.push(env.DB.prepare(
       `INSERT INTO todogreen_proofs_of_delivery
          (id, tenant_id, workspace_owner_id, service_order_id, kind, occurred_at,
-          recipient_name, document_url, document_hash, fields_json, created_by, created_at)
+          recipient_name, document_url, document_hash, latitude, longitude,
+          fields_json, created_by, created_at)
        SELECT lower(hex(randomblob(16))), os.tenant_id, os.workspace_owner_id, os.id, 'delivery', ?,
-              ?, ?, ?, json_object('operationId', ?, 'eventId', ?), ?, ?
+              ?, ?, ?, ?, ?, json_object('operationId', ?, 'eventId', ?), ?, ?
          FROM todogreen_service_orders os
         WHERE os.tenant_id = ? AND os.workspace_owner_id = ? AND os.operation_id = ?
           AND os.archived_at IS NULL
@@ -1213,21 +1220,17 @@ const registrarEventoOperacao = async (env, access, user, operationId, corpo, or
           )`,
     ).bind(
       ocorridoEm, recebedor, comprovanteUrl, texto(corpo.comprovanteHash, 200),
-      operationId, eventoId, user.id, agora,
-      TENANT_ID, access.ownerId, operationId,
+      Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null,
+      operationId, eventoId, userId, agora,
+      TENANT_ID, ownerId, operationId,
     ));
   }
   await env.DB.batch(instrucoes);
   const atualizada = await env.DB.prepare(
     `SELECT * FROM todogreen_client_operations
       WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
-  ).bind(operationId, TENANT_ID, access.ownerId).first();
-  const evento = { id: eventoId, tipo, titulo, descricao, local: texto(corpo.local, 300), ocorridoEm, registradoPor: user.id, criadoEm: agora };
-  await registrarAuditoriaTodoGreen(env, {
-    access, user, action: "event_added", resourceType: "operations", resourceId: operationId,
-    clientId: operacao.client_id, before: COLECOES.operations.daLinha(operacao),
-    after: COLECOES.operations.daLinha(atualizada), details: `${tipo}: ${titulo || descricao}`,
-  });
+  ).bind(operationId, TENANT_ID, ownerId).first();
+  const evento = { id: eventoId, tipo, titulo, descricao, local: texto(corpo.local, 300), ocorridoEm, registradoPor: userId, criadoEm: agora };
   // Entrega e ocorrência são os dois eventos que o embarcador quer saber na
   // hora — os demais ele acompanha pela linha do tempo quando quiser.
   if (tipo === "entrega" || tipo === "ocorrencia") {
@@ -1240,7 +1243,27 @@ const registrarEventoOperacao = async (env, access, user, operationId, corpo, or
       origem,
     });
   }
-  return json({ evento, registro: COLECOES.operations.daLinha(atualizada) }, 201);
+  return { evento, tipo, titulo, descricao, atualizada };
+};
+
+const registrarEventoOperacao = async (env, access, user, operationId, corpo, origem = "") => {
+  if (!(await noAlcanceDaCarteira(env, COLECOES.operations, access, user.email, operationId)))
+    return json({ error: "Operação não encontrada." }, 404);
+  const operacao = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_operations
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(operationId, TENANT_ID, access.ownerId).first();
+  const resultado = await aplicarEventoOperacional(env, {
+    ownerId: access.ownerId, operacao, userId: user.id, corpo, origem,
+  });
+  if (resultado.erro) return json({ error: resultado.erro }, 400);
+  await registrarAuditoriaTodoGreen(env, {
+    access, user, action: "event_added", resourceType: "operations", resourceId: operationId,
+    clientId: operacao.client_id, before: COLECOES.operations.daLinha(operacao),
+    after: COLECOES.operations.daLinha(resultado.atualizada),
+    details: `${resultado.tipo}: ${resultado.titulo || resultado.descricao}`,
+  });
+  return json({ evento: resultado.evento, registro: COLECOES.operations.daLinha(resultado.atualizada) }, 201);
 };
 
 const listarPagamentos = async (env, access, user, entryId) => {

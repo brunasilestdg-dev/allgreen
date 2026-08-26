@@ -99,7 +99,7 @@ const CONFIG = {
     map:(r)=>({ ...common(r), employeeId:r.employee_id, partyId:r.party_id, driverCode:r.driver_code, fullName:r.full_name, document:r.document,
       employmentType:r.employment_type, phone:r.phone, email:r.email, operationalUnitId:r.operational_unit_id, baseName:r.base_name,
       availabilityStatus:r.availability_status, cnhNumber:r.cnh_number, cnhCategory:r.cnh_category, cnhExpiresAt:r.cnh_expires_at||"",
-      moppExpiresAt:r.mopp_expires_at||"", rntrc:r.rntrc, status:r.status, fields:parse(r.fields_json,{}) }),
+      moppExpiresAt:r.mopp_expires_at||"", rntrc:r.rntrc, status:r.status, userEmail:r.user_email||"", fields:parse(r.fields_json,{}) }),
     encode:(b,c={})=>({ employee_id:text(value(b,c,"employeeId","employee_id"),120), party_id:text(value(b,c,"partyId","party_id"),120),
       driver_code:text(value(b,c,"driverCode","driver_code"),60).toUpperCase(), full_name:text(value(b,c,"fullName","full_name"),240), document:digits(value(b,c,"document","document"),14),
       employment_type:["employee","aggregate","pj","third_party","other"].includes(text(value(b,c,"employmentType","employment_type")))?text(value(b,c,"employmentType","employment_type")):"employee",
@@ -107,6 +107,9 @@ const CONFIG = {
       base_name:text(value(b,c,"baseName","base_name"),160), availability_status:["available","allocated","off_shift","leave","blocked","unavailable"].includes(text(value(b,c,"availabilityStatus","availability_status")))?text(value(b,c,"availabilityStatus","availability_status")):"unavailable",
       cnh_number:text(value(b,c,"cnhNumber","cnh_number"),60), cnh_category:text(value(b,c,"cnhCategory","cnh_category"),20).toUpperCase(), cnh_expires_at:text(value(b,c,"cnhExpiresAt","cnh_expires_at"),20)||null,
       mopp_expires_at:text(value(b,c,"moppExpiresAt","mopp_expires_at"),20)||null, rntrc:digits(value(b,c,"rntrc","rntrc"),20),
+      // E-mail de acesso ao portal do motorista (0070): é por ele que a sessão
+      // da pessoa encontra o próprio cadastro e as próprias viagens.
+      user_email:text(value(b,c,"userEmail","user_email"),200).toLowerCase(),
       status:["draft","active","blocked","inactive"].includes(text(value(b,c,"status","status")))?text(value(b,c,"status","status")):"draft",
       fields_json:JSON.stringify(object(has(b,"fields")?b.fields:parse(c.fields_json,{}))) }),
   },

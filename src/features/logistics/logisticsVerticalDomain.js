@@ -45,6 +45,10 @@ export const TODO_GREEN_ROLES = [
   // salário, CPF e dependentes são dado sensível (LGPD), e quem lança uma
   // despesa não precisa ver a remuneração de ninguém.
   "rh",
+  // O papel de quem dirige. Deliberadamente SEM "read": o motorista não vê a
+  // vertical inteira — só o portal dele, que recorta as viagens pelo próprio
+  // vínculo (driver:self). Registrar entrega e ocorrência da rua é driver:event.
+  "motorista",
 ];
 
 // crm:manage, proposal:manage, operations:manage e finance:manage são exigidas
@@ -75,6 +79,7 @@ export const TODO_GREEN_PERMISSIONS = {
   // caixa, e juntar os dois num papel só tiraria a segregação que a auditoria
   // de folha depende.
   rh: ["read", "hr:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  motorista: ["driver:self", "driver:event"],
 };
 
 // A regra de permissão da vertical, uma só, usada pelo front e pelo worker.

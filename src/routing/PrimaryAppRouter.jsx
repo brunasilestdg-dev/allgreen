@@ -4,6 +4,7 @@ const LogisticsVertical = lazy(() => import("../features/logistics/LogisticsVert
 const CustomerPortal = lazy(() => import("../features/logistics/CustomerPortal.jsx"));
 const ClientActivationPage = lazy(() => import("../features/logistics/ClientActivationPage.jsx"));
 const DriverFleetCenterPage = lazy(() => import("../features/logistics/pages/DriverFleetCenterPage.jsx"));
+const DriverPortalPage = lazy(() => import("../features/logistics/pages/DriverPortalPage.jsx"));
 
 export function resolvePrimaryRoute(pathname, authenticated) {
   const path = String(pathname || "/");
@@ -13,7 +14,12 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   if (inviteMatch) return { kind: "invite", token: inviteMatch[1] };
   if (!authenticated) return { kind: "login" };
   if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-portal" };
-  if (/^\/(?:portal-motorista|motorista-frota|central-motorista|central-frota)(?:\/|$)/.test(path))
+  // O portal DO motorista (celular, minhas viagens) é outra coisa que a
+  // central DE frota (gestão interna). Antes as quatro rotas caíam na tela de
+  // gestão — e o "portal do motorista" mostrava as operações de todo mundo.
+  if (/^\/(?:portal-motorista|central-motorista)(?:\/|$)/.test(path))
+    return { kind: "driver-portal" };
+  if (/^\/(?:motorista-frota|central-frota)(?:\/|$)/.test(path))
     return { kind: "driver-fleet-portal" };
   if (/^\/todogreen\/ativacao(?:\/|$)/.test(path)) return { kind: "todogreen-activation" };
   if (/^\/todogreen(?:\/|$)/.test(path)) return { kind: "todogreen" };
@@ -39,6 +45,12 @@ export default function PrimaryAppRouter({
     return (
       <Suspense fallback={<div className="inbox-loading">Abrindo seu portal...</div>}>
         <CustomerPortal />
+      </Suspense>
+    );
+  if (route.kind === "driver-portal")
+    return (
+      <Suspense fallback={<div className="inbox-loading">Abrindo suas viagens...</div>}>
+        <DriverPortalPage />
       </Suspense>
     );
   if (route.kind === "driver-fleet-portal")
