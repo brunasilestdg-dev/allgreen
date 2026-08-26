@@ -113,21 +113,39 @@ describe("espinha transacional", () => {
     expect((await issued.json()).record).toMatchObject({ status: "issued", ciotCode: "123456789012" });
   });
 
-  it("não pula etapas e gera elegibilidade apenas ao concluir", async () => {
+  it("não pula etapas e só gera elegibilidade depois do POD e da conclusão", async () => {
     const skipped = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", { status: "completed", revision: 1 });
     expect(skipped.status).toBe(409);
-    for (const status of ["released", "in_progress", "completed"]) {
+
+    for (const status of ["released", "in_progress"]) {
       const response = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", { status, revision: order.revision });
       expect(response.status).toBe(200);
       order = (await response.json()).record;
     }
+
+    const beforePod = await request("/api/todogreen/transactions/billing-items?status=eligible");
+    expect((await beforePod.json()).records).toHaveLength(0);
+
+    const now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO todogreen_proofs_of_delivery
+      (id,tenant_id,workspace_owner_id,service_order_id,delivery_id,kind,occurred_at,recipient_name,
+       document_url,document_hash,fields_json,created_by,created_at)
+      VALUES ('txn-pod','todogreen','txn-user',?,'','delivery',?,'Recebedor','','hash-pod','{}','txn-user',?)`)
+      .bind(order.id, now, now).run();
+
+    const completed = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", {
+      status: "completed", revision: order.revision,
+    });
+    expect(completed.status).toBe(200);
+    order = (await completed.json()).record;
+
     const queue = await request("/api/todogreen/transactions/billing-items?status=eligible");
     const records = (await queue.json()).records;
     expect(records).toHaveLength(1);
     billingItem = records[0];
   });
 
-  it("confere, fecha, emite documento e cria contas a receber", async () => {
+  it("confere, fecha, prepara documento e cria contas a receber", async () => {
     const checked = await request(`/api/todogreen/transactions/billing-items/${billingItem.id}/check`, "POST", { approved: true, revision: 1 });
     expect(checked.status).toBe(200);
     const closed = await request("/api/todogreen/transactions/billing-runs", "POST", {
