@@ -1281,6 +1281,13 @@ const registrarPagamento = async (env, access, user, entryId, corpo) => {
 // compensatório negativo que referencia o original e reabre o saldo. É como se
 // ajusta um lançamento sem corromper o histórico — a mesma filosofia do estoque
 // e do deal desk. Estornar duas vezes o mesmo pagamento é recusado.
+//
+// Sobre o fechamento de competência: o estorno NÃO chama `bloqueioDeCompetencia`,
+// de propósito e em paridade com `registrarPagamento` — a baixa também não chama.
+// A trava congela a competência (o accrual, o valor reconhecido no resultado),
+// não o lado caixa. Pagar um título cuja competência já fechou é rotina; poder
+// pagar mas não poder estornar seria a assimetria errada. O `amount` do
+// lançamento (o que a trava protege) não é tocado aqui — só `paid_amount`/status.
 const estornarPagamento = async (env, access, user, entryId, paymentId) => {
   if (!(await noAlcanceDaCarteira(env, COLECOES.financial, access, user.email, entryId)))
     return json({ error: "Lançamento não encontrado." }, 404);

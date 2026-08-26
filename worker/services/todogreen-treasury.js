@@ -315,10 +315,30 @@ const conciliar = async (env, access, user, corpo) => {
     ).bind(agora, linha.bank_account_id, user.id, agora, entryId, TENANT_ID, access.ownerId),
   ]);
 
-  // Se a primeira não mudou nada, outra pessoa conciliou entre a leitura e a
-  // gravação.
-  if (!resultado?.[0]?.meta?.changes)
-    return json({ error: "Esta linha foi conciliada por outra pessoa. Recarregue." }, 409);
+  // As duas gravações são guardadas por `reconciled_at IS NULL`. Se QUALQUER uma
+  // não mudou, alguém conciliou a linha ou o lançamento entre a leitura e a
+  // gravação — e o batch não desfaz a outra sozinho. Sem conferir as duas, dava
+  // para marcar a linha do extrato apontando para um lançamento já conciliado a
+  // outra linha (meia-conciliação, com o usuário vendo sucesso). Aqui, se só uma
+  // pegou, revertemos a que pegou e recusamos.
+  const linhaMudou = Boolean(resultado?.[0]?.meta?.changes);
+  const entradaMudou = Boolean(resultado?.[1]?.meta?.changes);
+  if (!linhaMudou || !entradaMudou) {
+    if (linhaMudou)
+      await env.DB.prepare(
+        `UPDATE todogreen_bank_statement_lines
+            SET entry_id = NULL, reconciled_at = NULL, reconciled_by = NULL
+          WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND reconciled_at = ?`,
+      ).bind(linhaId, TENANT_ID, access.ownerId, agora).run();
+    if (entradaMudou)
+      await env.DB.prepare(
+        `UPDATE todogreen_financial_entries
+            SET reconciled_at = NULL, bank_account_id = NULL, revision = revision + 1,
+                updated_by = ?, updated_at = ?
+          WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND reconciled_at = ?`,
+      ).bind(user.id, new Date().toISOString(), entryId, TENANT_ID, access.ownerId, agora).run();
+    return json({ error: "Esta linha ou o lançamento foi conciliado por outra pessoa. Recarregue." }, 409);
+  }
 
   return json({ ok: true, conciliadoEm: agora });
 };

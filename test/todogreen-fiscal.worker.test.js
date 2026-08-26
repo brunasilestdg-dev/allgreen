@@ -154,6 +154,26 @@ describe("ciclo de vida do documento", () => {
     expect(ok.status).toBe(200);
     expect((await ok.json()).status).toBe("validado");
   });
+
+  it("ao assinar, o XML leva o valor real e ganha número sequencial", async () => {
+    const criado = await (await criarDocumento(gestora.token, {
+      // Sem `numero`: o servidor tem de sequenciar na assinatura.
+      docType: "cte", valorServico: 4000, valorTotal: 4000, ufInicio: "SP", ufFim: "RJ",
+      tomadorId: "cli-9", cfop: "6353", icmsValor: 480, icmsBase: 4000, icmsAliquota: 12,
+    })).json();
+    expect(criado.numero == null || criado.numero === 0).toBe(true);
+
+    await transitar(gestora.token, criado.id, "validado");
+    const assinado = await transitar(gestora.token, criado.id, "assinado");
+    expect(assinado.status).toBe(200);
+    const doc = await assinado.json();
+
+    // Antes da correção, o XML saía com vTPrest 0.00 e todo documento numerado 1,
+    // porque o worker passava valorTotal/impostos achatados que o construtor não lia.
+    expect(doc.numero).toBeGreaterThanOrEqual(1);
+    expect(doc.xmlContent).toContain("<vTPrest>4000.00</vTPrest>");
+    expect(doc.xmlContent).toContain("<vICMS>480.00</vICMS>");
+  });
 });
 
 describe("impostos são calculados no servidor", () => {

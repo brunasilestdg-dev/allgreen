@@ -476,6 +476,20 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
     const perfil = await lerPerfil(env, access.ownerId);
     if (!perfil) return json({ error: "Configure o perfil fiscal antes de assinar." }, 400);
 
+    // Número sequencial por tipo e série, reservado no servidor na assinatura —
+    // nunca digitado no cliente. Sem isto todo documento saía numerado 1, o que
+    // é numeração fiscal inválida.
+    if (!row.numero) {
+      const seq = await env.DB.prepare(
+        `SELECT COALESCE(MAX(numero), 0) + 1 AS proximo FROM todogreen_fiscal_documents
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND doc_type = ? AND serie = ?`,
+      ).bind(TENANT_ID, access.ownerId, row.doc_type, row.serie).first();
+      row.numero = seq?.proximo || 1;
+      await env.DB.prepare(
+        `UPDATE todogreen_fiscal_documents SET numero = ? WHERE id = ?`,
+      ).bind(row.numero, docId).run();
+    }
+
     if (row.doc_type === "cte") {
       const refs = await listarReferenciasInterno(env, access.ownerId, docId);
       const chave = gerarChaveDeAcesso({
@@ -506,26 +520,26 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
           municipioFim: row.municipio_fim,
           codigoMunicipioFim: row.codigo_municipio_fim,
         },
-        valores: {
-          valorServico: row.valor_servico,
-          valorFrete: row.valor_frete,
-          valorSeguro: row.valor_seguro,
-          valorPedagio: row.valor_pedagio,
-          valorOutros: row.valor_outros,
-          valorTotal: row.valor_total,
-        },
+        // O construtor lê `valores.total`, `impostos.icms`/`impostos.pisCofins`
+        // e `referencia.chave` (contrato coberto por fiscalDomain.test.js).
+        // Passar `valorTotal`, impostos achatados ou `chaveAcesso` zerava o XML.
+        valores: { total: row.valor_total },
         impostos: {
-          icmsBase: row.icms_base,
-          icmsAliquota: row.icms_aliquota,
-          icmsValor: row.icms_valor,
-          cstIcms: row.cst_icms,
-          pisAliquota: row.pis_aliquota,
-          pisValor: row.pis_valor,
-          cofinsAliquota: row.cofins_aliquota,
-          cofinsValor: row.cofins_valor,
+          icms: {
+            icmsBase: row.icms_base,
+            icmsAliquota: row.icms_aliquota,
+            icmsValor: row.icms_valor,
+            cstIcms: row.cst_icms,
+          },
+          pisCofins: {
+            pisAliquota: row.pis_aliquota,
+            pisValor: row.pis_valor,
+            cofinsAliquota: row.cofins_aliquota,
+            cofinsValor: row.cofins_valor,
+          },
         },
         referencias: refs.map((r) => ({
-          chaveAcesso: r.chaveAcesso,
+          chave: r.chaveAcesso,
           tipo: r.refType,
         })),
         veiculo: { placa: row.placa, uf: row.uf_veiculo, rntrc: row.rntrc },
@@ -558,8 +572,8 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
         },
         veiculo: { placa: row.placa, uf: row.uf_veiculo, rntrc: row.rntrc },
         motorista: { nome: row.motorista_nome, cpf: row.motorista_cpf },
-        ctes: cteRefs.map((r) => r.chaveAcesso),
-        totais: { valorTotal: row.valor_total, peso: 0 },
+        ctes: cteRefs.map((r) => ({ chave: r.chaveAcesso })),
+        totais: { valorCarga: row.valor_total, pesoCarga: 0 },
       });
       await env.DB.prepare(
         `UPDATE todogreen_fiscal_documents SET chave_acesso = ? WHERE id = ?`,
