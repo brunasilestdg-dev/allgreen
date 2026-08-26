@@ -1445,3 +1445,14 @@
 .tdg-payment-row.estorno strong { color: #a23b2d; }
 .tdg-payment-row button { background: #fff; border: 1px solid #e0c9c4; border-radius: 8px; color: #a23b2d; cursor: pointer; font-size: 12px; font-weight: 700; padding: 5px 10px; }
 .tdg-payment-row em { color: var(--tdg-muted); font-size: 11px; font-style: normal; }
+
+/* ── Painéis: cartão do indicador com gráfico ───────────────── */
+.tdg-widget-card { display: grid; gap: 10px; align-content: start; }
+.tdg-widget-card > header { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.tdg-widget-card > header small { color: var(--tdg-ink); font-size: 13px; font-weight: 700; }
+.tdg-widget-card > header span {
+  background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); flex: none;
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 3px 8px; text-transform: uppercase;
+}
+.tdg-widget-card.size-large { grid-column: span 2; }
+@media (max-width: 620px) { .tdg-widget-card.size-large { grid-column: auto; } }

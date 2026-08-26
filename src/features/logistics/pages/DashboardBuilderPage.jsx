@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, Plus, Save, Trash2 } from "lucide-react";
+import WidgetChart from "./DashboardCharts.jsx";
 import "./TodoGreenPages.css";
 
 const METRICS = [
@@ -34,7 +35,7 @@ const metricValue = (metric, summary = {}) => ({
   produtividade: summary.produtividade ?? 0,
 }[metric] ?? 0);
 
-export default function DashboardBuilderPage({ authHeaders, summary = {}, setToast }) {
+export default function DashboardBuilderPage({ authHeaders, summary = {}, data = {}, setToast }) {
   const [dashboards, setDashboards] = useState([]);
   const [access, setAccess] = useState({ canManageTeam: false });
   const [selectedId, setSelectedId] = useState("");
@@ -109,7 +110,15 @@ export default function DashboardBuilderPage({ authHeaders, summary = {}, setToa
             </article>)}
           </div>
           <div className="tdg-dashboard-preview">
-            {form.widgets.map((widget) => <article className={`size-${widget.size}`} key={widget.id}><small>{widget.title || METRICS.find(([id]) => id === widget.metric)?.[1]}</small><strong>{Number(metricValue(widget.metric, summary)).toLocaleString("pt-BR")}</strong><span>{TYPES.find(([id]) => id === widget.type)?.[1]}</span></article>)}
+            {form.widgets.map((widget) => (
+              <article className={`tdg-widget-card size-${widget.size}`} key={widget.id}>
+                <header>
+                  <small>{widget.title || METRICS.find(([id]) => id === widget.metric)?.[1]}</small>
+                  <span>{TYPES.find(([id]) => id === widget.type)?.[1]}</span>
+                </header>
+                <WidgetChart widget={widget} data={data} valorEscalar={metricValue(widget.metric, summary)} />
+              </article>
+            ))}
           </div>
           <div className="tdg-page-actions"><button className="tdg-action" disabled={status === "saving" || form.widgets.length === 0}><Save size={17} />Salvar painel</button>{selectedId && <button type="button" className="tdg-danger-action" onClick={remove}><Trash2 size={17} />Excluir</button>}</div>
         </form>
