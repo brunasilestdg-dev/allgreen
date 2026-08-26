@@ -98,23 +98,41 @@ export default function FiscalPage({ authHeaders, setToast }) {
     if (["valorServico", "ufInicio", "ufFim", "cstIcms", "docType"].includes(campo)) setPrevia(null);
   };
 
+  // Faturas fechadas pelo Financeiro que ainda não viraram documento fiscal.
+  const [faturasPendentes, setFaturasPendentes] = useState([]);
+
   const carregar = async () => {
     setOcupado("carregando");
     setErro("");
     try {
       const consulta = filtroTipo ? `?tipo=${filtroTipo}&limit=100` : "?limit=100";
-      const [docResposta, perfilResposta, resumoResposta] = await Promise.all([
+      const [docResposta, perfilResposta, resumoResposta, pendentesResposta] = await Promise.all([
         request(`/documentos${consulta}`, authHeaders),
         request("/profile", authHeaders),
         request("/resumo", authHeaders),
+        request("/faturas-pendentes", authHeaders).catch(() => ({ registros: [] })),
       ]);
       setDocumentos(docResposta.registros || []);
       setPerfil(perfilResposta || null);
       setResumo(resumoResposta || null);
+      setFaturasPendentes(pendentesResposta.registros || []);
       setOcupado("");
     } catch (motivo) {
       setErro(motivo.message);
       setOcupado("");
+    }
+  };
+
+  const prepararDaFatura = async (fatura) => {
+    try {
+      await request("/documentos/da-fatura", authHeaders, {
+        method: "POST",
+        body: JSON.stringify({ invoiceId: fatura.invoiceId }),
+      });
+      avisar(`Rascunho de ${fatura.docType.toUpperCase()} preparado a partir da fatura ${fatura.numeroFatura}. Complete UFs e municípios e valide.`);
+      await carregar();
+    } catch (motivo) {
+      avisar(motivo.message, "erro");
     }
   };
 
@@ -330,6 +348,28 @@ export default function FiscalPage({ authHeaders, setToast }) {
           <small>CT-e, MDF-e e NFS-e</small>
         </article>
       </section>
+
+      {faturasPendentes.length > 0 && (
+        <section className="tdg-panel">
+          <div className="tdg-section-head">
+            <div>
+              <span className="tdg-kicker">FATURAMENTO → FISCAL</span>
+              <h3>Faturas aguardando documento fiscal</h3>
+              <p>Fechamentos do Financeiro que ainda não viraram CT-e/NFS-e. Preparar cria o rascunho já preenchido com cliente, valor, OS e frota.</p>
+            </div>
+            <strong>{faturasPendentes.length} fatura(s)</strong>
+          </div>
+          <ul className="tdg-via-faltando">
+            {faturasPendentes.map((fatura) => (
+              <li key={fatura.invoiceId}>
+                <strong>{fatura.numeroFatura}</strong> · {NOME_TIPO[fatura.docType] || fatura.docType} · {dinheiro(fatura.valor)} · competência {fatura.competencia || "—"}
+                {" "}
+                <button type="button" className="tdg-action" onClick={() => prepararDaFatura(fatura)}>Preparar {(NOME_TIPO[fatura.docType] || fatura.docType)}</button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {mostrarForm && (
         <form className="tdg-panel tdg-form" onSubmit={criarDocumento}>

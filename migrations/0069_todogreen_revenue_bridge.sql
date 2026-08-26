@@ -15,6 +15,48 @@
 -- 'pay-'||settlement.id) + INSERT OR IGNORE dão idempotência. Não há laço:
 -- o trigger de compras só dispara em kind='cost', este só grava kind='revenue'.
 
+-- ---------------------------------------------------------------------------
+-- Numeração fiscal atômica. O MAX(numero)+1 do fiscal era leitura-depois-
+-- escrita: duas assinaturas simultâneas produziam o mesmo número. A série
+-- fiscal ganha contador próprio (a todogreen_document_series tem CHECK que não
+-- aceita tipos fiscais) e o índice único é o cinto de segurança.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS todogreen_fiscal_series (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'todogreen',
+  workspace_owner_id TEXT NOT NULL,
+  doc_type TEXT NOT NULL CHECK (doc_type IN ('cte', 'mdfe', 'nfse')),
+  serie INTEGER NOT NULL DEFAULT 1,
+  next_number INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (tenant_id, workspace_owner_id, doc_type, serie),
+  FOREIGN KEY (workspace_owner_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Semeia o contador a partir do maior número já emitido, para espaços que já
+-- assinaram documentos com a numeração antiga.
+INSERT OR IGNORE INTO todogreen_fiscal_series
+  (id, tenant_id, workspace_owner_id, doc_type, serie, next_number, created_at, updated_at)
+SELECT lower(hex(randomblob(16))), tenant_id, workspace_owner_id, doc_type, serie,
+       MAX(numero) + 1, strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')
+  FROM todogreen_fiscal_documents
+ WHERE numero IS NOT NULL
+ GROUP BY tenant_id, workspace_owner_id, doc_type, serie;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tdg_fiscal_numero_unico
+  ON todogreen_fiscal_documents (tenant_id, workspace_owner_id, doc_type, serie, numero)
+  WHERE numero IS NOT NULL;
+
+-- O documento fiscal passa a saber de que fatura nasceu. O fechamento do
+-- faturamento gravava um "CTE-000001" em todogreen_invoices sem tocar o
+-- módulo fiscal — dois mundos numerando o mesmo frete. Com o vínculo, a
+-- fatura vira RASCUNHO fiscal pré-preenchido e a emissão acontece uma vez só.
+ALTER TABLE todogreen_fiscal_documents ADD COLUMN invoice_id TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tdg_fiscal_invoice_unica
+  ON todogreen_fiscal_documents (tenant_id, workspace_owner_id, invoice_id)
+  WHERE invoice_id <> '' AND archived_at IS NULL;
+
 CREATE TRIGGER IF NOT EXISTS trg_tdg_receivable_title_to_entry
 AFTER INSERT ON todogreen_financial_titles
 WHEN NEW.kind = 'receivable' AND NEW.original_amount > 0

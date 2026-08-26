@@ -224,6 +224,35 @@ describe("espinha transacional", () => {
   });
 });
 
+describe("a fatura fechada vira documento fiscal preparado", () => {
+  it("lista a fatura pendente e prepara o CT-e pré-preenchido, sem duplicar", async () => {
+    // Perfil fiscal mínimo — a preparação e a validação dependem dele.
+    await request("/api/todogreen/fiscal/profile", "POST", {
+      razaoSocial: "To Do Green Transportes", cnpj: "41.385.427/0001-32",
+      uf: "SP", regimeTributario: "simples", faturamento12m: 500000,
+    });
+
+    const pendentes = await (await request("/api/todogreen/fiscal/faturas-pendentes")).json();
+    expect(pendentes.registros.length).toBeGreaterThanOrEqual(1);
+    const fatura = pendentes.registros[0];
+    expect(fatura.valor).toBe(250);
+
+    const preparado = await request("/api/todogreen/fiscal/documentos/da-fatura", "POST", { invoiceId: fatura.invoiceId });
+    expect(preparado.status).toBe(201);
+    const doc = await preparado.json();
+    expect(doc.status).toBe("rascunho");
+    expect(doc.valorTotal).toBe(250);
+    expect(doc.clientId).toBe("txn-client");
+    expect(doc.invoiceId).toBe(fatura.invoiceId);
+
+    // A mesma fatura não vira dois documentos, e sai da fila de pendentes.
+    const denovo = await request("/api/todogreen/fiscal/documentos/da-fatura", "POST", { invoiceId: fatura.invoiceId });
+    expect(denovo.status).toBe(409);
+    const depois = await (await request("/api/todogreen/fiscal/faturas-pendentes")).json();
+    expect(depois.registros.some((r) => r.invoiceId === fatura.invoiceId)).toBe(false);
+  });
+});
+
 describe("evento de entrega fecha o ciclo da operação", () => {
   it("carimba delivered_at, guarda o comprovante e cria o POD da OS vinculada", async () => {
     const agora = new Date().toISOString();

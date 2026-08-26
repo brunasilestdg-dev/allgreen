@@ -173,6 +173,19 @@ const ciotIntegrationView = (row, env = {}) => {
   };
 };
 
+// Fechamento de período (todogreen_financial_periods): a trava já valia para
+// os lançamentos do razão, mas faturamento e baixa passavam por fora — um mês
+// "fechado" cujo faturamento ainda mudava não estava fechado.
+async function competenciaFechada(env, ownerId, dataOuCompetencia) {
+  const mes = String(dataOuCompetencia || "").slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(mes)) return "";
+  const row = await env.DB.prepare(
+    `SELECT reference_month FROM todogreen_financial_periods
+      WHERE tenant_id=? AND workspace_owner_id=? AND reference_month=? AND status='fechado'`,
+  ).bind(TENANT_ID, ownerId, mes).first();
+  return row ? mes : "";
+}
+
 async function contractInScope(env, ownerId, contractId, clientId) {
   return env.DB.prepare(
     `SELECT * FROM todogreen_contracts WHERE id=? AND tenant_id=? AND workspace_owner_id=?
@@ -707,6 +720,9 @@ async function closeBilling(env, access, user, body) {
   const dueDate = text(body.dueDate, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return json({ error: "Informe o vencimento do título." }, 400);
   const competence = text(body.competenceDate, 10) || items[0].competence_date;
+  const mesFechado = await competenciaFechada(env, access.ownerId, competence);
+  if (mesFechado)
+    return json({ error: `O período ${mesFechado} está fechado na Tesouraria. Fature em competência aberta ou reabra o período com justificativa.` }, 409);
   const contractId = new Set(items.map((item) => item.contract_id)).size === 1 ? items[0].contract_id : "";
   const statements = [
     env.DB.prepare(`INSERT INTO todogreen_billing_runs

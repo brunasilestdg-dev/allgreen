@@ -147,6 +147,7 @@ const documentoDaLinha = (row) => ({
   motoristaCpf: row.motorista_cpf,
   operationId: row.operation_id,
   clientId: row.client_id,
+  invoiceId: row.invoice_id || "",
   xmlContent: row.xml_content,
   campos: parse(row.fields_json, {}),
   revision: row.revision,
@@ -302,7 +303,7 @@ const criarDocumento = async (env, access, user, corpo) => {
        uf_inicio, municipio_inicio, codigo_municipio_inicio,
        uf_fim, municipio_fim, codigo_municipio_fim,
        placa, uf_veiculo, rntrc, motorista_nome, motorista_cpf,
-       operation_id, client_id, fields_json,
+       operation_id, client_id, invoice_id, fields_json,
        revision, created_by, updated_by, created_at, updated_at)
     VALUES (?,?,?,?,?,?,  'rascunho',
       ?,?,?,?,?,
@@ -313,7 +314,7 @@ const criarDocumento = async (env, access, user, corpo) => {
       ?,?,?,
       ?,?,?,
       ?,?,?,?,?,
-      ?,?,?,
+      ?,?,?,?,
       1,?,?,?,?)`,
   ).bind(
     id, TENANT_ID, access.ownerId, docType,
@@ -350,9 +351,27 @@ const criarDocumento = async (env, access, user, corpo) => {
     texto(corpo.motoristaCpf, 14).replace(/\D/g, ""),
     texto(corpo.operationId, 120) || null,
     texto(corpo.clientId, 120) || null,
+    texto(corpo.invoiceId, 120),
     JSON.stringify(objeto(corpo.campos)),
     user.id, user.id, agora, agora,
   ).run();
+
+  // Número digitado (documento emitido fora do ERP) também avança o contador
+  // da série: sem isto a próxima assinatura reservaria o mesmo número e
+  // esbarraria no índice único da 0069.
+  const numeroDigitado = Math.trunc(numero(corpo.numero));
+  if (numeroDigitado > 0) {
+    await env.DB.prepare(
+      `INSERT INTO todogreen_fiscal_series
+         (id, tenant_id, workspace_owner_id, doc_type, serie, next_number, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT(tenant_id, workspace_owner_id, doc_type, serie)
+       DO UPDATE SET next_number = MAX(next_number, excluded.next_number), updated_at = excluded.updated_at`,
+    ).bind(
+      crypto.randomUUID(), TENANT_ID, access.ownerId, docType,
+      Math.trunc(numero(corpo.serie) || 1), numeroDigitado + 1, agora, agora,
+    ).run();
+  }
 
   await registrarEvento(env, access.ownerId, user.id, id, "criacao", null, "rascunho", "Documento criado.");
 
@@ -460,8 +479,83 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
       error: `Transição de "${row.status}" para "${statusNovo}" não é permitida.`,
     }, 409);
 
-  // Validar antes de avançar de rascunho para validado
+  // "Transmitido"/"autorizado" só existem de verdade com o certificado no
+  // cofre — o mesmo padrão do push e do WhatsApp. A única exceção é o registro
+  // de documento emitido FORA do ERP, que exige o protocolo de autorização e a
+  // chave devolvidos pelo autorizador. Sem esta guarda, um clique fabricava um
+  // "autorizado" que a SEFAZ nunca viu, e o DACTE e a cobrança confiavam nele.
+  if (["transmitido", "autorizado"].includes(statusNovo) && !fiscalTransmissionEnabled(env)) {
+    const protocolo = texto(corpo.protocoloAutorizacao || corpo.protocolo, 60);
+    const chaveExterna = texto(corpo.chaveAcesso, 44).replace(/\D/g, "");
+    const registroManual = protocolo && (chaveExterna.length === 44 || texto(row.chave_acesso, 44));
+    if (!registroManual)
+      return json({
+        error: "A transmissão à SEFAZ aguarda o certificado digital (NFE_CERT_PFX/NFE_CERT_PASSWORD no cofre). Para registrar um documento emitido fora do ERP, informe o protocolo de autorização e a chave de acesso.",
+        code: "fiscal_transmission_disabled",
+      }, 409);
+    await env.DB.prepare(
+      `UPDATE todogreen_fiscal_documents
+          SET chave_acesso = COALESCE(NULLIF(?, ''), chave_acesso),
+              protocolo_autorizacao = ?,
+              fields_json = json_set(fields_json, '$.registroManual', 1)
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+    ).bind(chaveExterna, protocolo, docId, TENANT_ID, access.ownerId).run();
+  }
+
+  // Validar antes de avançar de rascunho para validado — e RECALCULAR os
+  // impostos no servidor antes de validar. O corpo do POST podia trazer ICMS
+  // zero e o documento seguia adiante com o número que o cliente mandou; a
+  // validação agora carimba o cálculo do motor sobre o perfil fiscal vigente.
   if (statusNovo === "validado") {
+    const perfil = await lerPerfil(env, access.ownerId);
+    if (!perfil) return json({ error: "Configure o perfil fiscal antes de validar." }, 400);
+    const baseServico = numero(row.valor_servico) || numero(row.valor_total);
+    if (["cte", "mdfe"].includes(row.doc_type)) {
+      const impostos = calcularImpostosCte({
+        valorServico: baseServico,
+        ufOrigem: row.uf_inicio,
+        ufDestino: row.uf_fim,
+        regimeEmitente: perfil.regimeTributario || "simples",
+        faturamento12m: perfil.faturamento12m || 0,
+        aliquotaInterna: perfil.icmsAliquotaInterna || 18,
+        cstIcms: row.cst_icms,
+      });
+      row.icms_base = impostos.icms.icmsBase;
+      row.icms_aliquota = impostos.icms.icmsAliquota;
+      row.icms_valor = impostos.icms.icmsValor;
+      row.cst_icms = impostos.icms.cstIcms;
+      row.pis_aliquota = impostos.pisCofins.pisAliquota;
+      row.pis_valor = impostos.pisCofins.pisValor;
+      row.cofins_aliquota = impostos.pisCofins.cofinsAliquota;
+      row.cofins_valor = impostos.pisCofins.cofinsValor;
+      if (!row.cfop) row.cfop = cfopPadraoCte(row.uf_inicio, row.uf_fim);
+    } else {
+      const impostos = calcularImpostosNfse({
+        valorServico: baseServico,
+        aliquotaIss: perfil.issAliquota || 2,
+        regimeEmitente: perfil.regimeTributario || "simples",
+        faturamento12m: perfil.faturamento12m || 0,
+      });
+      row.iss_aliquota = impostos.iss.issAliquota;
+      row.iss_valor = impostos.iss.issValor;
+      row.pis_aliquota = impostos.pisCofins.pisAliquota;
+      row.pis_valor = impostos.pisCofins.pisValor;
+      row.cofins_aliquota = impostos.pisCofins.cofinsAliquota;
+      row.cofins_valor = impostos.pisCofins.cofinsValor;
+    }
+    await env.DB.prepare(
+      `UPDATE todogreen_fiscal_documents SET
+          icms_base = ?, icms_aliquota = ?, icms_valor = ?, cst_icms = ?,
+          pis_aliquota = ?, pis_valor = ?, cofins_aliquota = ?, cofins_valor = ?,
+          iss_aliquota = ?, iss_valor = ?, cfop = ?
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+    ).bind(
+      row.icms_base, row.icms_aliquota, row.icms_valor, row.cst_icms,
+      row.pis_aliquota, row.pis_valor, row.cofins_aliquota, row.cofins_valor,
+      row.iss_aliquota, row.iss_valor, row.cfop,
+      docId, TENANT_ID, access.ownerId,
+    ).run();
+
     const doc = documentoDaLinha(row);
     const erros = row.doc_type === "cte" ? validarCte(doc)
       : row.doc_type === "mdfe" ? validarMdfe(doc)
@@ -477,14 +571,22 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
     if (!perfil) return json({ error: "Configure o perfil fiscal antes de assinar." }, 400);
 
     // Número sequencial por tipo e série, reservado no servidor na assinatura —
-    // nunca digitado no cliente. Sem isto todo documento saía numerado 1, o que
-    // é numeração fiscal inválida.
+    // nunca digitado no cliente. A reserva é ATÔMICA sobre a série de
+    // documentos (UPDATE ... RETURNING), o mesmo mecanismo das OS: o antigo
+    // MAX(numero)+1 era leitura-depois-escrita e duas assinaturas simultâneas
+    // saíam com o mesmo número fiscal. O índice único da 0069 é o cinto.
     if (!row.numero) {
-      const seq = await env.DB.prepare(
-        `SELECT COALESCE(MAX(numero), 0) + 1 AS proximo FROM todogreen_fiscal_documents
-          WHERE tenant_id = ? AND workspace_owner_id = ? AND doc_type = ? AND serie = ?`,
-      ).bind(TENANT_ID, access.ownerId, row.doc_type, row.serie).first();
-      row.numero = seq?.proximo || 1;
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO todogreen_fiscal_series
+           (id, tenant_id, workspace_owner_id, doc_type, serie, next_number, created_at, updated_at)
+         VALUES (?,?,?,?,?,1,?,?)`,
+      ).bind(crypto.randomUUID(), TENANT_ID, access.ownerId, row.doc_type, row.serie, agora, agora).run();
+      const reservado = await env.DB.prepare(
+        `UPDATE todogreen_fiscal_series SET next_number = next_number + 1, updated_at = ?
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND doc_type = ? AND serie = ?
+          RETURNING next_number - 1 AS numero`,
+      ).bind(agora, TENANT_ID, access.ownerId, row.doc_type, row.serie).first();
+      row.numero = reservado?.numero || 1;
       await env.DB.prepare(
         `UPDATE todogreen_fiscal_documents SET numero = ? WHERE id = ?`,
       ).bind(row.numero, docId).run();
@@ -593,6 +695,89 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
     `SELECT * FROM todogreen_fiscal_documents WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
   ).bind(docId, TENANT_ID, access.ownerId).first();
   return json(documentoDaLinha(atualizado));
+};
+
+// ---------------------------------------------------------------------------
+// Elo com o faturamento. O fechamento (todogreen_invoices) preparava um
+// "CTE-000123" que a SEFAZ nunca viu, e o módulo fiscal exigia redigitar tudo.
+// Agora a fatura preparada vira RASCUNHO fiscal pré-preenchido com o que o ERP
+// já sabe (cliente, valor, OS, operação, placa, motorista) — a pessoa completa
+// UFs/municípios e segue o ciclo validar → assinar.
+// ---------------------------------------------------------------------------
+
+const listarFaturasPendentes = async (env, access) => {
+  const { results } = await env.DB.prepare(
+    `SELECT i.id, i.number, i.document_type, i.amount, i.issued_at,
+            r.client_id, r.competence_date
+       FROM todogreen_invoices i
+       JOIN todogreen_billing_runs r ON r.id = i.billing_run_id
+      WHERE i.tenant_id = ? AND i.workspace_owner_id = ?
+        AND i.document_type IN ('cte', 'nfse')
+        AND NOT EXISTS (
+          SELECT 1 FROM todogreen_fiscal_documents f
+           WHERE f.tenant_id = i.tenant_id AND f.workspace_owner_id = i.workspace_owner_id
+             AND f.invoice_id = i.id AND f.archived_at IS NULL
+        )
+      ORDER BY i.created_at DESC LIMIT 100`,
+  ).bind(TENANT_ID, access.ownerId).all();
+  return json({
+    registros: (results || []).map((row) => ({
+      invoiceId: row.id, numeroFatura: row.number, docType: row.document_type,
+      valor: row.amount, emitidaEm: row.issued_at, clientId: row.client_id,
+      competencia: row.competence_date,
+    })),
+  });
+};
+
+const criarDaFatura = async (env, access, user, corpo) => {
+  const invoiceId = texto(corpo.invoiceId, 120);
+  if (!invoiceId) return json({ error: "Informe a fatura de origem." }, 400);
+  const fatura = await env.DB.prepare(
+    `SELECT i.*, r.client_id AS run_client_id, r.competence_date AS run_competence
+       FROM todogreen_invoices i
+       JOIN todogreen_billing_runs r ON r.id = i.billing_run_id
+      WHERE i.id = ? AND i.tenant_id = ? AND i.workspace_owner_id = ?`,
+  ).bind(invoiceId, TENANT_ID, access.ownerId).first();
+  if (!fatura) return json({ error: "Fatura não encontrada." }, 404);
+  const jaExiste = await env.DB.prepare(
+    `SELECT id FROM todogreen_fiscal_documents
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND invoice_id = ? AND archived_at IS NULL`,
+  ).bind(TENANT_ID, access.ownerId, invoiceId).first();
+  if (jaExiste) return json({ error: "Esta fatura já tem documento fiscal preparado.", documentoId: jaExiste.id }, 409);
+
+  // O que o ERP já sabe sobre este frete: a OS do item faturado e, por ela, a
+  // operação com placa e motorista.
+  const item = await env.DB.prepare(
+    `SELECT os.id AS os_id, os.operation_id
+       FROM todogreen_billing_items b
+       JOIN todogreen_service_orders os ON os.id = b.service_order_id
+      WHERE b.tenant_id = ? AND b.workspace_owner_id = ? AND b.billing_run_id = ?
+      ORDER BY b.created_at LIMIT 1`,
+  ).bind(TENANT_ID, access.ownerId, fatura.billing_run_id).first();
+  const operacao = item?.operation_id ? await env.DB.prepare(
+    `SELECT vehicle_plate, driver_name, origin, destination FROM todogreen_client_operations
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+  ).bind(item.operation_id, TENANT_ID, access.ownerId).first() : null;
+
+  return criarDocumento(env, access, user, {
+    docType: ["cte", "nfse"].includes(fatura.document_type) ? fatura.document_type : "cte",
+    valorServico: fatura.amount,
+    valorTotal: fatura.amount,
+    dataEmissao: new Date().toISOString().slice(0, 10),
+    clientId: fatura.run_client_id,
+    tomadorId: fatura.run_client_id,
+    operationId: item?.operation_id || "",
+    placa: operacao?.vehicle_plate || "",
+    motoristaNome: operacao?.driver_name || "",
+    invoiceId,
+    campos: {
+      origemFaturamento: fatura.number,
+      serviceOrderId: item?.os_id || "",
+      origemOperacional: operacao?.origin || "",
+      destinoOperacional: operacao?.destination || "",
+      competencia: fatura.run_competence || "",
+    },
+  });
 };
 
 // ---------------------------------------------------------------------------
@@ -724,9 +909,10 @@ const obterResumo = async (env, access) => {
     `SELECT * FROM todogreen_fiscal_documents
       WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
   ).bind(TENANT_ID, access.ownerId).all();
-  const docs = (results || []).map(documentoDaLinha);
+  // resumoFiscal lê as colunas do banco (doc_type, icms_valor, valor_total) —
+  // passar o mapa camelCase zerava os três indicadores do painel para sempre.
   const transmissaoHabilitada = fiscalTransmissionEnabled(env);
-  return json({ ...resumoFiscal(docs), transmissaoHabilitada });
+  return json({ ...resumoFiscal(results || []), transmissaoHabilitada });
 };
 
 // ---------------------------------------------------------------------------
@@ -759,6 +945,14 @@ export async function handleTodoGreenFiscal(request, env, access, user) {
   // Resumo
   if (path === "/resumo" || path === "/summary") {
     if (method === "GET") return obterResumo(env, access);
+  }
+
+  // Faturamento aguardando emissão — o elo com a espinha transacional.
+  if (path === "/faturas-pendentes" && method === "GET")
+    return listarFaturasPendentes(env, access);
+  if (path === "/documentos/da-fatura" && method === "POST") {
+    const corpo = await request.json().catch(() => ({}));
+    return criarDaFatura(env, access, user, corpo);
   }
 
   // Documentos com sub-rotas

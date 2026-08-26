@@ -157,13 +157,19 @@ describe("ciclo de vida do documento", () => {
 
   it("ao assinar, o XML leva o valor real e ganha número sequencial", async () => {
     const criado = await (await criarDocumento(gestora.token, {
-      // Sem `numero`: o servidor tem de sequenciar na assinatura.
+      // Sem `numero`: o servidor tem de sequenciar na assinatura. O ICMS de 480
+      // digitado abaixo é uma TENTATIVA de burlar: o perfil é Simples Nacional,
+      // então a validação recalcula no servidor e força CST 90 com ICMS zero —
+      // o imposto gravado nunca é o que veio no corpo.
       docType: "cte", valorServico: 4000, valorTotal: 4000, ufInicio: "SP", ufFim: "RJ",
       tomadorId: "cli-9", cfop: "6353", icmsValor: 480, icmsBase: 4000, icmsAliquota: 12,
     })).json();
     expect(criado.numero == null || criado.numero === 0).toBe(true);
 
-    await transitar(gestora.token, criado.id, "validado");
+    const validado = await (await transitar(gestora.token, criado.id, "validado")).json();
+    expect(validado.cstIcms).toBe("90");
+    expect(validado.icmsValor).toBe(0);
+
     const assinado = await transitar(gestora.token, criado.id, "assinado");
     expect(assinado.status).toBe(200);
     const doc = await assinado.json();
@@ -172,7 +178,51 @@ describe("ciclo de vida do documento", () => {
     // porque o worker passava valorTotal/impostos achatados que o construtor não lia.
     expect(doc.numero).toBeGreaterThanOrEqual(1);
     expect(doc.xmlContent).toContain("<vTPrest>4000.00</vTPrest>");
-    expect(doc.xmlContent).toContain("<vICMS>480.00</vICMS>");
+    expect(doc.xmlContent).toContain("<CST>90</CST>");
+  });
+
+  it("dois documentos assinados nunca dividem o mesmo número (reserva atômica)", async () => {
+    const criar = () => criarDocumento(gestora.token, {
+      docType: "cte", valorServico: 100, valorTotal: 100, ufInicio: "SP", ufFim: "RJ",
+      tomadorId: "cli-seq", cfop: "6353",
+    }).then((r) => r.json());
+    const a = await criar();
+    const b = await criar();
+    await transitar(gestora.token, a.id, "validado");
+    await transitar(gestora.token, b.id, "validado");
+    const docA = await (await transitar(gestora.token, a.id, "assinado")).json();
+    const docB = await (await transitar(gestora.token, b.id, "assinado")).json();
+    expect(docA.numero).not.toBe(docB.numero);
+  });
+
+  it("sem certificado, 'transmitido' é recusado; documento emitido fora entra com protocolo e chave", async () => {
+    const criado = await (await criarDocumento(gestora.token, {
+      docType: "cte", valorServico: 300, valorTotal: 300, ufInicio: "SP", ufFim: "RJ",
+      tomadorId: "cli-ext", cfop: "6353",
+    })).json();
+    await transitar(gestora.token, criado.id, "validado");
+    await transitar(gestora.token, criado.id, "assinado");
+
+    // Sem NFE_CERT_PFX no ambiente, transmitir é recusado com aviso claro —
+    // antes o clique fabricava um "autorizado" que a SEFAZ nunca viu.
+    const transmitido = await transitar(gestora.token, criado.id, "transmitido");
+    expect(transmitido.status).toBe(409);
+    expect((await transmitido.json()).code).toBe("fiscal_transmission_disabled");
+
+    // O caminho legítimo sem certificado: registrar o documento emitido fora,
+    // com o protocolo devolvido pelo autorizador (a chave o documento já tem,
+    // gerada na assinatura).
+    const manual = await pedir(`/api/todogreen/fiscal/documentos/${criado.id}/transicao`, {
+      metodo: "POST", token: gestora.token,
+      corpo: { statusNovo: "transmitido", protocoloAutorizacao: "135260000000001" },
+    });
+    expect(manual.status).toBe(200);
+    const autorizado = await pedir(`/api/todogreen/fiscal/documentos/${criado.id}/transicao`, {
+      metodo: "POST", token: gestora.token,
+      corpo: { statusNovo: "autorizado", protocoloAutorizacao: "135260000000001" },
+    });
+    expect(autorizado.status).toBe(200);
+    expect((await autorizado.json()).status).toBe("autorizado");
   });
 });
 
