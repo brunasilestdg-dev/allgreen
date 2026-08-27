@@ -45,6 +45,10 @@ export const TODO_GREEN_ROLES = [
   // salário, CPF e dependentes são dado sensível (LGPD), e quem lança uma
   // despesa não precisa ver a remuneração de ninguém.
   "rh",
+  // O papel de quem dirige. Deliberadamente SEM "read": o motorista não vê a
+  // vertical inteira — só o portal dele, que recorta as viagens pelo próprio
+  // vínculo (driver:self). Registrar entrega e ocorrência da rua é driver:event.
+  "motorista",
 ];
 
 // crm:manage, proposal:manage, operations:manage e finance:manage são exigidas
@@ -60,21 +64,22 @@ export const TODO_GREEN_ROLES = [
 export const TODO_GREEN_PERMISSIONS = {
   owner: ["*"],
   admin: ["*"],
-  lideranca_comercial: ["read", "crm:manage", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export"],
-  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "goal:read", "goal:checkin"],
-  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin"],
-  produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate"],
-  planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate"],
-  financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate"],
-  operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate"],
-  marketing: ["read", "marketing:manage", "evidence:manage", "goal:read", "goal:checkin"],
-  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "goal:read", "goal:checkin", "goal:validate"],
+  lideranca_comercial: ["read", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
+  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "fleet:manage", "integration:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  marketing: ["read", "marketing:manage", "evidence:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   auditor: ["read", "audit:read", "export:read", "goal:read", "goal:export"],
   // RH lê a vertical e administra pessoal — e nada além disso. Em particular,
   // não recebe `finance:manage`: fechar a folha não é o mesmo que lançar no
   // caixa, e juntar os dois num papel só tiraria a segregação que a auditoria
   // de folha depende.
-  rh: ["read", "hr:manage", "goal:read", "goal:checkin"],
+  rh: ["read", "hr:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  motorista: ["driver:self", "driver:event"],
 };
 
 // A regra de permissão da vertical, uma só, usada pelo front e pelo worker.
@@ -133,6 +138,11 @@ export const TODO_GREEN_MODULE_AREAS = [
     id: "implantacao",
     name: "Implantação",
     description: "Go-live de cliente com contrato, SLA, operação, faturamento, portal, integrações e responsáveis.",
+  },
+  {
+    id: "produtividade",
+    name: "Produtividade",
+    description: "Planos com tarefas, prazo, prioridade e progresso.",
   },
   {
     id: "ocorrencias",
@@ -358,10 +368,10 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Decisão de aceite da viagem ou OS com capacidade, produto, SLA, risco, margem e janela operacional.",
     permissions: ["read", "planning:manage", "product:manage"],
   }),
-  module("aceite-viagens", "Aceite de viagens", "operacao", "/todogreen/ordens-servico", {
+  module("aceite-viagens", "Aceito esta viagem?", "operacao", "/todogreen/aceite-viagens", {
     icon: "CheckCircle2",
     order: 26,
-    description: "Planejamento/Produtos libera a OS antes da execução, sem depender de Financeiro.",
+    description: "Simulador de aceite: custos obrigatórios, margem calculada e decisão registrada antes de virar OS.",
     permissions: ["read", "planning:manage", "product:manage"],
   }),
   module("ciot", "CIOT", "operacao", "/todogreen/ciot", {
@@ -399,6 +409,21 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("rentabilidade", "Rentabilidade", "financeiro", "/todogreen/custos", { icon: "Activity", order: 37 }),
   module("orcamento", "Orçamento", "financeiro", "/todogreen/custos", { icon: "ListChecks", order: 38 }),
   module("centros-custo", "Centros de custo", "financeiro", "/todogreen/rateios", { icon: "Network", order: 39 }),
+  module("tesouraria", "Tesouraria", "financeiro", "/todogreen/tesouraria", {
+    icon: "Landmark",
+    order: 39.4,
+    description: "Extrato bancário OFX, conciliação, saldo por conta, cobrança com aging e fechamento de competência.",
+    permissions: ["read", "finance:manage"],
+  }),
+  module("fiscal", "Fiscal", "financeiro", "/todogreen/fiscal", {
+    icon: "ReceiptText",
+    order: 39.5,
+    description: "CT-e, MDF-e e NFS-e da transportadora: impostos, XML e DACTE, com transmissão à SEFAZ pendente de certificado.",
+    permissions: ["read", "fiscal:manage"],
+  }),
+  module("cte", "CT-e", "financeiro", "/todogreen/fiscal", { icon: "ReceiptText", order: 39.6 }),
+  module("mdfe", "MDF-e", "financeiro", "/todogreen/fiscal", { icon: "FileCheck", order: 39.7 }),
+  module("nfse", "NFS-e", "financeiro", "/todogreen/fiscal", { icon: "FileText", order: 39.8 }),
   module("operacoes", "Fretes", "operacao", "/todogreen/operacoes", { icon: "Workflow", order: 40 }),
   module("rotas", "Rotas", "operacao", "/todogreen/operacoes", { icon: "Route", order: 42 }),
   module("viagens", "Viagens", "operacao", "/todogreen/operacoes", { icon: "Navigation", order: 43 }),
@@ -454,6 +479,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
     icon: "ListTodo",
     order: 60,
     description: "Boards, responsáveis, prazos, automações, Kanban, Gantt, workload e entregas entre áreas.",
+  }),
+  module("planner", "Planner", "produtividade", "/todogreen/planner", {
+    icon: "LayoutGrid",
+    order: 60.2,
+    description: "Planos com tarefas, prazo, prioridade e checklist.",
+    permissions: ["read", "planner:manage"],
   }),
   module("espaco", "Comunicação interna", "comunicacao-interna", "/todogreen/espaco", {
     icon: "BriefcaseBusiness",
@@ -622,13 +653,16 @@ export const getProductPricingBlueprint = (productId) =>
     executiveOutputs: ["preço recomendado", "margem", "custo por unidade", "impacto ESG"],
   };
 
+import { consumoReferencia } from "./vehicleClassDomain.js";
+
 export const DEFAULT_ENVIRONMENTAL_FACTORS = {
-  methodologyVersion: "tdg-env-v1",
+  methodologyVersion: "tdg-env-v2",
   dieselKgCo2ePerLiter: 2.68,
+  gasolineKgCo2ePerLiter: 2.12,
   dieselKmPerLiter: 4.2,
-  electricKgCo2ePerKwh: 0.06,
-  electricKwhPerKm: 0.22,
-  treeKgCo2eYear: 21,
+  electricKgCo2ePerKwh: 0.0385,
+  electricKwhPerKm: 0.30,
+  treeKgCo2eYear: 22,
   carKgCo2eYear: 4600,
   flightKgCo2e: 90,
   homeKwhMonth: 152,
@@ -675,7 +709,18 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
   const helpers = Math.max(0, n(inputs.helpers || inputs.ajudantes || 0));
   const distanceTotal = distanceKm * trips;
   const hours = Math.max(0, n(inputs.hoursPerDay));
-  const electricKwhPerKm = n(inputs.electricKwhPerKm || a.electricKwhPerKm || DEFAULT_ENVIRONMENTAL_FACTORS.electricKwhPerKm);
+  // A classe do veículo entra ANTES da premissa genérica: `a.electricKwhPerKm`
+  // já nasce com 0,30 por padrão, então deixá-la na frente faria uma moto
+  // consumir como uma van e a diferenciação por classe nunca valeria. Informar
+  // `vehicleClass` é escolha explícita de quem calcula — só a entrada direta
+  // manda mais que ela.
+  const classRef = inputs.vehicleClass ? consumoReferencia(inputs.vehicleClass) : null;
+  const electricKwhPerKm = n(
+    inputs.electricKwhPerKm
+    || classRef?.eletricoKwhPorKm
+    || a.electricKwhPerKm
+    || DEFAULT_ENVIRONMENTAL_FACTORS.electricKwhPerKm,
+  );
   const energy = distanceTotal * (n(a.energyCostPerKm) > 0
     ? n(a.energyCostPerKm)
     : electricKwhPerKm * n(a.energyCostPerKwh));
@@ -736,10 +781,14 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
 
 export const calculateEnvironmentalImpact = (inputs = {}, factors = {}) => {
   const f = { ...DEFAULT_ENVIRONMENTAL_FACTORS, ...factors };
+  const classRef = inputs.vehicleClass ? consumoReferencia(inputs.vehicleClass) : null;
   const distanceKm = Math.max(0, n(inputs.distanceKm || inputs.kmPerRoute) * Math.max(1, n(inputs.tripsPerMonth || inputs.frequencyPerMonth || inputs.routesPerDay * inputs.daysPerMonth || 1)));
-  const referenceLiters = distanceKm / Math.max(0.1, n(inputs.referenceKmPerLiter || f.dieselKmPerLiter));
-  const referenceKg = referenceLiters * f.dieselKgCo2ePerLiter;
-  const electricKwh = n(inputs.energyKwh) || distanceKm * f.electricKwhPerKm;
+  const refKmPerL = n(inputs.referenceKmPerLiter || (classRef?.convencionalKmPorL) || f.dieselKmPerLiter);
+  const refKgCO2ePerL = classRef?.convencionalKgCO2ePorL ?? f.dieselKgCo2ePerLiter;
+  const referenceLiters = distanceKm / Math.max(0.1, refKmPerL);
+  const referenceKg = referenceLiters * refKgCO2ePerL;
+  const evKwhPerKm = classRef?.eletricoKwhPorKm ?? f.electricKwhPerKm;
+  const electricKwh = n(inputs.energyKwh) || distanceKm * evKwhPerKm;
   const actualKg = electricKwh * f.electricKgCo2ePerKwh;
   const avoidedKg = Math.max(0, referenceKg - actualKg);
   const packages = Math.max(0, n(inputs.packages || inputs.deliveries));

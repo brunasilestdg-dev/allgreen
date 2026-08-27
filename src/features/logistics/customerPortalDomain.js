@@ -116,6 +116,10 @@ export const CLIENT_PORTAL_MENU = [
   { id: "green-score", label: "Green Score", permission: "portal:read" },
   { id: "esg", label: "Emissões e impacto ambiental", permission: "portal:read" },
   { id: "relatorios", label: "Relatórios", permission: "portal:report:export" },
+  // Fatura é assunto do próprio cliente: o que ele deve, quando vence e a
+  // 2ª via do documento. Nada do financeiro INTERNO (margem, custo, comissão)
+  // passa por aqui — o endpoint só lê títulos do cliente da sessão.
+  { id: "financeiro", label: "Faturas", permission: "portal:document:download" },
   { id: "documentos", label: "Documentos", permission: "portal:document:download" },
   { id: "solicitacoes", label: "Solicitações", permission: "portal:request:create" },
   { id: "assistente", label: "Assistente", permission: "portal:read" },

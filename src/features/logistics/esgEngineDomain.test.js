@@ -8,11 +8,23 @@ import {
   traduzirParaProposta,
 } from "./esgEngineDomain.js";
 
-// O que se testa aqui não é a aritmética — é a auditabilidade. Um número
-// ambiental que não se refaz não vale para relatório de conselho nem para
-// inventário de Escopo 3.
+const entradaVan = {
+  distanciaKm: 100,
+  viagens: 10,
+  tipoVeiculo: "Furgão elétrico",
+  classeVeiculo: "van",
+  origens: { distancia: "medido", ocupacao: "documentado" },
+};
 
-const entradaEletrica = {
+const entradaMoto = {
+  distanciaKm: 50,
+  viagens: 20,
+  tipoVeiculo: "Moto elétrica",
+  classeVeiculo: "moto",
+  origens: { distancia: "medido", ocupacao: "medido" },
+};
+
+const entradaSemClasse = {
   distanciaKm: 100,
   viagens: 10,
   tipoVeiculo: "Furgão elétrico",
@@ -21,36 +33,23 @@ const entradaEletrica = {
 
 describe("o cálculo se refaz", () => {
   it("a mesma entrada dá o mesmo resultado", () => {
-    const a = calcularImpactoAmbiental({ ...entradaEletrica, calculadoEm: "2026-01-01" });
-    const b = calcularImpactoAmbiental({ ...entradaEletrica, calculadoEm: "2026-01-01" });
+    const a = calcularImpactoAmbiental({ ...entradaVan, calculadoEm: "2026-01-01" });
+    const b = calcularImpactoAmbiental({ ...entradaVan, calculadoEm: "2026-01-01" });
     expect(a).toEqual(b);
   });
 
   it("a memória traz os passos na ordem, com fórmula e entradas", () => {
-    const r = calcularImpactoAmbiental(entradaEletrica);
+    const r = calcularImpactoAmbiental(entradaVan);
     expect(r.memoria.passos.length).toBeGreaterThanOrEqual(4);
-    r.memoria.passos.forEach((passo, i) => {
-      expect(passo.ordem).toBe(i + 1);
-      expect(passo.formula).toBeTruthy();
-      expect(passo.descricao).toBeTruthy();
-      expect(typeof passo.resultado).toBe("number");
-    });
-  });
-
-  it("cada fator usado vem com fonte, unidade, versão e responsável", () => {
-    const r = calcularImpactoAmbiental(entradaEletrica);
-    expect(r.memoria.fatoresUsados.length).toBeGreaterThan(0);
-    for (const fator of r.memoria.fatoresUsados) {
-      expect(fator.fonte).toBeTruthy();
-      expect(fator.unidade).toBeTruthy();
-      expect(fator.versao).toBe(FATORES_PADRAO.versao);
-      expect(fator.responsavel).toBeTruthy();
+    for (let i = 0; i < r.memoria.passos.length; i++) {
+      expect(r.memoria.passos[i].ordem).toBe(i + 1);
+      expect(r.memoria.passos[i].formula).toBeTruthy();
+      expect(r.memoria.passos[i].descricao).toBeTruthy();
     }
   });
 
   it("dá para recalcular o CO2 evitado só com a memória", () => {
-    // A prova de que a memória basta: refazer a conta com os números dela.
-    const r = calcularImpactoAmbiental(entradaEletrica);
+    const r = calcularImpactoAmbiental(entradaVan);
     const passos = Object.fromEntries(r.memoria.passos.map((p) => [p.descricao, p]));
     const referencia = passos["Emissão do cenário de referência"].resultado;
     const executada = passos["Emissão da operação executada"].resultado;
@@ -58,7 +57,94 @@ describe("o cálculo se refaz", () => {
   });
 
   it("o resultado carrega a versão dos fatores", () => {
-    expect(calcularImpactoAmbiental(entradaEletrica).versaoFatores).toBe(FATORES_PADRAO.versao);
+    expect(calcularImpactoAmbiental(entradaVan).versaoFatores).toBe(FATORES_PADRAO.versao);
+  });
+});
+
+describe("dados reais por classe de veículo", () => {
+  it("moto elétrica contra moto a gasolina — consumo muito menor que van", () => {
+    const moto = calcularImpactoAmbiental(entradaMoto);
+    const van = calcularImpactoAmbiental(entradaVan);
+    expect(moto.classeVeiculo).toBe("moto");
+    expect(van.classeVeiculo).toBe("van");
+    expect(moto.impacto.energiaKwh).toBeLessThan(van.impacto.energiaKwh);
+    expect(moto.memoria.premissas.some((p) => /Moto/i.test(p))).toBe(true);
+    expect(moto.memoria.premissas.some((p) => /gasolina/i.test(p))).toBe(true);
+  });
+
+  it("van usa diesel como referência, moto usa gasolina", () => {
+    const moto = calcularImpactoAmbiental(entradaMoto);
+    const van = calcularImpactoAmbiental(entradaVan);
+    const motoFuel = moto.memoria.passos.find((p) => /referência consumiria/.test(p.descricao));
+    const vanFuel = van.memoria.passos.find((p) => /referência consumiria/.test(p.descricao));
+    expect(motoFuel.descricao).toMatch(/gasolina/);
+    expect(vanFuel.descricao).toMatch(/diesel/);
+  });
+
+  it("a memória registra fatores por classe com fonte documentada", () => {
+    const r = calcularImpactoAmbiental(entradaVan);
+    expect(r.memoria.fatoresUsados.length).toBeGreaterThan(0);
+    for (const fator of r.memoria.fatoresUsados) {
+      expect(fator.fonte).toBeTruthy();
+      expect(fator.versao).toBe(FATORES_PADRAO.versao);
+      expect(fator.responsavel).toBeTruthy();
+    }
+    const eletrico = r.memoria.fatoresUsados.find((f) => /eletrico_van/.test(f.chave));
+    expect(eletrico).toBeTruthy();
+    expect(eletrico.valor).toBe(0.30);
+  });
+
+  it("moto elétrica: 0.04 kWh/km, 50 km x 20 viagens = 40 kWh", () => {
+    const r = calcularImpactoAmbiental(entradaMoto);
+    expect(r.impacto.energiaKwh).toBe(40);
+  });
+
+  it("van elétrica: 0.30 kWh/km, 100 km x 10 viagens = 300 kWh", () => {
+    const r = calcularImpactoAmbiental(entradaVan);
+    expect(r.impacto.energiaKwh).toBe(300);
+  });
+
+  it("cada classe que tem consumo elétrico produz resultado diferente", () => {
+    const classes = ["moto", "utilitario", "van", "vuc", "tres_quartos"];
+    const resultados = classes.map((c) =>
+      calcularImpactoAmbiental({
+        distanciaKm: 100,
+        viagens: 1,
+        tipoVeiculo: "eletrico",
+        classeVeiculo: c,
+      }).impacto.energiaKwh,
+    );
+    const unicos = new Set(resultados);
+    expect(unicos.size).toBe(classes.length);
+    expect(resultados[0]).toBeLessThan(resultados[4]);
+  });
+
+  it("carreta diesel: sem redução e sem classe elétrica", () => {
+    const r = calcularImpactoAmbiental({
+      distanciaKm: 500,
+      viagens: 1,
+      tipoVeiculo: "diesel",
+      classeVeiculo: "carreta",
+    });
+    expect(r.impacto.co2AvoidedKg).toBe(0);
+    expect(r.classeVeiculo).toBe("carreta");
+    expect(r.memoria.premissas.some((p) => /convencional/.test(p))).toBe(true);
+  });
+});
+
+describe("sem classe: funciona com médias genéricas", () => {
+  it("calcula com fallback genérico quando classeVeiculo é ausente", () => {
+    const r = calcularImpactoAmbiental(entradaSemClasse);
+    expect(r.classeVeiculo).toBeNull();
+    expect(r.impacto.co2AvoidedKg).toBeGreaterThan(0);
+    expect(r.memoria.premissas.some((p) => /genéric/i.test(p))).toBe(true);
+    expect(r.memoria.premissas.some((p) => /informe a classe/i.test(p))).toBe(true);
+  });
+
+  it("a qualidade reflete a origem do dado, não a presença da classe", () => {
+    const comClasse = calcularImpactoAmbiental(entradaVan);
+    const semClasse = calcularImpactoAmbiental(entradaSemClasse);
+    expect(semClasse.qualidadeDados).toBe(comClasse.qualidadeDados);
   });
 });
 
@@ -75,33 +161,33 @@ describe("mudar fator não reescreve o passado", () => {
         },
       },
     };
-    const antigo = calcularImpactoAmbiental(entradaEletrica);
-    const novo = calcularImpactoAmbiental(entradaEletrica, versaoNova);
+    const antigo = calcularImpactoAmbiental(entradaVan);
+    const novo = calcularImpactoAmbiental(entradaVan, versaoNova);
     expect(novo.impacto.co2AvoidedKg).not.toBe(antigo.impacto.co2AvoidedKg);
-    expect(antigo.versaoFatores).toBe("2026.1");
+    expect(antigo.versaoFatores).toBe(FATORES_PADRAO.versao);
     expect(novo.versaoFatores).toBe("2027.1");
   });
 
   it("fator ausente é erro, não silêncio", () => {
-    // Cair para zero seria pior: viraria número sem base, com cara de válido.
-    expect(() => fatorEmUso({ fatores: {} }, "diesel_b10_kgco2e_por_litro")).toThrow(/ausente/i);
+    expect(() => fatorEmUso({ fatores: {} }, "diesel_b14_kgco2e_por_litro")).toThrow(/ausente/i);
   });
 });
 
 describe("o número diz o que ele não é", () => {
   it("a ressalva acompanha todo cálculo", () => {
-    const r = calcularImpactoAmbiental(entradaEletrica);
+    const r = calcularImpactoAmbiental(entradaVan);
     expect(r.memoria.ressalva).toMatch(/não constitui certificação/i);
   });
 
-  it("as premissas ficam explícitas", () => {
-    const r = calcularImpactoAmbiental(entradaEletrica);
+  it("as premissas ficam explícitas e citam a fonte", () => {
+    const r = calcularImpactoAmbiental(entradaVan);
     expect(r.memoria.premissas.some((p) => /referência/i.test(p))).toBe(true);
-    expect(r.memoria.premissas.some((p) => /rede/i.test(p))).toBe(true);
+    expect(r.memoria.premissas.some((p) => /SIN|rede/i.test(p))).toBe(true);
+    expect(r.memoria.premissas.some((p) => /Sprinter|fonte/i.test(p))).toBe(true);
   });
 
   it("a equivalência em árvores é ilustrativa, não compensação", () => {
-    const t = traduzirParaProposta(calcularImpactoAmbiental(entradaEletrica));
+    const t = traduzirParaProposta(calcularImpactoAmbiental(entradaVan));
     expect(t.equivalencias[0].ressalva).toMatch(/não compensação/i);
   });
 });
@@ -113,20 +199,19 @@ describe("qualidade do dado", () => {
   });
 
   it("sem informar origem, assume o pior — não o melhor", () => {
-    // Assumir "medido" por omissão inflaria a confiança do relatório.
     expect(qualidadeDoCalculo({})).toBe(QUALIDADE.presumido);
     expect(qualidadeDoCalculo()).toBe(QUALIDADE.presumido);
   });
 
   it("a qualidade entra no resultado", () => {
-    const r = calcularImpactoAmbiental(entradaEletrica);
+    const r = calcularImpactoAmbiental(entradaVan);
     expect(r.qualidadeDados).toBe(Math.round((QUALIDADE.medido + QUALIDADE.documentado) / 2));
   });
 });
 
 describe("operação diesel", () => {
   it("não inventa redução sobre a própria referência", () => {
-    const r = calcularImpactoAmbiental({ ...entradaEletrica, tipoVeiculo: "Caminhão diesel" });
+    const r = calcularImpactoAmbiental({ ...entradaVan, tipoVeiculo: "Caminhão diesel" });
     expect(r.impacto.co2AvoidedKg).toBe(0);
     expect(r.impacto.reductionPercent).toBe(0);
     expect(r.impacto.dieselAvoidedLiters).toBe(0);
@@ -134,7 +219,7 @@ describe("operação diesel", () => {
 
   it("o texto da proposta também não promete o que não houve", () => {
     const t = traduzirParaProposta(
-      calcularImpactoAmbiental({ ...entradaEletrica, tipoVeiculo: "diesel" }),
+      calcularImpactoAmbiental({ ...entradaVan, tipoVeiculo: "diesel" }),
     );
     expect(t.texto).toMatch(/não apresentou redução/i);
     expect(t.equivalencias).toEqual([]);

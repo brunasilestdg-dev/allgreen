@@ -85,7 +85,7 @@ export default function OccurrencesPage({
         <div>
           <span className="tdg-kicker">OCORRÊNCIAS</span>
           <h2>Ocorrências operacionais</h2>
-          <p>Registro separado para tratar falhas, atrasos, insucessos, desvios e evidências sem tirar o frete da ficha operacional.</p>
+          <p>Falhas, atrasos e desvios, com evidências.</p>
         </div>
         <strong>{totals.ocorrencias} ocorrência(s)</strong>
       </div>

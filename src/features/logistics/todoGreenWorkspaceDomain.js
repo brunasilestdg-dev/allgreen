@@ -42,6 +42,11 @@ export const TODO_GREEN_WORKSPACE_TOOLS = Object.freeze([
     description: "Áreas, pastas e listas sem duplicar projetos.",
   },
   {
+    id: "visoes",
+    label: "Visualizações",
+    description: "Gantt, timeline, calendário, workload e gráficos dos mesmos itens do quadro.",
+  },
+  {
     id: "bases",
     label: "Bases",
     description: "Tabelas relacionais, campos próprios e visões por contexto.",

@@ -7,7 +7,7 @@ import {
   Layers,
   Link2,
   Network,
-  Plus,
+  NotebookPen,
   Search,
   Sparkles,
   Trash2,
@@ -337,7 +337,7 @@ export default function ConnectedNotes({ db, update, business, setToast, initial
             <CalendarDays size={16} /> Nota de hoje
           </button>
           <button type="button" className="btn primary" onClick={criarNota}>
-            <Plus size={16} /> Nova nota
+            <NotebookPen size={16} /> Nova nota
           </button>
         </div>
       </header>

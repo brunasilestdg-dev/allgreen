@@ -29,6 +29,7 @@ const VAZIO = Object.freeze({
   parties: [],
   accounts: [],
   costCenters: [],
+  bankAccounts: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {
@@ -152,6 +153,25 @@ export function useVerticalRecords(authHeaders, { ativo = true } = {}) {
     [authHeaders],
   );
 
+  const estornarPagamento = useCallback(
+    async (id, pagamentoId) => {
+      const resposta = await pedir(
+        `/financial/${encodeURIComponent(id)}/payments/${encodeURIComponent(pagamentoId)}`,
+        authHeaders,
+        { method: "DELETE" },
+      );
+      if (resposta.registro) {
+        setDados((atual) => ({
+          ...atual,
+          financial: atual.financial.map((item) => (item.id === id ? resposta.registro : item)),
+        }));
+        setErro("");
+      }
+      return resposta;
+    },
+    [authHeaders],
+  );
+
   const registrarEventoOperacao = useCallback(
     async (id, corpo) => {
       const resposta = await pedir(`/operations/${encodeURIComponent(id)}/events`, authHeaders, {
@@ -178,7 +198,7 @@ export function useVerticalRecords(authHeaders, { ativo = true } = {}) {
 
   return {
     dados, carregando, erro, recarregar, criar, atualizar, arquivar,
-    registrarPagamento, registrarEventoOperacao, listarSubrecurso,
+    registrarPagamento, estornarPagamento, registrarEventoOperacao, listarSubrecurso,
   };
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, MapPin, PackageCheck, Plus, Route, Truck } from "lucide-react";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
 
@@ -16,13 +16,25 @@ const slaEfetivo = (operation, now = new Date()) => {
 };
 const isLate = (operation) => slaEfetivo(operation) === "atrasado";
 
-export default function OperationsPage({ operations = [], clients = [], contracts = [], criar, registrarEventoOperacao, listarSubrecurso, setToast, mode = "operations" }) {
-  const empty = { clientId: "", contractId: "", productId: "middle-mile", reference: "", serviceDate: "", origin: "", destination: "", promisedAt: "", etaAt: "", plate: "", driver: "", trips: "", deliveries: "", packages: "", distanceKm: "", occupancyPercent: "", status: "planned" };
+export default function OperationsPage({ operations = [], clients = [], contracts = [], criar, registrarEventoOperacao, listarSubrecurso, setToast, mode = "operations", authHeaders }) {
+  // Motoristas do cadastro mestre: o vínculo por ID é o que liga a operação ao
+  // portal do motorista (0070). Texto livre continua valendo como fallback
+  // para quem ainda não cadastrou a equipe.
+  const [motoristas, setMotoristas] = useState([]);
+  useEffect(() => {
+    if (!authHeaders) return;
+    fetch("/api/todogreen/master-data/drivers", { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setMotoristas(d?.records || d?.registros || []))
+      .catch(() => {});
+  }, [authHeaders]);
+
+  const empty = { clientId: "", contractId: "", productId: "middle-mile", reference: "", serviceDate: "", origin: "", destination: "", promisedAt: "", etaAt: "", plate: "", driver: "", driverId: "", trips: "", deliveries: "", packages: "", distanceKm: "", occupancyPercent: "", status: "planned" };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState(null);
   const [events, setEvents] = useState([]);
-  const [event, setEvent] = useState({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal() });
+  const [event, setEvent] = useState({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal(), recebedor: "", comprovanteUrl: "" });
   const totals = useMemo(() => operations.reduce((sum, item) => ({
     trips: sum.trips + Number(item.viagens || 0), deliveries: sum.deliveries + Number(item.entregas || 0),
     incidents: sum.incidents + Number(item.ocorrencias || 0), distance: sum.distance + Number(item.distanciaKm || 0),
@@ -42,7 +54,7 @@ export default function OperationsPage({ operations = [], clients = [], contract
       await criar("operations", {
         clientId: form.clientId, contratoId: form.contractId, produtoId: form.productId,
         referencia: form.reference, dataServico: form.serviceDate, origem: form.origin, destino: form.destination,
-        prometidoEm: form.promisedAt, etaEm: form.etaAt, placa: form.plate, motorista: form.driver,
+        prometidoEm: form.promisedAt, etaEm: form.etaAt, placa: form.plate, motorista: form.driver, motoristaId: form.driverId,
         viagens: Number(form.trips), entregas: Number(form.deliveries), pacotes: Number(form.packages),
         distanciaKm: Number(form.distanceKm), ocupacaoPercent: Number(form.occupancyPercent), situacao: form.status,
       });
@@ -68,7 +80,7 @@ export default function OperationsPage({ operations = [], clients = [], contract
       const result = await registrarEventoOperacao(selected.id, event);
       setEvents((current) => [result.evento, ...current]);
       setSelected(result.registro || selected);
-      setEvent({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal() });
+      setEvent({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal(), recebedor: "", comprovanteUrl: "" });
       setToast?.("Evento operacional registrado");
     } catch (error) { setToast?.(error.message); }
     finally { setSaving(false); }
@@ -88,7 +100,7 @@ export default function OperationsPage({ operations = [], clients = [], contract
         <label><span>Prazo prometido</span><input type="datetime-local" value={form.promisedAt} onChange={(e) => setForm((v) => ({ ...v, promisedAt: e.target.value }))} /></label>
         <label><span>ETA atual</span><input type="datetime-local" value={form.etaAt} onChange={(e) => setForm((v) => ({ ...v, etaAt: e.target.value }))} /></label>
         <label><span>Placa</span><input value={form.plate} onChange={(e) => setForm((v) => ({ ...v, plate: e.target.value }))} /></label>
-        <label><span>Motorista</span><input value={form.driver} onChange={(e) => setForm((v) => ({ ...v, driver: e.target.value }))} /></label>
+        <label><span>Motorista</span>{motoristas.length ? <select value={form.driverId} onChange={(e) => { const escolhido = motoristas.find((m) => m.id === e.target.value); setForm((v) => ({ ...v, driverId: e.target.value, driver: escolhido?.fullName || v.driver })); }}><option value="">Selecionar do cadastro</option>{motoristas.map((m) => <option key={m.id} value={m.id}>{m.fullName}{m.availabilityStatus === "available" ? "" : ` (${m.availabilityStatus})`}</option>)}</select> : <input value={form.driver} onChange={(e) => setForm((v) => ({ ...v, driver: e.target.value }))} placeholder="Cadastre motoristas em Cadastros" />}</label>
         <label><span>Viagens</span><input type="number" min="0" value={form.trips} onChange={(e) => setForm((v) => ({ ...v, trips: e.target.value }))} /></label>
         <label><span>Entregas</span><input type="number" min="0" value={form.deliveries} onChange={(e) => setForm((v) => ({ ...v, deliveries: e.target.value }))} /></label>
         <label><span>Pacotes</span><input type="number" min="0" value={form.packages} onChange={(e) => setForm((v) => ({ ...v, packages: e.target.value }))} /></label>
@@ -99,7 +111,7 @@ export default function OperationsPage({ operations = [], clients = [], contract
         <button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : "Registrar operação"}</button>
       </form>}
       <div className="tdg-operation-grid">{visibleOperations.length === 0 && <div className="tdg-empty-access">{isIncidents ? "Nenhuma ocorrência ou atraso em aberto." : "Nenhuma operação real registrada."}</div>}{visibleOperations.map((operation) => <article className="tdg-operation-card" key={operation.id}><div><Route size={18} /><span><strong>{operation.referencia || "Operação sem referência"}</strong><small>{operation.origem || "origem pendente"} → {operation.destino || "destino pendente"}</small></span><span className={`tdg-ledger-status ${slaEfetivo(operation) === "atrasado" ? "overdue" : "pending"}`}>{slaEfetivo(operation) === "atrasado" && <AlertTriangle size={14} />}{slaEfetivo(operation)}</span></div><dl><div><dt><Truck size={14} /> Frota</dt><dd>{operation.placa || "sem placa"} · {operation.motorista || "sem motorista"}</dd></div><div><dt><Clock3 size={14} /> Prometido</dt><dd>{operation.prometidoEm || "não informado"}</dd></div><div><dt><PackageCheck size={14} /> Volume</dt><dd>{Number(operation.entregas || 0)} entregas · {Number(operation.pacotes || 0)} pacotes</dd></div><div><dt><MapPin size={14} /> Última posição</dt><dd>{operation.ultimaPosicaoEm || "não informada"}</dd></div></dl><button type="button" onClick={() => openEvents(operation)}>{isIncidents ? "Tratar ocorrência" : "Linha do tempo"} · {Number(operation.ocorrencias || 0)} ocorrência(s)</button></article>)}</div>
-      {selected && <div className="tdg-operation-timeline"><form className="tdg-inline-editor" onSubmit={saveEvent}><div><strong>Evento em {selected.referencia}</strong><small>Histórico append-only: o evento não pode ser reescrito depois.</small></div><label><span>Tipo</span><select value={event.tipo} onChange={(e) => setEvent((v) => ({ ...v, tipo: e.target.value }))}>{EVENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label><label><span>Título</span><input value={event.titulo} onChange={(e) => setEvent((v) => ({ ...v, titulo: e.target.value }))} /></label><label><span>Local</span><input value={event.local} onChange={(e) => setEvent((v) => ({ ...v, local: e.target.value }))} /></label><label><span>Quando ocorreu</span><input type="datetime-local" value={event.ocorridoEm} onChange={(e) => setEvent((v) => ({ ...v, ocorridoEm: e.target.value }))} /></label><label><span>Descrição</span><input value={event.descricao} onChange={(e) => setEvent((v) => ({ ...v, descricao: e.target.value }))} /></label><button className="tdg-action" type="submit" disabled={saving}>Registrar evento</button><button type="button" onClick={() => setSelected(null)}>Fechar</button></form><div className="tdg-timeline-list">{events.length === 0 && <small>Nenhum evento registrado.</small>}{events.map((item) => <article key={item.id}><span>{item.tipo}</span><strong>{item.titulo || item.descricao}</strong><small>{item.local || "sem local"} · {item.ocorridoEm}</small></article>)}</div></div>}
+      {selected && <div className="tdg-operation-timeline"><form className="tdg-inline-editor" onSubmit={saveEvent}><div><strong>Evento em {selected.referencia}</strong><small>Histórico append-only: o evento não pode ser reescrito depois.</small></div><label><span>Tipo</span><select value={event.tipo} onChange={(e) => setEvent((v) => ({ ...v, tipo: e.target.value }))}>{EVENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label><label><span>Título</span><input value={event.titulo} onChange={(e) => setEvent((v) => ({ ...v, titulo: e.target.value }))} /></label><label><span>Local</span><input value={event.local} onChange={(e) => setEvent((v) => ({ ...v, local: e.target.value }))} /></label><label><span>Quando ocorreu</span><input type="datetime-local" value={event.ocorridoEm} onChange={(e) => setEvent((v) => ({ ...v, ocorridoEm: e.target.value }))} /></label><label><span>Descrição</span><input value={event.descricao} onChange={(e) => setEvent((v) => ({ ...v, descricao: e.target.value }))} /></label>{event.tipo === "entrega" && <><label><span>Quem recebeu</span><input value={event.recebedor} onChange={(e) => setEvent((v) => ({ ...v, recebedor: e.target.value }))} placeholder="Nome do recebedor" /></label><label><span>Comprovante (link do canhoto/foto)</span><input value={event.comprovanteUrl} onChange={(e) => setEvent((v) => ({ ...v, comprovanteUrl: e.target.value }))} placeholder="https://..." /></label></>}<button className="tdg-action" type="submit" disabled={saving}>Registrar evento</button><button type="button" onClick={() => setSelected(null)}>Fechar</button></form><div className="tdg-timeline-list">{events.length === 0 && <small>Nenhum evento registrado.</small>}{events.map((item) => <article key={item.id}><span>{item.tipo}</span><strong>{item.titulo || item.descricao}</strong><small>{item.local || "sem local"} · {item.ocorridoEm}</small></article>)}</div></div>}
     </section>
   );
 }

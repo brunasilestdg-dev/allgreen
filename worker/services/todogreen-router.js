@@ -18,6 +18,12 @@ import { handleTodoGreenVerticalRecords } from "./todogreen-vertical-records.js"
 import { handleTodoGreenStock } from "./todogreen-stock.js";
 import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
+import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
+import { handleTodoGreenDriverPortal } from "./todogreen-driver-portal.js";
+import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
+import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
+import { handleTodoGreenPlanner } from "./todogreen-planner.js";
+import { handleTodoGreenTms } from "./todogreen-tms.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
 import { handleTodoGreenClientIntelligence } from "./todogreen-client-intelligence.js";
@@ -42,6 +48,24 @@ const guarded = async (label, message, handler) => {
 
 const internalAccess = (request, env) => exigirAcessoTodoGreen(request, env);
 
+// O papel `motorista` só alcança o próprio portal. Este é o único choke
+// point — sem ele, cada handler GET precisaria repetir a checagem, e o
+// primeiro que esquecesse viraria a porta pela qual um motorista lê a
+// carteira, a folha ou o financeiro inteiros. O corte é pelo PAPEL (não pela
+// permissão "read"): listas estreitadas de outros papéis continuam valendo.
+const internalReadAccess = async (request, env) => {
+  const resolved = await exigirAcessoTodoGreen(request, env);
+  if (resolved.response) return resolved;
+  if (resolved.access?.role === "motorista")
+    return {
+      response: new Response(
+        JSON.stringify({ error: "Motoristas usam o portal do motorista (/portal-motorista)." }),
+        { status: 403, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } },
+      ),
+    };
+  return resolved;
+};
+
 export async function routeTodoGreenApi(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -55,7 +79,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/evidencias")) {
     return guarded("To Do Green evidences error", "Não foi possível carregar os documentos.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenEvidences(request, env, resolved.access, resolved.user);
     });
@@ -63,7 +87,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/client-portal-preview")) {
     return guarded("To Do Green portal preview error", "Não foi possível montar a prévia do portal.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenClientPortalPreview(request, env, resolved.access, resolved.user);
     });
@@ -71,7 +95,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/client-activation")) {
     return guarded("To Do Green client activation error", "Não foi possível processar a implantação do cliente.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenClientActivation(request, env, resolved.access, resolved.user);
     });
@@ -88,7 +112,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
       () => handleTodoGreenPricingParameters(request, env));
   if (path.startsWith("/api/todogreen/pricing-performance")) {
     return guarded("To Do Green pricing performance error", "Não foi possível comparar preço e operação.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenPricingPerformance(request, env, resolved.access, resolved.user);
     });
@@ -112,7 +136,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
       () => handleTodoGreenTracker(request, env));
   if (path.startsWith("/api/todogreen/fleet")) {
     return guarded("To Do Green fleet error", "Não foi possível sincronizar a frota.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenFleet(request, env, resolved.access, resolved.user);
     });
@@ -120,7 +144,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/deal-desk")) {
     return guarded("To Do Green deal desk error", "Não foi possível processar a aprovação comercial.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenDealDesk(request, env, resolved.access, resolved.user);
     });
@@ -128,7 +152,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/records")) {
     return guarded("To Do Green records error", "Não foi possível carregar os registros da To Do Green.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenVerticalRecords(request, env, resolved.access, resolved.user);
     });
@@ -136,7 +160,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/stock")) {
     return guarded("To Do Green stock error", "Não foi possível movimentar o estoque.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenStock(request, env, resolved.access, resolved.user);
     });
@@ -144,7 +168,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/purchasing")) {
     return guarded("To Do Green purchasing error", "Não foi possível processar a compra.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenPurchasing(request, env, resolved.access, resolved.user);
     });
@@ -152,15 +176,78 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/transactions")) {
     return guarded("To Do Green transactions error", "Não foi possível processar a transação.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenTransactions(request, env, resolved.access, resolved.user);
     });
   }
 
+  // Portal do motorista: sessão pelo e-mail do cadastro, "minhas viagens" e
+  // eventos da rua (chegada, entrega com POD/GPS, ocorrência).
+  if (path.startsWith("/api/todogreen/driver-portal")) {
+    return guarded("To Do Green driver portal error", "Não foi possível abrir o portal do motorista.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenDriverPortal(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Tesouraria: importar extrato (em lote, com dedup), conciliar (duas tabelas
+  // numa gravação) e fechar período (trava que vale para outro handler).
+  if (path.startsWith("/api/todogreen/treasury")) {
+    return guarded("To Do Green treasury error", "Não foi possível processar a tesouraria.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenTreasury(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // TMS TRACK3R. Não confundir com `/tracker`, que é a Sistemas Tracker — outro
+  // fornecedor, outro assunto: o TRACK3R traz o DOCUMENTO (o que foi coletado e
+  // entregue), a Sistemas Tracker traz a POSIÇÃO (onde o veículo está).
+  if (path.startsWith("/api/todogreen/tms")) {
+    return guarded("To Do Green TMS error", "Não foi possível falar com a integração do TMS.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenTms(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Fiscal da transportadora: CT-e (modelo 57), MDF-e (modelo 58) e NFS-e — não
+  // NF-e, que é de quem vende mercadoria. O documento tem ciclo de vida, os
+  // impostos são calculados no servidor e o XML é gerado localmente; a
+  // transmissão à SEFAZ fica desligada por ausência de certificado digital.
+  if (path.startsWith("/api/todogreen/fiscal")) {
+    return guarded("To Do Green fiscal error", "Não foi possível processar o documento fiscal.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenFiscal(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Pessoas e folha. Dado sensível (CPF, salário): o módulo inteiro exige
+  // hr:manage, que só rh/admin/owner têm — quem não é do RH nem chega ao handler.
+  if (path.startsWith("/api/todogreen/payroll")) {
+    return guarded("To Do Green payroll error", "Não foi possível processar a folha.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPayroll(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Planner (estilo Microsoft Planner): planos privados ou compartilhados, com
+  // baldes e tarefas. A visibilidade é imposta no handler, em SQL.
+  if (path.startsWith("/api/todogreen/planner")) {
+    return guarded("To Do Green planner error", "Não foi possível abrir o Planner.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPlanner(request, env, resolved.access);
+    });
+  }
+
   if (path.startsWith("/api/todogreen/requests")) {
     return guarded("To Do Green requests error", "Não foi possível carregar as solicitações.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenRequests(request, env, resolved.access, resolved.user);
     });
@@ -168,7 +255,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/clients") || path.startsWith("/api/todogreen/client-assignments")) {
     return guarded("To Do Green clients error", "Não foi possível carregar os clientes.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return path.startsWith("/api/todogreen/client-assignments")
         ? handleTodoGreenClientAssignments(request, env, resolved.access, resolved.user)
@@ -178,7 +265,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/timeline")) {
     return guarded("To Do Green timeline error", "Não foi possível montar a linha do tempo da conta.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenTimeline(request, env, resolved.access, resolved.user);
     });
@@ -186,7 +273,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/semente")) {
     return guarded("To Do Green Plantû error", "O Plantû não conseguiu responder agora.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenSemente(request, env, resolved.access, resolved.user);
     });
@@ -194,7 +281,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/integrations")) {
     return guarded("To Do Green integrations error", "Não foi possível carregar as integrações.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenIntegrations(request, env, resolved.access);
     });
@@ -202,7 +289,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/governance")) {
     return guarded("To Do Green governance error", "Não foi possível carregar a auditoria.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenGovernance(request, env, resolved.access, resolved.user);
     });
@@ -210,7 +297,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
 
   if (path.startsWith("/api/todogreen/client-intelligence")) {
     return guarded("To Do Green client intelligence error", "Não foi possível pesquisar a empresa.", async () => {
-      const resolved = await internalAccess(request, env);
+      const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenClientIntelligence(request, env, resolved.access, resolved.user);
     });

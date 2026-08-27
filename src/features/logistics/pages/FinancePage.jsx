@@ -12,7 +12,7 @@ const LABEL = {
 };
 const STATUS = { pending: "em aberto", partial: "parcial", paid: "pago", overdue: "vencido", cancelled: "cancelado" };
 
-export default function FinancePage({ type, entries = [], clients = [], contracts = [], criar, registrarPagamento, listarSubrecurso, setToast }) {
+export default function FinancePage({ type, entries = [], clients = [], contracts = [], criar, registrarPagamento, estornarPagamento, listarSubrecurso, setToast }) {
   const copy = LABEL[type] || LABEL.cost;
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
@@ -69,9 +69,29 @@ export default function FinancePage({ type, entries = [], clients = [], contract
     finally { setSaving(false); }
   };
 
+  // Conjunto das baixas já estornadas: cada estorno é um lançamento negativo com
+  // referência "estorno:<idDaBaixa>". Serve para não oferecer estornar duas vezes.
+  const estornadas = new Set(
+    payments.filter((p) => Number(p.valor) < 0 && String(p.referencia || "").startsWith("estorno:"))
+      .map((p) => String(p.referencia).slice("estorno:".length)),
+  );
+
+  const estornar = async (pagamentoId) => {
+    if (!paymentFor || !estornarPagamento) return;
+    if (typeof window !== "undefined" && !window.confirm("Estornar esta baixa? O saldo reabre e o histórico guarda o estorno.")) return;
+    setSaving(true);
+    try {
+      await estornarPagamento(paymentFor.id, pagamentoId);
+      setToast?.("Baixa estornada. Saldo reaberto.");
+      const result = await listarSubrecurso("financial", paymentFor.id, "payments");
+      setPayments(result.pagamentos || []);
+    } catch (error) { setToast?.(error.message); }
+    finally { setSaving(false); }
+  };
+
   return (
     <section className="tdg-panel tdg-enterprise-ledger">
-      <div className="tdg-section-head"><div><span className="tdg-kicker">FINANCEIRO OPERACIONAL</span><h2>{copy.title}</h2><p>Vencimento, competência, documento, centro de custo, contrato e baixas rastreáveis no mesmo livro.</p></div><strong>{entries.length} lançamento(s)</strong></div>
+      <div className="tdg-section-head"><div><span className="tdg-kicker">FINANCEIRO OPERACIONAL</span><h2>{copy.title}</h2><p>Vencimento, competência e baixas no mesmo livro.</p></div><strong>{entries.length} lançamento(s)</strong></div>
       <div className="tdg-result">
         <article className="tdg-metric"><span>Total</span><strong>{BRL.format(summary.total)}</strong><small>lançamentos válidos</small></article>
         <article className="tdg-metric good"><span>Realizado</span><strong>{BRL.format(summary.pago)}</strong><small>com baixa registrada</small></article>
@@ -101,7 +121,28 @@ export default function FinancePage({ type, entries = [], clients = [], contract
           return <article className="tdg-ledger-row" key={entry.id}><span><strong>{entry.descricao || entry.categoria}</strong><small>{entry.contraparte || "sem contraparte"} · {entry.numeroDocumento || "sem documento"}</small></span><span><small>Vencimento</small><strong>{entry.vencimentoEm || "não informado"}</strong></span><span><small>Saldo</small><strong>{BRL.format(saldoAberto(entry))}</strong></span><span className={`tdg-ledger-status ${status}`}>{status === "overdue" ? <AlertTriangle size={15} /> : status === "paid" ? <CheckCircle2 size={15} /> : <CircleDollarSign size={15} />}{STATUS[status]}</span>{!["paid", "cancelled"].includes(status) && <button type="button" onClick={() => openPayment(entry)}>Dar baixa</button>}</article>;
         })}
       </div>
-      {paymentFor && <form className="tdg-inline-editor" onSubmit={pay}><div><strong>Baixa de {paymentFor.descricao || paymentFor.categoria}</strong><small>Saldo aberto: {BRL.format(saldoAberto(paymentFor))} · {payments.length} baixa(s) anterior(es)</small></div><label><span>Valor</span><input type="number" min="0.01" max={saldoAberto(paymentFor)} step="0.01" required value={payment.valor} onChange={(e) => setPayment((v) => ({ ...v, valor: e.target.value }))} /></label><label><span>Data</span><input type="date" required value={payment.pagoEm} onChange={(e) => setPayment((v) => ({ ...v, pagoEm: e.target.value }))} /></label><label><span>Meio</span><select value={payment.meioPagamento} onChange={(e) => setPayment((v) => ({ ...v, meioPagamento: e.target.value }))}><option value="pix">PIX</option><option value="transferencia">Transferência</option><option value="boleto">Boleto</option><option value="cartao">Cartão</option><option value="outro">Outro</option></select></label><label><span>Referência</span><input value={payment.referencia} onChange={(e) => setPayment((v) => ({ ...v, referencia: e.target.value }))} /></label><button className="tdg-action" type="submit" disabled={saving}>Confirmar baixa</button><button type="button" onClick={() => setPaymentFor(null)}>Cancelar</button></form>}
+      {paymentFor && <>
+        <form className="tdg-inline-editor" onSubmit={pay}><div><strong>Baixa de {paymentFor.descricao || paymentFor.categoria}</strong><small>Saldo aberto: {BRL.format(saldoAberto(paymentFor))} · {payments.filter((p) => Number(p.valor) > 0).length} baixa(s) anterior(es)</small></div><label><span>Valor</span><input type="number" min="0.01" max={saldoAberto(paymentFor)} step="0.01" required value={payment.valor} onChange={(e) => setPayment((v) => ({ ...v, valor: e.target.value }))} /></label><label><span>Data</span><input type="date" required value={payment.pagoEm} onChange={(e) => setPayment((v) => ({ ...v, pagoEm: e.target.value }))} /></label><label><span>Meio</span><select value={payment.meioPagamento} onChange={(e) => setPayment((v) => ({ ...v, meioPagamento: e.target.value }))}><option value="pix">PIX</option><option value="transferencia">Transferência</option><option value="boleto">Boleto</option><option value="cartao">Cartão</option><option value="outro">Outro</option></select></label><label><span>Referência</span><input value={payment.referencia} onChange={(e) => setPayment((v) => ({ ...v, referencia: e.target.value }))} /></label><button className="tdg-action" type="submit" disabled={saving}>Confirmar baixa</button><button type="button" onClick={() => setPaymentFor(null)}>Cancelar</button></form>
+        {payments.length > 0 && (
+          <div className="tdg-payment-history">
+            <strong>Histórico de baixas</strong>
+            {payments.map((p) => {
+              const negativa = Number(p.valor) < 0;
+              return (
+                <div className={`tdg-payment-row${negativa ? " estorno" : ""}`} key={p.id}>
+                  <span>{negativa ? "Estorno" : (p.meioPagamento || "baixa")} · {p.pagoEm ? String(p.pagoEm).slice(0, 10) : ""}</span>
+                  <strong>{BRL.format(Number(p.valor))}</strong>
+                  {!negativa && estornarPagamento && (
+                    estornadas.has(p.id)
+                      ? <em>estornada</em>
+                      : <button type="button" onClick={() => estornar(p.id)} disabled={saving}>Estornar</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </>}
     </section>
   );
 }

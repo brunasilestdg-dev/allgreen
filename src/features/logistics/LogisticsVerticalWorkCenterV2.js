@@ -34,6 +34,13 @@ const labels = {
   "move-item": "mover item",
   "research-client": "pesquisar e completar conta",
   "prepare-whatsapp": "preparar WhatsApp para aprovação",
+  "update-field": "atualizar campo",
+  "set-date": "definir data de entrega",
+  "move-to-group": "mover para grupo",
+  "create-item": "criar novo item",
+  "duplicate-item": "duplicar item",
+  "archive-item": "arquivar item",
+  "notify-email": "notificar por e-mail",
 };
 const label = (value) => labels[value] || String(value || "").replace(/-/g, " ");
 const today = () => new Date().toISOString().slice(0, 10);
@@ -169,17 +176,23 @@ const createAutomationRule = async (formElement) => {
   if (!state.canWrite) return;
   const values = new FormData(formElement);
   const actionType = values.get("actionType");
-  const actionValue = actionType === "change-status"
-    ? values.get("statusValue")
-    : actionType === "change-priority"
-      ? values.get("priorityValue")
-      : actionType === "move-item"
-        ? values.get("targetBoardId")
-        : actionType === "research-client"
-          ? values.get("researchFocus")
-          : actionType === "prepare-whatsapp"
-            ? values.get("whatsappMessage")
-            : values.get("responsibleValue");
+  const actionValueByType = {
+    "change-status": "statusValue",
+    "change-priority": "priorityValue",
+    "move-item": "targetBoardId",
+    "research-client": "researchFocus",
+    "prepare-whatsapp": "whatsappMessage",
+    "update-field": "fieldValue",
+    "set-date": "dateValue",
+    "move-to-group": "groupValue",
+    "create-item": "newItemTitle",
+    "notify-email": "emailValue",
+  };
+  // duplicate-item e archive-item não exigem valor.
+  const semValor = actionType === "duplicate-item" || actionType === "archive-item";
+  const actionValue = semValor
+    ? ""
+    : values.get(actionValueByType[actionType] || "responsibleValue") || "";
   state.notice = "Salvando automação...";
   renderWorkCenter();
   try {
@@ -602,13 +615,18 @@ const automationFormHtml = () => {
     <label><span>Campo da condição</span><select name="conditionField"><option value="">Sem condição adicional</option><option value="status">Status</option><option value="priority">Prioridade</option><option value="responsible">Responsável</option><option value="client">Cliente/operação</option><option value="type">Tipo</option><option value="dueDate">Prazo</option></select></label>
     <label><span>Comparação</span><select name="conditionOperator"><option value="equals">é igual a</option><option value="not-equals">é diferente de</option><option value="contains">contém</option><option value="is-empty">está vazio</option><option value="is-not-empty">não está vazio</option></select></label>
     <label class="full"><span>Valor da condição</span><input name="conditionValue" maxlength="240" placeholder="Ex.: bloqueado, Adidas ou crítica"></label>
-    <label><span>Ação</span><select name="actionType"><option value="change-status">Alterar status</option><option value="change-priority">Alterar prioridade</option><option value="assign-person">Atribuir responsável</option><option value="move-item">Mover para outro quadro</option><option value="research-client">Pesquisar e completar conta</option><option value="prepare-whatsapp">Preparar WhatsApp para aprovação</option></select></label>
+    <label><span>Ação</span><select name="actionType"><option value="change-status">Alterar status</option><option value="change-priority">Alterar prioridade</option><option value="assign-person">Atribuir responsável</option><option value="move-item">Mover para outro quadro</option><option value="research-client">Pesquisar e completar conta</option><option value="prepare-whatsapp">Preparar WhatsApp para aprovação</option><option value="update-field">Atualizar campo</option><option value="set-date">Definir data de entrega</option><option value="move-to-group">Mover para grupo</option><option value="create-item">Criar novo item</option><option value="duplicate-item">Duplicar item</option><option value="archive-item">Arquivar item</option><option value="notify-email">Notificar por e-mail</option></select></label>
     <label data-action-value="change-status"><span>Novo status</span><select name="statusValue">${boardStatuses().map((status) => `<option value="${esc(status.id)}">${esc(status.label)}</option>`).join("")}</select></label>
     <label data-action-value="change-priority"><span>Nova prioridade</span><select name="priorityValue">${priorities.map((value) => `<option value="${value}">${label(value)}</option>`).join("")}</select></label>
     <label data-action-value="assign-person"><span>Novo responsável</span><input name="responsibleValue" maxlength="160" placeholder="Nome ou equipe"></label>
     <label data-action-value="move-item"><span>Quadro de destino</span><select name="targetBoardId">${state.boards.map((board) => `<option value="${esc(board.id)}">${esc(board.name)}</option>`).join("")}</select></label>
     <label data-action-value="research-client"><span>O que pesquisar</span><select name="researchFocus"><option value="company">Empresa, site, segmento, ESG e notícias</option><option value="contacts">Contatos brasileiros de logística e procurement</option></select></label>
     <label class="full" data-action-value="prepare-whatsapp"><span>Mensagem para aprovação</span><textarea name="whatsappMessage" maxlength="1000" placeholder="A mensagem só será enviada depois de uma pessoa confirmar no item."></textarea></label>
+    <label data-action-value="update-field"><span>Campo = valor</span><input name="fieldValue" maxlength="240" placeholder="Ex.: area=Financeiro"></label>
+    <label data-action-value="set-date"><span>Data de entrega</span><input name="dateValue" maxlength="20" placeholder="hoje, +7 ou 2026-09-30"></label>
+    <label data-action-value="move-to-group"><span>Grupo de destino</span><select name="groupValue">${boardGroups().map((group) => `<option value="${esc(group.id)}">${esc(group.name)}</option>`).join("")}</select></label>
+    <label data-action-value="create-item"><span>Título do novo item</span><input name="newItemTitle" maxlength="200" placeholder="Ex.: Revisar contrato gerado"></label>
+    <label data-action-value="notify-email"><span>E-mail do destinatário</span><input name="emailValue" type="email" maxlength="160" placeholder="pessoa@empresa.com.br"></label>
     <div class="tdg-work-center-actions full"><button class="tdg-action" type="submit">Ativar automação</button><button class="tdg-login-secondary" type="button" data-automation-cancel>Cancelar</button></div>
   </form>`;
 };

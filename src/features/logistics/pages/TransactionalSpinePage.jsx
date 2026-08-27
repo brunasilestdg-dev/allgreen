@@ -41,7 +41,19 @@ function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }
   };
   const transition = async (record) => {
     const status = nextStatus[record.status]; if (!status) return;
-    try { await request(`service-orders/${record.id}/transition`, authHeaders, { method: "POST", body: JSON.stringify({ status, revision: record.revision }) }); setToast?.(status === "completed" ? "Operação concluída e enviada ao Financeiro" : "Ordem atualizada"); await load(); } catch (error) { setToast?.(error.message); }
+    try { await request(`service-orders/${record.id}/transition`, authHeaders, { method: "POST", body: JSON.stringify({ status, revision: record.revision }) }); setToast?.(status === "completed" ? "OS concluída: item liberado para a fila de faturamento" : "Ordem atualizada"); await load(); } catch (error) { setToast?.(error.message); if (String(error.message).includes("comprovante")) setPodFor(record.id); }
+  };
+  // Registro do comprovante de entrega (POD): sem ele, a régua de faturamento
+  // recusa a conclusão da OS. Recebedor OU link do arquivo — um dos dois basta.
+  const [podFor, setPodFor] = useState("");
+  const [pod, setPod] = useState({ recipientName: "", documentUrl: "" });
+  const savePod = async (event) => {
+    event.preventDefault();
+    try {
+      await request(`service-orders/${podFor}/pod`, authHeaders, { method: "POST", body: JSON.stringify(pod) });
+      setToast?.("Comprovante registrado — a OS já pode ser concluída");
+      setPodFor(""); setPod({ recipientName: "", documentUrl: "" });
+    } catch (error) { setToast?.(error.message); }
   };
   return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">PLANEJAMENTO E PRODUTOS</span><h2>Aceite e ordens de serviço</h2><p>Planejamento/Produtos aceita a viagem e libera a OS. Operação executa depois; Financeiro entra com CT-e, documento fiscal, título e baixa.</p></div><strong>{records.length} ordem(ns)</strong></div>
     <form className="tdg-txn-form" onSubmit={create}>
@@ -55,7 +67,13 @@ function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }
       <label><span>Fim programado</span><input type="datetime-local" value={form.scheduledEndAt} onChange={(e) => setForm((v) => ({ ...v, scheduledEndAt: e.target.value }))} /></label>
       <button className="tdg-action" disabled={saving || !eligibleContracts.length}><Plus size={17} />Criar OS para aceite</button>
     </form>
-    <div className="tdg-txn-list">{!records.length && <Empty>Nenhuma ordem de serviço criada.</Empty>}{records.map((record) => <article className="tdg-txn-row" key={record.id}><span><strong>{record.number}</strong><small>{clientName(clients, record.clientId)} · {contractName(contracts, record.contractId)}</small></span><span><small>Valor líquido</small><strong>{BRL.format(record.netAmount || 0)}</strong></span><Status value={record.status} />{nextStatus[record.status] && <button type="button" onClick={() => transition(record)}>{nextLabel[record.status]}<ArrowRight size={14} /></button>}</article>)}</div>
+    <div className="tdg-txn-list">{!records.length && <Empty>Nenhuma ordem de serviço criada.</Empty>}{records.map((record) => <article className="tdg-txn-row" key={record.id}><span><strong>{record.number}</strong><small>{clientName(clients, record.clientId)} · {contractName(contracts, record.contractId)}</small></span><span><small>Valor líquido</small><strong>{BRL.format(record.netAmount || 0)}</strong></span><Status value={record.status} />{record.status === "in_progress" && <button type="button" onClick={() => { setPodFor(record.id); setPod({ recipientName: "", documentUrl: "" }); }}>Registrar comprovante</button>}{nextStatus[record.status] && <button type="button" onClick={() => transition(record)}>{nextLabel[record.status]}<ArrowRight size={14} /></button>}</article>)}</div>
+    {podFor && <form className="tdg-txn-form" onSubmit={savePod}>
+      <label><span>Quem recebeu a carga</span><input value={pod.recipientName} onChange={(e) => setPod((v) => ({ ...v, recipientName: e.target.value }))} placeholder="Nome do recebedor" /></label>
+      <label><span>Link do comprovante (canhoto/foto)</span><input value={pod.documentUrl} onChange={(e) => setPod((v) => ({ ...v, documentUrl: e.target.value }))} placeholder="https://..." /></label>
+      <button className="tdg-action" type="submit"><CheckCircle2 size={17} />Registrar POD</button>
+      <button type="button" onClick={() => setPodFor("")}>Cancelar</button>
+    </form>}
   </section>;
 }
 

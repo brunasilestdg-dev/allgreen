@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import TopScrollRow from "./TopScrollRow.jsx";
 import { inboxUrl } from "../../../session/telemetria.js";
 import RelationshipMap from "../RelationshipMap.jsx";
 import {
@@ -50,6 +51,90 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
   maximumFractionDigits: 0,
 });
+
+// Liberação e gestão do acesso ao portal do cliente. O endpoint de liberar
+// (PUT) existia sem NENHUMA tela que o chamasse: cliente novo só entrava no
+// portal por migração de banco. Aqui a liderança liga o portal, convida por
+// e-mail e vê quem já está dentro.
+function PortalAccessPanel({ client, canManage, authHeaders, onToggle, setToast }) {
+  const [usuarios, setUsuarios] = useState([]);
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoPapel, setNovoPapel] = useState("cliente_gestor");
+  const [ocupado, setOcupado] = useState(false);
+
+  const clientId = client?.id || "";
+  const portalLigado = Boolean(client?.portalEnabled);
+  const carregarUsuarios = () => {
+    if (!canManage || !portalLigado || !clientId) { setUsuarios([]); return; }
+    api(`clients/${encodeURIComponent(clientId)}/portal-usuarios`, authHeaders)
+      .then((dados) => setUsuarios(dados.usuarios || []))
+      .catch(() => setUsuarios([]));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { carregarUsuarios(); }, [clientId, portalLigado, canManage]);
+
+  const convidar = async (event) => {
+    event.preventDefault();
+    setOcupado(true);
+    try {
+      const resultado = await api("clients", authHeaders, {
+        method: "PUT",
+        body: JSON.stringify({ clienteId: client.id, email: novoEmail, papel: novoPapel }),
+      });
+      setToast?.(resultado.conviteEnviado
+        ? `Acesso liberado e convite enviado para ${resultado.email}`
+        : resultado.emailConfigurado
+          ? `Acesso liberado para ${resultado.email} — o convite não pôde ser enviado, avise a pessoa`
+          : `Acesso liberado para ${resultado.email}. E-mail de convite desativado (sem BREVO_API_KEY) — envie o link do portal por fora.`);
+      setNovoEmail("");
+      carregarUsuarios();
+    } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(false); }
+  };
+
+  const remover = async (email) => {
+    setOcupado(true);
+    try {
+      await api(`clients?cliente=${encodeURIComponent(client.id)}&email=${encodeURIComponent(email)}`, authHeaders, { method: "DELETE" });
+      setToast?.(`Acesso de ${email} removido`);
+      carregarUsuarios();
+    } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(false); }
+  };
+
+  return (
+    <div className="tdg-portal-access">
+      <span>
+        {client.portalEnabled ? "Liberado" : "Bloqueado"}
+        {canManage && (
+          <button type="button" disabled={ocupado} onClick={onToggle}>
+            {client.portalEnabled ? "Bloquear portal" : "Liberar portal"}
+          </button>
+        )}
+      </span>
+      {client.portalEnabled && canManage && (
+        <>
+          <ul className="tdg-portal-users">
+            {usuarios.map((usuario) => (
+              <li key={usuario.email}>
+                <span>{usuario.email} <small>{usuario.papel} · {usuario.status}</small></span>
+                <button type="button" aria-label={`Remover ${usuario.email}`} disabled={ocupado} onClick={() => remover(usuario.email)}><X size={12} /></button>
+              </li>
+            ))}
+            {!usuarios.length && <li><small>Ninguém tem acesso ainda — convide a primeira pessoa.</small></li>}
+          </ul>
+          <form className="tdg-crm-assign" onSubmit={convidar}>
+            <input required type="email" aria-label="E-mail da pessoa do cliente" placeholder="pessoa@cliente.com" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} />
+            <select aria-label="Papel no portal" value={novoPapel} onChange={(e) => setNovoPapel(e.target.value)}>
+              <option value="cliente_admin">Administrador</option>
+              <option value="cliente_gestor">Gestor</option>
+              <option value="cliente_leitor">Leitura</option>
+            </select>
+            <button type="submit" disabled={ocupado}><UserPlus size={14} />Convidar</button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
 
 const api = async (path, authHeaders, options = {}) => {
   const result = await fetch(`/api/todogreen/${path}`, {
@@ -906,7 +991,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
       <div className="tdg-crm-toolbar"><div className="tdg-client-toolbar"><Search size={18} /><input aria-label="Buscar clientes e contatos" placeholder="Buscar ID, conta, contato, e-mail, telefone ou responsável" value={query} onChange={(e) => { setQuery(e.target.value); setVisibleLimit(100); }} /></div><div className="tdg-crm-view-switch" aria-label="Modo de visualização"><button type="button" className={viewMode === "cards" ? "active" : ""} onClick={() => setViewMode("cards")}><LayoutGrid size={15} />Cartões</button><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => setViewMode("kanban")}><BriefcaseBusiness size={15} />Kanban</button><button type="button" className={viewMode === "table" ? "active" : ""} onClick={() => setViewMode("table")}><List size={15} />Tabela</button></div><div className="tdg-crm-filter-grid" aria-label="Filtros e ordenação do CRM"><label><span>Ordenar</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="name-asc">Nome (A–Z)</option><option value="name-desc">Nome (Z–A)</option><option value="temperature">Temperatura</option><option value="next-action">Próxima ação</option><option value="updated">Atualização recente</option><option value="contacts">Mais contatos</option></select></label><label><span>Etapa</span><select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}><option value="all">Todas as etapas</option>{stageOptions.map((stage) => <option key={stage}>{stage}</option>)}</select></label><label><span>Responsável</span><select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}><option value="all">Todos</option><option value="unassigned">Sem responsável</option>{ownerOptions.map((owner) => <option key={owner}>{owner}</option>)}</select></label><label><span>Contatos</span><select value={contactFilter} onChange={(e) => setContactFilter(e.target.value)}><option value="all">Com e sem contato</option><option value="with">Com telefone/e-mail</option><option value="without">Sem telefone/e-mail</option></select></label></div><div className="tdg-crm-filters" aria-label="Temperatura das contas">{[["all", "Todas"], ["Quente", "Quentes"], ["Morno", "Mornas"], ["Frio", "Frias"]].map(([id, label]) => <button type="button" className={temperatureFilter === id ? "active" : ""} onClick={() => { setTemperatureFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div><div className="tdg-crm-filters" aria-label="Saúde da carteira">{[["all", "Toda saúde"], ["critical", "Críticas"], ["attention", "Atenção"], ["healthy", "Saudáveis"], ["no-decision", "Mapa incompleto"]].map(([id, label]) => <button type="button" className={filter === id ? "active" : ""} onClick={() => { setFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div></div>
       {loading && <p>Carregando carteira...</p>}{!loading && visible.length === 0 && <p className="tdg-crm-empty">Nenhuma conta corresponde aos filtros desta carteira.</p>}
       {!loading && visible.length > 0 && viewMode === "cards" && <div className="tdg-crm-card-grid" aria-label="Contas do CRM em cartões">{renderedClients.map((client) => { const summary = summaryById.get(client.id); return <button type="button" className={summary?.attention || ""} onClick={() => openClient(client.id)} key={client.id}><header><span><strong>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><b>{summary?.score || 0}</b></header><div className="tdg-crm-card-tags"><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{client.crm?.stage || "Mapeamento"}</em></div><dl><div><dt>Pipeline</dt><dd>{BRL.format(summary?.pipeline || 0)}</dd></div><div><dt>Decisores</dt><dd>{summary?.coverage || 0}%</dd></div><div><dt>Contatos</dt><dd>{client.crm?.contacts?.length || 0}</dd></div></dl><footer><span><small>Próxima ação</small><strong>{summary?.nextAction || "Definir próxima ação"}</strong></span><ArrowRight size={16} /></footer></button>; })}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-card-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div>}
-      {!loading && visible.length > 0 && viewMode === "kanban" && <div className="tdg-crm-kanban" aria-label="Kanban de clientes por etapa">{kanbanColumns.map((column) => <section className="tdg-crm-kanban-column" aria-label={`${column.stage}: ${column.accounts.length} conta(s)`} key={column.stage}><header><span><strong>{column.stage}</strong><small>{column.accounts.length} conta(s)</small></span><b>{BRL.format(column.pipeline)}</b></header><div>{column.accounts.length === 0 && <p>Sem contas nesta etapa.</p>}{column.accounts.map((client) => { const summary = summaryById.get(client.id); return <button type="button" className={`tdg-crm-kanban-card ${summary?.attention || ""}`} onClick={() => openClient(client.id)} key={client.id}><span><strong>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><div><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{summary?.coverage || 0}% decisores</em></div><footer><span><small>Pipeline</small><b>{BRL.format(summary?.pipeline || 0)}</b></span><span><small>Próxima ação</small><b>{summary?.nextAction || "Definir próxima ação"}</b></span></footer></button>; })}</div></section>)}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-kanban-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div>}
+      {!loading && visible.length > 0 && viewMode === "kanban" && <TopScrollRow className="tdg-crm-kanban-wrap" ariaLabel="Kanban de clientes por etapa"><div className="tdg-crm-kanban">{kanbanColumns.map((column) => <section className="tdg-crm-kanban-column" aria-label={`${column.stage}: ${column.accounts.length} conta(s)`} key={column.stage}><header><span><strong>{column.stage}</strong><small>{column.accounts.length} conta(s)</small></span><b>{BRL.format(column.pipeline)}</b></header><div>{column.accounts.length === 0 && <p>Sem contas nesta etapa.</p>}{column.accounts.map((client) => { const summary = summaryById.get(client.id); return <button type="button" className={`tdg-crm-kanban-card ${summary?.attention || ""}`} onClick={() => openClient(client.id)} key={client.id}><span><strong title={client.name}>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><div><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{summary?.coverage || 0}% decisores</em></div><footer><span><small>Pipeline</small><b>{BRL.format(summary?.pipeline || 0)}</b></span><span><small>Próxima ação</small><b title={summary?.nextAction || "Definir próxima ação"}>{summary?.nextAction || "Definir próxima ação"}</b></span></footer></button>; })}</div></section>)}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-kanban-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div></TopScrollRow>}
       {!loading && visible.length > 0 && viewMode === "table" && <div className="tdg-crm-table" role="table" aria-label="Contas do CRM"><div className="tdg-crm-table-head" role="row"><span>Conta</span><span>Saúde</span><span>Pipeline</span><span>Próxima ação</span></div>{renderedClients.map((client) => { const summary = summaryById.get(client.id); return <button type="button" role="row" className={summary?.attention || ""} onClick={() => openClient(client.id)} key={client.id}><span><strong>{client.name}</strong><small>{client.accountCode || client.id} · {client.crm?.temperature ? `${client.crm.temperature} · ` : ""}{client.segment || "Segmento não informado"} · {client.crm?.stage || "Mapeamento"}</small></span><span><b>{summary?.score || 0}</b><small>{summary?.coverage || 0}% de cobertura</small></span><span><strong>{BRL.format(summary?.pipeline || 0)}</strong><small>{summary?.openOpportunities || 0} aberta(s)</small></span><span><strong>{summary?.nextAction || "Definir próxima ação"}</strong><small>{client.crm?.nextActionAt || "Sem prazo"}</small></span></button>; })}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div>}
     </>}
 
@@ -961,7 +1046,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-summary"><header><strong>Responsáveis</strong></header><div className="tdg-client-sellers">{(selected.vendedores || []).length === 0 && <small>Sem responsável comercial</small>}{(selected.vendedores || []).map((seller) => <span key={seller.email}>{seller.email}{access.podeGerenciar && <button type="button" aria-label={`Remover ${seller.email}`} onClick={() => unassign(selected.id, seller.email)}><X size={12} /></button>}</span>)}</div>{access.podeGerenciar && <form className="tdg-crm-assign" onSubmit={assign}><input required type="email" aria-label="E-mail do vendedor" placeholder="vendedor@empresa.com" value={assignment.clientId === selected.id ? assignment.sellerEmail : ""} onChange={(e) => setAssignment({ clientId: selected.id, sellerEmail: e.target.value, note: "" })} /><button type="submit"><UserPlus size={14} />Atribuir</button></form>}</section>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-summary tdg-account-intelligence"><header><strong>Dados da conta</strong><small>Cadastro e preenchimento público</small></header><dl className="tdg-crm-account-data">
           <div><dt>ID da conta</dt><dd><code>{selected.accountCode || selected.id}</code><small>Código estável para busca, metas, importações e integrações</small></dd></div>
-          <div><dt>Portal do cliente</dt><dd>{selected.portalEnabled ? "Liberado" : "Bloqueado"}<small>{selected.portalUserCount || 0} acesso(s) ativo(s)</small></dd></div>
+          <div><dt>Portal do cliente</dt><dd><PortalAccessPanel client={selected} canManage={access.podeGerenciar} authHeaders={authHeaders} setToast={setToast} onToggle={() => saveClient(selected, { revision: selected.revision, portalEnabled: !selected.portalEnabled })} /></dd></div>
           <div><dt>Razão social</dt><dd>{selected.legalName || "Não informada"}<AccountSource evidence={selected.crm?.enrichmentEvidence?.legalName} url={selectedReport?.suggestedLegalName?.source?.url} /></dd></div>
           <div><dt>Segmento</dt><dd>{selected.segment || "Não informado"}<AccountSource evidence={selected.crm?.enrichmentEvidence?.segment} url={selectedReport?.suggestedSegment?.source?.url} /></dd></div>
           <div><dt>Sede</dt><dd>{selected.crm?.headquarters || "Não informada"}<AccountSource evidence={selected.crm?.enrichmentEvidence?.headquarters} url={selectedReport?.suggestedHeadquarters?.source?.url} /></dd></div>

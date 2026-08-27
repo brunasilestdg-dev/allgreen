@@ -1,0 +1,42 @@
+/* Desenhos dos indicadores do painel — SVG/CSS, sem biblioteca. */
+.tdgc-empty { color: var(--tdg-muted); font-size: 12px; margin: 0; padding: 18px 6px; text-align: center; }
+
+.tdgc-metric { align-items: center; display: flex; height: 100%; justify-content: center; min-height: 72px; }
+.tdgc-metric strong {
+  font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 800; letter-spacing: -.02em;
+  color: var(--tdg-ink); line-height: 1;
+}
+
+/* Barras */
+.tdgc-bars { align-items: flex-end; display: flex; gap: 8px; height: 130px; padding-top: 16px; }
+.tdgc-bar-col { align-items: center; display: flex; flex: 1; flex-direction: column; gap: 5px; height: 100%; justify-content: flex-end; min-width: 0; }
+.tdgc-bar { background: var(--tdg-green); border-radius: 5px 5px 0 0; width: 100%; max-width: 40px; min-height: 4px; }
+.tdgc-bar-val { color: var(--tdg-muted); font-family: "IBM Plex Mono", monospace; font-size: 10px; white-space: nowrap; }
+.tdgc-bar-lbl { color: var(--tdg-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap; }
+
+/* Evolução (linha) */
+.tdgc-line-wrap { display: grid; gap: 8px; }
+.tdgc-line { height: 120px; width: 100%; }
+.tdgc-axis { stroke: var(--tdg-line); stroke-width: 1; }
+.tdgc-area { fill: color-mix(in srgb, var(--tdg-green) 16%, transparent); }
+.tdgc-stroke { fill: none; stroke: var(--tdg-green); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.tdgc-endpoint { fill: var(--tdg-green); }
+.tdgc-line-labels { align-items: baseline; color: var(--tdg-muted); display: flex; font-size: 11px; justify-content: space-between; }
+.tdgc-line-labels strong { color: var(--tdg-green); font-family: "IBM Plex Mono", monospace; font-size: 13px; }
+
+/* Distribuição (rosca) */
+.tdgc-donut-wrap { align-items: center; display: flex; gap: 16px; min-height: 96px; }
+.tdgc-donut { border-radius: 50%; flex: none; height: 96px; position: relative; width: 96px; }
+.tdgc-donut::after { background: var(--tdg-card, #fff); border-radius: 50%; content: ""; inset: 26%; position: absolute; }
+.tdgc-legend { display: grid; gap: 6px; list-style: none; margin: 0; min-width: 0; padding: 0; }
+.tdgc-legend li { align-items: center; color: var(--tdg-ink); display: grid; font-size: 12px; gap: 8px; grid-template-columns: 10px 1fr auto; }
+.tdgc-legend i { border-radius: 3px; height: 10px; width: 10px; }
+.tdgc-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdgc-legend b { color: var(--tdg-muted); font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+
+/* Tabela */
+.tdgc-table-wrap { max-height: 150px; overflow-y: auto; }
+.tdgc-table { border-collapse: collapse; width: 100%; }
+.tdgc-table td { border-bottom: 1px solid var(--tdg-line); font-size: 13px; padding: 6px 4px; }
+.tdgc-table tr:last-child td { border-bottom: 0; }
+.tdgc-num { color: var(--tdg-ink); font-family: "IBM Plex Mono", monospace; text-align: right; font-variant-numeric: tabular-nums; }

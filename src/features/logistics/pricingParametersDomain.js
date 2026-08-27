@@ -158,6 +158,20 @@ export const validarParametros = (valores = {}, opcoes = {}) => {
     erros.push("A margem alvo não pode ser menor que a margem mínima — o preço recomendado nasceria abaixo do piso.");
   if (Number.isFinite(alvo) && Number.isFinite(comissao) && alvo + comissao >= LIMITE_MARGEM_MAIS_COMISSAO)
     erros.push(`Margem alvo (${alvo}%) mais comissão (${comissao}%) somam ${arredondar(alvo + comissao)}%. Acima de ${LIMITE_MARGEM_MAIS_COMISSAO}% a fórmula de preço perde o sentido e devolve um valor irreal.`);
+
+  // A régua global precisa dizer quanto custam o veículo e o motorista — são
+  // os dois maiores custos da operação. Sem eles o motor cai em silêncio nos
+  // valores padrão do código, e preço calculado sobre custo que ninguém
+  // confirmou é exatamente o que esta tela existe para impedir. Escopos
+  // parciais (produto, veículo, cliente) herdam da global e não precisam
+  // repetir.
+  if (!parcial) {
+    const positivo = (chave) => num(contexto[chave]) > 0;
+    if (!positivo("vehicleDailyCost") && !positivo("vehicleMonthlyCost"))
+      erros.push("Defina o custo do veículo (por dia ou por mês) — a régua global não pode ficar sem ele.");
+    if (!positivo("driverDailyCost") && !positivo("driverDailyCost4h") && !positivo("driverDailyCost8h") && !positivo("driverHourlyCost"))
+      erros.push("Defina o custo do motorista (diária, jornada ou hora) — a régua global não pode ficar sem ele.");
+  }
   if (Number.isFinite(minimo) && Number.isFinite(comissao) && minimo + comissao >= LIMITE_MARGEM_MAIS_COMISSAO)
     erros.push(`Margem mínima mais comissão somam ${arredondar(minimo + comissao)}%, acima do limite de ${LIMITE_MARGEM_MAIS_COMISSAO}%.`);
   const imposto = num(contexto.taxPercent);

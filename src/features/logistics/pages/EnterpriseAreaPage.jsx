@@ -204,44 +204,6 @@ const cards = {
   },
 };
 
-const rasciDefaults = {
-  products: ["Produtos", "Comercial", "Planejamento", "Operação, Financeiro, ESG", "Gestão"],
-  planning: ["Planejamento", "Produtos", "Comercial, Operação", "Financeiro, Jurídico", "Gestão"],
-  dp: ["DP", "Administração", "RH", "Operação, Financeiro", "Gestores"],
-  hr: ["RH", "Gestão", "DP", "Operação", "Gestores"],
-  quality: ["Qualidade", "Operação", "Indicadores", "Comercial, Cliente", "Gestão"],
-  marketing: ["Marketing", "Comercial", "ESG, Produtos", "Operação, Jurídico", "Gestão"],
-  legal: ["Jurídico", "Administração", "Comercial", "Financeiro, Implantação", "Gestão"],
-  indicators: ["Indicadores", "Gestão", "Todas as áreas", "Administração", "Diretoria"],
-  admin: ["Administração", "Titular", "Tecnologia", "Áreas", "Gestão"],
-  communication: ["Comunicação", "Gestores", "Todas as áreas", "Administração", "Times"],
-};
-
-function RasciTable({ area }) {
-  const values = rasciDefaults[area] || ["Área dona", "Gestão", "Áreas de apoio", "Áreas impactadas", "Times envolvidos"];
-  const rows = [
-    ["R", "Executa", values[0]],
-    ["A", "Aprova", values[1]],
-    ["S", "Apoia", values[2]],
-    ["C", "Consulta", values[3]],
-    ["I", "Informa", values[4]],
-  ];
-  return (
-    <article className="tdg-work-area tdg-rasci-card">
-      <div className="tdg-work-area-heading"><span><Gauge size={20} /></span><div><strong>RASCI</strong><small>Papel de cada área</small></div></div>
-      <div className="tdg-rasci-table">
-        {rows.map(([letter, role, owner]) => (
-          <div key={letter}>
-            <b>{letter}</b>
-            <span>{role}</span>
-            <strong>{owner}</strong>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
 function ProductStrip({ products = [] }) {
   if (!products.length) return null;
   return (
@@ -288,9 +250,9 @@ export default function EnterpriseAreaPage({ area, products = [], onNavigate }) 
           <div className="tdg-work-area-heading"><span><Target size={20} /></span><div><strong>Próximas ações</strong><small>Entrar no trabalho</small></div></div>
           <div className="tdg-work-area-links">
             {config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}
+            <button type="button" onClick={() => onNavigate?.("/todogreen/rasci")} key="rasci">Ver matriz RASCI<ArrowRight size={14} /></button>
           </div>
         </article>
-        <RasciTable area={area} />
       </div>
 
       {area === "products" && <ProductStrip products={products} />}

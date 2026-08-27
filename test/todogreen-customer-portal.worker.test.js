@@ -102,6 +102,7 @@ const pedir = (caminho, { method = "GET", token, body } = {}) => {
 let pessoaA;
 let pessoaB;
 let semVinculo;
+let gestora;
 
 beforeAll(async () => {
   // As tabelas nascem na primeira chamada (o serviço garante o DDL).
@@ -109,6 +110,15 @@ beforeAll(async () => {
 
   await criarCliente("cli-a", "Cliente A");
   await criarCliente("cli-b", "Cliente B");
+
+  // A dona do espaço precisa existir como usuária: as tabelas transacionais
+  // têm FOREIGN KEY para users(id).
+  gestora = await criarUsuario("dono", "gestora@todogreen.com.br");
+  await env.DB.prepare(
+    `INSERT INTO todogreen_access_emails
+       (id, tenant_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
+     VALUES ('acesso-dono', 'todogreen', ?, 'admin', 'active', '["*"]', '', 'dono', ?, ?)`,
+  ).bind(gestora.email, new Date().toISOString(), new Date().toISOString()).run();
 
   pessoaA = await criarUsuario("u-a", "pessoa@clientea.com.br");
   pessoaB = await criarUsuario("u-b", "pessoa@clienteb.com.br");
@@ -179,6 +189,110 @@ describe("o cliente A nunca alcança o cliente B", () => {
     const b = await (await pedir("/api/todogreen/portal/sessao", { token: pessoaB.token })).json();
     expect(a.cliente.nome).toBe("Cliente A");
     expect(b.cliente.nome).toBe("Cliente B");
+  });
+
+  it("campo livre interno (margem, custo, CPF) não vaza no payload do portal", async () => {
+    // O fields_json é escrito pela equipe sem validação de chave. Se um
+    // operador digitar dado interno num campo livre, o portal NÃO pode
+    // repassar — só o allowlist operacional sai.
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, status,
+          service_date, origin, destination, fields_json,
+          created_by, updated_by, created_at, updated_at)
+       VALUES ('op-vazamento','todogreen','cli-a','dono','OP-A-SENSIVEL','concluida',
+               '2026-08-10','CD','Hub',?, 'seed','seed',?,?)`,
+    ).bind(
+      JSON.stringify({
+        deliveries: 12, distanceKm: 80,
+        margem: 41.5, custoPorKm: 2.37, comissao: 3,
+        cpfMotorista: "111.444.777-35", observacaoInterna: "cliente devendo",
+      }),
+      agora, agora,
+    ).run();
+
+    const lista = await (await pedir("/api/todogreen/portal/operacoes", { token: pessoaA.token })).json();
+    const operacao = lista.operacoes.find((o) => o.referencia === "OP-A-SENSIVEL");
+    expect(operacao).toBeTruthy();
+    expect(operacao.campos.deliveries).toBe(12);
+    expect(operacao.campos.distanceKm).toBe(80);
+    expect(JSON.stringify(operacao)).not.toMatch(/margem|custoPorKm|comissao|cpfMotorista|devendo/);
+
+    const detalhe = await (await pedir("/api/todogreen/portal/operacoes/op-vazamento", { token: pessoaA.token })).json();
+    expect(JSON.stringify(detalhe)).not.toMatch(/margem|custoPorKm|comissao|cpfMotorista|devendo/);
+  });
+});
+
+describe("faturas do cliente no portal", () => {
+  it("lista só os títulos DELE, com 2ª via quando o documento fiscal existe", async () => {
+    const agora = new Date().toISOString();
+    // Título do cliente A com documento fiscal vinculado por fatura.
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO todogreen_financial_titles
+        (id,tenant_id,workspace_owner_id,number,kind,client_id,invoice_id,competence_date,issue_date,due_date,
+         original_amount,open_amount,status,created_by,updated_by,created_at,updated_at)
+        VALUES ('tit-a','todogreen','dono','REC-000001','receivable','cli-a','inv-a','2026-08-01','2026-08-01','2026-09-01',
+         1500,1500,'open','dono','dono',?,?)`).bind(agora, agora),
+      env.DB.prepare(`INSERT INTO todogreen_financial_titles
+        (id,tenant_id,workspace_owner_id,number,kind,client_id,invoice_id,competence_date,issue_date,due_date,
+         original_amount,open_amount,status,created_by,updated_by,created_at,updated_at)
+        VALUES ('tit-b','todogreen','dono','REC-000002','receivable','cli-b','','2026-08-01','2026-08-01','2026-09-01',
+         900,900,'open','dono','dono',?,?)`).bind(agora, agora),
+      env.DB.prepare(`INSERT INTO todogreen_fiscal_documents
+        (id,tenant_id,workspace_owner_id,doc_type,numero,serie,status,data_emissao,valor_servico,valor_total,
+         invoice_id,xml_content,fields_json,revision,created_by,updated_by,created_at,updated_at)
+        VALUES ('fis-a','todogreen','dono','cte',7,1,'assinado','2026-08-01',1500,1500,
+         'inv-a','<CTe>ok</CTe>','{}',1,'dono','dono',?,?)`).bind(agora, agora),
+    ]);
+
+    const doA = await (await pedir("/api/todogreen/portal/financeiro", { token: pessoaA.token })).json();
+    expect(doA.titulos.map((t) => t.numero)).toContain("REC-000001");
+    expect(doA.titulos.map((t) => t.numero)).not.toContain("REC-000002");
+    expect(doA.totais.emAberto).toBe(1500);
+    const comDocumento = doA.titulos.find((t) => t.numero === "REC-000001");
+    expect(comDocumento.documento.xmlDisponivel).toBe(true);
+
+    // 2ª via: o XML sai para o dono do título; o título do outro cliente, 404.
+    const xml = await pedir("/api/todogreen/portal/financeiro/tit-a/xml", { token: pessoaA.token });
+    expect(xml.status).toBe(200);
+    expect(await xml.text()).toContain("<CTe>ok</CTe>");
+    expect((await pedir("/api/todogreen/portal/financeiro/tit-b/xml", { token: pessoaA.token })).status).toBe(404);
+  });
+});
+
+describe("liberação do portal pela tela interna", () => {
+  it("PATCH liga/desliga o portal e o GET lista os usuários do cliente", async () => {
+    const cliente = await (await pedir("/api/todogreen/clients", { token: gestora.token })).json();
+    const alvo = (cliente.clientes || []).find((c) => c.id === "cli-a");
+    expect(alvo).toBeTruthy();
+
+    const desligado = await pedir("/api/todogreen/clients/cli-a", {
+      method: "PATCH", token: gestora.token, body: { revision: alvo.revision, portalEnabled: false },
+    });
+    expect(desligado.status).toBe(200);
+
+    // Com o portal desligado, o vínculo do cliente A morre na hora.
+    expect((await pedir("/api/todogreen/portal/operacoes", { token: pessoaA.token })).status).toBe(403);
+
+    const religado = await pedir("/api/todogreen/clients/cli-a", {
+      method: "PATCH", token: gestora.token, body: { revision: alvo.revision + 1, portalEnabled: true },
+    });
+    expect(religado.status).toBe(200);
+    expect((await pedir("/api/todogreen/portal/operacoes", { token: pessoaA.token })).status).toBe(200);
+
+    // A lista de quem entra existe para a tela — antes o PUT era às cegas.
+    const usuarios = await (await pedir("/api/todogreen/clients/cli-a/portal-usuarios", { token: gestora.token })).json();
+    expect(usuarios.usuarios.some((u) => u.email === pessoaA.email)).toBe(true);
+
+    // Liberar mais uma pessoa: sem BREVO_API_KEY o convite não sai, e a
+    // resposta diz isso em vez de fingir que enviou.
+    const convite = await (await pedir("/api/todogreen/clients", {
+      method: "PUT", token: gestora.token, body: { clienteId: "cli-a", email: "novo@cliente-a.com.br", papel: "cliente_leitor" },
+    })).json();
+    expect(convite.ok).toBe(true);
+    expect(convite.conviteEnviado).toBe(false);
+    expect(convite.emailConfigurado).toBe(false);
   });
 });
 

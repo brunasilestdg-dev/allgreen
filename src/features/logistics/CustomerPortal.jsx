@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Banknote,
   Download,
   FileText,
   Gauge,
@@ -27,6 +28,7 @@ const ICONES = {
   "green-score": Gauge,
   esg: Leaf,
   relatorios: FileText,
+  financeiro: Banknote,
   documentos: FileText,
   solicitacoes: PackageCheck,
   assistente: MessageSquare,
@@ -215,6 +217,59 @@ function Relatorios({ setAviso }) {
         ))}
       </div>
     </section>
+  );
+}
+
+const BRL_PORTAL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+// Faturas do próprio cliente: vencimento, saldo e 2ª via do documento fiscal.
+function Faturas({ setAviso }) {
+  const [dados, setDados] = useState(null);
+  useEffect(() => {
+    pedir("/api/todogreen/portal/financeiro")
+      .then(setDados)
+      .catch((motivo) => setAviso?.(motivo.message));
+  }, [setAviso]);
+  const baixarXml = async (titulo) => {
+    try {
+      const resposta = await fetch(comEmpresa(`/api/todogreen/portal/financeiro/${titulo.id}/xml`), { headers: authHeaders() });
+      if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({})))?.error || "Documento indisponível.");
+      const blob = await resposta.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${titulo.documento?.tipo || "documento"}-${titulo.documento?.numero || titulo.numero}.xml`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (motivo) { setAviso?.(motivo.message); }
+  };
+  const titulos = dados?.titulos || [];
+  return (
+    <div className="cp-bloco">
+      <header><h2>Faturas</h2><p>O que está em aberto, o que vence quando e a 2ª via do documento fiscal.</p></header>
+      <div className="cp-indicadores">
+        <Indicador rotulo="Em aberto" valor={BRL_PORTAL.format(dados?.totais?.emAberto || 0)} detalhe="soma dos títulos não quitados" tom={dados?.totais?.emAberto ? "alerta" : "positivo"} />
+        <Indicador rotulo="Quitado" valor={BRL_PORTAL.format(dados?.totais?.quitado || 0)} detalhe="histórico liquidado" tom="positivo" />
+      </div>
+      {!titulos.length && <p className="cp-vazio">Nenhuma fatura por aqui ainda.</p>}
+      <ul className="cp-lista">
+        {titulos.map((titulo) => (
+          <li key={titulo.id}>
+            <div>
+              <strong>{titulo.numero}</strong>
+              <small>emitida em {titulo.emitidoEm || "—"} · vence em {titulo.venceEm || "—"} · {titulo.status === "settled" ? "quitada" : titulo.status === "partial" ? "parcialmente paga" : titulo.status === "overdue" ? "vencida" : "em aberto"}</small>
+            </div>
+            <div>
+              <strong>{BRL_PORTAL.format(titulo.emAberto)}</strong>
+              <small>de {BRL_PORTAL.format(titulo.valor)}</small>
+            </div>
+            {titulo.documento?.xmlDisponivel && (
+              <button type="button" onClick={() => baixarXml(titulo)}><Download size={15} /> XML {titulo.documento.tipo?.toUpperCase()}</button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -437,6 +492,7 @@ export default function CustomerPortal() {
         {aba === "green-score" && <GreenScoreDetalhado resumo={resumo} />}
         {aba === "esg" && <ImpactoAmbiental resumo={resumo} />}
         {aba === "relatorios" && <Relatorios setAviso={setAviso} />}
+        {aba === "financeiro" && <Faturas setAviso={setAviso} />}
         {aba === "documentos" && <Evidencias evidencias={evidencias} carregando={carregandoEvidencias} aoAvisar={setAviso} />}
         {aba === "solicitacoes" && <Solicitacoes podeAbrir={(sessao?.permissoes || []).includes("portal:request:create")} setAviso={setAviso} />}
         {aba === "assistente" && <AssistenteCliente enviar={enviar} setAviso={setAviso} />}

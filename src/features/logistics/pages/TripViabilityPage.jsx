@@ -69,8 +69,29 @@ export default function TripViabilityPage({ authHeaders }) {
     fetch("/api/todogreen/pricing-parameters", { headers: authHeaders?.() || {} })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (vivo && d?.atual)
-          setRegua({ ...d.atual.parametros, versao: d.atual.versao });
+        if (!vivo || !d?.atual) return;
+        const parametros = d.atual.parametros || {};
+        setRegua({ ...parametros, versao: d.atual.versao });
+        // Os custos essenciais nascem PRÉ-DEFINIDOS pela régua cadastrada —
+        // editáveis, mas nunca em branco quando o gestor já definiu os seus.
+        // Só o que ainda está vazio é preenchido, para não sobrescrever o que
+        // a pessoa digitou enquanto a régua carregava. Sem régua cadastrada,
+        // ficam vazios mesmo: pré-preencher com número inventado é pior.
+        const daRegua = {
+          combustivel: { valor: parametros.energyCostPerKm, unidade: "por_km" },
+          motorista: { valor: parametros.driverDailyCost, unidade: "por_veiculo_dia" },
+          custo_frota:
+            Number(parametros.vehicleMonthlyCost) > 0
+              ? { valor: parametros.vehicleMonthlyCost, unidade: "por_veiculo_mes" }
+              : { valor: parametros.vehicleDailyCost, unidade: "por_veiculo_dia" },
+        };
+        setRubricas((atuais) =>
+          atuais.map((r) => {
+            const sugestao = daRegua[r.id];
+            if (!sugestao || r.valor !== "" || !(Number(sugestao.valor) > 0)) return r;
+            return { ...r, valor: String(sugestao.valor), unidade: sugestao.unidade };
+          }),
+        );
       })
       .catch(() => {});
     return () => {

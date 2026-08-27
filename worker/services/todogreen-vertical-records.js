@@ -25,6 +25,7 @@
 //    a outra pessoa acabou de escrever, que é o defeito do JSON único.
 
 import { TENANT_ID, paginacao, podeNaVertical, recorteDeCarteira } from "./todogreen-access.js";
+import { notificarPortalDoCliente } from "./todogreen-notify.js";
 // A validação e a normalização dos cadastros vêm do domínio, não daqui: é a
 // mesma regra que a tela aplica, e uma segunda cópia no worker seria a
 // divergência entre o botão liberado e a resposta recusada.
@@ -39,6 +40,10 @@ import {
   validateParty,
   validateWarehouse,
 } from "../../src/features/logistics/erpCoreDomain.js";
+import {
+  bloqueioPorFechamento,
+  validateBankAccount,
+} from "../../src/features/logistics/treasuryDomain.js";
 import { doBanco as pedidoDoBanco } from "./todogreen-deal-desk.js";
 import { liberacaoDaProposta } from "../../src/features/logistics/dealDeskDomain.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
@@ -329,6 +334,7 @@ const COLECOES = {
       etaEm: row.eta_at || "",
       placa: row.vehicle_plate || "",
       motorista: row.driver_name || "",
+      motoristaId: row.driver_id || "",
       sla: row.sla_status || "",
       comprovanteUrl: row.proof_url || "",
       comprovanteHash: row.proof_hash || "",
@@ -364,6 +370,9 @@ const COLECOES = {
       eta_at: texto(corpo.etaEm, 40) || null,
       vehicle_plate: texto(corpo.placa, 20).toUpperCase(),
       driver_name: texto(corpo.motorista, 160),
+      // O motorista como dado: o id liga a operação ao cadastro (0070) e é o
+      // recorte do portal do motorista. O nome continua como rótulo.
+      driver_id: texto(corpo.motoristaId, 120),
       distance_km: numero(corpo.distanciaKm),
       incident_count: numero(corpo.ocorrencias),
       sla_status: texto(corpo.sla, 40),
@@ -412,6 +421,15 @@ const COLECOES = {
       competenciaEm: row.competence_date || "",
       contratoId: row.contract_id || "",
       statusFinanceiro: row.invoice_status || "pending",
+      // Eixos do relatório (migração 0056). As colunas de texto `categoria` e
+      // `centroCusto` continuam valendo como detalhe livre; estas apontam para o
+      // cadastro e é por elas que o relatório soma sem depender de grafia.
+      accountId: row.account_id || "",
+      costCenterId: row.cost_center_id || "",
+      bankAccountId: row.bank_account_id || "",
+      multaPercent: row.late_fee_percent || 0,
+      jurosMesPercent: row.late_interest_month_percent || 0,
+      conciliadoEm: row.reconciled_at || "",
       revision: row.revision,
       criadoEm: row.created_at,
       atualizadoEm: row.updated_at,
@@ -438,6 +456,13 @@ const COLECOES = {
       contract_id: texto(corpo.contratoId, 120),
       invoice_status: ["pending", "partial", "paid", "overdue", "cancelled"].includes(texto(corpo.statusFinanceiro, 40))
         ? texto(corpo.statusFinanceiro, 40) : "pending",
+      account_id: texto(corpo.accountId, 120),
+      cost_center_id: texto(corpo.costCenterId, 120),
+      bank_account_id: texto(corpo.bankAccountId, 120),
+      // Percentual negativo não gera crédito; o encargo do atraso só pode
+      // aumentar o que se deve.
+      late_fee_percent: Math.max(0, numero(corpo.multaPercent)),
+      late_interest_month_percent: Math.max(0, numero(corpo.jurosMesPercent)),
       fields_json: JSON.stringify(objeto(corpo.campos)),
     }),
     exigido: (corpo) =>
@@ -655,6 +680,50 @@ const COLECOES = {
     }),
     exigido: (corpo) => validateCostCenter({ name: corpo.nome }),
   },
+
+  // Conta bancária é CRUD puro; o que tem regra — importar extrato, conciliar,
+  // fechar período — mora em `todogreen-treasury.js`. O saldo NÃO fica aqui:
+  // `opening_balance` é o saldo inicial (premissa), e o saldo de hoje é ele mais
+  // o que foi conciliado, calculado por `saldoDaConta`.
+  bankAccounts: {
+    tabela: "todogreen_treasury_accounts",
+    permissao: "finance:manage",
+    escopoDeCarteira: false,
+    ordem: "name ASC",
+    daLinha: (row) => ({
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      bancoCodigo: row.bank_code,
+      agencia: row.branch,
+      conta: row.account_number,
+      chavePix: row.pix_key,
+      saldoInicial: row.opening_balance,
+      aberturaEm: row.opening_date || "",
+      situacao: row.status,
+      campos: parse(row.fields_json, {}),
+      revision: row.revision,
+      criadoEm: row.created_at,
+      atualizadoEm: row.updated_at,
+    }),
+    colunas: (corpo) => ({
+      name: texto(corpo.name ?? corpo.nome, 200),
+      kind: ["corrente", "poupanca", "caixa", "aplicacao", "cartao"].includes(texto(corpo.kind))
+        ? texto(corpo.kind)
+        : "corrente",
+      bank_code: texto(corpo.bancoCodigo, 20),
+      branch: texto(corpo.agencia, 20),
+      account_number: texto(corpo.conta, 40),
+      pix_key: texto(corpo.chavePix, 200),
+      // Saldo inicial pode ser negativo: conta com limite usado começa no
+      // vermelho, e forçar zero mentiria sobre a posição de caixa.
+      opening_balance: numero(corpo.saldoInicial),
+      opening_date: texto(corpo.aberturaEm, 20) || null,
+      status: texto(corpo.situacao, 40) || "ativa",
+      fields_json: JSON.stringify(objeto(corpo.campos)),
+    }),
+    exigido: (corpo) => validateBankAccount({ name: corpo.name ?? corpo.nome, kind: corpo.kind }),
+  },
 };
 
 const nomeDaColecao = (colecao) =>
@@ -843,12 +912,37 @@ const proposalLiberada = async (env, access, cenarioId) => {
   return liberacaoDaProposta(cenarioId, (results || []).map(pedidoDoBanco));
 };
 
+// A trava do fechamento de período (migração 0056). Um mês fechado não aceita
+// lançamento novo, alteração nem arquivamento — é o que faz um resultado
+// publicado continuar valendo. Sem isso, o resultado de janeiro poderia mudar em
+// dezembro e nenhum relatório emitido antes continuaria verdadeiro.
+//
+// Vale para as DUAS competências numa alteração: a de onde o lançamento está e a
+// para onde ele iria. Checar só uma permitiria tirar um lançamento de um mês
+// fechado (mudando o resultado dele) ou empurrar um lançamento para dentro dele.
+const bloqueioDeCompetencia = async (env, access, ...entradas) => {
+  const { results } = await env.DB.prepare(
+    `SELECT reference_month AS referenceMonth, status FROM todogreen_financial_periods
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND status = 'fechado'`,
+  ).bind(TENANT_ID, access.ownerId).all();
+  const periodos = results || [];
+  if (!periodos.length) return "";
+  for (const entrada of entradas) {
+    if (!entrada) continue;
+    const bloqueio = bloqueioPorFechamento(entrada, periodos);
+    if (bloqueio) return bloqueio;
+  }
+  return "";
+};
+
 const criar = async (env, colecao, access, user, corpo) => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);
   if (colecao === COLECOES.financial) {
     const erroFinanceiro = validarFinanceiro(corpo);
     if (erroFinanceiro) return json({ error: erroFinanceiro }, 400);
+    const travado = await bloqueioDeCompetencia(env, access, corpo);
+    if (travado) return json({ error: travado }, 409);
   }
 
   if (colecao === COLECOES.proposals) {
@@ -952,6 +1046,9 @@ const atualizar = async (env, colecao, access, user, id, corpo) => {
   if (colecao === COLECOES.financial) {
     const erroFinanceiro = validarFinanceiro(corpo, atual);
     if (erroFinanceiro) return json({ error: erroFinanceiro }, 400);
+    // As duas competências: de onde sai e para onde vai.
+    const travado = await bloqueioDeCompetencia(env, access, colecao.daLinha(atual), proximo);
+    if (travado) return json({ error: travado }, 409);
   }
 
   if (colecao === COLECOES.operations) {
@@ -1010,6 +1107,13 @@ const arquivar = async (env, colecao, access, user, id) => {
     `SELECT * FROM ${colecao.tabela}
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(id, TENANT_ID, access.ownerId).first();
+
+  // Arquivar um lançamento de mês fechado mudaria um resultado já publicado.
+  if (colecao === COLECOES.financial && atual) {
+    const travado = await bloqueioDeCompetencia(env, access, colecao.daLinha(atual));
+    if (travado) return json({ error: travado }, 409);
+  }
+
   const agora = new Date().toISOString();
   // Arquiva em vez de apagar: o histórico é a única defesa quando alguém
   // pergunta, meses depois, de onde veio um número.
@@ -1049,49 +1153,117 @@ const listarEventosOperacao = async (env, access, user, operationId) => {
   });
 };
 
-const registrarEventoOperacao = async (env, access, user, operationId, corpo) => {
-  if (!(await noAlcanceDaCarteira(env, COLECOES.operations, access, user.email, operationId)))
-    return json({ error: "Operação não encontrada." }, 404);
-  const operacao = await env.DB.prepare(
-    `SELECT * FROM todogreen_client_operations
-      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-  ).bind(operationId, TENANT_ID, access.ownerId).first();
+// O núcleo do evento operacional, compartilhado entre a tela interna e o
+// portal do motorista: são o MESMO fato (a carga chegou, a entrega aconteceu,
+// houve ocorrência) — duas implementações produziriam dois delivered_at e
+// dois PODs diferentes. Quem chama já validou o alcance (carteira interna ou
+// vínculo do motorista); aqui só se aplica.
+export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId, corpo, origem = "" }) => {
   const tipos = new Set(["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"]);
   const tipo = tipos.has(texto(corpo.tipo, 40)) ? texto(corpo.tipo, 40) : "transito";
   const titulo = texto(corpo.titulo, 200);
   const descricao = texto(corpo.descricao, 3000);
-  if (!titulo && !descricao) return json({ error: "Informe o título ou a descrição do evento." }, 400);
+  if (!titulo && !descricao) return { erro: "Informe o título ou a descrição do evento." };
+  const operationId = operacao.id;
   const ocorridoEm = texto(corpo.ocorridoEm, 40) || new Date().toISOString();
   const agora = new Date().toISOString();
   const eventoId = crypto.randomUUID();
   const atualizacaoIncidente = tipo === "ocorrencia" ? ", incident_count = incident_count + 1" : "";
-  await env.DB.batch([
+  // O evento "entrega" é o fato que fecha o ciclo: carimba delivered_at,
+  // guarda o comprovante que o portal do cliente baixa e registra o POD que a
+  // régua de faturamento exige (trigger da 0062). Antes, o evento era só uma
+  // linha na timeline — a operação nunca "entregava" e a OS nunca faturava.
+  const comprovanteUrl = tipo === "entrega" ? texto(corpo.comprovanteUrl, 800) : "";
+  const recebedor = tipo === "entrega" ? texto(corpo.recebedor, 200) : "";
+  const atualizacaoEntrega = tipo === "entrega"
+    ? `, delivered_at = COALESCE(delivered_at, ?)${comprovanteUrl ? ", proof_url = ?, proof_hash = ?" : ""}`
+    : "";
+  const paramsEntrega = tipo === "entrega"
+    ? [ocorridoEm, ...(comprovanteUrl ? [comprovanteUrl, texto(corpo.comprovanteHash, 200)] : [])]
+    : [];
+  const instrucoes = [
     env.DB.prepare(
       `INSERT INTO todogreen_client_operation_events
          (id,tenant_id,operation_id,client_id,workspace_owner_id,kind,titulo,descricao,local,
           ocorrido_em,registrado_por,created_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(
-      eventoId, TENANT_ID, operationId, operacao.client_id, access.ownerId, tipo, titulo,
-      descricao, texto(corpo.local, 300), ocorridoEm, user.id, agora,
+      eventoId, TENANT_ID, operationId, operacao.client_id, ownerId, tipo, titulo,
+      descricao, texto(corpo.local, 300), ocorridoEm, userId, agora,
     ),
     env.DB.prepare(
       `UPDATE todogreen_client_operations
-          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}
+          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-    ).bind(agora, user.id, operationId, TENANT_ID, access.ownerId),
-  ]);
+    ).bind(agora, userId, ...paramsEntrega, operationId, TENANT_ID, ownerId),
+  ];
+  if (tipo === "entrega") {
+    // POD para toda OS amarrada a esta operação. INSERT direto com subselect:
+    // se não houver OS vinculada, nada acontece; se houver, o gate de
+    // faturamento passa a enxergar o comprovante.
+    const latitude = Number(corpo.latitude);
+    const longitude = Number(corpo.longitude);
+    instrucoes.push(env.DB.prepare(
+      `INSERT INTO todogreen_proofs_of_delivery
+         (id, tenant_id, workspace_owner_id, service_order_id, kind, occurred_at,
+          recipient_name, document_url, document_hash, latitude, longitude,
+          fields_json, created_by, created_at)
+       SELECT lower(hex(randomblob(16))), os.tenant_id, os.workspace_owner_id, os.id, 'delivery', ?,
+              ?, ?, ?, ?, ?, json_object('operationId', ?, 'eventId', ?), ?, ?
+         FROM todogreen_service_orders os
+        WHERE os.tenant_id = ? AND os.workspace_owner_id = ? AND os.operation_id = ?
+          AND os.archived_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM todogreen_proofs_of_delivery p
+             WHERE p.tenant_id = os.tenant_id AND p.workspace_owner_id = os.workspace_owner_id
+               AND p.service_order_id = os.id
+          )`,
+    ).bind(
+      ocorridoEm, recebedor, comprovanteUrl, texto(corpo.comprovanteHash, 200),
+      Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null,
+      operationId, eventoId, userId, agora,
+      TENANT_ID, ownerId, operationId,
+    ));
+  }
+  await env.DB.batch(instrucoes);
   const atualizada = await env.DB.prepare(
     `SELECT * FROM todogreen_client_operations
       WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(operationId, TENANT_ID, ownerId).first();
+  const evento = { id: eventoId, tipo, titulo, descricao, local: texto(corpo.local, 300), ocorridoEm, registradoPor: userId, criadoEm: agora };
+  // Entrega e ocorrência são os dois eventos que o embarcador quer saber na
+  // hora — os demais ele acompanha pela linha do tempo quando quiser.
+  if (tipo === "entrega" || tipo === "ocorrencia") {
+    await notificarPortalDoCliente(env, operacao.client_id, {
+      assunto: tipo === "entrega"
+        ? `Entrega concluída — ${operacao.reference || "operação"}`
+        : `Ocorrência registrada — ${operacao.reference || "operação"}`,
+      titulo: tipo === "entrega" ? "Sua carga foi entregue" : "Registramos uma ocorrência",
+      corpo: `${operacao.reference || "A operação"}: ${titulo || descricao || tipo}. Detalhes e comprovante na linha do tempo do portal.`,
+      origem,
+    });
+  }
+  return { evento, tipo, titulo, descricao, atualizada };
+};
+
+const registrarEventoOperacao = async (env, access, user, operationId, corpo, origem = "") => {
+  if (!(await noAlcanceDaCarteira(env, COLECOES.operations, access, user.email, operationId)))
+    return json({ error: "Operação não encontrada." }, 404);
+  const operacao = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_operations
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(operationId, TENANT_ID, access.ownerId).first();
-  const evento = { id: eventoId, tipo, titulo, descricao, local: texto(corpo.local, 300), ocorridoEm, registradoPor: user.id, criadoEm: agora };
+  const resultado = await aplicarEventoOperacional(env, {
+    ownerId: access.ownerId, operacao, userId: user.id, corpo, origem,
+  });
+  if (resultado.erro) return json({ error: resultado.erro }, 400);
   await registrarAuditoriaTodoGreen(env, {
     access, user, action: "event_added", resourceType: "operations", resourceId: operationId,
     clientId: operacao.client_id, before: COLECOES.operations.daLinha(operacao),
-    after: COLECOES.operations.daLinha(atualizada), details: `${tipo}: ${titulo || descricao}`,
+    after: COLECOES.operations.daLinha(resultado.atualizada),
+    details: `${resultado.tipo}: ${resultado.titulo || resultado.descricao}`,
   });
-  return json({ evento, registro: COLECOES.operations.daLinha(atualizada) }, 201);
+  return json({ evento: resultado.evento, registro: COLECOES.operations.daLinha(resultado.atualizada) }, 201);
 };
 
 const listarPagamentos = async (env, access, user, entryId) => {
@@ -1178,6 +1350,71 @@ const registrarPagamento = async (env, access, user, entryId, corpo) => {
   }, 201);
 };
 
+// Estornar uma baixa. O razão é imutável: não se apaga o pagamento, lança-se um
+// compensatório negativo que referencia o original e reabre o saldo. É como se
+// ajusta um lançamento sem corromper o histórico — a mesma filosofia do estoque
+// e do deal desk. Estornar duas vezes o mesmo pagamento é recusado.
+//
+// Sobre o fechamento de competência: o estorno NÃO chama `bloqueioDeCompetencia`,
+// de propósito e em paridade com `registrarPagamento` — a baixa também não chama.
+// A trava congela a competência (o accrual, o valor reconhecido no resultado),
+// não o lado caixa. Pagar um título cuja competência já fechou é rotina; poder
+// pagar mas não poder estornar seria a assimetria errada. O `amount` do
+// lançamento (o que a trava protege) não é tocado aqui — só `paid_amount`/status.
+const estornarPagamento = async (env, access, user, entryId, paymentId) => {
+  if (!(await noAlcanceDaCarteira(env, COLECOES.financial, access, user.email, entryId)))
+    return json({ error: "Lançamento não encontrado." }, 404);
+  const pagamento = await env.DB.prepare(
+    `SELECT * FROM todogreen_financial_payments
+      WHERE id=? AND entry_id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(paymentId, entryId, TENANT_ID, access.ownerId).first();
+  if (!pagamento) return json({ error: "Baixa não encontrada." }, 404);
+  if (numero(pagamento.amount) < 0)
+    return json({ error: "Este lançamento já é um estorno." }, 409);
+  const jaEstornado = await env.DB.prepare(
+    `SELECT 1 FROM todogreen_financial_payments
+      WHERE entry_id=? AND tenant_id=? AND workspace_owner_id=? AND reference=?`,
+  ).bind(entryId, TENANT_ID, access.ownerId, `estorno:${paymentId}`).first();
+  if (jaEstornado) return json({ error: "Esta baixa já foi estornada." }, 409);
+
+  const lancamento = await env.DB.prepare(
+    `SELECT * FROM todogreen_financial_entries
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(entryId, TENANT_ID, access.ownerId).first();
+  if (!lancamento) return json({ error: "Lançamento não encontrado." }, 404);
+
+  const valor = numero(pagamento.amount);
+  const novoPago = Math.max(0, numero(lancamento.paid_amount) - valor);
+  const novoStatus = novoPago <= 0.0001 ? "pending" : "partial";
+  const agora = new Date().toISOString();
+  const estornoId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE todogreen_financial_entries
+          SET paid_amount=?, invoice_status=?, revision=revision+1, updated_by=?, updated_at=?
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+    ).bind(novoPago, novoStatus, user.id, agora, entryId, TENANT_ID, access.ownerId),
+    env.DB.prepare(
+      `INSERT INTO todogreen_financial_payments
+         (id,tenant_id,workspace_owner_id,entry_id,amount,paid_at,payment_method,reference,notes,created_by,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(
+      estornoId, TENANT_ID, access.ownerId, entryId, -valor, agora,
+      pagamento.payment_method || "", `estorno:${paymentId}`,
+      `Estorno da baixa ${paymentId}`, user.id, agora,
+    ),
+  ]);
+  const atualizada = await env.DB.prepare(
+    `SELECT * FROM todogreen_financial_entries WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(entryId, TENANT_ID, access.ownerId).first();
+  await registrarAuditoriaTodoGreen(env, {
+    access, user, action: "payment_reversed", resourceType: "financial", resourceId: entryId,
+    clientId: lancamento.client_id, before: COLECOES.financial.daLinha(lancamento),
+    after: COLECOES.financial.daLinha(atualizada), details: `Estorno ${estornoId} da baixa ${paymentId}`,
+  });
+  return json({ estorno: { id: estornoId, valor: -valor, referencia: `estorno:${paymentId}` }, registro: COLECOES.financial.daLinha(atualizada) }, 201);
+};
+
 const listarEventosContrato = async (env, access, user, contractId) => {
   if (!(await noAlcanceDaCarteira(env, COLECOES.contracts, access, user.email, contractId)))
     return json({ error: "Contrato não encontrado." }, 404);
@@ -1201,6 +1438,7 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
   const nome = partes[3] || "";
   const id = texto(partes[4], 120);
   const subrecurso = texto(partes[5], 80);
+  const subId = texto(partes[6], 120);
 
   // Sem coleção na URL: a vertical inteira de uma vez, sem filtro nem
   // página — é a carga do painel, que precisa do total para somar, não de um
@@ -1246,7 +1484,7 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
     if (request.method === "POST") {
       if (!podeNaVertical(access, colecao.permissao))
         return json({ error: "Seu papel não pode registrar eventos operacionais." }, 403);
-      return registrarEventoOperacao(env, access, user, id, await request.json().catch(() => ({})));
+      return registrarEventoOperacao(env, access, user, id, await request.json().catch(() => ({})), new URL(request.url).origin);
     }
     return json({ error: "Método não permitido." }, 405);
   }
@@ -1257,6 +1495,13 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
       if (!podeNaVertical(access, colecao.permissao))
         return json({ error: "Seu papel não pode registrar baixas." }, 403);
       return registrarPagamento(env, access, user, id, await request.json().catch(() => ({})));
+    }
+    // Estorno de uma baixa específica: DELETE .../payments/:paymentId — lança o
+    // compensatório, não apaga o histórico.
+    if (request.method === "DELETE" && subId) {
+      if (!podeNaVertical(access, colecao.permissao))
+        return json({ error: "Seu papel não pode estornar baixas." }, 403);
+      return estornarPagamento(env, access, user, id, subId);
     }
     return json({ error: "Método não permitido." }, 405);
   }

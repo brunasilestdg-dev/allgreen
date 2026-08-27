@@ -79,6 +79,24 @@ describe("logistics vertical domain", () => {
     expect(hasTodoGreenPermission("admin", "deal:approve")).toBe(true);
   });
 
+  it("os papéis de trabalho conseguem escrever de fato (furos do CRUD fechados)", () => {
+    // Cada permissão abaixo era exigida por um handler mas não constava de papel
+    // nenhum — só owner/admin escreviam, e todos os outros levavam 403 silencioso
+    // (não adicionava veículo, não criava tarefa no Work Center, etc.).
+    expect(hasTodoGreenPermission("operacoes", "fleet:manage")).toBe(true);
+    expect(hasTodoGreenPermission("operacoes", "integration:manage")).toBe(true);
+    expect(hasTodoGreenPermission("operacoes", "work:manage")).toBe(true);
+    expect(hasTodoGreenPermission("lideranca_comercial", "clients:manage")).toBe(true);
+    expect(hasTodoGreenPermission("lideranca_comercial", "clients:assign")).toBe(true);
+    expect(hasTodoGreenPermission("vendedor", "work:manage")).toBe(true);
+    expect(hasTodoGreenPermission("rh", "work:manage")).toBe(true);
+    // Mas o auditor continua sem escrever nada — o corte de leitura se mantém.
+    expect(hasTodoGreenPermission("auditor", "fleet:manage")).toBe(false);
+    expect(hasTodoGreenPermission("auditor", "work:manage")).toBe(false);
+    // E o RH não ganhou acesso à frota só por poder tocar tarefas.
+    expect(hasTodoGreenPermission("rh", "fleet:manage")).toBe(false);
+  });
+
   it("a lista explícita do vínculo manda quando existe (caminho do worker)", () => {
     // Sem lista, deriva do papel; com lista, ela é a autoridade — mesmo mais
     // estreita que o padrão do papel.
