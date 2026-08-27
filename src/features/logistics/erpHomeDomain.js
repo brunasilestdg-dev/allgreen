@@ -1,7 +1,6 @@
 export const ERP_HOME_WIDGETS = Object.freeze([
   { id: "metrics", label: "Indicadores da minha área" },
   { id: "queue", label: "Minha fila e pendências" },
-  { id: "responsibilities", label: "Minhas responsabilidades" },
   { id: "shortcuts", label: "Atalhos de trabalho" },
 ]);
 

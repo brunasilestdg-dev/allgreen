@@ -383,6 +383,33 @@ h3,
 .mobile-logo {
   display: none;
 }
+.auth-perfis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.auth-perfis button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 11px;
+  padding: 11px 8px;
+  font-weight: 750;
+  font-size: 0.82rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.auth-perfis button:hover,
+.auth-perfis button:focus-visible {
+  border-color: var(--primary);
+  color: var(--primary);
+  outline: none;
+}
+.auth-perfis button.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
 .auth-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;

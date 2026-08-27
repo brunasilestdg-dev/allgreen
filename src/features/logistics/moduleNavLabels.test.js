@@ -70,12 +70,14 @@ describe("propriedade das abas principais", () => {
 
   it("funções que tinham dono errado ficam em abas próprias", () => {
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Cadastros"');
-    expect(blocoDaNavegacaoPrincipal).toContain('label: "Ocorrências"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Suprimentos"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Documentos"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Administração"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Operação", route: "/todogreen/operacoes"');
-    expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Operação"[^\n]+ocorrencias/);
+    // Ocorrência de entrega (atraso, insucesso, reentrega) pertence à Operação,
+    // não a um item solto no topo do menu.
+    expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Ocorrências"/);
+    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Operação"[^\n]+ocorrencias/);
     expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Documentos"[^\n]+relatorios/);
     expect(blocoDaNavegacaoPrincipal).toContain('label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"]');
   });

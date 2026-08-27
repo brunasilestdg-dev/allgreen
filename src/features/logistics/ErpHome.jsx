@@ -130,10 +130,6 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
         </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>{decision.hasData ? "Nenhuma pendência atribuída" : "Sem dados operacionais"}</strong><small>{decision.hasData ? "Itens da sua área aparecem aqui quando exigem ação." : "Cadastre clientes, oportunidades ou simulações para alimentar o painel."}</small></span></div>}
       </section>}
 
-      {visible("responsibilities") && <section className="tdg-home-section tdg-home-responsibilities">
-        <header><div><span>FUNÇÃO</span><h3>Minhas responsabilidades</h3></div></header>
-        <ol>{area.responsibilities.map((item) => <li key={item}>{item}</li>)}</ol>
-      </section>}
     </div>
 
     {visible("shortcuts") && <section className="tdg-home-section tdg-home-shortcuts">
