@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, CircleDollarSign, Plus, ReceiptText, Split } from "lucide-react";
 import "./TransactionalSpinePage.css";
+import { comRotulo } from "../rotulosDomain.js";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const today = () => new Date().toISOString().slice(0, 10);
@@ -23,7 +24,7 @@ const clientName = (clients, id) => clients.find((item) => item.id === id)?.name
 const contractName = (contracts, id) => contracts.find((item) => item.id === id)?.titulo || contracts.find((item) => item.id === id)?.title || id || "Sem contrato";
 
 function Empty({ children }) { return <div className="tdg-txn-empty">{children}</div>; }
-function Status({ value }) { return <span className={`tdg-txn-status ${value}`}>{statusLabel[value] || value}</span>; }
+function Status({ value }) { return <span className={`tdg-txn-status ${value}`}>{comRotulo(statusLabel, value)}</span>; }
 
 function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }) {
   const [records, setRecords] = useState([]);

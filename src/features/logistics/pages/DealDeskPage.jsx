@@ -7,6 +7,7 @@ import {
   resumirFila,
   situacaoVisivel,
 } from "../dealDeskDomain.js";
+import { comRotulo } from "../rotulosDomain.js";
 
 // A fila de aprovação comercial.
 //
@@ -57,7 +58,7 @@ function Historico({ eventos }) {
       {eventos.map((evento) => (
         <li key={evento.id}>
           <div>
-            <strong>{TITULO[evento.tipo] || evento.tipo}</strong>
+            <strong>{comRotulo(TITULO, evento.tipo)}</strong>
             <small>
               versão {evento.versao} · {evento.autorNome || evento.autorId} · {dataHora(evento.criadoEm)}
             </small>
@@ -117,7 +118,7 @@ function Pedido({ pedido, quem, authHeaders, aoMudar, setToast }) {
             {nivel?.nome || pedido.alcadaId} · versão {pedido.versao} · prazo {dataHora(pedido.prazoEm)}
           </small>
         </div>
-        <span className="tdg-dd-situacao">{ROTULO_SITUACAO[situacao] || situacao}</span>
+        <span className="tdg-dd-situacao">{comRotulo(ROTULO_SITUACAO, situacao)}</span>
       </header>
 
       <p className="tdg-dd-motivo">{pedido.motivoDaAlcada}</p>

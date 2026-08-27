@@ -87,6 +87,7 @@ import {
 } from "./moduleGroupingDomain.js";
 import Semente from "./Semente.jsx";
 import ErpHome from "./ErpHome.jsx";
+import { comRotulo } from "./rotulosDomain.js";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
 const PricingParametersPanel = lazy(() => import("./PricingParametersPanel.jsx"));
@@ -1499,13 +1500,13 @@ function FieldInput({ name, value, required, onChange }) {
     return (
       <label className="tdg-check-field">
         <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(name, event.target.checked)} />
-        <span>{fieldLabels[name] || name}{required ? " *" : ""}</span>
+        <span>{comRotulo(fieldLabels, name)}{required ? " *" : ""}</span>
       </label>
     );
   }
   return (
     <label>
-      <span>{fieldLabels[name] || name}{required ? " *" : ""}</span>
+      <span>{comRotulo(fieldLabels, name)}{required ? " *" : ""}</span>
       <input
         value={value ?? ""}
         inputMode={textFields.has(name) ? "text" : "decimal"}

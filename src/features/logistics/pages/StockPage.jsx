@@ -9,6 +9,7 @@ import {
   valorDoEstoque,
 } from "../stockDomain.js";
 import "./TodoGreenPages.css";
+import { comRotulo } from "../rotulosDomain.js";
 
 // A tela do estoque. O saldo NUNCA é digitado: ele nasce da soma dos
 // movimentos, e é por isso que a tela oferece "entrada", "saída" e
@@ -355,7 +356,7 @@ export default function StockPage({ authHeaders, setToast, registros }) {
                   {movimentos.map((mov) => (
                     <tr key={mov.id}>
                       <td>{data(mov.occurredAt || mov.createdAt)}</td>
-                      <td>{ROTULO_DO_MOVIMENTO[mov.kind] || mov.kind}</td>
+                      <td>{comRotulo(ROTULO_DO_MOVIMENTO, mov.kind)}</td>
                       <td>{nomeDoItem(mov.itemId)}</td>
                       <td>{nomeDoDeposito(mov.warehouseId)}</td>
                       <td>{numero(mov.quantity)}</td>

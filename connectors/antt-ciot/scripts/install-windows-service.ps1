@@ -8,7 +8,7 @@ param(
 
 $exe = Join-Path $PublishDir "ToDoGreen.AnttCiotConnector.exe"
 if (!(Test-Path $exe)) {
-  throw "Executavel nao encontrado: $exe. Rode: dotnet publish -c Release -r win-x64 --self-contained false"
+  throw "Executavel não encontrado: $exe. Rode: dotnet publish -c Release -r win-x64 --self-contained false"
 }
 
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {

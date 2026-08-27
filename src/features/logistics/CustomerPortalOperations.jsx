@@ -5,6 +5,7 @@ import {
   SITUACOES_SLA,
   TIPOS_DE_EVENTO,
 } from "./operationTrackingDomain.js";
+import { comRotulo } from "./rotulosDomain.js";
 
 // A aba de acompanhamento.
 //
@@ -71,7 +72,7 @@ function Detalhe({ detalhe, aoBaixarComprovante, baixando }) {
             </p>
           )}
           <span className={`cp-sla ${CLASSE_SLA[sla.situacao] || "neutro"}`}>
-            {ROTULO_SLA[sla.situacao] || sla.situacao}
+            {comRotulo(ROTULO_SLA, sla.situacao)}
             {sla.atrasoHoras ? ` · ${String(sla.atrasoHoras).replace(".", ",")} h` : ""}
           </span>
           {previsao.comparavel && previsao.vaiAtrasar && !operacao.entregueEm && (

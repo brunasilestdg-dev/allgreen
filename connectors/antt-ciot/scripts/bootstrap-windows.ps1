@@ -58,7 +58,7 @@ function Get-ArtifactExtension($Source, $DefaultExtension) {
 
 function Receive-Artifact($Url, $LocalPath, $Prefix, $DefaultExtension, $DownloadsDir) {
   if (![string]::IsNullOrWhiteSpace($Url) -and ![string]::IsNullOrWhiteSpace($LocalPath)) {
-    throw "Informe apenas URL ou arquivo local para $Prefix, nao ambos."
+    throw "Informe apenas URL ou arquivo local para $Prefix, não ambos."
   }
 
   if (![string]::IsNullOrWhiteSpace($Url)) {
@@ -71,7 +71,7 @@ function Receive-Artifact($Url, $LocalPath, $Prefix, $DefaultExtension, $Downloa
 
   if (![string]::IsNullOrWhiteSpace($LocalPath)) {
     if (!(Test-Path $LocalPath)) {
-      throw "Arquivo informado para $Prefix nao encontrado: $LocalPath"
+      throw "Arquivo informado para $Prefix não encontrado: $LocalPath"
     }
 
     $extension = Get-ArtifactExtension $LocalPath $DefaultExtension
@@ -177,12 +177,12 @@ if (!$AnttExecutablePath) {
 }
 
 if (!(Test-Path $AnttExecutablePath)) {
-  throw "Executavel ANTT nao encontrado: $AnttExecutablePath"
+  throw "Executavel ANTT não encontrado: $AnttExecutablePath"
 }
 
 $token = if ([string]::IsNullOrWhiteSpace($ConnectorToken)) { New-Token } else { $ConnectorToken }
 
-Write-Host "Publicando microservico..."
+Write-Host "Publicando microsserviço..."
 dotnet publish $projectFile -c Release -r win-x64 --self-contained false -o $publishDir
 
 $appsettings = @{
@@ -282,12 +282,12 @@ Write-Host "Conector instalado."
 Write-Host "Listen local: $ListenUrl"
 Write-Host "Executavel ANTT: $AnttExecutablePath"
 Write-Host "Token salvo em: $tokenPath"
-Write-Host "Variaveis do ERP salvas em: $ErpEnvFile"
-Write-Host "Manifest de instalacao: $manifestPath"
+Write-Host "Variáveis do ERP salvas em: $ErpEnvFile"
+Write-Host "Manifest de instalação: $manifestPath"
 if (!$SuppressTokenOutput) {
   Write-Host "Token do conector, configure no ERP:"
   Write-Host $token
 }
 Write-Host ""
-Write-Host "No ERP, configure a URL HTTPS publica apontando para este servico."
+Write-Host "No ERP, configure a URL HTTPS pública apontando para este serviço."
 Write-Host "URL CIOT esperada no ERP: $publicCiotUrl"

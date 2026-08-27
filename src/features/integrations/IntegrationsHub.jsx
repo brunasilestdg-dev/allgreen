@@ -13,6 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button, Empty, Field, PageTitle } from "../../components/ui.jsx";
+import AiKeysPanel from "./AiKeysPanel.jsx";
 import { uid } from "../../domain.js";
 import {
   CONNECTIONS,
@@ -448,7 +449,7 @@ export default function IntegrationsHub({
     <PageTitle
       eyebrow="INTEGRAÇÕES"
       title="Ligar o app ao que você já usa"
-      text="Traga o que está na planilha, leve os seus dados para onde quiser e coloque a agenda no seu calendário. Nada aqui depende de serviço pago."
+      text="Traga o que está na planilha, leve os seus dados para onde quiser, coloque a agenda no seu calendário e conecte a sua própria inteligência artificial."
       action={
         <Button icon={Download} onClick={baixarTudo}>
           Baixar tudo
@@ -461,6 +462,8 @@ export default function IntegrationsHub({
         business={business}
         setToast={setToast}
       />
+
+      <AiKeysPanel setToast={setToast} authHeaders={authHeaders} />
 
       <AutoSendPanel setToast={setToast} authHeaders={authHeaders} />
 

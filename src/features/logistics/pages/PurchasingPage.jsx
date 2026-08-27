@@ -8,6 +8,7 @@ import {
   totalDoPedido,
 } from "../purchaseDomain.js";
 import "./TodoGreenPages.css";
+import { comRotulo } from "../rotulosDomain.js";
 
 // Compras, da requisição ao recebimento. As três etapas moram na mesma tela de
 // propósito: quem abre "Compras" quer saber onde cada pedido parou, e separar
@@ -185,7 +186,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
   const mudarStatusPedido = async (pedido, status) => {
     try {
       await request(`/pedidos/${pedido.id}`, authHeaders, { method: "PATCH", body: JSON.stringify({ status, revision: pedido.revision }) });
-      setToast?.(`Pedido: ${NOME_DO_STATUS_DO_PEDIDO[status] || status}.`);
+      setToast?.(`Pedido: ${comRotulo(NOME_DO_STATUS_DO_PEDIDO, status)}.`);
       await carregar();
     } catch (motivo) { setToast?.(motivo.message); }
   };
@@ -397,7 +398,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
                       <td>{requisicao.title}</td>
                       <td>{requisicao.prioridade}</td>
                       <td>{dia(requisicao.precisaEm)}</td>
-                      <td>{NOME_DO_STATUS_DA_REQUISICAO[requisicao.status] || requisicao.status}</td>
+                      <td>{comRotulo(NOME_DO_STATUS_DA_REQUISICAO, requisicao.status)}</td>
                       {acesso.podeComprar && (
                         <td className="tdg-fiscal-acoes">
                           {requisicao.status === "pendente" && <button type="button" onClick={() => aprovarRequisicao(requisicao)}>Aprovar</button>}
@@ -434,7 +435,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
                       <td>{pedido.supplierName || "—"}</td>
                       <td>{dinheiro(totalDoPedido(pedido, pedido.items || []).total)}</td>
                       <td>{dia(pedido.esperadoEm)}</td>
-                      <td>{NOME_DO_STATUS_DO_PEDIDO[pedido.status] || pedido.status}</td>
+                      <td>{comRotulo(NOME_DO_STATUS_DO_PEDIDO, pedido.status)}</td>
                       {acesso.podeComprar && (
                         <td className="tdg-fiscal-acoes">
                           {pedido.status === "rascunho" && <button type="button" onClick={() => mudarStatusPedido(pedido, "aprovado")}>Aprovar</button>}

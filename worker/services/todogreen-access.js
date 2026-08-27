@@ -99,7 +99,7 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
 
   const autorizado = await env.DB
     .prepare(
-      `SELECT id, role, permissions_json
+      `SELECT id, role, permissions_json, workspace_owner_id
          FROM todogreen_access_emails
         WHERE tenant_id = ? AND lower(email) = ? AND status = 'active'
           AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`,
@@ -169,8 +169,19 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     .all()
     .then((resultado) => (resultado.results || []).map((item) => item.workspace_owner_id).filter(Boolean))
     .catch(() => []);
-  const espacoPadrao = vinculo?.workspace_owner_id || donosDaCarteira[0] || espacosDeMotorista[0] || user.id;
-  const permitidos = new Set([user.id, espacoPadrao, ...donosDaCarteira, ...espacosDeMotorista].filter(Boolean));
+  // O espaço gravado na liberação por e-mail (0071). É o que resolve o caso
+  // normal de quem foi autorizado ANTES de ter conta: sem ele, a pessoa criava
+  // a conta, entrava, e caía no próprio espaço vazio — com todas as permissões
+  // do papel apontadas para lugar nenhum.
+  const espacoDaLiberacao = clean(autorizado?.workspace_owner_id, 100);
+  const espacoPadrao = vinculo?.workspace_owner_id
+    || espacoDaLiberacao
+    || donosDaCarteira[0]
+    || espacosDeMotorista[0]
+    || user.id;
+  const permitidos = new Set(
+    [user.id, espacoPadrao, espacoDaLiberacao, ...donosDaCarteira, ...espacosDeMotorista].filter(Boolean),
+  );
 
   const pedido = clean(requestedOwnerId, 100);
   if (pedido && !ehAdministrador && !permitidos.has(pedido))

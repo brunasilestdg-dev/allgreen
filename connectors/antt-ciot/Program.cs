@@ -38,7 +38,7 @@ app.MapPost("/ciot", async (
     CancellationToken cancellationToken) =>
 {
     if (!auth.IsAuthorized(httpRequest))
-        return Results.Json(new { error = "Token do conector invalido." }, statusCode: StatusCodes.Status401Unauthorized);
+        return Results.Json(new { error = "Token do conector inválido." }, statusCode: StatusCodes.Status401Unauthorized);
 
     var validation = CiotValidator.Validate(request);
     if (validation is not null)
@@ -47,10 +47,16 @@ app.MapPost("/ciot", async (
     try
     {
         var response = await antt.GenerateAsync(request, cancellationToken);
+        // A resposta de ensaio sai com 200 e o marcador `simulated`: quem chama
+        // precisa distinguir "não emitiu porque e ensaio" de "não emitiu porque
+        // falhou", e um 502 embaralharia as duas coisas.
+        if (response.Raw.ContainsKey("simulated"))
+            return Results.Ok(response);
+
         if (!CiotValidator.IsCiotCode(response.CiotCode))
             return Results.Json(new
             {
-                error = "ANTT nao retornou CIOT valido de 12 digitos.",
+                error = "ANTT não retornou CIOT válido de 12 dígitos.",
                 response.Protocol,
                 response.Raw,
             }, statusCode: StatusCodes.Status502BadGateway);
@@ -67,7 +73,7 @@ app.MapPost("/ciot", async (
     }
     catch (Exception error)
     {
-        return Results.Json(new { error = "Falha ao acionar integracao oficial ANTT.", detail = error.Message }, statusCode: StatusCodes.Status502BadGateway);
+        return Results.Json(new { error = "Falha ao acionar integração oficial ANTT.", detail = error.Message }, statusCode: StatusCodes.Status502BadGateway);
     }
 });
 
@@ -117,17 +123,28 @@ public sealed class AnttCiotProcessClient(
     {
         if (_connectorOptions.DryRun)
         {
+            // Ensaio devolve CIOT VAZIO, nunca doze zeros.
+            //
+            // Doze zeros passavam na validação dos dois lados ("12 dígitos") e o
+            // ERP gravava o registro como emitido. Um CIOT de teste indistinguivel
+            // de um real e o tipo de coisa que so aparece numa fiscalização.
+            // O marcador `simulated` viaja junto para o ERP registrar `simulado`.
             return new CiotConnectorResponse(
-                CiotCode: "000000000000",
+                CiotCode: "",
                 Protocol: $"DRYRUN-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}",
-                Raw: new Dictionary<string, object?> { ["dryRun"] = true });
+                Raw: new Dictionary<string, object?>
+                {
+                    ["dryRun"] = true,
+                    ["simulated"] = true,
+                    ["message"] = "Modo de ensaio: nenhum CIOT foi emitido na ANTT.",
+                });
         }
 
         if (string.IsNullOrWhiteSpace(_options.ExecutablePath))
             throw new ConnectorNotConfiguredException("Configure AnttProcess:ExecutablePath com o adaptador oficial da ANTT.");
 
         if (!File.Exists(_options.ExecutablePath))
-            throw new ConnectorNotConfiguredException($"Adaptador ANTT nao encontrado: {_options.ExecutablePath}");
+            throw new ConnectorNotConfiguredException($"Adaptador ANTT não encontrado: {_options.ExecutablePath}");
 
         var workDir = string.IsNullOrWhiteSpace(_options.WorkingDirectory)
             ? Path.GetDirectoryName(_options.ExecutablePath)!
@@ -166,14 +183,14 @@ public sealed class AnttCiotProcessClient(
             var stderr = await stderrTask;
 
             if (process.ExitCode != 0)
-                throw new InvalidOperationException($"Adaptador ANTT retornou codigo {process.ExitCode}: {TrimForLog(stderr)}");
+                throw new InvalidOperationException($"Adaptador ANTT retornou código {process.ExitCode}: {TrimForLog(stderr)}");
 
             var rawText = File.Exists(outputPath)
                 ? await File.ReadAllTextAsync(outputPath, cancellationToken)
                 : stdout;
 
             var payload = ParseObject(rawText);
-            var ciotCode = FirstText(payload, "ciotCode", "ciot", "codigoCiot", "codigoCIOT", "codigo", "code", "numeroCiot", "numeroCIOT");
+            var ciotCode = FirstText(payload, "ciotCode", "ciot", "codigoCiot", "codigoCIOT", "código", "code", "numeroCiot", "numeroCIOT");
             var protocol = FirstText(payload, "protocol", "protocolo", "receipt", "recibo");
 
             return new CiotConnectorResponse(ciotCode, protocol, payload);
@@ -181,7 +198,7 @@ public sealed class AnttCiotProcessClient(
         finally
         {
             try { Directory.Delete(tempDir, recursive: true); }
-            catch (Exception error) { logger.LogWarning(error, "Nao foi possivel remover arquivos temporarios do CIOT."); }
+            catch (Exception error) { logger.LogWarning(error, "Não foi possível remover arquivos temporários do CIOT."); }
         }
     }
 
@@ -240,31 +257,36 @@ public static class CiotValidator
     public static string? Validate(CiotConnectorRequest request)
     {
         if (!string.Equals(request.Mode, "direct_api", StringComparison.OrdinalIgnoreCase))
-            return "Modo invalido para geracao CIOT.";
+            return "Modo inválido para geração CIOT.";
 
         if (request.RequiresIpef)
-            return "Este conector e exclusivo para integracao direta sem IPEF.";
+            return "Este conector é exclusivo para integração direta sem IPEF.";
 
         if (!Uri.TryCreate(request.BaseUrl, UriKind.Absolute, out var baseUrl) || baseUrl.Scheme != Uri.UriSchemeHttps)
             return "Base URL ANTT deve ser HTTPS.";
 
         if (request.Certificate is null)
-            return "Certificado ICP-Brasil nao informado.";
+            return "Certificado ICP-Brasil não informado.";
 
         if (!string.Equals(request.Certificate.Standard, "ICP-Brasil", StringComparison.OrdinalIgnoreCase))
-            return "Certificado deve usar padrao ICP-Brasil.";
+            return "Certificado deve usar padrão ICP-Brasil.";
 
         if (!string.Equals(request.Certificate.Type, "A1", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(request.Certificate.Type, "A3", StringComparison.OrdinalIgnoreCase))
             return "Tipo de certificado deve ser A1 ou A3.";
 
         if (request.Ciot is null)
-            return "Payload CIOT nao informado.";
+            return "Payload CIOT não informado.";
 
         return null;
     }
 
-    public static bool IsCiotCode(string value) => value.Length == 12 && value.All(char.IsDigit);
+    // Doze dígitos iguais não sao código emitido: sao carimbo de ensaio ou campo
+    // preenchido no automático. A mesma lista existe no Worker.
+    private static readonly HashSet<string> Reservados = new() { "000000000000", "111111111111", "999999999999" };
+
+    public static bool IsCiotCode(string value) =>
+        value.Length == 12 && value.All(char.IsDigit) && !Reservados.Contains(value);
 }
 
 public sealed record ConnectorOptions

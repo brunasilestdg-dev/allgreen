@@ -1,6 +1,6 @@
 # To Do Green ANTT CIOT Connector
 
-Microservico Windows para ligar o ERP To Do Green ao mecanismo oficial de geracao CIOT da ANTT.
+Microsserviço Windows para ligar o ERP To Do Green ao mecanismo oficial de geração CIOT da ANTT.
 
 ## O que ele faz
 
@@ -8,11 +8,11 @@ Microservico Windows para ligar o ERP To Do Green ao mecanismo oficial de geraca
 - Exige `Authorization: Bearer <token>`.
 - Recebe o payload que o ERP ja envia hoje.
 - Aciona um adaptador local da ANTT via processo configurado.
-- Devolve `ciotCode` de 12 digitos e `protocol` para o ERP gravar.
+- Devolve `ciotCode` de 12 dígitos e `protocol` para o ERP gravar.
 
 ## Por que existe
 
-A ANTT disponibiliza DCS, biblioteca DLL e executavel oficiais para geracao do CIOT. O Worker em Cloudflare nao deve executar DLL/EXE Windows nem acessar token A3 local. Este conector fica em servidor Windows controlado pela empresa e faz essa ponte.
+A ANTT disponibiliza DCS, biblioteca DLL e executavel oficiais para geração do CIOT. O Worker em Cloudflare não deve executar DLL/EXE Windows nem acessar token A3 local. Este conector fica em servidor Windows controlado pela empresa e faz essa ponte.
 
 ## Rodar localmente
 
@@ -54,7 +54,7 @@ Entrada resumida:
 }
 ```
 
-Saida esperada:
+Saída esperada:
 
 ```json
 {
@@ -64,11 +64,11 @@ Saida esperada:
 }
 ```
 
-## Configuracao no ERP
+## Configuração no ERP
 
 Na tela de CIOT:
 
-- Base URL ANTT: conforme DCS, homologacao ou producao.
+- Base URL ANTT: conforme DCS, homologação ou produção.
 - URL HTTPS do conector: `https://<host-do-conector>/ciot`
 - Token do conector: mesmo valor de `Connector:Token`.
 - Certificado: A1 enviado pelo portal ou A3 ligado ao adaptador local.
@@ -88,27 +88,27 @@ cd connectors\antt-ciot\scripts
   -PublicConnectorUrl "https://ciot.todogreen.com.br"
 ```
 
-Se a ANTT publicar ZIP unico, use `-AnttPackageUrl`. Se os arquivos ja estiverem baixados, use `-AnttExePath`, `-AnttDllPath` e `-DcsPath`.
+Se a ANTT publicar ZIP único, use `-AnttPackageUrl`. Se os arquivos ja estiverem baixados, use `-AnttExePath`, `-AnttDllPath` e `-DcsPath`.
 
 O script:
 
 - baixa o pacote, DLL, EXE e DCS oficiais da ANTT, conforme os parametros informados;
-- publica o microservico .NET;
+- pública o microsserviço .NET;
 - gera token forte;
 - grava `appsettings.Production.json`;
 - grava `secrets\connector-token.txt`;
-- grava `ops\erp-ciot-connector.env` com as variaveis do ERP;
-- grava `ops\antt-ciot-install-manifest.json` com a evidencia da instalacao;
+- grava `ops\erp-ciot-connector.env` com as variáveis do ERP;
+- grava `ops\antt-ciot-install-manifest.json` com a evidência da instalação;
 - instala e inicia o Windows Service.
 
-Depois disso, exponha `http://127.0.0.1:8088` por HTTPS usando IIS, Caddy, Nginx ou Cloudflare Tunnel e configure a URL publica no ERP.
+Depois disso, exponha `http://127.0.0.1:8088` por HTTPS usando IIS, Caddy, Nginx ou Cloudflare Tunnel e configure a URL pública no ERP.
 
 Templates prontos:
 
 - `deploy\cloudflared-config.example.yml`
 - `deploy\Caddyfile.example`
 
-Verificacao:
+Verificação:
 
 ```powershell
 .\verify-connector.ps1 `
@@ -117,10 +117,10 @@ Verificacao:
   -Token "<TOKEN_DO_CONNECTOR>"
 ```
 
-O teste de token nao emite CIOT. Ele espera HTTP 400 por modo invalido; isso confirma que a autenticacao passou. HTTP 401 indica token errado.
+O teste de token não emite CIOT. Ele espera HTTP 400 por modo inválido; isso confirma que a autenticacao passou. HTTP 401 indica token errado.
 
 ## Ponto que ainda depende da ANTT
 
-`AnttProcess:ExecutablePath` deve apontar para um adaptador que saiba chamar a DLL/EXE oficial da ANTT com o DCS vigente. O microservico ja isola essa chamada, mas a assinatura final do adaptador precisa respeitar o pacote tecnico baixado no portal da ANTT.
+`AnttProcess:ExecutablePath` deve apontar para um adaptador que saiba chamar a DLL/EXE oficial da ANTT com o DCS vigente. O microsserviço ja isola essa chamada, mas a assinatura final do adaptador precisa respeitar o pacote tecnico baixado no portal da ANTT.
 
 Se o fornecedor/arquivo oficial exigir outro formato de chamada, ajuste apenas `AnttCiotProcessClient`.

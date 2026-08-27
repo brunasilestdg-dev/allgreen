@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, FileText, ReceiptText, RefreshCw, ShieldAlert } from "lucide-react";
 import { STATUS_FISCAL, dadosDacte } from "../fiscalDomain.js";
 import "./TodoGreenPages.css";
+import { comRotulo } from "../rotulosDomain.js";
 
 // Fiscal da transportadora: CT-e (modelo 57), MDF-e (modelo 58) e NFS-e. Não
 // NF-e — essa é de quem vende mercadoria. As três moram na mesma tela porque
@@ -204,7 +205,7 @@ export default function FiscalPage({ authHeaders, setToast }) {
         method: "POST",
         body: JSON.stringify({ statusNovo: para }),
       });
-      avisar(`Documento movido para "${NOME_STATUS[para] || para}".`, "sucesso");
+      avisar(`Documento movido para "${comRotulo(NOME_STATUS, para)}".`, "sucesso");
       await carregar();
     } catch (motivo) {
       const detalhe = (motivo.detalhes || []).join(" · ");
@@ -247,7 +248,7 @@ export default function FiscalPage({ authHeaders, setToast }) {
         pdf.text(String(texto), 14, y);
         y += tamanho * 0.6;
       };
-      linha(`DACTE — ${NOME_TIPO[doc.docType] || doc.docType} (modelo ${dados.modelo})`, 14, true);
+      linha(`DACTE — ${comRotulo(NOME_TIPO, doc.docType)} (modelo ${dados.modelo})`, 14, true);
       linha(`Chave de acesso: ${dados.chaveAcesso || "— (gerada ao assinar)"}`, 9);
       linha(`Série ${dados.serie} · Número ${dados.numero || "—"} · Emissão ${dia(dados.dataEmissao)}`, 9);
       y += 3;
@@ -344,7 +345,7 @@ export default function FiscalPage({ authHeaders, setToast }) {
         </article>
         <article className="tdg-metric">
           <span>Por tipo</span>
-          <strong>{Object.entries(resumo?.porTipo || {}).map(([t, n]) => `${NOME_TIPO[t] || t}: ${n}`).join(" · ") || "—"}</strong>
+          <strong>{Object.entries(resumo?.porTipo || {}).map(([t, n]) => `${comRotulo(NOME_TIPO, t)}: ${n}`).join(" · ") || "—"}</strong>
           <small>CT-e, MDF-e e NFS-e</small>
         </article>
       </section>
@@ -362,7 +363,7 @@ export default function FiscalPage({ authHeaders, setToast }) {
           <ul className="tdg-via-faltando">
             {faturasPendentes.map((fatura) => (
               <li key={fatura.invoiceId}>
-                <strong>{fatura.numeroFatura}</strong> · {NOME_TIPO[fatura.docType] || fatura.docType} · {dinheiro(fatura.valor)} · competência {fatura.competencia || "—"}
+                <strong>{fatura.numeroFatura}</strong> · {comRotulo(NOME_TIPO, fatura.docType)} · {dinheiro(fatura.valor)} · competência {fatura.competencia || "—"}
                 {" "}
                 <button type="button" className="tdg-action" onClick={() => prepararDaFatura(fatura)}>Preparar {(NOME_TIPO[fatura.docType] || fatura.docType)}</button>
               </li>
@@ -461,12 +462,12 @@ export default function FiscalPage({ authHeaders, setToast }) {
                 <tbody>
                   {documentos.map((doc) => (
                     <tr key={doc.id}>
-                      <td>{NOME_TIPO[doc.docType] || doc.docType}</td>
+                      <td>{comRotulo(NOME_TIPO, doc.docType)}</td>
                       <td>{doc.numero || "—"}/{doc.serie}</td>
                       <td>{[doc.ufInicio, doc.ufFim].filter(Boolean).join(" → ") || "—"}</td>
                       <td>{dinheiro(doc.valorTotal)}</td>
                       <td>{dinheiro(doc.icmsValor)}</td>
-                      <td>{NOME_STATUS[doc.status] || doc.status}</td>
+                      <td>{comRotulo(NOME_STATUS, doc.status)}</td>
                       <td className="tdg-fiscal-acoes">
                         {(PROXIMO_PASSO[doc.status] || []).map((passo) => (
                           <button type="button" key={passo.para} onClick={() => transitar(doc, passo.para)}>

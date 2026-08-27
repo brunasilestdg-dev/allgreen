@@ -13,6 +13,7 @@ import {
   tasksForCollaborator,
 } from "./erpHomeDomain.js";
 import "./ErpHome.css";
+import { comRotulo } from "./rotulosDomain.js";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const NUM = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -109,7 +110,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
         <p>{profile.functionLabel}. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.</p>
       </div>
       <div className="tdg-home-identity">
-        <span>{ROLE_LABEL[role] || role}</span>
+        <span>{comRotulo(ROLE_LABEL, role)}</span>
         <button type="button" onClick={() => { setDraft(profile); setEditing(true); }}><Settings2 size={16} />Configurar meu início</button>
       </div>
     </header>

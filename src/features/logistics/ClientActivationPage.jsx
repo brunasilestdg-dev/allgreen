@@ -11,6 +11,7 @@ import {
   Settings2,
 } from "lucide-react";
 import "./ClientActivationPage.css";
+import ClientBriefingPanel from "./ClientBriefingPanel.jsx";
 
 const CHECK_LINKS = {
   contract: ["Contrato", "/todogreen/propostas"],
@@ -153,7 +154,7 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
   useEffect(() => { loadClients(); }, []);
   useEffect(() => {
     if (!clientId) return;
-    if (view === "activation") loadActivation(clientId);
+    if (view === "activation" || view === "briefing") loadActivation(clientId);
     else loadProjects(clientId);
   }, [clientId, view]);
   useEffect(() => {
@@ -225,6 +226,7 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
       if (nextAction === "prepare") setToast?.("Checklist de ativação atualizado.");
       if (nextAction === "configure") setToast?.("Configuração de ativação salva.");
       if (nextAction === "activate") setToast?.("Cliente ativado.");
+      if (nextAction === "briefing") setToast?.("Desenho da conta salvo.");
     } catch (reason) {
       if (reason.payload?.snapshot) setSnapshot(reason.payload.snapshot);
       setError(reason.message);
@@ -252,6 +254,7 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
           <span>Processo</span>
           <select value={view} onChange={(event) => setView(event.target.value)}>
             <option value="implementation">Implantação operacional</option>
+            <option value="briefing">Desenho da conta</option>
             <option value="activation">Ativação do cliente</option>
           </select>
         </label>
@@ -262,7 +265,7 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
             {clients.map((client) => <option key={client.id} value={client.id}>{client.name}{client.crm?.stage ? ` · ${client.crm.stage}` : ""}</option>)}
           </select>
         </label>
-        <button type="button" onClick={() => view === "activation" ? loadActivation() : loadProjects()} disabled={!clientId || Boolean(action)}><RefreshCw size={16}/>Atualizar</button>
+        <button type="button" onClick={() => (view === "activation" || view === "briefing") ? loadActivation() : loadProjects()} disabled={!clientId || Boolean(action)}><RefreshCw size={16}/>Atualizar</button>
       </section>
 
       {error && <div className="ca-error"><CircleAlert size={17}/><span>{error}</span></div>}
@@ -332,6 +335,14 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
             </form>
           </aside>
         </section>
+      )}
+
+      {clientId && view === "briefing" && (
+        <ClientBriefingPanel
+          briefing={snapshot?.briefing}
+          salvando={action === "briefing"}
+          onSalvar={(briefing) => runActivation("briefing", { briefing, revision: snapshot?.client?.revision })}
+        />
       )}
 
       {clientId && view === "activation" && !snapshot && action === "loading" && <div className="ca-loading"><LoaderCircle className="spin"/>Carregando ativação...</div>}

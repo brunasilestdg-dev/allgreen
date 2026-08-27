@@ -21,7 +21,7 @@ $health = Invoke-RestMethod -Method Get -Uri $HealthUrl
 Write-Host "Health OK: $($health.status)"
 
 if ([string]::IsNullOrWhiteSpace($ConnectorUrl) -or [string]::IsNullOrWhiteSpace($Token)) {
-  Write-Host "Token nao testado. Informe -ConnectorUrl e -Token para validar a autorizacao do POST /ciot."
+  Write-Host "Token não testado. Informe -ConnectorUrl e -Token para validar a autorizacao do POST /ciot."
   exit 0
 }
 
@@ -47,7 +47,7 @@ try {
     -Body $probe `
     -ErrorAction Stop | Out-Null
 
-  throw "Resposta inesperada: o probe deveria ser recusado por modo invalido."
+  throw "Resposta inesperada: o probe deveria ser recusado por modo inválido."
 } catch {
   $statusCode = Get-StatusCodeFromError $_
   if ($statusCode -eq 400) {

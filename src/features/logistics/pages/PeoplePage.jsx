@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Clock, Lock, Plane, RefreshCw, UserPlus, Users } from "lucide-react";
 import "./TodoGreenPages.css";
+import { comRotulo } from "../rotulosDomain.js";
 
 // Pessoas e folha. Dado sensível: o servidor só entrega isto a quem tem
 // hr:manage (rh/admin/owner) — a tela nem tenta esconder o que o back não manda.
@@ -236,7 +237,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
                         <td>{c.cargo || "—"}</td>
                         <td>{c.vinculo?.toUpperCase()}</td>
                         <td>{dinheiro(c.salarioBase)}</td>
-                        <td>{NOME_STATUS[c.status] || c.status}</td>
+                        <td>{comRotulo(NOME_STATUS, c.status)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -341,7 +342,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
                       <tr key={r.id}>
                         <td>{r.competencia}</td>
                         <td>{r.tipo}</td>
-                        <td>{NOME_RUN[r.status] || r.status}</td>
+                        <td>{comRotulo(NOME_RUN, r.status)}</td>
                         <td>{dinheiro(r.totalLiquido)}</td>
                         <td>{dinheiro(r.totalInss)}</td>
                         <td>{dinheiro(r.totalFgts)}</td>

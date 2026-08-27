@@ -33,10 +33,18 @@ describe("rede gratuita de IA", () => {
       SAMBANOVA_API_KEY: "segredo-samba",
     });
 
-    expect(providers).toHaveLength(9);
+    // Contar provedores travava o catálogo: incluir Claude e ChatGPT (0072,
+    // "traga sua própria chave") quebrava o teste sem que nada de errado
+    // tivesse acontecido. O que precisa ser verdade é que o catálogo cubra os
+    // provedores e não vaze chave — não que tenha um tamanho específico.
+    expect(providers.map((item) => item.id)).toEqual(
+      expect.arrayContaining(["anthropic", "openai", "google", "cloudflare", "groq", "sambanova"]),
+    );
     expect(providers.find((item) => item.id === "cloudflare")?.configured).toBe(
       true,
     );
+    // Provedor sem chave configurada aparece na lista, mas como não configurado.
+    expect(providers.find((item) => item.id === "anthropic")?.configured).toBe(false);
     expect(providers.find((item) => item.id === "groq")?.configured).toBe(true);
     expect(
       providers.find((item) => item.id === "sambanova")?.configured,

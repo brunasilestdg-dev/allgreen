@@ -20,7 +20,63 @@ const allowedAny = (access, permissions) => permissions.some((permission) => all
 const canPlanOrder = (access) => allowedAny(access, ["planning:manage", "product:manage"]);
 const canOperateOrder = (access) => allowedAny(access, ["operations:manage", "operation:manage"]);
 const canManageCiot = (access) => allowedAny(access, ["ciot:manage", "planning:manage", "fiscal:manage", "finance:manage", "operations:manage"]);
-const ciotDirectCode = (value) => /^\d{12}$/.test(String(value || "").trim());
+
+// ===== Quem aponta o conector, e para onde =====
+//
+// Preparar e registrar CIOT é rotina de cinco papéis. Dizer PARA QUAL SERVIDOR
+// o certificado digital vai, não é.
+//
+// A cada emissão o corpo enviado ao conector leva `pfxBase64` e a senha do
+// certificado A1 — precisa levar, porque é o conector que assina. A validação
+// da URL era só "começa com https://". Qualquer um dos cinco papéis podia
+// apontar o conector para um servidor próprio e receber o certificado digital
+// da empresa com a senha, em texto, na primeira emissão. Isso é a assinatura
+// jurídica da To Do Green mudando de dono por um campo de formulário.
+//
+// Duas travas: só `ciot:manage` (ou owner/admin) escolhe o destino, e o destino
+// precisa estar na lista de hosts que a titular cadastrou no cofre.
+const canPointConnector = (access) => allowedAny(access, ["ciot:manage"]);
+
+const connectorAllowedHosts = (env) => String(env.TODOGREEN_ANTT_CIOT_ALLOWED_HOSTS || "")
+  .split(",")
+  .map((item) => item.trim().toLowerCase())
+  .filter(Boolean);
+
+// Devolve a mensagem de recusa, ou "" quando a URL pode ser usada.
+const connectorUrlRejection = (env, value) => {
+  let url;
+  try { url = new URL(String(value || "").trim()); }
+  catch { return "Informe a URL HTTPS do conector CIOT."; }
+  if (url.protocol !== "https:") return "A URL do conector CIOT precisa ser HTTPS.";
+  const permitidos = connectorAllowedHosts(env);
+  // Sem lista cadastrada o destino não é confiável, e o certificado não sai.
+  // Falhar fechado aqui é a diferença entre "ainda não configuramos" e
+  // "qualquer endereço serve".
+  if (!permitidos.length)
+    return "Nenhum host de conector foi autorizado. Cadastre TODOGREEN_ANTT_CIOT_ALLOWED_HOSTS no cofre antes de apontar o conector.";
+  const host = url.hostname.toLowerCase();
+  const liberado = permitidos.some((item) => host === item || host.endsWith(`.${item}`));
+  return liberado ? "" : `O host ${host} não está entre os conectores autorizados.`;
+};
+// Um CIOT tem 12 dígitos — mas "12 dígitos" sozinho aceita coisas que a ANTT
+// nunca emitiria. O conector, em modo de ensaio (`Connector:DryRun`), devolvia
+// doze zeros; isso passava nesta validação e o ERP gravava `issued`, deixando um
+// CIOT de teste indistinguível de um real no registro que a fiscalização olha.
+// Sequência repetida não é código de CIOT: é carimbo de simulação ou de campo
+// preenchido no automático.
+const CIOT_RESERVADOS = new Set(["000000000000", "111111111111", "999999999999"]);
+const ciotDirectCode = (value) => {
+  const codigo = String(value || "").trim();
+  return /^\d{12}$/.test(codigo) && !CIOT_RESERVADOS.has(codigo);
+};
+
+// O conector avisa quando respondeu sem falar com a ANTT. Aceitamos as duas
+// grafias porque a resposta atravessa um processo externo que não controlamos.
+const respostaSimulada = (payload) => {
+  const fonte = object(payload);
+  return fonte.simulated === true || fonte.dryRun === true
+    || String(fonte.protocol || fonte.protocolo || "").toUpperCase().startsWith("DRYRUN");
+};
 const digitsOnly = (value) => String(value ?? "").replace(/\D/g, "");
 const parseJson = (value) => {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
@@ -471,12 +527,16 @@ async function saveCiotIntegration(env, access, user, body) {
 }
 
 async function saveCiotCredential(env, access, user, body) {
-  if (!canManageCiot(access)) return json({ error: "Sem permissão para configurar certificado CIOT." }, 403);
+  // Guardar o certificado E dizer para onde ele vai é a operação mais sensível
+  // da vertical — não cabe nos cinco papéis do `canManageCiot`.
+  if (!canPointConnector(access))
+    return json({ error: "Só quem tem a permissão ciot:manage pode cadastrar o certificado e apontar o conector." }, 403);
   const row = await env.DB.prepare(`SELECT * FROM todogreen_ciot_integrations WHERE tenant_id=? AND workspace_owner_id=? AND mode='direct_api' AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 1`).bind(TENANT_ID, access.ownerId).first();
   if (!row) return json({ error: "Salve primeiro a configuração da integração CIOT." }, 409);
   const certificateType = text(body.certificateType, 2).toUpperCase();
   const connectorUrl = text(body.connectorUrl, 500);
-  if (!/^https:\/\//i.test(connectorUrl)) return json({ error: "Informe a URL HTTPS do conector CIOT." }, 400);
+  const recusa = connectorUrlRejection(env, connectorUrl);
+  if (recusa) return json({ error: recusa }, 400);
   let credential;
   let filename = "";
   if (certificateType === "A1") {
@@ -588,6 +648,12 @@ async function submitCiot(env, access, user, id, body) {
     (integration.certificateType === "A3" ? text(envValue(env, integration.a3ConnectorEnvKey), 500) : "");
   if (!connectorUrl)
     return json({ error: `Configure ${integration.connectorUrlEnvKey || "TODOGREEN_ANTT_CIOT_CONNECTOR_URL"} no ambiente para acionar o conector direto.` }, 409);
+  // Conferido de novo na hora do envio, e não só na hora de salvar: a URL pode
+  // ter vindo de uma variável de ambiente trocada depois, e é agora que o
+  // certificado sai daqui.
+  const destinoRecusado = connectorUrlRejection(env, connectorUrl);
+  if (destinoRecusado)
+    return json({ error: `Envio bloqueado. ${destinoRecusado}` }, 409);
   if (!integration.certificateConfigured)
     return json({ error: "Configure o certificado ICP-Brasil A1/A3 no ambiente antes de enviar." }, 409);
 
@@ -632,8 +698,12 @@ async function submitCiot(env, access, user, id, body) {
 
   const ciotCode = ciotCodeFromResponse(responsePayload);
   const protocol = ciotProtocolFromResponse(responsePayload);
-  const finalStatus = responseOk && ciotCode ? "issued" : "failed";
-  const error = finalStatus === "issued"
+  // Ensaio nunca vira emissão. `simulado` é status próprio justamente para
+  // aparecer diferente na tela e no relatório — um CIOT de teste registrado
+  // como emitido é o tipo de coisa que só se descobre numa fiscalização.
+  const simulado = respostaSimulada(responsePayload);
+  const finalStatus = simulado ? "simulado" : (responseOk && ciotCode ? "issued" : "failed");
+  const error = finalStatus === "issued" || finalStatus === "simulado"
     ? ""
     : text(responsePayload.error || responsePayload.message || "Conector direto não retornou CIOT válido de 12 dígitos.", 500);
   const issuedAt = finalStatus === "issued" ? new Date().toISOString() : null;
@@ -643,7 +713,11 @@ async function submitCiot(env, access, user, id, body) {
           issued_at=COALESCE(?,issued_at),updated_by=?,updated_at=?
       WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
   ).bind(
-    finalStatus, ciotCode || row.ciot_code, protocol || row.protocol,
+    finalStatus,
+    // Código de ensaio não entra no campo do CIOT. Guardá-lo ali faria a tela,
+    // o relatório e a exportação tratarem simulação como emissão.
+    finalStatus === "simulado" ? row.ciot_code : (ciotCode || row.ciot_code),
+    protocol || row.protocol,
     JSON.stringify({ status: responseStatus, ...object(responsePayload) }), error,
     issuedAt, user.id, new Date().toISOString(), id, TENANT_ID, access.ownerId,
   ).run();
@@ -651,6 +725,12 @@ async function submitCiot(env, access, user, id, body) {
     `SELECT c.*,s.number AS service_order_number FROM todogreen_ciot_records c
       LEFT JOIN todogreen_service_orders s ON s.id=c.service_order_id WHERE c.id=?`,
   ).bind(id).first();
+  if (finalStatus === "simulado")
+    return json({
+      record: ciotView(updated),
+      simulado: true,
+      aviso: "O conector respondeu em modo de ensaio: nenhum CIOT foi emitido na ANTT. Desligue o modo de ensaio no servidor do conector antes de operar.",
+    });
   return finalStatus === "issued"
     ? json({ record: ciotView(updated) })
     : json({ error, record: ciotView(updated) }, 502);

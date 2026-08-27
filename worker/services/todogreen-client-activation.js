@@ -1,6 +1,11 @@
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { buildClientActivationReadiness } from "../../src/features/logistics/clientActivationDomain.js";
+import {
+  avaliarBriefing,
+  normalizarBriefing,
+  resumoComercialDoBriefing,
+} from "../../src/features/logistics/clientBriefingDomain.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -131,7 +136,20 @@ async function loadSnapshot(env, access, clientId) {
     activeScoreWeights: scoreWeights?.version || "",
     dashboard: dashboard || null,
   };
-  return { ...snapshot, readiness: buildClientActivationReadiness(snapshot) };
+  // Duas leituras da mesma conta, lado a lado e sem se misturar: `readiness`
+  // diz se o sistema está configurado, `briefing` diz se a conta foi desenhada.
+  // Dá para ter uma sem a outra, nos dois sentidos.
+  const briefing = normalizarBriefing(parse(clientRow?.fields_json, {}).briefing || {});
+  return {
+    ...snapshot,
+    readiness: buildClientActivationReadiness(snapshot),
+    briefing: {
+      valores: briefing,
+      avaliacao: avaliarBriefing(briefing),
+      comercial: resumoComercialDoBriefing(briefing),
+      atualizadoEm: parse(clientRow?.fields_json, {}).briefingAtualizadoEm || "",
+    },
+  };
 }
 
 const costCenterCode = (client) => {
@@ -298,6 +316,55 @@ async function activate(env, access, user, clientId) {
   return { snapshot, created: prepared.created };
 }
 
+// ===== O desenho da conta =====
+//
+// O gate técnico responde "o sistema está configurado?". O briefing responde
+// "esta conta foi desenhada?" — abrangência, modelo operacional, HC por etapa,
+// régua de SLA ou BSC, integração, faturamento, ocorrência, RASCI.
+//
+// Fica em `fields_json.briefing` do próprio cliente, e não em tabela nova, pelo
+// mesmo motivo que a implantação já mora ali: é atributo da conta, não entidade
+// com ciclo de vida próprio. `normalizarBriefing` é a porta — chave que não
+// está no catálogo não entra, para o `fields_json` não virar depósito.
+//
+// Deliberadamente NÃO bloqueia a ativação. Um gate que trava por campo em
+// branco vira campo preenchido com "n/a", e aí o documento não serve para nada.
+async function salvarBriefing(env, access, user, clientId, corpo) {
+  const row = await env.DB.prepare(
+    "SELECT fields_json,revision FROM todogreen_clients WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL",
+  ).bind(clientId, TENANT_ID, access.ownerId).first();
+  if (!row) return null;
+
+  const revisao = Number(corpo.revision);
+  if (!Number.isFinite(revisao) || revisao !== Number(row.revision))
+    return { conflito: true };
+
+  const fields = parse(row.fields_json, {});
+  // Mescla em vez de substituir: a tela salva um bloco por vez, e trocar o
+  // objeto inteiro apagaria os blocos que não estavam na tela naquele momento.
+  const briefing = { ...normalizarBriefing(fields.briefing || {}), ...normalizarBriefing(corpo.briefing || {}) };
+  fields.briefing = briefing;
+  fields.briefingAtualizadoEm = new Date().toISOString();
+
+  const agora = new Date().toISOString();
+  const meta = await env.DB.prepare(
+    `UPDATE todogreen_clients SET fields_json=?,revision=revision+1,updated_by=?,updated_at=?
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
+  ).bind(JSON.stringify(fields), user.id, agora, clientId, TENANT_ID, access.ownerId, revisao).run();
+  if (!meta?.meta?.changes) return { conflito: true };
+
+  await registrarAuditoriaTodoGreen(env, {
+    access, user, action: "client_briefing_updated", resourceType: "client_activation",
+    resourceId: clientId, clientId,
+    before: { briefing: parse(row.fields_json, {}).briefing || {} },
+    after: { briefing },
+    details: `Desenho da conta: ${avaliarBriefing(briefing).percentual}% preenchido.`,
+  });
+
+  const snapshot = await loadSnapshot(env, access, clientId);
+  return { snapshot };
+}
+
 export async function handleTodoGreenClientActivation(request, env, access, user) {
   if (!env.DB) return json({ error: "Banco indisponível." }, 503);
   const url = new URL(request.url);
@@ -322,6 +389,13 @@ export async function handleTodoGreenClientActivation(request, env, access, user
     if (action === "configure") {
       const snapshot = await configure(env, access, user, clientId, body);
       return snapshot ? json(snapshot) : json({ error: "Cliente não encontrado neste espaço." }, 404);
+    }
+    if (action === "briefing") {
+      const resultado = await salvarBriefing(env, access, user, clientId, body);
+      if (!resultado) return json({ error: "Cliente não encontrado neste espaço." }, 404);
+      if (resultado.conflito)
+        return json({ error: "O cliente mudou. Recarregue antes de salvar o desenho da conta." }, 409);
+      return json(resultado.snapshot);
     }
     if (action === "activate") {
       const result = await activate(env, access, user, clientId);

@@ -9,6 +9,7 @@
 
 import { allowed, json } from "../lib/http.js";
 import { membershipRole } from "../lib/membership.js";
+import { chavesDoEspaco } from "./ai-keys.js";
 import {
   especialistaDaVertical,
   instrucaoDaVertical,
@@ -188,6 +189,45 @@ Contexto do negócio selecionado:
 ${context}`;
 }
 
+// A Anthropic não fala o dialeto OpenAI: o system é campo de topo (não uma
+// mensagem), a autenticação é `x-api-key` (não Bearer) e a versão da API vai
+// num cabeçalho próprio. Por isso ela não passa por `askOpenAICompatible`.
+//
+// Escrita com `fetch` cru porque é assim que os outros onze provedores deste
+// arquivo funcionam: eles compartilham timeout, forma de erro e o contrato de
+// retorno de `providerChain`. Trazer o SDK oficial para um provedor só criaria
+// duas formas de fazer a mesma coisa dentro do mesmo arquivo.
+async function askClaude(env, prompt, system, requestedModel) {
+  if (!env.ANTHROPIC_API_KEY) throw new Error("Claude não configurado");
+  const model = requestedModel || env.ANTHROPIC_MODEL || "claude-opus-5";
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1800,
+      ...(system ? { system } : {}),
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!response.ok) throw new Error(`Claude indisponível (${response.status})`);
+  const data = await response.json();
+  // `content` é uma lista de blocos com tipos diferentes (texto, raciocínio).
+  // Pegar `content[0].text` funcionaria hoje e quebraria no dia em que o
+  // primeiro bloco não for texto.
+  const content = (Array.isArray(data.content) ? data.content : [])
+    .filter((bloco) => bloco?.type === "text")
+    .map((bloco) => bloco.text || "")
+    .join("")
+    .trim();
+  if (!content) throw new Error("Claude retornou uma resposta vazia");
+  return { content, provider: "Claude (Anthropic)", model: data.model || model, usage: data.usage || null };
+}
+
 async function askGemini(env, prompt, system, requestedModel) {
   if (!env.GEMINI_API_KEY) throw new Error("Gemini não configurado");
   const model =
@@ -308,6 +348,8 @@ export async function askOpenAICompatible({
 }
 
 const freeAiCatalog = [
+  { id: "anthropic", name: "Claude (Anthropic)", key: "ANTHROPIC_API_KEY" },
+  { id: "openai", name: "ChatGPT (OpenAI)", key: "OPENAI_API_KEY" },
   { id: "google", name: "Google Gemini/Gemma", key: "GEMINI_API_KEY" },
   { id: "cloudflare", name: "Cloudflare Workers AI", binding: "AI" },
   { id: "groq", name: "Groq Free", key: "GROQ_API_KEY" },
@@ -700,6 +742,22 @@ export function providerChain(
       run: (runPrompt, runSystem) =>
         askXai(env, runPrompt, runSystem),
     },
+    // Trazidos pelo espaço de trabalho ("traga sua própria chave", 0072) ou
+    // pelo cofre. Ficam no fim do mapa e no COMEÇO da ordem quando a chave é do
+    // espaço — ver o bloco de ordenação abaixo.
+    claude: {
+      enabled: !!env.ANTHROPIC_API_KEY,
+      run: (runPrompt, runSystem) => askClaude(env, runPrompt, runSystem),
+    },
+    openai: {
+      enabled: !!env.OPENAI_API_KEY,
+      run: compatible({
+        endpoint: "https://api.openai.com/v1/chat/completions",
+        token: env.OPENAI_API_KEY,
+        model: env.OPENAI_MODEL || "gpt-5",
+        provider: "ChatGPT (OpenAI)",
+      }),
+    },
   };
   const order = deep
     ? [
@@ -718,6 +776,8 @@ export function providerChain(
         "glm",
         "llama",
         "xai",
+        "claude",
+        "openai",
       ]
     : [
         "gemini-lite",
@@ -734,9 +794,28 @@ export function providerChain(
         "glm",
         "llama",
         "xai",
+        "claude",
+        "openai",
       ];
+  // Quem trouxe a própria conta quer que ela seja usada, não que fique de
+  // reserva atrás das chaves gratuitas da plataforma. `chavesDoEspaco` marca
+  // cada chave que veio do espaço de trabalho com `__DO_ESPACO_<ENV_KEY>`, e é
+  // essa marca que promove o provedor para o início da cascata.
+  const doEspaco = {
+    claude: !!env.__DO_ESPACO_ANTHROPIC_API_KEY,
+    openai: !!env.__DO_ESPACO_OPENAI_API_KEY,
+    "gemini-lite": !!env.__DO_ESPACO_GEMINI_API_KEY,
+    "gemini-flash": !!env.__DO_ESPACO_GEMINI_API_KEY,
+    gemma: !!env.__DO_ESPACO_GEMINI_API_KEY,
+    groq: !!env.__DO_ESPACO_GROQ_API_KEY,
+    mistral: !!env.__DO_ESPACO_MISTRAL_API_KEY,
+    openrouter: !!env.__DO_ESPACO_OPENROUTER_API_KEY,
+  };
   const providers = order
     .filter((name) => providerMap[name]?.enabled)
+    // `sort` estável: dentro de cada grupo a ordem original é preservada, então
+    // a preferência entre os gratuitos continua valendo como antes.
+    .sort((a, b) => Number(!!doEspaco[b]) - Number(!!doEspaco[a]))
     .map((name) => [name, providerMap[name].run]);
   if (preferredProvider)
     providers.sort(
@@ -812,6 +891,13 @@ export async function handleAiStream(request, env, user) {
   // e o limite do plano não valeria nada.
   const cota = await ensureQuota(env, serverContext.ownerId, "aiPerMonth", 1);
   if (!cota.allowed) return json(quotaResponse({ ...cota, metric: "aiPerMonth" }), 402);
+  // A partir daqui, `env` pode carregar as chaves que o espaço trouxe (0072).
+  // Sobrepõe, nunca apaga: provedor que o espaço não cadastrou continua valendo
+  // pelo cofre, e a cascata segue tendo para onde cair. As duas entradas — esta
+  // e a de streaming — precisam da mesma linha; fazer só numa deixaria um
+  // caminho ignorando a chave que a pessoa pagou.
+  const doEspaco = await chavesDoEspaco(env, serverContext.ownerId);
+  if (Object.keys(doEspaco).length) env = { ...env, ...doEspaco };
   let web;
   try {
     web = await addCurrentWebContext(
@@ -944,6 +1030,13 @@ export async function handleAi(request, env, user) {
   // gastar. Contar antes cobraria por chamada que falhou.
   const cota = await ensureQuota(env, serverContext.ownerId, "aiPerMonth", 1);
   if (!cota.allowed) return json(quotaResponse({ ...cota, metric: "aiPerMonth" }), 402);
+  // A partir daqui, `env` pode carregar as chaves que o espaço trouxe (0072).
+  // Sobrepõe, nunca apaga: provedor que o espaço não cadastrou continua valendo
+  // pelo cofre, e a cascata segue tendo para onde cair. As duas entradas — esta
+  // e a de streaming — precisam da mesma linha; fazer só numa deixaria um
+  // caminho ignorando a chave que a pessoa pagou.
+  const doEspaco = await chavesDoEspaco(env, serverContext.ownerId);
+  if (Object.keys(doEspaco).length) env = { ...env, ...doEspaco };
   let web;
   try {
     web = await addCurrentWebContext(

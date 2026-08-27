@@ -1,22 +1,22 @@
 # CIOT direto: checklist operacional
 
-Este checklist fecha o que precisa existir fora do ERP para a integracao direta sem IPEF funcionar com frota propria ou ETC subcontratada.
+Este checklist fecha o que precisa existir fora do ERP para a integração direta sem IPEF funcionar com frota própria ou ETC subcontratada.
 
 Fonte oficial da ANTT: https://www.gov.br/antt/pt-br/assuntos/cargas/ciot-para-todos-1/documentos-tecnicos/piso-minimo-ciot
 
-## Itens obrigatorios
+## Itens obrigatórios
 
-| Item | Como fica pronto | Evidencia |
+| Item | Como fica pronto | Evidência |
 | --- | --- | --- |
-| DCS vigente | Baixado da pagina oficial da ANTT e salvo em `C:\ANTT\CIOT\downloads` | Caminho registrado em `C:\ToDoGreen\AnttCiotConnector\ops\antt-ciot-install-manifest.json` |
-| DLL oficial ANTT | Baixada da pagina oficial, quando a operacao usar biblioteca | Caminho registrado no manifesto |
+| DCS vigente | Baixado da página oficial da ANTT e salvo em `C:\ANTT\CIOT\downloads` | Caminho registrado em `C:\ToDoGreen\AnttCiotConnector\ops\antt-ciot-install-manifest.json` |
+| DLL oficial ANTT | Baixada da página oficial, quando a operação usar biblioteca | Caminho registrado no manifesto |
 | EXE oficial ou adaptador EXE | Baixado da ANTT ou informado via `-AnttExecutablePath` | `AnttProcess:ExecutablePath` no `appsettings.Production.json` |
-| Servidor Windows | Windows com .NET 8, acesso ao certificado A1/A3 e saida HTTPS para ANTT | Servico `ToDoGreenAnttCiotConnector` iniciado |
+| Servidor Windows | Windows com .NET 8, acesso ao certificado A1/A3 e saída HTTPS para ANTT | Serviço `ToDoGreenAnttCiotConnector` iniciado |
 | URL HTTPS do conector | Reverse proxy ou tunnel apontando para `http://127.0.0.1:8088` | `https://<host>/health` retorna `operacional` |
 | Token interno | Gerado pelo bootstrap ou informado via `-ConnectorToken` | `connector-token.txt` e `erp-ciot-connector.env` criados |
-| ERP configurado | Variaveis `TODOGREEN_ANTT_CIOT_CONNECTOR_URL` e `TODOGREEN_ANTT_CIOT_CONNECTOR_TOKEN` aplicadas | Tela CIOT consegue testar credencial e enviar |
+| ERP configurado | Variáveis `TODOGREEN_ANTT_CIOT_CONNECTOR_URL` e `TODOGREEN_ANTT_CIOT_CONNECTOR_TOKEN` aplicadas | Tela CIOT consegue testar credencial e enviar |
 
-## Comando padrao no servidor Windows
+## Comando padrão no servidor Windows
 
 ```powershell
 cd C:\repos\Seufuncionario\connectors\antt-ciot\scripts
@@ -28,31 +28,31 @@ cd C:\repos\Seufuncionario\connectors\antt-ciot\scripts
   -PublicConnectorUrl "https://ciot.todogreen.com.br"
 ```
 
-Se a ANTT entregar ZIP unico, use `-AnttPackageUrl` no lugar de `-AnttExeUrl` e `-AnttDllUrl`.
+Se a ANTT entregar ZIP único, use `-AnttPackageUrl` no lugar de `-AnttExeUrl` e `-AnttDllUrl`.
 
-Se os arquivos ja foram baixados manualmente, use `-AnttExePath`, `-AnttDllPath` e `-DcsPath`.
+Se os arquivos já foram baixados manualmente, use `-AnttExePath`, `-AnttDllPath` e `-DcsPath`.
 
-## Saidas geradas pelo bootstrap
+## Saídas geradas pelo bootstrap
 
 | Arquivo | Uso |
 | --- | --- |
-| `C:\ToDoGreen\AnttCiotConnector\app\appsettings.Production.json` | Configuracao do servico Windows |
+| `C:\ToDoGreen\AnttCiotConnector\app\appsettings.Production.json` | Configuração do serviço Windows |
 | `C:\ToDoGreen\AnttCiotConnector\secrets\connector-token.txt` | Token interno do conector |
-| `C:\ToDoGreen\AnttCiotConnector\ops\erp-ciot-connector.env` | Variaveis para colar no ambiente do ERP |
-| `C:\ToDoGreen\AnttCiotConnector\ops\antt-ciot-install-manifest.json` | Prova dos artefatos usados na instalacao |
+| `C:\ToDoGreen\AnttCiotConnector\ops\erp-ciot-connector.env` | Variáveis para colar no ambiente do ERP |
+| `C:\ToDoGreen\AnttCiotConnector\ops\antt-ciot-install-manifest.json` | Prova dos artefatos usados na instalação |
 
-## Publicacao HTTPS
+## Publicação HTTPS
 
-O microservico deve ficar local em `http://127.0.0.1:8088`. A exposicao externa precisa ser HTTPS.
+O microsserviço deve ficar local em `http://127.0.0.1:8088`. A exposição externa precisa ser HTTPS.
 
-Opcoes prontas no repo:
+Opções prontas no repo:
 
-| Opcao | Arquivo |
+| Opção | Arquivo |
 | --- | --- |
 | Cloudflare Tunnel | `connectors/antt-ciot/deploy/cloudflared-config.example.yml` |
 | Caddy | `connectors/antt-ciot/deploy/Caddyfile.example` |
 
-## Verificacao
+## Verificação
 
 ```powershell
 .\verify-connector.ps1 `
@@ -61,11 +61,11 @@ Opcoes prontas no repo:
   -Token "<TOKEN_DO_CONNECTOR>"
 ```
 
-O teste de token nao emite CIOT. Ele autentica a chamada e espera uma recusa por modo invalido. Se vier HTTP 400, o token passou. Se vier HTTP 401, o token esta errado.
+O teste de token não emite CIOT. Ele autentica a chamada e espera uma recusa por modo inválido. Se vier HTTP 400, o token passou. Se vier HTTP 401, o token está errado.
 
-## O que ainda e externo ao codigo
+## O que ainda é externo ao código
 
 - A empresa precisa fornecer o certificado digital ICP-Brasil A1 ou A3.
-- A URL publica precisa existir no DNS ou tunnel escolhido.
-- O pacote oficial da ANTT precisa ser baixado da pagina oficial vigente.
+- A URL pública precisa existir no DNS ou tunnel escolhido.
+- O pacote oficial da ANTT precisa ser baixado da página oficial vigente.
 - Se a ANTT exigir chamada via DLL sem EXE, o `-AnttExecutablePath` deve apontar para o adaptador EXE que encapsula a DLL conforme o DCS.

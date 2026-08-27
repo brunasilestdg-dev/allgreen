@@ -39,6 +39,73 @@ async function resolveCoreAccess(env, user, ownerId) {
 const canManage = (access) => ["owner", "admin"].includes(access?.role) || access?.permissions?.includes("*");
 const canAny = (access, permissions = []) => canManage(access) || permissions.some((permission) => podeNaVertical(access, permission));
 
+// ===== O painel Acessos administra o modelo de acesso INTEIRO =====
+//
+// `resolveTodoGreenAccess` aceita DUAS fontes de vínculo: `todogreen_access_emails`
+// (liberação por e-mail, feita nesta tela) e `tenant_users` (associação ao espaço
+// de trabalho). Até aqui a tela só escrevia na primeira, e isso produzia dois
+// defeitos opostos, ambos silenciosos:
+//
+// 1) CONCEDER NÃO LIGAVA À EMPRESA. Sem linha em `tenant_users`, o espaço padrão
+//    caía no `user.id` da própria pessoa — um espaço vazio. Um financeiro recém-
+//    liberado recebia a lista inteira de permissões e abria um ERP sem nada
+//    dentro. Só vendedor (por carteira) e motorista (por cadastro) escapavam,
+//    cada um por um remendo diferente.
+//
+// 2) REVOGAR NÃO REVOGAVA. Quem já tinha `tenant_users` continuava entrando
+//    depois do "acesso removido" — a tela dizia que deu certo, a auditoria
+//    gravava `revoked`, e a pessoa seguia lendo a tesouraria da empresa.
+//
+// A regra agora: as duas fontes andam juntas. Conceder cria o vínculo apontando
+// para o espaço de quem concedeu (é nele que a operação vive); revogar encerra
+// os dois lados. Nenhuma tela do produto mostrava `tenant_users`, então não
+// havia como perceber a divergência olhando o app.
+const espacoDaConcessao = (access) => String(access?.ownerId || "").trim();
+
+async function vincularAoEspaco(env, { access, userId, email: alvo, role, permissions }) {
+  const espaco = espacoDaConcessao(access);
+  if (!espaco || !userId) return false;
+  const now = new Date().toISOString();
+  // A conta pode não existir ainda: quem é liberado por e-mail cria a própria
+  // conta depois (desde a 0029 não há senha no código). Nesse caso não há
+  // `user_id` para vincular, e quem resolve é o `workspace_owner_id` gravado na
+  // própria liberação (0071) — `resolveTodoGreenAccess` o usa como espaço
+  // padrão no primeiro acesso.
+  await env.DB.prepare(
+    `INSERT INTO tenant_users
+       (id, tenant_id, workspace_owner_id, user_id, role, status, permissions_json, invited_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+     ON CONFLICT(tenant_id, user_id) DO UPDATE SET
+       workspace_owner_id = excluded.workspace_owner_id,
+       role = excluded.role,
+       status = 'active',
+       permissions_json = excluded.permissions_json,
+       updated_at = excluded.updated_at`,
+  ).bind(
+    crypto.randomUUID(), TODO_GREEN_TENANT.id, espaco, userId, role,
+    JSON.stringify(permissions), access?.userId || null, now, now,
+  ).run().catch((erro) => {
+    console.error("todogreen vincularAoEspaco", alvo, erro);
+    return null;
+  });
+  return true;
+}
+
+async function desvincularDoEspaco(env, userId) {
+  if (!userId) return;
+  await env.DB.prepare(
+    "UPDATE tenant_users SET status='revoked', updated_at=? WHERE tenant_id=? AND user_id=?",
+  ).bind(new Date().toISOString(), TODO_GREEN_TENANT.id, userId).run().catch((erro) => {
+    console.error("todogreen desvincularDoEspaco", userId, erro);
+  });
+}
+
+const contaPorEmail = (env, alvo) => env.DB
+  .prepare("SELECT id FROM users WHERE lower(email) = ? LIMIT 1")
+  .bind(email(alvo))
+  .first()
+  .catch(() => null);
+
 const MASTER_PERMISSIONS = Object.freeze({
   "company-profiles": ["fiscal:manage", "finance:manage"],
   "company-documents": ["fiscal:manage", "finance:manage"],
@@ -246,21 +313,40 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
         return response({ error:"A validade do acesso precisa estar no futuro." },400);
       await env.DB.prepare(
         `INSERT INTO todogreen_access_emails
-         (id,tenant_id,email,role,status,permissions_json,note,expires_at,revoked_at,created_by,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?) ON CONFLICT(tenant_id,email) DO UPDATE SET
+         (id,tenant_id,email,role,status,permissions_json,note,expires_at,revoked_at,created_by,workspace_owner_id,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?,?) ON CONFLICT(tenant_id,email) DO UPDATE SET
           role=excluded.role,status=excluded.status,permissions_json=excluded.permissions_json,
-          note=excluded.note,expires_at=excluded.expires_at,revoked_at=NULL,updated_at=excluded.updated_at`,
+          note=excluded.note,expires_at=excluded.expires_at,revoked_at=NULL,
+          workspace_owner_id=excluded.workspace_owner_id,updated_at=excluded.updated_at`,
       ).bind(
         crypto.randomUUID(), TODO_GREEN_TENANT.id, normalized, role,
         body.status === "inactive" ? "inactive" : "active", JSON.stringify(permissions),
-        String(body.note || "").trim().slice(0,240), expiresAt, user.id, now, now,
+        String(body.note || "").trim().slice(0,240), expiresAt, user.id,
+        // O espaço de quem concede é o espaço onde a operação vive. Guardá-lo
+        // aqui é o que faz o vínculo nascer certo no primeiro acesso de quem
+        // ainda não tem conta.
+        espacoDaConcessao(access), now, now,
       ).run();
+      // O vínculo com o espaço da empresa é metade da concessão. Sem ele a
+      // pessoa entra num espaço próprio vazio — ver o comentário do bloco.
+      const ativo = body.status !== "inactive";
+      const conta = await contaPorEmail(env, normalized);
+      if (ativo && conta?.id)
+        await vincularAoEspaco(env, { access, userId: conta.id, email: normalized, role, permissions });
+      if (!ativo && conta?.id) await desvincularDoEspaco(env, conta.id);
+
       if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_acesso_autorizado",normalized,`papel: ${role}`);
       await registrarAuditoriaTodoGreen(env, {
         access,user,action:"authorized",resourceType:"access",resourceId:normalized,
-        after:{ email:normalized, role, status:body.status === "inactive" ? "inactive" : "active", expiresAt },
+        after:{ email:normalized, role, status:ativo ? "active" : "inactive", expiresAt, workspaceOwnerId: espacoDaConcessao(access) },
       });
-      return response({ ok:true,email:normalized,role,status:body.status === "inactive" ? "inactive" : "active",permissions,expiresAt },201);
+      return response({
+        ok:true,email:normalized,role,status:ativo ? "active" : "inactive",permissions,expiresAt,
+        // A tela precisa saber se a pessoa já tem conta: sem conta, o vínculo
+        // com o espaço só nasce no primeiro acesso dela.
+        vinculadoAoEspaco: Boolean(ativo && conta?.id),
+        aguardandoCadastro: Boolean(ativo && !conta?.id),
+      },201);
     }
     if (request.method === "DELETE") {
       const normalized = email(url.searchParams.get("email"));
@@ -273,6 +359,10 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       await env.DB.prepare(
         "UPDATE todogreen_access_emails SET status='inactive',revoked_at=?,updated_at=? WHERE tenant_id=? AND email=?",
       ).bind(now,now,TODO_GREEN_TENANT.id,normalized).run();
+      // Encerrar a liberação por e-mail não basta: `tenant_users` é a outra
+      // fonte de vínculo, e quem trabalhava de verdade tinha as duas.
+      const contaRevogada = await contaPorEmail(env, normalized);
+      if (contaRevogada?.id) await desvincularDoEspaco(env, contaRevogada.id);
       if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_acesso_removido",normalized,"");
       await registrarAuditoriaTodoGreen(env, {
         access,user,action:"revoked",resourceType:"access",resourceId:normalized,

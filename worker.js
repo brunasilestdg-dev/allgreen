@@ -4500,6 +4500,7 @@ export default {
       url.pathname.startsWith("/api/free-suite/") ||
       url.pathname.startsWith("/api/platform/") ||
       url.pathname.startsWith("/api/todogreen/") ||
+      url.pathname.startsWith("/api/ai-keys") ||
       url.pathname.startsWith("/api/push/");
     if (needsAuth) {
       if (url.pathname === "/api/ai" && request.method !== "POST")
@@ -4518,6 +4519,7 @@ export default {
           url.pathname.startsWith("/api/free-suite/") ||
           url.pathname.startsWith("/api/platform/") ||
           url.pathname.startsWith("/api/todogreen/") ||
+          url.pathname.startsWith("/api/ai-keys") ||
           url.pathname === "/api/plan" ||
           url.pathname === "/api/webhooks" ||
           url.pathname.startsWith("/api/push/")) &&
@@ -4535,6 +4537,27 @@ export default {
       } catch (error) {
         console.error("Session check error", error);
         return json({ error: "Não foi possível validar sua sessão." }, 500);
+      }
+      // Chaves de IA do espaço de trabalho ("traga sua própria chave").
+      // Exige owner/admin: uma chave de API é credencial que gera cobrança na
+      // conta de quem a trouxe, e não é coisa que qualquer membro cadastre ou
+      // apague pelos outros.
+      if (url.pathname.startsWith("/api/ai-keys")) {
+        try {
+          const ownerId = url.searchParams.get("owner") || user.id;
+          const role = await membershipRole(env, user.id, ownerId);
+          if (!role) return json({ error: "Você não tem acesso a este espaço." }, 403);
+          if (role !== "owner" && role !== "admin")
+            return json(
+              { error: "Somente o dono ou um administrador do espaço cadastra chaves de IA." },
+              403,
+            );
+          const { handleAiKeys } = await import("./worker/services/ai-keys.js");
+          return await handleAiKeys(request, env, { ownerId, userId: user.id });
+        } catch (error) {
+          console.error("AI keys error", error);
+          return json({ error: "Não foi possível salvar a chave de IA." }, 500);
+        }
       }
       if (url.pathname === "/api/workspace") {
         try {

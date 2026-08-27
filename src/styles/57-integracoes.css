@@ -651,3 +651,127 @@
   object-fit: contain;
   vertical-align: -4px;
 }
+
+/* ===== Conectar a própria inteligência artificial =====
+   Segue os mesmos tokens do resto do bloco de integrações (--line, --muted,
+   --surface2): o painel é mais uma seção da página, não uma ilha com
+   identidade própria. */
+.int-ia-lista {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.int-ia-cartao {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+/* A conta que a pessoa trouxe fica visualmente à frente das que ainda não
+   foram conectadas — é a informação que ela procura ao abrir a tela. */
+.int-ia-cartao.ativa {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+  background: var(--surface2);
+}
+
+.int-ia-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.int-ia-topo p {
+  margin: 3px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.int-ia-selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.int-ia-selo.ok {
+  color: var(--ok, #2e9e6b);
+  border-color: color-mix(in srgb, var(--ok, #2e9e6b) 40%, transparent);
+}
+
+.int-ia-selo.atencao {
+  color: var(--warn, #b07408);
+  border-color: color-mix(in srgb, var(--warn, #b07408) 40%, transparent);
+}
+
+.int-ia-dados {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 0;
+}
+
+.int-ia-dados > div {
+  display: grid;
+  gap: 1px;
+}
+
+.int-ia-dados dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.int-ia-dados dd {
+  margin: 0;
+  font-size: 0.86rem;
+  /* Prefixo de chave e nome de modelo são identificadores: alinhados em
+     monoespaçada, o olho compara sem precisar soletrar. */
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.int-ia-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.int-ia-onde {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.int-ia-erro {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--danger, #b3402a) 32%, transparent);
+  background: color-mix(in srgb, var(--danger, #b3402a) 8%, transparent);
+  color: var(--danger, #b3402a);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  /* Mensagem de provedor pode vir longa e sem espaços. */
+  overflow-wrap: anywhere;
+}
+
+.int-ia-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

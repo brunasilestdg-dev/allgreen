@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, MapPin, PackageCheck, Truck } from "lucide-react";
 import "./TodoGreenPages.css";
+import { comRotulo } from "../rotulosDomain.js";
 
 // ===== Portal do Motorista =====
 //
@@ -124,7 +125,7 @@ export default function DriverPortalPage() {
           <div className="tdg-driver-rota">
             <strong>{viagem.referencia || "Viagem"}</strong>
             <span><MapPin size={14} /> {viagem.origem || "origem"} → {viagem.destino || "destino"}</span>
-            <small>{viagem.dataServico || ""} · placa {viagem.placa || "—"} · {ROTULO_SITUACAO[viagem.situacao] || viagem.situacao}</small>
+            <small>{viagem.dataServico || ""} · placa {viagem.placa || "—"} · {comRotulo(ROTULO_SITUACAO, viagem.situacao)}</small>
           </div>
           <div className="tdg-driver-acoes">
             <button type="button" onClick={() => { setFormulario({ viagem, tipo: "chegada" }); setAviso(""); }}>Cheguei</button>

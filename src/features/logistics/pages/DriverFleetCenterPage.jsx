@@ -18,6 +18,7 @@ import Modal from "../../../components/Modal.jsx";
 import { VEHICLE_CLASSES, vehicleClass } from "../vehicleClassDomain.js";
 import { fleetAlerts, fleetVehicleMetrics, summarizeFleet } from "../todoGreenFleetDomain.js";
 import "./TodoGreenPages.css";
+import { comRotulo } from "../rotulosDomain.js";
 
 const ENERGY_LABELS = { electric: "Elétrico", hybrid: "Híbrido", biomethane: "Biometano", diesel: "Diesel" };
 const STATUS_OPTIONS = [
@@ -424,7 +425,7 @@ function VehicleModal({ vehicle, authHeaders, onClose, onSave, onArchive, setToa
           </label>
           <label>Energia
             <select value={form.energyType} onChange={set("energyType")}>
-              {energiasDaClasse.map((en) => <option key={en} value={en}>{ENERGY_LABELS[en] || en}</option>)}
+              {energiasDaClasse.map((en) => <option key={en} value={en}>{comRotulo(ENERGY_LABELS, en)}</option>)}
             </select>
           </label>
           <label>Unidade operacional<input value={form.operationalUnit} onChange={set("operationalUnit")} maxLength={120} /></label>
@@ -448,7 +449,7 @@ function VehicleModal({ vehicle, authHeaders, onClose, onSave, onArchive, setToa
             {orders.length === 0 && <p className="tdg-planner-col-empty">Nenhuma ordem registrada.</p>}
             {orders.map((o) => (
               <div className="df-maint-row" key={o.id}>
-                <span><strong>{o.title}</strong><small>{MAINT_STATUS[o.status] || o.status}</small></span>
+                <span><strong>{o.title}</strong><small>{comRotulo(MAINT_STATUS, o.status)}</small></span>
                 {o.status !== "done" && o.status !== "canceled" && (
                   <button type="button" className="tdg-planner-icon" title="Concluir" onClick={() => mudarOrdem(o, "done")}>✓</button>
                 )}

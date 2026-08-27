@@ -21,6 +21,7 @@ import {
   GreenScoreDetalhado,
   ImpactoAmbiental,
 } from "./CustomerPortalInsights.jsx";
+import { comRotulo } from "./rotulosDomain.js";
 
 const ICONES = {
   inicio: Home,
@@ -400,7 +401,7 @@ function Solicitacoes({ podeAbrir, setAviso }) {
       <ul className="cp-sol-lista">
         {lista.map((solicitacao) => (
           <li key={solicitacao.id} className={abertaId === solicitacao.id ? "aberta" : ""}>
-            <button type="button" className="cp-sol-head" onClick={() => abrir(solicitacao.id)}><span className="cp-sol-nome"><strong>{solicitacao.assunto}</strong><small>{ROTULO_TIPO[solicitacao.tipo] || solicitacao.tipo} · aberta em {new Date(solicitacao.criadaEm).toLocaleDateString("pt-BR")}</small></span><span className={`cp-sol-status s-${solicitacao.status}`}>{ROTULO_STATUS[solicitacao.status] || solicitacao.status}</span></button>
+            <button type="button" className="cp-sol-head" onClick={() => abrir(solicitacao.id)}><span className="cp-sol-nome"><strong>{solicitacao.assunto}</strong><small>{comRotulo(ROTULO_TIPO, solicitacao.tipo)} · aberta em {new Date(solicitacao.criadaEm).toLocaleDateString("pt-BR")}</small></span><span className={`cp-sol-status s-${solicitacao.status}`}>{comRotulo(ROTULO_STATUS, solicitacao.status)}</span></button>
             {abertaId === solicitacao.id && (
               <div className="cp-sol-corpo">
                 {Object.keys(solicitacao.campos || {}).length > 0 && <dl className="cp-sol-campos">{Object.entries(solicitacao.campos).map(([chave, valor]) => <div key={chave}><dt>{chave}</dt><dd>{valor}</dd></div>)}</dl>}
