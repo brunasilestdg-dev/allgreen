@@ -46,6 +46,8 @@ import {
   WalletCards,
   Workflow,
   Zap,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import {
   LOGISTICS_PRODUCTS,
@@ -117,6 +119,8 @@ const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
 const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
 const EnterpriseAreaPage = lazy(() => import("./pages/EnterpriseAreaPage.jsx"));
 const RasciMatrixPage = lazy(() => import("./pages/RasciMatrixPage.jsx"));
+const FluxosPage = lazy(() => import("./pages/FluxosPage.jsx"));
+const ErpManualPage = lazy(() => import("./pages/ErpManualPage.jsx"));
 const ClientActivationPage = lazy(() => import("./ClientActivationPage.jsx"));
 const DriverFleetCenterPage = lazy(() => import("./pages/DriverFleetCenterPage.jsx"));
 
@@ -270,6 +274,8 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "nfse",
   "planner",
   "rasci",
+  "fluxos",
+  "manual",
   "comissoes",
   "espaco",
 ]);
@@ -434,6 +440,22 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "administracao",
     status: "functional",
     description: "Quem executa, aprova, apoia, consulta e é informado em cada área — numa aba só.",
+  },
+  fluxos: {
+    title: "Fluxos entre áreas",
+    navLabel: "Fluxos",
+    route: "/todogreen/fluxos",
+    area: "administracao",
+    status: "functional",
+    description: "Como o trabalho passa de uma área para a outra, do produto ao caixa — numa aba só.",
+  },
+  manual: {
+    title: "Manual do ERP",
+    navLabel: "Manual",
+    route: "/todogreen/manual",
+    area: "administracao",
+    status: "functional",
+    description: "O que cada módulo faz e a permissão que exige; gerado do catálogo, sempre atual.",
   },
   esg: {
     title: "ESG, Green Score e emissões da cadeia logística",
@@ -746,9 +768,10 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
   { id: "cadastros", label: "Cadastros", route: "/todogreen/cadastros", pages: ["cadastros"] },
   { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial", "marketing", "campanhas"] },
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "motorista-frota", "planejamento", "aceite-viagens", "ordens-servico", "ciot", "rastreamento"] },
+  // Ocorrências aqui são de entrega (atrasos, insucessos, reentregas) — pertencem
+  // à Operação, não a um item solto no topo do menu.
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "motorista-frota", "planejamento", "aceite-viagens", "ordens-servico", "ocorrencias", "ciot", "rastreamento"] },
   { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes", "central-trabalho"] },
-  { id: "ocorrencias", label: "Ocorrências", route: "/todogreen/ocorrencias", pages: ["ocorrencias"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "fiscal"] },
   // DP e RH eram a mesma área de pessoas partida em dois itens que abriam quase o
@@ -762,7 +785,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
   // Qualidade e Jurídico são telas de governança de página única; ficam sob
   // Administração em vez de dois itens soltos no topo.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "auditoria", "integracoes", "acessos", "qualidade", "juridico"] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "fluxos", "manual", "auditoria", "integracoes", "acessos", "qualidade", "juridico"] },
 ]);
 
 const MANAGEMENT_TOOLS = Object.freeze([
@@ -2215,6 +2238,17 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const [query, setQuery] = useState("");
   const [navigationMode, setNavigationMode] = useState("area");
   const [navigationQuery, setNavigationQuery] = useState("");
+  // Esconder o menu lateral (persistido) — dá tela cheia ao conteúdo quando preciso.
+  const [menuOculto, setMenuOculto] = useState(() => {
+    try { return localStorage.getItem("todogreen-menu-oculto") === "1"; } catch { return false; }
+  });
+  const alternarMenu = useCallback(() => {
+    setMenuOculto((atual) => {
+      const proximo = !atual;
+      try { localStorage.setItem("todogreen-menu-oculto", proximo ? "1" : "0"); } catch { /* ignora */ }
+      return proximo;
+    });
+  }, []);
   // `access` chega vazio hoje; se um dia vier preenchido, ainda precisa passar
   // pela mesma leitura — a origem é que decide, não o formato.
   const [remoteAccess, setRemoteAccess] = useState(() => lerRespostaDeAcesso(access) || {});
@@ -2387,9 +2421,19 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </div>
       </header>
 
-      <div className="tdg-erp-layout">
-        <aside className="tdg-erp-sidebar">
-          <div><strong>ERP</strong><small>{remoteAccess.email || db?.user?.email || "To Do Green"}</small></div>
+      <div className={`tdg-erp-layout${menuOculto ? " menu-oculto" : ""}`}>
+        {menuOculto && (
+          <button type="button" className="tdg-menu-mostrar" onClick={alternarMenu} aria-label="Mostrar menu lateral">
+            <PanelLeftOpen size={16} />Menu
+          </button>
+        )}
+        <aside className="tdg-erp-sidebar" hidden={menuOculto}>
+          <div className="tdg-erp-sidebar-head">
+            <div><strong>ERP</strong><small>{remoteAccess.email || db?.user?.email || "To Do Green"}</small></div>
+            <button type="button" className="tdg-menu-ocultar" onClick={alternarMenu} aria-label="Esconder menu lateral" title="Esconder menu">
+              <PanelLeftClose size={16} />
+            </button>
+          </div>
           <button
             type="button"
             className={`tdg-work-entry ${isWorkCenter ? "active" : ""}`}
@@ -2517,6 +2561,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "rateios" && <Suspense fallback={<section className="tdg-panel">Carregando rateios...</section>}><TransactionalSpinePage mode="costs" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
       {page === "custos" && <Suspense fallback={<section className="tdg-panel">Carregando custos e margem...</section>}><FinancePage type="cost" entries={registros.financial.filter((item) => item.tipo === "cost")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "rasci" && <Suspense fallback={<section className="tdg-panel">Carregando matriz RASCI...</section>}><RasciMatrixPage /></Suspense>}
+      {page === "fluxos" && <Suspense fallback={<section className="tdg-panel">Carregando fluxos...</section>}><FluxosPage onNavigate={navigate} /></Suspense>}
+      {page === "manual" && <Suspense fallback={<section className="tdg-panel">Carregando manual do ERP...</section>}><ErpManualPage onNavigate={navigate} /></Suspense>}
       {page === "comissoes" && <Suspense fallback={<section className="tdg-panel">Carregando comissões...</section>}><FinancePage type="commission" entries={registros.financial.filter((item) => item.tipo === "commission")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} /></Suspense>}
       {page === "dp-rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP...</section>}><EnterpriseAreaPage area="dp" onNavigate={navigate} /></Suspense>}
       {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><PeoplePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}

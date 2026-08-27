@@ -1424,19 +1424,58 @@
   background: var(--tdg-card);
   border: 1px solid var(--tdg-line);
   border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 24px);
   min-width: 0;
   padding: 12px;
   position: sticky;
   top: 12px;
 }
-.tdg-erp-sidebar > div {
+.tdg-erp-sidebar-head {
+  align-items: center;
   border-bottom: 1px solid var(--tdg-line);
-  display: grid;
-  gap: 3px;
-  padding: 3px 6px 12px;
+  display: flex;
+  gap: 8px;
+  padding: 0 2px 10px;
 }
-.tdg-erp-sidebar > div strong { color: var(--tdg-ink); font-size: .82rem; letter-spacing: .08em; }
-.tdg-erp-sidebar > div small { color: var(--tdg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-erp-sidebar-head > div { display: grid; gap: 2px; min-width: 0; }
+.tdg-erp-sidebar-head strong { color: var(--tdg-ink); font-size: .82rem; letter-spacing: .08em; }
+.tdg-erp-sidebar-head small { color: var(--tdg-muted); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-menu-ocultar {
+  align-items: center;
+  background: #f6faf7;
+  border: 1px solid var(--tdg-line);
+  border-radius: 7px;
+  color: var(--tdg-muted);
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  margin-left: auto;
+  padding: 6px;
+}
+.tdg-menu-ocultar:hover,
+.tdg-menu-ocultar:focus-visible { background: var(--tdg-soft); color: var(--tdg-green); outline: none; }
+.tdg-menu-mostrar {
+  align-items: center;
+  align-self: start;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 8px;
+  color: var(--tdg-ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: .78rem;
+  font-weight: 800;
+  gap: 6px;
+  padding: 8px 11px;
+  position: sticky;
+  top: 12px;
+}
+.tdg-menu-mostrar:hover,
+.tdg-menu-mostrar:focus-visible { border-color: var(--tdg-green); color: var(--tdg-green); outline: none; }
+.tdg-erp-layout.menu-oculto { grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
 .tdg-work-entry {
   background: #173d31;
   border: 0;
@@ -1513,47 +1552,62 @@
   outline: 0;
   width: 100%;
 }
+/* As duas listas de navegação rolam dentro do próprio menu (thin scrollbar
+   global do .tdg), em vez de esticar o menu para fora da tela sem rolagem. */
 .tdg-erp-sidebar .tdg-tabs {
   display: grid;
-  gap: 3px;
-  overflow: visible;
-  padding: 8px 0 0;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 4px 2px 0;
 }
 .tdg-erp-sidebar .tdg-tabs button {
   background: transparent;
   border: 0;
   border-radius: 7px;
-  font-size: .83rem;
+  color: var(--tdg-ink);
+  font-size: .82rem;
+  font-weight: 650;
   justify-content: flex-start;
   line-height: 1.2;
-  min-height: 38px;
+  min-height: 34px;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 8px 10px;
   text-align: left;
   width: 100%;
+}
+.tdg-erp-sidebar .tdg-tabs button:hover,
+.tdg-erp-sidebar .tdg-tabs button:focus-visible {
+  background: #f2f7f3;
+  outline: none;
 }
 .tdg-erp-sidebar .tdg-tabs button.active {
   background: var(--tdg-soft);
   box-shadow: inset 3px 0 0 var(--tdg-green);
   color: var(--tdg-green);
+  font-weight: 800;
+}
+.tdg-function-navigation {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .tdg-function-navigation .tdg-tabs {
-  max-height: calc(100vh - 220px);
-  overflow: auto;
-  padding-right: 2px;
+  padding-right: 4px;
 }
 .tdg-function-navigation .tdg-tabs button {
-  /* Era display:grid com gap. O grid distribuía a altura fixa do botão entre
-     as duas linhas (título e legenda), esmagando cada uma para ~9px e cortando
-     o texto no meio — era o menu "Funcionalidades" inteiro ilegível. Bloco
-     normal deixa cada linha com a altura do próprio texto. */
+  /* Bloco normal (não grid) deixa cada linha com a altura do próprio texto —
+     título e legenda deixam de ser esmagados. */
   display: block;
-  min-height: 40px;
-}
-.tdg-function-navigation .tdg-tabs button small {
-  margin-top: 3px;
+  min-height: 42px;
+  padding: 7px 10px;
 }
 .tdg-function-navigation .tdg-tabs button span {
+  display: block;
+  font-weight: 750;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1561,27 +1615,31 @@
 .tdg-function-navigation .tdg-tabs button small {
   color: var(--tdg-muted);
   display: block;
-  font-size: .62rem;
-  font-weight: 650;
-  line-height: 1.25;
+  font-size: .64rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tdg-function-navigation .tdg-tabs button.active span { color: var(--tdg-green); }
 .tdg-function-navigation .tdg-tabs button.active small { color: var(--tdg-green); }
 .tdg-erp-stage { display: grid; gap: 14px; min-width: 0; }
 
 @media (max-width: 1180px) {
-  .tdg-erp-layout { grid-template-columns: 1fr; }
-  .tdg-erp-sidebar { padding: 8px; position: static; }
-  .tdg-erp-sidebar > div { display: none; }
+  .tdg-erp-layout,
+  .tdg-erp-layout.menu-oculto { grid-template-columns: 1fr; }
+  .tdg-erp-sidebar { max-height: none; padding: 8px; position: static; }
+  .tdg-erp-sidebar-head { display: none; }
   .tdg-work-entry {
     margin: 0 0 8px;
   }
   .tdg-nav-switch { margin: 0 0 8px; }
-  .tdg-erp-sidebar .tdg-tabs { display: flex; overflow-x: auto; padding: 0; }
+  .tdg-erp-sidebar .tdg-tabs { display: flex; overflow-x: auto; overflow-y: visible; padding: 0; }
   .tdg-erp-sidebar .tdg-tabs button { min-width: max-content; width: auto; }
   .tdg-erp-sidebar .tdg-tabs button.active { box-shadow: inset 0 -3px 0 var(--tdg-green); }
+  .tdg-function-navigation { flex-direction: row; }
   .tdg-function-navigation .tdg-tabs { max-height: none; }
   .tdg-function-navigation .tdg-tabs button { min-width: 160px; }
   .tdg-sidebar-search { margin: 0 0 8px; }
@@ -1629,3 +1687,53 @@
 .tdg-custos-op label span { font-size: .78rem; font-weight: 650; }
 .tdg-custos-op input { border: 1px solid var(--tdg-line); border-radius: 8px; min-height: 40px; padding: 6px 10px; }
 .tdg-custos-nota { color: var(--tdg-muted); font-size: .72rem; grid-column: 1 / -1; margin: 2px 0 0; }
+
+/* Página de área: só ações clicáveis + três referências únicas (RASCI, Fluxos, Manual). */
+.tdg-area-actions { margin-top: 14px; }
+.tdg-area-referencias { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 14px; }
+.tdg-area-referencias button {
+  align-items: center;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  color: var(--tdg-ink);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 10px;
+  padding: 12px;
+  text-align: left;
+}
+.tdg-area-referencias button:hover,
+.tdg-area-referencias button:focus-visible { border-color: var(--tdg-green); outline: none; }
+.tdg-area-referencias button > svg:first-child { color: var(--tdg-green); flex: 0 0 auto; }
+.tdg-area-referencias button span { display: grid; gap: 2px; min-width: 0; }
+.tdg-area-referencias button strong { font-size: .82rem; }
+.tdg-area-referencias button small { color: var(--tdg-muted); font-size: .68rem; line-height: 1.25; }
+.tdg-area-referencias button > svg:last-child { color: var(--tdg-muted); flex: 0 0 auto; margin-left: auto; }
+
+/* Fluxos entre áreas. */
+.tdg-fluxos-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-top: 14px; }
+.tdg-fluxo-card { background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.tdg-fluxo-card header { display: grid; gap: 2px; }
+.tdg-fluxo-card header strong { color: var(--tdg-ink); font-size: .92rem; }
+.tdg-fluxo-passos { display: grid; gap: 6px; list-style: none; margin: 4px 0 0; padding: 0; }
+.tdg-fluxo-passos li { align-items: center; color: var(--tdg-ink); display: grid; font-size: .8rem; gap: 8px; grid-template-columns: auto auto 1fr; }
+.tdg-fluxo-passos li b { color: var(--tdg-green); font-weight: 800; }
+.tdg-fluxo-passos li svg { color: var(--tdg-muted); }
+.tdg-fluxo-link { align-items: center; background: transparent; border: 0; border-top: 1px solid var(--tdg-line); color: var(--tdg-green); cursor: pointer; display: flex; font: inherit; font-size: .78rem; font-weight: 750; gap: 6px; margin-top: auto; padding: 8px 0 0; }
+
+/* Manual do ERP (vivo). */
+.tdg-manual-indice { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.tdg-manual-indice a { background: #f6faf7; border: 1px solid var(--tdg-line); border-radius: 999px; color: var(--tdg-ink); font-size: .72rem; font-weight: 700; padding: 5px 11px; text-decoration: none; }
+.tdg-manual-indice a:hover { border-color: var(--tdg-green); color: var(--tdg-green); }
+.tdg-manual-areas { display: grid; gap: 20px; }
+.tdg-manual-area h3 { color: var(--tdg-ink); font-size: 1rem; margin: 0 0 10px; }
+.tdg-manual-modulos { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.tdg-manual-modulo { background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 10px; display: flex; flex-direction: column; gap: 6px; padding: 12px; }
+.tdg-manual-modulo header { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.tdg-manual-modulo header strong { color: var(--tdg-ink); font-size: .84rem; }
+.tdg-manual-perm { background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); flex: 0 0 auto; font-size: .62rem; font-weight: 800; padding: 3px 8px; }
+.tdg-manual-modulo p { color: var(--tdg-muted); font-size: .74rem; line-height: 1.3; margin: 0; }
+.tdg-manual-modulo button { align-self: start; background: transparent; border: 0; color: var(--tdg-green); cursor: pointer; font: inherit; font-size: .74rem; font-weight: 750; margin-top: auto; padding: 4px 0 0; }
+@media (max-width: 760px) { .tdg-area-referencias { grid-template-columns: 1fr; } }

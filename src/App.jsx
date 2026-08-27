@@ -1959,6 +1959,23 @@ function Login({ update }) {
           <span className="mobile-logo">
             <Logo />
           </span>
+          <div className="auth-perfis" role="group" aria-label="Como você quer entrar">
+            <button type="button" className="active" aria-pressed="true">
+              Acesso ao ERP
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.assign("/portal-cliente")}
+            >
+              Sou Cliente
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.assign("/portal-motorista")}
+            >
+              Sou Motorista
+            </button>
+          </div>
           <div className="auth-tabs" role="tablist" aria-label="Acesso">
             <button
               type="button"

@@ -1,6 +1,8 @@
-import { ArrowRight, BadgeCheck, Boxes, BriefcaseBusiness, CheckCircle2, FileText, Gauge, Megaphone, Route, Scale, Settings, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, BadgeCheck, Boxes, BriefcaseBusiness, Gauge, GitBranch, Megaphone, Route, Scale, ScrollText, Settings, Table2, Target, TrendingUp, Users } from "lucide-react";
 
-const cards = {
+// Exportado para a página de Fluxos consumir as passagens entre áreas e o Manual
+// do ERP consumir as responsabilidades — a mesma fonte, sem duplicar conteúdo.
+export const cards = {
   products: {
     kicker: "PRODUTOS",
     title: "Produtos logísticos",
@@ -233,26 +235,19 @@ export default function EnterpriseAreaPage({ area, products = [], onNavigate }) 
         <Icon size={28} />
       </div>
 
-      <div className="tdg-work-area-grid tdg-enterprise-area-grid">
-        <article className="tdg-work-area">
-          <div className="tdg-work-area-heading"><span><CheckCircle2 size={20} /></span><div><strong>Responsabilidades</strong><small>O que esta área decide</small></div></div>
-          <ul className="tdg-work-area-list">
-            {config.responsibilities.map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        </article>
-        <article className="tdg-work-area">
-          <div className="tdg-work-area-heading"><span><FileText size={20} /></span><div><strong>Passagem entre áreas</strong><small>Como fecha a cadeia</small></div></div>
-          <ul className="tdg-work-area-list">
-            {config.handoff.map(([label, owner]) => <li key={label}><strong>{owner}</strong> {label}</li>)}
-          </ul>
-        </article>
-        <article className="tdg-work-area">
-          <div className="tdg-work-area-heading"><span><Target size={20} /></span><div><strong>Próximas ações</strong><small>Entrar no trabalho</small></div></div>
-          <div className="tdg-work-area-links">
-            {config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}
-            <button type="button" onClick={() => onNavigate?.("/todogreen/rasci")} key="rasci">Ver matriz RASCI<ArrowRight size={14} /></button>
-          </div>
-        </article>
+      <article className="tdg-work-area tdg-area-actions">
+        <div className="tdg-work-area-heading"><span><Target size={20} /></span><div><strong>Ações desta área</strong><small>Entrar no trabalho</small></div></div>
+        <div className="tdg-work-area-links">
+          {config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}
+        </div>
+      </article>
+
+      {/* Responsabilidades, fluxos e manual não moram mais em cada área: viram três
+          referências únicas, sem repetir o mesmo conteúdo em toda tela. */}
+      <div className="tdg-area-referencias">
+        <button type="button" onClick={() => onNavigate?.("/todogreen/rasci")}><Table2 size={16} /><span><strong>Responsabilidades (RASCI)</strong><small>Quem executa, aprova, apoia, consulta e é informado</small></span><ArrowRight size={14} /></button>
+        <button type="button" onClick={() => onNavigate?.("/todogreen/fluxos")}><GitBranch size={16} /><span><strong>Fluxos entre áreas</strong><small>Como o trabalho passa de uma área para a outra</small></span><ArrowRight size={14} /></button>
+        <button type="button" onClick={() => onNavigate?.("/todogreen/manual")}><ScrollText size={16} /><span><strong>Manual do ERP</strong><small>O que cada módulo faz e como usar</small></span><ArrowRight size={14} /></button>
       </div>
 
       {area === "products" && <ProductStrip products={products} />}
