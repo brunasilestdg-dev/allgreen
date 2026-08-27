@@ -40,11 +40,27 @@ export const normalizeFleetVehicle = (input = {}) => ({
   fields: input.fields && typeof input.fields === "object" ? input.fields : {},
 });
 
-export const fleetVehicleMetrics = (vehicleInput = {}) => {
+// Tarifas de referência quando a régua de precificação não informa a sua. Sem
+// elas o custo por km ficava estruturalmente zerado (dependia de `costAccumulated`,
+// que nada alimenta), e o alerta de economia negativa nunca disparava.
+export const FLEET_ENERGY_DEFAULTS = { energyCostPerKwh: 0.92, maintenancePerKm: 0.42 };
+
+export const fleetVehicleMetrics = (vehicleInput = {}, assumptions = {}) => {
   const vehicle = normalizeFleetVehicle(vehicleInput);
+  const energyCostPerKwh = Number(assumptions.energyCostPerKwh) > 0
+    ? Number(assumptions.energyCostPerKwh) : FLEET_ENERGY_DEFAULTS.energyCostPerKwh;
+  const maintenancePerKm = Number.isFinite(Number(assumptions.maintenancePerKm)) && Number(assumptions.maintenancePerKm) > 0
+    ? Number(assumptions.maintenancePerKm) : FLEET_ENERGY_DEFAULTS.maintenancePerKm;
+
   const margin = vehicle.revenueAccumulated - vehicle.costAccumulated;
   const marginPercent = vehicle.revenueAccumulated > 0 ? (margin / vehicle.revenueAccumulated) * 100 : 0;
-  const costPerKm = vehicle.odometerKm > 0 ? vehicle.costAccumulated / vehicle.odometerKm : 0;
+  // Custo realizado: só existe quando há custo acumulado lançado sobre o hodômetro.
+  const realizedCostPerKm = vehicle.odometerKm > 0 ? vehicle.costAccumulated / vehicle.odometerKm : 0;
+  // Custo projetado: energia (consumo físico × tarifa) + manutenção variável por km.
+  const energyCostPerKm = vehicle.energyConsumptionKwhPerKm * energyCostPerKwh;
+  const projectedCostPerKm = energyCostPerKm + maintenancePerKm;
+  // O número que a operação usa: o realizado quando existe, senão o projetado.
+  const costPerKm = realizedCostPerKm > 0 ? realizedCostPerKm : projectedCostPerKm;
   const revenuePerKm = vehicle.odometerKm > 0 ? vehicle.revenueAccumulated / vehicle.odometerKm : 0;
   const rangeEfficiencyPercent = vehicle.nominalRangeKm > 0 ? (vehicle.realRangeKm / vehicle.nominalRangeKm) * 100 : 0;
   const estimatedEnergyKwh = vehicle.odometerKm * vehicle.energyConsumptionKwhPerKm;
@@ -55,6 +71,9 @@ export const fleetVehicleMetrics = (vehicleInput = {}) => {
     margin,
     marginPercent,
     costPerKm,
+    realizedCostPerKm,
+    projectedCostPerKm,
+    energyCostPerKm,
     revenuePerKm,
     rangeEfficiencyPercent,
     estimatedEnergyKwh,
@@ -65,9 +84,9 @@ export const fleetVehicleMetrics = (vehicleInput = {}) => {
   };
 };
 
-export const summarizeFleet = (vehicles = []) => {
+export const summarizeFleet = (vehicles = [], assumptions = {}) => {
   const normalized = vehicles.map(normalizeFleetVehicle);
-  const metrics = normalized.map(fleetVehicleMetrics);
+  const metrics = normalized.map((vehicle) => fleetVehicleMetrics(vehicle, assumptions));
   const total = normalized.length;
   const statusCount = (status) => normalized.filter((vehicle) => vehicle.status === status).length;
   const available = statusCount("available");
@@ -96,9 +115,9 @@ export const summarizeFleet = (vehicles = []) => {
   };
 };
 
-export const fleetAlerts = (vehicleInput = {}, today = new Date().toISOString().slice(0, 10)) => {
+export const fleetAlerts = (vehicleInput = {}, today = new Date().toISOString().slice(0, 10), assumptions = {}) => {
   const vehicle = normalizeFleetVehicle(vehicleInput);
-  const metrics = fleetVehicleMetrics(vehicle);
+  const metrics = fleetVehicleMetrics(vehicle, assumptions);
   const alerts = [];
   if (metrics.batteryRisk) alerts.push({ level: "critical", code: "battery-soh", message: "Saúde da bateria abaixo de 80%." });
   if (metrics.autonomyRisk) alerts.push({ level: "high", code: "range-efficiency", message: "Autonomia real abaixo de 70% da nominal." });

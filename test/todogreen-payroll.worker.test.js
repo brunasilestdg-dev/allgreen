@@ -130,6 +130,50 @@ describe("fechamento da folha trava", () => {
   });
 });
 
+describe("folha lança no financeiro", () => {
+  it("fechar gera as quatro contas a pagar no razão, com vencimento no mês seguinte", async () => {
+    await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Davi Financeiro", cpf: "390.533.447-05", salarioBase: 4200, admissaoEm: "2026-01-02" },
+    });
+    const run = await (await pedir("/api/todogreen/payroll/folhas", {
+      metodo: "POST", token: rh.token, corpo: { competencia: "2026-05", tipo: "mensal" },
+    })).json();
+
+    const fechar = await (await pedir(`/api/todogreen/payroll/folhas/${run.id}/fechar`, { metodo: "POST", token: rh.token })).json();
+    expect(fechar.lancamentosFinanceiros).toBeGreaterThanOrEqual(1);
+
+    const { results } = await env.DB.prepare(
+      `SELECT category, amount, due_date, kind, competence_date, fields_json
+         FROM todogreen_financial_entries
+        WHERE workspace_owner_id = ? AND archived_at IS NULL
+          AND json_extract(fields_json, '$.origem') = 'folha'
+          AND json_extract(fields_json, '$.payrollRunId') = ?`,
+    ).bind(rh.id, run.id).all();
+
+    // Líquido + FGTS + INSS + IRRF (as que tiverem valor > 0), todas como custo.
+    expect(results.length).toBeGreaterThanOrEqual(2);
+    expect(results.every((r) => r.kind === "cost")).toBe(true);
+    const liquido = results.find((r) => r.category.includes("líquido"));
+    expect(liquido).toBeTruthy();
+    expect(liquido.amount).toBeGreaterThan(0);
+    // Vencimento cai no mês seguinte à competência.
+    expect(liquido.due_date.startsWith("2026-06")).toBe(true);
+    expect(liquido.competence_date).toBe("2026-05-01");
+
+    // Reprocessar (reabrir + fechar) não duplica os lançamentos não pagos.
+    await pedir(`/api/todogreen/payroll/folhas/${run.id}/reabrir`, { metodo: "POST", token: rh.token });
+    await pedir(`/api/todogreen/payroll/folhas/${run.id}/fechar`, { metodo: "POST", token: rh.token });
+    const { results: depois } = await env.DB.prepare(
+      `SELECT id FROM todogreen_financial_entries
+        WHERE workspace_owner_id = ? AND archived_at IS NULL
+          AND json_extract(fields_json, '$.origem') = 'folha'
+          AND json_extract(fields_json, '$.payrollRunId') = ?`,
+    ).bind(rh.id, run.id).all();
+    expect(depois.length).toBe(results.length);
+  });
+});
+
 describe("ponto e férias", () => {
   it("registra ponto e férias de um colaborador e lista de volta", async () => {
     const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {

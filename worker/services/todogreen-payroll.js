@@ -45,6 +45,24 @@ const parse = (valor, alternativa) => {
 const objeto = (valor) => (valor && typeof valor === "object" && !Array.isArray(valor) ? valor : {});
 const lista = (valor) => (Array.isArray(valor) ? valor : []);
 
+// Vencimento de cada obrigação da folha, no mês seguinte à competência (AAAA-MM).
+const vencimentoFolha = (competencia, dia) => {
+  const [ano, mes] = String(competencia).split("-").map(Number);
+  // Date.UTC usa mês 0-based; passar `mes` (1-based da competência) já cai no mês seguinte.
+  const data = new Date(Date.UTC(ano, mes, Math.min(dia, 28)));
+  return data.toISOString().slice(0, 10);
+};
+
+// As quatro obrigações que a folha fechada gera como contas a pagar, cada uma com
+// seu vencimento típico no mês seguinte. A soma delas é a despesa real da empresa
+// (líquido + INSS + IRRF retidos e repassados + FGTS patronal = proventos + FGTS).
+const OBRIGACOES_FOLHA = [
+  { chave: "liquido", campoTotal: "totalLiquido", categoria: "Folha — salário líquido", dia: 5 },
+  { chave: "fgts", campoTotal: "totalFgts", categoria: "Folha — FGTS", dia: 7 },
+  { chave: "inss", campoTotal: "totalInss", categoria: "Folha — INSS a recolher", dia: 20 },
+  { chave: "irrf", campoTotal: "totalIrrf", categoria: "Folha — IRRF a recolher", dia: 20 },
+];
+
 // ---------------------------------------------------------------------------
 // Mapeamento
 // ---------------------------------------------------------------------------
@@ -357,6 +375,45 @@ const criarRun = async (env, access, user, corpo) => {
   return json(runDaLinha(row), 201);
 };
 
+// Lança a folha fechada no razão único (todogreen_financial_entries) como quatro
+// contas a pagar. Reprocessar arquiva os lançamentos ainda NÃO pagos e regrava —
+// nunca toca num que já teve baixa, preservando o razão append-only.
+const lancarFolhaNoFinanceiro = async (env, access, user, run, totais) => {
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE todogreen_financial_entries
+        SET archived_at = ?, updated_at = ?
+      WHERE workspace_owner_id = ? AND tenant_id = ?
+        AND archived_at IS NULL AND paid_amount = 0
+        AND json_extract(fields_json, '$.origem') = 'folha'
+        AND json_extract(fields_json, '$.payrollRunId') = ?`,
+  ).bind(agora, agora, access.ownerId, TENANT_ID, run.id).run();
+
+  const gravacoes = [];
+  for (const obrigacao of OBRIGACOES_FOLHA) {
+    const valor = numero(totais[obrigacao.campoTotal]);
+    if (valor <= 0) continue;
+    gravacoes.push(env.DB.prepare(
+      `INSERT INTO todogreen_financial_entries
+         (id, tenant_id, workspace_owner_id, kind, client_id, product_id, scenario_id,
+          category, description, amount, reference_month, status, fields_json,
+          due_date, paid_amount, counterparty, document_number, cost_center,
+          budget_code, payment_method, competence_date, contract_id, invoice_status,
+          revision, created_by, updated_by, created_at, updated_at, archived_at)
+       VALUES (?, ?, ?, 'cost', '', '', '', ?, ?, ?, ?, 'confirmed', ?,
+               ?, 0, ?, '', '', '', '', ?, '', '', 1, ?, ?, ?, ?, NULL)`,
+    ).bind(
+      crypto.randomUUID(), TENANT_ID, access.ownerId,
+      obrigacao.categoria, `${obrigacao.categoria} · ${run.competencia}`, valor, run.competencia,
+      JSON.stringify({ origem: "folha", payrollRunId: run.id, competencia: run.competencia, obrigacao: obrigacao.chave }),
+      vencimentoFolha(run.competencia, obrigacao.dia), "Folha de pagamento",
+      `${run.competencia}-01`, user.id, user.id, agora, agora,
+    ));
+  }
+  if (gravacoes.length) await env.DB.batch(gravacoes);
+  return gravacoes.length;
+};
+
 // Fechar: calcula o holerite de cada colaborador ativo, grava os itens e trava.
 const fecharRun = async (env, access, user, runId) => {
   const run = await env.DB.prepare(
@@ -430,8 +487,11 @@ const fecharRun = async (env, access, user, runId) => {
     runId, TENANT_ID, access.ownerId,
   ).run();
 
+  // Fechada e travada, a folha vira despesa: lança as quatro contas a pagar no razão.
+  const lancamentos = await lancarFolhaNoFinanceiro(env, access, user, run, totais);
+
   const row = await env.DB.prepare("SELECT * FROM todogreen_payroll_runs WHERE id = ?").bind(runId).first();
-  return json({ run: runDaLinha(row), colaboradores: itensCalculados.length, ...totais });
+  return json({ run: runDaLinha(row), colaboradores: itensCalculados.length, lancamentosFinanceiros: lancamentos, ...totais });
 };
 
 const reabrirRun = async (env, access, user, runId) => {
