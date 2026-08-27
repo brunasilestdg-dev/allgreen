@@ -44,6 +44,7 @@ import {
 } from "../todoGreenCrmDomain.js";
 import { assessAccount, gmailComposeUrl, outlookComposeUrl, whatsappUrl } from "../accountIntelligenceDomain.js";
 import { parseCrmImportFile } from "../crmSpreadsheetImportDomain.js";
+import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
 import "./TodoGreenPages.css";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
@@ -51,6 +52,13 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
   maximumFractionDigits: 0,
 });
+
+// Data legível (AAAA-MM-DD ou ISO) sem quebrar quando o valor falta.
+const dataBR = (valor) => {
+  if (!valor) return "Não informada";
+  const d = new Date(valor.length <= 10 ? `${valor}T00:00:00` : valor);
+  return Number.isNaN(d.getTime()) ? valor : d.toLocaleDateString("pt-BR");
+};
 
 // Liberação e gestão do acesso ao portal do cliente. O endpoint de liberar
 // (PUT) existia sem NENHUMA tela que o chamasse: cliente novo só entrava no
@@ -622,7 +630,7 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
   const [clients, setClients] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
   const [query, setQuery] = useState("");
@@ -730,7 +738,43 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
   }, [renderedClients, stageFilter, stageOptions, summaryById]);
   const selected = clients.find((client) => client.id === selectedId) || null;
   const selectedAccount = useMemo(() => selected ? accountFromClient(selected) : null, [selected]);
-  const selectedOpportunities = selected ? crmOpportunities.filter((item) => item.clientId === selected.id) : [];
+  const selectedOpportunities = useMemo(() => selected ? crmOpportunities.filter((item) => item.clientId === selected.id) : [], [selected, crmOpportunities]);
+  // Ficha comercial do cliente: contrato (produto, tabela, datas, reajuste),
+  // primeira coleta (das operações) e um histórico único de tudo que aconteceu.
+  const comercial = useMemo(() => {
+    if (!selected) return null;
+    const nomeProduto = (id) => {
+      if (!id) return "";
+      const achado = LOGISTICS_PRODUCTS.find((p) => p.id === id || p.code === id || p.name === id);
+      return achado ? achado.name : id;
+    };
+    const contratos = (contracts || []).filter((c) => c.clientId === selected.id);
+    const ativo = contratos.find((c) => (c.situacao || "").toLowerCase() === "active" || (c.situacao || "").toLowerCase() === "ativo")
+      || [...contratos].sort((a, b) => String(b.atualizadoEm || "").localeCompare(String(a.atualizadoEm || "")))[0]
+      || null;
+    const ops = (operations || []).filter((o) => o.clientId === selected.id);
+    const datasColeta = ops.map((o) => o.dataServico || o.criadoEm || "").filter(Boolean).sort();
+    const primeiraColeta = datasColeta[0] || "";
+    const produto = ativo ? nomeProduto(ativo.servicoId) : nomeProduto(ops[0]?.produtoId);
+    const dataNegociada = ativo?.assinadoEm || ativo?.aprovadoEm || ativo?.inicioEm || "";
+    // Histórico único, do mais recente para o mais antigo.
+    const eventos = [];
+    for (const c of contratos) {
+      if (c.criadoEm) eventos.push({ data: c.criadoEm, tipo: "Contrato", texto: `Contrato "${c.titulo || "sem título"}" cadastrado` });
+      if (c.assinadoEm) eventos.push({ data: c.assinadoEm, tipo: "Contrato", texto: `Contrato assinado` });
+      if (c.aprovadoEm) eventos.push({ data: c.aprovadoEm, tipo: "Contrato", texto: `Contrato aprovado` });
+    }
+    for (const o of ops) {
+      const quando = o.dataServico || o.criadoEm;
+      if (quando) eventos.push({ data: quando, tipo: "Operação", texto: `${o.referencia || "Operação"}${o.origem ? ` · ${o.origem} → ${o.destino || ""}` : ""}${o.situacao ? ` (${o.situacao})` : ""}` });
+    }
+    for (const opp of selectedOpportunities) {
+      const quando = opp.atualizadoEm || opp.criadoEm;
+      if (quando) eventos.push({ data: quando, tipo: "Oportunidade", texto: `${opp.stage || "Etapa"}${opp.value ? ` · ${BRL.format(opp.value)}` : ""}` });
+    }
+    eventos.sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    return { contrato: ativo, contratos, produto, dataNegociada, primeiraColeta, totalOperacoes: ops.length, eventos };
+  }, [selected, contracts, operations, selectedOpportunities]);
   const selectedSummary = selectedAccount ? crmAccountSummary(selectedAccount, selectedAccount.contacts, crmOpportunities) : null;
   const selectedIntelligence = selected && selectedAccount
     ? assessAccount({ ...selected, crm: { ...(selected.crm || {}), contacts: selectedAccount.contacts } })
@@ -1001,6 +1045,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
       <nav className="tdg-crm-account-tabs" aria-label="Visões da conta">
         {[
           ["summary", "Resumo"],
+          ["comercial", "Comercial"],
           ["relationship", "Relacionamento"],
           ["opportunities", "Oportunidades"],
           ["strategy", "Estratégia"],
@@ -1012,6 +1057,23 @@ export default function ClientsPage({ authHeaders, opportunities = [], onNavigat
       <section className="tdg-crm-next"><Target size={17} /><div><small>PRÓXIMA MELHOR AÇÃO</small><strong>{selectedIntelligence.nextTask}</strong></div><button type="button" onClick={() => setTaskClientId(selected.id)}>Transformar em tarefa</button><button type="button" onClick={completeSuggestedAction} disabled={!selectedIntelligence.nextTaskCanComplete}>Marcar feita e ver próxima</button></section>
       {portalPreviewOpen && <ClientPortalPreview client={selected} authHeaders={authHeaders} open onClose={() => setPortalPreviewOpen(false)} />}
       <div className={`tdg-crm-detail-grid tdg-account-tab-${detailTab}`}><main>
+        {comercial && <section className="tdg-crm-detail-section tdg-account-panel tdg-account-comercial">
+          <header><strong>Contrato e negociação</strong><small>{comercial.contrato ? (comercial.contrato.titulo || "Contrato ativo") : "Nenhum contrato cadastrado para esta conta"}</small></header>
+          <dl className="tdg-crm-account-data tdg-comercial-grid">
+            <div><dt>Tipo de produto</dt><dd>{comercial.produto || "Não informado"}</dd></div>
+            <div><dt>Tabela negociada</dt><dd>{comercial.contrato?.tabelaPrecoId || comercial.contrato?.cenarioId || "Não informada"}</dd></div>
+            <div><dt>Data negociada</dt><dd>{dataBR(comercial.dataNegociada)}</dd></div>
+            <div><dt>Primeira coleta</dt><dd>{dataBR(comercial.primeiraColeta)}{comercial.totalOperacoes > 0 ? ` · ${comercial.totalOperacoes} operação(ões)` : ""}</dd></div>
+            <div><dt>Data para reajuste</dt><dd>{dataBR(comercial.contrato?.dataBaseReajuste)}{comercial.contrato?.indiceReajuste ? ` · ${comercial.contrato.indiceReajuste}` : ""}</dd></div>
+            <div><dt>Vigência</dt><dd>{comercial.contrato?.inicioEm ? `${dataBR(comercial.contrato.inicioEm)} → ${comercial.contrato.fimEm ? dataBR(comercial.contrato.fimEm) : "sem término"}` : "Não informada"}</dd></div>
+            <div><dt>Valor mensal</dt><dd>{comercial.contrato?.valorMensal ? BRL.format(comercial.contrato.valorMensal) : "Não informado"}</dd></div>
+            <div><dt>Faturamento</dt><dd>{comercial.contrato?.diaFaturamento ? `Dia ${comercial.contrato.diaFaturamento}` : "Não definido"}{comercial.contrato?.situacao ? ` · ${comercial.contrato.situacao}` : ""}</dd></div>
+          </dl>
+          <header className="tdg-comercial-hist-head"><strong>Histórico de tratativa</strong><small>Contrato, operações e oportunidades, do mais recente ao mais antigo</small></header>
+          {comercial.eventos.length ? <ol className="tdg-comercial-timeline">
+            {comercial.eventos.slice(0, 60).map((ev, i) => <li key={`${ev.data}-${i}`}><span className="tdg-comercial-tag">{ev.tipo}</span><div><strong>{ev.texto}</strong><small>{dataBR(ev.data)}</small></div></li>)}
+          </ol> : <p>Sem histórico de contrato, operação ou oportunidade registrado para esta conta.</p>}
+        </section>}
         <section className="tdg-crm-intelligence tdg-account-panel tdg-account-intelligence"><header><strong>IA · mapa da empresa</strong><small>Leitura dos dados do CRM</small></header><div><span>Relevância ESG</span><strong>{selectedIntelligence.esgRelevance}</strong><small>{selectedIntelligence.esgReason}</small></div><div><span>Próxima tarefa sugerida</span><strong>{selectedIntelligence.nextTask}</strong></div><div><span>Procurement de Logística e Transportes</span><strong>{procurementSummary}</strong></div></section>
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-summary"><header><strong>Potencial de carteira</strong><small>Cálculo anual auditável</small></header><div className="tdg-crm-strategy-grid"><span><small>Potencial anual</small><strong>{selectedStrategy.potential.annual ? BRL.format(selectedStrategy.potential.annual) : "Não calculado"}</strong></span><span><small>Middle mile</small><strong>{selectedStrategy.potential.middleMile ? BRL.format(selectedStrategy.potential.middleMile) : "Não calculado"}</strong></span><span><small>Last mile</small><strong>{selectedStrategy.potential.lastMile ? BRL.format(selectedStrategy.potential.lastMile) : "Não calculado"}</strong></span><span><small>Dedicada</small><strong>{selectedStrategy.potential.dedicated ? BRL.format(selectedStrategy.potential.dedicated) : "Não calculado"}</strong></span></div><p><strong>Base:</strong> {selectedStrategy.potential.method}.</p><p><strong>Expansão geográfica:</strong> {selectedStrategy.potential.geographicExpansion || "Ainda não mapeada."}</p>{selectedStrategy.potential.missing && <small>Abra Editar e informe as quantidades mensais e os tickets médios. Sem essa base, o CRM não inventa receita.</small>}</section>
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-summary"><header><strong>Share of Wallet</strong><small>Participação no gasto logístico do cliente</small></header>{selectedStrategy.shareOfWallet.percentage === null ? <p>{shareOfWalletMissingMessage}</p> : <div className="tdg-crm-strategy-grid"><span><small>Participação To Do Green</small><strong>{selectedStrategy.shareOfWallet.percentage.toLocaleString("pt-BR")}%</strong></span><span><small>Receita anual To Do Green</small><strong>{BRL.format(selectedStrategy.shareOfWallet.ourRevenue)}</strong></span><span><small>Gasto logístico do cliente</small><strong>{BRL.format(selectedStrategy.shareOfWallet.customerSpend)}</strong></span><span><small>Espaço estimado</small><strong>{BRL.format(selectedStrategy.shareOfWallet.remaining)}</strong></span></div>}</section>
