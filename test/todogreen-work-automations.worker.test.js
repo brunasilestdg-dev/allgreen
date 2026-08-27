@@ -271,4 +271,56 @@ describe("automações configuráveis da Central de Trabalho", () => {
     const data = await completed.json();
     expect(data.recurrenceCreated).toEqual(expect.objectContaining({ title: "Revisão semanal", dueDate: "2026-08-31", status: "novo" }));
   });
+
+  it("ações novas do Monday: update-field, set-date, create-item e duplicate-item", async () => {
+    const board = (await (await pedir("/api/todogreen/work-center")).json()).boards[0].id;
+
+    // update-field grava em fields.<chave>; set-date carimba a data de entrega.
+    await pedir("/api/todogreen/work-center/automations", {
+      method: "POST",
+      body: { name: "Marca área e prazo", boardId: board, trigger: "status-changed",
+        conditionField: "status", conditionOperator: "equals", conditionValue: "aguardando",
+        actionType: "update-field", actionValue: "area=Financeiro" },
+    });
+    await pedir("/api/todogreen/work-center/automations", {
+      method: "POST",
+      body: { name: "Prazo para hoje", boardId: board, trigger: "status-changed",
+        conditionField: "status", conditionOperator: "equals", conditionValue: "aguardando",
+        actionType: "set-date", actionValue: "hoje" },
+    });
+    const alvo = (await (await pedir("/api/todogreen/work-center", {
+      method: "POST", body: { boardId: board, title: "Item com campo e data" },
+    })).json()).item;
+    const mexido = await (await pedir(`/api/todogreen/work-center/${alvo.id}`, {
+      method: "PATCH", body: { status: "aguardando", revision: alvo.revision },
+    })).json();
+    expect(mexido.item.fields.area).toBe("Financeiro");
+    expect(mexido.item.dueDate).toBe(new Date().toISOString().slice(0, 10));
+
+    // create-item cria um item NOVO no quadro quando o gatilho dispara.
+    await pedir("/api/todogreen/work-center/automations", {
+      method: "POST",
+      body: { name: "Abre subtarefa", boardId: board, trigger: "status-changed",
+        conditionField: "status", conditionOperator: "equals", conditionValue: "bloqueado",
+        actionType: "create-item", actionValue: "Revisar contrato gerado pela automação" },
+    });
+    const gatilho = (await (await pedir("/api/todogreen/work-center", {
+      method: "POST", body: { boardId: board, title: "Dispara criação" },
+    })).json()).item;
+    await pedir(`/api/todogreen/work-center/${gatilho.id}`, {
+      method: "PATCH", body: { status: "bloqueado", revision: gatilho.revision },
+    });
+    const lista = await (await pedir("/api/todogreen/work-center")).json();
+    const criados = (lista.items || []).filter((i) => i.title === "Revisar contrato gerado pela automação");
+    expect(criados.length).toBeGreaterThanOrEqual(1);
+
+    // A regra sem valor (duplicate-item) é aceita na criação.
+    const semValor = await pedir("/api/todogreen/work-center/automations", {
+      method: "POST",
+      body: { name: "Duplica ao concluir", boardId: board, trigger: "status-changed",
+        conditionField: "status", conditionOperator: "equals", conditionValue: "concluido",
+        actionType: "duplicate-item", actionValue: "" },
+    });
+    expect(semValor.status).toBe(201);
+  });
 });

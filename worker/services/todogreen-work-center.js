@@ -4,7 +4,7 @@ import {
   resolveTodoGreenAccess,
 } from "./todogreen-access.js";
 import { pesquisarEmpresa } from "./todogreen-client-intelligence.js";
-import { sendWhatsAppText, whatsappEnabled } from "../mensageria/envio.js";
+import { emailEnabled, escMail, sendEmail, sendWhatsAppText, whatsappEnabled } from "../mensageria/envio.js";
 
 const TENANT_ID = "todogreen";
 const MAX_LIMIT = 200;
@@ -31,7 +31,19 @@ const AUTOMATION_ACTIONS = new Set([
   "move-item",
   "research-client",
   "prepare-whatsapp",
+  // Paridade com o Monday. As três primeiras mudam o próprio item na mesma
+  // transação de escrita; as quatro últimas são efeitos colaterais (INSERT/
+  // UPDATE/e-mail) executados depois, com o contexto do item.
+  "update-field",
+  "set-date",
+  "move-to-group",
+  "create-item",
+  "duplicate-item",
+  "archive-item",
+  "notify-email",
 ]);
+// Estas duas agem sobre o próprio item e não têm valor a configurar.
+const AUTOMATION_ACTIONS_SEM_VALOR = new Set(["duplicate-item", "archive-item"]);
 const AUTOMATION_OPERATORS = new Set([
   "equals",
   "not-equals",
@@ -279,6 +291,43 @@ async function runAutomationRules(env, ownerId, item, { before = null, eventType
       };
       executionMessage = `Regra “${rule.name}”: WhatsApp preparado e aguardando confirmação.`;
       changed = true;
+    } else if (rule.action.type === "update-field" && value.includes("=")) {
+      // "chave=valor" grava em fields.<chave>. É o update-field genérico do
+      // Monday: qualquer campo customizado, não só status/prioridade.
+      const idx = value.indexOf("=");
+      const chave = clean(value.slice(0, idx), 60);
+      const conteudo = clean(value.slice(idx + 1), 500);
+      if (chave && item.fields?.[chave] !== conteudo) {
+        item.fields = { ...item.fields, [chave]: conteudo };
+        changed = true;
+      }
+    } else if (rule.action.type === "set-date") {
+      // "hoje" | "+N" (N dias a partir de hoje) | data absoluta AAAA-MM-DD.
+      const alvo = value === "hoje" || value === "today"
+        ? now.slice(0, 10)
+        : /^[+-]?\d+$/.test(value)
+          ? new Date(Date.now() + Number(value) * 86400000).toISOString().slice(0, 10)
+          : /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+      if (alvo && item.dueDate !== alvo) { item.dueDate = alvo; changed = true; }
+    } else if (rule.action.type === "move-to-group" && value && item.fields?.groupId !== value) {
+      item.fields = { ...item.fields, groupId: value };
+      changed = true;
+    } else if (rule.action.type === "create-item" && value) {
+      sideEffects.push({ type: "create-item", boardId: item.boardId, title: value, ruleId: rule.id });
+      executionMessage = `Regra “${rule.name}”: item “${value}” criado.`;
+      changed = true;
+    } else if (rule.action.type === "duplicate-item") {
+      sideEffects.push({ type: "duplicate-item", item: { ...item, fields: { ...item.fields } }, ruleId: rule.id });
+      executionMessage = `Regra “${rule.name}”: item duplicado.`;
+      changed = true;
+    } else if (rule.action.type === "archive-item") {
+      sideEffects.push({ type: "archive-item", itemId: item.id, ruleId: rule.id });
+      executionMessage = `Regra “${rule.name}”: item arquivado.`;
+      changed = true;
+    } else if (rule.action.type === "notify-email" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
+      sideEffects.push({ type: "notify-email", to: value, title: item.title, boardId: item.boardId, ruleId: rule.id });
+      executionMessage = `Regra “${rule.name}”: e-mail enviado a ${value}.`;
+      changed = true;
     }
     if (!changed) continue;
     matchedIds.push(rule.id);
@@ -293,24 +342,58 @@ async function runAutomationRules(env, ownerId, item, { before = null, eventType
 }
 
 async function executeAutomationSideEffects(env, ownerId, userId, effects = []) {
+  const agora = new Date().toISOString();
   for (const effect of effects) {
-    if (effect.type !== "research-client") continue;
-    const linha = await env.DB.prepare(
-      `SELECT id,name,legal_name,document,segment,notes,fields_json,revision
-         FROM todogreen_clients
-        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-    ).bind(effect.clientId, TENANT_ID, ownerId).first();
-    if (!linha) continue;
     try {
-      await pesquisarEmpresa(env, {
-        linha,
-        ownerId,
-        userId,
-        forcar: false,
-        focus: effect.focus,
-      });
+      if (effect.type === "research-client") {
+        const linha = await env.DB.prepare(
+          `SELECT id,name,legal_name,document,segment,notes,fields_json,revision
+             FROM todogreen_clients
+            WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+        ).bind(effect.clientId, TENANT_ID, ownerId).first();
+        if (!linha) continue;
+        await pesquisarEmpresa(env, { linha, ownerId, userId, forcar: false, focus: effect.focus });
+      } else if (effect.type === "create-item") {
+        const id = crypto.randomUUID();
+        await env.DB.prepare(
+          `INSERT INTO todogreen_work_items
+           (id,tenant_id,workspace_owner_id,board_id,type,title,description,status,priority,
+            responsible_user_id,responsible_label,client_label,due_date,fields_json,relations_json,
+            dependencies_json,revision,created_by,updated_by,created_at,updated_at,archived_at)
+           VALUES (?,?,?,?,'tarefa',?,'','novo','media',NULL,'','','',
+            json_object('origem','automacao','ruleId',?),'[]','[]',1,?,?,?,?,NULL)`,
+        ).bind(id, TENANT_ID, ownerId, effect.boardId, clean(effect.title, 200), effect.ruleId, userId, userId, agora, agora).run();
+        await event(env, ownerId, effect.boardId, id, userId, "created", {}, { id, title: effect.title });
+      } else if (effect.type === "duplicate-item") {
+        const it = effect.item;
+        const id = crypto.randomUUID();
+        const campos = { ...it.fields, completedAt: undefined, completedBy: undefined, duplicadoDe: it.id };
+        delete campos.recurrenceSuccessorId;
+        delete campos.pendingWhatsapp;
+        await env.DB.prepare(
+          `INSERT INTO todogreen_work_items
+           (id,tenant_id,workspace_owner_id,board_id,type,title,description,status,priority,
+            responsible_user_id,responsible_label,client_label,due_date,fields_json,relations_json,
+            dependencies_json,revision,created_by,updated_by,created_at,updated_at,archived_at)
+           VALUES (?,?,?,?,?,?,?,'novo',?,?,?,?,?,?,?,'[]',1,?,?,?,?,NULL)`,
+        ).bind(id, TENANT_ID, ownerId, it.boardId, it.type, `${it.title} (cópia)`, it.description || "",
+          it.priority || "media", it.responsibleUserId || null, it.responsible || "", it.client || "",
+          it.dueDate || null, JSON.stringify(campos), JSON.stringify(it.relations || []), userId, userId, agora, agora).run();
+        await event(env, ownerId, it.boardId, id, userId, "duplicated", {}, { id, title: `${it.title} (cópia)` });
+      } else if (effect.type === "archive-item") {
+        await env.DB.prepare(
+          "UPDATE todogreen_work_items SET archived_at=?, updated_by=?, updated_at=? WHERE id=? AND workspace_owner_id=? AND archived_at IS NULL",
+        ).bind(agora, userId, agora, effect.itemId, ownerId).run();
+      } else if (effect.type === "notify-email" && emailEnabled(env)) {
+        const html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#1e1b35">
+          <div style="background:#173d31;border-radius:14px;padding:18px;text-align:center"><span style="color:#fff;font-weight:bold">To Do Green · Central de Trabalho</span></div>
+          <h2 style="margin:22px 0 8px">Um item precisa da sua atenção</h2>
+          <p style="color:#555">A automação sinalizou: <strong>${escMail(clean(effect.title, 200))}</strong>. Abra a Central de Trabalho para tratar.</p>
+        </div>`;
+        await sendEmail(env, effect.to, "To Do Green · item da Central de Trabalho", html).catch(() => {});
+      }
     } catch (error) {
-      console.error("To Do Green automation research error", error);
+      console.error("To Do Green automation side effect error", effect.type, error);
     }
   }
 }
@@ -427,7 +510,8 @@ async function handleAutomationRules(request, env, access, user, parts) {
   if (request.method === "POST" && !ruleId) {
     const body = await request.json().catch(() => ({}));
     const rule = normalizeAutomationRule(body);
-    if (!rule.name || !rule.trigger || !rule.actionType || !rule.actionValue || !rule.conditionOperator)
+    if (!rule.name || !rule.trigger || !rule.actionType || !rule.conditionOperator
+      || (!rule.actionValue && !AUTOMATION_ACTIONS_SEM_VALOR.has(rule.actionType)))
       return response({ error: "Informe nome, gatilho e ação válidos." }, 400);
     if (!(await validBoard(rule.boardId))) return response({ error: "Quadro inválido." }, 400);
     if (rule.actionType === "move-item" && !(await validBoard(rule.actionValue)))
@@ -467,7 +551,8 @@ async function handleAutomationRules(request, env, access, user, parts) {
       actionValue: body.actionValue ?? previous.action.value,
       enabled: body.enabled ?? previous.enabled,
     });
-    if (!merged.name || !merged.trigger || !merged.actionType || !merged.actionValue || !merged.conditionOperator)
+    if (!merged.name || !merged.trigger || !merged.actionType || !merged.conditionOperator
+      || (!merged.actionValue && !AUTOMATION_ACTIONS_SEM_VALOR.has(merged.actionType)))
       return response({ error: "Automação inválida." }, 400);
     if (!(await validBoard(merged.boardId))) return response({ error: "Quadro inválido." }, 400);
     if (merged.actionType === "move-item" && !(await validBoard(merged.actionValue)))

@@ -50,6 +50,13 @@ const ACTIONS = [
   ["move-item", "mover para outro quadro"],
   ["research-client", "pesquisar e completar a conta"],
   ["prepare-whatsapp", "preparar WhatsApp para aprovação"],
+  ["update-field", "atualizar um campo"],
+  ["set-date", "definir a data de entrega"],
+  ["move-to-group", "mover para outro grupo"],
+  ["create-item", "criar um novo item"],
+  ["duplicate-item", "duplicar este item"],
+  ["archive-item", "arquivar este item"],
+  ["notify-email", "notificar por e-mail"],
 ];
 
 const STATUS = [
@@ -165,6 +172,28 @@ function ActionValue({ form, boards, onChange }) {
     return (
       <label className="full"><span>Mensagem para aprovação</span><textarea maxLength={1000} value={form.actionValue} onChange={(event) => onChange(event.target.value)} placeholder="A mensagem só será enviada depois da confirmação de uma pessoa no item." /></label>
     );
+  if (form.actionType === "update-field")
+    return (
+      <label className="full"><span>Campo e valor</span><input maxLength={200} value={form.actionValue} onChange={(event) => onChange(event.target.value)} placeholder="campo=valor · ex.: area=Financeiro" /></label>
+    );
+  if (form.actionType === "set-date")
+    return (
+      <label><span>Data</span><input maxLength={20} value={form.actionValue} onChange={(event) => onChange(event.target.value)} placeholder="hoje, +7 (dias) ou AAAA-MM-DD" /></label>
+    );
+  if (form.actionType === "move-to-group")
+    return (
+      <label><span>Grupo de destino (id)</span><input maxLength={60} value={form.actionValue} onChange={(event) => onChange(event.target.value)} placeholder="id do grupo" /></label>
+    );
+  if (form.actionType === "create-item")
+    return (
+      <label className="full"><span>Título do novo item</span><input maxLength={200} value={form.actionValue} onChange={(event) => onChange(event.target.value)} placeholder="Ex.: Revisar contrato" /></label>
+    );
+  if (form.actionType === "notify-email")
+    return (
+      <label><span>E-mail do destinatário</span><input type="email" maxLength={200} value={form.actionValue} onChange={(event) => onChange(event.target.value)} placeholder="pessoa@todogreen.com.br" /></label>
+    );
+  if (form.actionType === "duplicate-item" || form.actionType === "archive-item")
+    return <p className="tdg-auto-nota">Esta ação age no próprio item e não precisa de valor.</p>;
   return (
     <label><span>Responsável</span><input maxLength={160} value={form.actionValue} onChange={(event) => onChange(event.target.value)} placeholder="Nome ou equipe" /></label>
   );
@@ -177,6 +206,13 @@ const defaultActionValue = (actionType, boards) => ({
   "move-item": boards[0]?.id || "",
   "research-client": "company",
   "prepare-whatsapp": "",
+  "update-field": "",
+  "set-date": "hoje",
+  "move-to-group": "",
+  "create-item": "",
+  "duplicate-item": "",
+  "archive-item": "",
+  "notify-email": "",
 }[actionType] || "");
 
 export default function TodoGreenAutomations({ setToast, onNavigate }) {
