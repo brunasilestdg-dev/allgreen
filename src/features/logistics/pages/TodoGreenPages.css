@@ -718,15 +718,26 @@
 .tdg-crm-detail-grid main,.tdg-crm-detail-grid aside { display: grid; gap: 12px; min-width: 0; }
 .tdg-crm-detail-grid .tdg-account-panel { display: none !important; }
 .tdg-account-tab-summary .tdg-account-summary,
+.tdg-account-tab-comercial .tdg-account-comercial,
 .tdg-account-tab-relationship .tdg-account-relationship,
 .tdg-account-tab-opportunities .tdg-account-opportunities,
 .tdg-account-tab-strategy .tdg-account-strategy,
 .tdg-account-tab-activity .tdg-account-activity,
 .tdg-account-tab-intelligence .tdg-account-intelligence { display: grid !important; }
 .tdg-account-tab-relationship,
+.tdg-account-tab-comercial,
 .tdg-account-tab-activity { grid-template-columns: minmax(0,1fr); }
 .tdg-account-tab-relationship > aside,
+.tdg-account-tab-comercial > aside,
 .tdg-account-tab-activity > aside { display: none; }
+.tdg-comercial-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.tdg-comercial-hist-head { border-top: 1px solid var(--tdg-line); margin-top: 6px; padding-top: 12px; }
+.tdg-comercial-timeline { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.tdg-comercial-timeline li { align-items: start; display: grid; gap: 10px; grid-template-columns: auto 1fr; }
+.tdg-comercial-timeline li > div { display: grid; gap: 1px; min-width: 0; }
+.tdg-comercial-timeline li strong { color: var(--tdg-ink); font-size: 12.5px; }
+.tdg-comercial-timeline li small { color: var(--tdg-muted); font-size: 11px; }
+.tdg-comercial-tag { background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); font-size: 10px; font-weight: 800; height: max-content; padding: 3px 9px; white-space: nowrap; }
 .tdg-crm-detail-section,.tdg-crm-detail-grid .tdg-crm-intelligence,.tdg-crm-detail-grid .tdg-crm-web-intelligence { background: #fff; border: 1px solid var(--tdg-line); border-radius: 15px; display: grid; gap: 11px; padding: 15px; }
 .tdg-crm-detail-section > header,.tdg-crm-detail-grid .tdg-crm-intelligence > header { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
 .tdg-crm-detail-section > header small,.tdg-crm-detail-grid .tdg-crm-intelligence > header small { color: var(--tdg-muted); font-size: 10.5px; }
