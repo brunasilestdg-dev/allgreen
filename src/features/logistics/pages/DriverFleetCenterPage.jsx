@@ -162,7 +162,10 @@ function FleetCard({ vehicle, operations, onEdit }) {
       </div>
       <footer>
         <small>Autonomia real {NUM.format(vehicle.realRangeKm || 0)} km · eficiência {NUM.format(metrics.rangeEfficiencyPercent)}%</small>
-        <small>Margem acumulada {BRL.format(metrics.margin)}</small>
+        <small>
+          Custo {BRL.format(metrics.costPerKm)}/km
+          {metrics.realizedCostPerKm > 0 ? " (realizado)" : " (projetado)"} · Margem {BRL.format(metrics.margin)}
+        </small>
       </footer>
       {alerts.length > 0 && <div className="df-alerts">{alerts.map((alert) => <em key={alert.code}>{alert.message}</em>)}</div>}
     </article>
