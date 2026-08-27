@@ -670,6 +670,27 @@
 .tdg-crm-card-grid footer strong { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tdg-crm-card-grid footer svg { color: var(--tdg-green); flex: 0 0 auto; }
 .tdg-crm-card-grid .tdg-crm-card-load-more { color: var(--tdg-green); font-weight: 800; justify-content: center; min-height: 100px; text-align: center; }
+/* Funil (kanban simplificado): uma faixa de cartões verdes por etapa, escurecendo
+   da prospecção ao fechamento — contagem e valor somado, clicável para abrir a etapa. */
+.tdg-crm-funil-wrap { display: grid; gap: 10px; }
+.tdg-crm-funil-legenda { color: var(--tdg-muted); font-size: 12.5px; margin: 0; }
+.tdg-crm-funil { display: grid; gap: 12px; grid-auto-columns: minmax(180px, 1fr); grid-auto-flow: column; padding-bottom: 6px; }
+.tdg-crm-funil-card {
+  --funil-passo: 0;
+  background: color-mix(in srgb, #17643f calc(20% + var(--funil-passo) * 62%), #ffffff);
+  border: 0;
+  border-radius: 14px;
+  color: color-mix(in srgb, #0c3521 calc(100% - var(--funil-passo) * 100%), #ffffff);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  min-height: 96px;
+  padding: 16px 18px;
+  text-align: left;
+}
+.tdg-crm-funil-card strong { font-size: 12px; font-weight: 800; letter-spacing: .04em; opacity: .92; }
+.tdg-crm-funil-card b { font-size: 1.5rem; font-weight: 800; }
+.tdg-crm-funil-card:hover, .tdg-crm-funil-card:focus-visible { filter: brightness(1.05); outline: 2px solid var(--tdg-green); outline-offset: 2px; }
 .tdg-crm-kanban { display: grid; gap: 12px; grid-auto-columns: minmax(250px, 1fr); grid-auto-flow: column; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
 .tdg-crm-kanban-column { background: #f4f8f6; border: 1px solid var(--tdg-line); border-radius: 14px; display: grid; gap: 10px; grid-template-rows: auto minmax(180px, 1fr); min-width: 250px; padding: 12px; scroll-snap-align: start; }
 .tdg-crm-kanban-column > header { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; }
