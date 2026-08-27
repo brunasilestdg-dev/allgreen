@@ -1623,3 +1623,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Custos editáveis na calculadora de precificação. */
+.tdg-custos-op label { display: grid; gap: 3px; }
+.tdg-custos-op label span { font-size: .78rem; font-weight: 650; }
+.tdg-custos-op input { border: 1px solid var(--tdg-line); border-radius: 8px; min-height: 40px; padding: 6px 10px; }
+.tdg-custos-nota { color: var(--tdg-muted); font-size: .72rem; grid-column: 1 / -1; margin: 2px 0 0; }

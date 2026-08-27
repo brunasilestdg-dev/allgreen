@@ -53,6 +53,7 @@ import {
   TODO_GREEN_MODULE_CATALOG,
   TODO_GREEN_PRODUCTION_DATA_POLICY,
   TODO_GREEN_ROLES,
+  DEFAULT_PRICING_ASSUMPTIONS,
   TODO_GREEN_TENANT,
   centralPricingEngine,
   createPricingScenarioSnapshot,
@@ -1416,11 +1417,11 @@ function ModuleCard({ grupo }) {
   const implemented = grupo.ids.some((id) => IMPLEMENTED_MODULE_IDS.has(id));
   const assuntos = resumirAssuntos(grupo.assuntos);
   return (
-    <button className={`tdg-module-card ${implemented ? "" : "disabled"}`} type="button" onClick={() => implemented && openFunctionPage(grupo.rota)}>
+    <button className={`tdg-module-card ${implemented ? "" : "disabled"}`} type="button" title={assuntos || grupo.nome} onClick={() => implemented && openFunctionPage(grupo.rota)}>
       <span className="tdg-module-icon"><Icon size={22} /></span>
       <span>
         <strong>{grupo.nome}</strong>
-        {implemented && assuntos && <small className="tdg-module-assuntos">{assuntos}</small>}
+        {implemented && assuntos && <small className="tdg-module-assuntos" title={assuntos}>{assuntos}</small>}
         {!implemented && <small>Em implantação.</small>}
       </span>
       {!implemented && <em>Em implantação</em>}
@@ -1599,6 +1600,11 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
   // Sem ela carregada ainda, a calculadora usa o padrão — e diz qual régua
   // está aplicando, porque preço sem régua identificada não se defende.
   const [regua, setRegua] = useState(null);
+  // Custos da operação editáveis na própria calculadora. Nascem da régua em
+  // vigor (ou do padrão) e, quando a pessoa mexe, sobrescrevem as premissas SÓ
+  // nesta simulação — a régua versionada continua intacta. Era o pedido: ver e
+  // ajustar motorista, energia e veículo aqui, sem abrir outra tela.
+  const [custosManuais, setCustosManuais] = useState({});
   useEffect(() => {
     let vivo = true;
     const consulta = new URLSearchParams({ productId });
@@ -1629,14 +1635,24 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
   const allowed = hasTodoGreenPermission(role, "pricing:simulate");
   const blueprint = getProductPricingBlueprint(productId);
   const product = LOGISTICS_PRODUCTS.find((item) => item.id === productId);
+  // A base é a régua (ou o padrão); os custos manuais entram por cima. Só
+  // valores realmente digitados sobrescrevem — campo vazio mantém a régua.
+  const custosEfetivos = useMemo(() => ({ ...DEFAULT_PRICING_ASSUMPTIONS, ...(regua?.parametros || {}) }), [regua]);
+  const assumptionsComOverride = useMemo(() => {
+    const overrides = Object.fromEntries(
+      Object.entries(custosManuais).filter(([, v]) => v !== "" && v != null && Number.isFinite(Number(v))).map(([k, v]) => [k, Number(v)]),
+    );
+    return { ...(regua?.parametros || {}), ...overrides };
+  }, [regua, custosManuais]);
+  const houveOverride = Object.values(custosManuais).some((v) => v !== "" && v != null);
   const result = useMemo(
     () =>
       centralPricingEngine(
         productId,
         inputs,
-        regua?.parametros ? { assumptions: regua.parametros, parameterVersion: regua.versao } : {},
+        { assumptions: assumptionsComOverride, parameterVersion: (regua?.versao || "padrão") + (houveOverride ? " · custo ajustado" : "") },
       ),
-    [inputs, productId, regua],
+    [inputs, productId, assumptionsComOverride, regua, houveOverride],
   );
   const outputs = productSpecificOutputs(productId, result);
   const decision = pricingDecisionSummary(result);
@@ -1644,6 +1660,7 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
   const selectProduct = (nextProductId) => {
     setProductId(nextProductId);
     setInputs(productDefaults[nextProductId] || { client: "", distanceKm: "", frequencyPerMonth: "", customerTargetPrice: 0, dataQuality: "" });
+    setCustosManuais({});
     setPremissasConfirmadas(false);
   };
   const changeInput = (key, value) => {
@@ -1699,8 +1716,11 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
     const snapshot = createPricingScenarioSnapshot(
       productId,
       inputs,
-      { userId: db?.user?.id || "local", tenantId: TODO_GREEN_TENANT.id, justification: `Simulação criada pela calculadora To Do Green (régua ${regua?.versao || "padrão"}).` },
-      regua?.parametros ? { assumptions: regua.parametros, parameterVersion: regua.versao } : {},
+      { userId: db?.user?.id || "local", tenantId: TODO_GREEN_TENANT.id, justification: `Simulação criada pela calculadora To Do Green (régua ${regua?.versao || "padrão"}${houveOverride ? ", com custos ajustados na simulação" : ""}).` },
+      // O snapshot leva os MESMOS custos que a tela mostrou — incluindo os
+      // ajustes manuais. Salvar a régua pura enquanto a tela usou outro custo
+      // faria o histórico divergir do que a pessoa viu.
+      { assumptions: assumptionsComOverride, parameterVersion: (regua?.versao || "padrão") + (houveOverride ? " · custo ajustado" : "") },
     );
     // A simulação vai para o banco, não para o JSON do espaço. Era daqui que
     // saía a gravação genérica que sobrescrevia o trabalho de quem estivesse
@@ -1776,6 +1796,29 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
           {blueprint.inputGroups.map(([group, fields]) => (
             <fieldset key={group}><legend>{group}</legend>{fields.map((field) => <FieldInput key={field} name={field} value={inputs[field]} required={product?.requiredFields?.includes(field)} onChange={changeInput} />)}</fieldset>
           ))}
+          {/* Custos da operação, editáveis aqui mesmo. Vêm da régua em vigor;
+              ajustar sobrescreve só esta simulação. */}
+          <fieldset className="tdg-custos-op">
+            <legend>Custos da operação (motorista, energia, veículo)</legend>
+            {[
+              ["driverDailyCost", "Motorista por dia (R$)"],
+              ["energyCostPerKm", "Energia por km (R$)"],
+              ["vehicleMonthlyCost", "Veículo por mês (R$)"],
+              ["vehicleDailyCost", "Veículo por dia (R$)"],
+              ["maintenancePerKm", "Manutenção por km (R$)"],
+            ].map(([campo, rotulo]) => (
+              <label key={campo}>
+                <span>{rotulo}</span>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={custosManuais[campo] ?? ""}
+                  placeholder={String(custosEfetivos[campo] ?? 0)}
+                  onChange={(e) => { setCustosManuais((c) => ({ ...c, [campo]: e.target.value })); setPremissasConfirmadas(false); setCenarioSalvoId(""); }}
+                />
+              </label>
+            ))}
+            <p className="tdg-custos-nota">{houveOverride ? "Usando custos ajustados só nesta simulação — a régua não muda." : "Em branco = usa a régua em vigor (valor cinza é o atual)."}</p>
+          </fieldset>
           <fieldset><legend>Dados usados no cálculo</legend><FieldInput name="dataQuality" value={inputs.dataQuality} onChange={changeInput} /><FieldInput name="occupancyPercent" value={inputs.occupancyPercent} onChange={changeInput} /></fieldset>
         </form>
         <div
@@ -2317,7 +2360,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         <div className="tdg-shell-location">
           <span>TO DO GREEN · {activeManagement ? "ADMINISTRAÇÃO" : primaryNavigation.label.toUpperCase()}</span>
           <h1 id="tdg-title">{currentPage.title}</h1>
-          <p>{currentPage.description}</p>
+          <p title={currentPage.description}>{currentPage.description}</p>
         </div>
         <div className="tdg-shell-actions">
           <button className="tdg-shell-search" type="button" onClick={() => navigate("/todogreen/dashboard?ferramentas=1")}>
