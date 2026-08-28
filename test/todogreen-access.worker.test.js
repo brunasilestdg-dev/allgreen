@@ -101,14 +101,15 @@ describe("espaço de trabalho pedido na query string", () => {
   it("pedir o espaço de outra pessoa é recusado", async () => {
     const r = await pedir(`${SONDA}?owner=${deFora.id}`, liberado.token);
     // Antes o parâmetro era aceito como veio e a sessão passava a operar o
-    // espaço alheio.
-    expect(r.status).toBe(403);
+    // espaço alheio. Agora responde 404 (não 403): não confirmamos a existência
+    // de um espaço que não é seu, igual aos registros.
+    expect(r.status).toBe(404);
     expect((await r.json()).error).toMatch(/não pertence à sua conta/i);
   });
 
   it("um espaço inventado também é recusado", async () => {
     const r = await pedir(`${SONDA}?owner=espaco-que-nao-existe`, liberado.token);
-    expect(r.status).toBe(403);
+    expect(r.status).toBe(404);
   });
 
   it("o próprio espaço continua funcionando", async () => {
@@ -157,7 +158,8 @@ describe("a porta é a mesma em todos os serviços", () => {
   it("nenhum serviço aceita espaço de trabalho alheio", async () => {
     for (const rota of rotas) {
       const r = await pedir(`${rota}?owner=${deFora.id}`, liberado.token);
-      expect(r.status).toBe(403);
+      // 404: não confirmamos a existência de um espaço que não é seu.
+      expect(r.status).toBe(404);
     }
   });
 });

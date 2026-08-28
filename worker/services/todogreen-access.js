@@ -241,7 +241,10 @@ export async function exigirAcessoTodoGreen(request, env) {
               ? "Este espaço de trabalho não pertence à sua conta."
               : "Você não tem acesso à To Do Green.",
         },
-        403,
+        // Espaço de outra conta responde 404, não 403: a regra do projeto é não
+        // confirmar a existência de um recorte que não é seu (o mesmo que os
+        // registros já fazem). Falta de acesso à vertical em si continua 403.
+        motivo === NEGADO.espacoNaoAutorizado ? 404 : 403,
       ),
     };
 

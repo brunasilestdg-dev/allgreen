@@ -85,6 +85,7 @@ describe("workspace padrão da vertical To Do Green", () => {
 
   it("recusa workspace arbitrário", async () => {
     const response = await call("/api/todogreen/access?owner=workspace-alheio", seller.token);
-    expect(response.status).toBe(403);
+    // 404: não confirmamos a existência de um espaço que não é da conta.
+    expect(response.status).toBe(404);
   });
 });

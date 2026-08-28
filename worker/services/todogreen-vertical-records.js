@@ -1290,6 +1290,17 @@ const registrarPagamento = async (env, access, user, entryId, corpo) => {
     `SELECT * FROM todogreen_financial_entries
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(entryId, TENANT_ID, access.ownerId).first();
+  // Recebível que nasceu de um título faturado (ponte 0069, id 'entry-<titleId>')
+  // tem baixa SÓ pela via do título (Faturamento › Títulos): dar baixa aqui no
+  // razão não reduziria o open_amount do título e abriria dupla baixa do mesmo
+  // recebível. Receita avulsa (sem título) segue baixável normalmente aqui.
+  if (typeof entryId === "string" && entryId.startsWith("entry-") && lancamento?.kind === "revenue") {
+    const titulo = await env.DB.prepare(
+      "SELECT status FROM todogreen_financial_titles WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL",
+    ).bind(entryId.slice(6), TENANT_ID, access.ownerId).first();
+    if (titulo && ["open", "partial", "overdue"].includes(titulo.status))
+      return json({ error: "Este recebível vem de um título faturado. Dê a baixa em Faturamento › Títulos; o razão é atualizado sozinho." }, 409);
+  }
   const revisao = Number(corpo.revision);
   if (!Number.isFinite(revisao) || revisao !== Number(lancamento.revision))
     return json({ error: "O lançamento mudou. Recarregue antes de registrar a baixa." }, 409);

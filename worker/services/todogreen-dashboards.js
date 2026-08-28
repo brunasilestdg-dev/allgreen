@@ -1,4 +1,5 @@
-import { authenticatedUser, resolveAccess } from "./todogreen-work-center.js";
+import { authenticatedUser } from "./todogreen-work-center.js";
+import { resolveTodoGreenAccess } from "./todogreen-access.js";
 
 const TENANT_ID = "todogreen";
 const MAX_DASHBOARDS = 30;
@@ -76,7 +77,10 @@ export async function handleTodoGreenDashboards(request, env) {
   const user = await authenticatedUser(request, env);
   if (!user) return response({ error: "Sua sessão expirou. Entre novamente." }, 401);
   const url = new URL(request.url);
-  const access = await resolveAccess(env, user, url.searchParams.get("owner"));
+  const { access, motivo } = await resolveTodoGreenAccess(env, user, url.searchParams.get("owner"));
+  // Espaço de outra conta → 404 (não confirmamos que existe); sem vínculo → 403.
+  if (!access && motivo === "espaco-nao-autorizado")
+    return response({ error: "Este espaço de trabalho não pertence à sua conta." }, 404);
   if (!access) return response({ error: "Você não tem acesso à To Do Green." }, 403);
 
   const parts = url.pathname.split("/").filter(Boolean);

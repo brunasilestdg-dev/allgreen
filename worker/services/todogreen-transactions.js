@@ -838,17 +838,27 @@ async function settleTitle(env, access, user, id, body) {
   ).bind(id,TENANT_ID,access.ownerId).first();
   if (!row) return json({ error: "Título não encontrado." }, 404);
   if (!["open","partial","overdue"].includes(row.status)) return json({ error: "Este título não aceita baixa." }, 409);
+  // Baixa move o caixa do razão pela ponte: não pode furar um mês já fechado.
+  const mesFechado = await competenciaFechada(env, access.ownerId, row.competence_date);
+  if (mesFechado)
+    return json({ error: `O período ${mesFechado} está fechado na Tesouraria. Reabra o período com justificativa para dar baixa.` }, 409);
   const state = settlementState(row.open_amount, body.amount);
   if (!state.valid) return json({ error: state.error }, 400);
   const now = new Date().toISOString();
   const settlementId = crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare(`INSERT INTO todogreen_settlements
-      (id,tenant_id,workspace_owner_id,title_id,amount,settled_at,method,bank_account_id,reference,notes,created_by,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(settlementId,TENANT_ID,access.ownerId,id,num(body.amount),text(body.settledAt,40)||now,text(body.method,50),text(body.bankAccountId,120),text(body.reference,120),text(body.notes,500),user.id,now),
-    env.DB.prepare(`UPDATE todogreen_financial_titles SET open_amount=?,status=?,revision=revision+1,updated_by=?,updated_at=?
-      WHERE id=? AND tenant_id=? AND workspace_owner_id=?`).bind(state.remaining,state.status,user.id,now,id,TENANT_ID,access.ownerId),
-  ]);
+  // Trava otimista: o UPDATE só passa se o saldo em aberto ainda for o que
+  // lemos. Duas baixas simultâneas (ou uma baixa pela tela transacional e outra
+  // pelo razão) leem o mesmo open_amount; a segunda encontra 0 linhas afetadas
+  // e é recusada, em vez de somar pagamento em dobro (lost update).
+  const upd = await env.DB.prepare(
+    `UPDATE todogreen_financial_titles SET open_amount=?,status=?,revision=revision+1,updated_by=?,updated_at=?
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND open_amount=? AND status IN ('open','partial','overdue')`,
+  ).bind(state.remaining,state.status,user.id,now,id,TENANT_ID,access.ownerId,row.open_amount).run();
+  if (!upd.meta?.changes)
+    return json({ error: "O título mudou desde que a tela carregou (baixa concorrente). Recarregue e tente de novo." }, 409);
+  await env.DB.prepare(`INSERT INTO todogreen_settlements
+    (id,tenant_id,workspace_owner_id,title_id,amount,settled_at,method,bank_account_id,reference,notes,created_by,created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(settlementId,TENANT_ID,access.ownerId,id,num(body.amount),text(body.settledAt,40)||now,text(body.method,50),text(body.bankAccountId,120),text(body.reference,120),text(body.notes,500),user.id,now).run();
   return json({ settlementId, openAmount: state.remaining, status: state.status }, 201);
 }
 

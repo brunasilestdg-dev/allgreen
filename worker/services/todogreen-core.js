@@ -31,9 +31,9 @@ const parse = (value, fallback = null) => {
 const email = (value) => String(value || "").trim().toLowerCase();
 
 async function resolveCoreAccess(env, user, ownerId) {
-  const { access } = await resolveTodoGreenAccess(env, user, ownerId);
-  if (!access) return null;
-  return { ...access, source: access.viaAdministradorGlobal ? "env" : "vinculo" };
+  const { access, motivo } = await resolveTodoGreenAccess(env, user, ownerId);
+  if (!access) return { access: null, motivo };
+  return { access: { ...access, source: access.viaAdministradorGlobal ? "env" : "vinculo" }, motivo: null };
 }
 
 const canManage = (access) => ["owner", "admin"].includes(access?.role) || access?.permissions?.includes("*");
@@ -262,7 +262,10 @@ async function handleTransactionsWithControls(request, env, access, user) {
 
 export async function handleTodoGreenCore(request, env, user, url, dependencies = {}) {
   const requestedOwnerId = url.searchParams.get("owner");
-  const access = await resolveCoreAccess(env, user, requestedOwnerId);
+  const { access, motivo } = await resolveCoreAccess(env, user, requestedOwnerId);
+  // Espaço de outra conta → 404 (não confirmamos que existe); falta de vínculo → 403.
+  if (!access && motivo === "espaco-nao-autorizado")
+    return response({ error: "Este espaço de trabalho não pertence à sua conta." }, 404);
   if (!access) return response({ error:"Você não tem acesso à To Do Green." },403);
 
   const path = url.pathname;

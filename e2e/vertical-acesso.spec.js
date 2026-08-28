@@ -90,7 +90,8 @@ test.describe("acesso à vertical To Do Green", () => {
 
     if (idAlvo) {
       const r = await api(page, `/api/todogreen/pricing-parameters?owner=${idAlvo}`);
-      expect(r.status).toBe(403);
+      // 404: não confirmamos a existência de um espaço que não é da conta.
+      expect(r.status).toBe(404);
       expect(String(r.corpo?.error)).toMatch(/não pertence à sua conta/i);
     }
   });

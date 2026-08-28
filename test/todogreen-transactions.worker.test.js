@@ -188,6 +188,19 @@ describe("espinha transacional", () => {
     expect(entry.document_number).toBe(title.number);
   });
 
+  it("recusa baixa do recebível-ponte pelo razão (evita dupla baixa)", async () => {
+    // O recebível 'entry-<titleId>' só se baixa pela via do título; dar baixa
+    // aqui no razão não reduziria o open_amount do título e contaria o dinheiro
+    // duas vezes.
+    const response = await request(`/api/todogreen/records/financial/entry-${title.id}/payments`, "POST", { valor: 100 });
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toMatch(/Faturamento.*Títulos/i);
+    // E o título continua aberto pelo valor cheio.
+    const ainda = await env.DB.prepare("SELECT open_amount,status FROM todogreen_financial_titles WHERE id=?").bind(title.id).first();
+    expect(ainda.open_amount).toBe(250);
+    expect(ainda.status).toBe("open");
+  });
+
   it("aceita baixa parcial e depois integral", async () => {
     let response = await request(`/api/todogreen/transactions/titles/${title.id}/settle`, "POST", { amount: 100, method: "pix" });
     expect(await response.json()).toMatchObject({ openAmount: 150, status: "partial" });
