@@ -2,6 +2,7 @@ import {
   authenticatedUser,
 } from "./todogreen-work-center.js";
 import { resolveTodoGreenAccess } from "./todogreen-access.js";
+import { atualizacoesDePosicao, normalizePlate } from "../../src/features/logistics/todoGreenFleetDomain.js";
 
 const TENANT_ID = "todogreen";
 const MAX_PROVIDER_ITEMS = 1000;
@@ -415,7 +416,11 @@ async function syncIntegration(env, integration, triggerType = "manual") {
           WHERE id = ?`,
       ).bind(status === "failed" ? "error" : "active", finishedAt, finishedAt, finishedAt, integration.id),
     ]);
-    return { runId, status, imported, updated, ignored, errors, total: external.collection.length };
+    // Depois de gravar as posições, propaga a última leitura às operações em
+    // curso. Best-effort: uma falha aqui não derruba a sincronização do tracker.
+    let operacoesAtualizadas = 0;
+    try { operacoesAtualizadas = await sincronizarPosicoesOperacoes(env, integration.workspace_owner_id); } catch { /* enriquecimento */ }
+    return { runId, status, imported, updated, ignored, errors, total: external.collection.length, operacoesAtualizadas };
   } catch (error) {
     const finishedAt = new Date().toISOString();
     const message = clean(error?.message || "Falha na sincronização.", 1000);
@@ -433,6 +438,56 @@ async function syncIntegration(env, integration, triggerType = "manual") {
     ]);
     throw new Error(message);
   }
+}
+
+// Ponte rastreador → operação: pega a última posição do tracker por placa e
+// carimba as operações em curso da mesma placa (last_position_*). É a leitura
+// que faltava para o cockpit e o portal do cliente mostrarem "onde está" sem
+// digitação. Só avança o horário — nunca regride —, e não toca em operação
+// entregue. O `revision` da operação NÃO é incrementado: é enriquecimento de
+// sistema, não pode conflitar com quem edita a operação ao mesmo tempo.
+async function sincronizarPosicoesOperacoes(env, ownerId) {
+  const [posRows, opRows] = await Promise.all([
+    env.DB.prepare(
+      `SELECT l.plate AS plate, p.latitude, p.longitude, p.recorded_at
+         FROM todogreen_tracker_vehicle_links l
+         JOIN todogreen_tracker_positions p ON p.id = (
+           SELECT p2.id FROM todogreen_tracker_positions p2
+            WHERE p2.vehicle_link_id = l.id
+            ORDER BY p2.recorded_at DESC LIMIT 1
+         )
+        WHERE l.workspace_owner_id = ? AND l.plate != ''`,
+    ).bind(ownerId).all(),
+    env.DB.prepare(
+      `SELECT id, vehicle_plate, last_position_at
+         FROM todogreen_client_operations
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL
+          AND (delivered_at IS NULL OR delivered_at = '') AND vehicle_plate != ''`,
+    ).bind(TENANT_ID, ownerId).all(),
+  ]);
+
+  const posicoesPorPlaca = {};
+  for (const r of posRows.results || []) {
+    // Se duas placas iguais vierem de links diferentes, fica com a leitura mais nova.
+    const chave = normalizePlate(r.plate);
+    const nova = String(r.recorded_at || "");
+    if (!posicoesPorPlaca[chave] || nova > String(posicoesPorPlaca[chave].recordedAt || "")) {
+      posicoesPorPlaca[chave] = { latitude: r.latitude, longitude: r.longitude, recordedAt: nova };
+    }
+  }
+  const operacoes = (opRows.results || []).map((r) => ({
+    id: r.id, vehiclePlate: r.vehicle_plate, lastPositionAt: r.last_position_at || "",
+  }));
+  const updates = atualizacoesDePosicao(operacoes, posicoesPorPlaca);
+  if (!updates.length) return 0;
+
+  const agora = new Date().toISOString();
+  await env.DB.batch(updates.map((u) => env.DB.prepare(
+    `UPDATE todogreen_client_operations
+        SET last_position_lat = ?, last_position_lng = ?, last_position_at = ?, updated_at = ?
+      WHERE id = ? AND workspace_owner_id = ?`,
+  ).bind(u.latitude, u.longitude, u.recordedAt, agora, u.operationId, ownerId)));
+  return updates.length;
 }
 
 const mapIntegration = (row, env) => {
@@ -770,6 +825,15 @@ export async function handleTodoGreenTracker(request, env) {
     } catch (error) {
       return response({ error: clean(error?.message, 1000) }, 422);
     }
+  }
+
+  // Propaga, sob demanda, a última posição do tracker às operações em curso —
+  // útil quando as posições chegam por webhook (sem passar por syncIntegration)
+  // ou para forçar o carimbo sem uma sincronização completa.
+  if (request.method === "POST" && action === "sync-operations") {
+    if (!canManage(access)) return response({ error: "Você não pode sincronizar posições." }, 403);
+    const operacoesAtualizadas = await sincronizarPosicoesOperacoes(env, access.ownerId);
+    return response({ ok: true, operacoesAtualizadas });
   }
 
   return response({ error: "Método não permitido." }, 405);

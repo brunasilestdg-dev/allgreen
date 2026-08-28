@@ -188,6 +188,29 @@ export const consolidarEconomiaFrota = (vehicles = [], manutencaoPorVeiculo = {}
   });
 };
 
+// Ponte rastreador → operação: casa a última posição do tracker (por placa) com
+// as operações em curso da MESMA placa, e devolve só as que precisam de
+// carimbo — quando a operação ainda não tem posição, ou quando a leitura do
+// tracker é mais recente que a última gravada. Nunca regride o horário: uma
+// leitura mais velha que a já registrada é ignorada. Posição sem coordenada
+// numérica não vira atualização.
+export const atualizacoesDePosicao = (operacoes = [], posicoesPorPlaca = {}) => {
+  const updates = [];
+  for (const op of operacoes || []) {
+    const pos = posicoesPorPlaca[normalizePlate(op.vehiclePlate)];
+    if (!pos) continue;
+    const lat = Number(pos.latitude);
+    const lng = Number(pos.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const nova = String(pos.recordedAt || "");
+    if (!nova) continue;
+    const atual = String(op.lastPositionAt || "");
+    if (atual && nova <= atual) continue; // já temos posição igual ou mais nova
+    updates.push({ operationId: op.id, latitude: lat, longitude: lng, recordedAt: nova });
+  }
+  return updates;
+};
+
 export const buildFleetAiPrompt = ({ vehicles = [], question = "" } = {}) => {
   const summary = summarizeFleet(vehicles);
   return [

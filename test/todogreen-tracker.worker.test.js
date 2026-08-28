@@ -149,3 +149,56 @@ describe("estrutura de integração com a Sistemas Tracker", () => {
     expect((await response.json()).vehicles).toEqual([]);
   });
 });
+
+describe("ponte rastreador → operação", () => {
+  it("carimba a última posição do tracker na operação em curso da mesma placa", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO tenants (id, slug, name, segment, status, theme_json, created_at, updated_at)
+       VALUES ('todogreen','todogreen','To Do Green','logistica','active','{}',?,?)`,
+    ).bind(now, now).run();
+
+    // Integração + link (placa TRK1A11) + última posição em SP.
+    const intId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tracker_integrations (id, workspace_owner_id, provider, created_by, updated_by, created_at, updated_at)
+       VALUES (?, ?, 'ponte-teste', ?, ?, ?, ?)`,
+    ).bind(intId, manager.id, manager.id, manager.id, now, now).run();
+    const linkId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tracker_vehicle_links (id, integration_id, workspace_owner_id, external_vehicle_id, plate, created_at, updated_at)
+       VALUES (?, ?, ?, 'ext-1', 'TRK1A11', ?, ?)`,
+    ).bind(linkId, intId, manager.id, now, now).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tracker_positions
+         (id, integration_id, workspace_owner_id, vehicle_link_id, external_vehicle_id, latitude, longitude, recorded_at, received_at, raw_hash)
+       VALUES (?, ?, ?, ?, 'ext-1', -23.5, -46.6, '2026-08-28T12:00:00Z', ?, ?)`,
+    ).bind(crypto.randomUUID(), intId, manager.id, linkId, now, `hash-${crypto.randomUUID()}`).run();
+
+    // Cliente + operação em curso na mesma placa (minúscula, para testar a normalização).
+    const clienteId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_clients (id, tenant_id, workspace_owner_id, name, created_by, updated_by, created_at, updated_at)
+       VALUES (?, 'todogreen', ?, 'Cliente Rota', ?, ?, ?, ?)`,
+    ).bind(clienteId, manager.id, manager.id, manager.id, now, now).run();
+    const opId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, vehicle_plate, created_by, updated_by, created_at, updated_at)
+       VALUES (?, 'todogreen', ?, ?, 'trk1a11', ?, ?, ?, ?)`,
+    ).bind(opId, clienteId, manager.id, manager.id, manager.id, now, now).run();
+
+    const res = await request("/api/todogreen/tracker/sync-operations", { method: "POST", token: manager.token });
+    expect(res.status).toBe(200);
+    expect((await res.json()).operacoesAtualizadas).toBeGreaterThanOrEqual(1);
+
+    const op = await env.DB.prepare("SELECT last_position_lat, last_position_lng, last_position_at FROM todogreen_client_operations WHERE id = ?").bind(opId).first();
+    expect(op.last_position_lat).toBe(-23.5);
+    expect(op.last_position_lng).toBe(-46.6);
+    expect(op.last_position_at).toBe("2026-08-28T12:00:00Z");
+
+    // Rodar de novo não re-carimba (a leitura não é mais nova): 0 atualizações.
+    const res2 = await request("/api/todogreen/tracker/sync-operations", { method: "POST", token: manager.token });
+    expect((await res2.json()).operacoesAtualizadas).toBe(0);
+  });
+});

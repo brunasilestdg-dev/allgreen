@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FLEET_ENERGY_DEFAULTS,
+  atualizacoesDePosicao,
   consolidarEconomiaFrota,
   fleetAlerts,
   fleetVehicleMetrics,
@@ -121,5 +122,39 @@ describe("status operacional sugerido do veículo", () => {
     );
     expect(eco[0].statusSugerido.status).toBe("maintenance");
     expect(eco[0].operacoes.ativas).toBe(1);
+  });
+});
+
+describe("ponte rastreador → operação", () => {
+  const posicoes = { ABC1D23: { latitude: -23.5, longitude: -46.6, recordedAt: "2026-08-28T12:00:00Z" } };
+
+  it("carimba a operação sem posição e a que tem posição mais velha", () => {
+    const ups = atualizacoesDePosicao(
+      [
+        { id: "o1", vehiclePlate: "abc-1d23", lastPositionAt: "" },
+        { id: "o2", vehiclePlate: "ABC1D23", lastPositionAt: "2026-08-28T09:00:00Z" },
+      ],
+      posicoes,
+    );
+    expect(ups.map((u) => u.operationId).sort()).toEqual(["o1", "o2"]);
+    expect(ups[0].latitude).toBe(-23.5);
+    expect(ups[0].recordedAt).toBe("2026-08-28T12:00:00Z");
+  });
+
+  it("não regride: leitura igual ou mais velha que a atual é ignorada", () => {
+    expect(atualizacoesDePosicao([{ id: "o1", vehiclePlate: "ABC1D23", lastPositionAt: "2026-08-28T12:00:00Z" }], posicoes)).toEqual([]);
+    expect(atualizacoesDePosicao([{ id: "o1", vehiclePlate: "ABC1D23", lastPositionAt: "2026-08-29T00:00:00Z" }], posicoes)).toEqual([]);
+  });
+
+  it("placa sem posição no tracker não gera atualização", () => {
+    expect(atualizacoesDePosicao([{ id: "o1", vehiclePlate: "XYZ9K88", lastPositionAt: "" }], posicoes)).toEqual([]);
+  });
+
+  it("coordenada não numérica é descartada", () => {
+    const ups = atualizacoesDePosicao(
+      [{ id: "o1", vehiclePlate: "ABC1D23", lastPositionAt: "" }],
+      { ABC1D23: { latitude: null, longitude: "x", recordedAt: "2026-08-28T12:00:00Z" } },
+    );
+    expect(ups).toEqual([]);
   });
 });
