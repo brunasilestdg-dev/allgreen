@@ -59,8 +59,10 @@ describe("interface de capacidade e recursos", () => {
 
   it("cria recurso, alocação e apresenta utilização", async () => {
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Capacidade e Recursos" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Adicionar primeiro recurso" }));
+    // A tela de Capacidade é carregada de forma lazy; sob carga do runner de CI
+    // o findBy padrão (1s) chega a estourar antes do chunk montar. Damos folga.
+    fireEvent.click(await screen.findByRole("button", { name: "Capacidade e Recursos" }, { timeout: 8000 }));
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar primeiro recurso" }, { timeout: 8000 }));
     fireEvent.change(screen.getByLabelText("Nome do recurso"), {
       target: { value: "Ana" },
     });
