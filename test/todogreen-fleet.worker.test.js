@@ -164,8 +164,14 @@ describe("economia real da frota", () => {
     expect(eco.operacoes.kmTotal).toBe(500);
     expect(eco.operacoes.operacoes).toBe(2);
     expect(eco.operacoes.entregues).toBe(1);
+    expect(eco.operacoes.ativas).toBe(1); // a operação sem delivered_at está em curso
     // 200 / 500 = 0,40 por km
     expect(eco.manutencaoPorKm).toBe(0.4);
+    // Com OS aberta o veículo está available: sugere manutenção (a OS foi fechada
+    // acima? não — esta é uma OS nova, aberta). Como a OS de manutenção deste
+    // veículo foi criada e concluída, não há OS aberta; então a operação em curso
+    // sugere "in-operation".
+    expect(eco.statusSugerido.status).toBe("in-operation");
   });
 
   it("economics é leitura: o auditor (só read) enxerga", async () => {

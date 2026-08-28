@@ -87,7 +87,9 @@ export async function handleTodoGreenFleet(request, env, access, user) {
         `SELECT vehicle_plate,
                 COUNT(*) AS operacoes,
                 COALESCE(SUM(distance_km), 0) AS km_total,
-                SUM(CASE WHEN delivered_at IS NOT NULL AND delivered_at != '' THEN 1 ELSE 0 END) AS entregues
+                SUM(CASE WHEN delivered_at IS NOT NULL AND delivered_at != '' THEN 1 ELSE 0 END) AS entregues,
+                SUM(CASE WHEN (delivered_at IS NULL OR delivered_at = '')
+                          AND status NOT IN ('entregue','cancelada','concluida') THEN 1 ELSE 0 END) AS ativas
            FROM todogreen_client_operations
           WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL AND vehicle_plate != ''
           GROUP BY vehicle_plate`,
@@ -103,7 +105,7 @@ export async function handleTodoGreenFleet(request, env, access, user) {
     const operacoesPorPlaca = {};
     for (const r of opsRows.results || []) {
       operacoesPorPlaca[normalizePlate(r.vehicle_plate)] = {
-        operacoes: num(r.operacoes), kmTotal: num(r.km_total), entregues: num(r.entregues),
+        operacoes: num(r.operacoes), kmTotal: num(r.km_total), entregues: num(r.entregues), ativas: num(r.ativas),
       };
     }
     return json({ economics: consolidarEconomiaFrota(vehicles, manutencaoPorVeiculo, operacoesPorPlaca) });

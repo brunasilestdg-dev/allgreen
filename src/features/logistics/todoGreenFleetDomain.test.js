@@ -5,6 +5,7 @@ import {
   fleetAlerts,
   fleetVehicleMetrics,
   normalizePlate,
+  sugerirStatusVeiculo,
   summarizeFleet,
 } from "./todoGreenFleetDomain.js";
 
@@ -89,5 +90,36 @@ describe("economia real da frota por placa", () => {
   it("normalizePlate ignora máscara e caixa", () => {
     expect(normalizePlate("abc-1d23")).toBe("ABC1D23");
     expect(normalizePlate("ABC1D23")).toBe("ABC1D23");
+  });
+});
+
+describe("status operacional sugerido do veículo", () => {
+  it("manutenção aberta sugere 'maintenance' e pesa mais que operação", () => {
+    const s = sugerirStatusVeiculo({ manutencaoAbertas: 1, operacoesAtivas: 3, statusAtual: "available" });
+    expect(s.status).toBe("maintenance");
+    expect(s.motivo).toMatch(/manuten/i);
+  });
+
+  it("operação em curso sugere 'in-operation'", () => {
+    const s = sugerirStatusVeiculo({ manutencaoAbertas: 0, operacoesAtivas: 2, statusAtual: "available" });
+    expect(s.status).toBe("in-operation");
+  });
+
+  it("sem sinal não sugere nada (respeita o status manual)", () => {
+    expect(sugerirStatusVeiculo({ manutencaoAbertas: 0, operacoesAtivas: 0, statusAtual: "reserved" })).toBe(null);
+  });
+
+  it("não sugere quando já bate com o status atual", () => {
+    expect(sugerirStatusVeiculo({ manutencaoAbertas: 1, operacoesAtivas: 0, statusAtual: "maintenance" })).toBe(null);
+  });
+
+  it("a consolidação carrega o status sugerido por veículo", () => {
+    const eco = consolidarEconomiaFrota(
+      [{ id: "v1", plate: "ABC1D23", status: "available" }],
+      { v1: { total: 0, abertas: 1, ordens: 1, downtimeHoras: 0 } },
+      { ABC1D23: { operacoes: 1, kmTotal: 100, entregues: 0, ativas: 1 } },
+    );
+    expect(eco[0].statusSugerido.status).toBe("maintenance");
+    expect(eco[0].operacoes.ativas).toBe(1);
   });
 });

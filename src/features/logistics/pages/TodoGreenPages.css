@@ -1142,6 +1142,30 @@
   padding-top: 10px;
 }
 
+.df-status-suggest {
+  align-items: center;
+  background: color-mix(in srgb, var(--tdg-accent, #2563eb) 10%, transparent);
+  border-radius: 999px;
+  color: var(--tdg-ink, #1e293b);
+  display: inline-flex;
+  flex-basis: 100%;
+  font-size: 11px;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.df-status-suggest button {
+  background: var(--tdg-accent, #2563eb);
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: auto;
+  padding: 3px 12px;
+}
+
 .df-alerts {
   display: flex;
   flex-wrap: wrap;

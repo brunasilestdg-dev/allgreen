@@ -151,11 +151,14 @@ function DriverCard({ row }) {
   );
 }
 
-function FleetCard({ vehicle, operations, economia, onEdit }) {
+const statusLabel = (id) => STATUS_OPTIONS.find((s) => s.id === id)?.label || id;
+
+function FleetCard({ vehicle, operations, economia, onEdit, onApplyStatus }) {
   const metrics = fleetVehicleMetrics(vehicle);
   const alerts = fleetAlerts(vehicle);
   const fields = vehicle.fields || {};
   const latest = latestOperationForVehicle(operations, vehicle);
+  const sugestao = economia?.statusSugerido;
   return (
     <article
       className={`df-fleet-card ${alerts.length ? "risk" : ""}${onEdit ? " df-clickable" : ""}`}
@@ -190,6 +193,16 @@ function FleetCard({ vehicle, operations, economia, onEdit }) {
             {" · "}{economia.operacoes.operacoes} viagem(ns), {NUM.format(economia.operacoes.kmTotal)} km
             {economia.manutencaoPorKm != null ? ` · ${BRL.format(economia.manutencaoPorKm)}/km manut.` : ""}
           </small>
+        )}
+        {sugestao && (
+          <span className="df-status-suggest">
+            Sugerido: <strong>{statusLabel(sugestao.status)}</strong> — {sugestao.motivo}
+            {onApplyStatus && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onApplyStatus(vehicle, sugestao.status); }}>
+                Aplicar
+              </button>
+            )}
+          </span>
         )}
       </footer>
       {alerts.length > 0 && <div className="df-alerts">{alerts.map((alert) => <em key={alert.code}>{alert.message}</em>)}</div>}
@@ -254,6 +267,16 @@ export default function DriverFleetCenterPage({
       }
       setEditing(null);
       setToast?.("Veículo salvo.");
+      await load();
+    } catch (reason) {
+      setToast?.(reason.message);
+    }
+  };
+
+  const aplicarStatusSugerido = async (vehicle, status) => {
+    try {
+      await fleetApi(`/${vehicle.id}`, authHeaders, { method: "PATCH", body: JSON.stringify({ status, revision: vehicle.revision }) });
+      setToast?.("Status do veículo atualizado.");
       await load();
     } catch (reason) {
       setToast?.(reason.message);
@@ -352,7 +375,7 @@ export default function DriverFleetCenterPage({
         <section>
           <header className="df-section-head"><div><Gauge size={18} /><span><strong>{isPortal ? "Veículo e telemetria" : "Gestão da frota"}</strong><small>Veículo, telemetria, bateria, custo e alertas.</small></span></div></header>
           <div className="df-fleet-list">
-            {fleet.length ? fleet.map((vehicle) => <FleetCard key={vehicle.id} vehicle={vehicle} operations={operations} economia={economicsByVehicle[vehicle.id]} onEdit={!isPortal && canWrite ? setEditing : undefined} />) : <p className="tdg-empty-access">{canWrite ? "Nenhum veículo cadastrado ainda. Use “Novo veículo”." : "Nenhum veículo cadastrado na frota."}</p>}
+            {fleet.length ? fleet.map((vehicle) => <FleetCard key={vehicle.id} vehicle={vehicle} operations={operations} economia={economicsByVehicle[vehicle.id]} onEdit={!isPortal && canWrite ? setEditing : undefined} onApplyStatus={!isPortal && canWrite ? aplicarStatusSugerido : undefined} />) : <p className="tdg-empty-access">{canWrite ? "Nenhum veículo cadastrado ainda. Use “Novo veículo”." : "Nenhum veículo cadastrado na frota."}</p>}
           </div>
         </section>
       </div>

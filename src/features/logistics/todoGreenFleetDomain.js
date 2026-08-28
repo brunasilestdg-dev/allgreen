@@ -133,6 +133,22 @@ export const fleetAlerts = (vehicleInput = {}, today = new Date().toISOString().
 export const normalizePlate = (plate) => String(plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
+// Status operacional SUGERIDO do veículo — derivado, nunca marcado à mão. O
+// status gravado continua sendo a fonte da verdade; isto é uma proposta que a
+// tela oferece com um clique, sem sobrescrever a escolha do gestor. A regra:
+// manutenção aberta pesa mais que operação (um veículo na oficina não está
+// rodando); operação em curso na placa sugere "em operação"; sem sinal, não há
+// sugestão (devolve `null`), para não empurrar todo veículo parado para
+// "disponível" por cima de uma reserva ou bloqueio manual.
+export const sugerirStatusVeiculo = ({ manutencaoAbertas = 0, operacoesAtivas = 0, statusAtual = "" } = {}) => {
+  let sugerido = null;
+  let motivo = "";
+  if (Number(manutencaoAbertas) > 0) { sugerido = "maintenance"; motivo = "Ordem de manutenção aberta"; }
+  else if (Number(operacoesAtivas) > 0) { sugerido = "in-operation"; motivo = "Operação em curso na placa"; }
+  if (!sugerido || sugerido === statusAtual) return null;
+  return { status: sugerido, motivo };
+};
+
 // Economia real da frota: o custo de manutenção que hoje fica preso em cada
 // ordem, somado POR VEÍCULO, cruzado com o que a operação de fato rodou POR
 // PLACA (km e viagens das operações, não o hodômetro digitado). O custo de
@@ -141,7 +157,7 @@ const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 export const consolidarEconomiaFrota = (vehicles = [], manutencaoPorVeiculo = {}, operacoesPorPlaca = {}) => {
   return (vehicles || []).map((v) => {
     const man = manutencaoPorVeiculo[v.id] || { total: 0, abertas: 0, ordens: 0, downtimeHoras: 0 };
-    const ops = operacoesPorPlaca[normalizePlate(v.plate)] || { operacoes: 0, kmTotal: 0, entregues: 0 };
+    const ops = operacoesPorPlaca[normalizePlate(v.plate)] || { operacoes: 0, kmTotal: 0, entregues: 0, ativas: 0 };
     const manutencaoPorKm = ops.kmTotal > 0 ? round2(man.total / ops.kmTotal) : null;
     return {
       vehicleId: v.id,
@@ -158,8 +174,13 @@ export const consolidarEconomiaFrota = (vehicles = [], manutencaoPorVeiculo = {}
         operacoes: Number(ops.operacoes) || 0,
         kmTotal: round2(ops.kmTotal),
         entregues: Number(ops.entregues) || 0,
+        ativas: Number(ops.ativas) || 0,
       },
       manutencaoPorKm,
+      // Status sugerido (derivado); null quando não há sinal ou já bate com o atual.
+      statusSugerido: sugerirStatusVeiculo({
+        manutencaoAbertas: man.abertas, operacoesAtivas: ops.ativas, statusAtual: v.status || "",
+      }),
       // Margem declarada no cadastro (receita − custo acumulados), para comparar
       // com o custo real de manutenção que esta consolidação traz.
       margemDeclarada: round2((Number(v.revenueAccumulated) || 0) - (Number(v.costAccumulated) || 0)),
