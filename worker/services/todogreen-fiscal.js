@@ -683,6 +683,36 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
     }
   }
 
+  // Cancelar um documento fiscal ligado a uma fatura tem de desfazer o
+  // recebível que ele gerou — senão receita e contas a receber ficam
+  // superavaliadas (a fatura foi cancelada, mas o título segue cobrável). Só
+  // estornamos se o título ainda não teve baixa: se já houve pagamento, o
+  // caixa recebido é real e a baixa precisa ser estornada antes, à mão.
+  if (statusNovo === "cancelado" && row.invoice_id) {
+    const titulo = await env.DB.prepare(
+      `SELECT id, status, original_amount, open_amount FROM todogreen_financial_titles
+        WHERE invoice_id = ? AND tenant_id = ? AND workspace_owner_id = ? AND kind = 'receivable' AND archived_at IS NULL`,
+    ).bind(row.invoice_id, TENANT_ID, access.ownerId).first();
+    if (titulo && titulo.status !== "cancelled") {
+      if (numero(titulo.open_amount) < numero(titulo.original_amount) - 0.0001)
+        return json({
+          error: "O título deste documento já teve baixa. Estorne a baixa na Tesouraria antes de cancelar a nota, para não apagar um recebimento real.",
+          code: "titulo_com_baixa",
+        }, 409);
+      // Título sem baixa: cancela o recebível e o espelho no razão (ponte 0069).
+      await env.DB.prepare(
+        `UPDATE todogreen_financial_titles SET status = 'cancelled', open_amount = 0,
+           revision = revision + 1, updated_by = ?, updated_at = ?
+         WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+      ).bind(user.id, agora, titulo.id, TENANT_ID, access.ownerId).run();
+      await env.DB.prepare(
+        `UPDATE todogreen_financial_entries SET invoice_status = 'cancelled', status = 'cancelled',
+           revision = revision + 1, updated_by = ?, updated_at = ?
+         WHERE id = 'entry-' || ? AND tenant_id = ? AND workspace_owner_id = ?`,
+      ).bind(user.id, agora, titulo.id, TENANT_ID, access.ownerId).run();
+    }
+  }
+
   await env.DB.prepare(
     `UPDATE todogreen_fiscal_documents
       SET status = ?, xml_content = ?, revision = revision + 1, updated_by = ?, updated_at = ?
