@@ -222,6 +222,46 @@ describe("o cliente A nunca alcança o cliente B", () => {
     const detalhe = await (await pedir("/api/todogreen/portal/operacoes/op-vazamento", { token: pessoaA.token })).json();
     expect(JSON.stringify(detalhe)).not.toMatch(/margem|custoPorKm|comissao|cpfMotorista|devendo/);
   });
+
+  it("posição do rastreador só chega ao cliente enquanto a operação está em trânsito", async () => {
+    const agora = new Date().toISOString();
+    const recente = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    // Integração pai (FK) + vínculo de rastreamento + posição recente da placa.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tracker_integrations
+         (id,tenant_id,workspace_owner_id,created_by,updated_by,created_at,updated_at)
+       VALUES ('intg','todogreen','dono','seed','seed',?,?)`,
+    ).bind(agora, agora).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tracker_vehicle_links
+         (id,integration_id,workspace_owner_id,external_vehicle_id,plate,active,created_at,updated_at)
+       VALUES ('lnk-gps','intg','dono','ext-1','ABC1D23',1,?,?)`,
+    ).bind(agora, agora).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tracker_positions
+         (id,integration_id,workspace_owner_id,vehicle_link_id,external_vehicle_id,latitude,longitude,address,recorded_at,received_at,raw_hash)
+       VALUES ('pos-gps','intg','dono','lnk-gps','ext-1',-23.5,-46.6,'Av. Teste, SP',?,?,'h1')`,
+    ).bind(recente, agora).run();
+    // Duas operações do mesmo cliente/placa: uma em trânsito, uma já entregue.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id,tenant_id,client_id,workspace_owner_id,reference,status,service_date,origin,destination,
+          vehicle_plate,delivered_at,fields_json,created_by,updated_by,created_at,updated_at)
+       VALUES ('op-transito','todogreen','cli-a','dono','OP-TRANSITO','em-transito','2026-08-10','CD','Hub',
+               'ABC1D23',NULL,'{}','seed','seed',?,?),
+              ('op-entregue','todogreen','cli-a','dono','OP-ENTREGUE','concluida','2026-08-10','CD','Hub',
+               'ABC1D23',?,'{}','seed','seed',?,?)`,
+    ).bind(agora, agora, agora, agora, agora).run();
+
+    const transito = await (await pedir("/api/todogreen/portal/operacoes/op-transito", { token: pessoaA.token })).json();
+    expect(transito.operacao.ultimaPosicao?.origem).toBe("rastreador");
+
+    const entregue = await (await pedir("/api/todogreen/portal/operacoes/op-entregue", { token: pessoaA.token })).json();
+    // Entregue: nada de posição viva do rastreador (o caminhão pode estar em
+    // rota de outro cliente).
+    expect(entregue.operacao.ultimaPosicao).toBeFalsy();
+    expect(JSON.stringify(entregue)).not.toMatch(/-23\.5|Av\. Teste/);
+  });
 });
 
 describe("faturas do cliente no portal", () => {

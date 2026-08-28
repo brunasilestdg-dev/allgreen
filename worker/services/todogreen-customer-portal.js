@@ -941,16 +941,26 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     // Rastreio de verdade: sem posição lançada à mão, a última posição vem do
     // TRACKER, casando a placa da operação com o vínculo de rastreamento. O
     // dado já era coletado por veículo e nunca chegava à operação do cliente.
-    if (!operacao.ultimaPosicao && linha.vehicle_plate) {
+    //
+    // LGPD/limite de escopo: a posição do veículo só pode chegar ao embarcador
+    // ENQUANTO a operação dele está em trânsito. Depois de entregue/cancelada o
+    // caminhão pode estar rodando a rota de OUTRO cliente — mostrar o GPS vivo
+    // ali vazaria localização de motorista para fora da operação. Por isso só
+    // aplicamos o fallback se a operação não foi entregue nem cancelada e se a
+    // posição é recente (janela de 6h); caso contrário fica "sem posição".
+    const operacaoEmCurso = !linha.delivered_at && linha.status !== "cancelled";
+    const recenteDesde = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+    if (!operacao.ultimaPosicao && linha.vehicle_plate && operacaoEmCurso) {
       const rastreada = await env.DB.prepare(
         `SELECT p.latitude, p.longitude, p.recorded_at, p.address
            FROM todogreen_tracker_positions p
            JOIN todogreen_tracker_vehicle_links l ON l.id = p.vehicle_link_id
           WHERE p.workspace_owner_id = ? AND l.active = 1
             AND UPPER(REPLACE(l.plate, '-', '')) = UPPER(REPLACE(?, '-', ''))
+            AND p.recorded_at >= ?
           ORDER BY p.recorded_at DESC
           LIMIT 1`,
-      ).bind(escopo.workspaceOwnerId, linha.vehicle_plate).first().catch(() => null);
+      ).bind(escopo.workspaceOwnerId, linha.vehicle_plate, recenteDesde).first().catch(() => null);
       if (rastreada) {
         operacao.ultimaPosicao = {
           em: rastreada.recorded_at,

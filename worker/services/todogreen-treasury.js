@@ -289,6 +289,13 @@ const conciliar = async (env, access, user, corpo) => {
   if (linha.reconciled_at) return json({ error: "Esta linha do extrato já foi conciliada." }, 409);
   if (lancamento.reconciled_at) return json({ error: "Este lançamento já foi conciliado." }, 409);
 
+  // Simétrico ao desconciliar: conciliar uma linha em mês fechado mudaria o
+  // saldo conciliado já publicado daquele período.
+  const periodos = await lerPeriodos(env, access.ownerId);
+  const mesLinha = texto(linha.occurred_on, 7);
+  if (periodoTravado(mesLinha, periodos))
+    return json({ error: `O período ${mesLinha} está fechado. Reabra com justificativa para conciliar.` }, 409);
+
   // Entrada no banco não pode casar com custo, nem saída com receita — seria
   // dinheiro entrando registrado como despesa.
   const entrada = numero(linha.amount) > 0;
