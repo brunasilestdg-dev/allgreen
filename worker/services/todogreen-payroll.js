@@ -16,9 +16,13 @@
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
 import {
   TABELAS_2025,
+  calcularDecimoTerceiro,
+  calcularDsr,
   calcularFolha,
+  diasUteisDoMes,
   encargosPatronais,
   mascararCpf,
+  mesesParaDecimo,
   payrollTransmissionEnabled,
   resumoFolha,
   validarColaborador,
@@ -438,26 +442,64 @@ const fecharRun = async (env, access, user, runId) => {
   await env.DB.prepare("DELETE FROM todogreen_payroll_items WHERE payroll_run_id = ? AND workspace_owner_id = ?")
     .bind(runId, access.ownerId).run();
 
+  // Ramos de fechamento. O 13º é calculado sobre a gratificação (proporcional
+  // aos avos do ano), com INSS/IRRF/FGTS próprios sobre essa parcela — nunca
+  // somado ao salário do mês. O mensal traz o ponto: horas extras e adicional
+  // noturno como proventos, o DSR sobre essas variáveis, e as faltas não
+  // abonadas como desconto que também reduz a base (não se tributa o que não
+  // foi pago), com o reflexo da falta no DSR.
+  const eDecimoTerceiro = run.tipo === "decimo_terceiro";
+  const eMensal = run.tipo === "mensal";
+  const anoBase = Number(String(run.competencia).split("-")[0]);
+  const { uteis, domingos } = diasUteisDoMes(run.competencia);
+
   const itensCalculados = [];
   const gravacoes = [];
   for (const c of colaboradores) {
-    // Horas extras do ponto viram provento tributável na competência.
-    const ponto = await env.DB.prepare(
-      `SELECT COALESCE(SUM(horas_extras),0) AS extras, COALESCE(SUM(horas_noturnas),0) AS noturnas
-        FROM todogreen_time_clock WHERE employee_id = ? AND workspace_owner_id = ? AND dia LIKE ?`,
-    ).bind(c.id, access.ownerId, `${run.competencia}%`).first();
-
+    let base = c.salario_base;
     const eventos = [];
-    const valorHora = c.salario_base / 220;
-    if (numero(ponto?.extras) > 0) {
-      eventos.push({ codigo: "he50", descricao: "Horas extras 50%", valor: valorHora * 1.5 * numero(ponto.extras), tributavel: true });
-    }
-    if (numero(ponto?.noturnas) > 0) {
-      eventos.push({ codigo: "adnot", descricao: "Adicional noturno", valor: valorHora * 0.2 * numero(ponto.noturnas), tributavel: true });
+
+    if (eDecimoTerceiro) {
+      const meses = mesesParaDecimo(c.hire_date, anoBase);
+      if (meses <= 0) continue; // ainda sem avos no ano: fica de fora do 13º
+      base = calcularDecimoTerceiro(c.salario_base, meses).bruto;
+    } else {
+      // Ponto da competência: extras, noturnas e faltas não abonadas.
+      const ponto = await env.DB.prepare(
+        `SELECT COALESCE(SUM(horas_extras),0) AS extras,
+                COALESCE(SUM(horas_noturnas),0) AS noturnas,
+                COALESCE(SUM(CASE WHEN falta = 1 AND abonado = 0 THEN 1 ELSE 0 END),0) AS faltas
+          FROM todogreen_time_clock WHERE employee_id = ? AND workspace_owner_id = ? AND dia LIKE ?`,
+      ).bind(c.id, access.ownerId, `${run.competencia}%`).first();
+
+      const valorHora = c.salario_base / 220;
+      const valorExtras = numero(ponto?.extras) > 0 ? valorHora * 1.5 * numero(ponto.extras) : 0;
+      const valorNoturno = numero(ponto?.noturnas) > 0 ? valorHora * 0.2 * numero(ponto.noturnas) : 0;
+      if (valorExtras > 0) eventos.push({ codigo: "he50", descricao: "Horas extras 50%", valor: valorExtras, tributavel: true });
+      if (valorNoturno > 0) eventos.push({ codigo: "adnot", descricao: "Adicional noturno", valor: valorNoturno, tributavel: true });
+
+      if (eMensal) {
+        // DSR sobre as variáveis do mês (extras + adicional noturno).
+        const variaveis = valorExtras + valorNoturno;
+        if (variaveis > 0 && uteis > 0) {
+          const dsr = calcularDsr(variaveis, uteis, domingos).valor;
+          if (dsr > 0) eventos.push({ codigo: "dsr", descricao: "DSR sobre variáveis", valor: dsr, tributavel: true });
+        }
+        // Faltas não abonadas: desconta o dia e o reflexo no DSR.
+        const faltas = numero(ponto?.faltas);
+        if (faltas > 0) {
+          const valorFalta = (c.salario_base / 30) * faltas;
+          eventos.push({ codigo: "falta", descricao: `Faltas (${faltas} dia(s))`, valor: valorFalta, tipo: "desconto", reduzBase: true });
+          if (uteis > 0) {
+            const dsrFalta = calcularDsr(valorFalta, uteis, domingos).valor;
+            if (dsrFalta > 0) eventos.push({ codigo: "dsrfalta", descricao: "DSR sobre faltas", valor: dsrFalta, tipo: "desconto", reduzBase: true });
+          }
+        }
+      }
     }
 
     const folha = calcularFolha(
-      { salarioBase: c.salario_base, dependentes: c.dependentes },
+      { salarioBase: base, dependentes: c.dependentes },
       { tabela: TABELAS_2025, eventos },
     );
     itensCalculados.push({ colaborador: c, folha });
@@ -473,6 +515,13 @@ const fecharRun = async (env, access, user, runId) => {
       folha.baseInss, folha.inss.valor, folha.baseIrrf, folha.irrf.valor, folha.fgts.valor,
       JSON.stringify(folha.proventos), JSON.stringify(folha.descontos), agora,
     ));
+  }
+  // No 13º pode não haver ninguém com avos ainda (todos admitidos depois): não
+  // há o que fechar, e devolvê-lo como erro é mais honesto que gravar zeros.
+  if (!gravacoes.length) {
+    return json({ error: eDecimoTerceiro
+      ? "Nenhum colaborador com avos de 13º nesta competência."
+      : "Nenhum colaborador para calcular." }, 400);
   }
   await env.DB.batch(gravacoes);
 

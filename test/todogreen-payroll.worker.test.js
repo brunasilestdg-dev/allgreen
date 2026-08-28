@@ -238,3 +238,72 @@ describe("encargo patronal no fechamento", () => {
     expect(patronal.amount).toBeGreaterThan(0);
   });
 });
+
+describe("mensal: DSR sobre variáveis e desconto de falta", () => {
+  it("extras geram DSR (provento) e faltas descontam do líquido e da base", async () => {
+    const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Gina Falta", cpf: "168.995.350-09", salarioBase: 3300, admissaoEm: "2026-01-02" },
+    })).json();
+    // Competência 2026-07: 10h extras num dia e uma falta não abonada em outro.
+    await pedir("/api/todogreen/payroll/ponto", {
+      metodo: "POST", token: rh.token,
+      corpo: { employeeId: colab.id, dia: "2026-07-06", entrada: "08:00", saida: "20:00", horasExtras: 10 },
+    });
+    await pedir("/api/todogreen/payroll/ponto", {
+      metodo: "POST", token: rh.token,
+      corpo: { employeeId: colab.id, dia: "2026-07-13", falta: true },
+    });
+    const run = await (await pedir("/api/todogreen/payroll/folhas", {
+      metodo: "POST", token: rh.token, corpo: { competencia: "2026-07", tipo: "mensal" },
+    })).json();
+    expect((await pedir(`/api/todogreen/payroll/folhas/${run.id}/fechar`, { metodo: "POST", token: rh.token })).status).toBe(200);
+
+    const itens = await (await pedir(`/api/todogreen/payroll/folhas/${run.id}/itens`, { token: rh.token })).json();
+    const meu = itens.registros.find((i) => i.employeeId === colab.id);
+    expect(meu).toBeTruthy();
+    // Extras + DSR sobre extras entram como proventos.
+    expect(meu.proventos.some((p) => p.codigo === "he50")).toBe(true);
+    expect(meu.proventos.some((p) => p.codigo === "dsr")).toBe(true);
+    // Falta entra como desconto: (3300/30)×1 = 110, e reduz a base tributável,
+    // que por isso fica abaixo do total de proventos (não se tributa o não pago).
+    const falta = meu.descontos.find((d) => d.codigo === "falta");
+    expect(falta).toBeTruthy();
+    expect(falta.valor).toBe(110);
+    expect(meu.baseInss).toBeLessThan(meu.totalProventos);
+  });
+});
+
+describe("13º proporcional aos avos do ano", () => {
+  it("fecha por tipo decimo_terceiro, proporcional aos meses, e exclui quem entrou depois", async () => {
+    // Helena: ano inteiro → 12 avos (13º = salário). Igor: admitido em julho →
+    // 6 avos (13º = metade). Novo2027: admitido depois do ano-base → sem 13º.
+    await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Helena Treze", cpf: "296.769.940-30", salarioBase: 3000, admissaoEm: "2026-01-05" },
+    });
+    const igor = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Igor Meio", cpf: "638.085.470-30", salarioBase: 4000, admissaoEm: "2026-07-10" },
+    })).json();
+    const novo = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Novo Depois", cpf: "409.774.180-22", salarioBase: 3000, admissaoEm: "2027-03-01" },
+    })).json();
+
+    const run = await (await pedir("/api/todogreen/payroll/folhas", {
+      metodo: "POST", token: rh.token, corpo: { competencia: "2026-12", tipo: "decimo_terceiro" },
+    })).json();
+    const fechar = await pedir(`/api/todogreen/payroll/folhas/${run.id}/fechar`, { metodo: "POST", token: rh.token });
+    expect(fechar.status).toBe(200);
+    expect((await fechar.json()).run.status).toBe("fechada");
+
+    const itens = await (await pedir(`/api/todogreen/payroll/folhas/${run.id}/itens`, { token: rh.token })).json();
+    // Igor: 6/12 de 4000 = 2000 de 13º bruto, com INSS descontado.
+    const itemIgor = itens.registros.find((i) => i.employeeId === igor.id);
+    expect(itemIgor.totalProventos).toBe(2000);
+    expect(itemIgor.descontos.some((d) => d.codigo === "inss")).toBe(true);
+    // Quem entrou depois do ano-base não gera holerite de 13º.
+    expect(itens.registros.some((i) => i.employeeId === novo.id)).toBe(false);
+  });
+});

@@ -7,6 +7,8 @@ import {
   calcularFerias,
   calcularFgts,
   calcularFolha,
+  diasUteisDoMes,
+  mesesParaDecimo,
   encargosPatronais,
   calcularHorasExtras,
   calcularInss,
@@ -162,6 +164,50 @@ describe("DSR", () => {
   });
 });
 
+describe("dias úteis da competência", () => {
+  it("conta os domingos do mês e deriva os úteis", () => {
+    // Agosto/2025: 31 dias, domingos em 3,10,17,24,31 = 5
+    const r = diasUteisDoMes("2025-08");
+    expect(r.dias).toBe(31);
+    expect(r.domingos).toBe(5);
+    expect(r.uteis).toBe(26);
+  });
+
+  it("fevereiro comum tem 28 dias", () => {
+    expect(diasUteisDoMes("2025-02").dias).toBe(28);
+  });
+
+  it("competência inválida devolve zeros", () => {
+    expect(diasUteisDoMes("xx").uteis).toBe(0);
+    expect(diasUteisDoMes("2025-13").dias).toBe(0);
+  });
+});
+
+describe("meses para o 13º", () => {
+  it("admitido antes do ano-base rende os 12 avos", () => {
+    expect(mesesParaDecimo("2024-05-10", 2025)).toBe(12);
+    expect(mesesParaDecimo("", 2025)).toBe(12);
+  });
+
+  it("admitido no meio do ano conta de admissão a dezembro", () => {
+    // Junho: jun..dez = 7 meses, dia 1 conta o mês
+    expect(mesesParaDecimo("2025-06-01", 2025)).toBe(7);
+  });
+
+  it("o mês de admissão só conta com 15 dias ou mais", () => {
+    // Dia 15 conta janeiro (12 avos); dia 16 não (11 avos)
+    expect(mesesParaDecimo("2025-01-15", 2025)).toBe(12);
+    expect(mesesParaDecimo("2025-01-16", 2025)).toBe(11);
+  });
+
+  it("admitido depois do ano-base ainda não gerou 13º", () => {
+    expect(mesesParaDecimo("2026-02-01", 2025)).toBe(0);
+    // dezembro após o dia 15 não fecha nenhum avo
+    expect(mesesParaDecimo("2025-12-20", 2025)).toBe(0);
+    expect(mesesParaDecimo("2025-12-10", 2025)).toBe(1);
+  });
+});
+
 describe("folha consolidada", () => {
   it("o líquido é proventos menos descontos, com INSS e IRRF derivados", () => {
     const folha = calcularFolha({ salarioBase: 3000, dependentes: 0 });
@@ -182,10 +228,32 @@ describe("folha consolidada", () => {
   });
 
   it("desconto avulso reduz o líquido sem mexer na base tributável", () => {
-    const folha = calcularFolha({ salarioBase: 3000 }, {
+    const semVale = calcularFolha({ salarioBase: 3000 });
+    const comVale = calcularFolha({ salarioBase: 3000 }, {
       eventos: [{ codigo: "vale", descricao: "Vale", tipo: "desconto", valor: 200 }],
     });
-    expect(folha.descontos.some((d) => d.codigo === "vale")).toBe(true);
+    expect(comVale.descontos.some((d) => d.codigo === "vale")).toBe(true);
+    // O vale não muda a base do INSS: só o líquido.
+    expect(comVale.inss.valor).toBe(semVale.inss.valor);
+  });
+
+  it("falta com reduzBase abate a base do INSS/IRRF, não só o líquido", () => {
+    const cheia = calcularFolha({ salarioBase: 3000 });
+    const comFalta = calcularFolha({ salarioBase: 3000 }, {
+      eventos: [{ codigo: "falta", descricao: "Faltas", tipo: "desconto", valor: 100, reduzBase: true }],
+    });
+    expect(comFalta.descontos.some((d) => d.codigo === "falta")).toBe(true);
+    // Faltou → recebeu menos → base do INSS menor que a da folha cheia.
+    expect(comFalta.inss.base).toBe(cheia.inss.base - 100);
+    expect(comFalta.inss.valor).toBeLessThan(cheia.inss.valor);
+  });
+
+  it("a base tributável nunca fica negativa", () => {
+    const folha = calcularFolha({ salarioBase: 1000 }, {
+      eventos: [{ codigo: "falta", descricao: "Faltas", tipo: "desconto", valor: 5000, reduzBase: true }],
+    });
+    expect(folha.inss.base).toBe(0);
+    expect(folha.inss.valor).toBe(0);
   });
 });
 

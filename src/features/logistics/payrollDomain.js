@@ -224,6 +224,46 @@ export function calcularDsr(totalVariaveis, diasUteis, domingosEFeriados) {
   };
 }
 
+// ─── Dias úteis da competência (base do DSR) ─────────────────
+// Para o DSR, "dias úteis" são todos os dias do mês menos os domingos e
+// feriados; o sábado conta como útil ainda que não trabalhado. Sem calendário
+// de feriados, usamos só os domingos — é a aproximação segura e declarada, a
+// mais a favor do colaborador (subestima o rateio, nunca infla o desconto).
+
+export function diasUteisDoMes(competencia) {
+  const m = String(competencia).match(/^(\d{4})-(\d{2})/);
+  if (!m) return { dias: 0, domingos: 0, uteis: 0 };
+  const ano = Number(m[1]);
+  const mes = Number(m[2]);
+  if (!(mes >= 1 && mes <= 12)) return { dias: 0, domingos: 0, uteis: 0 };
+  const dias = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  let domingos = 0;
+  for (let d = 1; d <= dias; d++) {
+    if (new Date(Date.UTC(ano, mes - 1, d)).getUTCDay() === 0) domingos++;
+  }
+  return { dias, domingos, uteis: dias - domingos };
+}
+
+// ─── Meses para o 13º ────────────────────────────────────────
+// Avos do 13º no ano-base: cada mês trabalhado vale 1/12. O mês de admissão só
+// conta se houve ao menos 15 dias de trabalho nele — a regra da CLT, que aqui
+// vira "admitido até o dia 15 conta o mês". Admissão antes do ano-base rende os
+// 12 avos; admissão depois, nenhum.
+
+export function mesesParaDecimo(admissaoEm, ano) {
+  const anoRef = Math.trunc(n(ano));
+  if (!admissaoEm) return 12;
+  const m = String(admissaoEm).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return 12;
+  const admAno = Number(m[1]);
+  const admMes = Number(m[2]);
+  const admDia = Number(m[3]);
+  if (admAno < anoRef) return 12;
+  if (admAno > anoRef) return 0;
+  const contaMesAdmissao = admDia <= 15 ? 1 : 0;
+  return Math.max(0, 12 - admMes + 1 - (contaMesAdmissao ? 0 : 1));
+}
+
 // ─── Encargos patronais ──────────────────────────────────────
 // Custo do EMPREGADOR sobre a folha, além dos descontos do empregado: INSS
 // patronal (CPP) 20% + RAT 2% + terceiros 5,8% = 27,8% da base, incidindo sobre
@@ -268,11 +308,16 @@ export function calcularFolha(colaborador, opts = {}) {
     const registro = { codigo: evento.codigo || "evento", descricao: evento.descricao || "", valor: Math.abs(valor) };
     if (evento.tipo === "desconto" || valor < 0) {
       descontos.push(registro);
+      // Falta/atraso não é desconto avulso: reduz o que se recebeu, e portanto a
+      // base do INSS/IRRF (não se tributa o que não foi pago). `reduzBase` marca
+      // esse caso; um vale ou adiantamento comum não mexe na base tributável.
+      if (evento.reduzBase) baseTributavel -= Math.abs(valor);
     } else {
       proventos.push(registro);
       if (tributavel) baseTributavel += valor;
     }
   }
+  baseTributavel = Math.max(0, baseTributavel);
 
   const inss = calcularInss(baseTributavel, tabela);
   const irrf = calcularIrrf(baseTributavel, { inss: inss.valor, dependentes, tabela });
