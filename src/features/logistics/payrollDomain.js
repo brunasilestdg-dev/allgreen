@@ -224,6 +224,25 @@ export function calcularDsr(totalVariaveis, diasUteis, domingosEFeriados) {
   };
 }
 
+// ─── Encargos patronais ──────────────────────────────────────
+// Custo do EMPREGADOR sobre a folha, além dos descontos do empregado: INSS
+// patronal (CPP) 20% + RAT 2% + terceiros 5,8% = 27,8% da base, incidindo sobre
+// os proventos (sem o teto do desconto do empregado). O FGTS 8% é encargo
+// patronal também, mas já é lançado à parte. No Simples Nacional a CPP está
+// embutida no DAS — então, nesse regime, o único encargo separado é o FGTS.
+
+export const ALIQUOTAS_PATRONAIS = Object.freeze({ cpp: 20, rat: 2, terceiros: 5.8 });
+
+export function encargosPatronais(baseFolha, opts = {}) {
+  const base = Math.max(0, n(baseFolha));
+  const regime = String(opts.regime || "").toLowerCase();
+  const noSimples = regime.includes("simples");
+  const cpp = noSimples ? 0 : arredondar(base * (ALIQUOTAS_PATRONAIS.cpp / 100));
+  const rat = noSimples ? 0 : arredondar(base * (ALIQUOTAS_PATRONAIS.rat / 100));
+  const terceiros = noSimples ? 0 : arredondar(base * (ALIQUOTAS_PATRONAIS.terceiros / 100));
+  return { cpp, rat, terceiros, total: arredondar(cpp + rat + terceiros), noSimples };
+}
+
 // ─── Folha consolidada ───────────────────────────────────────
 //
 // Junta proventos e descontos de um colaborador numa competência. O líquido é

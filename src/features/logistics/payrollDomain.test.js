@@ -7,6 +7,7 @@ import {
   calcularFerias,
   calcularFgts,
   calcularFolha,
+  encargosPatronais,
   calcularHorasExtras,
   calcularInss,
   calcularIrrf,
@@ -243,5 +244,21 @@ describe("resumo da folha", () => {
 
   it("lista vazia devolve zeros", () => {
     expect(resumoFolha([]).colaboradores).toBe(0);
+  });
+
+  describe("encargos patronais", () => {
+    it("fora do Simples cobra CPP 20% + RAT 2% + terceiros 5,8% = 27,8%", () => {
+      const e = encargosPatronais(10000, { regime: "lucro_presumido" });
+      expect(e.cpp).toBe(2000);
+      expect(e.rat).toBe(200);
+      expect(e.terceiros).toBe(580);
+      expect(e.total).toBe(2780);
+      expect(e.noSimples).toBe(false);
+    });
+    it("no Simples o encargo separado é zero (a CPP está no DAS)", () => {
+      const e = encargosPatronais(10000, { regime: "simples" });
+      expect(e.total).toBe(0);
+      expect(e.noSimples).toBe(true);
+    });
   });
 });

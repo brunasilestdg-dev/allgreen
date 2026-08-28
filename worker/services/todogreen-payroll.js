@@ -17,6 +17,7 @@ import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
 import {
   TABELAS_2025,
   calcularFolha,
+  encargosPatronais,
   mascararCpf,
   payrollTransmissionEnabled,
   resumoFolha,
@@ -53,13 +54,17 @@ const vencimentoFolha = (competencia, dia) => {
   return data.toISOString().slice(0, 10);
 };
 
-// As quatro obrigações que a folha fechada gera como contas a pagar, cada uma com
-// seu vencimento típico no mês seguinte. A soma delas é a despesa real da empresa
-// (líquido + INSS + IRRF retidos e repassados + FGTS patronal = proventos + FGTS).
+// As obrigações que a folha fechada gera como contas a pagar, cada uma com seu
+// vencimento típico no mês seguinte. Além do líquido, das retenções (INSS/IRRF
+// do empregado, repassadas) e do FGTS, entra o INSS PATRONAL (CPP + RAT +
+// terceiros) — o encargo do empregador que faltava, sem o qual o custo real da
+// folha ficava subestimado. No Simples Nacional a CPP está no DAS: aí esse
+// total é zero e a obrigação nem é lançada.
 const OBRIGACOES_FOLHA = [
   { chave: "liquido", campoTotal: "totalLiquido", categoria: "Folha — salário líquido", dia: 5 },
   { chave: "fgts", campoTotal: "totalFgts", categoria: "Folha — FGTS", dia: 7 },
   { chave: "inss", campoTotal: "totalInss", categoria: "Folha — INSS a recolher", dia: 20 },
+  { chave: "patronal", campoTotal: "totalPatronal", categoria: "Folha — INSS patronal (CPP+RAT+terceiros)", dia: 20 },
   { chave: "irrf", campoTotal: "totalIrrf", categoria: "Folha — IRRF a recolher", dia: 20 },
 ];
 
@@ -475,6 +480,15 @@ const fecharRun = async (env, access, user, runId) => {
     totalProventos: folha.totalProventos, totalDescontos: folha.totalDescontos, liquido: folha.liquido,
     fgtsValor: folha.fgts.valor, inssValor: folha.inss.valor, irrfValor: folha.irrf.valor,
   })));
+
+  // Encargo patronal sobre a folha (CPP+RAT+terceiros), pelo regime da empresa.
+  // Fora do Simples é ~27,8% dos proventos e é o custo do empregador que faltava.
+  const perfil = await env.DB.prepare(
+    `SELECT regime_tributario FROM todogreen_tax_profiles
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL LIMIT 1`,
+  ).bind(TENANT_ID, access.ownerId).first().catch(() => null);
+  const patronal = encargosPatronais(totais.totalProventos, { regime: perfil?.regime_tributario || "simples" });
+  totais.totalPatronal = patronal.total;
 
   await env.DB.prepare(
     `UPDATE todogreen_payroll_runs SET status = 'fechada', versao_tabela = ?,

@@ -210,3 +210,31 @@ describe("escopo", () => {
     expect((await pedir(`/api/todogreen/payroll/colaboradores/${doColega.id}`, { token: rh.token })).status).toBe(404);
   });
 });
+
+describe("encargo patronal no fechamento", () => {
+  it("fora do Simples, fechar a folha lança o INSS patronal como conta a pagar", async () => {
+    // Empresa em Lucro Presumido → paga CPP+RAT+terceiros (no Simples estaria no DAS).
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tax_profiles (id,tenant_id,workspace_owner_id,regime_tributario)
+       VALUES ('tax-rh','todogreen',?,'lucro_presumido')`,
+    ).bind(rh.id).run();
+    await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Eva Encargo", cpf: "153.509.460-56", salarioBase: 5000, admissaoEm: "2026-01-02" },
+    });
+    const run = await (await pedir("/api/todogreen/payroll/folhas", {
+      metodo: "POST", token: rh.token, corpo: { competencia: "2026-11", tipo: "mensal" },
+    })).json();
+    await pedir(`/api/todogreen/payroll/folhas/${run.id}/fechar`, { metodo: "POST", token: rh.token });
+
+    const { results } = await env.DB.prepare(
+      `SELECT category, amount FROM todogreen_financial_entries
+        WHERE workspace_owner_id = ? AND archived_at IS NULL
+          AND json_extract(fields_json, '$.origem') = 'folha'
+          AND json_extract(fields_json, '$.payrollRunId') = ?`,
+    ).bind(rh.id, run.id).all();
+    const patronal = results.find((r) => r.category.includes("patronal"));
+    expect(patronal).toBeTruthy();
+    expect(patronal.amount).toBeGreaterThan(0);
+  });
+});
