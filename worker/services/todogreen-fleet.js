@@ -8,6 +8,7 @@ import {
   validateVehicleClass,
   vehicleClass,
 } from "../../src/features/logistics/vehicleClassDomain.js";
+import { consolidarEconomiaFrota, normalizePlate } from "../../src/features/logistics/todoGreenFleetDomain.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const clean = (value, max = 500) => String(value || "").trim().slice(0, max);
@@ -63,6 +64,49 @@ export async function handleTodoGreenFleet(request, env, access, user) {
       .bind(access.ownerId).all();
     const vehicles = (rows.results || []).map(mapVehicle);
     return json({ vehicles, access: { role: access.role, canWrite: canWrite(access) } });
+  }
+
+  // Economia real da frota: custo de manutenção somado por veículo (hoje preso
+  // em cada ordem) cruzado com o km e as viagens que a operação de fato rodou,
+  // por placa. Leitura — liberada a quem já vê a frota, antes da trava de escrita.
+  if (request.method === "GET" && vehicleId === "economics") {
+    const [vehiclesRows, manRows, opsRows] = await Promise.all([
+      env.DB.prepare(`SELECT * FROM todogreen_fleet_vehicles WHERE workspace_owner_id = ? AND archived_at IS NULL LIMIT 500`)
+        .bind(access.ownerId).all(),
+      env.DB.prepare(
+        `SELECT vehicle_id,
+                SUM(CASE WHEN status != 'canceled' THEN parts_cost + labor_cost + other_cost ELSE 0 END) AS total,
+                SUM(CASE WHEN status IN ('open','in_progress') THEN 1 ELSE 0 END) AS abertas,
+                COUNT(*) AS ordens,
+                COALESCE(SUM(downtime_hours), 0) AS downtime
+           FROM todogreen_fleet_maintenance_orders
+          WHERE workspace_owner_id = ? AND archived_at IS NULL
+          GROUP BY vehicle_id`,
+      ).bind(access.ownerId).all(),
+      env.DB.prepare(
+        `SELECT vehicle_plate,
+                COUNT(*) AS operacoes,
+                COALESCE(SUM(distance_km), 0) AS km_total,
+                SUM(CASE WHEN delivered_at IS NOT NULL AND delivered_at != '' THEN 1 ELSE 0 END) AS entregues
+           FROM todogreen_client_operations
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL AND vehicle_plate != ''
+          GROUP BY vehicle_plate`,
+      ).bind(TENANT_ID, access.ownerId).all(),
+    ]);
+    const vehicles = (vehiclesRows.results || []).map(mapVehicle);
+    const manutencaoPorVeiculo = {};
+    for (const r of manRows.results || []) {
+      manutencaoPorVeiculo[r.vehicle_id] = {
+        total: num(r.total), abertas: num(r.abertas), ordens: num(r.ordens), downtimeHoras: num(r.downtime),
+      };
+    }
+    const operacoesPorPlaca = {};
+    for (const r of opsRows.results || []) {
+      operacoesPorPlaca[normalizePlate(r.vehicle_plate)] = {
+        operacoes: num(r.operacoes), kmTotal: num(r.km_total), entregues: num(r.entregues),
+      };
+    }
+    return json({ economics: consolidarEconomiaFrota(vehicles, manutencaoPorVeiculo, operacoesPorPlaca) });
   }
 
   if (request.method === "GET" && vehicleId && subresource === "maintenance") {

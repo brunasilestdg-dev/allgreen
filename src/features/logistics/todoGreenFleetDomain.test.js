@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   FLEET_ENERGY_DEFAULTS,
+  consolidarEconomiaFrota,
   fleetAlerts,
   fleetVehicleMetrics,
+  normalizePlate,
   summarizeFleet,
 } from "./todoGreenFleetDomain.js";
 
@@ -46,5 +48,46 @@ describe("custo por km da frota não é mais estruturalmente zero", () => {
       { energyCostPerKwh: 0.9, maintenancePerKm: 0.4 },
     );
     expect(resumo.total).toBe(2);
+  });
+});
+
+describe("economia real da frota por placa", () => {
+  const vehicles = [
+    { id: "v1", prefix: "TG-001", plate: "ABC-1D23", status: "in-operation", revenueAccumulated: 5000, costAccumulated: 2000 },
+    { id: "v2", prefix: "TG-002", plate: "XYZ9K88", status: "available" },
+  ];
+
+  it("soma a manutenção por veículo e cruza com o km real das operações por placa", () => {
+    const eco = consolidarEconomiaFrota(
+      vehicles,
+      { v1: { total: 800, abertas: 1, ordens: 3, downtimeHoras: 12 } },
+      { ABC1D23: { operacoes: 10, kmTotal: 2000, entregues: 9 } }, // placa normalizada (sem hífen)
+    );
+    const v1 = eco.find((e) => e.vehicleId === "v1");
+    expect(v1.manutencao.total).toBe(800);
+    expect(v1.manutencao.abertas).toBe(1);
+    expect(v1.operacoes.kmTotal).toBe(2000);
+    // 800 / 2000 = 0,40 por km
+    expect(v1.manutencaoPorKm).toBe(0.4);
+    expect(v1.margemDeclarada).toBe(3000);
+  });
+
+  it("sem km de operação, o custo por km é null (não zero)", () => {
+    const eco = consolidarEconomiaFrota(vehicles, { v2: { total: 300, abertas: 0, ordens: 1, downtimeHoras: 0 } }, {});
+    const v2 = eco.find((e) => e.vehicleId === "v2");
+    expect(v2.manutencao.total).toBe(300);
+    expect(v2.manutencaoPorKm).toBe(null);
+    expect(v2.operacoes.operacoes).toBe(0);
+  });
+
+  it("veículo sem manutenção nem operação zera sem quebrar", () => {
+    const eco = consolidarEconomiaFrota([{ id: "v3", plate: "" }], {}, {});
+    expect(eco[0].manutencao.total).toBe(0);
+    expect(eco[0].manutencaoPorKm).toBe(null);
+  });
+
+  it("normalizePlate ignora máscara e caixa", () => {
+    expect(normalizePlate("abc-1d23")).toBe("ABC1D23");
+    expect(normalizePlate("ABC1D23")).toBe("ABC1D23");
   });
 });

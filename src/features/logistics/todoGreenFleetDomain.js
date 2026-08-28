@@ -127,6 +127,46 @@ export const fleetAlerts = (vehicleInput = {}, today = new Date().toISOString().
   return alerts;
 };
 
+// Placa normalizada para casar veículo (todogreen_fleet_vehicles.plate) com a
+// placa da operação (todogreen_client_operations.vehicle_plate), que podem vir
+// com máscara ou caixa diferentes.
+export const normalizePlate = (plate) => String(plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+
+// Economia real da frota: o custo de manutenção que hoje fica preso em cada
+// ordem, somado POR VEÍCULO, cruzado com o que a operação de fato rodou POR
+// PLACA (km e viagens das operações, não o hodômetro digitado). O custo de
+// manutenção por km é derivado desse km real; quando não houve operação com km,
+// devolve `null` — nunca 0 —, porque dividir por zero não é "custo zero".
+export const consolidarEconomiaFrota = (vehicles = [], manutencaoPorVeiculo = {}, operacoesPorPlaca = {}) => {
+  return (vehicles || []).map((v) => {
+    const man = manutencaoPorVeiculo[v.id] || { total: 0, abertas: 0, ordens: 0, downtimeHoras: 0 };
+    const ops = operacoesPorPlaca[normalizePlate(v.plate)] || { operacoes: 0, kmTotal: 0, entregues: 0 };
+    const manutencaoPorKm = ops.kmTotal > 0 ? round2(man.total / ops.kmTotal) : null;
+    return {
+      vehicleId: v.id,
+      prefix: v.prefix || "",
+      plate: v.plate || "",
+      status: v.status || "",
+      manutencao: {
+        total: round2(man.total),
+        abertas: Number(man.abertas) || 0,
+        ordens: Number(man.ordens) || 0,
+        downtimeHoras: round2(man.downtimeHoras),
+      },
+      operacoes: {
+        operacoes: Number(ops.operacoes) || 0,
+        kmTotal: round2(ops.kmTotal),
+        entregues: Number(ops.entregues) || 0,
+      },
+      manutencaoPorKm,
+      // Margem declarada no cadastro (receita − custo acumulados), para comparar
+      // com o custo real de manutenção que esta consolidação traz.
+      margemDeclarada: round2((Number(v.revenueAccumulated) || 0) - (Number(v.costAccumulated) || 0)),
+    };
+  });
+};
+
 export const buildFleetAiPrompt = ({ vehicles = [], question = "" } = {}) => {
   const summary = summarizeFleet(vehicles);
   return [

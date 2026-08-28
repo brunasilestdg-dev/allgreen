@@ -124,3 +124,53 @@ describe("cadastro de veículo", () => {
     expect(restantes.orders.some((o) => o.id === ordemId)).toBe(false);
   });
 });
+
+describe("economia real da frota", () => {
+  it("soma a manutenção por veículo e o km das operações por placa", async () => {
+    const agora = new Date().toISOString();
+    // Veículo com placa ECO1A11.
+    const veic = await (await pedir("/api/todogreen/fleet", {
+      metodo: "POST", token: operacoes.token, corpo: { prefix: "TG-ECO", plate: "eco1a11", vehicleClass: "van", energyType: "electric" },
+    })).json();
+    const veiculoId = veic.vehicle.id;
+
+    // Ordem de manutenção fechada com custo total 200 (120 peças + 80 mão de obra).
+    const om = await (await pedir(`/api/todogreen/fleet/${veiculoId}/maintenance`, {
+      metodo: "POST", token: operacoes.token, corpo: { title: "Revisão" },
+    })).json();
+    await pedir(`/api/todogreen/fleet/${veiculoId}/maintenance/${om.id}`, {
+      metodo: "PATCH", token: operacoes.token, corpo: { status: "done", partsCost: 120, laborCost: 80, revision: 1 },
+    });
+
+    // Cliente + duas operações na mesma placa: 500 km no total, 1 entregue.
+    const clienteId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_clients (id, tenant_id, workspace_owner_id, name, created_by, updated_by, created_at, updated_at)
+       VALUES (?, 'todogreen', ?, 'Cliente Eco', ?, ?, ?, ?)`,
+    ).bind(clienteId, operacoes.id, operacoes.id, operacoes.id, agora, agora).run();
+    for (const [dist, entregue] of [[300, agora], [200, null]]) {
+      await env.DB.prepare(
+        `INSERT INTO todogreen_client_operations
+           (id, tenant_id, client_id, workspace_owner_id, vehicle_plate, distance_km, delivered_at, created_by, updated_by, created_at, updated_at)
+         VALUES (?, 'todogreen', ?, ?, 'ECO1A11', ?, ?, ?, ?, ?, ?)`,
+      ).bind(crypto.randomUUID(), clienteId, operacoes.id, dist, entregue, operacoes.id, operacoes.id, agora, agora).run();
+    }
+
+    const res = await pedir("/api/todogreen/fleet/economics", { token: operacoes.token });
+    expect(res.status).toBe(200);
+    const { economics } = await res.json();
+    const eco = economics.find((e) => e.vehicleId === veiculoId);
+    expect(eco.manutencao.total).toBe(200);
+    expect(eco.operacoes.kmTotal).toBe(500);
+    expect(eco.operacoes.operacoes).toBe(2);
+    expect(eco.operacoes.entregues).toBe(1);
+    // 200 / 500 = 0,40 por km
+    expect(eco.manutencaoPorKm).toBe(0.4);
+  });
+
+  it("economics é leitura: o auditor (só read) enxerga", async () => {
+    const res = await pedir("/api/todogreen/fleet/economics", { token: auditor.token });
+    expect(res.status).toBe(200);
+    expect(Array.isArray((await res.json()).economics)).toBe(true);
+  });
+});

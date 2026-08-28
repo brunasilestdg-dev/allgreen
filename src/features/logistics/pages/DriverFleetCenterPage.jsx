@@ -58,6 +58,16 @@ const requestOperations = async (authHeaders) => {
   return payload.registros || payload.operations || [];
 };
 
+const requestEconomics = async (authHeaders) => {
+  try {
+    const result = await fetch("/api/todogreen/fleet/economics", { headers: authHeaders?.() || {} });
+    const payload = await result.json().catch(() => ({}));
+    return result.ok ? (payload.economics || []) : [];
+  } catch {
+    return []; // a economia é um enriquecimento; sem ela o cockpit segue funcionando
+  }
+};
+
 const text = (value, fallback = "Não informado") => String(value || "").trim() || fallback;
 const dateTime = (value) => {
   if (!value) return "Não informado";
@@ -80,7 +90,13 @@ const driverRows = (operations = []) => {
   const grouped = new Map();
   for (const operation of operations) {
     const driver = text(operation.motorista, "Motorista não informado");
-    const current = grouped.get(driver) || {
+    // Agrupa pelo motoristaId quando existe — nome pode repetir entre pessoas ou
+    // mudar para a mesma pessoa; o id é a identidade. Sem id (registro legado),
+    // cai no nome, isolado por prefixo para não colidir com um id.
+    const key = operation.motoristaId ? `id:${operation.motoristaId}` : `nome:${driver}`;
+    const current = grouped.get(key) || {
+      key,
+      driverId: operation.motoristaId || "",
       driver,
       operations: 0,
       activeRoutes: 0,
@@ -103,7 +119,7 @@ const driverRows = (operations = []) => {
     const currentDate = new Date(current.latest?.atualizadoEm || current.latest?.dataServico || 0).getTime();
     const nextDate = new Date(operation.atualizadoEm || operation.dataServico || 0).getTime();
     if (!current.latest || nextDate >= currentDate) current.latest = operation;
-    grouped.set(driver, current);
+    grouped.set(key, current);
   }
   return [...grouped.values()]
     .map((item) => ({ ...item, plates: [...item.plates] }))
@@ -135,7 +151,7 @@ function DriverCard({ row }) {
   );
 }
 
-function FleetCard({ vehicle, operations, onEdit }) {
+function FleetCard({ vehicle, operations, economia, onEdit }) {
   const metrics = fleetVehicleMetrics(vehicle);
   const alerts = fleetAlerts(vehicle);
   const fields = vehicle.fields || {};
@@ -167,6 +183,14 @@ function FleetCard({ vehicle, operations, onEdit }) {
           Custo {BRL.format(metrics.costPerKm)}/km
           {metrics.realizedCostPerKm > 0 ? " (realizado)" : " (projetado)"} · Margem {BRL.format(metrics.margin)}
         </small>
+        {economia && (
+          <small>
+            Manutenção real {BRL.format(economia.manutencao.total)}
+            {economia.manutencao.abertas ? ` · ${economia.manutencao.abertas} OS aberta(s)` : ""}
+            {" · "}{economia.operacoes.operacoes} viagem(ns), {NUM.format(economia.operacoes.kmTotal)} km
+            {economia.manutencaoPorKm != null ? ` · ${BRL.format(economia.manutencaoPorKm)}/km manut.` : ""}
+          </small>
+        )}
       </footer>
       {alerts.length > 0 && <div className="df-alerts">{alerts.map((alert) => <em key={alert.code}>{alert.message}</em>)}</div>}
     </article>
@@ -181,6 +205,7 @@ export default function DriverFleetCenterPage({
   mode = "management",
 }) {
   const [fleet, setFleet] = useState([]);
+  const [economics, setEconomics] = useState([]);
   const [operationsFromApi, setOperationsFromApi] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -201,11 +226,13 @@ export default function DriverFleetCenterPage({
     setLoading(true);
     setError("");
     try {
-      const [payload, loadedOperations] = await Promise.all([
+      const [payload, loadedOperations, loadedEconomics] = await Promise.all([
         requestFleet(authHeaders),
         providedOperations ? Promise.resolve(providedOperations) : requestOperations(authHeaders),
+        requestEconomics(authHeaders),
       ]);
       setFleet(payload.vehicles || []);
+      setEconomics(loadedEconomics || []);
       setCanWrite(Boolean(payload.access?.canWrite));
       if (!providedOperations) setOperationsFromApi(loadedOperations || []);
     } catch (reason) {
@@ -246,6 +273,11 @@ export default function DriverFleetCenterPage({
   };
 
   const summary = useMemo(() => summarizeFleet(fleet), [fleet]);
+  const economicsByVehicle = useMemo(() => {
+    const map = {};
+    for (const e of economics) map[e.vehicleId] = e;
+    return map;
+  }, [economics]);
   const drivers = useMemo(() => driverRows(operations), [operations]);
   const lateOperations = operations.filter((operation) => isLate(operation)).length;
   const noPosition = operations.filter((operation) => !operation.ultimaPosicaoEm && !operation.latitude && !operation.longitude).length;
@@ -313,14 +345,14 @@ export default function DriverFleetCenterPage({
         <section>
           <header className="df-section-head"><div><Clock3 size={18} /><span><strong>{isPortal ? "Minha operação" : "Gestão do motorista"}</strong><small>Visão por pessoa, rota ativa e risco de atraso.</small></span></div></header>
           <div className="df-driver-list">
-            {drivers.length ? drivers.map((row) => <DriverCard key={row.driver} row={row} />) : <p className="tdg-empty-access">Nenhum motorista vinculado a operações ainda.</p>}
+            {drivers.length ? drivers.map((row) => <DriverCard key={row.key} row={row} />) : <p className="tdg-empty-access">Nenhum motorista vinculado a operações ainda.</p>}
           </div>
         </section>
 
         <section>
           <header className="df-section-head"><div><Gauge size={18} /><span><strong>{isPortal ? "Veículo e telemetria" : "Gestão da frota"}</strong><small>Veículo, telemetria, bateria, custo e alertas.</small></span></div></header>
           <div className="df-fleet-list">
-            {fleet.length ? fleet.map((vehicle) => <FleetCard key={vehicle.id} vehicle={vehicle} operations={operations} onEdit={!isPortal && canWrite ? setEditing : undefined} />) : <p className="tdg-empty-access">{canWrite ? "Nenhum veículo cadastrado ainda. Use “Novo veículo”." : "Nenhum veículo cadastrado na frota."}</p>}
+            {fleet.length ? fleet.map((vehicle) => <FleetCard key={vehicle.id} vehicle={vehicle} operations={operations} economia={economicsByVehicle[vehicle.id]} onEdit={!isPortal && canWrite ? setEditing : undefined} />) : <p className="tdg-empty-access">{canWrite ? "Nenhum veículo cadastrado ainda. Use “Novo veículo”." : "Nenhum veículo cadastrado na frota."}</p>}
           </div>
         </section>
       </div>
