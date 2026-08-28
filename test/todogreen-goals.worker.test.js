@@ -279,4 +279,31 @@ describe("Metas To Do Green", () => {
     });
     expect(result.status).toBe(409);
   });
+
+  it("meta de pipeline automática não conta oportunidades fechadas", async () => {
+    const now = new Date().toISOString();
+    const opp = (id, stage, valor) => env.DB.prepare(
+      `INSERT INTO todogreen_opportunities
+         (id,tenant_id,workspace_owner_id,client_id,client_name,stage,contract_value,created_by,updated_by,created_at,updated_at)
+       VALUES (?,'todogreen',?,?,?,?,?,?,?,?,?)`,
+    ).bind(id, admin.id, `cli-${id}`, id, stage, valor, admin.id, admin.id, "2026-08-15T12:00:00.000Z", now);
+    await env.DB.batch([
+      opp("opp-aberta", "Negociação", 100_000),
+      opp("opp-ganha", "Fechada ganha", 999_999),
+      opp("opp-perdida", "Fechada perdida", 555_555),
+    ]);
+    await env.DB.prepare(
+      `INSERT INTO todogreen_goals
+         (id,tenant_id,workspace_owner_id,title,category,scope_type,metric_key,measurement_mode,source_key,
+          target_value,period_start,period_end,status,approval_status,created_by,updated_by,created_at,updated_at)
+       VALUES ('goal-pipe','todogreen',?,'Pipeline do mês','commercial','company','pipeline','automatic','opportunities.pipeline',
+               1000000,'2026-08-01','2026-08-31','active','approved',?,?,?,?)`,
+    ).bind(admin.id, admin.id, admin.id, now, now).run();
+
+    const lista = await (await call("/api/todogreen/goals", { token: admin.token })).json();
+    const pipe = (lista.goals || lista.records || []).find((g) => g.id === "goal-pipe");
+    expect(pipe).toBeTruthy();
+    // Só a oportunidade aberta entra; ganha (999.999) e perdida (555.555) ficam de fora.
+    expect(pipe.currentValue).toBe(100_000);
+  });
 });

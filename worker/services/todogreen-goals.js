@@ -184,6 +184,9 @@ async function automaticValue(env, access, row) {
       `SELECT COALESCE(SUM(CASE WHEN contract_value > 0 THEN contract_value ELSE monthly_value END),0) AS value
          FROM todogreen_opportunities
         WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL
+          -- Pipeline é o que ainda está em jogo: fechadas (ganha/perdida) não
+          -- contam, senão a meta infla e diverge da tela de Oportunidades.
+          AND (stage IS NULL OR stage NOT LIKE 'Fechada%')
           AND created_at >= ? AND created_at <= ?${scope.sql}`,
     ).bind(...common, `${start}T00:00:00.000Z`, `${end}T23:59:59.999Z`, ...scope.binds).first();
   } else if (sourceKey === "opportunities.count") {

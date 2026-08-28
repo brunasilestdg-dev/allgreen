@@ -247,6 +247,10 @@
 .tdg-opp-alerta { align-items: center; background: #fff1ee; border-radius: 999px; color: #8f2e20; display: inline-flex !important; font-weight: 800; gap: 4px; grid-auto-flow: column; padding: 5px 10px; }
 .tdg-opp-corpo { border-top: 1px solid var(--tdg-line); display: grid; gap: 14px; padding: 16px; }
 .tdg-opp-acao { align-items: center; background: var(--tdg-soft); border-radius: 15px; display: grid; gap: 12px; grid-template-columns: 20px minmax(0,1fr) auto; padding: 14px; }
+.tdg-opp-etapa { display: grid; gap: 4px; }
+.tdg-opp-etapa > span { color: var(--tdg-ink); font-size: 12.5px; font-weight: 700; }
+.tdg-opp-etapa select { border: 1px solid var(--tdg-line); border-radius: 9px; font: inherit; min-height: 40px; padding: 8px 10px; }
+.tdg-opp-etapa small { color: var(--tdg-muted); font-size: 11px; }
 .tdg-opp-acao p { color: var(--tdg-muted); margin: 4px 0 0; }
 .tdg-opp-urgencia { border-radius: 999px; font-size: 12px; font-weight: 800; padding: 5px 10px; white-space: nowrap; }
 .tdg-opp-urgencia.u-alta { background: #fff1ee; color: #8f2e20; }
