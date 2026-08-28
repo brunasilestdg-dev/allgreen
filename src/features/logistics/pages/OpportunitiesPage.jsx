@@ -400,7 +400,7 @@ function BlocoAmbiental({ ambiental }) {
   );
 }
 
-function CartaoOportunidade({ registro, analise, jornada, aberta, alternar, onEdit, onSimulate }) {
+function CartaoOportunidade({ registro, analise, jornada, aberta, alternar, onEdit, onSimulate, onAvancarEtapa }) {
   const { ambiental, greenScore, financeiro, operacional, expansao, riscos } = analise;
   const criticos = riscos.filter((risco) => risco.gravidade === "alta").length;
   return (
@@ -450,6 +450,16 @@ function CartaoOportunidade({ registro, analise, jornada, aberta, alternar, onEd
               {gravidadeRotulo[analise.proximaAcao.urgencia]}
             </span>
           </div>
+
+          <label className="tdg-opp-etapa">
+            <span>Etapa do negócio</span>
+            <select value={analise.estagio} onChange={(event) => onAvancarEtapa?.(event.target.value)}>
+              {ESTAGIOS_OPORTUNIDADE.map((estagio) => (
+                <option key={estagio} value={estagio}>{estagio}</option>
+              ))}
+            </select>
+            <small>Ao marcar &quot;Fechada ganha&quot;, a implantação da operação é aberta automaticamente.</small>
+          </label>
 
           <JornadaEletrificacao jornada={jornada} onEdit={onEdit} onSimulate={onSimulate} />
 
@@ -794,6 +804,7 @@ export default function OpportunitiesPage({
             alternar={() => setAbertaId((atual) => (atual === registro.id ? null : registro.id))}
             onEdit={() => setEditandoId(registro.id)}
             onSimulate={() => onNavigate?.(`/todogreen/precificacao?opportunity=${encodeURIComponent(registro.id)}`)}
+            onAvancarEtapa={(estagio) => { if (estagio !== registro.estagio) onUpdate?.(registro.id, { estagio, revision: registro.revision }); }}
           />
         ))}
       </div>
