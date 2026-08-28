@@ -273,3 +273,41 @@ describe("transmissão desligada sem certificado", () => {
     expect((await r.json()).transmissaoHabilitada).toBe(false);
   });
 });
+
+describe("cancelar documento estorna o recebível", () => {
+  const agora = new Date().toISOString();
+  const seedDoc = (docId, invoiceId) => env.DB.prepare(
+    `INSERT INTO todogreen_fiscal_documents
+       (id,tenant_id,workspace_owner_id,doc_type,status,invoice_id,valor_total,created_by,updated_by,created_at,updated_at)
+     VALUES (?,'todogreen',?,'cte','autorizado',?,1000,?,?,?,?)`,
+  ).bind(docId, gestora.id, invoiceId, gestora.id, gestora.id, agora, agora);
+  const seedTitle = (titleId, invoiceId, openAmount) => env.DB.prepare(
+    `INSERT INTO todogreen_financial_titles
+       (id,tenant_id,workspace_owner_id,number,kind,invoice_id,competence_date,issue_date,due_date,
+        original_amount,open_amount,status,created_by,updated_by,created_at,updated_at)
+     VALUES (?,'todogreen',?,?,'receivable',?,'2026-08','2026-08-01','2026-09-05',1000,?,?,?,?,?,?)`,
+  ).bind(titleId, gestora.id, `REC-${titleId}`, invoiceId, openAmount, openAmount < 1000 ? "partial" : "open", gestora.id, gestora.id, agora, agora);
+  // O lançamento do razão ('entry-<titleId>') nasce sozinho: o gatilho da ponte
+  // (0069) o cria ao inserir o título. Não semeamos à mão.
+  it("cancelar a nota cancela o título e o lançamento do razão", async () => {
+    await env.DB.batch([seedDoc("doc-cx", "inv-cx"), seedTitle("tit-cx", "inv-cx", 1000)]);
+    const r = await transitar(gestora.token, "doc-cx", "cancelado");
+    expect(r.status).toBe(200);
+    const titulo = await env.DB.prepare("SELECT status,open_amount FROM todogreen_financial_titles WHERE id='tit-cx'").first();
+    expect(titulo.status).toBe("cancelled");
+    expect(titulo.open_amount).toBe(0);
+    const entry = await env.DB.prepare("SELECT status,invoice_status FROM todogreen_financial_entries WHERE id='entry-tit-cx'").first();
+    expect(entry.invoice_status).toBe("cancelled");
+    expect(entry.status).toBe("cancelled");
+  });
+
+  it("recusa cancelar quando o título já teve baixa (não apaga caixa recebido)", async () => {
+    await env.DB.batch([seedDoc("doc-bx", "inv-bx"), seedTitle("tit-bx", "inv-bx", 400)]);
+    const r = await transitar(gestora.token, "doc-bx", "cancelado");
+    expect(r.status).toBe(409);
+    expect((await r.json()).code).toBe("titulo_com_baixa");
+    // O título segue vivo e parcialmente aberto.
+    const titulo = await env.DB.prepare("SELECT status,open_amount FROM todogreen_financial_titles WHERE id='tit-bx'").first();
+    expect(titulo.open_amount).toBe(400);
+  });
+});
