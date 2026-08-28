@@ -18,6 +18,7 @@ import {
   TABELAS_2025,
   calcularDecimoTerceiro,
   calcularDsr,
+  calcularFerias,
   calcularFolha,
   diasUteisDoMes,
   encargosPatronais,
@@ -56,6 +57,15 @@ const vencimentoFolha = (competencia, dia) => {
   // Date.UTC usa mês 0-based; passar `mes` (1-based da competência) já cai no mês seguinte.
   const data = new Date(Date.UTC(ano, mes, Math.min(dia, 28)));
   return data.toISOString().slice(0, 10);
+};
+
+// N dias antes de uma data ISO (AAAA-MM-DD). Usado no pagamento das férias, que
+// por lei sai até dois dias antes do início do gozo.
+const diasAntes = (dataISO, dias) => {
+  const d = new Date(`${String(dataISO).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return String(dataISO).slice(0, 10);
+  d.setUTCDate(d.getUTCDate() - dias);
+  return d.toISOString().slice(0, 10);
 };
 
 // As obrigações que a folha fechada gera como contas a pagar, cada uma com seu
@@ -178,6 +188,7 @@ const feriasDaLinha = (row) => ({
   abonoPecuniario: Boolean(row.abono_pecuniario),
   adiantarDecimo: Boolean(row.adiantar_decimo),
   status: row.status,
+  pagamento: parse(row.fields_json, {}).pagamento || null,
   revision: row.revision,
 });
 
@@ -621,6 +632,105 @@ const criarFerias = async (env, access, user, corpo) => {
   return json(feriasDaLinha(row), 201);
 };
 
+// Lança as verbas de férias no razão único (todogreen_financial_entries) como
+// contas a pagar. Espelha a folha: reprocessar arquiva os lançamentos ainda NÃO
+// pagos desta mesma férias e regrava, sem tocar num que já teve baixa.
+const lancarFeriasNoFinanceiro = async (env, access, user, feriasId, competencia, obrigacoes) => {
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE todogreen_financial_entries
+        SET archived_at = ?, updated_at = ?
+      WHERE workspace_owner_id = ? AND tenant_id = ?
+        AND archived_at IS NULL AND paid_amount = 0
+        AND json_extract(fields_json, '$.origem') = 'ferias'
+        AND json_extract(fields_json, '$.feriasId') = ?`,
+  ).bind(agora, agora, access.ownerId, TENANT_ID, feriasId).run();
+
+  const gravacoes = [];
+  for (const o of obrigacoes) {
+    if (numero(o.valor) <= 0) continue;
+    gravacoes.push(env.DB.prepare(
+      `INSERT INTO todogreen_financial_entries
+         (id, tenant_id, workspace_owner_id, kind, client_id, product_id, scenario_id,
+          category, description, amount, reference_month, status, fields_json,
+          due_date, paid_amount, counterparty, document_number, cost_center,
+          budget_code, payment_method, competence_date, contract_id, invoice_status,
+          revision, created_by, updated_by, created_at, updated_at, archived_at)
+       VALUES (?, ?, ?, 'cost', '', '', '', ?, ?, ?, ?, 'confirmed', ?,
+               ?, 0, ?, '', '', '', '', ?, '', '', 1, ?, ?, ?, ?, NULL)`,
+    ).bind(
+      crypto.randomUUID(), TENANT_ID, access.ownerId,
+      o.categoria, `${o.categoria} · ${competencia}`, numero(o.valor), competencia,
+      JSON.stringify({ origem: "ferias", feriasId, competencia, obrigacao: o.chave }),
+      o.vencimento, "Folha de pagamento",
+      `${competencia}-01`, user.id, user.id, agora, agora,
+    ));
+  }
+  if (gravacoes.length) await env.DB.batch(gravacoes);
+  return gravacoes.length;
+};
+
+// Pagar as férias: calcula o holerite (proporcional aos dias + 1/3, com
+// INSS/IRRF/FGTS sobre o bruto), guarda-o na própria férias e lança as verbas no
+// razão — líquido com vencimento até dois dias antes do gozo, encargos no mês
+// seguinte. Reprocessar recalcula do zero e não duplica os lançamentos não pagos.
+const pagarFerias = async (env, access, user, id, corpo) => {
+  const ferias = await env.DB.prepare(
+    `SELECT * FROM todogreen_vacations WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(id, TENANT_ID, access.ownerId).first();
+  if (!ferias) return json({ error: "Férias não encontradas." }, 404);
+  if (numero(corpo.revision) !== ferias.revision)
+    return json({ error: "O registro de férias mudou. Recarregue." }, 409);
+  if (ferias.status === "cancelada") return json({ error: "Férias canceladas não são pagas." }, 409);
+  if (!ferias.gozo_inicio) return json({ error: "Informe o início do gozo antes de pagar as férias." }, 400);
+
+  const colaborador = await env.DB.prepare(
+    `SELECT * FROM todogreen_employees WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(ferias.employee_id, TENANT_ID, access.ownerId).first();
+  if (!colaborador) return json({ error: "Colaborador das férias não encontrado." }, 404);
+
+  const verba = calcularFerias(colaborador.salario_base, ferias.dias);
+  // O bruto das férias (proporcional + 1/3) é a base do INSS/IRRF/FGTS — a
+  // incidência própria das férias gozadas, à parte do salário do mês.
+  const folha = calcularFolha(
+    { salarioBase: verba.bruto, dependentes: colaborador.dependentes },
+    { tabela: TABELAS_2025 },
+  );
+  const competencia = String(ferias.gozo_inicio).slice(0, 7);
+  const lancamentos = await lancarFeriasNoFinanceiro(env, access, user, ferias.id, competencia, [
+    { chave: "liquido", categoria: "Férias — líquido", valor: folha.liquido, vencimento: diasAntes(ferias.gozo_inicio, 2) },
+    { chave: "fgts", categoria: "Férias — FGTS", valor: folha.fgts.valor, vencimento: vencimentoFolha(competencia, 7) },
+    { chave: "inss", categoria: "Férias — INSS a recolher", valor: folha.inss.valor, vencimento: vencimentoFolha(competencia, 20) },
+    { chave: "irrf", categoria: "Férias — IRRF a recolher", valor: folha.irrf.valor, vencimento: vencimentoFolha(competencia, 20) },
+  ]);
+
+  const campos = parse(ferias.fields_json, {});
+  campos.pagamento = {
+    pagoEm: new Date().toISOString(),
+    bruto: verba.bruto,
+    proporcional: verba.proporcional,
+    tercoConstitucional: verba.tercoConstitucional,
+    liquido: folha.liquido,
+    inss: folha.inss.valor,
+    irrf: folha.irrf.valor,
+    fgts: folha.fgts.valor,
+    versaoTabela: folha.versaoTabela,
+    proventos: folha.proventos,
+    descontos: folha.descontos,
+  };
+  const agora = new Date().toISOString();
+  // Pagas, as férias passam a 'aprovada' (não há um status 'paga' no enum); o
+  // holerite fica registrado nos campos.
+  const novoStatus = ferias.status === "programada" ? "aprovada" : ferias.status;
+  await env.DB.prepare(
+    `UPDATE todogreen_vacations SET fields_json = ?, status = ?, revision = revision + 1, updated_at = ?
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+  ).bind(JSON.stringify(campos), novoStatus, agora, id, TENANT_ID, access.ownerId).run();
+
+  const row = await env.DB.prepare("SELECT * FROM todogreen_vacations WHERE id = ?").bind(id).first();
+  return json({ ferias: feriasDaLinha(row), holerite: campos.pagamento, lancamentosFinanceiros: lancamentos });
+};
+
 // ---------------------------------------------------------------------------
 // Resumo
 // ---------------------------------------------------------------------------
@@ -699,6 +809,10 @@ export async function handleTodoGreenPayroll(request, env, access, user) {
   if (path === "/ferias") {
     if (method === "GET") return listarFerias(env, access, url);
     if (method === "POST") return criarFerias(env, access, user, await request.json().catch(() => ({})));
+  }
+  const feriasMatch = path.match(/^\/ferias\/([^/]+)\/pagar$/);
+  if (feriasMatch && method === "POST") {
+    return pagarFerias(env, access, user, feriasMatch[1], await request.json().catch(() => ({})));
   }
 
   return json({ error: "Rota da folha não encontrada." }, 404);

@@ -274,6 +274,76 @@ describe("mensal: DSR sobre variáveis e desconto de falta", () => {
   });
 });
 
+describe("férias com pagamento", () => {
+  it("paga as férias (proporcional + 1/3), grava o holerite e lança no razão", async () => {
+    const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Paula Ferias", cpf: "527.815.940-59", salarioBase: 3000, admissaoEm: "2026-01-05" },
+    })).json();
+    const ferias = await (await pedir("/api/todogreen/payroll/ferias", {
+      metodo: "POST", token: rh.token,
+      corpo: { employeeId: colab.id, periodoAquisitivoInicio: "2025-01-05", periodoAquisitivoFim: "2026-01-04", gozoInicio: "2026-08-03", gozoFim: "2026-09-01", dias: 30 },
+    })).json();
+
+    const pagar = await pedir(`/api/todogreen/payroll/ferias/${ferias.id}/pagar`, {
+      metodo: "POST", token: rh.token, corpo: { revision: ferias.revision },
+    });
+    expect(pagar.status).toBe(200);
+    const res = await pagar.json();
+    // 3000 + 1/3 = 4000 de bruto; líquido positivo, com INSS/IRRF descontados.
+    expect(res.holerite.bruto).toBe(4000);
+    expect(res.holerite.tercoConstitucional).toBe(1000);
+    expect(res.holerite.liquido).toBeGreaterThan(0);
+    expect(res.holerite.liquido).toBeLessThan(4000);
+    expect(res.lancamentosFinanceiros).toBeGreaterThanOrEqual(1);
+    // As férias voltam com o pagamento gravado.
+    expect(res.ferias.pagamento).toBeTruthy();
+
+    // Líquido no razão vence dois dias antes do gozo (03/08 → 01/08).
+    const { results } = await env.DB.prepare(
+      `SELECT category, amount, due_date, competence_date FROM todogreen_financial_entries
+        WHERE workspace_owner_id = ? AND archived_at IS NULL
+          AND json_extract(fields_json, '$.origem') = 'ferias'
+          AND json_extract(fields_json, '$.feriasId') = ?`,
+    ).bind(rh.id, ferias.id).all();
+    const liquido = results.find((r) => r.category.includes("líquido"));
+    expect(liquido).toBeTruthy();
+    expect(liquido.due_date).toBe("2026-08-01");
+    expect(liquido.competence_date).toBe("2026-08-01");
+
+    // Reprocessar (pagar de novo, com a nova revision) não duplica os não pagos.
+    const feriasAgora = await (await pedir("/api/todogreen/payroll/ferias?colaborador=" + colab.id, { token: rh.token })).json();
+    const atual = feriasAgora.registros.find((f) => f.id === ferias.id);
+    await pedir(`/api/todogreen/payroll/ferias/${ferias.id}/pagar`, { metodo: "POST", token: rh.token, corpo: { revision: atual.revision } });
+    const { results: depois } = await env.DB.prepare(
+      `SELECT id FROM todogreen_financial_entries
+        WHERE workspace_owner_id = ? AND archived_at IS NULL
+          AND json_extract(fields_json, '$.origem') = 'ferias'
+          AND json_extract(fields_json, '$.feriasId') = ?`,
+    ).bind(rh.id, ferias.id).all();
+    expect(depois.length).toBe(results.length);
+  });
+
+  it("recusa pagar sem início de gozo e com revision defasada", async () => {
+    const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Rui SemGozo", cpf: "742.069.318-87", salarioBase: 2500, admissaoEm: "2026-02-01" },
+    })).json();
+    const ferias = await (await pedir("/api/todogreen/payroll/ferias", {
+      metodo: "POST", token: rh.token,
+      corpo: { employeeId: colab.id, periodoAquisitivoInicio: "2025-02-01", periodoAquisitivoFim: "2026-01-31", dias: 30 },
+    })).json();
+    // Sem gozoInicio → 400.
+    expect((await pedir(`/api/todogreen/payroll/ferias/${ferias.id}/pagar`, {
+      metodo: "POST", token: rh.token, corpo: { revision: ferias.revision },
+    })).status).toBe(400);
+    // Revision errada → 409.
+    expect((await pedir(`/api/todogreen/payroll/ferias/${ferias.id}/pagar`, {
+      metodo: "POST", token: rh.token, corpo: { revision: 999 },
+    })).status).toBe(409);
+  });
+});
+
 describe("13º proporcional aos avos do ano", () => {
   it("fecha por tipo decimo_terceiro, proporcional aos meses, e exclui quem entrou depois", async () => {
     // Helena: ano inteiro → 12 avos (13º = salário). Igor: admitido em julho →

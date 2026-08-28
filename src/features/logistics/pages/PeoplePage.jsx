@@ -144,6 +144,17 @@ export default function PeoplePage({ authHeaders, setToast }) {
     } catch (motivo) { avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro"); }
   };
 
+  const pagarFerias = async (f) => {
+    if (!f.gozoInicio) { avisar("Informe o início do gozo antes de pagar.", "erro"); return; }
+    try {
+      const res = await request(`/ferias/${f.id}/pagar`, authHeaders, {
+        method: "POST", body: JSON.stringify({ revision: f.revision }),
+      });
+      avisar(`Férias pagas: líquido ${dinheiro(res.holerite?.liquido)} · ${res.lancamentosFinanceiros} lançamento(s) no razão.`, "sucesso");
+      await carregarFerias();
+    } catch (motivo) { avisar(motivo.message, "erro"); }
+  };
+
   const nomeColaborador = (id) => colaboradores.find((c) => c.id === id)?.nome || id || "—";
 
   useEffect(() => {
@@ -308,7 +319,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
             : (
               <div className="tdg-table-wrap">
                 <table className="tdg-table">
-                  <thead><tr><th>Colaborador</th><th>Aquisitivo</th><th>Gozo</th><th>Dias</th><th>Abono</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Colaborador</th><th>Aquisitivo</th><th>Gozo</th><th>Dias</th><th>Abono</th><th>Status</th><th>Pago</th><th>Ações</th></tr></thead>
                   <tbody>
                     {ferias.map((f) => (
                       <tr key={f.id}>
@@ -316,6 +327,12 @@ export default function PeoplePage({ authHeaders, setToast }) {
                         <td>{f.periodoAquisitivoInicio || "—"} a {f.periodoAquisitivoFim || "—"}</td>
                         <td>{f.gozoInicio ? `${f.gozoInicio} a ${f.gozoFim || "?"}` : "a programar"}</td>
                         <td>{f.dias}</td><td>{f.abonoPecuniario ? "Sim" : "—"}</td><td>{f.status}</td>
+                        <td>{f.pagamento ? dinheiro(f.pagamento.liquido) : "—"}</td>
+                        <td className="tdg-fiscal-acoes">
+                          <button type="button" disabled={!f.gozoInicio || f.status === "cancelada"} onClick={() => pagarFerias(f)}>
+                            {f.pagamento ? "Recalcular" : "Pagar"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
