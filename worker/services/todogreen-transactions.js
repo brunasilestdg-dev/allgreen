@@ -1,6 +1,7 @@
 import { paginacao, podeNaVertical, TENANT_ID } from "./todogreen-access.js";
 import {
   canTransitionServiceOrder,
+  precoUnitarioDaOs,
   serviceOrderAmounts,
   settlementState,
   validateAllocation,
@@ -154,7 +155,8 @@ const orderView = (row) => ({
   scheduledEndAt: row.scheduled_end_at, completedAt: row.completed_at,
   quantity: row.quantity, chargeUnit: row.charge_unit, unitPrice: row.unit_price,
   grossAmount: row.gross_amount, discountAmount: row.discount_amount, taxAmount: row.tax_amount,
-  netAmount: row.net_amount, revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at,
+  netAmount: row.net_amount, precoOrigem: parseJson(row.fields_json).precoOrigem || "",
+  revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at,
 });
 
 const ciotView = (row) => ({
@@ -279,8 +281,23 @@ async function createOrder(env, access, user, body) {
   if (contract.approval_status !== "approved" || contract.signature_status !== "signed")
     return json({ error: "A ordem exige contrato aprovado e assinado." }, 409);
 
-  const amounts = serviceOrderAmounts(body);
-  if (!amounts.quantity || !amounts.unitPrice) return json({ error: "Quantidade e preço unitário devem ser maiores que zero." }, 400);
+  // Preço herdado do aceite: quando não vem digitado, o contrato (valor
+  // negociado) manda; na falta dele, o preço da simulação que gerou o contrato.
+  // Assim a OS nasce do aceite sem redigitar o número que a régua já calculou.
+  let simulacaoResult = null;
+  if (!(Number(body.unitPrice) > 0) && contract.scenario_id) {
+    const cenario = await env.DB.prepare(
+      "SELECT result_json FROM pricing_scenarios WHERE id=? AND tenant_id=? AND workspace_owner_id=?",
+    ).bind(contract.scenario_id, TENANT_ID, access.ownerId).first().catch(() => null);
+    simulacaoResult = cenario ? parseJson(cenario.result_json) : null;
+  }
+  const { preco: precoHerdado, origem: origemPreco } = precoUnitarioDaOs({
+    unitPrice: body.unitPrice, contractMonthlyValue: contract.monthly_value, simulacaoResult,
+  });
+
+  const amounts = serviceOrderAmounts({ ...body, unitPrice: precoHerdado ?? 0 });
+  if (!amounts.quantity) return json({ error: "Informe a quantidade da ordem de serviço." }, 400);
+  if (!amounts.unitPrice) return json({ error: "Sem preço: informe o preço unitário ou gere a OS de um contrato com valor negociado ou simulação." }, 400);
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const number = await reserveNumber(env, access.ownerId, "ordem_servico", "OS-", now);
@@ -299,7 +316,7 @@ async function createOrder(env, access, user, body) {
     JSON.stringify(object(body.destination)), amounts.quantity, text(body.chargeUnit, 30),
     amounts.unitPrice, amounts.grossAmount, amounts.discountAmount, amounts.taxAmount, amounts.netAmount,
     JSON.stringify(object(body.sla || JSON.parse(contract.sla_json || "{}"))),
-    JSON.stringify(object(body.fields)), user.id, user.id, now, now,
+    JSON.stringify({ ...object(body.fields), precoOrigem: origemPreco }), user.id, user.id, now, now,
   ).run();
   const row = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
   return json({ record: orderView(row) }, 201);

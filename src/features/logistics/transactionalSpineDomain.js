@@ -15,6 +15,37 @@ export function canTransitionServiceOrder(from, to) {
   return (SERVICE_ORDER_TRANSITIONS[from] || []).includes(to);
 }
 
+// Preço recomendado guardado no resultado da simulação (result_json do
+// pricing_scenarios). O motor de preço devolve `precoRecomendado`; aceitamos
+// também as chaves equivalentes de versões/idiomas do resultado. Devolve null
+// quando nenhuma existe — nunca 0, para não fingir um preço que a simulação
+// não deu.
+export function precoDaSimulacao(result) {
+  if (!result || typeof result !== "object") return null;
+  const chaves = ["precoRecomendado", "recommendedPrice", "precoFinal", "precoSugerido", "valorRecomendado", "preco", "price"];
+  for (const chave of chaves) {
+    const valor = number(result[chave]);
+    if (valor > 0) return valor;
+  }
+  return null;
+}
+
+// Preço unitário da OS gerada a partir do aceite. A precedência respeita quem
+// tem mais autoridade sobre o número: o que for digitado na hora vence (uma
+// renegociação pontual); senão herda o valor NEGOCIADO do contrato; senão o
+// preço da SIMULAÇÃO que gerou o contrato. Assim o preço flui
+// simulação → contrato → OS sem redigitação, mas nunca sobrescreve um valor
+// informado de propósito. `origem` deixa rastro de onde o número veio.
+export function precoUnitarioDaOs({ unitPrice, contractMonthlyValue, simulacaoResult } = {}) {
+  const digitado = number(unitPrice);
+  if (digitado > 0) return { preco: digitado, origem: "digitado" };
+  const doContrato = number(contractMonthlyValue);
+  if (doContrato > 0) return { preco: doContrato, origem: "contrato" };
+  const daSimulacao = precoDaSimulacao(simulacaoResult);
+  if (daSimulacao != null) return { preco: daSimulacao, origem: "simulacao" };
+  return { preco: null, origem: "ausente" };
+}
+
 export function serviceOrderAmounts(input = {}) {
   const quantity = Math.max(0, number(input.quantity));
   const unitPrice = Math.max(0, number(input.unitPrice));

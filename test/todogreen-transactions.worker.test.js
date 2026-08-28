@@ -302,3 +302,57 @@ describe("evento de entrega fecha o ciclo da operação", () => {
     expect(lista[0].recipientName).toBe("Portaria");
   });
 });
+
+describe("aceite → OS: a ordem herda o preço", () => {
+  beforeAll(async () => {
+    const now = new Date().toISOString();
+    // Simulação com preço recomendado de 1500.
+    await env.DB.prepare(`INSERT INTO pricing_scenarios
+      (id,tenant_id,workspace_owner_id,product_id,created_by,rule_version,inputs_json,result_json,status,created_at)
+      VALUES ('sc-preco','todogreen','txn-user','same-day','txn-user','v1','{}','{"precoRecomendado":1500}','approved',?)`).bind(now).run();
+    // Contrato com valor negociado 1000 e ligado à simulação.
+    await env.DB.prepare(`INSERT INTO todogreen_contracts
+      (id,tenant_id,workspace_owner_id,client_id,client_name,proposal_id,scenario_id,monthly_value,title,status,signature_status,
+       approval_status,service_id,price_table_id,sla_json,commercial_terms_json,taxes_json,billing_rules_json,
+       fields_json,revision,created_by,updated_by,created_at,updated_at)
+      VALUES ('ct-preco','todogreen','txn-user','txn-client','Cliente Transacional','prop-preco','sc-preco',1000,'Contrato com preço','active','signed',
+       'approved','same-day','table-a','{}','{}','{}','{}','{}',1,'txn-user','txn-user',?,?)`).bind(now,now).run();
+    // Contrato sem valor negociado, só com a simulação por trás.
+    await env.DB.prepare(`INSERT INTO todogreen_contracts
+      (id,tenant_id,workspace_owner_id,client_id,client_name,proposal_id,scenario_id,monthly_value,title,status,signature_status,
+       approval_status,service_id,price_table_id,sla_json,commercial_terms_json,taxes_json,billing_rules_json,
+       fields_json,revision,created_by,updated_by,created_at,updated_at)
+      VALUES ('ct-sim','todogreen','txn-user','txn-client','Cliente Transacional','prop-sim','sc-preco',0,'Contrato só simulação','active','signed',
+       'approved','same-day','table-a','{}','{}','{}','{}','{}',1,'txn-user','txn-user',?,?)`).bind(now,now).run();
+  });
+
+  it("sem preço digitado, herda o valor negociado do contrato", async () => {
+    const res = await request("/api/todogreen/transactions/service-orders", "POST", {
+      clientId: "txn-client", contractId: "ct-preco", quantity: 2, chargeUnit: "entrega",
+    });
+    expect(res.status).toBe(201);
+    const os = (await res.json()).record;
+    expect(os.unitPrice).toBe(1000);
+    expect(os.netAmount).toBe(2000);
+    expect(os.precoOrigem).toBe("contrato");
+  });
+
+  it("sem contrato com valor, herda o preço da simulação", async () => {
+    const res = await request("/api/todogreen/transactions/service-orders", "POST", {
+      clientId: "txn-client", contractId: "ct-sim", quantity: 3, chargeUnit: "entrega",
+    });
+    expect(res.status).toBe(201);
+    const os = (await res.json()).record;
+    expect(os.unitPrice).toBe(1500);
+    expect(os.precoOrigem).toBe("simulacao");
+  });
+
+  it("o preço digitado vence a herança", async () => {
+    const res = await request("/api/todogreen/transactions/service-orders", "POST", {
+      clientId: "txn-client", contractId: "ct-preco", quantity: 1, unitPrice: 777, chargeUnit: "entrega",
+    });
+    const os = (await res.json()).record;
+    expect(os.unitPrice).toBe(777);
+    expect(os.precoOrigem).toBe("digitado");
+  });
+});

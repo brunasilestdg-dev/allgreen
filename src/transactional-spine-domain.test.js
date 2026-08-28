@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransitionServiceOrder,
+  precoDaSimulacao,
+  precoUnitarioDaOs,
   serviceOrderAmounts,
   settlementState,
   validateAllocation,
@@ -28,5 +30,33 @@ describe("espinha transacional To Do Green", () => {
     expect(settlementState(100, 40)).toMatchObject({ valid: true, remaining: 60, status: "partial" });
     expect(settlementState(100, 100)).toMatchObject({ valid: true, remaining: 0, status: "settled" });
     expect(settlementState(100, 101).valid).toBe(false);
+  });
+});
+
+describe("aceite → OS: herança de preço", () => {
+  it("lê o preço recomendado da simulação pelas chaves conhecidas", () => {
+    expect(precoDaSimulacao({ precoRecomendado: 1200 })).toBe(1200);
+    expect(precoDaSimulacao({ recommendedPrice: 999 })).toBe(999);
+    expect(precoDaSimulacao({ custoCarregado: 500 })).toBe(null); // não é o preço
+    expect(precoDaSimulacao(null)).toBe(null);
+  });
+
+  it("o preço digitado vence tudo", () => {
+    const r = precoUnitarioDaOs({ unitPrice: 800, contractMonthlyValue: 1000, simulacaoResult: { precoRecomendado: 1200 } });
+    expect(r).toEqual({ preco: 800, origem: "digitado" });
+  });
+
+  it("sem digitar, herda o valor negociado do contrato", () => {
+    const r = precoUnitarioDaOs({ unitPrice: 0, contractMonthlyValue: 1000, simulacaoResult: { precoRecomendado: 1200 } });
+    expect(r).toEqual({ preco: 1000, origem: "contrato" });
+  });
+
+  it("sem contrato com valor, cai para o preço da simulação", () => {
+    const r = precoUnitarioDaOs({ unitPrice: 0, contractMonthlyValue: 0, simulacaoResult: { precoRecomendado: 1200 } });
+    expect(r).toEqual({ preco: 1200, origem: "simulacao" });
+  });
+
+  it("sem nenhuma fonte, não inventa preço", () => {
+    expect(precoUnitarioDaOs({ unitPrice: 0, contractMonthlyValue: 0, simulacaoResult: {} })).toEqual({ preco: null, origem: "ausente" });
   });
 });
