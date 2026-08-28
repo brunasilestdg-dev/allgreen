@@ -377,3 +377,68 @@ describe("13º proporcional aos avos do ano", () => {
     expect(itens.registros.some((i) => i.employeeId === novo.id)).toBe(false);
   });
 });
+
+describe("rescisão (sem justa causa)", () => {
+  it("calcula as verbas, desliga o colaborador e lança no razão", async () => {
+    const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Túlio Rescisao", cpf: "305.817.260-57", salarioBase: 3000, admissaoEm: "2023-01-10" },
+    })).json();
+
+    const resc = await pedir(`/api/todogreen/payroll/colaboradores/${colab.id}/rescindir`, {
+      metodo: "POST", token: rh.token,
+      corpo: { revision: colab.revision, desligamentoEm: "2026-06-20", saldoFgts: 10000 },
+    });
+    expect(resc.status).toBe(200);
+    const res = await resc.json();
+    // Saldo 3000/30×20=2000; aviso 3 anos → 39 dias; multa 40% de 10000 = 4000.
+    expect(res.rescisao.saldoSalario).toBe(2000);
+    expect(res.rescisao.avisoPrevio.dias).toBe(39);
+    expect(res.rescisao.multaFgts.valor).toBe(4000);
+    expect(res.rescisao.liquido).toBeGreaterThan(0);
+    expect(res.lancamentosFinanceiros).toBeGreaterThanOrEqual(1);
+    // O colaborador fica desligado.
+    expect(res.colaborador.status).toBe("desligado");
+    expect(res.colaborador.desligamentoEm).toBe("2026-06-20");
+
+    // Líquido no razão vence dez dias após o desligamento (prazo legal).
+    const { results } = await env.DB.prepare(
+      `SELECT category, amount, due_date, competence_date FROM todogreen_financial_entries
+        WHERE workspace_owner_id = ? AND archived_at IS NULL
+          AND json_extract(fields_json, '$.origem') = 'rescisao'
+          AND json_extract(fields_json, '$.rescisaoId') = ?`,
+    ).bind(rh.id, colab.id).all();
+    const liquido = results.find((r) => r.category.includes("líquido"));
+    expect(liquido).toBeTruthy();
+    expect(liquido.due_date).toBe("2026-06-30");
+    expect(liquido.competence_date).toBe("2026-06-01");
+    const multa = results.find((r) => r.category.includes("multa"));
+    expect(multa.amount).toBe(4000);
+
+    // Reprocessar (com a nova revision) recalcula e não duplica os não pagos.
+    const detalhe = await (await pedir(`/api/todogreen/payroll/colaboradores/${colab.id}`, { token: rh.token })).json();
+    await pedir(`/api/todogreen/payroll/colaboradores/${colab.id}/rescindir`, {
+      metodo: "POST", token: rh.token, corpo: { revision: detalhe.revision, desligamentoEm: "2026-06-20", saldoFgts: 10000 },
+    });
+    const { results: depois } = await env.DB.prepare(
+      `SELECT id FROM todogreen_financial_entries
+        WHERE workspace_owner_id = ? AND archived_at IS NULL
+          AND json_extract(fields_json, '$.origem') = 'rescisao'
+          AND json_extract(fields_json, '$.rescisaoId') = ?`,
+    ).bind(rh.id, colab.id).all();
+    expect(depois.length).toBe(results.length);
+  });
+
+  it("recusa sem data de desligamento e com revision defasada", async () => {
+    const colab = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: rh.token,
+      corpo: { nome: "Vera SemData", cpf: "448.291.570-03", salarioBase: 2500, admissaoEm: "2024-03-01" },
+    })).json();
+    expect((await pedir(`/api/todogreen/payroll/colaboradores/${colab.id}/rescindir`, {
+      metodo: "POST", token: rh.token, corpo: { revision: colab.revision },
+    })).status).toBe(400);
+    expect((await pedir(`/api/todogreen/payroll/colaboradores/${colab.id}/rescindir`, {
+      metodo: "POST", token: rh.token, corpo: { revision: 999, desligamentoEm: "2026-06-20" },
+    })).status).toBe(409);
+  });
+});

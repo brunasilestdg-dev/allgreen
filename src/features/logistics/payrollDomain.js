@@ -212,6 +212,133 @@ export function calcularFerias(salarioMensal, dias = 30) {
   };
 }
 
+// ─── Rescisão (verbas rescisórias) ───────────────────────────
+//
+// Cobre o caso mais comum — dispensa SEM JUSTA CAUSA — com as verbas
+// principais. As naturezas são separadas de propósito, porque mudam a
+// tributação: saldo de salário e 13º têm INSS/IRRF próprios; aviso prévio
+// indenizado e férias (vencidas/proporcionais + 1/3) são indenizatórios e NÃO
+// sofrem INSS/IRRF. A multa de 40% do FGTS incide sobre o saldo depositado na
+// Caixa — que o sistema não tem — então é calculada só quando o saldo é
+// informado; sem ele, devolve `null` (nunca 0, para não afirmar o que não sabe).
+//
+// Não é cálculo homologado: é a estrutura federal do caso comum, com o mesmo
+// aviso do módulo fiscal. Justa causa, pedido de demissão e término de contrato
+// mudam as verbas e ficam de fora por ora.
+
+const partesData = (iso) => {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? { ano: Number(m[1]), mes: Number(m[2]), dia: Number(m[3]) } : null;
+};
+
+// Meses trabalhados no ano até o desligamento (avos do 13º e das férias
+// proporcionais na rescisão): de janeiro (ou da admissão, se no mesmo ano) até
+// o mês do desligamento, com o mês contando quando há 15 dias ou mais.
+function mesesNoAnoAte(admissaoEm, desligamentoEm) {
+  const fim = partesData(desligamentoEm);
+  if (!fim) return 0;
+  const ini = partesData(admissaoEm);
+  const mesInicial = ini && ini.ano === fim.ano ? ini.mes : 1;
+  // O mês do desligamento conta se o colaborador trabalhou ao menos 15 dias.
+  const contaMesFim = fim.dia >= 15 ? 1 : 0;
+  return Math.max(0, fim.mes - mesInicial + contaMesFim);
+}
+
+// Anos completos de casa até o desligamento — base do acréscimo do aviso prévio.
+function anosCompletos(admissaoEm, desligamentoEm) {
+  const ini = partesData(admissaoEm);
+  const fim = partesData(desligamentoEm);
+  if (!ini || !fim) return 0;
+  let anos = fim.ano - ini.ano;
+  if (fim.mes < ini.mes || (fim.mes === ini.mes && fim.dia < ini.dia)) anos -= 1;
+  return Math.max(0, anos);
+}
+
+export function calcularRescisao(dados, opts = {}) {
+  const { tabela = TABELAS_2025 } = opts;
+  const salario = n(dados?.salarioBase);
+  const dependentes = Math.max(0, Math.trunc(n(dados?.dependentes)));
+  const admissaoEm = dados?.admissaoEm || "";
+  const desligamentoEm = dados?.desligamentoEm || "";
+  const avisoIndenizado = dados?.avisoIndenizado !== false; // padrão: indenizado
+  const diasFeriasVencidas = Math.max(0, Math.min(30, Math.trunc(n(dados?.diasFeriasVencidas))));
+  const temSaldoFgts = dados?.saldoFgts !== undefined && dados?.saldoFgts !== null && dados?.saldoFgts !== "";
+
+  const fim = partesData(desligamentoEm);
+  const diari = salario / 30;
+
+  // Saldo de salário: dias trabalhados no mês do desligamento.
+  const diasSaldo = fim ? fim.dia : 0;
+  const saldoSalario = arredondar(diari * diasSaldo);
+
+  // Aviso prévio (Lei 12.506/2011): 30 dias + 3 por ano completo, teto 90.
+  const anos = anosCompletos(admissaoEm, desligamentoEm);
+  const diasAviso = Math.min(90, 30 + 3 * anos);
+  const avisoValor = avisoIndenizado ? arredondar(diari * diasAviso) : 0;
+
+  // 13º proporcional aos meses do ano.
+  const meses13 = mesesNoAnoAte(admissaoEm, desligamentoEm);
+  const decimoTerceiro = arredondar((salario / 12) * meses13);
+
+  // Férias vencidas (período completo não gozado) + 1/3.
+  const feriasVencidasBase = arredondar(diari * diasFeriasVencidas);
+  const feriasVencidas = arredondar(feriasVencidasBase + feriasVencidasBase / 3);
+
+  // Férias proporcionais: avos do período aquisitivo em curso + 1/3.
+  const feriasPropBase = arredondar((salario / 12) * meses13);
+  const feriasProporcionais = arredondar(feriasPropBase + feriasPropBase / 3);
+
+  // Multa de 40% do FGTS — só com o saldo depositado informado.
+  const multaFgts = temSaldoFgts
+    ? { base: arredondar(n(dados.saldoFgts)), valor: arredondar(n(dados.saldoFgts) * 0.4) }
+    : null;
+
+  // Tributação: incidem sobre o saldo de salário e sobre o 13º (cada um com sua
+  // própria base); aviso indenizado e férias (vencidas e proporcionais) são
+  // indenizatórios, sem INSS/IRRF.
+  const inssSaldo = calcularInss(saldoSalario, tabela);
+  const irrfSaldo = calcularIrrf(saldoSalario, { inss: inssSaldo.valor, dependentes, tabela });
+  const inss13 = calcularInss(decimoTerceiro, tabela);
+  const irrf13 = calcularIrrf(decimoTerceiro, { inss: inss13.valor, dependentes, tabela });
+
+  const proventos = [
+    { codigo: "saldo_salario", descricao: `Saldo de salário (${diasSaldo} dia(s))`, valor: saldoSalario, tributavel: true },
+  ];
+  if (avisoValor > 0) proventos.push({ codigo: "aviso_previo", descricao: `Aviso prévio indenizado (${diasAviso} dias)`, valor: avisoValor, tributavel: false });
+  if (decimoTerceiro > 0) proventos.push({ codigo: "decimo_terceiro", descricao: `13º proporcional (${meses13}/12)`, valor: decimoTerceiro, tributavel: true });
+  if (feriasVencidas > 0) proventos.push({ codigo: "ferias_vencidas", descricao: "Férias vencidas + 1/3", valor: feriasVencidas, tributavel: false });
+  if (feriasProporcionais > 0) proventos.push({ codigo: "ferias_proporcionais", descricao: `Férias proporcionais + 1/3 (${meses13}/12)`, valor: feriasProporcionais, tributavel: false });
+  if (multaFgts) proventos.push({ codigo: "multa_fgts", descricao: "Multa de 40% do FGTS", valor: multaFgts.valor, tributavel: false });
+
+  const descontos = [];
+  const inssTotal = arredondar(inssSaldo.valor + inss13.valor);
+  const irrfTotal = arredondar(irrfSaldo.valor + irrf13.valor);
+  if (inssTotal > 0) descontos.push({ codigo: "inss", descricao: "INSS (saldo + 13º)", valor: inssTotal });
+  if (irrfTotal > 0) descontos.push({ codigo: "irrf", descricao: "IRRF (saldo + 13º)", valor: irrfTotal });
+
+  const totalProventos = arredondar(proventos.reduce((s, p) => s + p.valor, 0));
+  const totalDescontos = arredondar(descontos.reduce((s, d) => s + d.valor, 0));
+
+  return {
+    motivo: "sem_justa_causa",
+    diasTrabalhados: diasSaldo,
+    saldoSalario,
+    avisoPrevio: { dias: diasAviso, indenizado: avisoIndenizado, valor: avisoValor },
+    decimoTerceiro: { meses: meses13, valor: decimoTerceiro },
+    feriasVencidas: { dias: diasFeriasVencidas, valor: feriasVencidas },
+    feriasProporcionais: { meses: meses13, valor: feriasProporcionais },
+    multaFgts,
+    inss: inssTotal,
+    irrf: irrfTotal,
+    proventos,
+    descontos,
+    totalProventos,
+    totalDescontos,
+    liquido: arredondar(totalProventos - totalDescontos),
+    versaoTabela: tabela.versao,
+  };
+}
+
 // ─── DSR sobre variáveis ─────────────────────────────────────
 // Descanso semanal remunerado incidente sobre horas extras e adicionais:
 // (total das variáveis / dias úteis) × domingos e feriados.

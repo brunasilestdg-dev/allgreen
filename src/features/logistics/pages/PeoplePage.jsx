@@ -46,6 +46,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
   const hojeISO = new Date().toISOString().slice(0, 10);
   const [formPonto, setFormPonto] = useState({ employeeId: "", dia: hojeISO, entrada: "", saida: "", horasExtras: "", horasNoturnas: "", falta: false, observacao: "" });
   const [formFerias, setFormFerias] = useState({ employeeId: "", periodoAquisitivoInicio: "", periodoAquisitivoFim: "", gozoInicio: "", gozoFim: "", dias: 30, abonoPecuniario: false, adiantarDecimo: false });
+  const [rescForm, setRescForm] = useState(null); // { id, nome, revision, desligamentoEm, saldoFgts, diasFeriasVencidas }
 
   const avisar = (mensagem, tom = "info") => (setToast ? setToast({ mensagem, tom }) : undefined);
 
@@ -155,6 +156,25 @@ export default function PeoplePage({ authHeaders, setToast }) {
     } catch (motivo) { avisar(motivo.message, "erro"); }
   };
 
+  const confirmarRescisao = async (evento) => {
+    evento.preventDefault();
+    if (!rescForm?.desligamentoEm) { avisar("Informe a data de desligamento.", "erro"); return; }
+    try {
+      const res = await request(`/colaboradores/${rescForm.id}/rescindir`, authHeaders, {
+        method: "POST",
+        body: JSON.stringify({
+          revision: rescForm.revision,
+          desligamentoEm: rescForm.desligamentoEm,
+          diasFeriasVencidas: rescForm.diasFeriasVencidas || 0,
+          saldoFgts: rescForm.saldoFgts === "" ? undefined : rescForm.saldoFgts,
+        }),
+      });
+      avisar(`Rescisão calculada: líquido ${dinheiro(res.rescisao?.liquido)} · ${res.lancamentosFinanceiros} lançamento(s) no razão.`, "sucesso");
+      setRescForm(null);
+      await carregar();
+    } catch (motivo) { avisar(motivo.message, "erro"); }
+  };
+
   const nomeColaborador = (id) => colaboradores.find((c) => c.id === id)?.nome || id || "—";
 
   useEffect(() => {
@@ -239,7 +259,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
             : (
               <div className="tdg-table-wrap">
                 <table className="tdg-table">
-                  <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Vínculo</th><th>Salário base</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Vínculo</th><th>Salário base</th><th>Status</th><th>Ações</th></tr></thead>
                   <tbody>
                     {colaboradores.map((c) => (
                       <tr key={c.id}>
@@ -249,12 +269,30 @@ export default function PeoplePage({ authHeaders, setToast }) {
                         <td>{c.vinculo?.toUpperCase()}</td>
                         <td>{dinheiro(c.salarioBase)}</td>
                         <td>{comRotulo(NOME_STATUS, c.status)}</td>
+                        <td className="tdg-fiscal-acoes">
+                          <button type="button" disabled={c.status === "desligado"}
+                            onClick={() => setRescForm({ id: c.id, nome: c.nome, revision: c.revision, desligamentoEm: hojeISO, saldoFgts: "", diasFeriasVencidas: 0 })}>
+                            Rescindir
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+          {rescForm && (
+            <form className="tdg-form tdg-people-subform" onSubmit={confirmarRescisao}>
+              <p className="full"><strong>Rescisão de {rescForm.nome}</strong> — dispensa sem justa causa. O motor cobre as verbas federais do caso comum; confira antes de homologar.</p>
+              <label><span>Desligamento *</span><input type="date" value={rescForm.desligamentoEm} onChange={(e) => setRescForm({ ...rescForm, desligamentoEm: e.target.value })} required /></label>
+              <label><span>Dias de férias vencidas</span><input type="number" min="0" max="30" value={rescForm.diasFeriasVencidas} onChange={(e) => setRescForm({ ...rescForm, diasFeriasVencidas: e.target.value })} /></label>
+              <label><span>Saldo FGTS depositado (p/ multa 40%)</span><input type="number" min="0" step="0.01" value={rescForm.saldoFgts} onChange={(e) => setRescForm({ ...rescForm, saldoFgts: e.target.value })} placeholder="opcional" /></label>
+              <div className="tdg-form-actions full">
+                <button className="tdg-action" type="submit">Calcular rescisão</button>
+                <button type="button" onClick={() => setRescForm(null)}>Cancelar</button>
+              </div>
+            </form>
+          )}
         </section>
       )}
 

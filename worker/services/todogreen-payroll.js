@@ -20,6 +20,7 @@ import {
   calcularDsr,
   calcularFerias,
   calcularFolha,
+  calcularRescisao,
   diasUteisDoMes,
   encargosPatronais,
   mascararCpf,
@@ -632,19 +633,19 @@ const criarFerias = async (env, access, user, corpo) => {
   return json(feriasDaLinha(row), 201);
 };
 
-// Lança as verbas de férias no razão único (todogreen_financial_entries) como
-// contas a pagar. Espelha a folha: reprocessar arquiva os lançamentos ainda NÃO
-// pagos desta mesma férias e regrava, sem tocar num que já teve baixa.
-const lancarFeriasNoFinanceiro = async (env, access, user, feriasId, competencia, obrigacoes) => {
+// Lança verbas de folha (férias, rescisão) no razão único como contas a pagar.
+// Espelha o fechamento: reprocessar arquiva os lançamentos ainda NÃO pagos da
+// mesma origem/referência e regrava, sem tocar num que já teve baixa.
+const lancarVerbasNoFinanceiro = async (env, access, user, { origem, chaveNome, chaveValor, competencia, obrigacoes }) => {
   const agora = new Date().toISOString();
   await env.DB.prepare(
     `UPDATE todogreen_financial_entries
         SET archived_at = ?, updated_at = ?
       WHERE workspace_owner_id = ? AND tenant_id = ?
         AND archived_at IS NULL AND paid_amount = 0
-        AND json_extract(fields_json, '$.origem') = 'ferias'
-        AND json_extract(fields_json, '$.feriasId') = ?`,
-  ).bind(agora, agora, access.ownerId, TENANT_ID, feriasId).run();
+        AND json_extract(fields_json, '$.origem') = ?
+        AND json_extract(fields_json, ?) = ?`,
+  ).bind(agora, agora, access.ownerId, TENANT_ID, origem, `$.${chaveNome}`, chaveValor).run();
 
   const gravacoes = [];
   for (const o of obrigacoes) {
@@ -661,7 +662,7 @@ const lancarFeriasNoFinanceiro = async (env, access, user, feriasId, competencia
     ).bind(
       crypto.randomUUID(), TENANT_ID, access.ownerId,
       o.categoria, `${o.categoria} · ${competencia}`, numero(o.valor), competencia,
-      JSON.stringify({ origem: "ferias", feriasId, competencia, obrigacao: o.chave }),
+      JSON.stringify({ origem, [chaveNome]: chaveValor, competencia, obrigacao: o.chave }),
       o.vencimento, "Folha de pagamento",
       `${competencia}-01`, user.id, user.id, agora, agora,
     ));
@@ -697,12 +698,15 @@ const pagarFerias = async (env, access, user, id, corpo) => {
     { tabela: TABELAS_2025 },
   );
   const competencia = String(ferias.gozo_inicio).slice(0, 7);
-  const lancamentos = await lancarFeriasNoFinanceiro(env, access, user, ferias.id, competencia, [
-    { chave: "liquido", categoria: "Férias — líquido", valor: folha.liquido, vencimento: diasAntes(ferias.gozo_inicio, 2) },
-    { chave: "fgts", categoria: "Férias — FGTS", valor: folha.fgts.valor, vencimento: vencimentoFolha(competencia, 7) },
-    { chave: "inss", categoria: "Férias — INSS a recolher", valor: folha.inss.valor, vencimento: vencimentoFolha(competencia, 20) },
-    { chave: "irrf", categoria: "Férias — IRRF a recolher", valor: folha.irrf.valor, vencimento: vencimentoFolha(competencia, 20) },
-  ]);
+  const lancamentos = await lancarVerbasNoFinanceiro(env, access, user, {
+    origem: "ferias", chaveNome: "feriasId", chaveValor: ferias.id, competencia,
+    obrigacoes: [
+      { chave: "liquido", categoria: "Férias — líquido", valor: folha.liquido, vencimento: diasAntes(ferias.gozo_inicio, 2) },
+      { chave: "fgts", categoria: "Férias — FGTS", valor: folha.fgts.valor, vencimento: vencimentoFolha(competencia, 7) },
+      { chave: "inss", categoria: "Férias — INSS a recolher", valor: folha.inss.valor, vencimento: vencimentoFolha(competencia, 20) },
+      { chave: "irrf", categoria: "Férias — IRRF a recolher", valor: folha.irrf.valor, vencimento: vencimentoFolha(competencia, 20) },
+    ],
+  });
 
   const campos = parse(ferias.fields_json, {});
   campos.pagamento = {
@@ -729,6 +733,59 @@ const pagarFerias = async (env, access, user, id, corpo) => {
 
   const row = await env.DB.prepare("SELECT * FROM todogreen_vacations WHERE id = ?").bind(id).first();
   return json({ ferias: feriasDaLinha(row), holerite: campos.pagamento, lancamentosFinanceiros: lancamentos });
+};
+
+// Rescindir: calcula as verbas rescisórias do caso comum (dispensa sem justa
+// causa), grava o holerite no cadastro, desliga o colaborador e lança as verbas
+// no razão — líquido e multa do FGTS até 10 dias do desligamento (prazo legal),
+// INSS/IRRF no mês seguinte. Reprocessar recalcula e não duplica os não pagos.
+const rescindirColaborador = async (env, access, user, id, corpo) => {
+  const c = await env.DB.prepare(
+    `SELECT * FROM todogreen_employees WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(id, TENANT_ID, access.ownerId).first();
+  if (!c) return json({ error: "Colaborador não encontrado." }, 404);
+  if (numero(corpo.revision) !== c.revision)
+    return json({ error: "O cadastro mudou. Recarregue." }, 409);
+  const desligamentoEm = texto(corpo.desligamentoEm, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desligamentoEm))
+    return json({ error: "Informe a data de desligamento (AAAA-MM-DD)." }, 400);
+
+  const rescisao = calcularRescisao({
+    salarioBase: c.salario_base,
+    dependentes: c.dependentes,
+    admissaoEm: c.hire_date || "",
+    desligamentoEm,
+    avisoIndenizado: corpo.avisoIndenizado !== false,
+    diasFeriasVencidas: corpo.diasFeriasVencidas,
+    saldoFgts: corpo.saldoFgts,
+  }, { tabela: TABELAS_2025 });
+
+  const competencia = desligamentoEm.slice(0, 7);
+  const lancamentos = await lancarVerbasNoFinanceiro(env, access, user, {
+    origem: "rescisao", chaveNome: "rescisaoId", chaveValor: c.id, competencia,
+    obrigacoes: [
+      { chave: "liquido", categoria: "Rescisão — líquido", valor: rescisao.liquido, vencimento: diasAntes(desligamentoEm, -10) },
+      { chave: "multa_fgts", categoria: "Rescisão — multa 40% FGTS", valor: rescisao.multaFgts?.valor || 0, vencimento: diasAntes(desligamentoEm, -10) },
+      { chave: "inss", categoria: "Rescisão — INSS a recolher", valor: rescisao.inss, vencimento: vencimentoFolha(competencia, 20) },
+      { chave: "irrf", categoria: "Rescisão — IRRF a recolher", valor: rescisao.irrf, vencimento: vencimentoFolha(competencia, 20) },
+    ],
+  });
+
+  const campos = parse(c.fields_json, {});
+  campos.rescisao = { ...rescisao, calculadaEm: new Date().toISOString(), desligamentoEm };
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE todogreen_employees
+        SET status = 'terminated', termination_date = ?, motivo_desligamento = ?,
+            fields_json = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+  ).bind(
+    desligamentoEm, texto(corpo.motivoDesligamento, 300) || "Dispensa sem justa causa",
+    JSON.stringify(campos), user.id, agora, id, TENANT_ID, access.ownerId,
+  ).run();
+
+  const row = await env.DB.prepare("SELECT * FROM todogreen_employees WHERE id = ?").bind(id).first();
+  return json({ colaborador: colaboradorDaLinha(row, { revelarCpf: true }), rescisao: campos.rescisao, lancamentosFinanceiros: lancamentos });
 };
 
 // ---------------------------------------------------------------------------
@@ -781,6 +838,12 @@ export async function handleTodoGreenPayroll(request, env, access, user) {
       if (method === "PATCH") return atualizarColaborador(env, access, user, id, await request.json().catch(() => ({})));
       if (method === "DELETE") return arquivarColaborador(env, access, user, id);
     }
+  }
+
+  // Rescisão de um colaborador
+  const rescMatch = path.match(/^\/colaboradores\/([^/]+)\/rescindir$/);
+  if (rescMatch && method === "POST") {
+    return rescindirColaborador(env, access, user, rescMatch[1], await request.json().catch(() => ({})));
   }
 
   // Ponto

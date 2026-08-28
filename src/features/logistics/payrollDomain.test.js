@@ -7,6 +7,7 @@ import {
   calcularFerias,
   calcularFgts,
   calcularFolha,
+  calcularRescisao,
   diasUteisDoMes,
   mesesParaDecimo,
   encargosPatronais,
@@ -150,6 +151,69 @@ describe("13º e férias", () => {
     const r = calcularFerias(3000, 15);
     expect(r.proporcional).toBe(1500);
     expect(r.bruto).toBe(2000);
+  });
+});
+
+describe("rescisão (sem justa causa)", () => {
+  const base = { salarioBase: 3000, dependentes: 0, admissaoEm: "2023-01-10", desligamentoEm: "2026-06-20" };
+
+  it("saldo de salário pelos dias trabalhados no mês", () => {
+    // 3000/30 × 20 = 2000
+    expect(calcularRescisao(base).saldoSalario).toBe(2000);
+  });
+
+  it("aviso prévio: 30 dias + 3 por ano completo, indenizado por padrão", () => {
+    const r = calcularRescisao(base);
+    // 3 anos completos → 30 + 9 = 39 dias; 3000/30 × 39 = 3900
+    expect(r.avisoPrevio.dias).toBe(39);
+    expect(r.avisoPrevio.valor).toBe(3900);
+    // Natureza indenizatória: não entra na base do INSS.
+    expect(r.proventos.find((p) => p.codigo === "aviso_previo").tributavel).toBe(false);
+  });
+
+  it("aviso prévio tem teto de 90 dias", () => {
+    const r = calcularRescisao({ ...base, admissaoEm: "1990-01-01" });
+    expect(r.avisoPrevio.dias).toBe(90);
+  });
+
+  it("aviso não indenizado não gera verba", () => {
+    const r = calcularRescisao({ ...base, avisoIndenizado: false });
+    expect(r.avisoPrevio.valor).toBe(0);
+    expect(r.proventos.some((p) => p.codigo === "aviso_previo")).toBe(false);
+  });
+
+  it("13º e férias proporcionais pelos avos do ano, com 1/3", () => {
+    const r = calcularRescisao(base);
+    // jun com 20 dias conta → 6 avos; 3000/12 × 6 = 1500
+    expect(r.decimoTerceiro.meses).toBe(6);
+    expect(r.decimoTerceiro.valor).toBe(1500);
+    // Férias proporcionais 1500 + 1/3 = 2000
+    expect(r.feriasProporcionais.valor).toBe(2000);
+  });
+
+  it("o mês do desligamento só conta com 15 dias ou mais", () => {
+    expect(calcularRescisao({ ...base, desligamentoEm: "2026-06-10" }).decimoTerceiro.meses).toBe(5);
+    expect(calcularRescisao({ ...base, desligamentoEm: "2026-06-15" }).decimoTerceiro.meses).toBe(6);
+  });
+
+  it("férias vencidas somam o 1/3 quando informadas", () => {
+    const r = calcularRescisao({ ...base, diasFeriasVencidas: 30 });
+    // 3000 + 1/3 = 4000
+    expect(r.feriasVencidas.valor).toBe(4000);
+  });
+
+  it("multa de 40% do FGTS só com saldo informado; senão null", () => {
+    expect(calcularRescisao(base).multaFgts).toBe(null);
+    const r = calcularRescisao({ ...base, saldoFgts: 10000 });
+    expect(r.multaFgts.valor).toBe(4000);
+  });
+
+  it("INSS/IRRF incidem só sobre saldo e 13º; líquido é derivado", () => {
+    const r = calcularRescisao(base);
+    expect(r.inss).toBeGreaterThan(0);
+    expect(r.liquido).toBe(r.totalProventos - r.totalDescontos);
+    // Férias e aviso (indenizatórios) não geram INSS por si.
+    expect(r.proventos.find((p) => p.codigo === "ferias_proporcionais").tributavel).toBe(false);
   });
 });
 
