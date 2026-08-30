@@ -182,13 +182,23 @@ describe("rescisão (sem justa causa)", () => {
     expect(r.proventos.some((p) => p.codigo === "aviso_previo")).toBe(false);
   });
 
-  it("13º e férias proporcionais pelos avos do ano, com 1/3", () => {
+  it("13º proporcional pelos avos do ANO-calendário, com 1/3", () => {
     const r = calcularRescisao(base);
     // jun com 20 dias conta → 6 avos; 3000/12 × 6 = 1500
     expect(r.decimoTerceiro.meses).toBe(6);
     expect(r.decimoTerceiro.valor).toBe(1500);
-    // Férias proporcionais 1500 + 1/3 = 2000
-    expect(r.feriasProporcionais.valor).toBe(2000);
+  });
+
+  it("férias proporcionais pelos avos do PERÍODO AQUISITIVO, não do ano", () => {
+    // Admissão 10/01/2023, desligamento 20/06/2026 → ciclo aquisitivo desde
+    // 10/01/2026: 5 meses inteiros (o mês fracionado de 10 dias < 15 não conta).
+    // 3000/12 × 5 = 1250; +1/3 = 1666,67.
+    expect(calcularRescisao(base).feriasProporcionais.valor).toBe(1666.67);
+    // Admissão em junho: o ciclo aquisitivo (não o ano) é que manda — 10 avos,
+    // não 3 como daria a contagem por ano-calendário.
+    const r2 = calcularRescisao({ ...base, admissaoEm: "2023-06-01", desligamentoEm: "2026-03-20" });
+    // 3000/12 × 10 = 2500; +1/3 = 3333,33.
+    expect(r2.feriasProporcionais.valor).toBe(3333.33);
   });
 
   it("o mês do desligamento só conta com 15 dias ou mais", () => {

@@ -41,22 +41,35 @@ describe("aceite → OS: herança de preço", () => {
     expect(precoDaSimulacao(null)).toBe(null);
   });
 
-  it("o preço digitado vence tudo", () => {
+  it("o preço digitado vence tudo (por unidade)", () => {
     const r = precoUnitarioDaOs({ unitPrice: 800, contractMonthlyValue: 1000, simulacaoResult: { precoRecomendado: 1200 } });
-    expect(r).toEqual({ preco: 800, origem: "digitado" });
+    expect(r).toEqual({ preco: 800, origem: "digitado", modo: "unidade" });
   });
 
-  it("sem digitar, herda o valor negociado do contrato", () => {
-    const r = precoUnitarioDaOs({ unitPrice: 0, contractMonthlyValue: 1000, simulacaoResult: { precoRecomendado: 1200 } });
-    expect(r).toEqual({ preco: 1000, origem: "contrato" });
+  it("valor do contrato sem marca é MENSAL: não multiplica pela quantidade", () => {
+    const r = precoUnitarioDaOs({ unitPrice: 0, contractValue: 1000, simulacaoResult: { precoRecomendado: 1200 } });
+    expect(r).toEqual({ preco: 1000, origem: "contrato", modo: "mensal" });
   });
 
-  it("sem contrato com valor, cai para o preço da simulação", () => {
-    const r = precoUnitarioDaOs({ unitPrice: 0, contractMonthlyValue: 0, simulacaoResult: { precoRecomendado: 1200 } });
-    expect(r).toEqual({ preco: 1200, origem: "simulacao" });
+  it("contrato marcado por_unidade herda como preço por unidade", () => {
+    const r = precoUnitarioDaOs({ unitPrice: 0, contractValue: 50, contractPricingMode: "por_unidade" });
+    expect(r).toEqual({ preco: 50, origem: "contrato", modo: "unidade" });
+  });
+
+  it("sem contrato com valor, cai para o preço da simulação (por unidade)", () => {
+    const r = precoUnitarioDaOs({ unitPrice: 0, contractValue: 0, simulacaoResult: { precoRecomendado: 1200 } });
+    expect(r).toEqual({ preco: 1200, origem: "simulacao", modo: "unidade" });
   });
 
   it("sem nenhuma fonte, não inventa preço", () => {
-    expect(precoUnitarioDaOs({ unitPrice: 0, contractMonthlyValue: 0, simulacaoResult: {} })).toEqual({ preco: null, origem: "ausente" });
+    expect(precoUnitarioDaOs({ unitPrice: 0, contractValue: 0, simulacaoResult: {} })).toEqual({ preco: null, origem: "ausente", modo: "unidade" });
+  });
+
+  it("OS mensal não multiplica o valor fechado pela quantidade de viagens", () => {
+    const mensal = serviceOrderAmounts({ quantity: 20, unitPrice: 30000, mode: "mensal" });
+    expect(mensal.grossAmount).toBe(30000);
+    expect(mensal.netAmount).toBe(30000);
+    const porViagem = serviceOrderAmounts({ quantity: 20, unitPrice: 300, mode: "unidade" });
+    expect(porViagem.grossAmount).toBe(6000);
   });
 });

@@ -138,31 +138,26 @@ Caixa de entrada quando os segredos existirem.
 
 ### C. Pesquisa na internet ao vivo (concorrentes, preços, pesquisa profunda)
 
-**É o item mais barato de destravar da sua lista.** Sem uma chave de busca o app
-não tem como ler a internet — nenhum truque resolve isso, porque os mecanismos
-de busca não permitem leitura automatizada sem credencial.
+**Atualização (30/08/2026): a pesquisa web JÁ FUNCIONA sem chave nenhuma.** A
+afirmação antiga de que "sem uma chave o app não lê a internet" ficou
+desatualizada. A cascata de busca (`web-search.js`) inclui provedores gratuitos
+sem cadastro (DuckDuckGo, Wikidata, Wikipédia) ligados por padrão — então a
+pesquisa de empresa (LinkedIn, decisores, notícias, RFQ) responde mesmo sem
+configurar nada. A chave/instância própria só MELHORA a qualidade e tira o
+limite.
 
-Duas opções gratuitas, escolha uma:
+Para ligar uma fonte melhor **sem terminal**, use a tela do próprio ERP em
+**Integrações → Busca web** ("traga sua própria busca"):
 
-- **Brave Search API** — 2.000 consultas por mês grátis. Cadastro em
-  `api-dashboard.search.brave.com`. Pede cartão para validar a conta, mas não
-  cobra dentro da faixa gratuita. É a que eu recomendaria: independente e sem
-  limite diário apertado.
-- **Google Programmable Search** — 100 consultas por dia grátis. Criar o
-  mecanismo em `programmablesearchengine.google.com` e a chave no Google Cloud.
-  Precisa de dois valores: a chave e o ID do mecanismo.
+- **SearXNG (ilimitado)** — cole a URL da sua instância própria; a cascata a usa
+  em primeiro lugar, sem cota. É a saída definitiva do limite.
+- **Chaves de reserva** (Serper 2.500/mês, Brave ~2.000/mês, Tavily, Exa, etc.)
+  — cole a chave; quando a cota de uma acaba, a busca passa sozinha para a
+  próxima. Tudo guardado criptografado no cofre do espaço, nunca no código.
 
-Depois de ter a chave:
-
-```bash
-npx wrangler secret put SEARCH_API_KEY
-# se usar o Google, cadastre também:
-npx wrangler secret put SEARCH_ENGINE_ID
-```
-
-Com isso eu ligo: pesquisa em tempo real, leitura de várias fontes, comparação
-entre elas, citação clicável em cada afirmação, biblioteca de pesquisas e alerta
-quando uma informação usada ficou velha.
+Não é mais necessário `wrangler secret put` para isso. As variáveis de ambiente
+antigas (`SEARCH_API_KEY`, `SEARXNG_BASE_URL` no cofre) continuam funcionando
+como padrão para todos os espaços, mas a tela acima é o caminho recomendado.
 
 
 ## 🚫 O que não é possível construir, e por quê

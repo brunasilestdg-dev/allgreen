@@ -291,11 +291,17 @@ async function createOrder(env, access, user, body) {
     ).bind(contract.scenario_id, TENANT_ID, access.ownerId).first().catch(() => null);
     simulacaoResult = cenario ? parseJson(cenario.result_json) : null;
   }
-  const { preco: precoHerdado, origem: origemPreco } = precoUnitarioDaOs({
-    unitPrice: body.unitPrice, contractMonthlyValue: contract.monthly_value, simulacaoResult,
+  // O contrato marca no fields_json se o valor negociado é mensal (operação
+  // dedicada) ou por unidade; a OS respeita isso para não multiplicar uma
+  // mensalidade pela quantidade de viagens. Sem marca vale "mensal", a
+  // semântica do próprio campo `monthly_value`.
+  const contractFields = parseJson(contract.fields_json) || {};
+  const { preco: precoHerdado, origem: origemPreco, modo: modoPreco } = precoUnitarioDaOs({
+    unitPrice: body.unitPrice, contractValue: contract.monthly_value,
+    contractPricingMode: contractFields.pricingMode, simulacaoResult,
   });
 
-  const amounts = serviceOrderAmounts({ ...body, unitPrice: precoHerdado ?? 0 });
+  const amounts = serviceOrderAmounts({ ...body, unitPrice: precoHerdado ?? 0, mode: modoPreco });
   if (!amounts.quantity) return json({ error: "Informe a quantidade da ordem de serviço." }, 400);
   if (!amounts.unitPrice) return json({ error: "Sem preço: informe o preço unitário ou gere a OS de um contrato com valor negociado ou simulação." }, 400);
   const now = new Date().toISOString();
@@ -316,7 +322,7 @@ async function createOrder(env, access, user, body) {
     JSON.stringify(object(body.destination)), amounts.quantity, text(body.chargeUnit, 30),
     amounts.unitPrice, amounts.grossAmount, amounts.discountAmount, amounts.taxAmount, amounts.netAmount,
     JSON.stringify(object(body.sla || JSON.parse(contract.sla_json || "{}"))),
-    JSON.stringify({ ...object(body.fields), precoOrigem: origemPreco }), user.id, user.id, now, now,
+    JSON.stringify({ ...object(body.fields), precoOrigem: origemPreco, precoModo: modoPreco }), user.id, user.id, now, now,
   ).run();
   const row = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
   return json({ record: orderView(row) }, 201);
@@ -349,8 +355,9 @@ async function transitionOrder(env, access, user, id, body) {
      VALUES (?,?,?,?,?,?,'eligible',?,?,?,?,?,?)`,
   ).bind(crypto.randomUUID(), TENANT_ID, access.ownerId, id, row.client_id, row.contract_id,
     row.net_amount, completedAt.slice(0, 10), user.id, user.id, now, now));
+  let results;
   try {
-    await env.DB.batch(statements);
+    results = await env.DB.batch(statements);
   } catch (error) {
     // O trigger da 0062 aborta o item faturável sem POD. Sem este catch o
     // usuário recebia um 500 opaco e a OS ficava presa sem explicação.
@@ -361,6 +368,12 @@ async function transitionOrder(env, access, user, id, body) {
       }, 409);
     throw error;
   }
+  // A checagem de `revision` acima não basta sob concorrência: dois PATCH que
+  // leram a mesma revisão passam os dois, mas só o primeiro UPDATE casa a
+  // linha. Sem conferir o `changes` do UPDATE, o segundo recebia 200 para uma
+  // transição que não aplicou. A tesouraria já faz esta conferência.
+  if (!results?.[0]?.meta?.changes)
+    return json({ error: "A ordem mudou. Recarregue antes de salvar." }, 409);
   const updated = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
   return json({ record: orderView(updated), billingEligible: next === "completed" });
 }

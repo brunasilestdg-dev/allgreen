@@ -244,6 +244,25 @@ function mesesNoAnoAte(admissaoEm, desligamentoEm) {
   return Math.max(0, fim.mes - mesInicial + contaMesFim);
 }
 
+// Meses do PERÍODO AQUISITIVO em curso (avos das férias proporcionais na
+// rescisão): diferente do 13º, as férias proporcionais contam do aniversário de
+// admissão, não de janeiro. Conta os meses inteiros do ciclo mais o mês
+// fracionado quando nele há 15 dias ou mais trabalhados (a fração conta a partir
+// do dia de admissão). Teto de 12; regra da CLT, ainda a validar por contador.
+function mesesDoPeriodoAquisitivo(admissaoEm, desligamentoEm) {
+  const ini = partesData(admissaoEm);
+  const fim = partesData(desligamentoEm);
+  if (!ini || !fim) return 0;
+  // Início do ciclo aquisitivo em curso: o aniversário de admissão mais recente
+  // que não ultrapassa o desligamento.
+  let anivAno = fim.ano;
+  if (fim.mes < ini.mes || (fim.mes === ini.mes && fim.dia < ini.dia)) anivAno -= 1;
+  let meses = (fim.ano - anivAno) * 12 + (fim.mes - ini.mes);
+  const diasNoMesFracionado = fim.dia - ini.dia + 1;
+  if (diasNoMesFracionado >= 15) meses += 1;
+  return Math.max(0, Math.min(12, meses));
+}
+
 // Anos completos de casa até o desligamento — base do acréscimo do aviso prévio.
 function anosCompletos(admissaoEm, desligamentoEm) {
   const ini = partesData(admissaoEm);
@@ -284,8 +303,10 @@ export function calcularRescisao(dados, opts = {}) {
   const feriasVencidasBase = arredondar(diari * diasFeriasVencidas);
   const feriasVencidas = arredondar(feriasVencidasBase + feriasVencidasBase / 3);
 
-  // Férias proporcionais: avos do período aquisitivo em curso + 1/3.
-  const feriasPropBase = arredondar((salario / 12) * meses13);
+  // Férias proporcionais: avos do PERÍODO AQUISITIVO em curso (não do ano-
+  // calendário como o 13º) + 1/3.
+  const mesesFeriasProp = mesesDoPeriodoAquisitivo(admissaoEm, desligamentoEm);
+  const feriasPropBase = arredondar((salario / 12) * mesesFeriasProp);
   const feriasProporcionais = arredondar(feriasPropBase + feriasPropBase / 3);
 
   // Multa de 40% do FGTS — só com o saldo depositado informado.

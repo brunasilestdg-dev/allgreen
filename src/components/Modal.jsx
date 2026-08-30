@@ -47,6 +47,18 @@ export default function Modal({ title, children, onClose, wide = false }) {
     };
   }, []);
 
+  // Trava a rolagem do fundo enquanto o modal está aberto. Sem isso o conteúdo
+  // atrás rola sob o modal (mouse/touch), dando sensação de descontrole em
+  // telas longas. Restaura o valor anterior ao fechar.
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = anterior;
+    };
+  }, []);
+
   return (
     <div
       className="modal-backdrop"

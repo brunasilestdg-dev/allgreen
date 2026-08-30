@@ -324,16 +324,35 @@ describe("aceite → OS: a ordem herda o preço", () => {
        fields_json,revision,created_by,updated_by,created_at,updated_at)
       VALUES ('ct-sim','todogreen','txn-user','txn-client','Cliente Transacional','prop-sim','sc-preco',0,'Contrato só simulação','active','signed',
        'approved','same-day','table-a','{}','{}','{}','{}','{}',1,'txn-user','txn-user',?,?)`).bind(now,now).run();
+    // Contrato POR UNIDADE (marcado no fields_json): o valor é preço por viagem.
+    await env.DB.prepare(`INSERT INTO todogreen_contracts
+      (id,tenant_id,workspace_owner_id,client_id,client_name,proposal_id,scenario_id,monthly_value,title,status,signature_status,
+       approval_status,service_id,price_table_id,sla_json,commercial_terms_json,taxes_json,billing_rules_json,
+       fields_json,revision,created_by,updated_by,created_at,updated_at)
+      VALUES ('ct-unidade','todogreen','txn-user','txn-client','Cliente Transacional','prop-un','sc-preco',50,'Contrato por unidade','active','signed',
+       'approved','same-day','table-a','{}','{}','{}','{}','{"pricingMode":"por_unidade"}',1,'txn-user','txn-user',?,?)`).bind(now,now).run();
   });
 
-  it("sem preço digitado, herda o valor negociado do contrato", async () => {
+  it("herda o valor MENSAL do contrato como valor fechado (não multiplica pela quantidade)", async () => {
     const res = await request("/api/todogreen/transactions/service-orders", "POST", {
       clientId: "txn-client", contractId: "ct-preco", quantity: 2, chargeUnit: "entrega",
     });
     expect(res.status).toBe(201);
     const os = (await res.json()).record;
     expect(os.unitPrice).toBe(1000);
-    expect(os.netAmount).toBe(2000);
+    // Mensal: 1000 fechado, não 1000 × 2. Evita superfaturar operação dedicada.
+    expect(os.netAmount).toBe(1000);
+    expect(os.precoOrigem).toBe("contrato");
+  });
+
+  it("contrato marcado por unidade multiplica o preço pela quantidade", async () => {
+    const res = await request("/api/todogreen/transactions/service-orders", "POST", {
+      clientId: "txn-client", contractId: "ct-unidade", quantity: 4, chargeUnit: "entrega",
+    });
+    expect(res.status).toBe(201);
+    const os = (await res.json()).record;
+    expect(os.unitPrice).toBe(50);
+    expect(os.netAmount).toBe(200); // 50 × 4
     expect(os.precoOrigem).toBe("contrato");
   });
 

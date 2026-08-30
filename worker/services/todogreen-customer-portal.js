@@ -497,7 +497,7 @@ async function vinculosDaSessao(env, user) {
   )
     .bind(TENANT_ID, normalizeEmail(user.email))
     .all()
-    .catch(() => ({ results: [] }));
+    .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
   return (results || []).map(resolveClientScope).filter(Boolean);
 }
 
@@ -683,7 +683,7 @@ export async function handleTodoGreenClientPortalPreview(request, env, access, u
        FROM todogreen_client_users
       WHERE tenant_id=? AND client_id=? AND status='active'
       ORDER BY email`,
-  ).bind(TENANT_ID, client.id).all().catch(() => ({ results: [] }));
+  ).bind(TENANT_ID, client.id).all().catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
   const users = usersResult.results || [];
   const requestedRole = clientPortalRole(url.searchParams.get("role") || users[0]?.role);
   const previewScope = {
@@ -698,7 +698,7 @@ export async function handleTodoGreenClientPortalPreview(request, env, access, u
       `SELECT id,reference,status,service_date AS serviceDate,origin,destination
          FROM todogreen_client_operations WHERE ${sql}
         ORDER BY service_date DESC,created_at DESC LIMIT 5`,
-    ).bind(...params).all().catch(() => ({ results: [] })),
+    ).bind(...params).all().catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] })),
     env.DB.prepare(`SELECT COUNT(*) AS total FROM todogreen_evidences WHERE ${sql}`)
       .bind(...params).first().catch(() => ({ total: 0 })),
     env.DB.prepare(`SELECT COUNT(*) AS total FROM todogreen_client_requests WHERE ${sql}`)
@@ -797,7 +797,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     )
       .bind(...params, MAX_LIMIT)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
 
     const todas = (linhas.results || []).map(operacaoDoBanco);
     const filtradas = filtrarOperacoes(todas, {
@@ -850,7 +850,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
           AND t.kind = 'receivable' AND t.archived_at IS NULL
         ORDER BY t.due_date DESC
         LIMIT 200`,
-    ).bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId).all().catch(() => ({ results: [] }));
+    ).bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId).all().catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
     const titulos = (results || []).map((linha) => ({
       id: linha.id,
       numero: linha.number,
@@ -923,7 +923,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     )
       .bind(documentoPedido, escopo.tenantId, escopo.clientId)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
 
     const linhaDoTempo = ordenarLinhaDoTempo(
       (eventos.results || []).map((e) => ({
@@ -998,7 +998,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     )
       .bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
     return response({ eventos: linhas.results || [] });
   }
 
@@ -1023,7 +1023,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     )
       .bind(...params, inicio, fim)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
 
     const calculos = await env.DB.prepare(
       `SELECT id, result_json, methodology_version, data_quality, created_at
@@ -1034,7 +1034,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     )
       .bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId, inicio, fim)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
 
     const score = await env.DB.prepare(
       `SELECT score, weights_version, components_json, calculated_at
@@ -1087,7 +1087,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     )
       .bind(...params, MAX_LIMIT)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
     return response({
       evidencias: (linhas.results || []).map((l) => ({
         id: l.id,
@@ -1204,7 +1204,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     )
       .bind(...params)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
 
     let contexto;
     try {
@@ -1280,7 +1280,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       )
         .bind(...params, MAX_LIMIT)
         .all()
-        .catch(() => ({ results: [] }));
+        .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
 
       const solicitacoes = (linhas.results || []).map(linhaParaSolicitacao);
       const detalhe = clean(url.searchParams.get("id"), 60);
@@ -1296,7 +1296,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
         )
           .bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId, detalhe)
           .all()
-          .catch(() => ({ results: [] }));
+          .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
         mensagens = (conversa.results || []).map((m) => ({
           id: m.id,
           lado: m.author_side,
@@ -1562,7 +1562,7 @@ export async function handleTodoGreenClients(request, env, access, user) {
     )
       .bind(TENANT_ID, access.ownerId, podeVerTodos ? 1 : 0, emailSessao)
       .all()
-      .catch(() => ({ results: [] }));
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
     const ids = (linhas.results || []).map((item) => item.id);
     let atribuicoes = [];
     if (ids.length) {
@@ -1575,7 +1575,7 @@ export async function handleTodoGreenClients(request, env, access, user) {
             AND c.archived_at IS NULL
             AND (?=1 OR lower(a.seller_email)=?)
           ORDER BY a.seller_email`,
-      ).bind(TENANT_ID, access.ownerId, podeVerTodos ? 1 : 0, emailSessao).all().catch(() => ({ results: [] }));
+      ).bind(TENANT_ID, access.ownerId, podeVerTodos ? 1 : 0, emailSessao).all().catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
       atribuicoes = resultado.results || [];
     }
     return response({
@@ -1677,7 +1677,7 @@ export async function handleTodoGreenClients(request, env, access, user) {
       ? await env.DB.prepare(
           `SELECT id,fields_json FROM todogreen_clients
             WHERE tenant_id = ? AND workspace_owner_id = ? AND id IN (${placeholders})`,
-        ).bind(TENANT_ID, access.ownerId || user.id, ...preparados.map((item) => item.id)).all().catch(() => ({ results: [] }))
+        ).bind(TENANT_ID, access.ownerId || user.id, ...preparados.map((item) => item.id)).all().catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }))
       : { results: [] };
     const crmExistente = new Map((existentes.results || []).map((item) => [item.id, parse(item.fields_json, {})]));
     for (const item of preparados)
@@ -1913,7 +1913,7 @@ export async function handleTodoGreenClientAssignments(request, env, access, use
          JOIN todogreen_clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id
         WHERE a.tenant_id = ? AND c.workspace_owner_id = ? AND a.status = 'active'
         ORDER BY c.name, a.seller_email`,
-    ).bind(TENANT_ID, access.ownerId).all().catch(() => ({ results: [] }));
+    ).bind(TENANT_ID, access.ownerId).all().catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
     return response({ atribuicoes: rows.results || [] });
   }
 

@@ -107,7 +107,7 @@
 .tdg-crm-opps article b { font-size: 11.5px; white-space: nowrap; }
 .tdg-crm-assign { display: flex; gap: 6px; }
 .tdg-crm-assign input { border: 1px solid var(--tdg-line); border-radius: 9px; flex: 1; min-width: 0; padding: 8px; }
-.tdg-crm-editor { display: grid; gap: 14px; }
+.tdg-crm-editor { display: grid; gap: 14px; padding: 18px 24px 22px; }
 .tdg-crm-editor fieldset { border: 1px solid var(--tdg-line); border-radius: 14px; display: grid; gap: 11px; margin: 0; padding: 15px; }
 .tdg-crm-editor legend { font-weight: 850; padding: 0 6px; }
 .tdg-crm-editor fieldset > p { color: var(--tdg-muted); font-size: 12px; margin: 0; }
@@ -867,7 +867,7 @@
 .tdg-crm-relationship-map > div.risk { background: #fff4f0; border-left-color: #b94f3c; }
 .tdg-crm-chip-list { display: flex; flex-wrap: wrap; gap: 7px; }
 .tdg-crm-chip-list span { background: #e8f3ed; border-radius: 999px; color: #285b4b; font-size: 10.5px; font-weight: 750; padding: 6px 9px; }
-.tdg-crm-task-form { display: grid; gap: 12px; }
+.tdg-crm-task-form { display: grid; gap: 12px; padding: 18px 24px 22px; }
 .tdg-crm-task-form label { display: grid; gap: 5px; }
 .tdg-crm-task-form label span { color: var(--tdg-muted); font-size: 11px; font-weight: 750; }
 .tdg-crm-task-form input,.tdg-crm-task-form select,.tdg-crm-task-form textarea { border: 1px solid var(--tdg-line); border-radius: 10px; font: inherit; padding: 9px; width: 100%; }
@@ -1431,7 +1431,7 @@
 .tdg-people-folha-abrir input { padding:.5rem .7rem; border:1px solid var(--tdg-line); border-radius:10px; background:var(--tdg-card); color:var(--tdg-ink); }
 
 /* ── Planner (estilo Microsoft Planner) ─────────────────────── */
-.tdg-planner-form { display: grid; gap: 12px; }
+.tdg-planner-form { display: grid; gap: 12px; padding: 18px 24px 22px; }
 .tdg-planner-grid3 { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .tdg-planner-toggle {
   align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line);

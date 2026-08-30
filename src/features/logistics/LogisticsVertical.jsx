@@ -2145,7 +2145,7 @@ function ProposalPanel({ data, criar, atualizar, pedidosDeAprovacao = [], setToa
   const propostasAceitas = (data.proposals || []).filter(propostaAceita);
   const [propostaContratoId, setPropostaContratoId] = useState("");
   const propostaContrato = propostasAceitas.find((item) => item.id === propostaContratoId) || propostasAceitas[0];
-  const contratoVazio = { titulo: "Contrato de operação logística", inicioEm: "", fimEm: "", valorMensal: "", valorTotal: "", termos: "", assinatura: "pending", aprovacao: "pending", renovacao: "manual", avisoRenovacaoEm: "", diaFaturamento: "", antecedenciaAvisoDias: "60", servicoId: "", tabelaPrecoId: "", indiceReajuste: "", dataBaseReajuste: "", compromissoMinimo: "", slaPrazoHoras: "", prazoPagamentoDias: "", aliquotaImposto: "", eventoFaturamento: "delivery" };
+  const contratoVazio = { titulo: "Contrato de operação logística", inicioEm: "", fimEm: "", valorMensal: "", tipoCobranca: "mensal", valorTotal: "", termos: "", assinatura: "pending", aprovacao: "pending", renovacao: "manual", avisoRenovacaoEm: "", diaFaturamento: "", antecedenciaAvisoDias: "60", servicoId: "", tabelaPrecoId: "", indiceReajuste: "", dataBaseReajuste: "", compromissoMinimo: "", slaPrazoHoras: "", prazoPagamentoDias: "", aliquotaImposto: "", eventoFaturamento: "delivery" };
   const [contrato, setContrato] = useState(contratoVazio);
   const [salvandoContrato, setSalvandoContrato] = useState(false);
   const save = async (event) => {
@@ -2211,6 +2211,9 @@ function ProposalPanel({ data, criar, atualizar, pedidosDeAprovacao = [], setToa
         valorMensal: Number(contrato.valorMensal || 0),
         valorTotal: Number(contrato.valorTotal || 0),
         compromissoMinimo: Number(contrato.compromissoMinimo || 0),
+        // A OS lê isto do fields_json do contrato para saber se o valor
+        // negociado é mensal (não multiplica) ou por unidade (× quantidade).
+        campos: { pricingMode: contrato.tipoCobranca === "por_unidade" ? "por_unidade" : "mensal" },
         sla: { prazoEntregaHoras: Number(contrato.slaPrazoHoras || 0) },
         condicoesComerciais: { prazoPagamentoDias: Number(contrato.prazoPagamentoDias || 0) },
         impostos: { aliquotaPercentual: Number(contrato.aliquotaImposto || 0) },
@@ -2251,7 +2254,8 @@ function ProposalPanel({ data, criar, atualizar, pedidosDeAprovacao = [], setToa
         <label><span>Título</span><input value={contrato.titulo} onChange={(event) => setContrato((current) => ({ ...current, titulo: event.target.value }))} /></label>
         <label><span>Início</span><input type="date" value={contrato.inicioEm} onChange={(event) => setContrato((current) => ({ ...current, inicioEm: event.target.value }))} /></label>
         <label><span>Fim</span><input type="date" value={contrato.fimEm} onChange={(event) => setContrato((current) => ({ ...current, fimEm: event.target.value }))} /></label>
-        <label><span>Valor mensal</span><input type="number" value={contrato.valorMensal} onChange={(event) => setContrato((current) => ({ ...current, valorMensal: event.target.value }))} /></label>
+        <label><span>Valor negociado</span><input type="number" value={contrato.valorMensal} onChange={(event) => setContrato((current) => ({ ...current, valorMensal: event.target.value }))} /></label>
+        <label><span>Tipo de cobrança</span><select value={contrato.tipoCobranca} onChange={(event) => setContrato((current) => ({ ...current, tipoCobranca: event.target.value }))}><option value="mensal">Mensal (operação dedicada)</option><option value="por_unidade">Por viagem/entrega</option></select><small>Decide como a OS usa o valor: "mensal" é fechado no período; "por viagem" multiplica pela quantidade.</small></label>
         <label><span>Valor total</span><input type="number" value={contrato.valorTotal} onChange={(event) => setContrato((current) => ({ ...current, valorTotal: event.target.value }))} /></label>
         <label><span>Serviço</span><input value={contrato.servicoId} onChange={(event) => setContrato((current) => ({ ...current, servicoId: event.target.value }))} placeholder="Código do serviço" /></label>
         <label><span>Tabela de preço</span><input value={contrato.tabelaPrecoId} onChange={(event) => setContrato((current) => ({ ...current, tabelaPrecoId: event.target.value }))} placeholder="Código da tabela" /></label>

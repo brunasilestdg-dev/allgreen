@@ -1,3 +1,4 @@
+import "./TodoGreenPages.css";
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Plus, ReceiptText } from "lucide-react";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";

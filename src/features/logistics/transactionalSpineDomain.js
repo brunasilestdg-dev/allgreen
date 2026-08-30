@@ -1,3 +1,5 @@
+import { roundMoney } from "./logisticsVerticalDomain.js";
+
 const number = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -36,29 +38,46 @@ export function precoDaSimulacao(result) {
 // preço da SIMULAÇÃO que gerou o contrato. Assim o preço flui
 // simulação → contrato → OS sem redigitação, mas nunca sobrescreve um valor
 // informado de propósito. `origem` deixa rastro de onde o número veio.
-export function precoUnitarioDaOs({ unitPrice, contractMonthlyValue, simulacaoResult } = {}) {
+// `modo` diz como o preço vira valor da OS: "unidade" multiplica pela
+// quantidade (preço por viagem/entrega); "mensal" é um valor FECHADO do
+// período (operação dedicada) que NÃO se multiplica. Um contrato marcado
+// `pricingMode: "por_unidade"` no fields_json guarda preço por unidade; a
+// falta da marca cai em "mensal", que é a semântica do próprio campo
+// (`monthly_value`) e evita o superfaturamento de multiplicar mensalidade por
+// número de viagens. Preço digitado e o da simulação são sempre por unidade.
+export function precoUnitarioDaOs({ unitPrice, contractValue, contractMonthlyValue, contractPricingMode, simulacaoResult } = {}) {
   const digitado = number(unitPrice);
-  if (digitado > 0) return { preco: digitado, origem: "digitado" };
-  const doContrato = number(contractMonthlyValue);
-  if (doContrato > 0) return { preco: doContrato, origem: "contrato" };
+  if (digitado > 0) return { preco: digitado, origem: "digitado", modo: "unidade" };
+  const doContrato = number(contractValue ?? contractMonthlyValue);
+  if (doContrato > 0)
+    return {
+      preco: doContrato,
+      origem: "contrato",
+      modo: contractPricingMode === "por_unidade" ? "unidade" : "mensal",
+    };
   const daSimulacao = precoDaSimulacao(simulacaoResult);
-  if (daSimulacao != null) return { preco: daSimulacao, origem: "simulacao" };
-  return { preco: null, origem: "ausente" };
+  if (daSimulacao != null) return { preco: daSimulacao, origem: "simulacao", modo: "unidade" };
+  return { preco: null, origem: "ausente", modo: "unidade" };
 }
 
 export function serviceOrderAmounts(input = {}) {
   const quantity = Math.max(0, number(input.quantity));
   const unitPrice = Math.max(0, number(input.unitPrice));
-  const grossAmount = quantity * unitPrice;
-  const discountAmount = Math.min(grossAmount, Math.max(0, number(input.discountAmount)));
-  const taxAmount = Math.max(0, number(input.taxAmount));
+  // "mensal": o preço é um valor fechado do período (operação dedicada) e NÃO
+  // se multiplica pela quantidade de viagens — senão R$30.000/mês numa OS de 20
+  // viagens viraria R$600.000. "unidade" (padrão): preço por viagem × qtd.
+  // Arredonda a dinheiro (2 casas), como folha e fiscal já fazem, para não
+  // arrastar centavo fantasma (33,33 × 3 = 99,99000000000001) ao faturamento.
+  const grossAmount = roundMoney(input.mode === "mensal" ? unitPrice : quantity * unitPrice);
+  const discountAmount = roundMoney(Math.min(grossAmount, Math.max(0, number(input.discountAmount))));
+  const taxAmount = roundMoney(Math.max(0, number(input.taxAmount)));
   return {
     quantity,
     unitPrice,
     grossAmount,
     discountAmount,
     taxAmount,
-    netAmount: grossAmount - discountAmount + taxAmount,
+    netAmount: roundMoney(grossAmount - discountAmount + taxAmount),
   };
 }
 
