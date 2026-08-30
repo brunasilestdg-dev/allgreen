@@ -1,6 +1,10 @@
 const SERVICE_VERSION =
   new URL(self.location.href).searchParams.get("v") || "local";
-const CACHE = `seu-funcionario-v12-${SERVICE_VERSION}`;
+// v13: força qualquer navegador preso num bundle antigo a descartar o cache e
+// baixar a versão nova. Mudar o número do cache faz o `activate` apagar tudo o
+// que não é este cache — cura o caso de telas (Planner, Inteligência) que
+// "não fazem nada" porque o JS em cache aponta para pedaços que já não existem.
+const CACHE = `seu-funcionario-v13-${SERVICE_VERSION}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 
