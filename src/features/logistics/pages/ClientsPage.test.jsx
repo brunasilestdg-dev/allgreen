@@ -85,6 +85,15 @@ describe("página de clientes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
     expect(screen.getByRole("button", { name: "Kanban" })).toHaveClass("active");
 
+    // O kanban abre no formato SIMPLIFICADO aprovado pela titular: etapa com
+    // total em R$ e cartão nome+valor, nada mais.
+    const simples = screen.getByLabelText("Kanban simplificado de clientes por etapa");
+    const colunaImplantacao = within(simples).getByRole("region", { name: /Implantação/ });
+    expect(within(colunaImplantacao).getByText("Implantação · 1")).toBeInTheDocument();
+    expect(within(colunaImplantacao).getByRole("button", { name: /Rede Alfa.*750 mil/ })).toBeInTheDocument();
+
+    // O detalhado continua a um clique.
+    fireEvent.click(screen.getByRole("button", { name: "Detalhado" }));
     const board = screen.getByLabelText("Kanban de clientes por etapa");
     const implantacao = within(board).getByRole("region", { name: /Implantação/ });
     expect(within(implantacao).getByRole("button", { name: /Rede Alfa/ })).toBeInTheDocument();
@@ -136,6 +145,30 @@ describe("página de clientes", () => {
       active: true,
     });
     expect(setToast.mock.calls.at(-1)[0]).toBe("Contato registrado em Rede Beta.");
+  });
+
+  it("comentário na conta é registrado sem oportunidade — é ele que replica", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      clientes: [{ id: "client-1", name: "Rede Alfa", status: "ativo", revision: 1, vendedores: [], crm: { contacts: [] } }],
+      acesso: { podeGerenciar: false, podeEditar: true, somenteCarteira: true },
+    }), { status: 200 }))));
+    const onComment = vi.fn().mockResolvedValue({});
+
+    render(<ClientsPage
+      authHeaders={() => ({})}
+      setToast={vi.fn()}
+      onComment={onComment}
+      comments={[{ id: "c1", clientId: "client-1", opportunityId: "", comentario: "Conta estratégica para o Q4.", autorEmail: "bruna@todogreen.com", criadoEm: "2026-08-29T09:00:00Z" }]}
+    />);
+    fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Atividade" }));
+
+    expect(screen.getByText("Conta estratégica para o Q4.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Escreva um comentário desta conta"), { target: { value: "Piloto em SP fechado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Comentar" }));
+    // Sem opportunityId no corpo: comentário de conta replica em todas as
+    // oportunidades da conta — regra da titular (30/08).
+    await waitFor(() => expect(onComment).toHaveBeenCalledWith({ clientId: "client-1", comentario: "Piloto em SP fechado" }));
   });
 
   it("novo contato sem conta da lista não grava em lugar nenhum", async () => {

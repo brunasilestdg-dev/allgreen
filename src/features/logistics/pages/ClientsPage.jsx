@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import TopScrollRow from "./TopScrollRow.jsx";
+import ComentariosPanel from "./ComentariosPanel.jsx";
 import { inboxUrl } from "../../../session/telemetria.js";
 import RelationshipMap from "../RelationshipMap.jsx";
 import {
@@ -647,7 +648,7 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], comments = [], onComment, onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
   const [clients, setClients] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
   const [query, setQuery] = useState("");
@@ -661,6 +662,13 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
     if (typeof window === "undefined") return "cards";
     const stored = window.localStorage.getItem("todogreen-crm-view");
     return ["cards", "table", "kanban", "funil"].includes(stored) ? stored : "cards";
+  });
+  // O kanban tem dois formatos (pedido da titular, 30/08): o SIMPLIFICADO do
+  // mockup aprovado — etapa, total em R$ e cartão nome+valor — e o detalhado,
+  // que continua a um clique. O simplificado é o padrão.
+  const [kanbanMode, setKanbanMode] = useState(() => {
+    if (typeof window === "undefined") return "simples";
+    return window.localStorage.getItem("todogreen-crm-kanban-mode") === "detalhado" ? "detalhado" : "simples";
   });
   const [visibleLimit, setVisibleLimit] = useState(100);
   const [error, setError] = useState("");
@@ -709,6 +717,9 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   useEffect(() => {
     if (typeof window !== "undefined") window.localStorage.setItem("todogreen-crm-view", viewMode);
   }, [viewMode]);
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("todogreen-crm-kanban-mode", kanbanMode);
+  }, [kanbanMode]);
 
   const accounts = useMemo(() => clients.map(accountFromClient), [clients]);
   const crmOpportunities = useMemo(() => opportunities.map(opportunityForCrm), [opportunities]);
@@ -1115,7 +1126,31 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       <div className="tdg-crm-toolbar"><div className="tdg-client-toolbar"><Search size={18} /><input aria-label="Buscar clientes e contatos" placeholder="Buscar ID, conta, contato, e-mail, telefone ou responsável" value={query} onChange={(e) => { setQuery(e.target.value); setVisibleLimit(100); }} /></div><div className="tdg-crm-view-switch" aria-label="Modo de visualização"><button type="button" className={viewMode === "cards" ? "active" : ""} onClick={() => setViewMode("cards")}><LayoutGrid size={15} />Cartões</button><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => setViewMode("kanban")}><BriefcaseBusiness size={15} />Kanban</button><button type="button" className={viewMode === "funil" ? "active" : ""} onClick={() => setViewMode("funil")}><Filter size={15} />Funil</button><button type="button" className={viewMode === "table" ? "active" : ""} onClick={() => setViewMode("table")}><List size={15} />Tabela</button></div><div className="tdg-crm-filter-grid" aria-label="Filtros e ordenação do CRM"><label><span>Ordenar</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="name-asc">Nome (A–Z)</option><option value="name-desc">Nome (Z–A)</option><option value="temperature">Temperatura</option><option value="next-action">Próxima ação</option><option value="updated">Atualização recente</option><option value="contacts">Mais contatos</option></select></label><label><span>Etapa</span><select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}><option value="all">Todas as etapas</option>{stageOptions.map((stage) => <option key={stage}>{stage}</option>)}</select></label><label><span>Responsável</span><select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}><option value="all">Todos</option><option value="unassigned">Sem responsável</option>{ownerOptions.map((owner) => <option key={owner}>{owner}</option>)}</select></label><label><span>Contatos</span><select value={contactFilter} onChange={(e) => setContactFilter(e.target.value)}><option value="all">Com e sem contato</option><option value="with">Com telefone/e-mail</option><option value="without">Sem telefone/e-mail</option></select></label></div><div className="tdg-crm-filters" aria-label="Temperatura das contas">{[["all", "Todas"], ["Quente", "Quentes"], ["Morno", "Mornas"], ["Frio", "Frias"]].map(([id, label]) => <button type="button" className={temperatureFilter === id ? "active" : ""} onClick={() => { setTemperatureFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div><div className="tdg-crm-filters" aria-label="Saúde da carteira">{[["all", "Toda saúde"], ["critical", "Críticas"], ["attention", "Atenção"], ["healthy", "Saudáveis"], ["no-decision", "Mapa incompleto"]].map(([id, label]) => <button type="button" className={filter === id ? "active" : ""} onClick={() => { setFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div></div>
       {loading && <p>Carregando carteira...</p>}{!loading && visible.length === 0 && <p className="tdg-crm-empty">Nenhuma conta corresponde aos filtros desta carteira.</p>}
       {!loading && visible.length > 0 && viewMode === "cards" && <div className="tdg-crm-card-grid" aria-label="Contas do CRM em cartões">{renderedClients.map((client) => { const summary = summaryById.get(client.id); return <button type="button" className={summary?.attention || ""} onClick={() => openClient(client.id)} key={client.id}><header><span><strong>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><b>{summary?.score || 0}</b></header><div className="tdg-crm-card-tags"><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{client.crm?.stage || "Mapeamento"}</em></div><dl><div><dt>Pipeline</dt><dd>{BRL.format(summary?.pipeline || 0)}</dd></div><div><dt>Decisores</dt><dd>{summary?.coverage || 0}%</dd></div><div><dt>Contatos</dt><dd>{client.crm?.contacts?.length || 0}</dd></div></dl><footer><span><small>Próxima ação</small><strong>{summary?.nextAction || "Definir próxima ação"}</strong></span><ArrowRight size={16} /></footer></button>; })}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-card-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div>}
-      {!loading && visible.length > 0 && viewMode === "kanban" && <TopScrollRow className="tdg-crm-kanban-wrap" ariaLabel="Kanban de clientes por etapa"><div className="tdg-crm-kanban">{kanbanColumns.map((column) => <section className="tdg-crm-kanban-column" aria-label={`${column.stage}: ${column.accounts.length} conta(s)`} key={column.stage}><header><span><strong>{column.stage}</strong><small>{column.accounts.length} conta(s)</small></span><b>{BRL.format(column.pipeline)}</b></header><div>{column.accounts.length === 0 && <p>Sem contas nesta etapa.</p>}{column.accounts.map((client) => { const summary = summaryById.get(client.id); return <button type="button" className={`tdg-crm-kanban-card ${summary?.attention || ""}`} onClick={() => openClient(client.id)} key={client.id}><span><strong title={client.name}>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><div><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{summary?.coverage || 0}% decisores</em></div><footer><span><small>Pipeline</small><b>{BRL.format(summary?.pipeline || 0)}</b></span><span><small>Próxima ação</small><b title={summary?.nextAction || "Definir próxima ação"}>{summary?.nextAction || "Definir próxima ação"}</b></span></footer></button>; })}</div></section>)}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-kanban-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div></TopScrollRow>}
+      {!loading && visible.length > 0 && viewMode === "kanban" && <>
+        <div className="tdg-crm-view-switch tdg-crm-kanban-mode" aria-label="Formato do kanban">
+          <button type="button" className={kanbanMode === "simples" ? "active" : ""} onClick={() => setKanbanMode("simples")}>Simplificado</button>
+          <button type="button" className={kanbanMode === "detalhado" ? "active" : ""} onClick={() => setKanbanMode("detalhado")}>Detalhado</button>
+        </div>
+        {kanbanMode === "simples" && <TopScrollRow className="tdg-opp-kanban-wrap" ariaLabel="Kanban simplificado de clientes por etapa">
+          <div className="tdg-opp-kanban">
+            {kanbanColumns.map((column, indice) => <section className="tdg-opp-kb-col" style={{ "--kb-tom": Math.min(indice, 5) }} aria-label={`${column.stage}: ${column.accounts.length} conta(s)`} key={column.stage}>
+              <header>
+                <strong>{column.stage} · {column.accounts.length}</strong>
+                <span>{BRL_COMPACTO(column.pipeline)}</span>
+              </header>
+              <div className="tdg-opp-kb-body">
+                {column.accounts.map((client) => <button type="button" className="tdg-opp-kb-card" onClick={() => openClient(client.id)} title={client.name} key={client.id}>
+                  <span>{client.name}</span>
+                  <b>{BRL_COMPACTO(summaryById.get(client.id)?.pipeline || 0)}</b>
+                </button>)}
+                {!column.accounts.length && <p className="tdg-opp-kb-vazio">—</p>}
+              </div>
+            </section>)}
+            {visible.length > renderedClients.length && <button type="button" className="tdg-crm-kanban-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}
+          </div>
+        </TopScrollRow>}
+        {kanbanMode === "detalhado" && <TopScrollRow className="tdg-crm-kanban-wrap" ariaLabel="Kanban de clientes por etapa"><div className="tdg-crm-kanban">{kanbanColumns.map((column) => <section className="tdg-crm-kanban-column" aria-label={`${column.stage}: ${column.accounts.length} conta(s)`} key={column.stage}><header><span><strong>{column.stage}</strong><small>{column.accounts.length} conta(s)</small></span><b>{BRL.format(column.pipeline)}</b></header><div>{column.accounts.length === 0 && <p>Sem contas nesta etapa.</p>}{column.accounts.map((client) => { const summary = summaryById.get(client.id); return <button type="button" className={`tdg-crm-kanban-card ${summary?.attention || ""}`} onClick={() => openClient(client.id)} key={client.id}><span><strong title={client.name}>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><div><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{summary?.coverage || 0}% decisores</em></div><footer><span><small>Pipeline</small><b>{BRL.format(summary?.pipeline || 0)}</b></span><span><small>Próxima ação</small><b title={summary?.nextAction || "Definir próxima ação"}>{summary?.nextAction || "Definir próxima ação"}</b></span></footer></button>; })}</div></section>)}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-kanban-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div></TopScrollRow>}
+      </>}
       {!loading && visible.length > 0 && viewMode === "funil" && <div className="tdg-crm-funil-wrap">
         <p className="tdg-crm-funil-legenda">{renderedClients.length} conta(s), cada uma na etapa em que está hoje. Clique numa etapa para ver as contas.</p>
         <TopScrollRow className="tdg-crm-funil-scroll" ariaLabel="Funil de contas por etapa">
@@ -1258,6 +1293,19 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
               </details>
             );
           })()}
+        </section>
+        <section className="tdg-crm-detail-section tdg-account-panel tdg-account-activity tdg-account-comments">
+          <ComentariosPanel
+            comentarios={comments.filter((item) => item.clientId === selected.id && !item.opportunityId)}
+            aviso="Comentário feito na conta aparece em todas as oportunidades dela. Para comentar algo de uma oportunidade específica, abra a oportunidade."
+            placeholder="Escreva um comentário desta conta"
+            podeComentar={Boolean(access.podeEditar && onComment)}
+            onEnviar={async (comentario) => {
+              await onComment({ clientId: selected.id, comentario });
+              setToast?.("Comentário da conta registrado — visível em todas as oportunidades dela.");
+            }}
+            setToast={setToast}
+          />
         </section>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-activity"><header><strong>Atividade da conta</strong><small>Mensagens e movimentações realmente registradas</small></header>{activityLoading ? <p>Carregando histórico...</p> : accountInteractions.length ? <div className="tdg-crm-activity-feed">{accountInteractions.map((item) => <article key={item.id}><span><strong>{item.contactName || item.contactHandle || "Contato"}</strong><small>{item.channel || "atividade"} · {item.direction === "out" ? "enviado" : "recebido"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("pt-BR") : "data não informada"}</small></span>{item.subject && <b>{item.subject}</b>}{item.body && <p>{item.body}</p>}</article>)}</div> : <div className="tdg-crm-activity-empty"><strong>Nenhuma mensagem ou reunião registrada</strong><span>WhatsApp e e-mails enviados pelo app aparecem aqui quando associados a esta conta ou a um de seus contatos.</span></div>}<div className="tdg-crm-activity-list"><article><span>Última atualização da conta</span><strong>{selected.updatedAt ? new Date(selected.updatedAt).toLocaleString("pt-BR") : "Ainda não registrada"}</strong></article><article><span>Próxima ação</span><strong>{selected.crm?.nextAction || selectedIntelligence.nextTask || "Ainda não definida"}</strong><small>{selected.crm?.nextActionAt || "Sem prazo registrado"}</small></article><article><span>Histórico comercial</span><strong>{selectedOpportunities.length} oportunidade(s) vinculada(s)</strong></article></div><p>O CRM não cria atividades que não aconteceram.</p></section>
       </main><aside>

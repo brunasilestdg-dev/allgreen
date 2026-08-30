@@ -14,6 +14,7 @@ import {
   Target,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import ComentariosPanel from "./ComentariosPanel.jsx";
 import TopScrollRow from "./TopScrollRow.jsx";
 import {
   ESTAGIOS_OPORTUNIDADE,
@@ -132,7 +133,13 @@ function CampoEstudo({ form, campo, rotulo, tipo = "text", onChange, opcoes }) {
   );
 }
 
-function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast }) {
+function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast, comments = [], onComment }) {
+  // Regra da titular (30/08): comentário feito AQUI fica só nesta
+  // oportunidade; comentário feito na conta aparece em todas as
+  // oportunidades dela — por isso a lista junta os dois, rotulando a origem.
+  const comentariosVisiveis = comments.filter((item) =>
+    item.opportunityId === registro.id
+    || (!item.opportunityId && registro.clientId && item.clientId === registro.clientId));
   const [form, setForm] = useState(() =>
     Object.fromEntries(CAMPOS_ESTUDO.map((campo) => [campo, registro[campo] ?? ""])),
   );
@@ -288,6 +295,18 @@ function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast }) {
           </button>
         </footer>
       </form>
+      {onComment && (
+        <ComentariosPanel
+          comentarios={comentariosVisiveis}
+          aviso="O que você escrever aqui fica só nesta oportunidade. Comentário feito na conta aparece em todas as oportunidades dela."
+          placeholder="Escreva um comentário desta oportunidade"
+          onEnviar={async (comentario) => {
+            await onComment({ clientId: registro.clientId || "", opportunityId: registro.id, comentario });
+            setToast?.("Comentário registrado nesta oportunidade.");
+          }}
+          setToast={setToast}
+        />
+      )}
     </Modal>
   );
 }
@@ -554,6 +573,8 @@ export default function OpportunitiesPage({
   clients = [],
   opportunities = [],
   scenarios = [],
+  comments = [],
+  onComment,
   onCreate,
   onUpdate,
   onNavigate,
@@ -831,6 +852,8 @@ export default function OpportunitiesPage({
           onClose={() => setEditandoId(null)}
           onSave={(alteracoes) => onUpdate?.(editando.id, alteracoes)}
           setToast={setToast}
+          comments={comments}
+          onComment={onComment}
         />
       )}
     </section>

@@ -196,6 +196,28 @@ describe("página de oportunidades", () => {
     expect(onCreate.mock.calls[0][0]).toMatchObject({ clientId: "cli-1", cliente: "Rede Alfa" });
   });
 
+  it("comentário da conta aparece na oportunidade; o novo fica só nela", async () => {
+    // Regra da titular (30/08): comentário da CONTA replica em todas as
+    // oportunidades dela; comentário de OUTRA oportunidade nunca vaza para cá;
+    // e o que se escreve aqui sai carimbado com o id desta oportunidade.
+    const onComment = vi.fn().mockResolvedValue({});
+    const comments = [
+      { id: "c1", clientId: "cli-1", opportunityId: "", comentario: "Nota da conta: piloto aprovado.", autorEmail: "bruna@todogreen.com", criadoEm: "2026-08-29T10:00:00Z" },
+      { id: "c2", clientId: "cli-1", opportunityId: "outra-opp", comentario: "Segredo de outra oportunidade", autorEmail: "x@todogreen.com", criadoEm: "2026-08-29T11:00:00Z" },
+    ];
+    localStorage.setItem("todogreen-opp-view", "kanban");
+    render(<OpportunitiesPage opportunities={[{ ...completa, clientId: "cli-1" }]} comments={comments} onComment={onComment} setToast={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Distribuidora Norte/ }));
+    expect(await screen.findByText("Nota da conta: piloto aprovado.")).toBeInTheDocument();
+    expect(screen.getByText(/comentário da conta/)).toBeInTheDocument();
+    expect(screen.queryByText("Segredo de outra oportunidade")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Escreva um comentário desta oportunidade"), { target: { value: "Renegociar prazo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Comentar" }));
+    await waitFor(() => expect(onComment).toHaveBeenCalledWith({ clientId: "cli-1", opportunityId: "opp-1", comentario: "Renegociar prazo" }));
+  });
+
   it("avisa que a conta Fria saiu para Morno — e não repete o aviso para conta Quente", async () => {
     // O servidor aquece a conta (Frio/sem classificação → Morno) quando a
     // oportunidade nasce vinculada; o toast espelha a mesma régua.

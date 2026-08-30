@@ -216,6 +216,40 @@ const COLECOES = {
     exigido: (corpo) => (texto(corpo.cliente || corpo.clientName) ? "" : "Informe o cliente da oportunidade."),
   },
 
+  // Comentários do comercial (0078). A regra de alcance da titular mora nos
+  // dois campos: clientId sem opportunityId = comentário da conta, visível em
+  // todas as oportunidades dela; opportunityId preenchido = fica só naquela
+  // oportunidade. Quem escreve oportunidade escreve comentário — as mesmas
+  // permissões.
+  comments: {
+    tabela: "todogreen_crm_comments",
+    permissao: "crm:manage",
+    permissoesLeitura: ["crm:manage", "clients:manage", "audit:read"],
+    ordem: "updated_at DESC",
+    daLinha: (row) => ({
+      id: row.id,
+      clientId: row.client_id || "",
+      opportunityId: row.opportunity_id || "",
+      comentario: row.body,
+      autorEmail: row.author_email || "",
+      revision: row.revision,
+      criadoEm: row.created_at,
+      atualizadoEm: row.updated_at,
+    }),
+    colunas: (corpo) => ({
+      client_id: texto(corpo.clientId, 120),
+      opportunity_id: texto(corpo.opportunityId, 120),
+      body: texto(corpo.comentario || corpo.body, 4000),
+      author_email: texto(corpo.autorEmail, 200),
+    }),
+    exigido: (corpo) => {
+      if (!texto(corpo.comentario || corpo.body)) return "Escreva o comentário.";
+      if (!texto(corpo.clientId) && !texto(corpo.opportunityId))
+        return "Vincule o comentário a uma conta ou a uma oportunidade.";
+      return "";
+    },
+  },
+
   proposals: {
     tabela: "todogreen_proposals",
     permissao: "proposal:manage",
@@ -994,6 +1028,10 @@ const bloqueioDeCompetencia = async (env, access, ...entradas) => {
 const criar = async (env, colecao, access, user, corpo) => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);
+
+  // O autor do comentário é a sessão, nunca o corpo — assinatura não se
+  // escolhe pelo navegador.
+  if (colecao === COLECOES.comments) corpo = { ...corpo, autorEmail: texto(user.email, 200) };
   if (colecao === COLECOES.financial) {
     const erroFinanceiro = validarFinanceiro(corpo);
     if (erroFinanceiro) return json({ error: erroFinanceiro }, 400);
@@ -1095,6 +1133,8 @@ const atualizar = async (env, colecao, access, user, id, corpo) => {
     return json({ error: "Informe a revisão do registro que você leu." }, 400);
 
   const proximo = { ...colecao.daLinha(atual), ...corpo };
+  // Editar um comentário não troca a assinatura: o autor original permanece.
+  if (colecao === COLECOES.comments) proximo.autorEmail = atual.author_email || "";
   if (colecao === COLECOES.contracts && texto(corpo.aprovacao, 40)) {
     proximo.aprovadoPor = texto(corpo.aprovacao, 40) === "approved" ? user.id : "";
     proximo.aprovadoEm = texto(corpo.aprovacao, 40) === "approved" ? new Date().toISOString() : "";

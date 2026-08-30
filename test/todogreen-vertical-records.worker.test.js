@@ -717,6 +717,7 @@ describe("a vertical inteira numa chamada só", () => {
     expect(Object.keys(corpo).sort()).toEqual([
       "accounts",
       "bankAccounts",
+      "comments",
       "contracts",
       "costCenters",
       "financial",
@@ -862,5 +863,52 @@ describe("leitura por funcionalidade", () => {
     expect(payload.bankAccounts).toEqual([]);
     expect(payload.totals.financial).toBe(0);
     expect(payload.totals.bankAccounts).toBe(0);
+  });
+});
+
+describe("comentários do comercial: conta replica, oportunidade fica nela", () => {
+  // Regra da titular (30/08): comentário na CONTA aparece em todas as
+  // oportunidades dela; comentário na OPORTUNIDADE fica só nela. O servidor
+  // guarda os dois campos e carimba o autor pela sessão — o corte de quem vê
+  // o quê é feito por quem lê, com dado íntegro.
+  it("grava comentário de conta e de oportunidade, com autor da sessão", async () => {
+    const daConta = await pedir("/api/todogreen/records/comments", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { clientId: "cli-fria", comentario: "Reunião ótima — cliente quer piloto em SP.", autorEmail: "forjado@x.com" },
+    });
+    expect(daConta.status).toBe(201);
+    const conta = (await daConta.json()).registro;
+    expect(conta.clientId).toBe("cli-fria");
+    expect(conta.opportunityId).toBe("");
+    // O autor vem da sessão; o corpo não escolhe assinatura.
+    expect(conta.autorEmail).toBe(gestora.email);
+
+    const daOportunidade = await pedir("/api/todogreen/records/comments", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { clientId: "cli-fria", opportunityId: "opp-x", comentario: "Só nesta oportunidade: renegociar prazo." },
+    });
+    expect(daOportunidade.status).toBe(201);
+    expect((await daOportunidade.json()).registro.opportunityId).toBe("opp-x");
+
+    const lista = await (await pedir("/api/todogreen/records/comments", { token: gestora.token })).json();
+    const textos = lista.registros.map((r) => r.comentario);
+    expect(textos).toContain("Reunião ótima — cliente quer piloto em SP.");
+    expect(textos).toContain("Só nesta oportunidade: renegociar prazo.");
+  });
+
+  it("comentário sem texto ou sem vínculo é recusado", async () => {
+    expect((await pedir("/api/todogreen/records/comments", {
+      metodo: "POST", token: gestora.token, corpo: { clientId: "cli-fria", comentario: "  " },
+    })).status).toBe(400);
+    expect((await pedir("/api/todogreen/records/comments", {
+      metodo: "POST", token: gestora.token, corpo: { comentario: "Sem vínculo nenhum" },
+    })).status).toBe(400);
+  });
+
+  it("o espaço de outra pessoa não vê os comentários", async () => {
+    const doColega = await (await pedir("/api/todogreen/records/comments", { token: colega.token })).json();
+    expect(doColega.registros.map((r) => r.comentario)).not.toContain("Reunião ótima — cliente quer piloto em SP.");
   });
 });

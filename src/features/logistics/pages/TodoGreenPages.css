@@ -1794,3 +1794,18 @@
 
 /* Cadastros agrupados por correlação: o formulário abre dentro da seção. */
 .tdg-registry-form { margin: 0 0 14px; }
+
+/* Comentários do comercial — conta e oportunidade, mesmo desenho. */
+.tdg-comentarios { border-top: 1px solid var(--tdg-line); display: grid; gap: 10px; margin-top: 14px; padding-top: 12px; }
+.tdg-comentarios > header { display: grid; gap: 2px; }
+.tdg-comentarios > header strong { align-items: center; display: inline-flex; font-size: .9rem; gap: 6px; }
+.tdg-comentarios > header small { color: var(--tdg-muted); }
+.tdg-comentarios ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.tdg-comentarios li { background: #fbfdfc; border: 1px solid var(--tdg-line); border-radius: 9px; display: grid; gap: 3px; padding: 8px 11px; }
+.tdg-comentarios li[data-origem="conta"] { background: var(--tdg-soft); }
+.tdg-comentarios li > span { color: var(--tdg-muted); font-size: 11.5px; }
+.tdg-comentarios li > p { margin: 0; white-space: pre-wrap; }
+.tdg-comentarios .tdg-comentarios-vazio { border-style: dashed; color: var(--tdg-muted); text-align: center; }
+.tdg-comentarios form { display: grid; gap: 8px; }
+.tdg-comentarios form textarea { border: 1px solid var(--tdg-line); border-radius: 9px; font: inherit; padding: 8px 10px; resize: vertical; }
+.tdg-comentarios form button { justify-self: start; }
