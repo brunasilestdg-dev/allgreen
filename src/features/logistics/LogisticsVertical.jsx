@@ -88,6 +88,7 @@ import {
 import Semente from "./Semente.jsx";
 import ErpHome from "./ErpHome.jsx";
 import { comRotulo } from "./rotulosDomain.js";
+import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
 const PricingParametersPanel = lazy(() => import("./PricingParametersPanel.jsx"));
@@ -1495,12 +1496,82 @@ function ProductCard({ product, active, onSelect }) {
   );
 }
 
-function FieldInput({ name, value, required, onChange }) {
+// ===== Distância que a própria operação calcula =====
+//
+// `distanceKm` era digitado à mão em Middle Mile, Last Mile, Transferência e
+// Coleta em fornecedores — a premissa mais frágil da conta inteira, porque
+// multiplica combustível, pedágio, hora de motorista e emissão de CO2. Errar
+// 40 km numa operação de 44 viagens/mês erra o preço do contrato.
+//
+// O app já sabia traçar rota (Nominatim + OSRM, sem chave e sem cota); só não
+// estava ligado aqui. Oferece como SUGESTÃO: quem precifica pode ter motivo
+// para outro número — rota que o cliente exige, restrição de circulação,
+// trecho que a operação faz diferente do que o roteirizador acha.
+function BotaoDistancia({ origem, destino, idaEVolta, onAceitar }) {
+  const [estado, setEstado] = useState({ fase: "parado" });
+  const podeCalcular = String(origem || "").trim().length >= 3 && String(destino || "").trim().length >= 3;
+
+  const calcular = async () => {
+    setEstado({ fase: "calculando" });
+    const resultado = await calcularDistancia({ origem, destino, idaEVolta });
+    setEstado(resultado.ok ? { fase: "pronto", resultado } : { fase: "erro", motivo: resultado.motivo });
+  };
+
+  if (!podeCalcular)
+    return <small className="tdg-distancia-dica">Preencha origem e destino para calcular a distância pelo mapa.</small>;
+
+  return (
+    <div className="tdg-distancia">
+      {estado.fase !== "pronto" && (
+        <button type="button" className="tdg-distancia-botao" onClick={calcular} disabled={estado.fase === "calculando"}>
+          {estado.fase === "calculando" ? "Consultando o mapa…" : "Calcular pelo mapa"}
+        </button>
+      )}
+      {estado.fase === "erro" && <small className="tdg-distancia-erro">{estado.motivo}</small>}
+      {estado.fase === "pronto" && (
+        <div className="tdg-distancia-resultado">
+          <strong>{resumoDaDistancia(estado.resultado)}</strong>
+          <small>{estado.resultado.origem} → {estado.resultado.destino}</small>
+          <div>
+            {/* A pessoa aceita; a tela não sobrescreve o que ela digitou. */}
+            <button type="button" onClick={() => { onAceitar(estado.resultado.distanciaKm); setEstado({ fase: "parado" }); }}>
+              Usar {estado.resultado.distanciaKm} km
+            </button>
+            <button type="button" className="secundario" onClick={() => setEstado({ fase: "parado" })}>Descartar</button>
+          </div>
+          <small className="tdg-distancia-fonte">{estado.resultado.fonte}</small>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FieldInput({ name, value, required, onChange, inputs }) {
   if (booleanFields.has(name)) {
     return (
       <label className="tdg-check-field">
         <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(name, event.target.checked)} />
         <span>{comRotulo(fieldLabels, name)}{required ? " *" : ""}</span>
+      </label>
+    );
+  }
+  if (name === "distanceKm") {
+    return (
+      <label>
+        <span>{comRotulo(fieldLabels, name)}{required ? " *" : ""}</span>
+        <input
+          value={value ?? ""}
+          inputMode="decimal"
+          onChange={(event) => onChange(name, event.target.value === "" ? "" : Number(event.target.value) || 0)}
+        />
+        <BotaoDistancia
+          origem={inputs?.origin}
+          destino={inputs?.destination}
+          // Middle Mile cobra o ciclo completo quando o retorno é carregado ou
+          // vazio: a viagem é ida e volta, e só a ida subestima o custo.
+          idaEVolta={inputs?.returnLoaded === true || inputs?.roundTrip === true}
+          onAceitar={(km) => onChange(name, km)}
+        />
       </label>
     );
   }
@@ -1813,12 +1884,12 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
             <fieldset>
               <legend>Identificação</legend>
               {obrigatoriasForaDoFormulario.map((field) => (
-                <FieldInput key={field} name={field} value={inputs[field]} required onChange={changeInput} />
+                <FieldInput key={field} name={field} value={inputs[field]} required onChange={changeInput} inputs={inputs} />
               ))}
             </fieldset>
           )}
           {blueprint.inputGroups.map(([group, fields]) => (
-            <fieldset key={group}><legend>{group}</legend>{fields.map((field) => <FieldInput key={field} name={field} value={inputs[field]} required={product?.requiredFields?.includes(field)} onChange={changeInput} />)}</fieldset>
+            <fieldset key={group}><legend>{group}</legend>{fields.map((field) => <FieldInput key={field} name={field} value={inputs[field]} required={product?.requiredFields?.includes(field)} onChange={changeInput} inputs={inputs} />)}</fieldset>
           ))}
           {/* Custos da operação, editáveis aqui mesmo. Vêm da régua em vigor;
               ajustar sobrescreve só esta simulação. */}

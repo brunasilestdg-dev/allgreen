@@ -24,6 +24,22 @@ const emDias = (n) =>
     .toISOString()
     .slice(0, 10);
 
+// O primeiro dia ÚTIL a partir de hoje.
+//
+// `freeSlots` devolve vazio em dia fora da jornada (o padrão é segunda a
+// sexta), então o planner pula o fim de semana e encaixa na segunda. Um teste
+// que semeia compromisso em "hoje" e espera colisão passa de segunda a sexta e
+// falha sábado e domingo — o produto certo, o teste dependente do calendário.
+// Quem precisa do dia que o planner vai REALMENTE usar, usa este.
+const PRIMEIRO_DIA_UTIL = (() => {
+  for (let n = 0; n < 7; n += 1) {
+    const dia = emDias(n);
+    const semana = new Date(`${dia}T00:00:00Z`).getUTCDay();
+    if (semana >= 1 && semana <= 5) return dia;
+  }
+  return HOJE;
+})();
+
 const tarefa = (extra = {}) => ({
   id: "t1",
   title: "Escrever proposta",
@@ -239,7 +255,9 @@ describe("Planejar o dia", () => {
         [
           {
             id: "a1",
-            date: HOJE,
+            // No dia que o planner vai usar, não em "hoje": no fim de semana
+            // os dois são dias diferentes e a colisão nunca aconteceria.
+            date: PRIMEIRO_DIA_UTIL,
             time: "09:00",
             end: "11:00",
             title: "Cliente",

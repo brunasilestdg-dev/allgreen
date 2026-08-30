@@ -64,6 +64,57 @@ describe("web search service", () => {
     expect(endpoint.pathname).toBe("/search");
     expect(endpoint.searchParams.get("format")).toBe("json");
     expect(endpoint.searchParams.get("language")).toBe("pt-BR");
+    // Sem SEARXNG_TOKEN, o cabeçalho não vai: instância antiga sem proxy de
+    // token continua funcionando exatamente como antes.
+    expect(fetcher.mock.calls[0][1]?.headers).not.toHaveProperty("x-searxng-token");
+  });
+
+  it("envia o token quando a instância exige, e não envia quando não há", async () => {
+    const responder = () => ({ ok: true, status: 200, json: async () => ({ results: [] }) });
+    const comToken = vi.fn(responder);
+    await searchWeb(
+      { SEARXNG_BASE_URL: "https://busca.example.com", SEARXNG_TOKEN: "segredo-do-proxy" },
+      "consulta qualquer",
+      { fetcher: comToken },
+    );
+    expect(comToken.mock.calls[0][1].headers["x-searxng-token"]).toBe("segredo-do-proxy");
+
+    // Token em branco é o mesmo que não ter: não manda cabeçalho vazio, que o
+    // proxy recusaria como token errado.
+    const semToken = vi.fn(responder);
+    await searchWeb(
+      { SEARXNG_BASE_URL: "https://busca.example.com", SEARXNG_TOKEN: "   " },
+      "consulta qualquer",
+      { fetcher: semToken },
+    );
+    expect(semToken.mock.calls[0][1].headers).not.toHaveProperty("x-searxng-token");
+  });
+
+  it("instância com JSON desligado não vira \"nenhum resultado\"", async () => {
+    // `format=json` é opt-in no SearXNG e vem DESLIGADO de fábrica. Sem esta
+    // detecção o sintoma é "a pesquisa não traz nada", que manda depurar no
+    // lugar errado — a cascata cai para o próximo provedor em silêncio.
+    const html = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ query: "x" }) }));
+    const resultado = await searchWeb(
+      { SEARXNG_BASE_URL: "https://busca.example.com" },
+      "consulta qualquer",
+      { fetcher: html },
+    );
+    expect(resultado.failures.map((f) => f.error).join(" ")).toMatch(/search\.formats/);
+  });
+
+  it("403 do SearXNG aponta as duas causas reais, não só o número", async () => {
+    // 403 aqui é token errado no proxy OU o limiter do próprio SearXNG
+    // barrando cliente de API. Dizer isso poupa a caçada.
+    const negado = vi.fn(async () => ({ ok: false, status: 403, json: async () => ({}) }));
+    const resultado = await searchWeb(
+      { SEARXNG_BASE_URL: "https://busca.example.com", SEARXNG_TOKEN: "errado" },
+      "consulta qualquer",
+      { fetcher: negado },
+    );
+    const motivos = resultado.failures.map((f) => f.error).join(" ");
+    expect(motivos).toMatch(/SEARXNG_TOKEN/);
+    expect(motivos).toMatch(/limiter/);
   });
 
   it("detecta pedido de informação atual sem forçar busca em toda conversa", () => {

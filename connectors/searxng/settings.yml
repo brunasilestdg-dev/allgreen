@@ -1,0 +1,93 @@
+# SearXNG para o Seu Funcionário
+#
+# Duas linhas aqui decidem se a integração funciona ou falha em silêncio, e as
+# duas vêm ERRADAS de fábrica para este uso:
+#
+#   1. `search.formats` não inclui `json`. O SearXNG responde 200 com HTML, o
+#      app não acha `results`, e o sintoma vira "a pesquisa não traz nada" —
+#      que manda depurar no lugar errado.
+#   2. `server.limiter` vem `true`. Ele é a proteção contra robô, e um Worker
+#      chamando a API é exatamente o que ele foi feito para barrar. Resultado:
+#      403 em toda consulta.
+#
+# Este arquivo já vem com as duas resolvidas. A proteção que o limiter daria
+# fica no Caddy, por token — ver o Caddyfile ao lado.
+
+use_default_settings: true
+
+general:
+  instance_name: "Busca — Seu Funcionário"
+  # Sem página de doação e sem estatística pública: a instância é interna.
+  donation_url: false
+  enable_metrics: false
+
+server:
+  # Trocado pelo docker-compose a partir de SEARXNG_SECRET. Nunca deixe o
+  # valor de exemplo em produção: ele assina os cookies da sessão.
+  secret_key: "troque-me"
+  bind_address: "0.0.0.0:8080"
+  # DESLIGADO de propósito. O limiter barra cliente de API, e é ele o motivo
+  # nº 1 de "SearXNG devolve 403". Quem controla o acesso aqui é o Caddy.
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+search:
+  # A LINHA QUE FAZ A INTEGRAÇÃO EXISTIR. Sem "json" aqui, o app recebe HTML.
+  formats:
+    - html
+    - json
+  # A operação é brasileira; o app já pede pt-BR em cada consulta, isto é o
+  # padrão de quem abrir no navegador.
+  default_lang: "pt-BR"
+  safe_search: 1
+  # Segundos até desistir de um motor lento. O app tem o próprio limite; este
+  # existe para uma consulta travada não segurar a resposta inteira.
+  max_page: 1
+
+ui:
+  default_locale: "pt-BR"
+  query_in_title: true
+
+outgoing:
+  # Um motor lento não pode segurar a consulta toda.
+  request_timeout: 6.0
+  max_request_timeout: 10.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+# ===== Motores =====
+#
+# O que interessa a este produto é busca geral em português e perfil público
+# indexado (o `site:linkedin.com/in` que a pesquisa de contato usa). Motores de
+# imagem, vídeo, torrent e música só gastam tempo da consulta.
+#
+# Google e Bing são os que respeitam `site:` de verdade — são eles que fazem a
+# pesquisa de contato funcionar. DuckDuckGo e Brave entram como reserva.
+engines:
+  - name: google
+    engine: google
+    disabled: false
+    weight: 3
+  - name: bing
+    engine: bing
+    disabled: false
+    weight: 2
+  - name: duckduckgo
+    engine: duckduckgo
+    disabled: false
+    weight: 1
+  - name: brave
+    engine: brave
+    disabled: false
+    weight: 1
+  - name: wikipedia
+    engine: wikipedia
+    disabled: false
+    weight: 1
+  - name: startpage
+    engine: startpage
+    disabled: false
+    weight: 1

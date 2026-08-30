@@ -199,7 +199,20 @@ async function jinaSearch(query, key, fetcher) {
   return normalizeSearchResults(items, "Jina Search");
 }
 
-async function searxngSearch(query, baseUrl, fetcher) {
+// SearXNG é o único provedor da cascata sem cota: ele não tem índice próprio,
+// consulta Google/Bing/DuckDuckGo por baixo e devolve unificado. Quem cobra
+// cota é a API, e aqui não existe API no meio — por isso ele vem primeiro e
+// atende antes de gastar as chaves pagas.
+//
+// `SEARXNG_TOKEN` é OPCIONAL e existe por um motivo prático: uma instância
+// aberta com `format=json` habilitado é um proxy de busca gratuito para o
+// mundo inteiro. Ela é abusada em dias, e o abuso termina com o IP do servidor
+// banido no Google — matando exatamente o "sem cota" que motivou hospedá-la.
+// Com o token, o proxy na frente do SearXNG recusa quem não o apresenta.
+//
+// Quem já roda uma instância sem token continua funcionando: sem a variável, o
+// cabeçalho simplesmente não é enviado.
+async function searxngSearch(query, baseUrl, fetcher, token = "") {
   const origin = safeUrl(baseUrl);
   if (!origin) throw new Error("SearXNG com URL inválida");
   const endpoint = new URL("search", origin.endsWith("/") ? origin : `${origin}/`);
@@ -207,12 +220,30 @@ async function searxngSearch(query, baseUrl, fetcher) {
   endpoint.searchParams.set("format", "json");
   endpoint.searchParams.set("language", "pt-BR");
   endpoint.searchParams.set("safesearch", "1");
+  const chave = String(token || "").trim();
   const response = await fetcher(endpoint, {
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      ...(chave ? { "x-searxng-token": chave } : {}),
+    },
   });
+  // 401/403 aqui quase sempre é token ausente ou errado no proxy, e 403 sem
+  // token costuma ser o limiter do próprio SearXNG barrando cliente de API.
+  // Dizer isso poupa a caçada.
+  if (response.status === 401 || response.status === 403)
+    throw new Error(
+      `SearXNG recusou a consulta (${response.status}). Confira SEARXNG_TOKEN e, no settings.yml, "limiter: false".`,
+    );
   if (!response.ok) throw new Error(`SearXNG indisponível (${response.status})`);
   const data = await response.json();
-  return normalizeSearchResults(data?.results, "SearXNG");
+  // Instância com JSON desligado responde 200 com HTML: o `format=json` é
+  // opt-in no SearXNG e vem DESLIGADO de fábrica. Sem esta checagem o erro
+  // aparece como "nenhum resultado", que manda depurar no lugar errado.
+  if (!data || !Array.isArray(data.results))
+    throw new Error(
+      'SearXNG respondeu sem JSON. Adicione "json" em search.formats no settings.yml.',
+    );
+  return normalizeSearchResults(data.results, "SearXNG");
 }
 
 
@@ -462,7 +493,7 @@ export async function searchWeb(env, rawQuery, { fetcher = fetch } = {}) {
   const configured = [
     env.SEARXNG_BASE_URL && {
       name: "SearXNG",
-      run: () => searxngSearch(query, env.SEARXNG_BASE_URL, fetcher),
+      run: () => searxngSearch(query, env.SEARXNG_BASE_URL, fetcher, env.SEARXNG_TOKEN),
     },
     env.SERPER_API_KEY && {
       name: "Serper",

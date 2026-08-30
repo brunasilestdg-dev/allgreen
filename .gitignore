@@ -9,3 +9,6 @@ __pycache__/
 .DS_Store
 test-results/
 playwright-report/
+
+# Segredos da instância SearXNG
+connectors/searxng/.env

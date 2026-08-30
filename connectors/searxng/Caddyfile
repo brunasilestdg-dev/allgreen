@@ -1,0 +1,54 @@
+# HTTPS automático e a porta que exige o token.
+#
+# Por que o token existe: uma instância SearXNG aberta com `format=json`
+# habilitado é um proxy de busca gratuito para o mundo inteiro. Ela é
+# encontrada e abusada em dias, e o abuso termina com o IP do servidor banido
+# no Google — matando exatamente o "sem cota" que motivou hospedá-la.
+#
+# O SearXNG não tem autenticação própria; quem a faz é este proxy.
+
+{$SEARXNG_HOSTNAME} {
+	encode zstd gzip
+
+	# A API: exige o token que o Worker envia em `x-searxng-token`.
+	@api {
+		path /search*
+		header x-searxng-token {$SEARXNG_TOKEN}
+	}
+	handle @api {
+		reverse_proxy searxng:8080
+	}
+
+	# `/search` sem o token correto: recusa seca. 401 e nada mais — sem dizer
+	# que existe um SearXNG atrás, sem formulário, sem convite a tentar de novo.
+	handle /search* {
+		respond "Unauthorized" 401
+	}
+
+	# Sonda de saúde, para o `verificar.sh` e para monitoramento. Não devolve
+	# resultado de busca, então não precisa de token.
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Qualquer outro caminho — inclusive a home do SearXNG — não existe para o
+	# mundo. A instância é de máquina, não de gente.
+	handle {
+		respond "Not found" 404
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	log {
+		output stdout
+		format console
+		# A consulta vai na URL; registrá-la guardaria o que a equipe pesquisa
+		# sobre cada cliente. Só erro é registrado.
+		level ERROR
+	}
+}

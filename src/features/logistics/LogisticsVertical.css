@@ -1737,3 +1737,96 @@
 .tdg-manual-modulo p { color: var(--tdg-muted); font-size: .74rem; line-height: 1.3; margin: 0; }
 .tdg-manual-modulo button { align-self: start; background: transparent; border: 0; color: var(--tdg-green); cursor: pointer; font: inherit; font-size: .74rem; font-weight: 750; margin-top: auto; padding: 4px 0 0; }
 @media (max-width: 760px) { .tdg-area-referencias { grid-template-columns: 1fr; } }
+
+/* ===== Distância pelo mapa =====
+   Vive dentro do <label> do campo, logo abaixo do input: a sugestão pertence
+   ao campo que ela preenche, não a uma barra de ferramentas separada. */
+.tdg-distancia {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tdg-distancia-dica,
+.tdg-distancia-fonte {
+  color: var(--tdg-muted, #6d7d75);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.tdg-distancia-dica {
+  display: block;
+  margin-top: 6px;
+}
+
+.tdg-distancia-botao {
+  justify-self: start;
+  padding: 5px 11px;
+  border: 1px dashed var(--tdg-line, #c4d3ca);
+  border-radius: 8px;
+  background: none;
+  color: var(--tdg-primary, #17624f);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tdg-distancia-botao:disabled {
+  cursor: progress;
+  color: var(--tdg-muted, #6d7d75);
+}
+
+.tdg-distancia-erro {
+  color: var(--tdg-danger, #a83a22);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.tdg-distancia-resultado {
+  display: grid;
+  gap: 5px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--tdg-primary, #17624f) 30%, transparent);
+  border-radius: 10px;
+  background: var(--tdg-surface2, #eef4ef);
+}
+
+.tdg-distancia-resultado strong {
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* O endereço que o mapa entendeu. É o que denuncia "Santos de Portugal"
+   antes da pessoa aceitar o número. */
+.tdg-distancia-resultado > small {
+  color: var(--tdg-muted, #6d7d75);
+  font-size: 0.74rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.tdg-distancia-resultado > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.tdg-distancia-resultado button {
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--tdg-primary, #17624f);
+  color: #fff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tdg-distancia-resultado button.secundario {
+  background: none;
+  border: 1px solid var(--tdg-line, #c4d3ca);
+  color: var(--tdg-muted, #46574f);
+}
