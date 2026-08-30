@@ -10,6 +10,7 @@
 import { allowed, json } from "../lib/http.js";
 import { membershipRole } from "../lib/membership.js";
 import { chavesDoEspaco } from "./ai-keys.js";
+import { chavesDeBuscaDoEspaco } from "./search-keys.js";
 import {
   especialistaDaVertical,
   instrucaoDaVertical,
@@ -898,6 +899,10 @@ export async function handleAiStream(request, env, user) {
   // caminho ignorando a chave que a pessoa pagou.
   const doEspaco = await chavesDoEspaco(env, serverContext.ownerId);
   if (Object.keys(doEspaco).length) env = { ...env, ...doEspaco };
+  // Mesma sobreposição para a busca: a URL do SearXNG e as chaves de pesquisa
+  // que o espaço cadastrou entram no `env` que a cascata de busca vai ler.
+  const buscaDoEspaco = await chavesDeBuscaDoEspaco(env, serverContext.ownerId);
+  if (Object.keys(buscaDoEspaco).length) env = { ...env, ...buscaDoEspaco };
   let web;
   try {
     web = await addCurrentWebContext(
@@ -1037,6 +1042,10 @@ export async function handleAi(request, env, user) {
   // caminho ignorando a chave que a pessoa pagou.
   const doEspaco = await chavesDoEspaco(env, serverContext.ownerId);
   if (Object.keys(doEspaco).length) env = { ...env, ...doEspaco };
+  // Mesma sobreposição para a busca: a URL do SearXNG e as chaves de pesquisa
+  // que o espaço cadastrou entram no `env` que a cascata de busca vai ler.
+  const buscaDoEspaco = await chavesDeBuscaDoEspaco(env, serverContext.ownerId);
+  if (Object.keys(buscaDoEspaco).length) env = { ...env, ...buscaDoEspaco };
   let web;
   try {
     web = await addCurrentWebContext(

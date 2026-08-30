@@ -21,8 +21,10 @@
 // do resto do produto. Nada aqui é uma segunda implementação.
 
 import { recorteDeCarteira, podeNaVertical, TENANT_ID } from "./todogreen-access.js";
-import { runWithFallback } from "./ai.js";
+import { configuredAiProviders, runWithFallback } from "./ai.js";
+import { envComChavesDoEspaco } from "./ai-keys.js";
 import { webSearchConfiguration } from "./web-search.js";
+import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { pesquisarEmpresa } from "./todogreen-client-intelligence.js";
 import { pessoasAtribuiveis, resolverResponsavel } from "../../src/features/logistics/taskAssignmentDomain.js";
 import { montarPauta } from "../../src/features/logistics/sementeBriefingDomain.js";
@@ -568,7 +570,7 @@ export async function executarAcao(env, { access, user, email, acao, linhas }) {
   const { linha, ambiguidade } = escolherCliente(linhas, acao?.cliente);
   if (ambiguidade.length) return { erro: `Mais de uma conta corresponde: ${ambiguidade.join(", ")}.`, status: 409 };
   if (!linha) return { erro: "Conta não encontrada na sua carteira.", status: 404 };
-  if (!webSearchConfiguration(env).configured)
+  if (!webSearchConfiguration(await envComChavesDeBuscaDoEspaco(env, access.ownerId)).configured)
     return {
       erro: "Pesquisa web indisponível. A integração precisa ser revisada por um administrador.",
       status: 503,
@@ -640,12 +642,16 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   // cliente quer dizer aquela empresa, e obrigar a pessoa a repetir o nome é
   // fazer o produto esquecer o que está na frente dele.
   const emFoco = linhas.find((linha) => linha.id === clean(body.clienteId, 60)) || null;
+  const envIa = await envComChavesDoEspaco(env, access.ownerId);
+  const envBusca = await envComChavesDeBuscaDoEspaco(envIa, access.ownerId);
+  if (!configuredAiProviders(envIa).some((provider) => provider.configured))
+    return response({ error: "Plantû está sem provedor de IA. Um administrador precisa conectar GPT, Claude, Gemini ou outro provedor em Integrações." }, 503);
   const cabecalho = [
     `Pessoa atendida: ${clean(user?.name, 120) || email || "usuária da To Do Green"}.`,
     `Tela em que a pessoa está: ${clean(body.tela, 60) || "não informada"}.`,
     emFoco ? `Conta aberta na tela agora: ${emFoco.name} (id ${emFoco.id}).` : "",
     `Carteira de ${email || "quem perguntou"}: ${indice.length} conta(s).`,
-    `Pesquisa web neste ambiente: ${webSearchConfiguration(env).configured ? "configurada" : "NÃO configurada — não proponha pesquisar_empresa"}.`,
+    `Pesquisa web neste ambiente: ${webSearchConfiguration(envBusca).configured ? "configurada" : "NÃO configurada — não proponha pesquisar_empresa"}.`,
     "",
     catalogoTextual(),
     "",
@@ -654,7 +660,7 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     `\nPERGUNTA: ${pergunta}`,
   ].join("\n");
 
-  const primeira = await runWithFallback(env, { prompt: cabecalho, system: INSTRUCAO, deep: true });
+  const primeira = await runWithFallback(envIa, { prompt: cabecalho, system: INSTRUCAO, deep: true });
   if (!primeira.ok) {
     // O motivo de CADA provedor ter falhado ia para o lixo aqui — cota
     // estourada, chave inválida, tempo esgotado, tudo virava a mesma frase
@@ -673,7 +679,7 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   if (decisao.consultar) {
     const dados = await executarFerramenta(env, { access, pedido: decisao.consultar, linhas });
     consultou = { ferramenta: dados.ferramenta, pedido: decisao.consultar };
-    const segunda = await runWithFallback(env, {
+    const segunda = await runWithFallback(envIa, {
       prompt: [
         cabecalho,
         `\nVocê pediu a ferramenta "${dados.ferramenta}". Resultado real, vindo do banco:`,
@@ -695,7 +701,7 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     }
   }
 
-  decisao = await garantirRespostaEmPortugues(env, decisao);
+  decisao = await garantirRespostaEmPortugues(envIa, decisao);
 
   return response({
     resposta: decisao.resposta || "Não consegui formular uma resposta com os dados desta carteira.",

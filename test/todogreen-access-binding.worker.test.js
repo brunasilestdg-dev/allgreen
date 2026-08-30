@@ -91,6 +91,24 @@ beforeAll(async () => {
 });
 
 describe("conceder acesso liga a pessoa ao espaço da empresa", () => {
+  it("aceita seleção explícita de funcionalidades e descarta permissão inventada", async () => {
+    const resposta = await pedir("/api/todogreen/access-list", {
+      method: "POST",
+      token: tokenDona,
+      body: {
+        email: "acesso-granular@todogreen.test",
+        role: "vendedor",
+        permissions: ["read", "market:read", "market:research", "permissao:inventada"],
+      },
+    });
+    expect(resposta.status).toBe(201);
+    expect((await resposta.json()).permissions).toEqual(["read", "market:read", "market:research"]);
+
+    const lista = await (await pedir("/api/todogreen/access-list", { token: tokenDona })).json();
+    expect(lista.emails.find((item) => item.email === "acesso-granular@todogreen.test")?.permissions)
+      .toEqual(["read", "market:read", "market:research"]);
+  });
+
   it("cria o vínculo e o ERP abre com os dados da empresa, não vazio", async () => {
     const concessao = await pedir("/api/todogreen/access-list", {
       method: "POST",

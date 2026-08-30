@@ -81,7 +81,7 @@ const autorizar = async (email, userId, role = "admin") => {
     `INSERT INTO todogreen_access_emails
        (id, tenant_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
      VALUES (?, 'todogreen', ?, ?, 'active', ?, '', ?, ?, ?)
-     ON CONFLICT(tenant_id, email) DO UPDATE SET role = excluded.role, status = 'active'`,
+     ON CONFLICT(tenant_id, workspace_owner_id, email) DO UPDATE SET role = excluded.role, status = 'active'`,
   )
     .bind(crypto.randomUUID(), email, role, JSON.stringify(["*"]), userId, now, now)
     .run();

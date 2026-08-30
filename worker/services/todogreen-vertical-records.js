@@ -137,6 +137,7 @@ const COLECOES = {
   opportunities: {
     tabela: "todogreen_opportunities",
     permissao: "crm:manage",
+    permissoesLeitura: ["crm:manage", "clients:manage", "audit:read"],
     ordem: "updated_at DESC",
     daLinha: (row) => ({
       // O que não tem coluna própria volta primeiro, e as colunas mandam por
@@ -184,6 +185,7 @@ const COLECOES = {
   proposals: {
     tabela: "todogreen_proposals",
     permissao: "proposal:manage",
+    permissoesLeitura: ["proposal:create", "proposal:manage", "deal:review", "deal:approve", "audit:read"],
     ordem: "updated_at DESC",
     daLinha: (row) => ({
       id: row.id,
@@ -226,6 +228,7 @@ const COLECOES = {
   contracts: {
     tabela: "todogreen_contracts",
     permissao: "proposal:manage",
+    permissoesLeitura: ["proposal:manage", "deal:review", "deal:approve", "audit:read"],
     ordem: "updated_at DESC",
     daLinha: (row) => ({
       id: row.id,
@@ -318,6 +321,7 @@ const COLECOES = {
     // escrevia em todogreen_operations e o cliente lia outra tabela.
     tabela: "todogreen_client_operations",
     permissao: "operations:manage",
+    permissoesLeitura: ["operations:manage", "planning:manage", "tms:manage", "evidence:manage", "audit:read"],
     ordem: "updated_at DESC",
     daLinha: (row) => ({
       id: row.id,
@@ -397,6 +401,7 @@ const COLECOES = {
   financial: {
     tabela: "todogreen_financial_entries",
     permissao: "finance:manage",
+    permissoesLeitura: ["finance:manage", "revenue:manage", "cost:manage", "commission:manage", "audit:read"],
     ordem: "reference_month DESC, updated_at DESC",
     daLinha: (row) => ({
       id: row.id,
@@ -487,6 +492,7 @@ const COLECOES = {
   items: {
     tabela: "todogreen_items",
     permissao: "stock:manage",
+    permissoesLeitura: ["stock:manage", "purchase:manage", "operations:manage", "audit:read"],
     escopoDeCarteira: false,
     ordem: "name ASC",
     daLinha: (row) => ({
@@ -532,6 +538,7 @@ const COLECOES = {
   warehouses: {
     tabela: "todogreen_warehouses",
     permissao: "stock:manage",
+    permissoesLeitura: ["stock:manage", "purchase:manage", "operations:manage", "audit:read"],
     escopoDeCarteira: false,
     ordem: "name ASC",
     daLinha: (row) => ({
@@ -567,6 +574,7 @@ const COLECOES = {
     // Escrita é de compras: é quem cadastra fornecedor. A conta comercial
     // continua sendo escrita em `todogreen_clients`, com a carteira valendo lá.
     permissao: "purchase:manage",
+    permissoesLeitura: ["purchase:manage", "finance:manage", "clients:manage", "audit:read"],
     // A parte tem `client_id`, mas o recorte de carteira aqui esconderia todo
     // fornecedor (client_id vazio) de operações e financeiro — exatamente de
     // quem precisa dele. O que é sensível por carteira (score, pipeline,
@@ -624,6 +632,7 @@ const COLECOES = {
   accounts: {
     tabela: "todogreen_chart_of_accounts",
     permissao: "finance:manage",
+    permissoesLeitura: ["finance:manage", "audit:read"],
     escopoDeCarteira: false,
     ordem: "code ASC, name ASC",
     daLinha: (row) => ({
@@ -656,6 +665,7 @@ const COLECOES = {
   costCenters: {
     tabela: "todogreen_cost_centers",
     permissao: "finance:manage",
+    permissoesLeitura: ["finance:manage", "audit:read"],
     escopoDeCarteira: false,
     ordem: "code ASC, name ASC",
     daLinha: (row) => ({
@@ -688,6 +698,7 @@ const COLECOES = {
   bankAccounts: {
     tabela: "todogreen_treasury_accounts",
     permissao: "finance:manage",
+    permissoesLeitura: ["finance:manage"],
     escopoDeCarteira: false,
     ordem: "name ASC",
     daLinha: (row) => ({
@@ -728,6 +739,17 @@ const COLECOES = {
 
 const nomeDaColecao = (colecao) =>
   Object.entries(COLECOES).find(([, configuracao]) => configuracao === colecao)?.[0] || "record";
+
+// `read` abre a vertical, não o razão financeiro inteiro. Cada coleção
+// declara pelo menos uma capacidade funcional que dá acesso ao seu conteúdo.
+// A regra é "qualquer uma", porque auditoria pode consultar sem administrar.
+const podeLerColecao = (access, colecao) =>
+  (colecao.permissoesLeitura || [colecao.permissao]).some((permissao) =>
+    podeNaVertical(access, permissao));
+
+const podeLerCenarios = (access) =>
+  ["pricing:simulate", "pricing:manage", "deal:review", "deal:approve", "audit:read"]
+    .some((permissao) => podeNaVertical(access, permissao));
 
 const validarFinanceiro = (corpo, atual = null) => {
   const valor = numero(corpo.valor);
@@ -1457,16 +1479,20 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
   if (!nome) {
     if (request.method !== "GET") return json({ error: "Método não permitido." }, 405);
     const nomes = Object.keys(COLECOES);
+    const permitidas = nomes.filter((n) => podeLerColecao(access, COLECOES[n]));
     const [listas, cenarios] = await Promise.all([
-      Promise.all(nomes.map((n) => listar(env, COLECOES[n], access, user.email))),
-      listarCenarios(env, access, user.email),
+      Promise.all(permitidas.map((n) => listar(env, COLECOES[n], access, user.email))),
+      podeLerCenarios(access)
+        ? listarCenarios(env, access, user.email)
+        : Promise.resolve({ registros: [], total: 0 }),
     ]);
+    const porNome = Object.fromEntries(permitidas.map((n, i) => [n, listas[i]]));
     const payload = {
-      ...Object.fromEntries(nomes.map((n, i) => [n, listas[i].registros])),
+      ...Object.fromEntries(nomes.map((n) => [n, porNome[n]?.registros || []])),
       scenarios: cenarios.registros,
     };
     if (url.searchParams.get("includeTotals") === "1" || request.headers.get("x-todogreen-include-totals") === "1") payload.totals = {
-        ...Object.fromEntries(nomes.map((n, i) => [n, listas[i].total])),
+        ...Object.fromEntries(nomes.map((n) => [n, porNome[n]?.total || 0])),
         scenarios: cenarios.total,
       };
     return json(payload);
@@ -1474,6 +1500,8 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
 
   if (nome === "scenarios") {
     if (request.method === "GET") {
+      if (!podeLerCenarios(access))
+        return json({ error: "Seu papel não pode consultar simulações." }, 403);
       const { limit, offset } = paginacao(url);
       const clienteId = texto(url.searchParams.get("cliente"), 120);
       const resultado = await listarCenarios(env, access, user.email, { clienteId, limit, offset });
@@ -1489,6 +1517,9 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
 
   const colecao = COLECOES[nome];
   if (!colecao) return json({ error: "Coleção desconhecida." }, 404);
+
+  if (request.method === "GET" && !podeLerColecao(access, colecao))
+    return json({ error: "Seu papel não pode consultar estes registros." }, 403);
 
   if (id && subrecurso === "events" && colecao === COLECOES.operations) {
     if (request.method === "GET") return listarEventosOperacao(env, access, user, id);

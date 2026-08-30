@@ -118,6 +118,78 @@
   -webkit-line-clamp: 2;
 }
 
+/* A trilha lê a mesma configuração do menu: área e tela sempre concordam. */
+.tdg-breadcrumb {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tdg-breadcrumb-item {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tdg-breadcrumb button,
+.tdg-breadcrumb [aria-current="page"] {
+  color: var(--tdg-muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.tdg-breadcrumb button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tdg-breadcrumb button:hover {
+  color: var(--tdg-green);
+  text-decoration: underline;
+}
+
+.tdg-breadcrumb [aria-current="page"] {
+  color: var(--tdg-green);
+}
+
+.tdg-breadcrumb-sep {
+  color: var(--tdg-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Tela barrada pelo perfil: a mesma regra do menu, agora também na rota. */
+.tdg-sem-permissao {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.tdg-sem-permissao > svg {
+  color: var(--tdg-green);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.tdg-sem-permissao strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.tdg-sem-permissao p {
+  color: var(--tdg-muted);
+  font-size: .85rem;
+  margin: 0 0 10px;
+}
+
 .tdg-shell-actions {
   align-items: center;
   display: flex;
@@ -857,6 +929,42 @@
 }
 
 .tdg-access-list { display: grid; gap: 9px; margin-top: 14px; }
+
+.tdg-permission-editor {
+  border: 1px solid var(--tdg-line);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  padding: 14px;
+}
+
+.tdg-permission-editor-head {
+  align-items: center;
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+}
+
+.tdg-permission-editor-head button {
+  background: transparent;
+  border: 0;
+  color: var(--tdg-green);
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.tdg-permission-editor fieldset {
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+}
+
+.tdg-permission-editor legend { color: var(--tdg-green); font-size: 12px; font-weight: 850; padding: 0 5px; }
 
 .tdg-access-row {
   align-items: center;

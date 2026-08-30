@@ -97,26 +97,30 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
   const admins = administradoresDaEnv(env);
   const ehAdministrador = admins.includes(email);
 
-  const autorizado = await env.DB
+  const autorizacoes = await env.DB
     .prepare(
       `SELECT id, role, permissions_json, workspace_owner_id
          FROM todogreen_access_emails
         WHERE tenant_id = ? AND lower(email) = ? AND status = 'active'
-          AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`,
+          AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
+        ORDER BY updated_at DESC`,
     )
     .bind(TENANT_ID, email, new Date().toISOString())
-    .first()
-    .catch(() => null);
+    .all()
+    .then((resultado) => resultado.results || [])
+    .catch(() => []);
 
-  const vinculo = await env.DB
+  const vinculos = await env.DB
     .prepare(
       `SELECT role, permissions_json, workspace_owner_id
          FROM tenant_users
-        WHERE tenant_id = ? AND user_id = ? AND status = 'active'`,
+        WHERE tenant_id = ? AND user_id = ? AND status = 'active'
+        ORDER BY updated_at DESC`,
     )
     .bind(TENANT_ID, user.id)
-    .first()
-    .catch(() => null);
+    .all()
+    .then((resultado) => resultado.results || [])
+    .catch(() => []);
 
   // A carteira pode ser preparada antes do primeiro acesso do vendedor e, por
   // isso, é vinculada por e-mail. Quando ainda não existe `tenant_users`, a
@@ -141,15 +145,8 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     .catch(() => []);
 
   // Sem domínio na conta: entrar exige alguém ter autorizado esta pessoa.
-  if (!ehAdministrador && !autorizado && !vinculo)
+  if (!ehAdministrador && !autorizacoes.length && !vinculos.length)
     return { access: null, motivo: NEGADO.semVinculo };
-
-  const role = ehAdministrador
-    ? "admin"
-    : autorizado?.role || vinculo?.role || "auditor";
-  const permissions = ehAdministrador
-    ? ["*"]
-    : parse(autorizado?.permissions_json || vinculo?.permissions_json, []);
 
   // Os espaços que esta sessão alcança de fato. O administrador da vertical
   // opera qualquer espaço porque é dele que a operação depende; todos os
@@ -173,19 +170,40 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
   // normal de quem foi autorizado ANTES de ter conta: sem ele, a pessoa criava
   // a conta, entrava, e caía no próprio espaço vazio — com todas as permissões
   // do papel apontadas para lugar nenhum.
-  const espacoDaLiberacao = clean(autorizado?.workspace_owner_id, 100);
-  const espacoPadrao = vinculo?.workspace_owner_id
-    || espacoDaLiberacao
+  const pedido = clean(requestedOwnerId, 100);
+  const donosDosVinculos = vinculos.map((item) => clean(item.workspace_owner_id, 100)).filter(Boolean);
+  const donosDasLiberacoes = autorizacoes.map((item) => clean(item.workspace_owner_id, 100)).filter(Boolean);
+  const donosExplicitos = [
+    ...donosDosVinculos,
+    ...donosDasLiberacoes,
+    ...donosDaCarteira,
+    ...espacosDeMotorista,
+  ].filter(Boolean);
+  // Registros anteriores à 0071 podem não ter espaço. Só nesse legado a conta
+  // própria é usada como fallback; depois que existe um dono explícito, ela
+  // não vira um workspace extra por acidente.
+  const permitidos = new Set(donosExplicitos.length ? donosExplicitos : [user.id]);
+  if (pedido && !ehAdministrador && !permitidos.has(pedido))
+    return { access: null, motivo: NEGADO.espacoNaoAutorizado };
+
+  const espacoPadrao = pedido
+    || donosDosVinculos[0]
+    || donosDasLiberacoes[0]
     || donosDaCarteira[0]
     || espacosDeMotorista[0]
     || user.id;
-  const permitidos = new Set(
-    [user.id, espacoPadrao, espacoDaLiberacao, ...donosDaCarteira, ...espacosDeMotorista].filter(Boolean),
-  );
-
-  const pedido = clean(requestedOwnerId, 100);
-  if (pedido && !ehAdministrador && !permitidos.has(pedido))
-    return { access: null, motivo: NEGADO.espacoNaoAutorizado };
+  const autorizado = autorizacoes.find((item) => clean(item.workspace_owner_id, 100) === espacoPadrao)
+    || autorizacoes.find((item) => !clean(item.workspace_owner_id, 100))
+    || null;
+  const vinculo = vinculos.find((item) => clean(item.workspace_owner_id, 100) === espacoPadrao)
+    || vinculos.find((item) => !clean(item.workspace_owner_id, 100))
+    || null;
+  const role = ehAdministrador
+    ? "admin"
+    : autorizado?.role || vinculo?.role || "auditor";
+  const permissions = ehAdministrador
+    ? ["*"]
+    : parse(autorizado?.permissions_json || vinculo?.permissions_json, []);
 
   if (autorizado?.id) {
     await env.DB.prepare(
@@ -195,7 +213,7 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
 
   return {
     access: {
-      ownerId: pedido || espacoPadrao,
+      ownerId: espacoPadrao,
       role,
       permissions,
       email,

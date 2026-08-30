@@ -744,6 +744,7 @@
 .tdg-crm-detail-grid .tdg-account-panel { display: none !important; }
 .tdg-account-tab-summary .tdg-account-summary,
 .tdg-account-tab-comercial .tdg-account-comercial,
+.tdg-account-tab-operacao .tdg-account-operacao,
 .tdg-account-tab-relationship .tdg-account-relationship,
 .tdg-account-tab-opportunities .tdg-account-opportunities,
 .tdg-account-tab-strategy .tdg-account-strategy,
@@ -751,10 +752,77 @@
 .tdg-account-tab-intelligence .tdg-account-intelligence { display: grid !important; }
 .tdg-account-tab-relationship,
 .tdg-account-tab-comercial,
+.tdg-account-tab-operacao,
 .tdg-account-tab-activity { grid-template-columns: minmax(0,1fr); }
 .tdg-account-tab-relationship > aside,
 .tdg-account-tab-comercial > aside,
+.tdg-account-tab-operacao > aside,
 .tdg-account-tab-activity > aside { display: none; }
+
+/* Conta 360 conectada: operação e financeiro lidos da mesma fonte das telas. */
+.tdg-conta-conectada-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 14px;
+}
+.tdg-conta-conectada-metrics article {
+  background: #f6faf7;
+  border: 1px solid var(--tdg-line);
+  border-radius: 9px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+.tdg-conta-conectada-metrics small { color: var(--tdg-muted); font-size: .7rem; }
+.tdg-conta-conectada-metrics strong { font-size: 1.25rem; }
+.tdg-conta-conectada-metrics strong.risk,
+.tdg-conta-conectada-metrics .risk { color: var(--tdg-danger, #b3261e); }
+.tdg-conta-conectada-metrics span.risk { font-size: .72rem; font-weight: 700; }
+.tdg-conta-conectada-cols {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.tdg-conta-conectada-cols > div { min-width: 0; }
+.tdg-conta-conectada-cols header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.tdg-conta-conectada-cols header button {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--tdg-green);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: .72rem;
+  font-weight: 700;
+  gap: 3px;
+  padding: 0;
+}
+.tdg-conta-conectada-cols header button:hover { text-decoration: underline; }
+.tdg-conta-conectada-cols ul { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.tdg-conta-conectada-cols li {
+  align-items: center;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 7px 10px;
+}
+.tdg-conta-conectada-cols li.risk { border-color: var(--tdg-danger, #b3261e); }
+.tdg-conta-conectada-cols li span { display: grid; gap: 1px; min-width: 0; }
+.tdg-conta-conectada-cols li strong { font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-conta-conectada-cols li small { color: var(--tdg-muted); font-size: .68rem; }
+.tdg-conta-conectada-cols li em { color: var(--tdg-muted); flex: 0 0 auto; font-size: .72rem; font-style: normal; font-weight: 700; }
+.tdg-conta-conectada-cols li.risk em { color: var(--tdg-danger, #b3261e); }
+.tdg-conta-conectada-cols p { color: var(--tdg-muted); font-size: .78rem; margin: 0; }
 .tdg-comercial-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .tdg-comercial-hist-head { border-top: 1px solid var(--tdg-line); margin-top: 6px; padding-top: 12px; }
 .tdg-comercial-timeline { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }

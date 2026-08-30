@@ -34,7 +34,7 @@ async function vincular(usuario, papel, permissoes, donoDoEspaco) {
     `INSERT INTO tenant_users
        (id, tenant_id, workspace_owner_id, user_id, role, status, permissions_json, created_at, updated_at)
      VALUES (?, 'todogreen', ?, ?, ?, 'active', ?, ?, ?)
-     ON CONFLICT(tenant_id, user_id) DO UPDATE SET role = excluded.role,
+     ON CONFLICT(tenant_id, workspace_owner_id, user_id) DO UPDATE SET role = excluded.role,
        workspace_owner_id = excluded.workspace_owner_id,
        permissions_json = excluded.permissions_json, status = 'active'`,
   ).bind(crypto.randomUUID(), donoDoEspaco, usuario.id, papel, JSON.stringify(permissoes), agora, agora).run();

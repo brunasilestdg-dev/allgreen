@@ -44,6 +44,7 @@ import {
   validarContexto,
 } from "../../src/features/logistics/customerAssistantDomain.js";
 import { runWithFallback } from "./ai.js";
+import { envComChavesDoEspaco } from "./ai-keys.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { podeVerTodaCarteira } from "./todogreen-access.js";
 import { normalizeCrmContacts } from "../../src/features/logistics/crmContactNormalizationDomain.js";
@@ -1239,7 +1240,8 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     // próprio cliente e a validação que barra campo interno. A troca é só de
     // motor.
     try {
-      const { ok, result, errors } = await runWithFallback(env, {
+      const envIa = await envComChavesDoEspaco(env, escopo.workspaceOwnerId);
+      const { ok, result, errors } = await runWithFallback(envIa, {
         prompt: `Dados do cliente (únicos disponíveis):\n${JSON.stringify(contexto, null, 2)}\n\nPergunta: ${pergunta}`,
         system: INSTRUCAO_ASSISTENTE,
       });
@@ -1288,11 +1290,11 @@ export async function handleTodoGreenCustomerPortal(request, env) {
         // tela — esconder no navegador é entregar o dado e pedir para não olhar.
         const conversa = await env.DB.prepare(
           `SELECT id, author_side, author_name, body, created_at
-             FROM todogreen_client_request_messages
-            WHERE tenant_id = ? AND client_id = ? AND request_id = ? AND internal = 0
+            FROM todogreen_client_request_messages
+            WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ? AND request_id = ? AND internal = 0
             ORDER BY created_at`,
         )
-          .bind(escopo.tenantId, escopo.clientId, detalhe)
+          .bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId, detalhe)
           .all()
           .catch(() => ({ results: [] }));
         mensagens = (conversa.results || []).map((m) => ({
@@ -1444,13 +1446,14 @@ const linhaParaSolicitacao = (linha) => ({
 async function inserirMensagem(env, escopo, requestId, { lado, email, nome, texto, interna = 0 }) {
   await env.DB.prepare(
     `INSERT INTO todogreen_client_request_messages
-       (id, tenant_id, client_id, request_id, author_side, author_email, author_name,
+       (id, tenant_id, workspace_owner_id, client_id, request_id, author_side, author_email, author_name,
         body, internal, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       crypto.randomUUID(),
       escopo.tenantId,
+      escopo.workspaceOwnerId,
       escopo.clientId,
       requestId,
       lado,

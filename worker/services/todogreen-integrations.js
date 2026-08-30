@@ -1,6 +1,7 @@
 import { configuredAiProviders, probeAiProvider } from "./ai.js";
 import { podeNaVertical } from "./todogreen-access.js";
 import { probeWebSearch, webSearchConfiguration } from "./web-search.js";
+import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -129,11 +130,15 @@ export function todoGreenIntegrationStatus(env = {}, { activeWebhooks = 0 } = {}
 }
 
 export async function handleTodoGreenIntegrations(request, env, access) {
+  // A busca configurada por ESTE espaço (SearXNG próprio, chaves de reserva)
+  // precisa aparecer como "ligada" na tela e ser o que o botão "Testar"
+  // exercita — senão o campo que a titular acabou de preencher não teria eco.
+  const envBusca = await envComChavesDeBuscaDoEspaco(env, access.ownerId);
   if (request.method === "GET") {
     const activeWebhooks = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM webhooks WHERE owner_id=? AND enabled=1",
     ).bind(access.ownerId).first().then((row) => Number(row?.total || 0)).catch(() => 0);
-    return json(todoGreenIntegrationStatus(env, { activeWebhooks }));
+    return json(todoGreenIntegrationStatus(envBusca, { activeWebhooks }));
   }
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
   if (!podeNaVertical(access, "integration:manage"))
@@ -146,7 +151,7 @@ export async function handleTodoGreenIntegrations(request, env, access) {
     // descreve. Por isso tem teste próprio, que devolve quem respondeu, quem
     // falhou e por quê, e quantos resultados vieram.
     if (provider === "web-search")
-      return json({ searchTest: await probeWebSearch(env), checkedAt: new Date().toISOString() });
+      return json({ searchTest: await probeWebSearch(envBusca), checkedAt: new Date().toISOString() });
     return json({ test: await probeAiProvider(env, provider), checkedAt: new Date().toISOString() });
   } catch (error) {
     return json({ error: String(error?.message || "Falha no teste do provedor").slice(0, 180), provider }, 502);

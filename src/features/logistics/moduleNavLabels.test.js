@@ -93,7 +93,7 @@ describe("permissão não sai do texto da tela", () => {
   });
 
   it("a barra filtra por permissão antes de desenhar a aba", () => {
-    expect(fonte).toMatch(/hasTodoGreenPermission\(role, item\.permission\)/);
+    expect(fonte).toMatch(/podeAcessarFuncionalidade\(role, remoteAccess\.permissions, item\.permission\)/);
   });
 
   it("nenhum módulo de tela decide acesso lendo textContent", () => {

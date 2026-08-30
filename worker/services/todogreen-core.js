@@ -1,6 +1,7 @@
 import {
   LOGISTICS_PRODUCTS,
   TODO_GREEN_MODULE_CATALOG,
+  TODO_GREEN_PERMISSION_KEYS,
   TODO_GREEN_PERMISSIONS,
   TODO_GREEN_ROLES,
   TODO_GREEN_TENANT,
@@ -36,7 +37,10 @@ async function resolveCoreAccess(env, user, ownerId) {
   return { access: { ...access, source: access.viaAdministradorGlobal ? "env" : "vinculo" }, motivo: null };
 }
 
-const canManage = (access) => ["owner", "admin"].includes(access?.role) || access?.permissions?.includes("*");
+const canManage = (access) =>
+  ["owner", "admin"].includes(access?.role)
+  || access?.permissions?.includes("*")
+  || podeNaVertical(access, "access:manage");
 const canAny = (access, permissions = []) => canManage(access) || permissions.some((permission) => podeNaVertical(access, permission));
 
 // ===== O painel Acessos administra o modelo de acesso INTEIRO =====
@@ -75,8 +79,7 @@ async function vincularAoEspaco(env, { access, userId, email: alvo, role, permis
     `INSERT INTO tenant_users
        (id, tenant_id, workspace_owner_id, user_id, role, status, permissions_json, invited_by, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
-     ON CONFLICT(tenant_id, user_id) DO UPDATE SET
-       workspace_owner_id = excluded.workspace_owner_id,
+     ON CONFLICT(tenant_id, workspace_owner_id, user_id) DO UPDATE SET
        role = excluded.role,
        status = 'active',
        permissions_json = excluded.permissions_json,
@@ -91,11 +94,11 @@ async function vincularAoEspaco(env, { access, userId, email: alvo, role, permis
   return true;
 }
 
-async function desvincularDoEspaco(env, userId) {
+async function desvincularDoEspaco(env, access, userId) {
   if (!userId) return;
   await env.DB.prepare(
-    "UPDATE tenant_users SET status='revoked', updated_at=? WHERE tenant_id=? AND user_id=?",
-  ).bind(new Date().toISOString(), TODO_GREEN_TENANT.id, userId).run().catch((erro) => {
+    "UPDATE tenant_users SET status='revoked', updated_at=? WHERE tenant_id=? AND workspace_owner_id=? AND user_id=?",
+  ).bind(new Date().toISOString(), TODO_GREEN_TENANT.id, espacoDaConcessao(access), userId).run().catch((erro) => {
     console.error("todogreen desvincularDoEspaco", userId, erro);
   });
 }
@@ -296,19 +299,28 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
     await seedCatalog(env);
     if (request.method === "GET") {
       const rows = await env.DB.prepare(
-        `SELECT email,role,status,note,expires_at AS expiresAt,revoked_at AS revokedAt,
+        `SELECT email,role,status,permissions_json,note,expires_at AS expiresAt,revoked_at AS revokedAt,
                 last_access_at AS lastAccessAt,created_at AS createdAt,updated_at AS updatedAt
-           FROM todogreen_access_emails WHERE tenant_id=? ORDER BY status='active' DESC,email`,
-      ).bind(TODO_GREEN_TENANT.id).all();
-      return response({ emails:rows.results || [] });
+           FROM todogreen_access_emails
+          WHERE tenant_id=? AND workspace_owner_id=?
+          ORDER BY status='active' DESC,email`,
+      ).bind(TODO_GREEN_TENANT.id, espacoDaConcessao(access)).all();
+      return response({
+        emails:(rows.results || []).map((item) => ({
+          ...item,
+          permissions:parse(item.permissions_json, []),
+          permissions_json:undefined,
+        })),
+      });
     }
     if (request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const normalized = email(body.email);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return response({ error:"Informe um e-mail válido." },400);
       const role = TODO_GREEN_ROLES.includes(body.role) ? body.role : "auditor";
+      const permitidas = new Set(TODO_GREEN_PERMISSION_KEYS);
       const permissions = Array.isArray(body.permissions)
-        ? body.permissions.map((item) => String(item).slice(0,80)).slice(0,30)
+        ? [...new Set(body.permissions.map((item) => String(item).slice(0,80)).filter((item) => permitidas.has(item)))].slice(0,60)
         : TODO_GREEN_PERMISSIONS[role] || ["read"];
       const now = new Date().toISOString();
       const expiresAt = String(body.expiresAt || "").trim().slice(0,40) || null;
@@ -317,7 +329,7 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       await env.DB.prepare(
         `INSERT INTO todogreen_access_emails
          (id,tenant_id,email,role,status,permissions_json,note,expires_at,revoked_at,created_by,workspace_owner_id,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?,?) ON CONFLICT(tenant_id,email) DO UPDATE SET
+         VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?,?) ON CONFLICT(tenant_id,workspace_owner_id,email) DO UPDATE SET
           role=excluded.role,status=excluded.status,permissions_json=excluded.permissions_json,
           note=excluded.note,expires_at=excluded.expires_at,revoked_at=NULL,
           workspace_owner_id=excluded.workspace_owner_id,updated_at=excluded.updated_at`,
@@ -336,7 +348,7 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       const conta = await contaPorEmail(env, normalized);
       if (ativo && conta?.id)
         await vincularAoEspaco(env, { access, userId: conta.id, email: normalized, role, permissions });
-      if (!ativo && conta?.id) await desvincularDoEspaco(env, conta.id);
+      if (!ativo && conta?.id) await desvincularDoEspaco(env, access, conta.id);
 
       if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_acesso_autorizado",normalized,`papel: ${role}`);
       await registrarAuditoriaTodoGreen(env, {
@@ -356,16 +368,17 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       if (!normalized) return response({ error:"Informe o e-mail." },400);
       const current = await env.DB.prepare(
         `SELECT email,role,status,note,expires_at AS expiresAt,last_access_at AS lastAccessAt
-           FROM todogreen_access_emails WHERE tenant_id=? AND email=?`,
-      ).bind(TODO_GREEN_TENANT.id,normalized).first();
+           FROM todogreen_access_emails
+          WHERE tenant_id=? AND workspace_owner_id=? AND email=?`,
+      ).bind(TODO_GREEN_TENANT.id,espacoDaConcessao(access),normalized).first();
       const now = new Date().toISOString();
       await env.DB.prepare(
-        "UPDATE todogreen_access_emails SET status='inactive',revoked_at=?,updated_at=? WHERE tenant_id=? AND email=?",
-      ).bind(now,now,TODO_GREEN_TENANT.id,normalized).run();
+        "UPDATE todogreen_access_emails SET status='inactive',revoked_at=?,updated_at=? WHERE tenant_id=? AND workspace_owner_id=? AND email=?",
+      ).bind(now,now,TODO_GREEN_TENANT.id,espacoDaConcessao(access),normalized).run();
       // Encerrar a liberação por e-mail não basta: `tenant_users` é a outra
       // fonte de vínculo, e quem trabalhava de verdade tinha as duas.
       const contaRevogada = await contaPorEmail(env, normalized);
-      if (contaRevogada?.id) await desvincularDoEspaco(env, contaRevogada.id);
+      if (contaRevogada?.id) await desvincularDoEspaco(env, access, contaRevogada.id);
       if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_acesso_removido",normalized,"");
       await registrarAuditoriaTodoGreen(env, {
         access,user,action:"revoked",resourceType:"access",resourceId:normalized,

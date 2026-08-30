@@ -51,6 +51,91 @@ export const TODO_GREEN_ROLES = [
   "motorista",
 ];
 
+// O administrador pode usar um perfil pronto ou montar um acesso funcional
+// sem criar um novo papel no código. A mesma lista alimenta a tela e valida o
+// payload no Worker, portanto um nome de permissão inventado pelo navegador
+// nunca vira autorização.
+export const TODO_GREEN_PERMISSION_CATALOG = Object.freeze([
+  {
+    group: "Acesso e governança",
+    items: [
+      ["read", "Acessar a vertical"],
+      ["access:manage", "Gerenciar usuários e permissões"],
+      ["audit:read", "Consultar auditoria"],
+      ["export:read", "Exportar dados e relatórios"],
+      ["integration:manage", "Configurar integrações"],
+    ],
+  },
+  {
+    group: "Comercial e inteligência",
+    items: [
+      ["crm:manage", "Gerenciar oportunidades e CRM"],
+      ["clients:read", "Consultar clientes e implantação"],
+      ["clients:manage", "Gerenciar clientes"],
+      ["clients:assign", "Distribuir carteira"],
+      ["proposal:create", "Criar propostas"],
+      ["proposal:manage", "Gerenciar propostas e contratos"],
+      ["pricing:simulate", "Simular preços"],
+      ["pricing:manage", "Gerenciar parâmetros de preço"],
+      ["deal:review", "Revisar aprovações comerciais"],
+      ["deal:approve", "Aprovar exceções comerciais"],
+      ["market:read", "Consultar notícias, RFQs e mercado"],
+      ["market:research", "Executar pesquisas de mercado e decisores"],
+    ],
+  },
+  {
+    group: "Operação e produtos",
+    items: [
+      ["product:manage", "Gerenciar produtos logísticos"],
+      ["planning:manage", "Planejar capacidade e aceite"],
+      ["operations:manage", "Gerenciar operações"],
+      ["operation:manage", "Gerenciar cadastros operacionais legados"],
+      ["production:manage", "Gerenciar produção operacional"],
+      ["fleet:manage", "Gerenciar frota"],
+      ["tms:manage", "Operar TMS e rastreamento"],
+      ["ciot:manage", "Emitir e administrar CIOT"],
+      ["evidence:manage", "Gerenciar POD e evidências"],
+    ],
+  },
+  {
+    group: "Financeiro, fiscal e suprimentos",
+    items: [
+      ["finance:manage", "Gerenciar financeiro e contas bancárias"],
+      ["revenue:manage", "Gerenciar receitas e recebíveis"],
+      ["cost:manage", "Gerenciar custos"],
+      ["commission:manage", "Gerenciar comissões"],
+      ["fiscal:manage", "Gerenciar documentos fiscais"],
+      ["purchase:manage", "Gerenciar compras"],
+      ["stock:manage", "Gerenciar estoque"],
+    ],
+  },
+  {
+    group: "Pessoas, ESG e gestão",
+    items: [
+      ["hr:manage", "Gerenciar pessoas e folha"],
+      ["marketing:manage", "Gerenciar marketing"],
+      ["esg:manage", "Calcular e administrar ESG"],
+      ["goal:read", "Consultar metas"],
+      ["goal:create", "Criar metas"],
+      ["goal:update", "Atualizar metas"],
+      ["goal:checkin", "Registrar andamento de metas"],
+      ["goal:approve", "Aprovar metas"],
+      ["goal:close", "Encerrar metas"],
+      ["goal:manage-team", "Gerenciar metas da equipe"],
+      ["goal:manage-company", "Gerenciar metas da empresa"],
+      ["goal:validate", "Validar metas"],
+      ["goal:export", "Exportar metas"],
+      ["planner:manage", "Gerenciar Planner"],
+      ["work:manage", "Gerenciar Central de Trabalho"],
+      ["dashboard:manage", "Criar e editar painéis"],
+    ],
+  },
+]);
+
+export const TODO_GREEN_PERMISSION_KEYS = Object.freeze(
+  TODO_GREEN_PERMISSION_CATALOG.flatMap((group) => group.items.map(([key]) => key)),
+);
+
 // crm:manage, proposal:manage, operations:manage e finance:manage são exigidas
 // por worker/services/todogreen-vertical-records.js para GRAVAR oportunidade,
 // proposta, contrato, operação e lançamento financeiro — e não apareciam em
@@ -64,16 +149,16 @@ export const TODO_GREEN_ROLES = [
 export const TODO_GREEN_PERMISSIONS = {
   owner: ["*"],
   admin: ["*"],
-  lideranca_comercial: ["read", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
-  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
-  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  lideranca_comercial: ["read", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
+  vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "fleet:manage", "integration:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
-  marketing: ["read", "marketing:manage", "evidence:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
-  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
-  auditor: ["read", "audit:read", "export:read", "goal:read", "goal:export"],
+  marketing: ["read", "marketing:manage", "evidence:manage", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "market:read", "market:research", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  auditor: ["read", "audit:read", "export:read", "market:read", "goal:read", "goal:export"],
   // RH lê a vertical e administra pessoal — e nada além disso. Em particular,
   // não recebe `finance:manage`: fechar a folha não é o mesmo que lançar no
   // caixa, e juntar os dois num papel só tiraria a segregação que a auditoria
@@ -98,9 +183,10 @@ export const verticalPermite = (role, permissions, permissao = "read") => {
   return requested.every((item) => grants.includes(item));
 };
 
-// Fachada do front: só tem o papel na mão.
-export const hasTodoGreenPermission = (role, permission = "read") =>
-  verticalPermite(role, null, permission);
+// Fachada do front. Quando a API devolve uma lista explícita, ela prevalece
+// sobre o perfil pronto; sem lista, mantemos a derivação pelo papel.
+export const hasTodoGreenPermission = (role, permission = "read", permissions = null) =>
+  verticalPermite(role, permissions, permission);
 
 export const TODO_GREEN_PRODUCTION_DATA_POLICY = Object.freeze({
   demoModeFlag: "todoGreenDemoMode",

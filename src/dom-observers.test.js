@@ -16,7 +16,10 @@ const arquivo = (nome) =>
 const OBSERVADORES = [
   "LogisticsVerticalPolish.js",
   "LogisticsVerticalCredentials.js",
-  "LogisticsVerticalNavigation.js",
+  // LogisticsVerticalNavigation.js foi removido: era navegação imperativa
+  // (MutationObserver global + clique sintético) sobre um DOM que o React
+  // parou de gerar — código morto. A navegação da precificação agora é
+  // dirigida pela rota, no próprio React.
 ];
 
 describe("gravar o mesmo texto realimenta o observador", () => {

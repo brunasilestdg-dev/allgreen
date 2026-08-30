@@ -91,6 +91,44 @@ describe("página de clientes", () => {
     expect(window.localStorage.getItem("todogreen-crm-view")).toBe("kanban");
   });
 
+  it("conecta operação e financeiro da conta na aba dedicada", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      clientes: [{
+        id: "client-1", accountCode: "TDG-000001", name: "Rede Alfa", segment: "Varejo", status: "ativo", revision: 2,
+        vendedores: [], crm: { stage: "Implantação", contacts: [] },
+      }],
+      acesso: { podeGerenciar: true, podeEditar: true, somenteCarteira: false },
+    }), { status: 200 })));
+
+    render(<ClientsPage
+      authHeaders={() => ({})}
+      operations={[
+        { id: "op-1", clientId: "client-1", referencia: "OP-1", situacao: "in_transit", prometidoEm: "2000-01-01", ocorrencias: 2 },
+        { id: "op-2", clientId: "client-1", referencia: "OP-2", situacao: "delivered", entregueEm: "2026-08-01" },
+      ]}
+      financial={[
+        { id: "fin-1", clientId: "client-1", tipo: "revenue", valor: 12000, vencimentoEm: "2000-02-01", descricao: "NF 001" },
+        { id: "fin-2", clientId: "client-1", tipo: "revenue", valor: 8000, vencimentoEm: "2999-01-01", pagoEm: null, descricao: "NF 002" },
+      ]}
+    />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
+    expect(await screen.findByRole("heading", { name: "Rede Alfa" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Operação e financeiro" }));
+    expect(screen.getByRole("button", { name: "Operação e financeiro" })).toHaveClass("active");
+
+    // O painel dedicado lê a mesma fonte das telas de Operação e Financeiro.
+    const painel = screen.getByText("Operação e financeiro ao vivo").closest("section");
+    // OP-1 aparece em andamento e também na coluna de ocorrências (tem 2).
+    expect(within(painel).getAllByText("OP-1").length).toBeGreaterThan(0);
+    // A entregue não conta como em andamento.
+    expect(within(painel).queryByText("OP-2")).not.toBeInTheDocument();
+    expect(within(painel).getByText("2 ocorrência(s)")).toBeInTheDocument();
+    expect(within(painel).getByText("NF 001")).toBeInTheDocument();
+    expect(within(painel).getByText("NF 002")).toBeInTheDocument();
+    expect(within(painel).getByRole("button", { name: /Abrir contas a receber/ })).toBeInTheDocument();
+  });
+
   it("reconhece os contatos salvos sem fingir que são procurement logístico", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       clientes: [{

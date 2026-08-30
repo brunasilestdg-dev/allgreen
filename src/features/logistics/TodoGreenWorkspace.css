@@ -284,6 +284,12 @@
 
 .tdg-intelligence-search { display: flex; align-items: center; gap: 9px; padding: 0 13px; border: 1px solid #cfddd7; border-radius: 11px; background: #fff; color: #668078; }
 .tdg-intelligence-search input { width: 100%; min-height: 43px; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
+.tdg-intelligence-search button { border: 0; background: transparent; color: #17624f; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.tdg-intelligence-search button:disabled { cursor: wait; opacity: .55; }
+.tdg-intelligence-run { color: #637970; }
+.tdg-intelligence-portfolio { border-top: 1px solid #dce7e2; padding-top: 12px; }
+.tdg-intelligence-portfolio summary { color: #17624f; cursor: pointer; font-weight: 800; margin-bottom: 10px; }
+.tdg-intelligence-source-list article > select { min-height: 36px; padding: 6px 8px; border: 1px solid #bad5ca; border-radius: 9px; background: #fff; color: #17624f; font: inherit; font-size: 12px; font-weight: 750; }
 .tdg-intelligence-contact-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .tdg-intelligence-contact-grid article { display: grid; gap: 11px; padding: 15px; border: 1px solid var(--tdg-line, #dce7e2); border-radius: 13px; background: #fff; }
 .tdg-intelligence-contact-grid article > header { display: flex; align-items: center; gap: 9px; }

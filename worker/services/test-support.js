@@ -57,7 +57,7 @@ export async function handleTestSupport(request, env, url) {
     `INSERT INTO todogreen_access_emails
        (id, tenant_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
      VALUES (?, ?, ?, ?, 'active', ?, 'concedido pelo suporte de teste E2E', ?, ?, ?)
-     ON CONFLICT(tenant_id, email) DO UPDATE SET
+     ON CONFLICT(tenant_id, workspace_owner_id, email) DO UPDATE SET
        role = excluded.role, status = 'active', permissions_json = excluded.permissions_json,
        updated_at = excluded.updated_at`,
   )

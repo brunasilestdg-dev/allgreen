@@ -54,6 +54,8 @@ import {
   TODO_GREEN_MODULE_AREAS,
   TODO_GREEN_MODULE_CATALOG,
   TODO_GREEN_PRODUCTION_DATA_POLICY,
+  TODO_GREEN_PERMISSION_CATALOG,
+  TODO_GREEN_PERMISSIONS,
   TODO_GREEN_ROLES,
   DEFAULT_PRICING_ASSUMPTIONS,
   TODO_GREEN_TENANT,
@@ -113,6 +115,7 @@ const DealDeskPage = lazy(() => import("./pages/DealDeskPage.jsx"));
 const DocumentVaultPage = lazy(() => import("./pages/DocumentVaultPage.jsx"));
 const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
 const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
+const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
 const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
 const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
@@ -313,6 +316,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/metas",
     area: "comercial",
     status: "functional",
+    permission: "goal:read",
     description: "Metas com medição, check-ins e planos de ação.",
   },
   "performance-comercial": {
@@ -321,6 +325,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/performance-comercial",
     area: "comercial",
     status: "functional",
+    permission: ["crm:manage", "clients:manage"],
     description: "Execução da carteira e atingimento de metas, sem misturar oportunidades, pipeline ou faturamento.",
   },
   "playbook-comercial": {
@@ -337,6 +342,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/clientes",
     area: "comercial",
     status: "functional",
+    permission: ["crm:manage", "clients:manage", "clients:read"],
     description: "Cadastro de cliente, segmento, decisor, maturidade ESG, dores logísticas e próximo passo comercial.",
   },
   oportunidades: {
@@ -345,6 +351,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/oportunidades",
     area: "comercial",
     status: "functional",
+    permission: "crm:manage",
     description: "Criação de oportunidades por produto logístico, estágio, valor estimado, probabilidade e prioridade.",
   },
   propostas: {
@@ -353,6 +360,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/propostas",
     area: "comercial",
     status: "functional",
+    permission: ["proposal:create", "proposal:manage", "deal:review", "deal:approve"],
     description: "Geração de proposta textual com preço, premissas, ROI ambiental, ressalvas e aprovações necessárias.",
   },
   precificacao: {
@@ -361,6 +369,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/precificacao",
     area: "comercial",
     status: "functional",
+    permission: ["pricing:simulate", "pricing:manage"],
     description: "Calculadoras por produto, margem, custo, target, gatilhos de aprovação e evidências obrigatórias.",
   },
   implantacao: {
@@ -369,6 +378,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/implantacao",
     area: "implantacao",
     status: "functional",
+    permission: ["clients:manage", "clients:read", "operations:manage", "planning:manage"],
     description: "Go-live do cliente: contrato, operação, SLA e portal.",
   },
   produtos: {
@@ -377,6 +387,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/produtos",
     area: "produtos",
     status: "functional",
+    permission: "product:manage",
     description: "Catálogo de first, middle e last mile com escopo, SLA, unidade de cobrança, premissas e restrições por produto.",
   },
   "catalogo-produtos": {
@@ -385,6 +396,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/produtos",
     area: "produtos",
     status: "functional",
+    permission: "product:manage",
     description: "Regras, indicadores, premissas e evidências de cada serviço contratado.",
   },
   "produtos-logisticos": {
@@ -393,6 +405,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/produtos",
     area: "produtos",
     status: "functional",
+    permission: "product:manage",
     description: "Serviços logísticos que Comercial vende, Produtos governa, Planejamento aceita e Operação executa.",
   },
   planejamento: {
@@ -401,6 +414,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/planejamento",
     area: "operacao",
     status: "functional",
+    permission: ["planning:manage", "operations:manage"],
     description: "Decide aceite de viagem ou OS com capacidade, produto, SLA, risco, margem e janela operacional.",
   },
   "aceite-viagens": {
@@ -409,6 +423,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/aceite-viagens",
     area: "operacao",
     status: "functional",
+    permission: ["planning:manage", "operations:manage"],
     description: "Simulador de aceite: custos obrigatórios, margem calculada e decisão registrada antes de virar OS.",
   },
   ciot: {
@@ -417,6 +432,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/ciot",
     area: "operacao",
     status: "functional",
+    permission: "ciot:manage",
     description: "Emissão de CIOT com piso mínimo e protocolo.",
   },
   ocorrencias: {
@@ -425,6 +441,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/ocorrencias",
     area: "operacao",
     status: "functional",
+    permission: ["operations:manage", "tms:manage", "evidence:manage"],
     description: "Atrasos, insucessos, reentregas e eventos críticos ligados à operação.",
   },
   comissoes: {
@@ -433,6 +450,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/comissoes",
     area: "financeiro",
     status: "functional",
+    permission: ["commission:manage", "finance:manage", "audit:read"],
     description: "Comissão por lançamento, com baixa e estorno pelo mesmo razão.",
   },
   rasci: {
@@ -465,6 +483,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/esg",
     area: "esg",
     status: "functional",
+    permission: ["esg:manage", "audit:read", "deal:review"],
     description: "CO2 evitado, diesel não consumido, equivalências, metodologia e textos comerciais auditáveis.",
   },
   regua: {
@@ -473,6 +492,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/parametros-simulador",
     area: "commercial",
     status: "functional",
+    permission: "pricing:manage",
     description: "Custo de veículo, motorista, energia e margem que a precificação usa — com versão e fonte.",
   },
   "central-esg": {
@@ -481,6 +501,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/central-esg",
     area: "esg",
     status: "functional",
+    permission: ["esg:manage", "audit:read", "deal:review"],
     description: "Calcula e grava o impacto com memória de cálculo, apura o Green Score com a régua em vigor e guarda a explicação de cada variação.",
   },
   solicitacoes: {
@@ -489,6 +510,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/solicitacoes",
     area: "implantacao",
     status: "functional",
+    permission: ["clients:manage", "crm:manage", "operations:manage"],
     description: "Entrada do cliente antes do aceite, com prazo, produto provável, responsável, conversa e histórico.",
   },
   operacoes: {
@@ -497,6 +519,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/operacoes",
     area: "operacao",
     status: "functional",
+    permission: ["operations:manage", "planning:manage", "tms:manage"],
     description: "Ficha operacional do frete com OS, execução, rota, entregas, documentos, fiscal, financeiro, SLA e histórico.",
   },
   "ordens-servico": {
@@ -505,6 +528,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/ordens-servico",
     area: "operacao",
     status: "functional",
+    permission: ["operations:manage", "planning:manage"],
     description: "Planejamento e Produtos liberam o frete; Operação executa; Financeiro só entra quando há elegibilidade de faturamento.",
   },
   rastreamento: {
@@ -513,6 +537,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/rastreamento",
     area: "operacao",
     status: "functional",
+    permission: ["tms:manage", "operations:manage"],
     description: "Configuração, teste e sincronização segura de posições e eventos da frota em modo somente leitura.",
   },
   cadastros: {
@@ -521,6 +546,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/cadastros",
     area: "cadastros",
     status: "functional",
+    permission: ["clients:manage", "crm:manage", "stock:manage", "purchase:manage", "finance:manage", "fleet:manage", "hr:manage", "operations:manage", "planning:manage"],
     description: "Clientes, motoristas, veículos, tabelas, rotas, materiais, depósitos, parceiros, centros de custo e plano de contas.",
   },
   estoque: {
@@ -529,6 +555,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/estoque",
     area: "suprimentos",
     status: "functional",
+    permission: "stock:manage",
     description: "Saldos, entradas, saídas, transferências e contagens.",
   },
   compras: {
@@ -537,6 +564,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/compras",
     area: "suprimentos",
     status: "functional",
+    permission: "purchase:manage",
     description: "Requisições, aprovações, pedidos e recebimentos.",
   },
   tesouraria: {
@@ -563,6 +591,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/receita",
     area: "financeiro",
     status: "functional",
+    permission: ["revenue:manage", "finance:manage", "audit:read"],
     description: "Entradas financeiras por cliente/produto, forecast, faturamento, recebimento e comissão prevista.",
   },
   faturamento: {
@@ -571,6 +600,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/faturamento",
     area: "financeiro",
     status: "functional",
+    permission: ["revenue:manage", "finance:manage", "fiscal:manage"],
     description: "Fila de OS concluída, conferência fiscal, CT-e/documento, fechamento, título a receber e rastreabilidade.",
   },
   titulos: {
@@ -579,6 +609,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/titulos",
     area: "financeiro",
     status: "functional",
+    permission: ["finance:manage", "revenue:manage", "cost:manage"],
     description: "Contas a pagar e receber com competência, vencimento, saldo, parcelas e liquidações rastreáveis.",
   },
   rateios: {
@@ -587,6 +618,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/rateios",
     area: "financeiro",
     status: "functional",
+    permission: ["finance:manage", "cost:manage"],
     description: "Distribuição integral do custo por OS, operação, cliente, contrato, veículo, fornecedor e centro de custo.",
   },
   custos: {
@@ -595,6 +627,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/custos",
     area: "financeiro",
     status: "functional",
+    permission: ["cost:manage", "finance:manage", "audit:read"],
     description: "Centro de custos operacional, custo por categoria, margem e comparação contra receita/simulações, sem decidir aceite.",
   },
   rh: {
@@ -603,6 +636,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/rh",
     area: "rh",
     status: "functional",
+    permission: "hr:manage",
     description: "Pessoas, motoristas, escalas, documentos, alocação, dados sensíveis e rotinas trabalhistas.",
   },
   "dp-rh": {
@@ -611,6 +645,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/dp",
     area: "dp",
     status: "functional",
+    permission: "hr:manage",
     description: "Administração de pessoal, documentação, alocação e rotinas trabalhistas separadas do Financeiro.",
   },
   motoristas: {
@@ -619,6 +654,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/motorista-frota",
     area: "operacao",
     status: "functional",
+    permission: ["fleet:manage", "operations:manage", "hr:manage"],
     description: "Motoristas vinculados às operações, rotas ativas, jornada, produtividade e ocorrências.",
   },
   "motorista-frota": {
@@ -627,6 +663,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/motorista-frota",
     area: "operacao",
     status: "functional",
+    permission: ["fleet:manage", "operations:manage", "hr:manage"],
     description: "Gestão operacional de frota, motoristas, telemetria disponível, custo, bateria, manutenção e alertas.",
   },
   escalas: {
@@ -635,23 +672,26 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/rh",
     area: "rh",
     status: "functional",
+    permission: ["hr:manage", "operations:manage", "planning:manage"],
     description: "Escalas e disponibilidade de motoristas e equipes por operação, janela e produto.",
   },
   marketing: {
-    title: "Marketing e marca",
-    navLabel: "Marketing",
+    title: "Inteligência de mercado",
+    navLabel: "Mercado",
     route: "/todogreen/marketing",
     area: "marketing",
     status: "functional",
-    description: "Campanhas, materiais, narrativa comercial, relacionamento e comunicação dos diferenciais elétricos e ESG.",
+    permission: "market:read",
+    description: "Pesquisa de notícias, RFQs e possíveis decisores no mercado inteiro, com fonte e classificação.",
   },
   campanhas: {
-    title: "Campanhas",
-    navLabel: "Campanhas",
+    title: "Sinais e oportunidades de mercado",
+    navLabel: "Sinais de mercado",
     route: "/todogreen/marketing",
     area: "marketing",
     status: "functional",
-    description: "Campanhas por segmento, produto, cliente, objetivo comercial e prova ESG disponível.",
+    permission: "market:read",
+    description: "Triagem de sinais externos para virar oportunidade comercial, inclusive fora da carteira atual.",
   },
   relatorios: {
     title: "Relatórios executivos",
@@ -721,6 +761,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/qualidade",
     area: "qualidade",
     status: "functional",
+    permission: ["audit:read", "operations:manage", "evidence:manage"],
     description: "SLA, BSC, auditoria de execução, não conformidades, planos de ação e melhoria contínua.",
   },
   "comunicacao-interna": {
@@ -737,6 +778,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/juridico",
     area: "juridico",
     status: "functional",
+    permission: ["proposal:manage", "deal:review", "deal:approve", "audit:read"],
     description: "Contratos, minutas, riscos jurídicos, aprovações e documentos formais vinculados à operação.",
   },
   indicadores: {
@@ -753,6 +795,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/administracao",
     area: "administracao",
     status: "functional",
+    permission: ["access:manage", "integration:manage", "audit:read"],
     description: "Acessos, permissões, auditoria, integrações, configurações e governança da vertical.",
   },
   planner: {
@@ -819,6 +862,46 @@ const MANAGEMENT_TOOLS = Object.freeze([
 
 const navigationFor = (page) => {
   return PRIMARY_NAVIGATION.find((item) => item.pages.includes(page)) || PRIMARY_NAVIGATION[0];
+};
+
+// A permissão de uma tela sai do MESMO config que o menu usa para escondê-la.
+// Sem isto, esconder o botão não protege a tela: quem digita a URL, volta no
+// histórico ou atualiza a página passa direto pela filtragem do menu e o
+// conteúdo restrito renderiza assim mesmo. A regra de quem entra é do papel,
+// não da presença do botão.
+export const permissaoDaPagina = (page) => {
+  const ferramenta = MANAGEMENT_TOOLS.find((item) => item.id === page);
+  if (ferramenta) return ferramenta.permission || "";
+  return MODULE_IMPLEMENTATION[page]?.permission || "";
+};
+
+// Uma tela pode servir a mais de uma área. Neste catálogo, lista significa
+// alternativas (qualquer uma libera), e não a exigência cumulativa usada em
+// operações críticas do domínio.
+const podeAcessarFuncionalidade = (role, permissions, required) => {
+  if (!required || (Array.isArray(required) && required.length === 0)) return true;
+  const alternatives = Array.isArray(required) ? required : [required];
+  return alternatives.some((permission) => hasTodoGreenPermission(role, permission, permissions));
+};
+
+// A trilha (breadcrumb) vem do mesmo config do menu: a área da navegação
+// primária, a tela do módulo (ou da ferramenta de administração). Menu e trilha
+// lendo a mesma fonte nunca discordam sobre onde a pessoa está.
+export const trilhaDaPagina = (page) => {
+  const area = navigationFor(page);
+  const modulo = MODULE_IMPLEMENTATION[page];
+  const ferramenta = MANAGEMENT_TOOLS.find((item) => item.id === page);
+  const trilha = [{ label: "To Do Green", route: "/todogreen/dashboard" }];
+  if (area && area.id !== "principal" && area.route)
+    trilha.push({ label: area.label, route: area.route });
+  const atual = modulo
+    ? { label: modulo.navLabel, route: modulo.route }
+    : ferramenta
+      ? { label: ferramenta.label, route: ferramenta.route }
+      : null;
+  if (atual && atual.route !== trilha[trilha.length - 1].route)
+    trilha.push(atual);
+  return trilha;
 };
 
 // O nome que a aba já usa para cada tela. É ele que dá nome ao cartão: se a
@@ -1087,6 +1170,17 @@ const sectionFromPath = (path) => {
     .split("?")[0]
     .split("/")[0];
   return slug || "dashboard";
+};
+
+// O produto da precificação vem da ROTA (/todogreen/precificacao/<produto>),
+// não de estado só do React. Assim voltar, avançar, atualizar a página e
+// compartilhar o link levam ao mesmo produto — era isto que o módulo
+// imperativo (removido) fingia fazer com clique sintético no card.
+export const produtoDaRota = (path) => {
+  const partes = String(path || "").replace(/^\/todogreen\/?/, "").split("?")[0].split("/");
+  if (partes[0] !== "precificacao") return "";
+  const id = partes[1] || "";
+  return LOGISTICS_PRODUCTS.some((item) => item.id === id) ? id : "";
 };
 
 const TODO_GREEN_PAGE_ALIASES = Object.freeze({
@@ -1671,7 +1765,12 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
       ? ""
       : new URLSearchParams(window.location.search).get("opportunity") || "";
   const sourceOpportunity = opportunities.find((item) => item.id === opportunityId) || null;
-  const initialProductId = sourceOpportunity?.productId || "middle-mile";
+  // O produto sai da rota primeiro; a oportunidade e o padrão só entram quando
+  // a rota não traz produto. O painel é remontado ao trocar de produto (ver o
+  // `key` no render), então ler a rota no início basta.
+  const rotaProduto =
+    typeof window === "undefined" ? "" : produtoDaRota(window.location.pathname);
+  const initialProductId = rotaProduto || sourceOpportunity?.productId || "middle-mile";
   const [productId, setProductId] = useState(initialProductId);
   const [inputs, setInputs] = useState(() =>
     sourceOpportunity
@@ -1753,10 +1852,11 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
   const decision = pricingDecisionSummary(result);
   const hasEnvironmentalInputs = Number(inputs.distanceKm || inputs.kmPerRoute || 0) > 0;
   const selectProduct = (nextProductId) => {
-    setProductId(nextProductId);
-    setInputs(productDefaults[nextProductId] || { client: "", distanceKm: "", frequencyPerMonth: "", customerTargetPrice: 0, dataQuality: "" });
-    setCustosManuais({});
-    setPremissasConfirmadas(false);
+    // Navega em vez de só trocar estado: a URL passa a refletir o produto, e o
+    // painel remonta (pelo `key`) já com as premissas do produto novo — o
+    // mesmo reset que este método fazia à mão, agora dirigido pela rota.
+    const busca = typeof window === "undefined" ? "" : window.location.search;
+    navigate(`/todogreen/precificacao/${nextProductId}${busca}`);
   };
   const changeInput = (key, value) => {
     setInputs((current) => ({ ...current, [key]: value }));
@@ -2238,13 +2338,13 @@ function MethodologyPanel() {
   );
 }
 
-function AccessPanel({ role, authHeaders, setToast }) {
+function AccessPanel({ role, permissions, authHeaders, setToast }) {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadedAt, setLoadedAt] = useState(0);
-  const [form, setForm] = useState({ email: "", role: "admin", note: "", expiresAt: "" });
-  const canManage = role === "admin" || role === "owner";
+  const [form, setForm] = useState({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
+  const canManage = hasTodoGreenPermission(role, "access:manage", permissions);
   const load = useCallback(() => {
     const headers = authHeaders?.() || {};
     if (!headers.authorization || !canManage) return;
@@ -2267,13 +2367,16 @@ function AccessPanel({ role, authHeaders, setToast }) {
     setSaving(true);
     try {
       const body = {
-        ...form,
+        email: form.email,
+        role: form.role,
+        note: form.note,
+        ...(form.customPermissions ? { permissions: form.permissions } : {}),
         expiresAt: form.expiresAt ? new Date(`${form.expiresAt}T23:59:59.999Z`).toISOString() : "",
       };
       const response = await fetch(`/api/todogreen/access-list?owner=${encodeURIComponent(ownerId())}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível salvar o acesso.");
-      setForm({ email: "", role: "admin", note: "", expiresAt: "" });
+      setForm({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
       setToast?.("E-mail autorizado na To Do Green");
       load();
     } catch (error) {
@@ -2282,6 +2385,16 @@ function AccessPanel({ role, authHeaders, setToast }) {
       setSaving(false);
     }
   };
+  const alternarPermissao = (permission) => setForm((current) => ({
+    ...current,
+    permissions: current.permissions.includes(permission)
+      ? current.permissions.filter((item) => item !== permission)
+      : [...current.permissions, permission],
+  }));
+  const selecionarPerfilAtual = () => setForm((current) => ({
+    ...current,
+    permissions: (TODO_GREEN_PERMISSIONS[current.role] || []).filter((item) => item !== "*"),
+  }));
   const remove = async (email) => {
     const headers = authHeaders?.() || {};
     if (!headers.authorization || !canManage) return;
@@ -2298,9 +2411,18 @@ function AccessPanel({ role, authHeaders, setToast }) {
   };
   if (!canManage) return <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Você tem acesso, mas não pode gerenciar usuários.</h2></div><strong>{role || "sem papel"}</strong></div></section>;
   return (
-    <section className="tdg-panel tdg-access-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Autorize usuários para acessar a To Do Green.</h2></div><strong>{loading ? "carregando" : `${emails.length} e-mail(s)`}</strong></div>
-      <form className="tdg-access-form" onSubmit={save}><label><span>E-mail autorizado</span><input value={form.email} type="email" required placeholder="nome@empresa.com.br" onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Papel</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{TODO_GREEN_ROLES.filter((item) => item !== "owner").map((item) => <option value={item} key={item}>{item.replace(/_/g, " ")}</option>)}</select></label><label><span>Validade</span><input type="date" value={form.expiresAt} onChange={(event) => setForm((current) => ({ ...current, expiresAt: event.target.value }))} /><small>Vazio mantém o acesso sem expiração.</small></label><label><span>Observação</span><input value={form.note} placeholder="Ex.: implantação, auditor externo" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label><button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : "Autorizar"}</button></form>
-      <div className="tdg-access-list">{emails.length === 0 && <div className="tdg-empty-access"><ShieldCheck size={18} />Nenhum e-mail autorizado ainda.</div>}{emails.map((item) => { const expired = item.expiresAt && loadedAt > 0 && Date.parse(item.expiresAt) <= loadedAt; const active = item.status === "active" && !item.revokedAt && !expired; return <div className="tdg-access-row" key={item.email}><span><strong>{item.email}</strong><small>{item.note || "sem observação"}{item.lastAccessAt ? ` · último acesso ${new Date(item.lastAccessAt).toLocaleString("pt-BR")}` : ""}</small></span><span>{item.role.replace(/_/g, " ")}</span><span className={active ? "good" : ""}>{active ? item.expiresAt ? `ativo até ${new Date(item.expiresAt).toLocaleDateString("pt-BR")}` : "ativo" : item.revokedAt ? "revogado" : expired ? "expirado" : "inativo"}</span>{active && <button type="button" onClick={() => remove(item.email)} aria-label={`Revogar ${item.email}`}><Trash2 size={17} /></button>}</div>; })}</div>
+    <section className="tdg-panel tdg-access-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Autorize usuários por perfil pronto ou selecione cada funcionalidade.</h2></div><strong>{loading ? "carregando" : `${emails.length} e-mail(s)`}</strong></div>
+      <form className="tdg-access-form" onSubmit={save}>
+        <label><span>E-mail autorizado</span><input value={form.email} type="email" required placeholder="nome@empresa.com.br" onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
+        <label><span>Perfil base</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{TODO_GREEN_ROLES.filter((item) => item !== "owner").map((item) => <option value={item} key={item}>{item.replace(/_/g, " ")}</option>)}</select></label>
+        <label><span>Tipo de acesso</span><select value={form.customPermissions ? "custom" : "profile"} onChange={(event) => setForm((current) => ({ ...current, customPermissions: event.target.value === "custom", permissions: event.target.value === "custom" ? (TODO_GREEN_PERMISSIONS[current.role] || []).filter((item) => item !== "*") : [] }))}><option value="profile">Perfil pronto</option><option value="custom">Funcionalidades selecionadas</option></select></label>
+        <label><span>Validade</span><input type="date" value={form.expiresAt} onChange={(event) => setForm((current) => ({ ...current, expiresAt: event.target.value }))} /><small>Vazio mantém o acesso sem expiração.</small></label>
+        <label><span>Observação</span><input value={form.note} placeholder="Ex.: implantação, auditor externo" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label>
+        {form.customPermissions && <div className="tdg-permission-editor"><div className="tdg-permission-editor-head"><strong>Funcionalidades liberadas</strong><button type="button" onClick={selecionarPerfilAtual}>Restaurar perfil base</button></div>{TODO_GREEN_PERMISSION_CATALOG.map((group) => <fieldset key={group.group}><legend>{group.group}</legend>{group.items.map(([permission, label]) => <label className="tdg-check-field" key={permission}><input type="checkbox" checked={form.permissions.includes(permission)} onChange={() => alternarPermissao(permission)} /><span>{label}</span></label>)}</fieldset>)}</div>}
+        <button className="tdg-action" type="submit" disabled={saving || (form.customPermissions && !form.permissions.includes("read"))}><Plus size={17} />{saving ? "Salvando..." : "Autorizar"}</button>
+      </form>
+      {form.customPermissions && !form.permissions.includes("read") && <div className="tdg-alert"><AlertTriangle size={17} />Selecione “Acessar a vertical” para liberar a entrada.</div>}
+      <div className="tdg-access-list">{emails.length === 0 && <div className="tdg-empty-access"><ShieldCheck size={18} />Nenhum e-mail autorizado ainda.</div>}{emails.map((item) => { const expired = item.expiresAt && loadedAt > 0 && Date.parse(item.expiresAt) <= loadedAt; const active = item.status === "active" && !item.revokedAt && !expired; const defaults = TODO_GREEN_PERMISSIONS[item.role] || []; const customized = !defaults.includes("*") && JSON.stringify([...(item.permissions || [])].sort()) !== JSON.stringify([...defaults].sort()); return <div className="tdg-access-row" key={item.email}><span><strong>{item.email}</strong><small>{item.note || "sem observação"}{item.lastAccessAt ? ` · último acesso ${new Date(item.lastAccessAt).toLocaleString("pt-BR")}` : ""}</small></span><span>{item.role.replace(/_/g, " ")}<small>{customized ? `${item.permissions?.length || 0} funcionalidades` : "perfil pronto"}</small></span><span className={active ? "good" : ""}>{active ? item.expiresAt ? `ativo até ${new Date(item.expiresAt).toLocaleDateString("pt-BR")}` : "ativo" : item.revokedAt ? "revogado" : expired ? "expirado" : "inativo"}</span>{active && <button type="button" onClick={() => remove(item.email)} aria-label={`Revogar ${item.email}`}><Trash2 size={17} /></button>}</div>; })}</div>
     </section>
   );
 }
@@ -2308,7 +2430,15 @@ function AccessPanel({ role, authHeaders, setToast }) {
 export default function LogisticsVertical({ db, update, setToast, access = {}, authHeaders }) {
   const [path, setPath] = useState(todoGreenPath());
   const [query, setQuery] = useState("");
-  const [navigationMode, setNavigationMode] = useState("area");
+  // O modo de navegação (por área × por funcionalidade) é preferência de quem
+  // usa: persiste igual ao menu oculto, para não voltar a "área" a cada refresh.
+  const [navigationMode, setNavigationMode] = useState(() => {
+    try { return localStorage.getItem("todogreen-nav-modo") === "function" ? "function" : "area"; } catch { return "area"; }
+  });
+  const escolherModo = useCallback((modo) => {
+    setNavigationMode(modo);
+    try { localStorage.setItem("todogreen-nav-modo", modo); } catch { /* ignora */ }
+  }, []);
   const [navigationQuery, setNavigationQuery] = useState("");
   // Esconder o menu lateral (persistido) — dá tela cheia ao conteúdo quando preciso.
   const [menuOculto, setMenuOculto] = useState(() => {
@@ -2371,6 +2501,12 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     ? MANAGEMENT_TOOLS[0]
     : MANAGEMENT_TOOLS.find((item) => item.id === page) || null;
   const currentPage = activeManagement || MODULE_IMPLEMENTATION[page] || MODULE_IMPLEMENTATION.dashboard;
+  const trilha = trilhaDaPagina(page);
+  // A permissão da tela é conferida AQUI, na rota, e não só no menu: o menu
+  // esconde o botão, mas voltar no histórico, atualizar ou digitar a URL
+  // chegam à tela sem passar por ele. A fonte é a mesma que o menu usa.
+  const permissaoNecessaria = activeManagement ? activeManagement.permission : permissaoDaPagina(page);
+  const podeVerPagina = podeAcessarFuncionalidade(role, remoteAccess.permissions, permissaoNecessaria);
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
     document.title = `${currentPage.title} | To Do Green`;
@@ -2443,7 +2579,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         .filter((grupo) => {
           const paginaDoGrupo = todoGreenRouteToPage(grupo.rota);
           const modulo = MODULE_IMPLEMENTATION[paginaDoGrupo];
-          return !modulo?.permission || hasTodoGreenPermission(role, modulo.permission);
+          return podeAcessarFuncionalidade(role, remoteAccess.permissions, modulo?.permission);
         })
         .filter((grupo) => grupoAtendeBusca(grupo, navigationQuery)),
       navigationQuery,
@@ -2464,7 +2600,21 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
       <header className="tdg-shell-header">
         <div className="tdg-shell-location">
-          <span>TO DO GREEN · {activeManagement ? "ADMINISTRAÇÃO" : primaryNavigation.label.toUpperCase()}</span>
+          <nav className="tdg-breadcrumb" aria-label="Trilha de navegação">
+            {trilha.map((passo, indice) => {
+              const ultimo = indice === trilha.length - 1;
+              return (
+                <span className="tdg-breadcrumb-item" key={passo.route}>
+                  {ultimo ? (
+                    <span aria-current="page">{passo.label}</span>
+                  ) : (
+                    <button type="button" onClick={() => navigate(passo.route)}>{passo.label}</button>
+                  )}
+                  {!ultimo && <span className="tdg-breadcrumb-sep" aria-hidden="true">›</span>}
+                </span>
+              );
+            })}
+          </nav>
           <h1 id="tdg-title">{currentPage.title}</h1>
           <p title={currentPage.description}>{currentPage.description}</p>
         </div>
@@ -2476,7 +2626,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <summary>Configurações</summary>
             <div data-tdg-management-tools="true">
               {MANAGEMENT_TOOLS
-                .filter((item) => !item.permission || hasTodoGreenPermission(role, item.permission))
+                .filter((item) => podeAcessarFuncionalidade(role, remoteAccess.permissions, item.permission))
                 .map((item) => (
                   <button
                     type="button"
@@ -2515,8 +2665,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <small>Boards, Kanban, Gantt e Workload</small>
           </button>
           <div className="tdg-nav-switch" role="tablist" aria-label="Modo de navegação">
-            <button type="button" className={navigationMode === "area" ? "active" : ""} onClick={() => setNavigationMode("area")}>Por área</button>
-            <button type="button" className={navigationMode === "function" ? "active" : ""} onClick={() => setNavigationMode("function")}>Funcionalidades</button>
+            <button type="button" className={navigationMode === "area" ? "active" : ""} onClick={() => escolherModo("area")}>Por área</button>
+            <button type="button" className={navigationMode === "function" ? "active" : ""} onClick={() => escolherModo("function")}>Funcionalidades</button>
           </div>
           {navigationMode === "area" ? (
             <nav className="tdg-tabs" aria-label="Navegação To Do Green">
@@ -2562,7 +2712,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <nav className="tdg-subtabs" aria-label={`Seções de ${primaryNavigation.label}`}>
               {primaryNavigation.pages
                 .map((id) => [id, MODULE_IMPLEMENTATION[id]])
-                .filter(([, item]) => item && (!item.permission || hasTodoGreenPermission(role, item.permission)))
+                .filter(([, item]) => item && podeAcessarFuncionalidade(role, remoteAccess.permissions, item.permission))
                 .map(([id, item]) => (
                   <button type="button" className={page === id ? "active" : ""} onClick={() => navigate(item.route)} key={id}>
                     {item.navLabel}
@@ -2579,17 +2729,28 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </div>
       )}
 
+      {!podeVerPagina && (
+        <section className="tdg-panel tdg-sem-permissao" role="alert">
+          <LockKeyhole size={20} />
+          <div>
+            <strong>Esta tela é restrita ao seu perfil.</strong>
+            <p>Seu acesso não inclui {currentPage.title}. Fale com quem administra os acessos da vertical se precisar entrar aqui.</p>
+            <button type="button" className="tdg-action" onClick={() => navigate("/todogreen/dashboard")}>Voltar ao painel</button>
+          </div>
+        </section>
+      )}
+      {podeVerPagina && (<>
       {page === "dashboard" && <ErpHome role={role} user={db?.user || {}} data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} products={LOGISTICS_PRODUCTS} preferences={db?.preferences?.todoGreenHome} onSave={saveHomePreferences} onNavigate={navigate} />}
       {["espaco", "central-trabalho"].includes(page) && (
         <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
-          <TodoGreenWorkspace db={db} update={update} verticalData={verticalData} setToast={setToast} onNavigate={navigate} />
+          <TodoGreenWorkspace db={db} update={update} verticalData={verticalData} setToast={setToast} onNavigate={navigate} authHeaders={authHeaders} />
         </Suspense>
       )}
       {page === "dashboards" && <Suspense fallback={<section className="tdg-panel">Carregando seus painéis...</section>}><DashboardBuilderPage authHeaders={authHeaders} summary={dashboard} data={registros} setToast={setToast} /></Suspense>}
       {page === "metas" && <Suspense fallback={<section className="tdg-panel">Carregando metas...</section>}><GoalsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "performance-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando performance comercial...</section>}><SalesPerformancePage authHeaders={authHeaders} onNavigate={navigate} /></Suspense>}
       {page === "playbook-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando playbook comercial...</section>}><TodoGreenGuides mode="playbook" onNavigate={navigate} /></Suspense>}
-      {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} setToast={setToast} /></Suspense>}
       {page === "implantacao" && (
         <Suspense fallback={<section className="tdg-panel">Carregando implantação...</section>}>
@@ -2600,10 +2761,10 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "tesouraria" && <Suspense fallback={<section className="tdg-panel">Carregando a tesouraria...</section>}><TreasuryPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
+      {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} financial={registros.financial} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
-      {page === "precificacao" && <PricingPanel key={new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
+      {page === "precificacao" && <PricingPanel key={`${produtoDaRota(path) || "nova"}:${new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"}`} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
       {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}
       {page === "regua" && (
         <Suspense fallback={<section className="tdg-panel">Carregando parâmetros do simulador...</section>}>
@@ -2640,7 +2801,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><PeoplePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "planner" && <Suspense fallback={<section className="tdg-panel">Carregando o Planner...</section>}><PlannerPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} role={role} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><EnterpriseAreaPage area="quality" onNavigate={navigate} /></Suspense>}
-      {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando marketing...</section>}><EnterpriseAreaPage area="marketing" onNavigate={navigate} /></Suspense>}
+      {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando inteligência de mercado...</section>}><TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={navigate} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><EnterpriseAreaPage area="legal" onNavigate={navigate} /></Suspense>}
       {page === "indicadores" && <Suspense fallback={<section className="tdg-panel">Carregando indicadores...</section>}><EnterpriseAreaPage area="indicators" onNavigate={navigate} /></Suspense>}
       {page === "administracao" && <Suspense fallback={<section className="tdg-panel">Carregando administração...</section>}><EnterpriseAreaPage area="admin" onNavigate={navigate} /></Suspense>}
@@ -2661,7 +2822,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </Suspense>
       )}
       {page === "auditoria" && <Suspense fallback={<section className="tdg-panel">Carregando auditoria...</section>}><GovernancePage role={role} permissions={remoteAccess.permissions || []} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "acessos" && <AccessPanel role={role} authHeaders={authHeaders} setToast={setToast} />}
+      {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
       {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 
@@ -2682,6 +2843,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           </div>
         </details>
       )}
+      </>)}
           </div>
         </section>
       </div>

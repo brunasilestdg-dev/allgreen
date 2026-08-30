@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Clock, Inbox, Lock, Send } from "lucide-react";
+import { AlertTriangle, Clock, Inbox, ListPlus, Lock, Send } from "lucide-react";
 import {
   STATUS_SOLICITACAO,
   TIPOS_SOLICITACAO,
@@ -38,7 +38,7 @@ const prazoEmPalavras = (prazo) => {
   return prazo.emAtraso ? `atrasada há ${texto}` : `vence em ${texto}`;
 };
 
-export default function ClientRequestsPage({ authHeaders, setToast }) {
+export default function ClientRequestsPage({ authHeaders, setToast, onCreateTask, currentUserId }) {
   const [dados, setDados] = useState(null);
   const [abertaId, setAbertaId] = useState("");
   const [mensagens, setMensagens] = useState([]);
@@ -118,6 +118,39 @@ export default function ClientRequestsPage({ authHeaders, setToast }) {
       await carregar(abertaId === id ? id : "");
     } catch (razao) {
       setErro(razao.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  // Ligar o portal ao trabalho interno: a solicitação vira uma tarefa na
+  // central, já vinculada ao cliente, sem redigitar. O atendimento no portal
+  // continua sendo a fonte do status para o cliente; a tarefa é o braço interno.
+  const [tarefasCriadas, setTarefasCriadas] = useState({});
+  const virarTarefa = async (s) => {
+    if (!onCreateTask) { setToast?.("Não foi possível criar a tarefa: central de trabalho indisponível."); return; }
+    setEnviando(true);
+    try {
+      await onCreateTask({
+        id: crypto.randomUUID(),
+        title: `Solicitação do cliente · ${s.assunto}`,
+        description: `${s.clienteNome} · ${rotuloTipo(s.tipo)}\n\n${s.descricao || ""}`.trim(),
+        priority: s.prazo?.emAtraso ? "Alta" : "Média",
+        status: "A fazer", due: "", area: "Atendimento",
+        assigneeType: "real", assignee: "", assigneeId: currentUserId || "", project: "",
+        isMission: false, distribution: "atribuida", difficulty: "Simples", slots: "1",
+        points: "", reward: "", approvalMode: "imediata", allowWithdrawal: true,
+        assignees: [], interested: [], missionStatus: "", deliveries: [], attachments: [],
+        visibility: "privado", sharedWith: [], sharedTeams: [], subtasks: [], dependsOn: [],
+        recurrence: { frequency: "none" }, ownerId: currentUserId || null,
+        clientId: s.clienteId || "", clientName: s.clienteNome || "",
+        source: "todogreen-solicitacao", requestId: s.id, businessId: "todogreen",
+        createdAt: new Date().toISOString(),
+      });
+      setTarefasCriadas((atual) => ({ ...atual, [s.id]: true }));
+      setToast?.("Tarefa criada na central e vinculada ao cliente.");
+    } catch (razao) {
+      setToast?.(razao.message);
     } finally {
       setEnviando(false);
     }
@@ -303,6 +336,17 @@ export default function ClientRequestsPage({ authHeaders, setToast }) {
                           onClick={() => acao(s.id, { assumir: true }, "Solicitação assumida.")}
                         >
                           Assumir
+                        </button>
+                      )}
+                      {onCreateTask && (
+                        <button
+                          type="button"
+                          className="tdg-action"
+                          disabled={enviando || tarefasCriadas[s.id]}
+                          onClick={() => virarTarefa(s)}
+                        >
+                          <ListPlus size={15} />
+                          {tarefasCriadas[s.id] ? "Tarefa criada" : "Transformar em tarefa"}
                         </button>
                       )}
                       <button

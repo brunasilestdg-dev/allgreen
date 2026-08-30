@@ -29,7 +29,7 @@ async function autorizar(usuario, papel, permissoes) {
   await env.DB.prepare(
     `INSERT INTO todogreen_access_emails (id, tenant_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
      VALUES (?, 'todogreen', ?, ?, 'active', ?, '', ?, ?, ?)
-     ON CONFLICT(tenant_id, email) DO UPDATE SET role = excluded.role, permissions_json = excluded.permissions_json, status = 'active'`,
+     ON CONFLICT(tenant_id, workspace_owner_id, email) DO UPDATE SET role = excluded.role, permissions_json = excluded.permissions_json, status = 'active'`,
   ).bind(crypto.randomUUID(), usuario.email, papel, JSON.stringify(permissoes), usuario.id, agora, agora).run();
 }
 const pedir = (caminho, { metodo = "GET", token, corpo } = {}) => {

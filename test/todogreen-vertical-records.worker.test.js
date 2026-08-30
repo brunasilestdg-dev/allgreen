@@ -32,16 +32,16 @@ async function criarUsuario(id, email) {
   return { id, email, token };
 }
 
-async function autorizar(usuario, papel = "admin", permissoes = ["*"]) {
+async function autorizar(usuario, papel = "admin", permissoes = ["*"], workspaceOwnerId = usuario.id) {
   const agora = new Date().toISOString();
   await env.DB.prepare(
     `INSERT INTO todogreen_access_emails
-       (id, tenant_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
-     VALUES (?, 'todogreen', ?, ?, 'active', ?, '', ?, ?, ?)
-     ON CONFLICT(tenant_id, email) DO UPDATE SET role = excluded.role,
+       (id, tenant_id, workspace_owner_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
+     VALUES (?, 'todogreen', ?, ?, ?, 'active', ?, '', ?, ?, ?)
+     ON CONFLICT(tenant_id, workspace_owner_id, email) DO UPDATE SET role = excluded.role,
        permissions_json = excluded.permissions_json, status = 'active'`,
   )
-    .bind(crypto.randomUUID(), usuario.email, papel, JSON.stringify(permissoes), usuario.id, agora, agora)
+    .bind(crypto.randomUUID(), workspaceOwnerId, usuario.email, papel, JSON.stringify(permissoes), usuario.id, agora, agora)
     .run();
 }
 
@@ -98,7 +98,7 @@ beforeAll(async () => {
   await autorizar(gestora);
   await autorizar(colega);
   // Papel que enxerga tudo e não altera nada.
-  await autorizar(auditor, "auditor", ["read"]);
+  await autorizar(auditor, "auditor", ["read", "audit:read"]);
 });
 
 describe("oportunidades saem do JSON do espaço", () => {
@@ -766,5 +766,26 @@ describe("a concessão real deriva a permissão do papel, não fixa ['read']", (
       corpo: { cliente: "Não deveria conseguir" },
     });
     expect(tentativa.status).toBe(403);
+  });
+});
+
+describe("leitura por funcionalidade", () => {
+  it("quem só pesquisa mercado não recebe financeiro nem contas bancárias na carga geral", async () => {
+    const pesquisa = await criarUsuario(`rec-market-${n}`, `rec-market-${n}@example.com`);
+    await autorizar(pesquisa, "marketing", ["read", "market:read", "market:research"], gestora.id);
+
+    const financeiro = await pedir("/api/todogreen/records/financial", { token: pesquisa.token });
+    expect(financeiro.status).toBe(403);
+
+    const contas = await pedir("/api/todogreen/records/bankAccounts", { token: pesquisa.token });
+    expect(contas.status).toBe(403);
+
+    const geral = await pedir("/api/todogreen/records?includeTotals=1", { token: pesquisa.token });
+    expect(geral.status).toBe(200);
+    const payload = await geral.json();
+    expect(payload.financial).toEqual([]);
+    expect(payload.bankAccounts).toEqual([]);
+    expect(payload.totals.financial).toBe(0);
+    expect(payload.totals.bankAccounts).toBe(0);
   });
 });

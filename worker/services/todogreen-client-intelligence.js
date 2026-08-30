@@ -1,5 +1,6 @@
 import { podeNaVertical, recorteDeCarteira, TENANT_ID } from "./todogreen-access.js";
 import { searchWeb, webSearchConfiguration } from "./web-search.js";
+import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { normalizedPhone } from "../../src/features/logistics/crmContactNormalizationDomain.js";
 
 const clean = (value, max = 1000) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -814,6 +815,9 @@ export async function handleTodoGreenClientIntelligence(request, env, access, us
       WHERE c.id=? AND c.tenant_id=? AND c.workspace_owner_id=? AND c.archived_at IS NULL ${scope.sql}`,
   ).bind(clientId, TENANT_ID, access.ownerId, ...scope.params).first();
   if (!row) return response({ error: "Cliente não encontrado na sua carteira." }, 404);
+  // A busca configurada por ESTE espaço (SearXNG próprio, chaves de reserva)
+  // decide o `configured` que a tela mostra e o gate do fluxo.
+  const envBusca = await envComChavesDeBuscaDoEspaco(env, access.ownerId);
   const fields = parse(row.fields_json, {});
   const cached = fields.intelligence && typeof fields.intelligence === "object" && Number(fields.intelligence.version || 0) >= COMPANY_RESEARCH_VERSION ? fields.intelligence : null;
   const watch = await env.DB.prepare(
@@ -853,7 +857,7 @@ export async function handleTodoGreenClientIntelligence(request, env, access, us
   if (request.method === "GET")
     return response({
       intelligence: cached,
-      configured: webSearchConfiguration(env).configured,
+      configured: webSearchConfiguration(envBusca).configured,
       watch: watch ? {
         enabled: Boolean(watch.enabled), frequencyHours: watch.frequency_hours, focus: watch.focus,
         nextRunAt: watch.next_run_at, lastRunAt: watch.last_run_at, status: watch.last_status,
@@ -913,6 +917,10 @@ export async function runTodoGreenIntelligenceWatches(env, now = new Date()) {
 
 /** Pesquisa compartilhada pelos botões do CRM e pelas ações confirmadas da Semente. */
 export async function pesquisarEmpresa(env, { linha, ownerId, userId, forcar = false, focus = "company" }) {
+  // A busca sai pelo SearXNG (ou pelas chaves) que ESTE espaço cadastrou. Sem
+  // esta sobreposição a pesquisa só enxergaria o que está no cofre do Worker, e
+  // a instância que a titular ligou na tela não teria efeito.
+  const envBusca = await envComChavesDeBuscaDoEspaco(env, ownerId);
   const fields = parse(linha.fields_json, {});
   const cached = fields.intelligence && typeof fields.intelligence === "object" && Number(fields.intelligence.version || 0) >= COMPANY_RESEARCH_VERSION ? fields.intelligence : null;
   const idadeDoCache = cached?.checkedAt ? Date.now() - Date.parse(cached.checkedAt) : Infinity;
@@ -926,7 +934,7 @@ export async function pesquisarEmpresa(env, { linha, ownerId, userId, forcar = f
   const knownContacts = Array.isArray(fields.contacts) ? fields.contacts : [];
   const plans = buildCompanyResearchPlans({ company, segment, year, focus, knownContacts });
   const [planResults, publicRegistry] = await Promise.all([
-    Promise.all(plans.map(async (plan) => ({ ...plan, ...(await searchWeb(env, plan.query)) }))),
+    Promise.all(plans.map(async (plan) => ({ ...plan, ...(await searchWeb(envBusca, plan.query)) }))),
     lookupPublicCompanyRegistry(linha.document),
   ]);
   const settled = planResults.flatMap((item) => item.kinds.map((kind) => ({

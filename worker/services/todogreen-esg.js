@@ -70,14 +70,14 @@ const podeLerEsg = (access) => !!access;
 // O conjunto de pesos em vigor. Se ninguém cadastrou nenhum, usa o padrão do
 // código — mas devolve a versão dele, para o score gravado saber com que régua
 // nasceu mesmo nesse caso.
-async function pesosEmVigor(env) {
+async function pesosEmVigor(env, access) {
   const linha = await env.DB.prepare(
     `SELECT version, weights_json, methodology, responsible
        FROM todogreen_score_weights
-      WHERE tenant_id = ? AND status = 'active'
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND status = 'active'
       ORDER BY effective_from DESC LIMIT 1`,
   )
-    .bind(TENANT_ID)
+    .bind(TENANT_ID, access.ownerId)
     .first()
     .catch(() => null);
   if (!linha) return PESOS_PADRAO;
@@ -117,7 +117,7 @@ export async function handleTodoGreenEsg(request, env) {
   if (request.method === "GET" && recurso === "fatores") {
     if (!podeLerEsg(access))
       return response({ error: "Sem permissão para ver os fatores." }, 403);
-    const pesos = await pesosEmVigor(env);
+    const pesos = await pesosEmVigor(env, access);
     return response({
       fatores: FATORES_PADRAO,
       pesos: { versao: pesos.versao, pesos: pesos.pesos, metodologia: pesos.metodologia, responsavel: pesos.responsavel },
@@ -165,17 +165,17 @@ export async function handleTodoGreenEsg(request, env) {
     await env.DB.prepare(
       `UPDATE todogreen_score_weights
           SET status = 'superseded', effective_to = ?
-        WHERE tenant_id = ? AND status = 'active'`,
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND status = 'active'`,
     )
-      .bind(vigencia, TENANT_ID)
+      .bind(vigencia, TENANT_ID, access.ownerId)
       .run()
       .catch(() => {});
     await env.DB.prepare(
       `INSERT INTO todogreen_score_weights
-         (version, tenant_id, weights_json, methodology, source, responsible,
+         (version, tenant_id, workspace_owner_id, weights_json, methodology, source, responsible,
           effective_from, status, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-       ON CONFLICT(version) DO UPDATE SET
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+       ON CONFLICT(tenant_id, workspace_owner_id, version) DO UPDATE SET
          weights_json = excluded.weights_json,
          methodology = excluded.methodology,
          source = excluded.source,
@@ -186,6 +186,7 @@ export async function handleTodoGreenEsg(request, env) {
       .bind(
         versao,
         TENANT_ID,
+        access.ownerId,
         JSON.stringify(pesos),
         clean(body.metodologia ?? body.methodology, 1000),
         clean(body.fonte ?? body.source, 500),
@@ -302,7 +303,7 @@ export async function handleTodoGreenEsg(request, env) {
       );
 
     // Green Score do cliente a partir do que acabou de ser apurado.
-    const pesos = await pesosEmVigor(env);
+    const pesos = await pesosEmVigor(env, access);
     const totalOperacoes = operacoes.length;
     const entradasScore = {
       reducaoPercent:

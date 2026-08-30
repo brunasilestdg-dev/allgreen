@@ -162,6 +162,28 @@ describe("responder", () => {
     });
   });
 
+  it("transforma a solicitação em tarefa vinculada ao cliente", async () => {
+    montarFetch([{ dados: caixa() }, { dados: caixa() }]);
+    const onCreateTask = vi.fn().mockResolvedValue(undefined);
+    render(<ClientRequestsPage authHeaders={authHeaders} onCreateTask={onCreateTask} currentUserId="user-9" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Incluir trecho Campinas/ }));
+    await screen.findByLabelText("Mensagem");
+
+    fireEvent.click(screen.getByRole("button", { name: /Transformar em tarefa/ }));
+
+    await waitFor(() => expect(onCreateTask).toHaveBeenCalledTimes(1));
+    const tarefa = onCreateTask.mock.calls[0][0];
+    expect(tarefa).toMatchObject({
+      clientId: "cli-a",
+      clientName: "Distribuidora Norte",
+      source: "todogreen-solicitacao",
+      requestId: "req-1",
+    });
+    expect(tarefa.title).toContain("Incluir trecho Campinas");
+    // Depois de criada, o botão trava para não duplicar.
+    expect(await screen.findByRole("button", { name: /Tarefa criada/ })).toBeDisabled();
+  });
+
   it("pedido encerrado não oferece caixa de resposta", async () => {
     montarFetch([
       { dados: caixa({ solicitacoes: [pedido({ status: "concluida" })] }) },

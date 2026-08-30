@@ -742,6 +742,24 @@ describe("LogisticsVertical", () => {
     expect(screen.getByText(/Autorize usuários/i)).toBeTruthy();
   });
 
+  it("permite ao administrador selecionar funcionalidades em vez de só um perfil", async () => {
+    window.history.pushState({}, "", "/todogreen/acessos");
+    const chamadas = stubDeRede({ "/api/todogreen/access-list": () => jsonOk({ emails: [] }) });
+    await renderarAutorizada();
+    await screen.findByText(/Nenhum e-mail autorizado ainda/);
+
+    fireEvent.change(screen.getByLabelText("E-mail autorizado"), { target: { value: "pesquisa@teste.com.br" } });
+    fireEvent.change(screen.getByLabelText("Tipo de acesso"), { target: { value: "custom" } });
+    fireEvent.click(screen.getByLabelText("Acessar a vertical"));
+    fireEvent.click(screen.getByLabelText("Consultar notícias, RFQs e mercado"));
+    fireEvent.click(screen.getByLabelText("Executar pesquisas de mercado e decisores"));
+    fireEvent.click(screen.getByRole("button", { name: /Autorizar/ }));
+
+    await waitFor(() => expect(chamadas.mock.calls.some(([, options]) => options?.method === "POST")).toBe(true));
+    const [, options] = chamadas.mock.calls.find(([, requestOptions]) => requestOptions?.method === "POST");
+    expect(JSON.parse(options.body).permissions).toEqual(["read", "market:read", "market:research"]);
+  });
+
   it("o painel de acessos não promete liberação automática por domínio", async () => {
     window.history.pushState({}, "", "/todogreen/acessos");
     stubDeRede({ "/api/todogreen/access-list": () => jsonOk({ emails: [] }) });

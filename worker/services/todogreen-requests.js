@@ -73,9 +73,9 @@ async function solicitacaoNoAlcance(env, access, email, id) {
   return env.DB.prepare(
     `SELECT r.id, r.client_id, r.status, r.due_at
        FROM todogreen_client_requests r
-      WHERE r.tenant_id = ? AND r.id = ? ${recorte.sql}`,
+      WHERE r.tenant_id = ? AND r.workspace_owner_id = ? AND r.id = ? ${recorte.sql}`,
   )
-    .bind(TENANT_ID, id, ...recorte.params)
+    .bind(TENANT_ID, access.ownerId, id, ...recorte.params)
     .first();
 }
 
@@ -95,11 +95,12 @@ export async function handleTodoGreenRequests(request, env, access, user) {
          FROM todogreen_client_requests r
          JOIN todogreen_clients c
            ON c.id = r.client_id AND c.tenant_id = r.tenant_id
-        WHERE r.tenant_id = ? ${recorte.sql}
+          AND c.workspace_owner_id = r.workspace_owner_id
+        WHERE r.tenant_id = ? AND r.workspace_owner_id = ? ${recorte.sql}
         ORDER BY r.created_at DESC
         LIMIT ?`,
     )
-      .bind(TENANT_ID, ...recorte.params, MAX_LIMIT)
+      .bind(TENANT_ID, access.ownerId, ...recorte.params, MAX_LIMIT)
       .all()
       .catch(() => ({ results: [] }));
 
@@ -111,12 +112,12 @@ export async function handleTodoGreenRequests(request, env, access, user) {
       // A equipe vê a conversa inteira, inclusive as notas internas: é o lado
       // que as escreveu.
       const conversa = await env.DB.prepare(
-        `SELECT id, author_side, author_name, author_email, body, internal, created_at
+          `SELECT id, author_side, author_name, author_email, body, internal, created_at
            FROM todogreen_client_request_messages
-          WHERE tenant_id = ? AND request_id = ?
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND request_id = ?
           ORDER BY created_at`,
       )
-        .bind(TENANT_ID, id)
+        .bind(TENANT_ID, access.ownerId, id)
         .all()
         .catch(() => ({ results: [] }));
       mensagens = (conversa.results || []).map((m) => ({
@@ -160,13 +161,14 @@ export async function handleTodoGreenRequests(request, env, access, user) {
     const agora = new Date().toISOString();
     await env.DB.prepare(
       `INSERT INTO todogreen_client_request_messages
-         (id, tenant_id, client_id, request_id, author_side, author_email,
+         (id, tenant_id, workspace_owner_id, client_id, request_id, author_side, author_email,
           author_name, body, internal, created_at)
-       VALUES (?, ?, ?, ?, 'equipe', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'equipe', ?, ?, ?, ?, ?)`,
     )
       .bind(
         crypto.randomUUID(),
         TENANT_ID,
+        access.ownerId,
         atual.client_id,
         id,
         email,
@@ -189,8 +191,8 @@ export async function handleTodoGreenRequests(request, env, access, user) {
       if (movimento.ok) {
         await env.DB.prepare(
           `UPDATE todogreen_client_requests
-              SET status = ?, closed_at = ?, closed_by = ?, updated_at = ?
-            WHERE tenant_id = ? AND id = ?`,
+            SET status = ?, closed_at = ?, closed_by = ?, updated_at = ?
+            WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ?`,
         )
           .bind(
             movimento.status,
@@ -198,6 +200,7 @@ export async function handleTodoGreenRequests(request, env, access, user) {
             movimento.encerradoPor,
             agora,
             TENANT_ID,
+            access.ownerId,
             id,
           )
           .run();
@@ -236,9 +239,9 @@ export async function handleTodoGreenRequests(request, env, access, user) {
     if (body.assumir === true) {
       await env.DB.prepare(
         `UPDATE todogreen_client_requests SET assigned_to = ?, updated_at = ?
-          WHERE tenant_id = ? AND id = ?`,
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ?`,
       )
-        .bind(email, new Date().toISOString(), TENANT_ID, id)
+        .bind(email, new Date().toISOString(), TENANT_ID, access.ownerId, id)
         .run();
       return response({ ok: true, responsavel: email });
     }
@@ -253,7 +256,7 @@ export async function handleTodoGreenRequests(request, env, access, user) {
     await env.DB.prepare(
       `UPDATE todogreen_client_requests
           SET status = ?, closed_at = ?, closed_by = ?, updated_at = ?
-        WHERE tenant_id = ? AND id = ?`,
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ?`,
     )
       .bind(
         movimento.status,
@@ -261,6 +264,7 @@ export async function handleTodoGreenRequests(request, env, access, user) {
         movimento.encerradoPor,
         new Date().toISOString(),
         TENANT_ID,
+        access.ownerId,
         id,
       )
       .run();

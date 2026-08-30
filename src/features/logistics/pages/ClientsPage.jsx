@@ -44,6 +44,7 @@ import {
   normalizeRelationshipRole,
 } from "../todoGreenCrmDomain.js";
 import { assessAccount, gmailComposeUrl, outlookComposeUrl, whatsappUrl } from "../accountIntelligenceDomain.js";
+import { resumoContaConectada } from "../contaConectadaDomain.js";
 import { parseCrmImportFile } from "../crmSpreadsheetImportDomain.js";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
 import "./TodoGreenPages.css";
@@ -639,7 +640,7 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
   const [clients, setClients] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
   const [query, setQuery] = useState("");
@@ -784,6 +785,12 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
     eventos.sort((a, b) => String(b.data).localeCompare(String(a.data)));
     return { contrato: ativo, contratos, produto, dataNegociada, primeiraColeta, totalOperacoes: ops.length, eventos };
   }, [selected, contracts, operations, selectedOpportunities]);
+  // Conta 360 conectada: operação em andamento, ocorrências e títulos a receber
+  // lidos da mesma fonte que Operações, Ocorrências e Contas a receber usam.
+  const conectada = useMemo(
+    () => resumoContaConectada({ clientId: selected?.id || "", operations, financial }),
+    [selected, operations, financial],
+  );
   const selectedSummary = selectedAccount ? crmAccountSummary(selectedAccount, selectedAccount.contacts, crmOpportunities) : null;
   const selectedIntelligence = selected && selectedAccount
     ? assessAccount({ ...selected, crm: { ...(selected.crm || {}), contacts: selectedAccount.contacts } })
@@ -1075,6 +1082,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         {[
           ["summary", "Resumo"],
           ["comercial", "Comercial"],
+          ["operacao", "Operação e financeiro"],
           ["relationship", "Relacionamento"],
           ["opportunities", "Oportunidades"],
           ["strategy", "Estratégia"],
@@ -1103,6 +1111,28 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
             {comercial.eventos.slice(0, 60).map((ev, i) => <li key={`${ev.data}-${i}`}><span className="tdg-comercial-tag">{ev.tipo}</span><div><strong>{ev.texto}</strong><small>{dataBR(ev.data)}</small></div></li>)}
           </ol> : <p>Sem histórico de contrato, operação ou oportunidade registrado para esta conta.</p>}
         </section>}
+        <section className="tdg-crm-detail-section tdg-account-panel tdg-account-operacao tdg-conta-conectada">
+          <header><strong>Operação e financeiro ao vivo</strong><small>Lido das operações e das contas a receber desta conta — a mesma fonte das telas de Operação e Financeiro</small></header>
+          <div className="tdg-conta-conectada-metrics">
+            <article><small>Operações em andamento</small><strong>{conectada.totalAndamento}</strong>{conectada.operacoesAtrasadas > 0 && <span className="risk">{conectada.operacoesAtrasadas} atrasada(s)</span>}</article>
+            <article><small>Ocorrências abertas</small><strong className={conectada.totalOcorrencias > 0 ? "risk" : ""}>{conectada.totalOcorrencias}</strong></article>
+            <article><small>A receber em aberto</small><strong>{BRL.format(conectada.totalAReceber)}</strong>{conectada.qtdVencidos > 0 && <span className="risk">{BRL.format(conectada.totalVencido)} vencido</span>}</article>
+          </div>
+          <div className="tdg-conta-conectada-cols">
+            <div>
+              <header><b>Operações em andamento</b><button type="button" onClick={() => onNavigate?.("/todogreen/operacoes")}>Abrir operações <ArrowRight size={13} /></button></header>
+              {conectada.operacoesAndamento.length ? <ul>{conectada.operacoesAndamento.slice(0, 8).map((op) => <li key={op.id} className={op.atrasada ? "risk" : ""}><span><strong>{op.referencia}</strong><small>{[op.origem, op.destino].filter(Boolean).join(" → ") || "Trajeto não informado"}</small></span><em>{op.atrasada ? "Atrasada" : (op.situacao || "").replaceAll("_", " ") || "Em andamento"}</em></li>)}</ul> : <p>Nenhuma operação em andamento para esta conta.</p>}
+            </div>
+            <div>
+              <header><b>Ocorrências</b><button type="button" onClick={() => onNavigate?.("/todogreen/ocorrencias")}>Tratar ocorrências <ArrowRight size={13} /></button></header>
+              {conectada.ocorrenciasAbertas.length ? <ul>{conectada.ocorrenciasAbertas.slice(0, 8).map((op) => <li key={op.id} className="risk"><span><strong>{op.referencia}</strong></span><em>{op.ocorrencias} ocorrência(s)</em></li>)}</ul> : <p>Nenhuma ocorrência aberta nesta conta.</p>}
+            </div>
+            <div>
+              <header><b>Títulos a receber em aberto</b><button type="button" onClick={() => onNavigate?.("/todogreen/receita")}>Abrir contas a receber <ArrowRight size={13} /></button></header>
+              {conectada.titulosAbertos.length ? <ul>{conectada.titulosAbertos.slice(0, 8).map((t) => <li key={t.id} className={t.atrasado ? "risk" : ""}><span><strong>{t.descricao}</strong><small>{t.vencimentoEm ? `Vence ${dataBR(t.vencimentoEm)}` : "Sem vencimento"}</small></span><em>{BRL.format(t.valor)}{t.atrasado ? " · vencido" : ""}</em></li>)}</ul> : <p>Nenhum título a receber em aberto para esta conta.</p>}
+            </div>
+          </div>
+        </section>
         <section className="tdg-crm-intelligence tdg-account-panel tdg-account-intelligence"><header><strong>IA · mapa da empresa</strong><small>Leitura dos dados do CRM</small></header><div><span>Relevância ESG</span><strong>{selectedIntelligence.esgRelevance}</strong><small>{selectedIntelligence.esgReason}</small></div><div><span>Próxima tarefa sugerida</span><strong>{selectedIntelligence.nextTask}</strong></div><div><span>Procurement de Logística e Transportes</span><strong>{procurementSummary}</strong></div></section>
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-summary"><header><strong>Potencial de carteira</strong><small>Cálculo anual auditável</small></header><div className="tdg-crm-strategy-grid"><span><small>Potencial anual</small><strong>{selectedStrategy.potential.annual ? BRL.format(selectedStrategy.potential.annual) : "Não calculado"}</strong></span><span><small>Middle mile</small><strong>{selectedStrategy.potential.middleMile ? BRL.format(selectedStrategy.potential.middleMile) : "Não calculado"}</strong></span><span><small>Last mile</small><strong>{selectedStrategy.potential.lastMile ? BRL.format(selectedStrategy.potential.lastMile) : "Não calculado"}</strong></span><span><small>Dedicada</small><strong>{selectedStrategy.potential.dedicated ? BRL.format(selectedStrategy.potential.dedicated) : "Não calculado"}</strong></span></div><p><strong>Base:</strong> {selectedStrategy.potential.method}.</p><p><strong>Expansão geográfica:</strong> {selectedStrategy.potential.geographicExpansion || "Ainda não mapeada."}</p>{selectedStrategy.potential.missing && <small>Abra Editar e informe as quantidades mensais e os tickets médios. Sem essa base, o CRM não inventa receita.</small>}</section>
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-summary"><header><strong>Share of Wallet</strong><small>Participação no gasto logístico do cliente</small></header>{selectedStrategy.shareOfWallet.percentage === null ? <p>{shareOfWalletMissingMessage}</p> : <div className="tdg-crm-strategy-grid"><span><small>Participação To Do Green</small><strong>{selectedStrategy.shareOfWallet.percentage.toLocaleString("pt-BR")}%</strong></span><span><small>Receita anual To Do Green</small><strong>{BRL.format(selectedStrategy.shareOfWallet.ourRevenue)}</strong></span><span><small>Gasto logístico do cliente</small><strong>{BRL.format(selectedStrategy.shareOfWallet.customerSpend)}</strong></span><span><small>Espaço estimado</small><strong>{BRL.format(selectedStrategy.shareOfWallet.remaining)}</strong></span></div>}</section>

@@ -56,16 +56,18 @@ const REQ_OUTRO = "int-req-outro";
 
 async function seedSolicitacao(id, clientId, assunto, extra = {}) {
   const agora = new Date().toISOString();
+  const ownerId = extra.ownerId || gestor?.id || "dono";
   await env.DB.prepare(
     `INSERT INTO todogreen_client_requests
        (id, tenant_id, client_id, workspace_owner_id, type, subject, description,
         urgency, status, fields_json, due_at, opened_by, created_at, updated_at)
-     VALUES (?, 'todogreen', ?, 'dono', 'nova_rota', ?, 'descrição do pedido',
+     VALUES (?, 'todogreen', ?, ?, 'nova_rota', ?, 'descrição do pedido',
              'normal', ?, '{}', ?, 'cliente@empresa.com', ?, ?)`,
   )
     .bind(
       id,
       clientId,
+      ownerId,
       assunto,
       extra.status || "aberta",
       extra.prazoEm || new Date(Date.now() + 48 * 3600000).toISOString(),

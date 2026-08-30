@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Cable, CheckCircle2, CircleDashed, Mail, MessageCircle, RefreshCw, Search, Workflow, Zap } from "lucide-react";
+import AiKeysPanel from "../../integrations/AiKeysPanel.jsx";
+import SearchKeysPanel from "../../integrations/SearchKeysPanel.jsx";
 import "./TodoGreenPages.css";
 
 const ProviderList = ({ title, icon: Icon, items = [], testing, onTest }) => (
@@ -104,8 +106,15 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
   return (
     <div className="tdg-page">
       <header className="tdg-page-title"><div><span>CONFIABILIDADE</span><h2>Integrações de IA, busca e automação</h2><p>O Plantû usa a cascata de IA e as fontes de busca configuradas. As automações essenciais rodam na própria Cloudflare.</p></div><button className="tdg-action" type="button" onClick={load}><RefreshCw size={16} />Atualizar</button></header>
-      <ProviderList title="Cascata de IA" icon={Zap} items={status?.ai} testing={testing} onTest={test} />
+      {/* As suas chaves de IA (Claude, GPT, Google e outras), guardadas no cofre
+          e usadas pela cascata. É aqui que o usuário conecta a própria conta —
+          antes só dava para ver o status, não para adicionar a chave. */}
+      <AiKeysPanel setToast={setToast} authHeaders={authHeaders} />
+      <ProviderList title="Cascata de IA (status)" icon={Zap} items={status?.ai} testing={testing} onTest={test} />
       <ProviderList title="Busca web" icon={Search} items={searchItems} testing={testing} onTest={test} />
+      <section className="tdg-panel">
+        <SearchKeysPanel authHeaders={authHeaders} setToast={setToast} />
+      </section>
       <ProviderList title="WhatsApp" icon={MessageCircle} items={status?.messaging} />
       <ProviderList title="E-mail e produtividade" icon={Mail} items={status?.communication} />
       <ProviderList title="API e troca de dados" icon={Cable} items={status?.dataExchange} />

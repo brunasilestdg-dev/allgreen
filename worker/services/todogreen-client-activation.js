@@ -108,10 +108,10 @@ async function loadSnapshot(env, access, clientId) {
     ).bind(TENANT_ID, access.ownerId).first(),
     env.DB.prepare(
       `SELECT version FROM todogreen_score_weights
-        WHERE tenant_id=? AND status='active' AND effective_from<=datetime('now')
+        WHERE tenant_id=? AND workspace_owner_id=? AND status='active' AND effective_from<=datetime('now')
           AND (effective_to IS NULL OR effective_to='' OR effective_to>=datetime('now'))
         ORDER BY effective_from DESC LIMIT 1`,
-    ).bind(TENANT_ID).first(),
+    ).bind(TENANT_ID, access.ownerId).first(),
     env.DB.prepare(
       `SELECT id,name FROM todogreen_dashboards
         WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL AND status='active'

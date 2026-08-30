@@ -1,10 +1,11 @@
 const SERVICE_VERSION =
   new URL(self.location.href).searchParams.get("v") || "local";
-// v13: força qualquer navegador preso num bundle antigo a descartar o cache e
-// baixar a versão nova. Mudar o número do cache faz o `activate` apagar tudo o
-// que não é este cache — cura o caso de telas (Planner, Inteligência) que
-// "não fazem nada" porque o JS em cache aponta para pedaços que já não existem.
-const CACHE = `seu-funcionario-v13-${SERVICE_VERSION}`;
+// v14: nova tela de configuração de busca (Integrações → Busca web) muda o
+// bundle; o bump força quem estiver preso na versão antiga a descartar o cache
+// e baixar a nova. Mudar o número do cache faz o `activate` apagar tudo o que
+// não é este cache — cura o caso de telas que "não fazem nada" porque o JS em
+// cache aponta para pedaços que já não existem.
+const CACHE = `seu-funcionario-v14-${SERVICE_VERSION}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 

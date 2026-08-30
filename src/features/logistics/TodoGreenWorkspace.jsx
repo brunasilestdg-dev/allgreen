@@ -197,7 +197,7 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
   );
 }
 
-export default function TodoGreenWorkspace({ db, update, verticalData, setToast, onNavigate }) {
+export default function TodoGreenWorkspace({ db, update, verticalData, setToast, onNavigate, authHeaders }) {
   const [tool, setTool] = useState("visao-geral");
   const [focusNoteId, setFocusNoteId] = useState("");
   const [focusPageId, setFocusPageId] = useState("");
@@ -318,7 +318,7 @@ export default function TodoGreenWorkspace({ db, update, verticalData, setToast,
           {tool === "automacoes" && (
             <TodoGreenAutomations setToast={setToast} onNavigate={onNavigate} />
           )}
-          {tool === "inteligencia" && <TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={onNavigate} />}
+          {tool === "inteligencia" && <TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={onNavigate} authHeaders={authHeaders} setToast={setToast} />}
           {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} />}
           {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}

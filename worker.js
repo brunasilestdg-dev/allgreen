@@ -83,6 +83,7 @@ import { createQuoteHandlers } from "./worker/services/quotes.js";
 import { createWebhookHandlers } from "./worker/services/webhooks.js";
 import { runTodoGreenScheduledWorkAutomations } from "./worker/services/todogreen-work-center.js";
 import { runTodoGreenIntelligenceWatches } from "./worker/services/todogreen-client-intelligence.js";
+import { runTodoGreenMarketIntelligenceScheduled } from "./worker/services/todogreen-market-intelligence.js";
 
 
 
@@ -4258,6 +4259,11 @@ export default {
         console.error("scheduled To Do Green intelligence watches", error),
       ),
     );
+    ctx.waitUntil(
+      runTodoGreenMarketIntelligenceScheduled(env, now).catch((error) =>
+        console.error("scheduled To Do Green market intelligence", error),
+      ),
+    );
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -4501,6 +4507,7 @@ export default {
       url.pathname.startsWith("/api/platform/") ||
       url.pathname.startsWith("/api/todogreen/") ||
       url.pathname.startsWith("/api/ai-keys") ||
+      url.pathname.startsWith("/api/search-keys") ||
       url.pathname.startsWith("/api/push/");
     if (needsAuth) {
       if (url.pathname === "/api/ai" && request.method !== "POST")
@@ -4520,6 +4527,7 @@ export default {
           url.pathname.startsWith("/api/platform/") ||
           url.pathname.startsWith("/api/todogreen/") ||
           url.pathname.startsWith("/api/ai-keys") ||
+          url.pathname.startsWith("/api/search-keys") ||
           url.pathname === "/api/plan" ||
           url.pathname === "/api/webhooks" ||
           url.pathname.startsWith("/api/push/")) &&
@@ -4557,6 +4565,27 @@ export default {
         } catch (error) {
           console.error("AI keys error", error);
           return json({ error: "Não foi possível salvar a chave de IA." }, 500);
+        }
+      }
+      // Configuração de busca do espaço ("traga sua própria busca"): a URL do
+      // SearXNG e as chaves de provedores de pesquisa. Mesma exigência de
+      // owner/admin das chaves de IA — é a credencial que decide de onde a
+      // pesquisa da empresa inteira sai.
+      if (url.pathname.startsWith("/api/search-keys")) {
+        try {
+          const ownerId = url.searchParams.get("owner") || user.id;
+          const role = await membershipRole(env, user.id, ownerId);
+          if (!role) return json({ error: "Você não tem acesso a este espaço." }, 403);
+          if (role !== "owner" && role !== "admin")
+            return json(
+              { error: "Somente o dono ou um administrador do espaço configura a busca." },
+              403,
+            );
+          const { handleSearchKeys } = await import("./worker/services/search-keys.js");
+          return await handleSearchKeys(request, env, { ownerId, userId: user.id });
+        } catch (error) {
+          console.error("Search keys error", error);
+          return json({ error: "Não foi possível salvar a configuração de busca." }, 500);
         }
       }
       if (url.pathname === "/api/workspace") {

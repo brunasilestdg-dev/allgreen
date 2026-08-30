@@ -11,7 +11,6 @@ import "./features/logistics/LogisticsVerticalRecovery.js";
 import "./features/logistics/LogisticsVerticalCredentials.js";
 import "./features/logistics/LogisticsVerticalWorkCenterV2.js";
 import "./features/logistics/LogisticsVerticalFleet.js";
-import "./features/logistics/LogisticsVerticalNavigation.js";
 import "./features/logistics/LogisticsVerticalBranding.js";
 
 const reportError = (message, stack, componentStack) => {
