@@ -108,6 +108,7 @@ const FiscalPage = lazy(() => import("./pages/FiscalPage.jsx"));
 const TreasuryPage = lazy(() => import("./pages/TreasuryPage.jsx"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage.jsx"));
 const PlannerPage = lazy(() => import("./pages/PlannerPage.jsx"));
+const AvancosDaSemanaPage = lazy(() => import("./pages/AvancosDaSemanaPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
 const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage.jsx"));
@@ -310,6 +311,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "espaco-trabalho",
     status: "functional",
     description: "Notas, bases relacionais, processos, automações, capacidade e quadros — o hub de trabalho da vertical.",
+  },
+  avancos: {
+    title: "Avanços da semana",
+    navLabel: "Avanços da semana",
+    route: "/todogreen/avancos",
+    area: "espaco-trabalho",
+    status: "functional",
+    permission: ["crm:manage", "clients:manage", "audit:read"],
+    description: "As oportunidades com movimento concreto nos últimos sete dias, com o avanço escrito por quem trabalhou nelas.",
   },
   metas: {
     title: "Metas e acompanhamento",
@@ -819,7 +829,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // Workspace primeiro (pedido de 30/08): é a mesa de trabalho — planner,
   // projetos e implantações moram aqui. Implantação é um TIPO de projeto,
   // por isso vive dentro deste grupo sem perder o nome próprio.
-  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "planner", "central-trabalho", "implantacao", "solicitacoes"] },
+  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "avancos", "planner", "central-trabalho", "implantacao", "solicitacoes"] },
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "planejamento", "aceite-viagens", "ordens-servico", "ocorrencias", "rastreamento"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
@@ -2864,6 +2874,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "dp-rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP...</section>}><EnterpriseAreaPage area="dp" onNavigate={navigate} /></Suspense>}
       {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><PeoplePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "planner" && <Suspense fallback={<section className="tdg-panel">Carregando o Planner...</section>}><PlannerPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} role={role} espacoId={remoteAccess.ownerId || ""} /></Suspense>}
+      {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} onNavigate={navigate} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><EnterpriseAreaPage area="quality" onNavigate={navigate} /></Suspense>}
       {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando inteligência de mercado...</section>}><TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={navigate} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><EnterpriseAreaPage area="legal" onNavigate={navigate} /></Suspense>}

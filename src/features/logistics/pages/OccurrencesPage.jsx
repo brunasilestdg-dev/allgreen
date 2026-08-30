@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Clock3, MapPin, Plus, Route } from "lucide-react";
+import Modal from "../../../components/Modal.jsx";
 
 const agoraLocal = () => new Date().toISOString().slice(0, 16);
 
@@ -23,6 +24,8 @@ export default function OccurrencesPage({
 }) {
   const [operationId, setOperationId] = useState("");
   const [saving, setSaving] = useState(false);
+  // Registro em janela própria (rodada "nada corta a tela", 30/08).
+  const [novaAberta, setNovaAberta] = useState(false);
   const [selected, setSelected] = useState(null);
   const [events, setEvents] = useState([]);
   const [form, setForm] = useState({
@@ -71,6 +74,7 @@ export default function OccurrencesPage({
       setEvents((current) => [result?.evento, ...current].filter(Boolean));
       setSelected(result?.registro || selected);
       setForm({ titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal() });
+      setNovaAberta(false);
       setToast?.("Ocorrência registrada no frete.");
     } catch (error) {
       setToast?.(error.message);
@@ -87,7 +91,7 @@ export default function OccurrencesPage({
           <h2>Ocorrências operacionais</h2>
           <p>Falhas, atrasos e desvios, com evidências.</p>
         </div>
-        <strong>{totals.ocorrencias} ocorrência(s)</strong>
+        <div className="tdg-page-actions"><strong>{totals.ocorrencias} ocorrência(s)</strong><button type="button" className="tdg-action" onClick={() => setNovaAberta(true)}><Plus size={16} />Nova ocorrência</button></div>
       </div>
 
       <div className="tdg-result">
@@ -96,7 +100,8 @@ export default function OccurrencesPage({
         <article className={`tdg-metric ${totals.atrasados ? "risk" : ""}`}><span>SLA crítico</span><strong>{totals.atrasados}</strong><small>atrasado ou violado</small></article>
       </div>
 
-      <form className="tdg-access-form tdg-enterprise-form" onSubmit={save}>
+      {novaAberta && <Modal title="Nova ocorrência" onClose={() => setNovaAberta(false)} wide>
+      <form className="tdg-access-form tdg-enterprise-form tdg-form-em-modal" onSubmit={save}>
         <label>
           <span>Frete / operação</span>
           <select required value={operationId} onChange={(e) => setOperationId(e.target.value)}>
@@ -112,8 +117,9 @@ export default function OccurrencesPage({
         <label><span>Local</span><input value={form.local} onChange={(e) => setForm((v) => ({ ...v, local: e.target.value }))} /></label>
         <label><span>Quando ocorreu</span><input type="datetime-local" value={form.ocorridoEm} onChange={(e) => setForm((v) => ({ ...v, ocorridoEm: e.target.value }))} /></label>
         <label className="full"><span>Descrição</span><input value={form.descricao} onChange={(e) => setForm((v) => ({ ...v, descricao: e.target.value }))} placeholder="O que aconteceu, impacto e ação tomada" /></label>
-        <button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Registrando..." : "Registrar ocorrência"}</button>
+        <div className="tdg-form-actions"><button type="button" onClick={() => setNovaAberta(false)}>Cancelar</button><button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Registrando..." : "Registrar ocorrência"}</button></div>
       </form>
+      </Modal>}
 
       <div className="tdg-operation-grid">
         {operationsWithOccurrences.length === 0 && <div className="tdg-empty-access">Nenhuma ocorrência registrada.</div>}
@@ -137,15 +143,11 @@ export default function OccurrencesPage({
         ))}
       </div>
 
+      {/* Histórico em janela própria: antes nascia depois da grade inteira. */}
       {selected && (
-        <div className="tdg-operation-timeline">
-          <div className="tdg-inline-editor">
-            <div>
-              <strong>Histórico de ocorrências · {selected.referencia}</strong>
-              <small>Eventos operacionais preservados na linha do tempo do frete.</small>
-            </div>
-            <button type="button" onClick={() => { setSelected(null); setEvents([]); }}>Fechar</button>
-          </div>
+        <Modal title={`Histórico de ocorrências · ${selected.referencia}`} onClose={() => { setSelected(null); setEvents([]); }} wide>
+        <div className="tdg-operation-timeline tdg-form-em-modal">
+          <small>Eventos operacionais preservados na linha do tempo do frete.</small>
           <div className="tdg-timeline-list">
             {events.length === 0 && <small>Nenhuma ocorrência detalhada encontrada.</small>}
             {events.map((item) => (
@@ -157,6 +159,7 @@ export default function OccurrencesPage({
             ))}
           </div>
         </div>
+        </Modal>
       )}
     </section>
   );

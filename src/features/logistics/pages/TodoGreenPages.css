@@ -1814,3 +1814,13 @@
    formulário respira sem a moldura de painel (o modal já é a moldura). */
 .tdg-form-em-modal { border: none; box-shadow: none; margin: 0; padding: 0; }
 .tdg-form-em-modal .tdg-form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
+
+/* ===== Avanços da semana (mockup da titular) ===== */
+.tdg-avancos-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); margin-top: 6px; }
+.tdg-avanco-cartao { background: var(--tdg-soft); border: 1px solid var(--tdg-line); border-radius: 12px; cursor: pointer; display: grid; gap: 9px; justify-items: start; padding: 14px; text-align: left; }
+.tdg-avanco-cartao:hover { border-color: var(--tdg-green); box-shadow: 0 1px 6px rgba(20, 83, 45, .14); }
+.tdg-avanco-valor { background: var(--tdg-green); border-radius: 999px; color: #fff; font-size: .85rem; font-weight: 800; justify-self: stretch; padding: 6px 14px; text-align: center; }
+.tdg-avanco-cartao > strong { color: var(--tdg-green); font-size: 1.02rem; }
+.tdg-avanco-cartao > p { color: var(--tdg-text); font-size: .86rem; line-height: 1.45; margin: 0; }
+.tdg-avancos-atencao { border-top: 1px solid var(--tdg-line); color: var(--tdg-muted); margin: 16px 0 0; padding-top: 12px; }
+.tdg-avancos-atencao strong { color: #a05e03; }

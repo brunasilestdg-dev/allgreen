@@ -602,6 +602,8 @@ describe("LogisticsVertical", () => {
     });
     window.history.pushState({}, "", "/todogreen/comissoes");
     await renderarAutorizada();
+    // O lançamento abre em janela própria (rodada "nada corta a tela").
+    fireEvent.click(screen.getByRole("button", { name: /Nova comissão/ }));
     fireEvent.change(screen.getByLabelText("Valor R$"), { target: { value: "900" } });
     fireEvent.click(screen.getByRole("button", { name: /Salvar lançamento/ }));
     await waitFor(() => expect(gravados.length).toBe(1));

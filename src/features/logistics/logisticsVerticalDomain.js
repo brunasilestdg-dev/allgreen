@@ -577,6 +577,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
     order: 60.5,
     description: "Comunicados, decisões, bases de conhecimento e alinhamentos internos.",
   }),
+  module("avancos", "Avanços da semana", "comunicacao-interna", "/todogreen/avancos", {
+    icon: "TrendingUp",
+    order: 60.6,
+    description: "Oportunidades com movimento concreto nos últimos sete dias, com o avanço escrito por quem trabalhou nelas.",
+    permissions: ["crm:manage", "clients:manage", "audit:read"],
+  }),
   module("documentos", "Documentos", "documentos", "/todogreen/documentos", { icon: "FileText", order: 61 }),
   module("aprovacoes", "Aprovações", "comercial", "/todogreen/deal-desk", { icon: "ShieldCheck", order: 62 }),
   module("notificacoes", "Notificações", "comunicacao-interna", "/todogreen/espaco", { icon: "Bell", order: 63 }),

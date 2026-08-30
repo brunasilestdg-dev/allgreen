@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, MapPin, PackageCheck, Truck } from "lucide-react";
 import "./TodoGreenPages.css";
+import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 
 // ===== Portal do Motorista =====
@@ -136,27 +137,34 @@ export default function DriverPortalPage() {
       ))}
       {!pendentes.length && <div className="tdg-driver-cartao"><p>Tudo entregue. 🎉</p></div>}
 
+      {/* Confirmação em janela própria: o botão fica no card da viagem, mas o
+          formulário nascia no fim da página — com várias viagens, fora da tela. */}
       {formulario && (
-        <form className="tdg-driver-cartao tdg-driver-form" onSubmit={registrar}>
-          <strong>
-            {formulario.tipo === "entrega" ? "Confirmar entrega" : formulario.tipo === "chegada" ? "Confirmar chegada" : "Registrar ocorrência"}
-            {" — "}{formulario.viagem.referencia}
-          </strong>
-          {formulario.tipo === "entrega" && (
-            <>
-              <label><span>Quem recebeu</span><input required value={dados.recebedor} onChange={(e) => setDados((v) => ({ ...v, recebedor: e.target.value }))} placeholder="Nome de quem recebeu" /></label>
-              <label><span>Foto do canhoto (link)</span><input value={dados.comprovanteUrl} onChange={(e) => setDados((v) => ({ ...v, comprovanteUrl: e.target.value }))} placeholder="Cole o link da foto (opcional)" /></label>
-            </>
-          )}
-          {formulario.tipo === "ocorrencia" && (
-            <label><span>O que aconteceu</span><input required value={dados.descricao} onChange={(e) => setDados((v) => ({ ...v, descricao: e.target.value }))} placeholder="Ex.: destinatário ausente" /></label>
-          )}
-          <small>Sua localização vai junto, se o celular permitir.</small>
-          <div className="tdg-driver-acoes">
-            <button type="submit" className="principal" disabled={ocupado}>{ocupado ? "Enviando…" : "Confirmar"}</button>
-            <button type="button" onClick={() => setFormulario(null)}>Cancelar</button>
-          </div>
-        </form>
+        <Modal
+          title={formulario.tipo === "entrega" ? "Confirmar entrega" : formulario.tipo === "chegada" ? "Confirmar chegada" : "Registrar ocorrência"}
+          onClose={() => setFormulario(null)}
+        >
+          <form className="tdg-driver-cartao tdg-driver-form tdg-form-em-modal" onSubmit={registrar}>
+            <strong>{formulario.viagem.referencia || "Viagem"}</strong>
+            {formulario.tipo === "entrega" && (
+              <>
+                <label><span>Quem recebeu</span><input required value={dados.recebedor} onChange={(e) => setDados((v) => ({ ...v, recebedor: e.target.value }))} placeholder="Nome de quem recebeu" /></label>
+                <label><span>Foto do canhoto (link)</span><input value={dados.comprovanteUrl} onChange={(e) => setDados((v) => ({ ...v, comprovanteUrl: e.target.value }))} placeholder="Cole o link da foto (opcional)" /></label>
+              </>
+            )}
+            {formulario.tipo === "ocorrencia" && (
+              <label><span>O que aconteceu</span><input required value={dados.descricao} onChange={(e) => setDados((v) => ({ ...v, descricao: e.target.value }))} placeholder="Ex.: destinatário ausente" /></label>
+            )}
+            <small>Sua localização vai junto, se o celular permitir.</small>
+            {/* Enquanto o modal está aberto, o aviso do topo fica escondido
+                atrás do fundo — o erro precisa aparecer aqui dentro. */}
+            {aviso && <div className="tdg-driver-cartao aviso" role="alert"><AlertTriangle size={18} /><p>{aviso}</p></div>}
+            <div className="tdg-driver-acoes tdg-form-actions">
+              <button type="button" onClick={() => setFormulario(null)}>Cancelar</button>
+              <button type="submit" className="principal" disabled={ocupado}>{ocupado ? "Enviando…" : "Confirmar"}</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {feitas.length > 0 && (

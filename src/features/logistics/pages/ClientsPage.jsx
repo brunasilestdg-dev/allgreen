@@ -1284,10 +1284,13 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
           <header>
             <strong>Contatos do cliente</strong>
             <small>{selectedAccount.contacts.length} contato(s)</small>
-            {access.podeEditar && <button type="button" onClick={() => setQuickContactOpen((value) => !value)}><UserPlus size={13} />Adicionar contato</button>}
+            {access.podeEditar && <button type="button" onClick={() => setQuickContactOpen(true)}><UserPlus size={13} />Adicionar contato</button>}
           </header>
+          {/* Contato em janela própria: o formulário não empurra a lista de
+              contatos que a pessoa está olhando. */}
           {quickContactOpen && (
-            <form className="tdg-crm-contact-form tdg-crm-quick-contact" onSubmit={saveQuickContact}>
+            <Modal title={`Adicionar contato · ${selected.name}`} onClose={() => setQuickContactOpen(false)}>
+            <form className="tdg-crm-contact-form tdg-crm-quick-contact tdg-form-em-modal" onSubmit={saveQuickContact}>
               <input aria-label="Nome do novo contato" placeholder="Nome" value={quickContact.name} onChange={(event) => setQuickContact({ ...quickContact, name: event.target.value })} />
               <input aria-label="Cargo do novo contato" placeholder="Cargo" value={quickContact.title} onChange={(event) => setQuickContact({ ...quickContact, title: event.target.value })} />
               <select aria-label="Papel do novo contato" value={quickContact.relationshipRole} onChange={(event) => setQuickContact({ ...quickContact, relationshipRole: event.target.value })}>{TODO_GREEN_RELATIONSHIP_ROLES.map((item) => <option key={item}>{item}</option>)}</select>
@@ -1295,6 +1298,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
               <input aria-label="Telefone do novo contato" placeholder="Telefone" value={quickContact.phone} onChange={(event) => setQuickContact({ ...quickContact, phone: event.target.value })} />
               <button className="tdg-action" type="submit"><UserPlus size={15} />Registrar contato</button>
             </form>
+            </Modal>
           )}
           <div className="tdg-crm-roles">{selectedAccount.contacts.map((contact) => <ContactCard key={contact.id} contact={contact} clientName={selected.name} />)}{selectedAccount.contacts.length === 0 && <p>Nenhum decisor ou patrocinador mapeado.</p>}</div>
           {(() => {

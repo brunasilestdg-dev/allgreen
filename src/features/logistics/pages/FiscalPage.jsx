@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, FileText, ReceiptText, RefreshCw, ShieldAlert } from "lucide-react";
 import { STATUS_FISCAL, dadosDacte } from "../fiscalDomain.js";
 import "./TodoGreenPages.css";
+import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 
 // Fiscal da transportadora: CT-e (modelo 57), MDF-e (modelo 58) e NFS-e. Não
@@ -297,8 +298,8 @@ export default function FiscalPage({ authHeaders, setToast }) {
           <button className="tdg-action" type="button" onClick={carregar} disabled={Boolean(ocupado)}>
             <RefreshCw size={16} />Atualizar
           </button>
-          <button className="tdg-action" type="button" onClick={() => setMostrarForm((v) => !v)}>
-            <FileText size={16} />{mostrarForm ? "Fechar" : "Novo documento"}
+          <button className="tdg-action" type="button" onClick={() => setMostrarForm(true)}>
+            <FileText size={16} />Novo documento
           </button>
         </div>
       </header>
@@ -372,8 +373,11 @@ export default function FiscalPage({ authHeaders, setToast }) {
         </section>
       )}
 
+      {/* Emissão em janela própria: o formulário (com a prévia de impostos
+          que cresce) não empurra mais a tabela de documentos. */}
       {mostrarForm && (
-        <form className="tdg-panel tdg-form" onSubmit={criarDocumento}>
+        <Modal title="Novo documento fiscal" onClose={() => { setMostrarForm(false); setPrevia(null); }} wide>
+        <form className="tdg-form tdg-form-em-modal" onSubmit={criarDocumento}>
           <label>
             <span>Tipo</span>
             <select value={form.docType} onChange={(e) => alterar("docType", e.target.value)}>
@@ -431,6 +435,7 @@ export default function FiscalPage({ authHeaders, setToast }) {
             <button type="button" onClick={() => { setMostrarForm(false); setPrevia(null); }}>Cancelar</button>
           </div>
         </form>
+        </Modal>
       )}
 
       <section className="tdg-panel">

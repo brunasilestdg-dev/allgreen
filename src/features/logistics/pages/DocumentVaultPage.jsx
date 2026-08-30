@@ -1,6 +1,7 @@
 import "./TodoGreenPages.css";
 import { Download, ExternalLink, FileText, Plus, ShieldCheck, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import Modal from "../../../components/Modal.jsx";
 import { TIPOS_DE_DOCUMENTO, documentoValido, tamanhoLegivel } from "../documentVaultDomain.js";
 
 const api = async (caminho, authHeaders, opcoes = {}) => {
@@ -47,6 +48,7 @@ export default function DocumentVaultPage({ authHeaders, clientes = [], setToast
   const [erro, setErro] = useState("");
   const [filtroCliente, setFiltroCliente] = useState("");
   const [cenariosDoCliente, setCenariosDoCliente] = useState([]);
+  const [evidenciaAberta, setEvidenciaAberta] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -73,7 +75,7 @@ export default function DocumentVaultPage({ authHeaders, clientes = [], setToast
   const conferencia = documentoValido(form);
   const salvarReferenciaEvidencia = async (evento) => {
     evento.preventDefault(); setSalvando(true);
-    try { await api("", authHeaders, { method: "POST", body: form }); setForm(FORMULARIO_VAZIO); await carregar(); setToast?.("Referência cadastrada com impressão digital do conteúdo."); }
+    try { await api("", authHeaders, { method: "POST", body: form }); setForm(FORMULARIO_VAZIO); setEvidenciaAberta(false); await carregar(); setToast?.("Referência cadastrada com impressão digital do conteúdo."); }
     catch (razao) { setToast?.(razao.message); }
     finally { setSalvando(false); }
   };
@@ -95,7 +97,7 @@ export default function DocumentVaultPage({ authHeaders, clientes = [], setToast
     if (!form.arquivoUrl) { setToast?.("Informe o endereço do documento do cliente."); return; }
     try {
       await fileApi("", authHeaders, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ externalUrl: form.arquivoUrl, fileName: form.titulo || "Documento do cliente", clientId: form.clientId }) });
-      await carregar(); setToast?.("Referência do documento do cliente registrada.");
+      setEvidenciaAberta(false); await carregar(); setToast?.("Referência do documento do cliente registrada.");
     } catch (razao) { setToast?.(razao.message); }
   };
 
@@ -127,9 +129,8 @@ export default function DocumentVaultPage({ authHeaders, clientes = [], setToast
       </form>
     </section>
 
-    <details className="tdg-panel">
-      <summary><strong>Documento externo / evidência do cliente</strong></summary>
-      <form className="tdg-access-form" onSubmit={salvarReferenciaEvidencia}>
+    {evidenciaAberta && <Modal title="Registrar evidência" onClose={() => setEvidenciaAberta(false)} wide>
+      <form className="tdg-access-form tdg-form-em-modal" onSubmit={salvarReferenciaEvidencia}>
         <label><span>Cliente</span><select value={form.clientId} onChange={trocarCliente}><option value="">Selecione o cliente</option>{clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome || cliente.name}</option>)}</select></label>
         <label><span>Título</span><input value={form.titulo} onChange={campo("titulo")} placeholder="Contrato do cliente · versão 3" /></label>
         <label><span>Vincular a uma simulação</span><select value={form.calculoId} onChange={campo("calculoId")} disabled={!form.clientId}><option value="">Sem vínculo</option>{cenariosDoCliente.map((cenario) => <option key={cenario.id} value={cenario.id}>{rotuloDoCenario(cenario)}</option>)}</select></label>
@@ -137,15 +138,18 @@ export default function DocumentVaultPage({ authHeaders, clientes = [], setToast
         <label><span>Referência</span><input value={form.referencia} onChange={campo("referencia")} /></label>
         <label><span>Emitido em</span><input type="date" value={form.emitidoEm} onChange={campo("emitidoEm")} /></label>
         <label><span>Endereço do arquivo do cliente</span><input value={form.arquivoUrl} onChange={campo("arquivoUrl")} placeholder="https://..." /></label>
-        <button className="tdg-action" type="submit" disabled={!conferencia.valido || salvando}><Plus size={17} />Cadastrar como evidência</button>
-        <button type="button" onClick={cadastrarReferenciaCliente} disabled={!form.arquivoUrl}>Guardar somente a referência</button>
+        <div className="tdg-form-actions">
+          <button type="button" onClick={() => setEvidenciaAberta(false)}>Cancelar</button>
+          <button type="button" onClick={cadastrarReferenciaCliente} disabled={!form.arquivoUrl}>Guardar somente a referência</button>
+          <button className="tdg-action" type="submit" disabled={!conferencia.valido || salvando}><Plus size={17} />Cadastrar como evidência</button>
+        </div>
       </form>
-    </details>
+    </Modal>}
 
     <div className="tdg-doc-filtro"><label><span>Filtrar por cliente</span><select value={filtroCliente} onChange={(e) => setFiltroCliente(e.target.value)}><option value="">Todos</option>{clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome || cliente.name}</option>)}</select></label></div>
 
     <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ARQUIVOS INTERNOS</span><h3>Guardados no ERP</h3></div><strong>{arquivos.length}</strong></div>{carregando && <p>Carregando...</p>}{!carregando && arquivos.length === 0 && <p className="tdg-dd-vazio"><FileText size={16} />Nenhum arquivo interno ainda.</p>}<div className="tdg-access-list">{arquivos.map((item) => <div className="tdg-access-row tdg-doc-row" key={item.id}><span><strong>{item.fileName}</strong><small>{item.source === "internal_upload" ? `Versão ${item.version} · ${tamanhoLegivel(item.byteSize)}` : "Referência externa do cliente"}</small></span><span title="SHA-256"><ShieldCheck size={15} />{item.sha256 ? `${item.sha256.slice(0,12)}…` : "referência"}</span><button type="button" onClick={() => baixarInterno(item)}>{item.source === "client_reference" ? <ExternalLink size={17} /> : <Download size={17} />}</button></div>)}</div></section>
 
-    <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">EVIDÊNCIAS AUDITÁVEIS</span><h3>Documentos vinculados a cálculo, operação ou cliente</h3></div><strong>{documentos.length}</strong></div>{!carregando && documentos.length === 0 && <p className="tdg-dd-vazio"><FileText size={16} />Nenhuma evidência cadastrada.</p>}<div className="tdg-access-list">{documentos.map((documento) => <div className="tdg-access-row tdg-doc-row" key={documento.id}><span><strong>{documento.titulo}</strong><small>{documento.tipo.replace(/_/g," ")} · {documento.referencia || "sem referência"} · {documento.emitidoEm || "sem data"}</small></span><span title="SHA-256"><ShieldCheck size={15} />{String(documento.impressaoDigital || "").slice(0,12)}…</span><span>{tamanhoLegivel(documento.arquivoBytes)}</span><button type="button" onClick={() => baixarEvidencia(documento)}><Download size={17} /></button></div>)}</div></section>
+    <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">EVIDÊNCIAS AUDITÁVEIS</span><h3>Documentos vinculados a cálculo, operação ou cliente</h3></div><div className="tdg-page-actions"><strong>{documentos.length}</strong><button type="button" className="tdg-action" onClick={() => setEvidenciaAberta(true)}><Plus size={16} />Registrar evidência</button></div></div>{!carregando && documentos.length === 0 && <p className="tdg-dd-vazio"><FileText size={16} />Nenhuma evidência cadastrada.</p>}<div className="tdg-access-list">{documentos.map((documento) => <div className="tdg-access-row tdg-doc-row" key={documento.id}><span><strong>{documento.titulo}</strong><small>{documento.tipo.replace(/_/g," ")} · {documento.referencia || "sem referência"} · {documento.emitidoEm || "sem data"}</small></span><span title="SHA-256"><ShieldCheck size={15} />{String(documento.impressaoDigital || "").slice(0,12)}…</span><span>{tamanhoLegivel(documento.arquivoBytes)}</span><button type="button" onClick={() => baixarEvidencia(documento)}><Download size={17} /></button></div>)}</div></section>
   </section>;
 }

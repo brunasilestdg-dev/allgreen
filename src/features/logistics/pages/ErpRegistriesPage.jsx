@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { authHeaders as sessionAuthHeaders } from "../../../session/armazenamento.js";
+import Modal from "../../../components/Modal.jsx";
 import {
   COLUMNS,
   FORMS,
@@ -167,14 +168,17 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
               <button
                 className="tdg-action"
                 type="button"
-                onClick={() => (formTab === tabId ? setFormTab("") : abrirFormulario(tabId))}
+                onClick={() => abrirFormulario(tabId)}
               >
-                <Icon size={16} />{formTab === tabId ? "Fechar" : `Novo ${cfg.singular}`}
+                <Icon size={16} />{`Novo ${cfg.singular}`}
               </button>
             </div>
 
+            {/* Cadastro em janela própria: abrir um formulário não empurra
+                mais a tabela desta seção nem as seções irmãs do grupo. */}
             {formTab === tabId && (
-              <form className="tdg-form tdg-registry-form" onSubmit={submit}>
+              <Modal title={`Novo ${cfg.singular}`} onClose={() => setFormTab("")} wide>
+              <form className="tdg-form tdg-registry-form tdg-form-em-modal" onSubmit={submit}>
                 {(formConfig.fields || []).map(([field, label, type = "text", required = false, selectKey]) => (
                   <label key={field}>
                     <span>{label}</span>
@@ -202,10 +206,11 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
                   </label>
                 ))}
                 <div className="tdg-form-actions full">
-                  <button className="tdg-action" type="submit" disabled={saving}>{saving ? "Cadastrando..." : "Cadastrar"}</button>
                   <button type="button" onClick={() => setFormTab("")}>Cancelar</button>
+                  <button className="tdg-action" type="submit" disabled={saving}>{saving ? "Cadastrando..." : "Cadastrar"}</button>
                 </div>
               </form>
+              </Modal>
             )}
 
             {erros[tabId] ? (

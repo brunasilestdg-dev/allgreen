@@ -9,6 +9,7 @@ import {
   valorDoEstoque,
 } from "../stockDomain.js";
 import "./TodoGreenPages.css";
+import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 
 // A tela do estoque. O saldo NUNCA é digitado: ele nasce da soma dos
@@ -187,8 +188,8 @@ export default function StockPage({ authHeaders, setToast, registros }) {
             <RefreshCw size={16} />Atualizar
           </button>
           {acesso.podeMovimentar && (
-            <button className="tdg-action" type="button" onClick={() => setMostrarForm((v) => !v)}>
-              <Package size={16} />{mostrarForm ? "Fechar" : "Novo movimento"}
+            <button className="tdg-action" type="button" onClick={() => setMostrarForm(true)}>
+              <Package size={16} />Novo movimento
             </button>
           )}
         </div>
@@ -221,8 +222,11 @@ export default function StockPage({ authHeaders, setToast, registros }) {
         </article>
       </section>
 
+      {/* Ação em janela própria: o formulário não empurra mais as tabelas
+          da tela (rodada "nada corta a tela", 30/08). */}
       {mostrarForm && acesso.podeMovimentar && (
-        <form className="tdg-panel tdg-form" onSubmit={enviar}>
+        <Modal title="Novo movimento de estoque" onClose={() => setMostrarForm(false)} wide>
+        <form className="tdg-form tdg-form-em-modal" onSubmit={enviar}>
           <label>
             <span>Tipo</span>
             <select value={form.kind} onChange={(e) => alterar("kind", e.target.value)}>
@@ -302,6 +306,7 @@ export default function StockPage({ authHeaders, setToast, registros }) {
             <button type="button" onClick={() => setMostrarForm(false)}>Cancelar</button>
           </div>
         </form>
+        </Modal>
       )}
 
       <section className="tdg-panel">

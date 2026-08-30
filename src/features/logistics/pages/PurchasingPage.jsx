@@ -258,8 +258,8 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
             <RefreshCw size={16} />Atualizar
           </button>
           {acesso.podeComprar && (
-            <button className="tdg-action" type="button" onClick={() => setMostrarForm((v) => !v)}>
-              <FileText size={16} />{mostrarForm ? "Fechar" : "Nova requisição"}
+            <button className="tdg-action" type="button" onClick={() => setMostrarForm(true)}>
+              <FileText size={16} />Nova requisição
             </button>
           )}
         </div>
@@ -278,8 +278,11 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
         <article className="tdg-metric"><span>Requisições</span><strong>{indicadores.requisicoes}</strong><small>no total</small></article>
       </section>
 
+      {/* Ação em janela própria: o formulário não empurra mais as tabelas
+          da tela (rodada "nada corta a tela", 30/08). */}
       {mostrarForm && acesso.podeComprar && (
-        <form className="tdg-panel tdg-form" onSubmit={enviar}>
+        <Modal title="Nova requisição" onClose={() => setMostrarForm(false)} wide>
+        <form className="tdg-form tdg-form-em-modal" onSubmit={enviar}>
           <label className="full"><span>O que precisa ser comprado</span><input value={form.title} onChange={(e) => alterar("title", e.target.value)} required maxLength={160} /></label>
           <label><span>Prioridade</span><select value={form.prioridade} onChange={(e) => alterar("prioridade", e.target.value)}><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></label>
           <label><span>Precisa em</span><input type="date" value={form.precisaEm} onChange={(e) => alterar("precisaEm", e.target.value)} /></label>
@@ -307,6 +310,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
             <button type="button" onClick={() => setMostrarForm(false)}>Cancelar</button>
           </div>
         </form>
+        </Modal>
       )}
 
       <section className="tdg-panel">

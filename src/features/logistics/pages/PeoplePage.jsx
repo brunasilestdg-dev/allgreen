@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Clock, Lock, Plane, RefreshCw, UserPlus, Users } from "lucide-react";
 import "./TodoGreenPages.css";
+import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 
 // Pessoas e folha. Dado sensível: o servidor só entrega isto a quem tem
@@ -210,7 +211,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
         </div>
         <div className="tdg-page-actions">
           <button className="tdg-action" type="button" onClick={carregar}><RefreshCw size={16} />Atualizar</button>
-          <button className="tdg-action" type="button" onClick={() => setMostrarForm((v) => !v)}><UserPlus size={16} />{mostrarForm ? "Fechar" : "Novo colaborador"}</button>
+          <button className="tdg-action" type="button" onClick={() => setMostrarForm(true)}><UserPlus size={16} />Novo colaborador</button>
         </div>
       </header>
 
@@ -223,8 +224,11 @@ export default function PeoplePage({ authHeaders, setToast }) {
         <article className="tdg-metric"><span>eSocial</span><strong>{resumo?.transmissaoEsocialHabilitada ? "Pronto" : "Pendente"}</strong><small>{resumo?.transmissaoEsocialHabilitada ? "certificado no cofre" : "aguarda certificado"}</small></article>
       </section>
 
+      {/* Cadastro em janela própria: o formulário não empurra mais a barra
+          de abas para fora da tela (rodada "nada corta a tela", 30/08). */}
       {mostrarForm && (
-        <form className="tdg-panel tdg-form" onSubmit={criarColaborador}>
+        <Modal title="Novo colaborador" onClose={() => setMostrarForm(false)} wide>
+        <form className="tdg-form tdg-form-em-modal" onSubmit={criarColaborador}>
           <label><span>Nome *</span><input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required /></label>
           <label><span>CPF *</span><input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} placeholder="000.000.000-00" required /></label>
           <label><span>Cargo</span><input value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} /></label>
@@ -243,6 +247,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
             <button type="button" onClick={() => setMostrarForm(false)}>Cancelar</button>
           </div>
         </form>
+        </Modal>
       )}
 
       <div className="tdg-workviews-switch" role="tablist" aria-label="Seções">
@@ -281,17 +286,21 @@ export default function PeoplePage({ authHeaders, setToast }) {
                 </table>
               </div>
             )}
+          {/* Rescisão em janela própria — dado sensível não fica exposto no
+              meio da lista de pessoas. */}
           {rescForm && (
-            <form className="tdg-form tdg-people-subform" onSubmit={confirmarRescisao}>
+            <Modal title={`Rescisão de ${rescForm.nome}`} onClose={() => setRescForm(null)}>
+            <form className="tdg-form tdg-people-subform tdg-form-em-modal" onSubmit={confirmarRescisao}>
               <p className="full"><strong>Rescisão de {rescForm.nome}</strong> — dispensa sem justa causa. O motor cobre as verbas federais do caso comum; confira antes de homologar.</p>
               <label><span>Desligamento *</span><input type="date" value={rescForm.desligamentoEm} onChange={(e) => setRescForm({ ...rescForm, desligamentoEm: e.target.value })} required /></label>
               <label><span>Dias de férias vencidas</span><input type="number" min="0" max="30" value={rescForm.diasFeriasVencidas} onChange={(e) => setRescForm({ ...rescForm, diasFeriasVencidas: e.target.value })} /></label>
               <label><span>Saldo FGTS depositado (p/ multa 40%)</span><input type="number" min="0" step="0.01" value={rescForm.saldoFgts} onChange={(e) => setRescForm({ ...rescForm, saldoFgts: e.target.value })} placeholder="opcional" /></label>
               <div className="tdg-form-actions full">
-                <button className="tdg-action" type="submit">Calcular rescisão</button>
                 <button type="button" onClick={() => setRescForm(null)}>Cancelar</button>
+                <button className="tdg-action" type="submit">Calcular rescisão</button>
               </div>
             </form>
+            </Modal>
           )}
         </section>
       )}

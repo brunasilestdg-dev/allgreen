@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, CircleDollarSign, Plus, ReceiptText, Split } from "lucide-react";
 import "./TransactionalSpinePage.css";
+// Estilos compartilhados dos formulários em modal (tdg-form-em-modal, tdg-form-actions).
+import "./TodoGreenPages.css";
+import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -29,6 +32,7 @@ function Status({ value }) { return <span className={`tdg-txn-status ${value}`}>
 function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }) {
   const [records, setRecords] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [novaAberta, setNovaAberta] = useState(false);
   const [form, setForm] = useState({ clientId: "", contractId: "", operationId: "", quantity: "", chargeUnit: "entrega", unitPrice: "", discountAmount: "0", taxAmount: "0", scheduledStartAt: "", scheduledEndAt: "" });
   const load = useCallback(() => request("service-orders", authHeaders).then((data) => setRecords(data.records || [])).catch((error) => setToast?.(error.message)), [authHeaders, setToast]);
   useEffect(() => { load(); }, [load]);
@@ -37,7 +41,7 @@ function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }
     event.preventDefault(); setSaving(true);
     try {
       await request("service-orders", authHeaders, { method: "POST", body: JSON.stringify({ ...form, quantity: Number(form.quantity), unitPrice: Number(form.unitPrice), discountAmount: Number(form.discountAmount), taxAmount: Number(form.taxAmount) }) });
-      setToast?.("Ordem de serviço criada"); setForm((value) => ({ ...value, quantity: "", unitPrice: "" })); await load();
+      setToast?.("Ordem de serviço criada"); setForm((value) => ({ ...value, quantity: "", unitPrice: "" })); setNovaAberta(false); await load();
     } catch (error) { setToast?.(error.message); } finally { setSaving(false); }
   };
   const transition = async (record) => {
@@ -56,8 +60,9 @@ function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }
       setPodFor(""); setPod({ recipientName: "", documentUrl: "" });
     } catch (error) { setToast?.(error.message); }
   };
-  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">PLANEJAMENTO E PRODUTOS</span><h2>Aceite e ordens de serviço</h2><p>Planejamento/Produtos aceita a viagem e libera a OS. Operação executa depois; Financeiro entra com CT-e, documento fiscal, título e baixa.</p></div><strong>{records.length} ordem(ns)</strong></div>
-    <form className="tdg-txn-form" onSubmit={create}>
+  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">PLANEJAMENTO E PRODUTOS</span><h2>Aceite e ordens de serviço</h2><p>Planejamento/Produtos aceita a viagem e libera a OS. Operação executa depois; Financeiro entra com CT-e, documento fiscal, título e baixa.</p></div><div className="tdg-page-actions"><strong>{records.length} ordem(ns)</strong><button type="button" className="tdg-action" onClick={() => setNovaAberta(true)}><Plus size={16} />Nova OS</button></div></div>
+    {novaAberta && <Modal title="Nova OS" onClose={() => setNovaAberta(false)} wide>
+    <form className="tdg-txn-form tdg-form-em-modal" onSubmit={create}>
       <label><span>Cliente</span><select required value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value, contractId: "" }))}><option value="">Selecione</option>{clients.map((item) => <option value={item.id} key={item.id}>{item.name || item.nome}</option>)}</select></label>
       <label><span>Contrato aprovado e assinado</span><select required value={form.contractId} onChange={(e) => setForm((v) => ({ ...v, contractId: e.target.value }))}><option value="">Selecione</option>{eligibleContracts.map((item) => <option value={item.id} key={item.id}>{item.titulo || item.title || item.id}</option>)}</select><small>{form.clientId && !eligibleContracts.length ? "Nenhum contrato elegível para este cliente." : ""}</small></label>
       <label><span>Operação vinculada</span><select value={form.operationId} onChange={(e) => setForm((v) => ({ ...v, operationId: e.target.value }))}><option value="">Vincular depois</option>{operations.filter((item) => !form.clientId || (item.clientId || item.clienteId) === form.clientId).map((item) => <option value={item.id} key={item.id}>{item.referencia || item.reference || item.id}</option>)}</select></label>
@@ -66,15 +71,19 @@ function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }
       <label><span>Preço unitário</span><input type="number" min="0" step="0.01" value={form.unitPrice} onChange={(e) => setForm((v) => ({ ...v, unitPrice: e.target.value }))} placeholder="Herda do contrato/simulação" /><small>Deixe em branco para herdar o valor negociado do contrato (ou o preço da simulação).</small></label>
       <label><span>Início programado</span><input type="datetime-local" value={form.scheduledStartAt} onChange={(e) => setForm((v) => ({ ...v, scheduledStartAt: e.target.value }))} /></label>
       <label><span>Fim programado</span><input type="datetime-local" value={form.scheduledEndAt} onChange={(e) => setForm((v) => ({ ...v, scheduledEndAt: e.target.value }))} /></label>
-      <button className="tdg-action" disabled={saving || !eligibleContracts.length}><Plus size={17} />Criar OS para aceite</button>
+      <div className="tdg-form-actions"><button type="button" onClick={() => setNovaAberta(false)}>Cancelar</button><button className="tdg-action" disabled={saving || !eligibleContracts.length}><Plus size={17} />Criar OS para aceite</button></div>
     </form>
+    </Modal>}
     <div className="tdg-txn-list">{!records.length && <Empty>Nenhuma ordem de serviço criada.</Empty>}{records.map((record) => <article className="tdg-txn-row" key={record.id}><span><strong>{record.number}</strong><small>{clientName(clients, record.clientId)} · {contractName(contracts, record.contractId)}</small></span><span><small>Valor líquido{record.precoOrigem === "contrato" ? " · preço do contrato" : record.precoOrigem === "simulacao" ? " · preço da simulação" : ""}</small><strong>{BRL.format(record.netAmount || 0)}</strong></span><Status value={record.status} />{record.status === "in_progress" && <button type="button" onClick={() => { setPodFor(record.id); setPod({ recipientName: "", documentUrl: "" }); }}>Registrar comprovante</button>}{nextStatus[record.status] && <button type="button" onClick={() => transition(record)}>{nextLabel[record.status]}<ArrowRight size={14} /></button>}</article>)}</div>
-    {podFor && <form className="tdg-txn-form" onSubmit={savePod}>
-      <label><span>Quem recebeu a carga</span><input value={pod.recipientName} onChange={(e) => setPod((v) => ({ ...v, recipientName: e.target.value }))} placeholder="Nome do recebedor" /></label>
-      <label><span>Link do comprovante (canhoto/foto)</span><input value={pod.documentUrl} onChange={(e) => setPod((v) => ({ ...v, documentUrl: e.target.value }))} placeholder="https://..." /></label>
-      <button className="tdg-action" type="submit"><CheckCircle2 size={17} />Registrar POD</button>
-      <button type="button" onClick={() => setPodFor("")}>Cancelar</button>
-    </form>}
+    {/* POD em janela própria: o botão fica na linha da OS, mas o formulário
+        nascia no rodapé da lista — com muitas ordens, abria fora da tela. */}
+    {podFor && <Modal title="Registrar POD" onClose={() => setPodFor("")}>
+      <form className="tdg-txn-form tdg-form-em-modal" onSubmit={savePod}>
+        <label><span>Quem recebeu a carga</span><input value={pod.recipientName} onChange={(e) => setPod((v) => ({ ...v, recipientName: e.target.value }))} placeholder="Nome do recebedor" /></label>
+        <label><span>Link do comprovante (canhoto/foto)</span><input value={pod.documentUrl} onChange={(e) => setPod((v) => ({ ...v, documentUrl: e.target.value }))} placeholder="https://..." /></label>
+        <div className="tdg-form-actions"><button type="button" onClick={() => setPodFor("")}>Cancelar</button><button className="tdg-action" type="submit"><CheckCircle2 size={17} />Registrar POD</button></div>
+      </form>
+    </Modal>}
   </section>;
 }
 
@@ -108,6 +117,7 @@ function Ciot({ authHeaders, clients, contracts, operations, setToast }) {
   const [records, setRecords] = useState([]);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState("");
+  const [emissaoAberta, setEmissaoAberta] = useState(false);
   const [issuing, setIssuing] = useState(null);
   const [issueForm, setIssueForm] = useState({ ciotCode: "", protocol: "" });
   const [certificateFile, setCertificateFile] = useState(null);
@@ -180,6 +190,7 @@ function Ciot({ authHeaders, clients, contracts, operations, setToast }) {
       await request("ciot", authHeaders, { method: "POST", body: JSON.stringify(body) });
       setToast?.(body.contingencyReason ? "CIOT registrado em contingência" : "CIOT preparado para emissão");
       setForm((current) => ({ ...current, floorAmount: "", contingencyReason: "" }));
+      setEmissaoAberta(false);
       await load();
     } catch (error) { setToast?.(error.message); } finally { setSaving(false); }
   };
@@ -209,7 +220,12 @@ function Ciot({ authHeaders, clients, contracts, operations, setToast }) {
     ["Conector direto", Boolean(integration?.connectorConfigured), integration?.connectorConfigured ? "Configurado" : "Pendente"],
     ["Certificado ICP-Brasil", Boolean(integration?.certificateConfigured), integration?.credentialFilename || (integration?.certificateConfigured ? "Configurado" : "Pendente")],
   ];
-  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">ANTT · API DIRETA · CIOT</span><h2>Geração e controle de CIOT</h2><p>Integração direta para ETC/frota própria sem IPEF: certificado ICP-Brasil A1/A3, payload regulatório, piso mínimo e retorno do código governamental de 12 dígitos.</p></div><strong>{records.length} CIOT(s)</strong></div>
+  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">ANTT · API DIRETA · CIOT</span><h2>Geração e controle de CIOT</h2><p>Integração direta para ETC/frota própria sem IPEF: certificado ICP-Brasil A1/A3, payload regulatório, piso mínimo e retorno do código governamental de 12 dígitos.</p></div><div className="tdg-page-actions"><strong>{records.length} CIOT(s)</strong><button type="button" className="tdg-action" onClick={() => setEmissaoAberta(true)}><ReceiptText size={16} />Emitir CIOT</button></div></div>
+    {/* Configuração técnica (envs, certificado, conector) muda raramente e é
+        assunto de TI: recolhida para não empilhar dois formulários antes da
+        emissão do dia a dia. */}
+    <details className="tdg-panel">
+    <summary>Configuração da integração ANTT — para TI</summary>
     <form className="tdg-txn-form" onSubmit={saveIntegration}>
       <label><span>Modo</span><input value="Integração direta ANTT sem IPEF" readOnly /></label>
       <label><span>Ambiente</span><select value={integrationForm.environment} onChange={(e) => changeIntegration("environment", e.target.value)}><option value="homologation">Homologação</option><option value="production">Produção</option></select></label>
@@ -234,11 +250,13 @@ function Ciot({ authHeaders, clients, contracts, operations, setToast }) {
       <button className="tdg-action" disabled={credentialSaving}><CheckCircle2 size={17} />{credentialSaving ? "Protegendo..." : integrationForm.certificateType === "A1" ? "Enviar certificado A1" : "Salvar conector A3"}</button>
       {integration?.credentialUploadedAt && <button type="button" onClick={testCredential}>Testar credencial</button>}
     </form>
+    </details>
     <div className="tdg-txn-readiness">
       {readiness.map(([label, ok, value]) => <article className={ok ? "ready" : "pending"} key={label}><CheckCircle2 size={16} /><span><strong>{label}</strong><small>{value}</small></span></article>)}
     </div>
     {regulatoryProfile && <div className="tdg-txn-readiness regulatory"><article className="ready"><CheckCircle2 size={16} /><span><strong>{regulatoryProfile.tradeName}</strong><small>CNPJ {regulatoryProfile.document} · RNTRC {regulatoryProfile.rntrc} · {regulatoryProfile.vehicles?.length || 0} veículos</small></span></article></div>}
-    <form className="tdg-txn-form" onSubmit={save}>
+    {emissaoAberta && <Modal title="Emitir CIOT" onClose={() => setEmissaoAberta(false)} wide>
+    <form className="tdg-txn-form tdg-form-em-modal" onSubmit={save}>
       <label><span>OS vinculada</span><select value={form.serviceOrderId} onChange={(e) => { const order = orders.find((item) => item.id === e.target.value); setForm((v) => ({ ...v, serviceOrderId: e.target.value, freightAmount: order?.netAmount ? String(order.netAmount) : v.freightAmount, startsAt: order?.scheduledStartAt || v.startsAt, endsAt: order?.scheduledEndAt || v.endsAt })); }}><option value="">Sem OS</option>{orders.map((item) => <option value={item.id} key={item.id}>{item.number} · {clientName(clients, item.clientId)}</option>)}</select><small>{selectedContract ? `Contrato: ${selectedContract.titulo || selectedContract.title || selectedContract.id}` : ""}</small></label>
       <label><span>Tipo de operação</span><select value={form.operationType} onChange={(e) => change("operationType", e.target.value)}><option value="carga_lotacao">Carga lotação</option><option value="carga_fracionada">Carga fracionada</option><option value="tac_agregado">TAC agregado</option></select></label>
       <label><span>Responsável</span><select value={form.responsibleType} onChange={(e) => change("responsibleType", e.target.value)}><option value="etc">ETC própria</option><option value="tac">TAC/TAC equiparado via pagamento</option><option value="subcontratada">ETC subcontratada</option></select></label>
@@ -257,11 +275,16 @@ function Ciot({ authHeaders, clients, contracts, operations, setToast }) {
       <label><span>Início previsto</span><input type="datetime-local" value={form.startsAt} onChange={(e) => change("startsAt", e.target.value)} /></label>
       <label><span>Fim previsto</span><input type="datetime-local" value={form.endsAt} onChange={(e) => change("endsAt", e.target.value)} /></label>
       <label><span>Contingência</span><input value={form.contingencyReason} onChange={(e) => change("contingencyReason", e.target.value)} placeholder="Preencher só se ANTT estiver indisponível" /></label>
-      <button className="tdg-action" disabled={saving}><ReceiptText size={17} />Preparar envio direto</button>
+      <div className="tdg-form-actions"><button type="button" onClick={() => setEmissaoAberta(false)}>Cancelar</button><button className="tdg-action" disabled={saving}><ReceiptText size={17} />Preparar envio direto</button></div>
     </form>
+    </Modal>}
     <div className="tdg-txn-list">{!records.length && <Empty>Nenhum CIOT preparado.</Empty>}{records.map((record) => <article className="tdg-txn-row" key={record.id}><span><strong>{record.ciotCode || record.number}</strong><small>{record.serviceOrderNumber || "sem OS"} · {record.operationType} · {record.originCity || "origem"} → {record.destinationCity || "destino"}{record.lastError ? ` · ${record.lastError}` : ""}</small></span><span><small>Frete / piso</small><strong>{BRL.format(record.freightAmount || 0)} / {BRL.format(record.floorAmount || 0)}</strong></span><Status value={record.status} />{record.status !== "issued" && <span className="tdg-txn-actions"><button type="button" disabled={submitting === record.id || record.status === "sending"} onClick={() => submit(record)}>Enviar ANTT</button><button type="button" onClick={() => { setIssuing(record); setIssueForm({ ciotCode: record.ciotCode || "", protocol: record.protocol || "" }); }}>Registrar retorno</button></span>}</article>)}</div>
     <div className="tdg-txn-note"><AlertTriangle size={16} /><span>Envio direto sem IPEF. A emissão depende de conector ativo, certificado válido e retorno ANTT com CIOT de 12 dígitos.</span></div>
-    {issuing && <form className="tdg-txn-close" onSubmit={issue}><div><strong>Registrar CIOT de {issuing.number}</strong><small>Use o código de 12 dígitos retornado pela API direta da ANTT.</small></div><label><span>Código CIOT</span><input required inputMode="numeric" pattern="\\d{12}" maxLength={12} value={issueForm.ciotCode} onChange={(e) => setIssueForm((v) => ({ ...v, ciotCode: e.target.value.replace(/\D/g, "").slice(0, 12) }))} /></label><label><span>Protocolo</span><input value={issueForm.protocol} onChange={(e) => setIssueForm((v) => ({ ...v, protocol: e.target.value }))} /></label><button className="tdg-action"><CheckCircle2 size={17} />Confirmar</button><button type="button" onClick={() => setIssuing(null)}>Cancelar</button></form>}
+    {/* Registro do retorno em janela própria: o botão fica na linha do CIOT,
+        mas o formulário nascia depois da lista inteira, fora da tela. */}
+    {issuing && <Modal title="Registrar código do CIOT" onClose={() => setIssuing(null)}>
+      <form className="tdg-txn-close tdg-form-em-modal" onSubmit={issue}><div><strong>Registrar CIOT de {issuing.number}</strong><small>Use o código de 12 dígitos retornado pela API direta da ANTT.</small></div><label><span>Código CIOT</span><input required inputMode="numeric" pattern="\\d{12}" maxLength={12} value={issueForm.ciotCode} onChange={(e) => setIssueForm((v) => ({ ...v, ciotCode: e.target.value.replace(/\D/g, "").slice(0, 12) }))} /></label><label><span>Protocolo</span><input value={issueForm.protocol} onChange={(e) => setIssueForm((v) => ({ ...v, protocol: e.target.value }))} /></label><div className="tdg-form-actions"><button type="button" onClick={() => setIssuing(null)}>Cancelar</button><button className="tdg-action"><CheckCircle2 size={17} />Confirmar</button></div></form>
+    </Modal>}
   </section>;
 }
 
@@ -271,23 +294,30 @@ function Titles({ authHeaders, clients, setToast }) {
   const settle = async (event) => { event.preventDefault(); try { await request(`titles/${paying.id}/settle`, authHeaders, { method: "POST", body: JSON.stringify({ amount: Number(amount), settledAt: new Date().toISOString(), method: "pix" }) }); setToast?.("Baixa registrada"); setPaying(null); await load(); } catch (error) { setToast?.(error.message); } };
   const openTotal = useMemo(() => records.reduce((sum, item) => sum + Number(item.open_amount || 0), 0), [records]);
   return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">RECEBÍVEIS E CONCILIAÇÃO</span><h2>Títulos e baixas</h2><p>Competência, vencimento, parcela, origem fiscal/documental e saldo real em um único razão.</p></div><strong>{BRL.format(openTotal)} em aberto</strong></div><div className="tdg-txn-list">{!records.length && <Empty>Nenhum título financeiro.</Empty>}{records.map((item) => <article className="tdg-txn-row" key={item.id}><span><strong>{item.number}</strong><small>{item.kind === "receivable" ? clientName(clients, item.client_id) : item.supplier_id || "Fornecedor"} · vence {item.due_date}</small></span><span><small>Saldo</small><strong>{BRL.format(item.open_amount || 0)}</strong></span><Status value={item.status} />{["open", "partial", "overdue"].includes(item.status) && <button type="button" onClick={() => { setPaying(item); setAmount(String(item.open_amount)); }}>Dar baixa</button>}</article>)}</div>
-    {paying && <form className="tdg-txn-close" onSubmit={settle}><div><strong>Baixa de {paying.number}</strong><small>Saldo atual {BRL.format(paying.open_amount)}</small></div><label><span>Valor</span><input required type="number" min="0.01" max={paying.open_amount} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label><button className="tdg-action"><CircleDollarSign size={17} />Confirmar baixa</button><button type="button" onClick={() => setPaying(null)}>Cancelar</button></form>}
+    {/* Baixa em janela própria: o botão fica na linha do título, mas o
+        formulário nascia depois da lista inteira, fora da tela. */}
+    {paying && <Modal title={`Baixa de ${paying.number}`} onClose={() => setPaying(null)}>
+      <form className="tdg-txn-close tdg-form-em-modal" onSubmit={settle}><div><small>Saldo atual {BRL.format(paying.open_amount)}</small></div><label><span>Valor</span><input required type="number" min="0.01" max={paying.open_amount} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label><div className="tdg-form-actions"><button type="button" onClick={() => setPaying(null)}>Cancelar</button><button className="tdg-action"><CircleDollarSign size={17} />Confirmar baixa</button></div></form>
+    </Modal>}
   </section>;
 }
 
 const allocationEmpty = () => ({ serviceOrderId: "", operationId: "", clientId: "", contractId: "", vehicleId: "", supplierId: "", costCenterId: "", amount: "" });
 function Costs({ authHeaders, clients, contracts, operations, setToast }) {
-  const [records, setRecords] = useState([]); const [saving, setSaving] = useState(false); const [form, setForm] = useState({ description: "", amount: "", competenceDate: today(), supplierId: "", documentNumber: "", allocations: [allocationEmpty()] });
+  const [records, setRecords] = useState([]); const [saving, setSaving] = useState(false); const [novoAberto, setNovoAberto] = useState(false); const [form, setForm] = useState({ description: "", amount: "", competenceDate: today(), supplierId: "", documentNumber: "", allocations: [allocationEmpty()] });
   const load = useCallback(() => request("costs", authHeaders).then((data) => setRecords(data.records || [])).catch(() => setRecords([])), [authHeaders]); useEffect(() => { load(); }, [load]);
   const allocated = form.allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0); const remaining = Number(form.amount || 0) - allocated;
   const changeAllocation = (index, key, value) => setForm((current) => ({ ...current, allocations: current.allocations.map((item, position) => position === index ? { ...item, [key]: value } : item) }));
-  const save = async (event) => { event.preventDefault(); setSaving(true); try { await request("costs", authHeaders, { method: "POST", body: JSON.stringify({ ...form, amount: Number(form.amount), allocations: form.allocations.map((item) => ({ ...item, amount: Number(item.amount) })) }) }); setToast?.("Custo e rateios registrados"); setForm({ description: "", amount: "", competenceDate: today(), supplierId: "", documentNumber: "", allocations: [allocationEmpty()] }); await load(); } catch (error) { setToast?.(error.message); } finally { setSaving(false); } };
-  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">CUSTO MULTIDIMENSIONAL</span><h2>Rateio de custos</h2><p>Um custo pode ser distribuído entre OS, operação, cliente, contrato, veículo, fornecedor e centro de custo.</p></div><strong>{records.length} custo(s)</strong></div>
-    <form className="tdg-txn-cost" onSubmit={save}><div className="tdg-txn-form"><label><span>Descrição</span><input required value={form.description} onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))} /></label><label><span>Valor total</span><input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></label><label><span>Competência</span><input required type="date" value={form.competenceDate} onChange={(e) => setForm((v) => ({ ...v, competenceDate: e.target.value }))} /></label><label><span>Documento</span><input value={form.documentNumber} onChange={(e) => setForm((v) => ({ ...v, documentNumber: e.target.value }))} /></label></div>
+  const save = async (event) => { event.preventDefault(); setSaving(true); try { await request("costs", authHeaders, { method: "POST", body: JSON.stringify({ ...form, amount: Number(form.amount), allocations: form.allocations.map((item) => ({ ...item, amount: Number(item.amount) })) }) }); setToast?.("Custo e rateios registrados"); setForm({ description: "", amount: "", competenceDate: today(), supplierId: "", documentNumber: "", allocations: [allocationEmpty()] }); setNovoAberto(false); await load(); } catch (error) { setToast?.(error.message); } finally { setSaving(false); } };
+  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">CUSTO MULTIDIMENSIONAL</span><h2>Rateio de custos</h2><p>Um custo pode ser distribuído entre OS, operação, cliente, contrato, veículo, fornecedor e centro de custo.</p></div><div className="tdg-page-actions"><strong>{records.length} custo(s)</strong><button type="button" className="tdg-action" onClick={() => setNovoAberto(true)}><Plus size={16} />Novo custo</button></div></div>
+    {novoAberto && <Modal title="Novo custo" onClose={() => setNovoAberto(false)} wide>
+    <form className="tdg-txn-cost tdg-form-em-modal" onSubmit={save}><div className="tdg-txn-form"><label><span>Descrição</span><input required value={form.description} onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))} /></label><label><span>Valor total</span><input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></label><label><span>Competência</span><input required type="date" value={form.competenceDate} onChange={(e) => setForm((v) => ({ ...v, competenceDate: e.target.value }))} /></label><label><span>Documento</span><input value={form.documentNumber} onChange={(e) => setForm((v) => ({ ...v, documentNumber: e.target.value }))} /></label></div>
       <div className="tdg-txn-allocation-head"><strong>Distribuição</strong><span className={Math.abs(remaining) < .01 ? "balanced" : ""}>Restante: {BRL.format(remaining)}</span></div>
       {form.allocations.map((item, index) => <div className="tdg-txn-allocation" key={index}><label><span>Valor</span><input required type="number" min="0.01" step="0.01" value={item.amount} onChange={(e) => changeAllocation(index, "amount", e.target.value)} /></label><label><span>Cliente</span><select value={item.clientId} onChange={(e) => changeAllocation(index, "clientId", e.target.value)}><option value="">Sem vínculo</option>{clients.map((x) => <option value={x.id} key={x.id}>{x.name || x.nome}</option>)}</select></label><label><span>Contrato</span><select value={item.contractId} onChange={(e) => changeAllocation(index, "contractId", e.target.value)}><option value="">Sem vínculo</option>{contracts.map((x) => <option value={x.id} key={x.id}>{x.titulo || x.title || x.id}</option>)}</select></label><label><span>Operação</span><select value={item.operationId} onChange={(e) => changeAllocation(index, "operationId", e.target.value)}><option value="">Sem vínculo</option>{operations.map((x) => <option value={x.id} key={x.id}>{x.referencia || x.reference || x.id}</option>)}</select></label><label><span>OS</span><input value={item.serviceOrderId} onChange={(e) => changeAllocation(index, "serviceOrderId", e.target.value)} placeholder="ID da OS" /></label><label><span>Veículo</span><input value={item.vehicleId} onChange={(e) => changeAllocation(index, "vehicleId", e.target.value)} /></label><label><span>Fornecedor</span><input value={item.supplierId} onChange={(e) => changeAllocation(index, "supplierId", e.target.value)} /></label><label><span>Centro de custo</span><input value={item.costCenterId} onChange={(e) => changeAllocation(index, "costCenterId", e.target.value)} /></label>{form.allocations.length > 1 && <button type="button" onClick={() => setForm((v) => ({ ...v, allocations: v.allocations.filter((_, position) => position !== index) }))}>Remover</button>}</div>)}
-      <div className="tdg-txn-form-actions"><button type="button" onClick={() => setForm((v) => ({ ...v, allocations: [...v.allocations, allocationEmpty()] }))}><Plus size={16} />Adicionar rateio</button><button className="tdg-action" disabled={saving || Math.abs(remaining) >= .01}><Split size={17} />Salvar custo rateado</button></div>
+      <div className="tdg-txn-form-actions"><button type="button" onClick={() => setForm((v) => ({ ...v, allocations: [...v.allocations, allocationEmpty()] }))}><Plus size={16} />Adicionar rateio</button></div>
+      <div className="tdg-form-actions"><button type="button" onClick={() => setNovoAberto(false)}>Cancelar</button><button className="tdg-action" disabled={saving || Math.abs(remaining) >= .01}><Split size={17} />Salvar custo rateado</button></div>
     </form>
+    </Modal>}
     <div className="tdg-txn-list">{!records.length && <Empty>Nenhum custo rateado registrado.</Empty>}{records.map((item) => <article className="tdg-txn-row" key={item.id}><span><strong>{item.description}</strong><small>{item.document_number || "sem documento"} · {item.allocations?.length || 0} dimensão(ões)</small></span><span><small>Valor</small><strong>{BRL.format(item.amount || 0)}</strong></span><CheckCircle2 size={18} /></article>)}</div>
   </section>;
 }

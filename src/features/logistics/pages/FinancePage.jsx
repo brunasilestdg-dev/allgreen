@@ -1,6 +1,7 @@
 import "./TodoGreenPages.css";
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Plus, ReceiptText } from "lucide-react";
+import Modal from "../../../components/Modal.jsx";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
 import { agruparPorCentroDeCusto, resumoFinanceiro, saldoAberto, statusFinanceiroEfetivo } from "../todoGreenFinanceDomain.js";
 import { faixasDeAtraso, proximoVencimentoMensal } from "../contasPonteDomain.js";
@@ -18,6 +19,9 @@ export default function FinancePage({ type, entries = [], clients = [], contract
   const copy = LABEL[type] || LABEL.cost;
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
+  // Lançamento novo abre em janela própria: o livro não é mais empurrado
+  // por um formulário de 12 campos (rodada "nada corta a tela", 30/08).
+  const [novoAberto, setNovoAberto] = useState(false);
   const [paymentFor, setPaymentFor] = useState(null);
   const [payments, setPayments] = useState([]);
   const [payment, setPayment] = useState({ valor: "", pagoEm: hoje(), meioPagamento: "pix", referencia: "", observacoes: "" });
@@ -46,6 +50,7 @@ export default function FinancePage({ type, entries = [], clients = [], contract
         codigoOrcamento: form.budgetCode, situacao: "confirmed", statusFinanceiro: "pending",
       });
       setForm(empty);
+      setNovoAberto(false);
       setToast?.(`${copy.action} registrada`);
     } catch (error) { setToast?.(error.message); }
     finally { setSaving(false); }
@@ -116,7 +121,7 @@ export default function FinancePage({ type, entries = [], clients = [], contract
 
   return (
     <section className="tdg-panel tdg-enterprise-ledger">
-      <div className="tdg-section-head"><div><span className="tdg-kicker">FINANCEIRO OPERACIONAL</span><h2>{copy.title}</h2><p>Vencimento, competência e baixas no mesmo livro.</p></div><strong>{entries.length} lançamento(s)</strong></div>
+      <div className="tdg-section-head"><div><span className="tdg-kicker">FINANCEIRO OPERACIONAL</span><h2>{copy.title}</h2><p>Vencimento, competência e baixas no mesmo livro.</p></div><div className="tdg-page-actions"><strong>{entries.length} lançamento(s)</strong><button type="button" className="tdg-action" onClick={() => setNovoAberto(true)}><Plus size={16} />{copy.action}</button></div></div>
       <div className="tdg-result">
         <article className="tdg-metric"><span>Total</span><strong>{BRL.format(summary.total)}</strong><small>lançamentos válidos</small></article>
         <article className="tdg-metric good"><span>Realizado</span><strong>{BRL.format(summary.pago)}</strong><small>com baixa registrada</small></article>
@@ -132,7 +137,8 @@ export default function FinancePage({ type, entries = [], clients = [], contract
           ))}
         </div>
       )}
-      <form className="tdg-access-form tdg-enterprise-form" onSubmit={save}>
+      {novoAberto && <Modal title={copy.action} onClose={() => setNovoAberto(false)} wide>
+      <form className="tdg-access-form tdg-enterprise-form tdg-form-em-modal" onSubmit={save}>
         <label><span>Cliente</span><select value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value }))}><option value="">Sem vínculo</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name || client.nome || client.id}</option>)}</select></label>
         <label><span>Contrato</span><select value={form.contractId} onChange={(e) => setForm((v) => ({ ...v, contractId: e.target.value }))}><option value="">Sem contrato</option>{contracts.filter((contract) => !form.clientId || contract.clientId === form.clientId).map((contract) => <option key={contract.id} value={contract.id}>{contract.titulo || contract.title}</option>)}</select></label>
         <label><span>{copy.party}</span><input value={form.counterparty} onChange={(e) => setForm((v) => ({ ...v, counterparty: e.target.value }))} /></label>
@@ -145,8 +151,9 @@ export default function FinancePage({ type, entries = [], clients = [], contract
         <label><span>Centro de custo</span><input value={form.costCenter} onChange={(e) => setForm((v) => ({ ...v, costCenter: e.target.value }))} /></label>
         <label><span>Código de orçamento</span><input value={form.budgetCode} onChange={(e) => setForm((v) => ({ ...v, budgetCode: e.target.value }))} /></label>
         <label><span>Produto</span><select value={form.productId} onChange={(e) => setForm((v) => ({ ...v, productId: e.target.value }))}>{LOGISTICS_PRODUCTS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : "Salvar lançamento"}</button>
+        <div className="tdg-form-actions"><button type="button" onClick={() => setNovoAberto(false)}>Cancelar</button><button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : "Salvar lançamento"}</button></div>
       </form>
+      </Modal>}
       <div className="tdg-ledger-tools"><label className="tdg-search"><ReceiptText size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar documento, contraparte, categoria ou centro de custo" /></label>{centers.length > 0 && <small>Maiores centros: {centers.map(([name, value]) => `${name} ${BRL.format(value)}`).join(" · ")}</small>}</div>
       <div className="tdg-ledger-table" aria-label={copy.title}>
         {filtered.length === 0 && <div className="tdg-empty-access">Nenhum lançamento encontrado.</div>}
@@ -155,8 +162,10 @@ export default function FinancePage({ type, entries = [], clients = [], contract
           return <article className="tdg-ledger-row" key={entry.id}><span><strong>{entry.descricao || entry.categoria}</strong><small>{entry.contraparte || "sem contraparte"} · {entry.numeroDocumento || "sem documento"}</small></span><span><small>Vencimento</small><strong>{entry.vencimentoEm || "não informado"}</strong></span><span><small>Saldo</small><strong>{BRL.format(saldoAberto(entry))}</strong></span><span className={`tdg-ledger-status ${status}`}>{status === "overdue" ? <AlertTriangle size={15} /> : status === "paid" ? <CheckCircle2 size={15} /> : <CircleDollarSign size={15} />}{STATUS[status]}</span>{!["paid", "cancelled"].includes(status) && <button type="button" onClick={() => openPayment(entry)}>Dar baixa</button>}{status !== "cancelled" && <button type="button" onClick={() => repetirProximoMes(entry)} disabled={saving} title="Gera o mesmo título com vencimento no mês seguinte">Repetir mês</button>}</article>;
         })}
       </div>
-      {paymentFor && <>
-        <form className="tdg-inline-editor" onSubmit={pay}><div><strong>Baixa de {paymentFor.descricao || paymentFor.categoria}</strong><small>Saldo aberto: {BRL.format(saldoAberto(paymentFor))} · {payments.filter((p) => Number(p.valor) > 0).length} baixa(s) anterior(es)</small></div><label><span>Valor</span><input type="number" min="0.01" max={saldoAberto(paymentFor)} step="0.01" required value={payment.valor} onChange={(e) => setPayment((v) => ({ ...v, valor: e.target.value }))} /></label><label><span>Data</span><input type="date" required value={payment.pagoEm} onChange={(e) => setPayment((v) => ({ ...v, pagoEm: e.target.value }))} /></label><label><span>Meio</span><select value={payment.meioPagamento} onChange={(e) => setPayment((v) => ({ ...v, meioPagamento: e.target.value }))}><option value="pix">PIX</option><option value="transferencia">Transferência</option><option value="boleto">Boleto</option><option value="cartao">Cartão</option><option value="outro">Outro</option></select></label><label><span>Referência</span><input value={payment.referencia} onChange={(e) => setPayment((v) => ({ ...v, referencia: e.target.value }))} /></label><button className="tdg-action" type="submit" disabled={saving}>Confirmar baixa</button><button type="button" onClick={() => setPaymentFor(null)}>Cancelar</button></form>
+      {/* Baixa em janela própria: antes o formulário nascia DEPOIS da tabela
+          inteira — com muitos títulos, a ação abria fora da tela. */}
+      {paymentFor && <Modal title={`Baixa de ${paymentFor.descricao || paymentFor.categoria}`} onClose={() => setPaymentFor(null)} wide>
+        <form className="tdg-inline-editor tdg-form-em-modal" onSubmit={pay}><div><small>Saldo aberto: {BRL.format(saldoAberto(paymentFor))} · {payments.filter((p) => Number(p.valor) > 0).length} baixa(s) anterior(es)</small></div><label><span>Valor</span><input type="number" min="0.01" max={saldoAberto(paymentFor)} step="0.01" required value={payment.valor} onChange={(e) => setPayment((v) => ({ ...v, valor: e.target.value }))} /></label><label><span>Data</span><input type="date" required value={payment.pagoEm} onChange={(e) => setPayment((v) => ({ ...v, pagoEm: e.target.value }))} /></label><label><span>Meio</span><select value={payment.meioPagamento} onChange={(e) => setPayment((v) => ({ ...v, meioPagamento: e.target.value }))}><option value="pix">PIX</option><option value="transferencia">Transferência</option><option value="boleto">Boleto</option><option value="cartao">Cartão</option><option value="outro">Outro</option></select></label><label><span>Referência</span><input value={payment.referencia} onChange={(e) => setPayment((v) => ({ ...v, referencia: e.target.value }))} /></label><button className="tdg-action" type="submit" disabled={saving}>Confirmar baixa</button><button type="button" onClick={() => setPaymentFor(null)}>Cancelar</button></form>
         {payments.length > 0 && (
           <div className="tdg-payment-history">
             <strong>Histórico de baixas</strong>
@@ -176,7 +185,7 @@ export default function FinancePage({ type, entries = [], clients = [], contract
             })}
           </div>
         )}
-      </>}
+      </Modal>}
     </section>
   );
 }

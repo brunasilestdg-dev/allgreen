@@ -9,8 +9,10 @@ import {
   ServerCog,
   Trash2,
   Workflow,
-  X,
 } from "lucide-react";
+import Modal from "../../components/Modal.jsx";
+// Estilos compartilhados dos formulários em modal (tdg-form-em-modal, tdg-form-actions).
+import "./pages/TodoGreenPages.css";
 import { authHeaders } from "../../session/armazenamento.js";
 
 const API = "/api/todogreen/work-center";
@@ -263,6 +265,7 @@ export default function TodoGreenAutomations({ setToast, onNavigate }) {
 
   const openTemplate = (template) => {
     setForm({ ...emptyForm(), ...template.values });
+    setError("");
     setFormOpen(true);
   };
 
@@ -334,7 +337,7 @@ export default function TodoGreenAutomations({ setToast, onNavigate }) {
         <div><span className="tdg-kicker">AUTOMAÇÕES</span><h2>Quando isso acontecer, faça aquilo</h2><p>As regras rodam no servidor, respeitam o acesso da To Do Green e registram a execução no histórico do item.</p></div>
         <div className="tdg-automation-hero-actions">
           <button type="button" className="tdg-login-secondary" onClick={load} disabled={loading}><RefreshCw size={16} /> Atualizar</button>
-          {canWrite && <button type="button" className="tdg-action" onClick={() => { setForm(emptyForm()); setFormOpen(true); }}><Plus size={16} /> Nova automação</button>}
+          {canWrite && <button type="button" className="tdg-action" onClick={() => { setForm(emptyForm()); setError(""); setFormOpen(true); }}><Plus size={16} /> Nova automação</button>}
         </div>
       </section>
 
@@ -347,7 +350,7 @@ export default function TodoGreenAutomations({ setToast, onNavigate }) {
         <span><Clock3 /><small>Já executadas</small><strong>{metrics.executed}</strong></span>
       </section>
 
-      {canWrite && !formOpen && (
+      {canWrite && (
         <section className="tdg-automation-templates">
           <header><div><span className="tdg-kicker">ATALHOS</span><h3>Comece de uma regra segura</h3></div></header>
           <div>{templates.map((template) => <button type="button" onClick={() => openTemplate(template)} key={template.id}><ServerCog /><span><strong>{template.name}</strong><small>{template.description}</small></span><ArrowRight /></button>)}</div>
@@ -355,8 +358,8 @@ export default function TodoGreenAutomations({ setToast, onNavigate }) {
       )}
 
       {formOpen && canWrite && (
-        <form className="tdg-automation-builder" onSubmit={save}>
-          <header><div><span className="tdg-kicker">NOVA REGRA</span><h3>Monte a automação</h3></div><button type="button" aria-label="Fechar formulário" onClick={() => setFormOpen(false)}><X /></button></header>
+        <Modal title="Nova automação" onClose={() => setFormOpen(false)} wide>
+        <form className="tdg-automation-builder tdg-form-em-modal" onSubmit={save}>
           <label className="full"><span>Nome</span><input required maxLength={160} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex.: Escalar item bloqueado" /></label>
           <label><span>Aplicar em</span><select value={form.boardId} onChange={(event) => setForm({ ...form, boardId: event.target.value })}><option value="">Todos os quadros</option>{boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}</select></label>
           <label><span>Quando</span><select value={form.trigger} onChange={(event) => setForm({ ...form, trigger: event.target.value })}>{TRIGGERS.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>
@@ -365,8 +368,12 @@ export default function TodoGreenAutomations({ setToast, onNavigate }) {
           {form.conditionField && !["is-empty", "is-not-empty"].includes(form.conditionOperator) && <label className="full"><span>Valor da condição</span><input maxLength={240} value={form.conditionValue} onChange={(event) => setForm({ ...form, conditionValue: event.target.value })} placeholder="Ex.: bloqueado, crítica ou nome do cliente" /></label>}
           <label><span>Ação</span><select value={form.actionType} onChange={(event) => { const actionType = event.target.value; setForm({ ...form, actionType, actionValue: defaultActionValue(actionType, boards) }); }}>{ACTIONS.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>
           <ActionValue form={form} boards={boards} onChange={(actionValue) => setForm({ ...form, actionValue })} />
-          <footer className="full"><button type="button" className="tdg-login-secondary" onClick={() => setFormOpen(false)}>Cancelar</button><button type="submit" className="tdg-action" disabled={saving || !form.name.trim() || !form.actionValue.trim()}>{saving ? "Salvando..." : "Ativar automação"}</button></footer>
+          {/* O alerta do topo da página fica atrás do fundo do modal; o erro
+              do salvamento precisa aparecer aqui, com o formulário aberto. */}
+          {error && <div className="tdg-alert full"><span>{error}</span></div>}
+          <div className="tdg-form-actions full"><button type="button" className="tdg-login-secondary" onClick={() => setFormOpen(false)}>Cancelar</button><button type="submit" className="tdg-action" disabled={saving || !form.name.trim() || !form.actionValue.trim()}>{saving ? "Salvando..." : "Ativar automação"}</button></div>
         </form>
+        </Modal>
       )}
 
       <section className="tdg-automation-list">

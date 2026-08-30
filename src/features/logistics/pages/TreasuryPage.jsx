@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Banknote, CheckCircle2, FileUp, Landmark, Link2, Lock, Plus, Unlock } from "lucide-react";
+import Modal from "../../../components/Modal.jsx";
 import { parseOfxTransactions } from "../../../domain/importacoes.js";
 import "./TodoGreenPages.css";
 
@@ -208,8 +209,11 @@ export default function TreasuryPage({ authHeaders, setToast }) {
         </article>
       </div>
 
+      {/* Conta nova em janela própria: o formulário não empurra mais a
+          barra de seções da tesouraria (rodada "nada corta a tela", 30/08). */}
       {formConta && (
-        <form className="tdg-form" onSubmit={criarConta}>
+        <Modal title="Nova conta bancária" onClose={() => setFormConta(null)}>
+        <form className="tdg-form tdg-form-em-modal" onSubmit={criarConta}>
           <label><span>Nome da conta</span><input required value={formConta.name} onChange={(e) => setFormConta((v) => ({ ...v, name: e.target.value }))} placeholder="Ex.: Itaú principal" /></label>
           <label><span>Tipo</span><select value={formConta.kind} onChange={(e) => setFormConta((v) => ({ ...v, kind: e.target.value }))}>{["corrente", "poupanca", "caixa", "aplicacao", "cartao"].map((k) => <option key={k} value={k}>{k}</option>)}</select></label>
           <label><span>Banco (código)</span><input value={formConta.bancoCodigo} onChange={(e) => setFormConta((v) => ({ ...v, bancoCodigo: e.target.value }))} /></label>
@@ -217,9 +221,9 @@ export default function TreasuryPage({ authHeaders, setToast }) {
           <label><span>Conta</span><input value={formConta.conta} onChange={(e) => setFormConta((v) => ({ ...v, conta: e.target.value }))} /></label>
           <label><span>Saldo inicial (R$)</span><input type="number" step="0.01" value={formConta.saldoInicial} onChange={(e) => setFormConta((v) => ({ ...v, saldoInicial: e.target.value }))} /></label>
           <label><span>Data do saldo</span><input type="date" value={formConta.aberturaEm} onChange={(e) => setFormConta((v) => ({ ...v, aberturaEm: e.target.value }))} /></label>
-          <button className="tdg-action" type="submit" disabled={ocupado}><Landmark size={15} />Criar conta</button>
-          <button type="button" onClick={() => setFormConta(null)}>Cancelar</button>
+          <div className="tdg-form-actions"><button type="button" onClick={() => setFormConta(null)}>Cancelar</button><button className="tdg-action" type="submit" disabled={ocupado}><Landmark size={15} />Criar conta</button></div>
         </form>
+        </Modal>
       )}
 
       <nav className="tdg-subtabs" aria-label="Seções da tesouraria">
