@@ -203,7 +203,7 @@ const COLECOES = {
     colunas: (corpo) => ({
       client_id: texto(corpo.clientId, 120),
       client_name: texto(corpo.cliente || corpo.clientName, 200),
-      stage: texto(corpo.estagio || corpo.stage, 60) || "Mapeamento",
+      stage: texto(corpo.estagio || corpo.stage, 60) || "Prospecção",
       monthly_value: numero(corpo.valorMensal),
       contract_value: numero(corpo.valorContrato),
       distance_km: numero(corpo.distanciaKm),

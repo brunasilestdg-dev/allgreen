@@ -44,6 +44,9 @@ const mapeada = {
 };
 
 const abrir = (nome) => fireEvent.click(screen.getByRole("button", { name: new RegExp(nome) }));
+// O formulário de criação vive num modal (a página não é mais cortada no
+// meio); os testes abrem o modal como uma pessoa abriria.
+const abrirNova = () => fireEvent.click(screen.getByRole("button", { name: /Nova oportunidade/ }));
 
 // O kanban simplificado virou a visão padrão (pedido da titular). Estes testes
 // exercitam os fluxos da LISTA (cartão aberto, memória de cálculo, edição), então
@@ -58,7 +61,7 @@ describe("página de oportunidades", () => {
     render(<OpportunitiesPage opportunities={[completa]} />);
     // Coluna do estágio da oportunidade com contagem e o cartão nome+valor.
     expect(screen.getByRole("tab", { name: "Kanban", selected: true })).toBeInTheDocument();
-    expect(screen.getByText(/Proposta · 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Apresentação · 1/)).toBeInTheDocument();
     const cartao = screen.getByRole("button", { name: /Distribuidora Norte.*240\.000/ });
     expect(cartao).toBeInTheDocument();
   });
@@ -66,8 +69,8 @@ describe("página de oportunidades", () => {
   it("mostra o pipeline separando valor cheio de valor ponderado", () => {
     render(<OpportunitiesPage opportunities={[completa]} />);
     const resumo = screen.getByText("Ponderado pela probabilidade").closest("article");
-    // 240.000 × 60% (estágio Proposta)
-    expect(within(resumo).getByText(/144\.000/)).toBeInTheDocument();
+    // 240.000 × 35% (estágio Apresentação, régua do funil da titular)
+    expect(within(resumo).getByText(/84\.000/)).toBeInTheDocument();
     expect(screen.getByText("Valor em contrato").closest("article")).toHaveTextContent(
       /240\.000/,
     );
@@ -167,6 +170,7 @@ describe("página de oportunidades", () => {
   it("grava os números do formulário como número, não como texto", () => {
     const onCreate = vi.fn();
     render(<OpportunitiesPage opportunities={[]} onCreate={onCreate} />);
+    abrirNova();
     fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "Nova Conta" } });
     fireEvent.change(screen.getByLabelText("Distância por viagem (km)"), {
       target: { value: "90" },
@@ -189,8 +193,9 @@ describe("página de oportunidades", () => {
   it("vincula a oportunidade ao identificador da conta e navega pelas etapas", () => {
     const onCreate = vi.fn();
     render(<OpportunitiesPage clients={[{ id: "cli-1", name: "Rede Alfa" }]} opportunities={[completa]} onCreate={onCreate} />);
+    abrirNova();
     fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-1" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Proposta/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Apresentação/ }));
     expect(screen.getByRole("button", { name: /Distribuidora Norte/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
     expect(onCreate.mock.calls[0][0]).toMatchObject({ clientId: "cli-1", cliente: "Rede Alfa" });
@@ -228,11 +233,15 @@ describe("página de oportunidades", () => {
     ];
     render(<OpportunitiesPage clients={clients} opportunities={[]} onCreate={vi.fn()} setToast={setToast} />);
 
+    abrirNova();
     fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-fria" } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
     await waitFor(() => expect(setToast).toHaveBeenCalled());
     expect(setToast.mock.calls.at(-1)[0]).toMatch(/Rede Fria saiu de Frio para Morno/);
 
+    // O modal fecha no sucesso; a segunda oportunidade começa como a pessoa
+    // começaria — abrindo de novo.
+    abrirNova();
     fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-quente" } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
     await waitFor(() => expect(setToast).toHaveBeenCalledTimes(2));
@@ -243,10 +252,12 @@ describe("página de oportunidades", () => {
     const onCreate = vi.fn().mockRejectedValue(new Error("Servidor indisponível"));
     const setToast = vi.fn();
     render(<OpportunitiesPage opportunities={[]} onCreate={onCreate} setToast={setToast} />);
+    abrirNova();
     fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "Conta preservada" } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
 
     await waitFor(() => expect(setToast).toHaveBeenCalledWith("Servidor indisponível"));
+    // Em erro o modal continua aberto e nada digitado se perde.
     expect(screen.getByLabelText("Cliente")).toHaveValue("Conta preservada");
   });
 

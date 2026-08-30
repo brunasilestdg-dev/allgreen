@@ -33,8 +33,8 @@ const oportunidade = (extra = {}) => ({
 
 describe("estágio e probabilidade", () => {
   it("estágio desconhecido não derruba a análise: cai no início do funil", () => {
-    expect(estagioValido("Qualquer coisa")).toBe("Mapeamento");
-    expect(estagioValido(undefined)).toBe("Mapeamento");
+    expect(estagioValido("Qualquer coisa")).toBe("Prospecção");
+    expect(estagioValido(undefined)).toBe("Prospecção");
     expect(estagioValido("Negociação")).toBe("Negociação");
   });
 
@@ -45,13 +45,13 @@ describe("estágio e probabilidade", () => {
   });
 
   it("a probabilidade informada pela pessoa vence a do estágio", () => {
-    expect(probabilidadeDoEstagio("Mapeamento", 65)).toBe(65);
+    expect(probabilidadeDoEstagio("Prospecção", 65)).toBe(65);
   });
 
   it("probabilidade impossível é ignorada em favor da régua do estágio", () => {
-    expect(probabilidadeDoEstagio("Proposta", 150)).toBe(60);
-    expect(probabilidadeDoEstagio("Proposta", -3)).toBe(60);
-    expect(probabilidadeDoEstagio("Proposta", "mais ou menos")).toBe(60);
+    expect(probabilidadeDoEstagio("Apresentação", 150)).toBe(35);
+    expect(probabilidadeDoEstagio("Apresentação", -3)).toBe(35);
+    expect(probabilidadeDoEstagio("Apresentação", "mais ou menos")).toBe(35);
   });
 });
 
@@ -171,8 +171,8 @@ describe("impacto financeiro", () => {
   it("valor cheio e valor ponderado são coisas diferentes", () => {
     const f = impactoFinanceiro(oportunidade({ estagio: "Negociação" }));
     expect(f.valorContrato).toBe(240000);
-    expect(f.probabilidade).toBe(75);
-    expect(f.valorPonderado).toBe(180000);
+    expect(f.probabilidade).toBe(60);
+    expect(f.valorPonderado).toBe(144000);
     // Confundir os dois é o que transforma pipeline em ficção.
     expect(f.valorPonderado).toBeLessThan(f.valorContrato);
   });
@@ -309,7 +309,7 @@ describe("próxima ação", () => {
   });
 
   it("risco alto manda na ação, acima do estágio", () => {
-    // Estágio Proposta pediria "apresentar a proposta"; a frota faltando vem antes.
+    // Estágio Apresentação pediria "apresentar a proposta"; a frota faltando vem antes.
     const acao = proximaAcao(
       oportunidade({ viagensMes: 220, veiculosDisponiveis: 2 }),
     );
@@ -330,13 +330,13 @@ describe("próxima ação", () => {
   });
 
   it("sem risco alto, a ação segue o estágio", () => {
-    expect(proximaAcao(oportunidade({ estagio: "Mapeamento" })).acao).toMatch(
+    expect(proximaAcao(oportunidade({ estagio: "Prospecção" })).acao).toMatch(
       /diagnóstico operacional/i,
     );
     expect(proximaAcao(oportunidade({ estagio: "Negociação" })).acao).toMatch(
       /data de início/i,
     );
-    expect(proximaAcao(oportunidade({ estagio: "Proposta" })).acao).toMatch(
+    expect(proximaAcao(oportunidade({ estagio: "Apresentação" })).acao).toMatch(
       /memória de cálculo/i,
     );
   });
@@ -356,7 +356,7 @@ describe("análise completa", () => {
     const analise = analisarOportunidade(oportunidade(), {
       conta: { rotasMapeadas: 9, rotasAtivas: 4 },
     });
-    expect(analise.estagio).toBe("Proposta");
+    expect(analise.estagio).toBe("Apresentação");
     expect(analise.ambiental.disponivel).toBe(true);
     expect(analise.greenScore.disponivel).toBe(true);
     expect(analise.financeiro.valorContrato).toBe(240000);
@@ -366,7 +366,7 @@ describe("análise completa", () => {
   });
 
   it("oportunidade crua não quebra a tela: entrega o que dá e diz o que falta", () => {
-    const analise = analisarOportunidade({ estagio: "Mapeamento" });
+    const analise = analisarOportunidade({ estagio: "Prospecção" });
     expect(analise.ambiental.disponivel).toBe(false);
     expect(analise.greenScore.disponivel).toBe(false);
     expect(analise.financeiro.valorContrato).toBe(0);
@@ -400,7 +400,7 @@ describe("adaptador do registro guardado", () => {
   it("lê o registro antigo sem exigir migração", () => {
     const o = normalizarOportunidade(registroAntigo);
     expect(o.cliente).toBe("Distribuidora Norte");
-    expect(o.estagio).toBe("Diagnóstico");
+    expect(o.estagio).toBe("Prospecção");
     expect(o.valorContrato).toBe(180000);
     expect(o.probabilidade).toBe(30);
   });
@@ -429,13 +429,13 @@ describe("adaptador do registro guardado", () => {
     expect(normalizarOportunidade({ stage: "Ganho" }).estagio).toBe("Fechada ganha");
     expect(normalizarOportunidade({ stage: "Perdido" }).estagio).toBe("Fechada perdida");
     expect(normalizarOportunidade({ stage: "Cliente ativo" }).estagio).toBe("Fechada ganha");
-    expect(normalizarOportunidade({ stage: "Prospecção" }).estagio).toBe("Mapeamento");
+    expect(normalizarOportunidade({ stage: "Mapeamento" }).estagio).toBe("Prospecção");
   });
 
   it("estágio escrito sem acento ou em caixa diferente é reconhecido", () => {
     expect(estagioValido("negociacao")).toBe("Negociação");
-    expect(estagioValido("PROPOSTA")).toBe("Proposta");
-    expect(estagioValido("diagnostico")).toBe("Diagnóstico");
+    expect(estagioValido("PROPOSTA")).toBe("Apresentação");
+    expect(estagioValido("diagnostico")).toBe("Prospecção");
   });
 
   it("converte a última interação em dias parados", () => {
@@ -462,7 +462,7 @@ describe("adaptador do registro guardado", () => {
 
   it("registro cru passa pelo motor inteiro sem quebrar", () => {
     const analise = analisarOportunidade(normalizarOportunidade(registroAntigo));
-    expect(analise.estagio).toBe("Diagnóstico");
+    expect(analise.estagio).toBe("Prospecção");
     expect(analise.ambiental.disponivel).toBe(false);
     expect(analise.financeiro.valorContrato).toBe(180000);
     expect(analise.proximaAcao.acao).toBeTruthy();

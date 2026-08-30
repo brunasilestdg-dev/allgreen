@@ -1809,3 +1809,8 @@
 .tdg-comentarios form { display: grid; gap: 8px; }
 .tdg-comentarios form textarea { border: 1px solid var(--tdg-line); border-radius: 9px; font: inherit; padding: 8px 10px; resize: vertical; }
 .tdg-comentarios form button { justify-self: start; }
+
+/* Formulário dentro de modal: as ações de rodapé alinham à direita e o
+   formulário respira sem a moldura de painel (o modal já é a moldura). */
+.tdg-form-em-modal { border: none; box-shadow: none; margin: 0; padding: 0; }
+.tdg-form-em-modal .tdg-form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }

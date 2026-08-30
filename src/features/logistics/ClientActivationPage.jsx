@@ -241,12 +241,16 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
     <main className="ca-page">
       <header className="ca-head">
         <div>
-          <a href="/todogreen/clientes" className="ca-back"><ArrowLeft size={16}/>Clientes</a>
           <span className="ca-eyebrow">IMPLANTAÇÃO</span>
           <h1>Implantação e ativação</h1>
           <p>Implantação operacional é um projeto interno. Ativação é o gate final que libera o cliente para operar.</p>
         </div>
-        <a className="ca-portfolio-link" href="/?page=portfolio"><ExternalLink size={16}/>Portfólio global</a>
+        {/* Tudo dentro da vertical, com a cara da To Do Green: nada de link
+            para o app geral (o "Portfólio global" que saltava para fora). */}
+        <div className="ca-head-acoes">
+          <a href="/todogreen/clientes" className="ca-back"><ArrowLeft size={16}/>Voltar aos clientes</a>
+          <a className="ca-portfolio-link" href="/todogreen/central-trabalho">Ver nos quadros de projetos</a>
+        </div>
       </header>
 
       <section className="ca-client-picker">

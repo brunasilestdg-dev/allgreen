@@ -647,6 +647,8 @@ export default function OpportunitiesPage({
   const campo = (key) => (event) =>
     setForm((atual) => ({ ...atual, [key]: event.target.value }));
 
+  const [novaAberta, setNovaAberta] = useState(false);
+
   const salvar = async (event) => {
     event.preventDefault();
     setSalvando(true);
@@ -668,6 +670,7 @@ export default function OpportunitiesPage({
       const contaVinculada = clients.find((item) => item.id === form.clientId);
       const estavaFria = contaVinculada && ["", "Frio"].includes(contaVinculada.crm?.temperature || "");
       setForm(FORM_VAZIO);
+      setNovaAberta(false);
       setToast?.(estavaFria
         ? `Oportunidade registrada — a conta ${contaVinculada.name} saiu de Frio para Morno.`
         : "Oportunidade registrada com potencial ESG calculado.");
@@ -690,6 +693,11 @@ export default function OpportunitiesPage({
             travando o negócio. Os números vêm dos mesmos motores que apuram a operação
             executada — o que é prometido aqui é o que será medido depois.
           </p>
+        </div>
+        <div className="tdg-page-actions">
+          <button type="button" className="tdg-action" onClick={() => setNovaAberta(true)}>
+            <Plus size={16} /> Nova oportunidade
+          </button>
         </div>
       </header>
 
@@ -721,8 +729,11 @@ export default function OpportunitiesPage({
         {forecast.pendencias.find((item) => item.id === "sem-data") && <article className="attention"><strong>Sem previsão</strong><span>{forecast.pendencias.find((item) => item.id === "sem-data").quantidade} negócio(s)</span><small>Fora do calendário até informar a data de fechamento</small></article>}
       </section>
 
-      <form className="tdg-client-admin-form" onSubmit={salvar}>
-        <strong>Nova oportunidade</strong>
+      {/* Ação em janela própria: o formulário não corta mais a página entre o
+          forecast e o pipeline (pedido da titular, 30/08). Em erro o modal
+          continua aberto — nada digitado se perde. */}
+      {novaAberta && <Modal title="Nova oportunidade" onClose={() => setNovaAberta(false)} wide>
+      <form className="tdg-client-admin-form tdg-form-em-modal" onSubmit={salvar}>
         <div className="tdg-form-row">
           <label>
             <span>Cliente</span>
@@ -772,11 +783,15 @@ export default function OpportunitiesPage({
           Distância e viagens por mês são o que destrava o cálculo ambiental. Sem elas a
           oportunidade entra no pipeline, mas sem potencial ESG.
         </p>
-        <button className="tdg-action" type="submit" disabled={salvando}>
-          <Plus size={16} />
-          {salvando ? "Registrando..." : "Registrar oportunidade"}
-        </button>
+        <div className="tdg-form-actions">
+          <button type="button" onClick={() => setNovaAberta(false)}>Cancelar</button>
+          <button className="tdg-action" type="submit" disabled={salvando}>
+            <Plus size={16} />
+            {salvando ? "Registrando..." : "Registrar oportunidade"}
+          </button>
+        </div>
       </form>
+      </Modal>}
 
       <section className="tdg-pipeline-strip" aria-label="Etapas do pipeline">
         <button type="button" className={filtroEstagio === "todas" ? "active" : ""} onClick={() => setFiltroEstagio("todas")}><strong>Pipeline completo</strong><span>{registros.length} negócio(s)</span><small>{BRL.format(resumo.valorTotal)}</small></button>

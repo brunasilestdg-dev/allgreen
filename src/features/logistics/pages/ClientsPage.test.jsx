@@ -85,14 +85,19 @@ describe("página de clientes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
     expect(screen.getByRole("button", { name: "Kanban" })).toHaveClass("active");
 
-    // O kanban abre no formato SIMPLIFICADO aprovado pela titular: etapa com
-    // total em R$ e cartão nome+valor, nada mais.
-    const simples = screen.getByLabelText("Kanban simplificado de clientes por etapa");
-    const colunaImplantacao = within(simples).getByRole("region", { name: /Implantação/ });
-    expect(within(colunaImplantacao).getByText("Implantação · 1")).toBeInTheDocument();
-    expect(within(colunaImplantacao).getByRole("button", { name: /Rede Alfa.*750 mil/ })).toBeInTheDocument();
+    // O kanban abre no formato SIMPLIFICADO aprovado pela titular: as etapas
+    // do FUNIL DE OPORTUNIDADES (Prospecção → Fechamento + desfechos), coluna
+    // com total em R$ e cartão só com cliente e valor. A oportunidade da
+    // fixture está em "Proposta" (nome antigo), que cai em Apresentação.
+    const simples = screen.getByLabelText("Kanban simplificado — oportunidades por etapa do funil");
+    const colunaApresentacao = within(simples).getByRole("region", { name: /Apresentação/ });
+    expect(within(colunaApresentacao).getByText("Apresentação · 1")).toBeInTheDocument();
+    expect(within(colunaApresentacao).getByRole("button", { name: /Rede Alfa.*750 mil/ })).toBeInTheDocument();
+    // As duas colunas de desfecho existem, vazias.
+    expect(within(simples).getByRole("region", { name: /Fechada ganha/ })).toBeInTheDocument();
+    expect(within(simples).getByRole("region", { name: /Fechada perdida/ })).toBeInTheDocument();
 
-    // O detalhado continua a um clique.
+    // O detalhado (por etapa da conta) continua a um clique.
     fireEvent.click(screen.getByRole("button", { name: "Detalhado" }));
     const board = screen.getByLabelText("Kanban de clientes por etapa");
     const implantacao = within(board).getByRole("region", { name: /Implantação/ });

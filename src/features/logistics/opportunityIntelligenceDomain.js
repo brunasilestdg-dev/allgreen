@@ -22,12 +22,20 @@
 import { calcularImpactoAmbiental } from "./esgEngineDomain.js";
 import { calcularGreenScore } from "./greenScoreDomain.js";
 
-export const ESTAGIOS_OPORTUNIDADE = [
-  "Mapeamento",
-  "Diagnóstico",
-  "Construção de solução",
-  "Proposta",
+// O funil é o da titular (30/08, mockup aprovado): Prospecção → Apresentação
+// → Negociação → Homologação → Fechamento. "Fechada ganha"/"Fechada perdida"
+// são DESFECHOS, não colunas do funil — o handoff operacional continua
+// disparando na ganha, e a perdida sai do pipeline.
+export const ESTAGIOS_FUNIL = [
+  "Prospecção",
+  "Apresentação",
   "Negociação",
+  "Homologação",
+  "Fechamento",
+];
+
+export const ESTAGIOS_OPORTUNIDADE = [
+  ...ESTAGIOS_FUNIL,
   "Fechada ganha",
   "Fechada perdida",
 ];
@@ -36,11 +44,11 @@ export const ESTAGIOS_OPORTUNIDADE = [
 // própria equipe pode sobrescrever por oportunidade, mas que dá um ponto de
 // partida honesto para o forecast em vez de deixar o campo vazio.
 export const PROBABILIDADE_POR_ESTAGIO = {
-  Mapeamento: 10,
-  Diagnóstico: 25,
-  "Construção de solução": 40,
-  Proposta: 60,
-  Negociação: 75,
+  Prospecção: 10,
+  Apresentação: 35,
+  Negociação: 60,
+  Homologação: 80,
+  Fechamento: 90,
   "Fechada ganha": 100,
   "Fechada perdida": 0,
 };
@@ -69,12 +77,16 @@ const APELIDOS_ESTAGIO = {
   perdido: "Fechada perdida",
   perdida: "Fechada perdida",
   perdeu: "Fechada perdida",
-  prospeccao: "Mapeamento",
-  prospecao: "Mapeamento",
-  qualificacao: "Diagnóstico",
-  solucao: "Construção de solução",
-  proposta: "Proposta",
-  negociacao: "Negociação",
+  // Os nomes antigos do sistema caem no funil da titular: mapeamento e
+  // diagnóstico ainda são prospecção; construir solução e apresentar a
+  // proposta são a etapa de apresentação. Nenhuma oportunidade antiga volta
+  // para o início nem some.
+  mapeamento: "Prospecção",
+  diagnostico: "Prospecção",
+  qualificacao: "Prospecção",
+  "construcao de solucao": "Apresentação",
+  solucao: "Apresentação",
+  proposta: "Apresentação",
   implantacao: "Fechada ganha",
   "cliente ativo": "Fechada ganha",
 };
@@ -89,10 +101,10 @@ const semAcento = (valor) =>
 export const estagioValido = (valor) => {
   if (ESTAGIOS_OPORTUNIDADE.includes(valor)) return valor;
   const chave = semAcento(valor);
-  if (!chave) return "Mapeamento";
+  if (!chave) return "Prospecção";
   const canonico = ESTAGIOS_OPORTUNIDADE.find((e) => semAcento(e) === chave);
   if (canonico) return canonico;
-  return APELIDOS_ESTAGIO[chave] || "Mapeamento";
+  return APELIDOS_ESTAGIO[chave] || "Prospecção";
 };
 
 export const probabilidadeDoEstagio = (estagio, informada) => {
@@ -375,19 +387,13 @@ export const proximaAcao = (oportunidade = {}, riscos = null) => {
     };
 
   const estagio = estagioValido(oportunidade.estagio);
-  if (estagio === "Mapeamento" || estagio === "Diagnóstico")
+  if (estagio === "Prospecção")
     return {
       acao: "Agendar diagnóstico operacional com quem opera a logística",
       porque: "O número ambiental só convence com dado do cliente.",
       urgencia: "media",
     };
-  if (estagio === "Construção de solução")
-    return {
-      acao: "Fechar as premissas e gerar a simulação de preço",
-      porque: "Premissa aberta vira retrabalho na negociação.",
-      urgencia: "media",
-    };
-  if (estagio === "Proposta")
+  if (estagio === "Apresentação")
     return {
       acao: "Apresentar a proposta com a memória de cálculo ambiental anexada",
       porque: "É o que diferencia da concorrência que só manda preço.",
@@ -397,6 +403,18 @@ export const proximaAcao = (oportunidade = {}, riscos = null) => {
     return {
       acao: "Definir data de início e condições de implantação",
       porque: "Negociação sem data de início escorrega de mês.",
+      urgencia: "alta",
+    };
+  if (estagio === "Homologação")
+    return {
+      acao: "Acompanhar os requisitos da homologação e destravar pendências",
+      porque: "Homologação parada é contrato pronto esfriando na mesa.",
+      urgencia: "alta",
+    };
+  if (estagio === "Fechamento")
+    return {
+      acao: "Formalizar contrato e data de início com o jurídico",
+      porque: "Fechamento sem assinatura ainda não é receita.",
       urgencia: "alta",
     };
   return {

@@ -1,9 +1,13 @@
 .ca-page { min-height: 100%; padding: 28px clamp(16px, 4vw, 48px) 48px; background: #f6f7f5; color: #202421; }
 .ca-head { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; max-width: 1280px; margin: 0 auto 22px; }
-.ca-head h1 { margin: 5px 0 8px; font-size: clamp(1.7rem, 3vw, 2.4rem); }
+/* Um título grande por tela é o do shell; o desta seção fica compacto, no
+   mesmo tamanho dos heróis das outras páginas da vertical. */
+.ca-head h1 { margin: 4px 0 6px; font-size: 1.35rem; }
 .ca-head p { max-width: 760px; margin: 0; color: #5d655f; line-height: 1.5; }
+.ca-eyebrow { display: block; }
+.ca-head-acoes { display: grid; gap: 8px; justify-items: end; }
 .ca-back, .ca-portfolio-link { display: inline-flex; align-items: center; gap: 6px; color: #315f42; text-decoration: none; font-weight: 600; }
-.ca-back { margin-bottom: 14px; font-size: .88rem; }
+.ca-back { font-size: .88rem; }
 .ca-portfolio-link { border: 1px solid #d9dfda; border-radius: 9px; padding: 9px 12px; background: #fff; white-space: nowrap; }
 .ca-eyebrow { font-size: .72rem; letter-spacing: .1em; font-weight: 700; color: #52715c; }
 .ca-client-picker, .ca-summary, .ca-layout, .ca-error, .ca-loading, .ca-empty { max-width: 1280px; margin-left: auto; margin-right: auto; }
