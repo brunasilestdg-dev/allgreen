@@ -37,7 +37,9 @@ describe("página de clientes", () => {
     }]} />);
 
     expect(await screen.findByText("Forecast ponderado")).toBeInTheDocument();
-    expect(screen.getAllByText(/600\.000/).length).toBeGreaterThan(0);
+    // findAll: o forecast chega depois do fetch; em runner lento a leitura
+    // síncrona via a tela ainda com R$ 0 (flake real visto na main em 30/08).
+    expect((await screen.findAllByText(/600\.000/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /Rede Alfa/ }));
     expect(await screen.findByRole("heading", { name: "Rede Alfa" })).toBeInTheDocument();
     expect(screen.getAllByText("TDG-000001").length).toBeGreaterThan(0);

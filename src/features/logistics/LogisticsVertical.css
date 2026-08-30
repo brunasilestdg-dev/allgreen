@@ -1669,15 +1669,12 @@
   outline: 0;
   width: 100%;
 }
-/* As duas listas de navegação rolam dentro do próprio menu (thin scrollbar
-   global do .tdg), em vez de esticar o menu para fora da tela sem rolagem. */
+/* Quem rola é o MENU inteiro (barra vertical visível no .tdg-erp-sidebar);
+   a lista interna não captura mais o scroll — era isso que escondia a barra. */
 .tdg-erp-sidebar .tdg-tabs {
   display: grid;
   gap: 2px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
   padding: 8px 4px 2px 0;
 }
 .tdg-erp-sidebar .tdg-tabs button {
@@ -2066,3 +2063,67 @@
 
 /* A dica que faltava embaixo do seletor de navegação. */
 .tdg-nav-dica { color: var(--tdg-muted); display: block; font-size: .7rem; line-height: 1.35; margin: 6px 2px 0; }
+
+
+/* ===== Menu em acordeão: área → funcionalidades (pedido da titular) ===== */
+.tdg-nav-areas { display: grid; gap: 2px; padding: 8px 4px 2px 0; }
+.tdg-nav-area-cabeca { align-items: center; display: flex; gap: 4px; }
+.tdg-nav-area-cabeca > button:first-child {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--tdg-ink);
+  cursor: pointer;
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tdg-nav-area-cabeca > button:first-child:hover { background: #f2f7f3; }
+.tdg-nav-area-cabeca > button:first-child.active { background: var(--tdg-soft); color: var(--tdg-green); }
+.tdg-nav-area-seta {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--tdg-muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 28px;
+}
+.tdg-nav-area-seta:hover { background: #f2f7f3; color: var(--tdg-green); }
+.tdg-nav-area-seta svg { transition: transform .15s ease; }
+.tdg-nav-area-seta svg.aberta { transform: rotate(180deg); }
+.tdg-nav-area-itens { border-left: 2px solid var(--tdg-line); display: grid; gap: 1px; margin: 2px 0 6px 14px; padding-left: 6px; }
+.tdg-nav-area-itens button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--tdg-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 9px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tdg-nav-area-itens button:hover { background: #f2f7f3; color: var(--tdg-ink); }
+.tdg-nav-area-itens button.active { background: var(--tdg-soft); color: var(--tdg-green); }
+.tdg-nav-vazio { color: var(--tdg-muted); font-size: .8rem; margin: 8px 2px; }
+/* A barra vertical do menu fica visível de verdade. */
+.tdg-erp-sidebar { scrollbar-width: thin; scrollbar-color: #b9cfc5 transparent; }
+.tdg-nav-area-itens button.tdg-nav-extra { color: #6d8a7e; font-style: italic; font-weight: 550; }
+.tdg-nav-area-itens button.tdg-nav-extra:hover { color: var(--tdg-green); }

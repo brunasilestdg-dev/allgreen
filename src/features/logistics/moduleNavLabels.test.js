@@ -69,8 +69,13 @@ describe("propriedade das abas principais", () => {
   });
 
   it("funções que tinham dono errado ficam em abas próprias", () => {
-    expect(blocoDaNavegacaoPrincipal).toContain('label: "Cadastros"');
-    expect(blocoDaNavegacaoPrincipal).toContain('label: "Suprimentos"');
+    // Taxonomia da titular (30/08): cadastro mora na área dona do dado —
+    // fornecedores, itens e depósitos são de Compras; e Suprimentos assina
+    // como "Compras". Implantação vive dentro do Workspace (é um tipo de
+    // projeto), e o Workspace abre a lista.
+    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Compras"[^\n]+cadastros/);
+    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Workspace"[^\n]+implantacao/);
+    expect(blocoDaNavegacaoPrincipal).toMatch(/^const PRIMARY_NAVIGATION[\s\S]{0,400}label: "Workspace"/);
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Documentos"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Administração"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Operação", route: "/todogreen/operacoes"');

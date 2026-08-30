@@ -38,7 +38,10 @@ import { api, contaNova, criarConta, habilitarTodoGreen } from "./apoio.js";
 // suíte `e2e/` inteira. `vertical.spec.js` continua `fixme`: tem outra
 // instabilidade, não relacionada a estas duas — ver o comentário lá.
 
-const abas = (page) => page.getByRole("navigation", { name: /Navegação To Do Green/ });
+// O menu lateral da vertical é o acordeão de áreas (`.tdg-nav-areas`): cada
+// área da empresa na frente e, aberta, as funcionalidades dela dentro. O marco
+// de navegação com este nome só existe para quem tem acesso à vertical.
+const menu = (page) => page.getByRole("navigation", { name: /Navegação To Do Green/ });
 
 test.describe("acesso à vertical To Do Green", () => {
   test("quem não tem o negócio no espaço não entra na vertical", async ({ page }) => {
@@ -48,31 +51,34 @@ test.describe("acesso à vertical To Do Green", () => {
     expect(acesso.status).toBe(403);
 
     await page.goto("/todogreen/dashboard");
-    await expect(page.locator(".tdg-tabs")).toHaveCount(0);
+    await expect(menu(page)).toHaveCount(0);
   });
 
-  test("com o negócio no espaço, a vertical abre com as abas", async ({ page }) => {
+  test("com o negócio no espaço, a vertical abre com o menu por áreas", async ({ page }) => {
     await criarConta(page, contaNova("com-vertical"));
     await habilitarTodoGreen(page);
 
     await page.goto("/todogreen/dashboard");
-    await expect(page.locator(".tdg-tabs")).toBeVisible();
-    await expect(abas(page).getByRole("button").first()).toBeVisible();
+    await expect(page.locator(".tdg-nav-areas")).toBeVisible();
+    await expect(menu(page).getByRole("button").first()).toBeVisible();
   });
 
-  test("a aba de Acessos não aparece para quem não gerencia acessos", async ({ page }) => {
+  test("a funcionalidade de Acessos não aparece para quem não gerencia acessos", async ({ page }) => {
     await criarConta(page, contaNova("acessos"));
     await habilitarTodoGreen(page);
     await page.goto("/todogreen/dashboard");
-    await expect(page.locator(".tdg-tabs")).toBeVisible();
+    await expect(page.locator(".tdg-nav-areas")).toBeVisible();
 
     const acesso = await api(page, "/api/todogreen/access");
     const papel = acesso.corpo?.role;
-    const aba = abas(page).getByRole("button", { name: /Acessos$/ });
+    // Acessos mora dentro da área Administração, e o acordeão só desenha as
+    // funcionalidades de uma área quando ela é aberta.
+    await menu(page).getByRole("button", { name: "Abrir funcionalidades de Administração" }).click();
+    const item = menu(page).getByRole("button", { name: /Acessos$/ });
     // A visibilidade segue o papel do vínculo, não a presença da palavra
     // "admin" em algum canto da tela.
-    if (["admin", "owner"].includes(papel)) await expect(aba).toBeVisible();
-    else await expect(aba).toHaveCount(0);
+    if (["admin", "owner"].includes(papel)) await expect(item).toBeVisible();
+    else await expect(item).toHaveCount(0);
   });
 
   test("trocar o parâmetro na URL não dá acesso ao espaço alheio", async ({ page, browser }) => {

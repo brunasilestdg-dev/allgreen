@@ -64,6 +64,6 @@ test.describe("entrar no produto", () => {
     await page.goto("/todogreen/dashboard");
     // Sem token, o que aparece é a porta de entrada — não a vertical.
     await expect(page.locator(".auth-shell")).toBeVisible();
-    await expect(page.locator(".tdg-tabs")).toHaveCount(0);
+    await expect(page.locator(".tdg-nav-areas")).toHaveCount(0);
   });
 });

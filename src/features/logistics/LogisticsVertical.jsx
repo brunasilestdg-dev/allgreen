@@ -46,6 +46,7 @@ import {
   WalletCards,
   Workflow,
   Zap,
+  ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -809,28 +810,38 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
 });
 
+// A taxonomia de áreas é a da titular (mensagem de 30/08): cada área da
+// empresa na frente e, dentro dela, as funcionalidades. Nenhuma página saiu —
+// só mudou de estante. Áreas pedidas sem tela própria moram na mais próxima:
+// Cultura Organizacional → Recursos Humanos; Melhoria Contínua → Qualidade;
+// Notícias → Workspace (hub de notícias e inteligência).
 const PRIMARY_NAVIGATION = Object.freeze([
+  // Workspace primeiro (pedido de 30/08): é a mesa de trabalho — planner,
+  // projetos e implantações moram aqui. Implantação é um TIPO de projeto,
+  // por isso vive dentro deste grupo sem perder o nome próprio.
+  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "planner", "central-trabalho", "implantacao", "solicitacoes"] },
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
-  { id: "cadastros", label: "Cadastros", route: "/todogreen/cadastros", pages: ["cadastros"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial", "marketing", "campanhas"] },
-  // Ocorrências aqui são de entrega (atrasos, insucessos, reentregas) — pertencem
-  // à Operação, não a um item solto no topo do menu.
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "motorista-frota", "planejamento", "aceite-viagens", "ordens-servico", "ocorrencias", "ciot", "rastreamento"] },
-  { id: "implantacao", label: "Implantação", route: "/todogreen/implantacao", pages: ["implantacao", "solicitacoes", "central-trabalho"] },
-  { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
-  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "fiscal"] },
-  // DP e RH eram a mesma área de pessoas partida em dois itens que abriam quase o
-  // mesmo conteúdo. Viraram um só: "Pessoas".
-  { id: "pessoas", label: "Pessoas", route: "/todogreen/rh", pages: ["rh", "dp-rh", "escalas"] },
-  { id: "suprimentos", label: "Suprimentos", route: "/todogreen/compras", pages: ["compras", "estoque"] },
-  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "catalogo-produtos"] },
-  { id: "planner", label: "Planner", route: "/todogreen/planner", pages: ["planner"] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "planejamento", "aceite-viagens", "ordens-servico", "ocorrencias", "rastreamento"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
-  { id: "espaco-trabalho", label: "Espaço de trabalho", route: "/todogreen/espaco", pages: ["espaco"] },
-  { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
-  // Qualidade e Jurídico são telas de governança de página única; ficam sob
-  // Administração em vez de dois itens soltos no topo.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "fluxos", "manual", "auditoria", "integracoes", "acessos", "qualidade", "juridico"] },
+  { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing", "campanhas"] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
+  { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "rasci", "manual", "fluxos"] },
+  { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
+  { id: "planejamento", label: "Planejamento", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
+  // Cada cadastro mora na área dona do dado (atalhos "Cadastro · ..." no
+  // segundo nível): materiais/depósitos/fornecedores em Compras, contas no
+  // Financeiro, veículos/motoristas na Frota, colaboradores no DP, tabelas
+  // de preço no Comercial, bases/rotas na Operação. A página completa
+  // continua em Administração como o "ver tudo".
+  { id: "suprimentos", label: "Compras", route: "/todogreen/compras", pages: ["compras", "estoque"], extras: [["Cadastro · Materiais", "/todogreen/cadastros?secao=items"], ["Cadastro · Depósitos", "/todogreen/cadastros?secao=warehouses"], ["Cadastro · Fornecedores e parceiros", "/todogreen/cadastros?secao=parties"]] },
+  { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "motoristas", "ciot"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
+  { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
+  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
+  { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh", "escalas"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
+  { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
+  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "catalogo-produtos"] },
+  { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "integracoes", "acessos", "cadastros"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 const MANAGEMENT_TOOLS = Object.freeze([
@@ -2436,12 +2447,19 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const [query, setQuery] = useState("");
   // O modo de navegação (por área × por funcionalidade) é preferência de quem
   // usa: persiste igual ao menu oculto, para não voltar a "área" a cada refresh.
-  const [navigationMode, setNavigationMode] = useState(() => {
-    try { return localStorage.getItem("todogreen-nav-modo") === "function" ? "function" : "area"; } catch { return "area"; }
-  });
-  const escolherModo = useCallback((modo) => {
-    setNavigationMode(modo);
-    try { localStorage.setItem("todogreen-nav-modo", modo); } catch { /* ignora */ }
+  // Menu em acordeão (pedido da titular): áreas na frente; dentro de cada
+  // área, o segundo nível com as funcionalidades dela. A área da tela atual
+  // abre sozinha; as que a pessoa abrir à mão ficam na sessão.
+  const [areasAbertas, setAreasAbertas] = useState(() => new Set());
+  const abrirArea = useCallback((id) => {
+    setAreasAbertas((atual) => (atual.has(id) ? atual : new Set([...atual, id])));
+  }, []);
+  const alternarArea = useCallback((id) => {
+    setAreasAbertas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) proximo.delete(id); else proximo.add(id);
+      return proximo;
+    });
   }, []);
   const [navigationQuery, setNavigationQuery] = useState("");
   // Esconder o menu lateral (persistido) — dá tela cheia ao conteúdo quando preciso.
@@ -2671,47 +2689,85 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <strong>Projetos e tarefas</strong>
             <small>Boards, Kanban, Gantt e Workload</small>
           </button>
-          <div className="tdg-nav-switch" role="tablist" aria-label="Modo de navegação">
-            <button type="button" className={navigationMode === "area" ? "active" : ""} onClick={() => escolherModo("area")}>Por área</button>
-            <button type="button" className={navigationMode === "function" ? "active" : ""} onClick={() => escolherModo("function")}>Funcionalidades</button>
-          </div>
-          <small className="tdg-nav-dica">Por área agrupa o dia a dia; Funcionalidades lista todas as telas para achar pela busca.</small>
-          {navigationMode === "area" ? (
-            <nav className="tdg-tabs" aria-label="Navegação To Do Green">
-              {PRIMARY_NAVIGATION.map((item) => (
-                <button
-                  type="button"
-                  className={primaryNavigation.id === item.id ? "active" : ""}
-                  onClick={() => navigate(item.route)}
-                  key={item.id}
-                >
-                  {item.label}
-                </button>
-              ))}
+          {/* Um menu só, do jeito que a titular pediu: as áreas na frente e,
+              dentro de cada área, o segundo nível com todas as funcionalidades
+              dela. A busca fica sempre à mão e, enquanto há termo digitado,
+              mostra o resultado atravessando todas as áreas. */}
+          <label className="tdg-sidebar-search">
+            <Search size={15} />
+            <input value={navigationQuery} onChange={(event) => setNavigationQuery(event.target.value)} placeholder="Buscar funcionalidade" aria-label="Buscar funcionalidades" />
+          </label>
+          {navigationQuery.trim() ? (
+            <nav className="tdg-tabs" aria-label="Navegação por funcionalidades">
+              {functionNavigation.map((grupo) => {
+                const paginaDoGrupo = todoGreenRouteToPage(grupo.rota);
+                return (
+                  <button
+                    type="button"
+                    className={paginaDoGrupo === page ? "active" : ""}
+                    onClick={() => { navigate(grupo.rota); setNavigationQuery(""); }}
+                    key={grupo.rota}
+                  >
+                    <span>{sidebarFunctionLabel(grupo)}</span>
+                    {grupo.assuntos.length > 0 && <small>{resumirAssuntos(grupo.assuntos)}</small>}
+                  </button>
+                );
+              })}
+              {functionNavigation.length === 0 && <p className="tdg-nav-vazio">Nada com esse termo. Tente “ocorrência”, “holerite”, “frota”...</p>}
             </nav>
           ) : (
-            <div className="tdg-function-navigation">
-              <label className="tdg-sidebar-search">
-                <Search size={15} />
-                <input value={navigationQuery} onChange={(event) => setNavigationQuery(event.target.value)} placeholder="Buscar funcionalidade" aria-label="Buscar funcionalidades" />
-              </label>
-              <nav className="tdg-tabs" aria-label="Navegação por funcionalidades">
-                {functionNavigation.map((grupo) => {
-                  const paginaDoGrupo = todoGreenRouteToPage(grupo.rota);
-                  return (
-                    <button
-                      type="button"
-                      className={paginaDoGrupo === page ? "active" : ""}
-                      onClick={() => navigate(grupo.rota)}
-                      key={grupo.rota}
-                    >
-                      <span>{sidebarFunctionLabel(grupo)}</span>
-                      {grupo.assuntos.length > 0 && <small>{resumirAssuntos(grupo.assuntos)}</small>}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
+            <nav className="tdg-nav-areas" aria-label="Navegação To Do Green">
+              {PRIMARY_NAVIGATION.map((item) => {
+                const ativa = primaryNavigation.id === item.id;
+                const aberta = areasAbertas.has(item.id) || ativa;
+                const paginas = item.pages
+                  .map((id) => [id, MODULE_IMPLEMENTATION[id]])
+                  .filter(([, modulo]) => modulo && podeAcessarFuncionalidade(role, remoteAccess.permissions, modulo.permission));
+                return (
+                  <div className={`tdg-nav-area${aberta ? " aberta" : ""}`} key={item.id}>
+                    <div className="tdg-nav-area-cabeca">
+                      <button
+                        type="button"
+                        className={ativa ? "active" : ""}
+                        onClick={() => { navigate(item.route); abrirArea(item.id); }}
+                      >
+                        {item.label}
+                      </button>
+                      {(paginas.length > 1 || (item.extras || []).length > 0) && (
+                        <button
+                          type="button"
+                          className="tdg-nav-area-seta"
+                          aria-label={`${aberta ? "Recolher" : "Abrir"} funcionalidades de ${item.label}`}
+                          aria-expanded={aberta}
+                          onClick={() => alternarArea(item.id)}
+                        >
+                          <ChevronDown size={14} className={aberta ? "aberta" : ""} />
+                        </button>
+                      )}
+                    </div>
+                    {aberta && (paginas.length > 1 || (item.extras || []).length > 0) && (
+                      <div className="tdg-nav-area-itens">
+                        {paginas.length > 1 && paginas.map(([id, modulo]) => (
+                          <button
+                            type="button"
+                            className={page === id ? "active" : ""}
+                            onClick={() => navigate(modulo.route)}
+                            key={id}
+                          >
+                            {modulo.navLabel || modulo.title}
+                          </button>
+                        ))}
+                        {(item.extras || []).map(([rotulo, rota]) => (
+                          <button type="button" className="tdg-nav-extra" onClick={() => navigate(rota)} key={rota}>
+                            {rotulo}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
           )}
         </aside>
 

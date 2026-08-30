@@ -34,20 +34,24 @@ import { contaNova, criarConta, habilitarTodoGreen } from "./apoio.js";
 // isolamento quebrada não podia esperar o resto da suíte ficar estável.
 
 test.describe("vertical To Do Green", () => {
-  test("nenhuma aba aparece com rótulo quebrado", async ({ page }) => {
+  test("nenhuma área do menu aparece com rótulo quebrado", async ({ page }) => {
     await criarConta(page, contaNova("abas"));
     await habilitarTodoGreen(page);
     await page.goto("/todogreen/dashboard");
-    await expect(page.locator(".tdg-tabs")).toBeVisible();
+    await expect(page.locator(".tdg-nav-areas")).toBeVisible();
 
-    const rotulos = await page.locator(".tdg-tabs button").allInnerTexts();
+    // O menu virou um acordeão de áreas; o rótulo visível de cada área é o
+    // botão da cabeça (a seta de abrir/recolher não carrega texto).
+    const rotulos = await page
+      .locator(".tdg-nav-areas .tdg-nav-area-cabeca > button:not(.tdg-nav-area-seta)")
+      .allInnerTexts();
     expect(rotulos.length).toBeGreaterThan(5);
     // Era exatamente isto que aparecia: "ESG,", "Receita,", "Custos,".
     for (const rotulo of rotulos) {
       expect(rotulo.trim()).not.toMatch(/[,;:.]$/);
       expect(rotulo.trim()).not.toBe("");
     }
-    // E nenhum nome repetido, que faria duas abas parecerem funções diferentes.
+    // E nenhum nome repetido, que faria duas áreas parecerem funções diferentes.
     expect(new Set(rotulos).size).toBe(rotulos.length);
   });
 

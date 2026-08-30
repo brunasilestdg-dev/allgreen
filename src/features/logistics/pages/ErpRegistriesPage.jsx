@@ -28,7 +28,15 @@ async function api(path, options = {}) {
 }
 
 export default function ErpRegistriesPage({ registros, criar, setToast }) {
-  const [tab, setTab] = useState("items");
+  // A seção pode vir da URL (?secao=) — é assim que cada área do menu abre
+  // direto o SEU cadastro: Compras→materiais, Financeiro→plano de contas,
+  // DP→colaboradores... A página única continua sendo o "ver tudo".
+  const [tab, setTab] = useState(() => {
+    try {
+      const pedida = new URLSearchParams(window.location.search).get("secao") || "";
+      return TABS.some((item) => item.id === pedida) ? pedida : "items";
+    } catch { return "items"; }
+  });
   const [external, setExternal] = useState({});
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);

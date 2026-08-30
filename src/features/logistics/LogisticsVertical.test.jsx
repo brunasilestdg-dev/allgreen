@@ -163,7 +163,10 @@ describe("LogisticsVertical", () => {
   it("renders the private hub for authorized To Do Green users", async () => {
     await renderarAutorizada();
     expect(screen.getByRole("heading", { name: "Principal", level: 1 }).hidden).toBe(false);
-    expect(screen.getByRole("navigation", { name: "Navegação To Do Green" }).querySelectorAll("button")).toHaveLength(15);
+    // Acordeão: 18 áreas (taxonomia da titular; Implantação mora no Workspace) + as setas de expandir das
+    // áreas com segundo nível. Conta-se as ÁREAS, não um total frágil.
+    const navegacao = screen.getByRole("navigation", { name: "Navegação To Do Green" });
+    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(18);
     expect(screen.getByText("Configurações")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Olá, Bruna" })).toBeTruthy();
     expect(screen.getByText("Novos Negócios e Comercial. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.")).toBeTruthy();
@@ -178,21 +181,29 @@ describe("LogisticsVertical", () => {
     expect(screen.getAllByText("ESG").length).toBeGreaterThan(0);
   });
 
-  it("alterna entre navegação por área e por funcionalidades sem duplicar a entrada principal", async () => {
+  it("menu em acordeão: área abre o segundo nível com as funcionalidades dela", async () => {
     await renderarAutorizada();
 
-    fireEvent.click(screen.getByRole("button", { name: "Funcionalidades" }));
+    const areas = screen.getByRole("navigation", { name: "Navegação To Do Green" });
+    // Taxonomia da titular presente.
+    expect(within(areas).getByRole("button", { name: "Comercial" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Frota" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Departamento Pessoal" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Recursos Humanos" })).toBeTruthy();
 
-    expect(screen.queryByRole("navigation", { name: "Navegação To Do Green" })).toBeNull();
-    const funcionalidades = screen.getByRole("navigation", { name: "Navegação por funcionalidades" });
-    expect(within(funcionalidades).getAllByRole("button", { name: /Ocorrências/ })).toHaveLength(1);
-    expect(within(funcionalidades).getAllByRole("button", { name: /Precificação/ })).toHaveLength(1);
+    // Abrir o segundo nível do Comercial sem navegar (a seta só expande).
+    fireEvent.click(within(areas).getByRole("button", { name: /Abrir funcionalidades de Comercial/ }));
+    expect(within(areas).getByRole("button", { name: "Oportunidades" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: /Precificação/ })).toBeTruthy();
 
+    // A busca atravessa todas as áreas e substitui o acordeão enquanto digita.
     fireEvent.change(screen.getByLabelText("Buscar funcionalidades"), { target: { value: "ocorrência" } });
-    expect(within(funcionalidades).getAllByRole("button", { name: /Ocorrências/ })).toHaveLength(1);
-    expect(within(funcionalidades).queryByRole("button", { name: /Precificação/ })).toBeNull();
+    const resultados = screen.getByRole("navigation", { name: "Navegação por funcionalidades" });
+    expect(within(resultados).getAllByRole("button", { name: /Ocorrências/ })).toHaveLength(1);
+    expect(within(resultados).queryByRole("button", { name: /Precificação/ })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Por área" }));
+    // Limpar a busca devolve o acordeão.
+    fireEvent.change(screen.getByLabelText("Buscar funcionalidades"), { target: { value: "" } });
     expect(screen.getByRole("navigation", { name: "Navegação To Do Green" })).toBeTruthy();
   });
 
@@ -704,7 +715,9 @@ describe("LogisticsVertical", () => {
     window.history.pushState({}, "", "/todogreen/ordens-servico");
     await renderarAutorizada();
     expect(await screen.findByRole("heading", { name: "Aceite e ordens de serviço", level: 2 })).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: /Seções de Operação/ }).textContent).toContain("CIOT");
+    // CIOT agora mora na área Frota (taxonomia da titular); Operação segue
+    // com planejamento e aceite.
+    expect(screen.getByRole("navigation", { name: /Seções de Operação/ }).textContent).toContain("Planejamento");
     fireEvent.click(screen.getByRole("button", { name: "Financeiro" }));
     expect(await screen.findByRole("heading", { name: "Fila de faturamento", level: 2 })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: /Seções de Financeiro/ }).textContent).toContain("Títulos e baixas");
