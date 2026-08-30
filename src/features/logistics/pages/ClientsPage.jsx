@@ -682,6 +682,10 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   const [quickContact, setQuickContact] = useState(contatoVazio);
   const [assignment, setAssignment] = useState({ clientId: "", sellerEmail: "", note: "" });
   const [importProgress, setImportProgress] = useState("");
+  // "Novo contato" direto da lista, sem abrir a conta antes: o campo Conta
+  // sugere as contas cadastradas e o contato nasce vinculado à conta real.
+  const [novoContatoAberto, setNovoContatoAberto] = useState(false);
+  const [novoContatoGlobal, setNovoContatoGlobal] = useState(() => ({ conta: "", ...contatoVazio() }));
 
   const load = async () => {
     setLoading(true); setError("");
@@ -1030,6 +1034,43 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       setError(reason.message);
     }
   };
+  const salvarContatoGlobal = async (event) => {
+    event.preventDefault();
+    const nome = novoContatoGlobal.name.trim();
+    const nomeDaConta = novoContatoGlobal.conta.trim();
+    if (!nome) { setToast?.("Informe o nome do contato."); return; }
+    // A sugestão preenche o nome exato; a gravação acontece pelo id da conta
+    // encontrada — nunca por nome solto (regra da casa: vínculo é por id).
+    const candidatas = clients.filter((c) => String(c.name).trim().toLowerCase() === nomeDaConta.toLowerCase());
+    if (candidatas.length !== 1) {
+      setToast?.(candidatas.length === 0
+        ? "Escolha uma conta da lista de sugestões para vincular o contato."
+        : "Há mais de uma conta com esse nome — abra a conta certa e adicione o contato por lá.");
+      return;
+    }
+    const conta = candidatas[0];
+    const { conta: _conta, ...camposDoContato } = novoContatoGlobal;
+    const contato = {
+      ...camposDoContato,
+      id: crypto.randomUUID(),
+      name: nome,
+      email: novoContatoGlobal.email.trim().toLowerCase(),
+      phone: novoContatoGlobal.phone.trim(),
+      source: "Cadastro manual",
+      active: true,
+    };
+    try {
+      await saveClient(conta, {
+        revision: conta.revision,
+        crm: { ...(conta.crm || {}), contacts: [...(conta.crm?.contacts || []), contato] },
+      });
+      setNovoContatoGlobal({ conta: "", ...contatoVazio() });
+      setNovoContatoAberto(false);
+      setToast?.(`Contato registrado em ${conta.name}.`);
+    } catch (reason) {
+      setError(reason.message);
+    }
+  };
   const assign = async (event) => {
     event.preventDefault(); setError("");
     try {
@@ -1067,9 +1108,10 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   return <section className="tdg-panel tdg-page tdg-clients-page">
     {error && <div className="tdg-page-error">{error}</div>}
     {!selected && <>
-      <header className="tdg-page-title"><div><span>COMANDO COMERCIAL</span><h2>CRM e carteira 360º</h2><p>Priorize contas, acompanhe relacionamentos, forecast e próximas ações. Clique em uma conta para abrir sua visão gerencial.</p></div>{access.podeGerenciar && <div className="tdg-crm-admin-actions"><label className="tdg-action tdg-crm-import"><Upload size={16} />{importProgress || "Importar Excel, CSV ou JSON"}<input type="file" accept=".xlsx,.csv,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/json" disabled={Boolean(importProgress)} onChange={importClients} /></label><button className="tdg-action" type="button" onClick={() => setShowCreate((value) => !value)}><Plus size={16} />Nova conta</button></div>}</header>
+      <header className="tdg-page-title"><div><span>COMANDO COMERCIAL</span><h2>CRM e carteira 360º</h2><p>Priorize contas, acompanhe relacionamentos, forecast e próximas ações. Clique em uma conta para abrir sua visão gerencial.</p></div>{(access.podeGerenciar || access.podeEditar) && <div className="tdg-crm-admin-actions">{access.podeGerenciar && <label className="tdg-action tdg-crm-import"><Upload size={16} />{importProgress || "Importar Excel, CSV ou JSON"}<input type="file" accept=".xlsx,.csv,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/json" disabled={Boolean(importProgress)} onChange={importClients} /></label>}{access.podeGerenciar && <button className="tdg-action" type="button" onClick={() => setShowCreate((value) => !value)}><Plus size={16} />Nova conta</button>}{access.podeEditar && <button className="tdg-action" type="button" onClick={() => setNovoContatoAberto((value) => !value)}><UserPlus size={16} />Novo contato</button>}</div>}</header>
       <div className="tdg-crm-metrics" aria-label="Resumo do CRM"><article><Building2 size={18} /><span>Contas na carteira</span><strong>{command.totalAccounts}</strong></article><article><BriefcaseBusiness size={18} /><span>Oportunidades abertas</span><strong>{command.openOpportunities}</strong></article><article><CircleDollarSign size={18} /><span>Forecast ponderado</span><strong>{BRL.format(command.weightedPipeline)}</strong><small>{BRL.format(command.totalPipeline)} em pipeline</small></article><article className={command.overdueActions ? "attention" : ""}><CalendarClock size={18} /><span>Ações atrasadas</span><strong>{command.overdueActions}</strong></article><article className={command.relationshipGaps ? "attention" : ""}><Users size={18} /><span>Mapa incompleto</span><strong>{command.relationshipGaps}</strong></article></div>
       {showCreate && <form className="tdg-client-admin-form" onSubmit={createClient}><strong>Nova conta</strong><div className="tdg-form-row"><label><span>Nome</span><input required value={clientForm.nome} onChange={(e) => setClientForm({ ...clientForm, nome: e.target.value })} /></label><label><span>Documento</span><input value={clientForm.documento} onChange={(e) => setClientForm({ ...clientForm, documento: e.target.value })} /></label><label><span>Segmento</span><input value={clientForm.segmento} onChange={(e) => setClientForm({ ...clientForm, segmento: e.target.value })} /></label><label><span>Classificação</span><select value={clientForm.tier} onChange={(e) => setClientForm({ ...clientForm, tier: e.target.value })}>{TODO_GREEN_ACCOUNT_TIERS.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>Momento</span><select value={clientForm.stage} onChange={(e) => setClientForm({ ...clientForm, stage: e.target.value })}>{TODO_GREEN_ACCOUNT_STAGES.map((item) => <option key={item}>{item}</option>)}</select></label></div><button className="tdg-action"><Plus size={16} />Cadastrar conta</button></form>}
+      {novoContatoAberto && <form className="tdg-client-admin-form" onSubmit={salvarContatoGlobal}><strong>Novo contato</strong><div className="tdg-form-row"><label><span>Conta</span><input required list="tdg-crm-contas" value={novoContatoGlobal.conta} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, conta: e.target.value })} placeholder="Digite para ver as contas cadastradas" /><datalist id="tdg-crm-contas">{clients.map((c) => <option value={c.name} key={c.id} />)}</datalist></label><label><span>Nome</span><input required value={novoContatoGlobal.name} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, name: e.target.value })} /></label><label><span>Cargo</span><input value={novoContatoGlobal.title} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, title: e.target.value })} /></label><label><span>Papel</span><select value={novoContatoGlobal.relationshipRole} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, relationshipRole: e.target.value })}>{TODO_GREEN_RELATIONSHIP_ROLES.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>E-mail</span><input type="email" value={novoContatoGlobal.email} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, email: e.target.value })} /></label><label><span>Telefone</span><input value={novoContatoGlobal.phone} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, phone: e.target.value })} /></label></div><button className="tdg-action"><UserPlus size={16} />Salvar contato</button></form>}
       <div className="tdg-crm-toolbar"><div className="tdg-client-toolbar"><Search size={18} /><input aria-label="Buscar clientes e contatos" placeholder="Buscar ID, conta, contato, e-mail, telefone ou responsável" value={query} onChange={(e) => { setQuery(e.target.value); setVisibleLimit(100); }} /></div><div className="tdg-crm-view-switch" aria-label="Modo de visualização"><button type="button" className={viewMode === "cards" ? "active" : ""} onClick={() => setViewMode("cards")}><LayoutGrid size={15} />Cartões</button><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => setViewMode("kanban")}><BriefcaseBusiness size={15} />Kanban</button><button type="button" className={viewMode === "funil" ? "active" : ""} onClick={() => setViewMode("funil")}><Filter size={15} />Funil</button><button type="button" className={viewMode === "table" ? "active" : ""} onClick={() => setViewMode("table")}><List size={15} />Tabela</button></div><div className="tdg-crm-filter-grid" aria-label="Filtros e ordenação do CRM"><label><span>Ordenar</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="name-asc">Nome (A–Z)</option><option value="name-desc">Nome (Z–A)</option><option value="temperature">Temperatura</option><option value="next-action">Próxima ação</option><option value="updated">Atualização recente</option><option value="contacts">Mais contatos</option></select></label><label><span>Etapa</span><select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}><option value="all">Todas as etapas</option>{stageOptions.map((stage) => <option key={stage}>{stage}</option>)}</select></label><label><span>Responsável</span><select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}><option value="all">Todos</option><option value="unassigned">Sem responsável</option>{ownerOptions.map((owner) => <option key={owner}>{owner}</option>)}</select></label><label><span>Contatos</span><select value={contactFilter} onChange={(e) => setContactFilter(e.target.value)}><option value="all">Com e sem contato</option><option value="with">Com telefone/e-mail</option><option value="without">Sem telefone/e-mail</option></select></label></div><div className="tdg-crm-filters" aria-label="Temperatura das contas">{[["all", "Todas"], ["Quente", "Quentes"], ["Morno", "Mornas"], ["Frio", "Frias"]].map(([id, label]) => <button type="button" className={temperatureFilter === id ? "active" : ""} onClick={() => { setTemperatureFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div><div className="tdg-crm-filters" aria-label="Saúde da carteira">{[["all", "Toda saúde"], ["critical", "Críticas"], ["attention", "Atenção"], ["healthy", "Saudáveis"], ["no-decision", "Mapa incompleto"]].map(([id, label]) => <button type="button" className={filter === id ? "active" : ""} onClick={() => { setFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div></div>
       {loading && <p>Carregando carteira...</p>}{!loading && visible.length === 0 && <p className="tdg-crm-empty">Nenhuma conta corresponde aos filtros desta carteira.</p>}
       {!loading && visible.length > 0 && viewMode === "cards" && <div className="tdg-crm-card-grid" aria-label="Contas do CRM em cartões">{renderedClients.map((client) => { const summary = summaryById.get(client.id); return <button type="button" className={summary?.attention || ""} onClick={() => openClient(client.id)} key={client.id}><header><span><strong>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><b>{summary?.score || 0}</b></header><div className="tdg-crm-card-tags"><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{client.crm?.stage || "Mapeamento"}</em></div><dl><div><dt>Pipeline</dt><dd>{BRL.format(summary?.pipeline || 0)}</dd></div><div><dt>Decisores</dt><dd>{summary?.coverage || 0}%</dd></div><div><dt>Contatos</dt><dd>{client.crm?.contacts?.length || 0}</dd></div></dl><footer><span><small>Próxima ação</small><strong>{summary?.nextAction || "Definir próxima ação"}</strong></span><ArrowRight size={16} /></footer></button>; })}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-card-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div>}

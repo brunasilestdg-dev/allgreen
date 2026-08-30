@@ -273,6 +273,28 @@ const colunasTarefa = (corpo, plano) => {
   };
 };
 
+// A tela sugere pessoas da plataforma, mas o corpo vem do navegador: um id
+// que não é gente do espaço não entra na coluna — a tarefa ficaria
+// "atribuída" a alguém que nunca a veria em Minhas tarefas. O rótulo continua
+// valendo sozinho para gente de fora (um terceiro, um contato do cliente);
+// só o vínculo por id exige vínculo real. "Gente do espaço" são as duas
+// portas que existem: membro do espaço do app (memberships, a lista que o
+// /api/collab sugere na tela) ou vínculo direto na vertical (tenant_users).
+const responsavelValidado = async (env, access, assigneeUserId) => {
+  const id = texto(assigneeUserId, 120);
+  if (!id) return "";
+  if (id === access.ownerId || id === access.userId) return id;
+  const membro = await env.DB.prepare(
+    "SELECT member_id FROM memberships WHERE owner_id = ? AND member_id = ? AND status = 'ativo'",
+  ).bind(access.ownerId, id).first();
+  if (membro) return id;
+  const vinculo = await env.DB.prepare(
+    `SELECT user_id FROM tenant_users
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND user_id = ? AND status = 'active'`,
+  ).bind(TENANT_ID, access.ownerId, id).first();
+  return vinculo ? id : "";
+};
+
 const criarTarefa = async (env, access, planId, corpo) => {
   const plano = await buscarPlanoVisivel(env, access, planId);
   if (!plano) return json({ error: "Plano não encontrado." }, 404);
@@ -283,7 +305,10 @@ const criarTarefa = async (env, access, planId, corpo) => {
   });
   if (erros.length) return json({ error: "Tarefa com pendências.", erros }, 400);
 
-  const dados = colunasTarefa(corpo, plano);
+  const dados = colunasTarefa(
+    { ...corpo, assigneeUserId: await responsavelValidado(env, access, corpo.assigneeUserId) },
+    plano,
+  );
   const id = crypto.randomUUID();
   const agora = new Date().toISOString();
   const colunas = Object.keys(dados).join(", ");
@@ -315,7 +340,9 @@ const atualizarTarefa = async (env, access, planId, taskId, corpo) => {
   });
   if (erros.length) return json({ error: "Tarefa com pendências.", erros }, 400);
 
-  const dados = colunasTarefa({ ...tarefaDaLinha(atual), ...corpo }, plano);
+  const mesclado = { ...tarefaDaLinha(atual), ...corpo };
+  mesclado.assigneeUserId = await responsavelValidado(env, access, mesclado.assigneeUserId);
+  const dados = colunasTarefa(mesclado, plano);
   const sets = Object.keys(dados).map((k) => `${k} = ?`).join(", ");
   await env.DB.prepare(
     `UPDATE todogreen_planner_tasks SET ${sets}, revision = revision + 1, updated_by = ?, updated_at = ?

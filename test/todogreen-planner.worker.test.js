@@ -207,3 +207,61 @@ describe("tarefas de um plano compartilhado", () => {
     expect(minhas.registros.some((t) => t.planId === planId)).toBe(false);
   });
 });
+
+describe("responsável por id precisa ser gente do espaço", () => {
+  // A tela sugere pessoas da plataforma e manda o id junto do rótulo. O id só
+  // gruda se a pessoa for do espaço (dona, membro do app ou vínculo da
+  // vertical); id de fora vira rótulo solto — atribuição fantasma não entra
+  // em Minhas tarefas de ninguém.
+  let planId;
+
+  it("prepara um plano compartilhado", async () => {
+    const c = await (await pedir("/api/todogreen/planner/planos", {
+      metodo: "POST", token: ana.token,
+      corpo: { name: "Atribuições", visibility: "shared", buckets: [{ id: "todo", nome: "A fazer" }] },
+    })).json();
+    planId = c.id;
+  });
+
+  it("colega do espaço vira responsável de verdade e vê a tarefa nas dela", async () => {
+    const r = await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, {
+      metodo: "POST", token: ana.token,
+      corpo: { title: "Fechar escala da semana", assigneeUserId: bia.id, assigneeLabel: "Bia" },
+    });
+    expect(r.status).toBe(201);
+    const t = await r.json();
+    expect(t.assigneeUserId).toBe(bia.id);
+
+    const minhas = await (await pedir("/api/todogreen/planner/minhas-tarefas", { token: bia.token })).json();
+    expect(minhas.registros.some((x) => x.id === t.id)).toBe(true);
+  });
+
+  it("id de quem não é do espaço não cola — fica só o rótulo", async () => {
+    const r = await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, {
+      metodo: "POST", token: ana.token,
+      corpo: { title: "Cobrar fornecedor", assigneeUserId: externo.id, assigneeLabel: "Fornecedor Externo" },
+    });
+    expect(r.status).toBe(201);
+    const t = await r.json();
+    expect(t.assigneeUserId).toBe("");
+    expect(t.assigneeLabel).toBe("Fornecedor Externo");
+
+    // E o de fora não ganha tarefa no espaço alheio por tabela.
+    const dele = await (await pedir("/api/todogreen/planner/minhas-tarefas", { token: externo.token })).json();
+    expect(dele.registros.some((x) => x.id === t.id)).toBe(false);
+  });
+
+  it("no PATCH a mesma régua vale: id inválido é limpo, válido fica", async () => {
+    const criada = await (await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, {
+      metodo: "POST", token: ana.token,
+      corpo: { title: "Revisar rota", assigneeUserId: bia.id, assigneeLabel: "Bia" },
+    })).json();
+
+    const trocada = await (await pedir(`/api/todogreen/planner/planos/${planId}/tarefas/${criada.id}`, {
+      metodo: "PATCH", token: ana.token,
+      corpo: { revision: criada.revision, assigneeUserId: externo.id, assigneeLabel: "Alguém de fora" },
+    })).json();
+    expect(trocada.assigneeUserId).toBe("");
+    expect(trocada.assigneeLabel).toBe("Alguém de fora");
+  });
+});

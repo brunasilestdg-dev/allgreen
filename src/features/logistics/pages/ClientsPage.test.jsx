@@ -93,6 +93,74 @@ describe("página de clientes", () => {
     expect(window.localStorage.getItem("todogreen-crm-view")).toBe("kanban");
   });
 
+  it("novo contato pela lista sugere as contas cadastradas e grava na conta escolhida", async () => {
+    const chamadas = [];
+    const payload = {
+      clientes: [
+        { id: "client-1", name: "Rede Alfa", segment: "Varejo", status: "ativo", revision: 4, vendedores: [], crm: { stage: "Diagnóstico", contacts: [] } },
+        { id: "client-2", name: "Rede Beta", segment: "Indústria", status: "ativo", revision: 1, vendedores: [], crm: { contacts: [] } },
+      ],
+      acesso: { podeGerenciar: false, podeEditar: true, somenteCarteira: true },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {
+      chamadas.push({ url: String(url), method: options.method || "GET", body: options.body });
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+    }));
+    const setToast = vi.fn();
+
+    render(<ClientsPage authHeaders={() => ({})} setToast={setToast} />);
+    expect(await screen.findByRole("heading", { name: "CRM e carteira 360º" })).toBeInTheDocument();
+
+    // Vendedor sem podeGerenciar também registra contato — só não cria conta.
+    expect(screen.queryByRole("button", { name: /Nova conta/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Novo contato" }));
+
+    // O campo Conta sugere as contas cadastradas (datalist), e o contato vai
+    // para a conta pelo id resolvido — nunca por nome solto.
+    expect(document.querySelectorAll("#tdg-crm-contas option")).toHaveLength(2);
+    fireEvent.change(screen.getByLabelText("Conta"), { target: { value: "Rede Beta" } });
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Carla Souza" } });
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "Carla@REDEBETA.com.br" } });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar contato/ }));
+
+    await waitFor(() => expect(chamadas.some((c) => c.method === "PATCH")).toBe(true));
+    const patch = chamadas.find((c) => c.method === "PATCH");
+    expect(patch.url).toContain("clients/client-2");
+    const corpo = JSON.parse(patch.body);
+    expect(corpo.revision).toBe(1);
+    expect(corpo.crm.contacts).toHaveLength(1);
+    expect(corpo.crm.contacts[0]).toMatchObject({
+      name: "Carla Souza",
+      email: "carla@redebeta.com.br",
+      source: "Cadastro manual",
+      active: true,
+    });
+    expect(setToast.mock.calls.at(-1)[0]).toBe("Contato registrado em Rede Beta.");
+  });
+
+  it("novo contato sem conta da lista não grava em lugar nenhum", async () => {
+    const chamadas = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {
+      chamadas.push({ method: options.method || "GET" });
+      return Promise.resolve(new Response(JSON.stringify({
+        clientes: [{ id: "client-1", name: "Rede Alfa", status: "ativo", revision: 1, vendedores: [], crm: { contacts: [] } }],
+        acesso: { podeGerenciar: false, podeEditar: true, somenteCarteira: true },
+      }), { status: 200 }));
+    }));
+    const setToast = vi.fn();
+
+    render(<ClientsPage authHeaders={() => ({})} setToast={setToast} />);
+    await screen.findByRole("heading", { name: "CRM e carteira 360º" });
+    fireEvent.click(screen.getByRole("button", { name: "Novo contato" }));
+    fireEvent.change(screen.getByLabelText("Conta"), { target: { value: "Conta que não existe" } });
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Contato Perdido" } });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar contato/ }));
+
+    await waitFor(() => expect(setToast).toHaveBeenCalled());
+    expect(setToast.mock.calls.at(-1)[0]).toMatch(/Escolha uma conta da lista/);
+    expect(chamadas.every((c) => c.method === "GET")).toBe(true);
+  });
+
   it("conecta operação e financeiro da conta na aba dedicada", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       clientes: [{

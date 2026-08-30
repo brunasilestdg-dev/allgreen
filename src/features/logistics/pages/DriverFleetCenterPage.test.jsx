@@ -60,7 +60,10 @@ describe("Gestão operacional de frota", () => {
 
     expect(await screen.findByRole("heading", { name: "Gestão operacional de frota" })).toBeInTheDocument();
     expect(screen.getAllByText("Ana Souza").length).toBeGreaterThan(0);
-    expect(screen.getByText("TG-001")).toBeInTheDocument();
+    // findByText: o TG-001 vem do fetch da frota, e o cabeçalho renderiza
+    // antes de a resposta chegar — em runner lento a leitura síncrona via a
+    // tela ainda com "0 veículos" (flake real na main em 30/08, run 639).
+    expect(await screen.findByText("TG-001")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Abrir portal motorista/i })).toBeInTheDocument();
   });
 

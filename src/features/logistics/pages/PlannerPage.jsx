@@ -75,10 +75,15 @@ const tarefaVazia = (bucketId = "") => ({
   labels: [],
 });
 
-export default function PlannerPage({ authHeaders, setToast, currentUserId, role }) {
+export default function PlannerPage({ authHeaders, setToast, currentUserId, role, espacoId = "" }) {
   const [planos, setPlanos] = useState([]);
   const [planoAtivoId, setPlanoAtivoId] = useState("");
   const [tarefas, setTarefas] = useState([]);
+  // Pessoas da plataforma para sugerir como responsável: o dono do espaço e os
+  // membros ativos, da mesma lista que o /api/collab já serve ao app inteiro.
+  // Se a chamada falhar, o campo continua aceitando texto livre — sugestão é
+  // conveniência, nunca condição.
+  const [pessoas, setPessoas] = useState([]);
   const [corte, setCorte] = useState("balde");
   const [busca, setBusca] = useState("");
   const [ocupado, setOcupado] = useState("carregando");
@@ -141,6 +146,23 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
   useEffect(() => { carregarPlanos(); }, []);
   useEffect(() => { if (planoAtivoId) carregarTarefas(planoAtivoId); }, [planoAtivoId]);
   useEffect(() => { if (vendoMinhas) carregarMinhas(); }, [vendoMinhas]);
+  useEffect(() => {
+    if (!espacoId) return undefined;
+    let ativo = true;
+    fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
+      .then((resposta) => (resposta.ok ? resposta.json() : null))
+      .then((corpo) => {
+        if (!ativo || !corpo) return;
+        const candidatos = [corpo.owner, ...(corpo.members || []).filter((m) => m.status === "ativo")];
+        const unicos = [];
+        for (const pessoa of candidatos) {
+          if (pessoa?.id && pessoa?.name && !unicos.some((p) => p.id === pessoa.id)) unicos.push(pessoa);
+        }
+        setPessoas(unicos);
+      })
+      .catch(() => {});
+    return () => { ativo = false; };
+  }, [espacoId, authHeaders]);
 
   const criarPlano = async (evento) => {
     evento.preventDefault();
@@ -456,6 +478,7 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
         <TarefaModal
           tarefa={tarefaEmEdicao}
           baldes={normalizarBaldes(planoAtivo?.buckets || [])}
+          pessoas={pessoas}
           onFechar={() => setTarefaEmEdicao(null)}
           onSalvar={salvarTarefa}
           onArquivar={arquivarTarefa}
@@ -465,9 +488,17 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
   );
 }
 
-function TarefaModal({ tarefa, baldes, onFechar, onSalvar, onArquivar }) {
+function TarefaModal({ tarefa, baldes, pessoas = [], onFechar, onSalvar, onArquivar }) {
   const [form, setForm] = useState({ ...tarefaVazia(baldes[0]?.id), ...tarefa });
   const set = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
+
+  // Escolher uma pessoa da lista grava o vínculo de verdade (assigneeUserId) —
+  // é ele que faz a tarefa aparecer em "Minhas tarefas" de quem foi atribuído.
+  // Texto que não bate com ninguém vale como rótulo solto (gente de fora).
+  const definirResponsavel = (valor) => {
+    const pessoa = pessoas.find((p) => p.name === valor);
+    setForm((f) => ({ ...f, assigneeLabel: valor, assigneeUserId: pessoa?.id || "" }));
+  };
 
   const alterarItem = (i, patch) =>
     setForm((f) => ({ ...f, checklist: f.checklist.map((item, idx) => (idx === i ? { ...item, ...patch } : item)) }));
@@ -510,7 +541,19 @@ function TarefaModal({ tarefa, baldes, onFechar, onSalvar, onArquivar }) {
         <div className="tdg-planner-grid3">
           <label>
             Responsável
-            <input value={form.assigneeLabel} onChange={set("assigneeLabel")} placeholder="Nome de quem executa" maxLength={160} />
+            <input
+              list="tdg-planner-pessoas"
+              value={form.assigneeLabel}
+              onChange={(e) => definirResponsavel(e.target.value)}
+              placeholder="Nome de quem executa"
+              maxLength={160}
+            />
+            <datalist id="tdg-planner-pessoas">
+              {pessoas.map((p) => <option value={p.name} key={p.id}>{p.email}</option>)}
+            </datalist>
+            {form.assigneeUserId
+              ? <small className="tdg-planner-vinculo">Pessoa da plataforma — entra em “Minhas tarefas” dela.</small>
+              : null}
           </label>
           <label>
             Início

@@ -1764,3 +1764,20 @@
 .tdg-aging-row small { color: var(--tdg-muted); font-size: 10.5px; font-weight: 800; text-transform: uppercase; }
 .tdg-aging-row strong { font-size: .98rem; }
 .tdg-aging-row em { color: var(--tdg-muted); font-size: 11.5px; font-style: normal; }
+
+/* ===== Vaivém do contrato (painel do Jurídico) =====
+   Os pontos em que o Jurídico não concorda, marcáveis um a um, e a bola
+   (Comercial ↔ Jurídico) sempre à vista no cartão do processo. */
+.tdg-wf-pontos { background: var(--tdg-soft); border: 1px solid var(--tdg-line); border-radius: 10px; display: grid; gap: 8px; margin: 10px 0 4px; padding: 11px 12px; }
+.tdg-wf-pontos > strong { font-size: .82rem; }
+.tdg-wf-pontos ul { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.tdg-wf-pontos li { align-items: flex-start; display: flex; font-size: .87rem; gap: 8px; }
+.tdg-wf-pontos li button { align-items: center; background: #fff; border: 1px solid var(--tdg-line); border-radius: 999px; color: var(--tdg-muted); cursor: pointer; display: inline-flex; flex: none; height: 22px; justify-content: center; margin-top: 1px; width: 22px; }
+.tdg-wf-pontos li button:hover { border-color: var(--tdg-green); color: var(--tdg-green); }
+.tdg-wf-pontos li[data-status="acordado"] button { background: var(--tdg-green); border-color: var(--tdg-green); color: #fff; }
+.tdg-wf-pontos li[data-status="acordado"] span { opacity: .62; text-decoration: line-through; }
+.tdg-wf-pontos > button { background: #fff; border: 1px solid var(--tdg-line); border-radius: 8px; cursor: pointer; justify-self: start; padding: 6px 12px; }
+.tdg-wf-pontos > button:hover { border-color: var(--tdg-green); color: var(--tdg-green); }
+
+/* Responsável do Planner vinculado a uma pessoa da plataforma. */
+.tdg-planner-vinculo { color: var(--tdg-green); display: block; font-size: 11.5px; margin-top: 3px; }

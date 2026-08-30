@@ -196,6 +196,27 @@ describe("página de oportunidades", () => {
     expect(onCreate.mock.calls[0][0]).toMatchObject({ clientId: "cli-1", cliente: "Rede Alfa" });
   });
 
+  it("avisa que a conta Fria saiu para Morno — e não repete o aviso para conta Quente", async () => {
+    // O servidor aquece a conta (Frio/sem classificação → Morno) quando a
+    // oportunidade nasce vinculada; o toast espelha a mesma régua.
+    const setToast = vi.fn();
+    const clients = [
+      { id: "cli-fria", name: "Rede Fria", crm: { temperature: "Frio" } },
+      { id: "cli-quente", name: "Rede Quente", crm: { temperature: "Quente" } },
+    ];
+    render(<OpportunitiesPage clients={clients} opportunities={[]} onCreate={vi.fn()} setToast={setToast} />);
+
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-fria" } });
+    fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
+    await waitFor(() => expect(setToast).toHaveBeenCalled());
+    expect(setToast.mock.calls.at(-1)[0]).toMatch(/Rede Fria saiu de Frio para Morno/);
+
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-quente" } });
+    fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
+    await waitFor(() => expect(setToast).toHaveBeenCalledTimes(2));
+    expect(setToast.mock.calls.at(-1)[0]).not.toMatch(/Morno/);
+  });
+
   it("não limpa o formulário nem anuncia sucesso quando a gravação falha", async () => {
     const onCreate = vi.fn().mockRejectedValue(new Error("Servidor indisponível"));
     const setToast = vi.fn();

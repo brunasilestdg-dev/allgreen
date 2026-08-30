@@ -168,6 +168,81 @@ describe("oportunidades saem do JSON do espaço", () => {
   });
 });
 
+describe("oportunidade vinculada esquenta a conta fria", () => {
+  // Pedido da titular (30/08): "oportunidade, posso atribuir a um cliente na
+  // plataforma e automaticamente sai de frio pra morno". A régua só sobe —
+  // classificação manual acima de Frio nunca é rebaixada por automação.
+  const contaComCampos = async (id, campos) => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_clients
+         (id, tenant_id, workspace_owner_id, name, status, portal_enabled, fields_json,
+          created_by, updated_by, created_at, updated_at)
+       VALUES (?, 'todogreen', ?, ?, 'ativo', 0, ?, ?, ?, ?, ?)`,
+    ).bind(id, gestora.id, id, JSON.stringify(campos), gestora.id, gestora.id, agora, agora).run();
+  };
+  const camposDaConta = async (id) => {
+    const linha = await env.DB.prepare(
+      "SELECT fields_json FROM todogreen_clients WHERE id = ?",
+    ).bind(id).first();
+    return JSON.parse(linha.fields_json || "{}");
+  };
+
+  it("conta Fria vira Morno quando nasce oportunidade vinculada a ela", async () => {
+    await contaComCampos("cli-fria", { temperature: "Frio", stage: "Mapeamento", tags: ["frota"] });
+    const criada = await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { cliente: "cli-fria", clientId: "cli-fria", valorMensal: 12000 },
+    });
+    expect(criada.status).toBe(201);
+    const campos = await camposDaConta("cli-fria");
+    expect(campos.temperature).toBe("Morno");
+    // O aquecimento mexe só na temperatura; o resto do CRM fica intacto.
+    expect(campos.stage).toBe("Mapeamento");
+    expect(campos.tags).toEqual(["frota"]);
+  });
+
+  it("conta ainda sem classificação também esquenta", async () => {
+    await contaComCampos("cli-sem-classe", {});
+    await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { cliente: "cli-sem-classe", clientId: "cli-sem-classe", valorMensal: 800 },
+    });
+    expect((await camposDaConta("cli-sem-classe")).temperature).toBe("Morno");
+  });
+
+  it("Quente classificado à mão não é rebaixado", async () => {
+    await contaComCampos("cli-quente", { temperature: "Quente" });
+    await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { cliente: "cli-quente", clientId: "cli-quente", valorMensal: 5000 },
+    });
+    expect((await camposDaConta("cli-quente")).temperature).toBe("Quente");
+  });
+
+  it("vincular a conta depois, na edição da oportunidade, também esquenta", async () => {
+    await contaComCampos("cli-tardia", { temperature: "Frio" });
+    const criada = await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { cliente: "Ainda sem conta", valorMensal: 900 },
+    });
+    const { registro } = await criada.json();
+    expect((await camposDaConta("cli-tardia")).temperature).toBe("Frio");
+
+    const editada = await pedir(`/api/todogreen/records/opportunities/${registro.id}`, {
+      metodo: "PATCH",
+      token: gestora.token,
+      corpo: { revision: registro.revision, clientId: "cli-tardia" },
+    });
+    expect(editada.status).toBe(200);
+    expect((await camposDaConta("cli-tardia")).temperature).toBe("Morno");
+  });
+});
+
 describe("paginação e filtro no servidor", () => {
   it("limit e offset recortam a página, e o total conta a lista inteira", async () => {
     const dono = await criarUsuario("rec-pag-dono", "pag-dono@parceiro.com.br");

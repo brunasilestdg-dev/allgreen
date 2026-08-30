@@ -112,6 +112,40 @@ const criarHandoffOperacional = async (env, access, user, oportunidade) => {
   ).bind(crypto.randomUUID(), access.ownerId, boardId, itemId, user.id, JSON.stringify({ opportunityId: oportunidade.id }), agora).run();
 };
 
+// Oportunidade aberta é conversa viva: uma conta Fria (ou ainda sem
+// classificação) que ganha oportunidade vinculada vira "Morno" sozinha —
+// pedido da titular (30/08). A régua só esquenta: nunca rebaixa "Morno" ou
+// "Quente" que a equipe classificou à mão. A escrita respeita a trava de
+// revision do cliente; se alguém salvou a conta no meio, o aquecimento cede
+// a vez em silêncio — é conveniência, não pode brigar com edição humana.
+const aquecerContaPorOportunidade = async (env, access, user, clientId) => {
+  const conta = await env.DB.prepare(
+    `SELECT id, fields_json, revision FROM todogreen_clients
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(texto(clientId, 120), TENANT_ID, access.ownerId).first();
+  if (!conta) return false;
+  let campos = {};
+  try { campos = JSON.parse(conta.fields_json || "{}") || {}; } catch { campos = {}; }
+  const atual = typeof campos.temperature === "string" ? campos.temperature : "";
+  if (atual && atual !== "Frio") return false;
+  const { meta } = await env.DB.prepare(
+    `UPDATE todogreen_clients
+        SET fields_json=?, revision=revision+1, updated_by=?, updated_at=?
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
+  ).bind(
+    JSON.stringify({ ...campos, temperature: "Morno" }), user.id, new Date().toISOString(),
+    conta.id, TENANT_ID, access.ownerId, conta.revision,
+  ).run();
+  if (!meta?.changes) return false;
+  await registrarAuditoriaTodoGreen(env, {
+    access, user, action: "updated", resourceType: "clients", resourceId: conta.id,
+    clientId: conta.id,
+    before: { temperature: atual },
+    after: { temperature: "Morno", motivo: "oportunidade vinculada à conta" },
+  });
+  return true;
+};
+
 // Cada coleção declara como uma linha vira registro e como um registro vira
 // linha. Sem essa tabela, cada endpoint reescreveria o mesmo mapeamento com
 // uma diferença sutil — e a diferença sutil é o que faz o painel somar errado.
@@ -1029,6 +1063,8 @@ const criar = async (env, colecao, access, user, corpo) => {
     .first();
   const registro = colecao.daLinha(row);
   const tipo = nomeDaColecao(colecao);
+  if (colecao === COLECOES.opportunities && texto(registro.clientId))
+    await aquecerContaPorOportunidade(env, access, user, registro.clientId);
   if (colecao === COLECOES.contracts)
     await registrarEventoContrato(env, access, user, id, "created", {}, registro, texto(corpo.nota, 1000));
   await registrarAuditoriaTodoGreen(env, {
@@ -1113,6 +1149,8 @@ const atualizar = async (env, colecao, access, user, id, corpo) => {
   const depois = colecao.daLinha(row);
   if (colecao === COLECOES.opportunities && deveCriarHandoff(atual.stage, row.stage))
     await criarHandoffOperacional(env, access, user, depois);
+  if (colecao === COLECOES.opportunities && !texto(antes.clientId) && texto(depois.clientId))
+    await aquecerContaPorOportunidade(env, access, user, depois.clientId);
   if (colecao === COLECOES.contracts)
     await registrarEventoContrato(env, access, user, id, "updated", antes, depois, texto(corpo.nota, 1000));
   await registrarAuditoriaTodoGreen(env, {

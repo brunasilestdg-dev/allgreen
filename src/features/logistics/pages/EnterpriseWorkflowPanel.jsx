@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Clock3, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { authHeaders } from "../../../session/armazenamento.js";
+import {
+  alternarPonto,
+  normalizarPontos,
+  outroLado,
+  pontosDeTexto,
+  resumoDosPontos,
+  rotuloDoLado,
+} from "../contratoNegociacaoDomain.js";
+// Sem este import, os estilos do vaivém só existem se outra página lazy já
+// tiver sido visitada na sessão — a mesma armadilha documentada do DealDesk.
+import "./TodoGreenPages.css";
 
 const DOMAIN = {
   legal: {
@@ -31,10 +42,10 @@ const STATUS = {
 const PRIORITY = { low: "Baixa", normal: "Normal", high: "Alta", critical: "Crítica" };
 const empty = (domain) => ({
   title: "", description: "", kind: DOMAIN[domain]?.kinds?.[0]?.[0] || "",
-  priority: "normal", dueAt: "", clientId: "", requireApproval: true,
+  priority: "normal", dueAt: "", clientId: "", clientName: "", requireApproval: true,
   recurrenceEnabled: false, recurrenceFrequency: "monthly", recurrenceInterval: 1,
   data: domain === "legal"
-    ? { documentOwner: "client", version: "1", signatureStatus: "pending", externalUrl: "", risk: "" }
+    ? { documentOwner: "client", version: "1", signatureStatus: "pending", externalUrl: "", risk: "", bola: "juridico", pontosTexto: "" }
     : domain === "quality"
       ? { severity: "medium", rootCause: "", correctiveAction: "", preventiveAction: "", operationReference: "", evidence: "" }
       : { objective: "", audience: "", channel: "", budget: "", startAt: "", endAt: "", expectedLeads: "", actualLeads: "", attributedRevenue: "" },
@@ -58,7 +69,9 @@ function DomainFields({ domain, form, setForm }) {
     <label><span>Origem do documento</span><select value={form.data.documentOwner} onChange={(e) => setData("documentOwner", e.target.value)}><option value="client">Documento do cliente / referência externa</option><option value="company">Documento da To Do Green / arquivo interno</option></select></label>
     <label><span>Versão</span><input value={form.data.version} onChange={(e) => setData("version", e.target.value)} /></label>
     <label><span>Assinatura</span><select value={form.data.signatureStatus} onChange={(e) => setData("signatureStatus", e.target.value)}><option value="pending">Pendente</option><option value="sent">Enviado para assinatura</option><option value="signed">Assinado</option><option value="expired">Expirado</option></select></label>
+    <label><span>Com quem está agora</span><select value={form.data.bola || "juridico"} onChange={(e) => setData("bola", e.target.value)}><option value="juridico">Jurídico — analisando</option><option value="comercial">Comercial — alinhando com o cliente</option></select></label>
     <label><span>Link do cliente, se houver</span><input type="url" value={form.data.externalUrl} onChange={(e) => setData("externalUrl", e.target.value)} placeholder="https://..." /></label>
+    <label className="full"><span>Pontos de discordância (um por linha)</span><textarea value={form.data.pontosTexto || ""} onChange={(e) => setData("pontosTexto", e.target.value)} placeholder={"Multa por rescisão antecipada\nPrazo de pagamento 60 dias"} /></label>
     <label className="full"><span>Risco / ressalvas jurídicas</span><textarea value={form.data.risk} onChange={(e) => setData("risk", e.target.value)} /></label>
   </>;
   if (domain === "quality") return <>
@@ -96,6 +109,16 @@ function Card({ item, domain, reload, setToast }) {
     catch (error) { setToast?.(error.message); }
     finally { setBusy(false); }
   };
+  // O PATCH de data é merge raso no servidor: mandar só {pontos} ou {bola}
+  // preserva o resto do payload do domínio.
+  const saveData = async (data) => {
+    setBusy(true);
+    try { await api(`/${item.id}`, { method: "PATCH", body: JSON.stringify({ revision: item.revision, data }) }); await reload(); }
+    catch (error) { setToast?.(error.message); }
+    finally { setBusy(false); }
+  };
+  const pontos = domain === "legal" ? normalizarPontos(item.data?.pontos) : [];
+  const resumoPontos = resumoDosPontos(pontos);
   const extra = domain === "marketing"
     ? `${money(item.data?.budget)} orçamento · ${Number(item.data?.actualLeads || 0)} lead(s) · ${money(item.data?.attributedRevenue)} receita atribuída`
     : domain === "quality"
@@ -103,7 +126,33 @@ function Card({ item, domain, reload, setToast }) {
       : `${item.data?.documentOwner === "company" ? "Documento To Do Green" : "Documento do cliente"} · versão ${item.data?.version || "—"} · assinatura ${item.data?.signatureStatus || "pendente"}`;
   return <article className="tdg-panel tdg-workflow-card">
     <header className="tdg-section-head"><div><span className="tdg-kicker">{DOMAIN[domain]?.kinds.find(([id]) => id === item.kind)?.[1] || item.kind}</span><h3>{item.title}</h3><p>{item.description || extra}</p></div><strong>{STATUS[item.status] || item.status}</strong></header>
-    <div className="tdg-workflow-meta"><span><Clock3 size={14} />{date(item.dueAt)}</span><span>Prioridade {PRIORITY[item.priority] || item.priority}</span><span>{extra}</span></div>
+    <div className="tdg-workflow-meta"><span><Clock3 size={14} />{date(item.dueAt)}</span><span>Prioridade {PRIORITY[item.priority] || item.priority}</span>{item.data?.clientName ? <span>{item.data.clientName}</span> : null}<span>{extra}</span></div>
+    {domain === "legal" && pontos.length > 0 && (
+      <div className="tdg-wf-pontos">
+        <strong>
+          Pontos de discordância · {resumoPontos.texto} · com o {rotuloDoLado(item.data?.bola)}
+        </strong>
+        <ul>
+          {pontos.map((ponto) => (
+            <li key={ponto.id} data-status={ponto.status}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => saveData({ pontos: alternarPonto(pontos, ponto.id) })}
+                title={ponto.status === "acordado" ? "Reabrir este ponto" : "Marcar como acordado"}
+                aria-label={`${ponto.status === "acordado" ? "Reabrir" : "Acordar"}: ${ponto.texto}`}
+              >
+                <Check size={13} />
+              </button>
+              <span>{ponto.texto}</span>
+            </li>
+          ))}
+        </ul>
+        <button type="button" disabled={busy} onClick={() => saveData({ bola: outroLado(item.data?.bola) })}>
+          Passar para o {rotuloDoLado(outroLado(item.data?.bola))}
+        </button>
+      </div>
+    )}
     {item.approval?.plan?.length > 0 && <div className="tdg-workflow-approval"><ShieldCheck size={16} /><span><strong>{item.approval.complete ? "Aprovações concluídas" : `Próxima aprovação: ${item.approval.next?.label || "—"}`}</strong><small>{item.approval.approvals?.map((step) => `${step.label}: ${step.decision === "approved" ? "aprovado" : "recusado"}`).join(" · ") || "Nenhuma decisão registrada"}</small></span></div>}
     <div className="tdg-page-actions">
       {item.status === "pending" && <><button className="tdg-action" type="button" disabled={busy} onClick={() => decide("approve")}><Check size={15} />Aprovar etapa</button><button type="button" disabled={busy} onClick={() => decide("reject")}><X size={15} />Recusar</button></>}
@@ -121,6 +170,18 @@ export default function EnterpriseWorkflowPanel({ domain, setToast }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Contas do CRM para sugerir no vínculo do processo. O clientId tem coluna
+  // própria no workflow desde sempre — só faltava a tela preencher. Falha na
+  // carga deixa a lista vazia e o campo segue como texto livre de rótulo.
+  const [contas, setContas] = useState([]);
+  useEffect(() => {
+    let ativo = true;
+    fetch("/api/todogreen/clients", { headers: authHeaders() })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((corpo) => { if (ativo && corpo) setContas(corpo.clientes || []); })
+      .catch(() => {});
+    return () => { ativo = false; };
+  }, []);
   const reload = useCallback(async () => {
     setLoading(true);
     try { const data = await api(`?domain=${domain}`); setItems(data.workflows || []); }
@@ -137,10 +198,24 @@ export default function EnterpriseWorkflowPanel({ domain, setToast }) {
     event.preventDefault(); setSaving(true);
     try {
       const recurrence = form.recurrenceEnabled ? { enabled: true, frequency: form.recurrenceFrequency, interval: Number(form.recurrenceInterval) || 1, nextRunAt: form.dueAt ? new Date(`${form.dueAt}T12:00:00Z`).toISOString() : new Date(Date.now() + 86400000).toISOString() } : {};
-      await api("", { method: "POST", body: JSON.stringify({ ...form, domain, data: { ...form.data, budget: Number(form.data.budget || 0), actualLeads: Number(form.data.actualLeads || 0), expectedLeads: Number(form.data.expectedLeads || 0), attributedRevenue: Number(form.data.attributedRevenue || 0) }, recurrence }) });
+      const data = { ...form.data, clientName: form.clientName || "" };
+      if (domain === "marketing") {
+        data.budget = Number(form.data.budget || 0);
+        data.actualLeads = Number(form.data.actualLeads || 0);
+        data.expectedLeads = Number(form.data.expectedLeads || 0);
+        data.attributedRevenue = Number(form.data.attributedRevenue || 0);
+      }
+      if (domain === "legal") {
+        // O textarea é rascunho de digitação; o que o workflow guarda são os
+        // pontos estruturados, marcáveis um a um no cartão.
+        data.pontos = pontosDeTexto(form.data.pontosTexto);
+        data.bola = form.data.bola === "comercial" ? "comercial" : "juridico";
+        delete data.pontosTexto;
+      }
+      await api("", { method: "POST", body: JSON.stringify({ ...form, domain, data, recurrence }) });
       setForm(empty(domain)); setOpen(false); await reload(); setToast?.("Processo registrado.");
     } catch (error) { setToast?.(error.message); }
     finally { setSaving(false); }
   };
-  return <section className="tdg-enterprise-workflow"><header className="tdg-page-title"><div><span>{config.kicker}</span><h2>{config.title}</h2><p>{config.description}</p></div><div className="tdg-page-actions"><button type="button" onClick={reload}><RefreshCw size={15} />Atualizar</button><button type="button" className="tdg-action" onClick={() => setOpen((value) => !value)}><Plus size={15} />{open ? "Fechar" : "Novo processo"}</button></div></header><section className="tdg-metrics"><article className="tdg-metric"><span>Em aberto</span><strong>{metrics.open}</strong></article><article className={`tdg-metric ${metrics.pending ? "warn" : ""}`}><span>Aguardando aprovação</span><strong>{metrics.pending}</strong></article><article className={`tdg-metric ${metrics.late ? "risk" : ""}`}><span>Prazo vencido</span><strong>{metrics.late}</strong></article></section>{open && <form className="tdg-panel tdg-form" onSubmit={submit}><label><span>Tipo</span><select value={form.kind} onChange={(e) => setForm((current) => ({ ...current, kind: e.target.value }))}>{config.kinds.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><label className="full"><span>Título</span><input required minLength={3} value={form.title} onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))} /></label><label className="full"><span>Descrição / briefing</span><textarea value={form.description} onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))} /></label><label><span>Prioridade</span><select value={form.priority} onChange={(e) => setForm((current) => ({ ...current, priority: e.target.value }))}>{Object.entries(PRIORITY).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><label><span>Prazo</span><input type="date" value={form.dueAt} onChange={(e) => setForm((current) => ({ ...current, dueAt: e.target.value }))} /></label><DomainFields domain={domain} form={form} setForm={setForm} /><label><span><input type="checkbox" checked={form.requireApproval} onChange={(e) => setForm((current) => ({ ...current, requireApproval: e.target.checked }))} /> Exigir fluxo de aprovação</span></label><label><span><input type="checkbox" checked={form.recurrenceEnabled} onChange={(e) => setForm((current) => ({ ...current, recurrenceEnabled: e.target.checked }))} /> Processo recorrente</span></label>{form.recurrenceEnabled && <><label><span>Frequência</span><select value={form.recurrenceFrequency} onChange={(e) => setForm((current) => ({ ...current, recurrenceFrequency: e.target.value }))}><option value="daily">Diária</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select></label><label><span>A cada</span><input type="number" min="1" max="24" value={form.recurrenceInterval} onChange={(e) => setForm((current) => ({ ...current, recurrenceInterval: e.target.value }))} /></label></>}<button className="tdg-action" disabled={saving}>{saving ? "Salvando..." : "Criar processo"}</button></form>}<div className="tdg-workflow-list">{loading && <p>Carregando...</p>}{!loading && items.length === 0 && <p className="tdg-empty-access">Nenhum processo registrado nesta área.</p>}{items.map((item) => <Card key={item.id} item={item} domain={domain} reload={reload} setToast={setToast} />)}</div></section>;
+  return <section className="tdg-enterprise-workflow"><header className="tdg-page-title"><div><span>{config.kicker}</span><h2>{config.title}</h2><p>{config.description}</p></div><div className="tdg-page-actions"><button type="button" onClick={reload}><RefreshCw size={15} />Atualizar</button><button type="button" className="tdg-action" onClick={() => setOpen((value) => !value)}><Plus size={15} />{open ? "Fechar" : "Novo processo"}</button></div></header><section className="tdg-metrics"><article className="tdg-metric"><span>Em aberto</span><strong>{metrics.open}</strong></article><article className={`tdg-metric ${metrics.pending ? "warn" : ""}`}><span>Aguardando aprovação</span><strong>{metrics.pending}</strong></article><article className={`tdg-metric ${metrics.late ? "risk" : ""}`}><span>Prazo vencido</span><strong>{metrics.late}</strong></article></section>{open && <form className="tdg-panel tdg-form" onSubmit={submit}><label><span>Tipo</span><select value={form.kind} onChange={(e) => setForm((current) => ({ ...current, kind: e.target.value }))}>{config.kinds.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><label className="full"><span>Título</span><input required minLength={3} value={form.title} onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))} /></label><label className="full"><span>Descrição / briefing</span><textarea value={form.description} onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))} /></label><label><span>Conta To Do Green (opcional)</span><input list="tdg-wf-contas" value={form.clientName} onChange={(e) => { const nome = e.target.value; const conta = contas.find((c) => c.name === nome); setForm((current) => ({ ...current, clientName: nome, clientId: conta?.id || "" })); }} placeholder="Digite para sugerir contas do CRM" /><datalist id="tdg-wf-contas">{contas.map((c) => <option value={c.name} key={c.id} />)}</datalist></label><label><span>Prioridade</span><select value={form.priority} onChange={(e) => setForm((current) => ({ ...current, priority: e.target.value }))}>{Object.entries(PRIORITY).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><label><span>Prazo</span><input type="date" value={form.dueAt} onChange={(e) => setForm((current) => ({ ...current, dueAt: e.target.value }))} /></label><DomainFields domain={domain} form={form} setForm={setForm} /><label><span><input type="checkbox" checked={form.requireApproval} onChange={(e) => setForm((current) => ({ ...current, requireApproval: e.target.checked }))} /> Exigir fluxo de aprovação</span></label><label><span><input type="checkbox" checked={form.recurrenceEnabled} onChange={(e) => setForm((current) => ({ ...current, recurrenceEnabled: e.target.checked }))} /> Processo recorrente</span></label>{form.recurrenceEnabled && <><label><span>Frequência</span><select value={form.recurrenceFrequency} onChange={(e) => setForm((current) => ({ ...current, recurrenceFrequency: e.target.value }))}><option value="daily">Diária</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select></label><label><span>A cada</span><input type="number" min="1" max="24" value={form.recurrenceInterval} onChange={(e) => setForm((current) => ({ ...current, recurrenceInterval: e.target.value }))} /></label></>}<button className="tdg-action" disabled={saving}>{saving ? "Salvando..." : "Criar processo"}</button></form>}<div className="tdg-workflow-list">{loading && <p>Carregando...</p>}{!loading && items.length === 0 && <p className="tdg-empty-access">Nenhum processo registrado nesta área.</p>}{items.map((item) => <Card key={item.id} item={item} domain={domain} reload={reload} setToast={setToast} />)}</div></section>;
 }

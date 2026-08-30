@@ -641,8 +641,15 @@ export default function OpportunitiesPage({
           [...CAMPOS_OPERACAO, ...CAMPOS_CONTRATO].map(({ key }) => [key, Number(form[key] || 0)]),
         ),
       });
+      // O servidor esquenta a conta Fria (ou sem classificação) quando a
+      // oportunidade nasce vinculada a ela; o aviso aqui espelha essa régua
+      // para a pessoa saber na hora, sem precisar abrir o CRM.
+      const contaVinculada = clients.find((item) => item.id === form.clientId);
+      const estavaFria = contaVinculada && ["", "Frio"].includes(contaVinculada.crm?.temperature || "");
       setForm(FORM_VAZIO);
-      setToast?.("Oportunidade registrada com potencial ESG calculado.");
+      setToast?.(estavaFria
+        ? `Oportunidade registrada — a conta ${contaVinculada.name} saiu de Frio para Morno.`
+        : "Oportunidade registrada com potencial ESG calculado.");
     } catch (erro) {
       setToast?.(erro?.message || "Não foi possível registrar a oportunidade.");
     } finally {
