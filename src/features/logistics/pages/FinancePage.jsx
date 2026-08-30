@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Plus, ReceiptText } from "lucide-react";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
 import { agruparPorCentroDeCusto, resumoFinanceiro, saldoAberto, statusFinanceiroEfetivo } from "../todoGreenFinanceDomain.js";
+import { faixasDeAtraso, proximoVencimentoMensal } from "../contasPonteDomain.js";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -23,6 +24,8 @@ export default function FinancePage({ type, entries = [], clients = [], contract
   const empty = { clientId: "", contractId: "", productId: "middle-mile", category: "", description: "", amount: "", referenceMonth: hoje().slice(0, 7), competenceDate: hoje(), dueDate: "", counterparty: "", documentNumber: "", costCenter: "", budgetCode: "" };
   const [form, setForm] = useState(empty);
   const summary = useMemo(() => resumoFinanceiro(entries), [entries]);
+  // Aging por faixa de atraso — motor do app geral, via ponte (regra 5).
+  const faixas = useMemo(() => faixasDeAtraso(entries), [entries]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("pt-BR");
     if (!needle) return entries;
@@ -44,6 +47,27 @@ export default function FinancePage({ type, entries = [], clients = [], contract
       });
       setForm(empty);
       setToast?.(`${copy.action} registrada`);
+    } catch (error) { setToast?.(error.message); }
+    finally { setSaving(false); }
+  };
+
+  // Conta mensal (aluguel, seguro, parcela do caminhão) não se redigita: um
+  // clique gera o título do mês seguinte, mesmo dia ajustado a mês curto.
+  const repetirProximoMes = async (entry) => {
+    const vencimento = proximoVencimentoMensal(entry.vencimentoEm);
+    if (!vencimento) { setToast?.("Este lançamento não tem vencimento — informe um para repetir."); return; }
+    setSaving(true);
+    try {
+      await criar("financial", {
+        tipo: type, clientId: entry.clientId || "", contratoId: entry.contratoId || "",
+        produtoId: entry.produtoId || "middle-mile", categoria: entry.categoria || "",
+        descricao: entry.descricao || "", valor: Number(entry.valor) || 0,
+        mesReferencia: vencimento.slice(0, 7), competenciaEm: vencimento, vencimentoEm: vencimento,
+        contraparte: entry.contraparte || "", numeroDocumento: entry.numeroDocumento || "",
+        centroCusto: entry.centroCusto || "", codigoOrcamento: entry.codigoOrcamento || "",
+        situacao: "confirmed", statusFinanceiro: "pending",
+      });
+      setToast?.(`Título repetido para ${vencimento.split("-").reverse().join("/")}.`);
     } catch (error) { setToast?.(error.message); }
     finally { setSaving(false); }
   };
@@ -99,6 +123,15 @@ export default function FinancePage({ type, entries = [], clients = [], contract
         <article className="tdg-metric"><span>Em aberto</span><strong>{BRL.format(summary.aberto)}</strong><small>{summary.parciais} parcial(is)</small></article>
         <article className={`tdg-metric ${summary.vencido ? "risk" : ""}`}><span>Vencido</span><strong>{BRL.format(summary.vencido)}</strong><small>saldo que exige ação</small></article>
       </div>
+      {summary.vencido > 0 && (
+        <div className="tdg-aging-row" aria-label="Atraso por faixa">
+          {Object.values(faixas).filter((faixa) => faixa.count > 0).map((faixa) => (
+            <span className={faixa.label === "A vencer" ? "" : "atrasada"} key={faixa.label}>
+              <small>{faixa.label}</small><strong>{BRL.format(faixa.total)}</strong><em>{faixa.count} título(s)</em>
+            </span>
+          ))}
+        </div>
+      )}
       <form className="tdg-access-form tdg-enterprise-form" onSubmit={save}>
         <label><span>Cliente</span><select value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value }))}><option value="">Sem vínculo</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name || client.nome || client.id}</option>)}</select></label>
         <label><span>Contrato</span><select value={form.contractId} onChange={(e) => setForm((v) => ({ ...v, contractId: e.target.value }))}><option value="">Sem contrato</option>{contracts.filter((contract) => !form.clientId || contract.clientId === form.clientId).map((contract) => <option key={contract.id} value={contract.id}>{contract.titulo || contract.title}</option>)}</select></label>
@@ -119,7 +152,7 @@ export default function FinancePage({ type, entries = [], clients = [], contract
         {filtered.length === 0 && <div className="tdg-empty-access">Nenhum lançamento encontrado.</div>}
         {filtered.map((entry) => {
           const status = statusFinanceiroEfetivo(entry);
-          return <article className="tdg-ledger-row" key={entry.id}><span><strong>{entry.descricao || entry.categoria}</strong><small>{entry.contraparte || "sem contraparte"} · {entry.numeroDocumento || "sem documento"}</small></span><span><small>Vencimento</small><strong>{entry.vencimentoEm || "não informado"}</strong></span><span><small>Saldo</small><strong>{BRL.format(saldoAberto(entry))}</strong></span><span className={`tdg-ledger-status ${status}`}>{status === "overdue" ? <AlertTriangle size={15} /> : status === "paid" ? <CheckCircle2 size={15} /> : <CircleDollarSign size={15} />}{STATUS[status]}</span>{!["paid", "cancelled"].includes(status) && <button type="button" onClick={() => openPayment(entry)}>Dar baixa</button>}</article>;
+          return <article className="tdg-ledger-row" key={entry.id}><span><strong>{entry.descricao || entry.categoria}</strong><small>{entry.contraparte || "sem contraparte"} · {entry.numeroDocumento || "sem documento"}</small></span><span><small>Vencimento</small><strong>{entry.vencimentoEm || "não informado"}</strong></span><span><small>Saldo</small><strong>{BRL.format(saldoAberto(entry))}</strong></span><span className={`tdg-ledger-status ${status}`}>{status === "overdue" ? <AlertTriangle size={15} /> : status === "paid" ? <CheckCircle2 size={15} /> : <CircleDollarSign size={15} />}{STATUS[status]}</span>{!["paid", "cancelled"].includes(status) && <button type="button" onClick={() => openPayment(entry)}>Dar baixa</button>}{status !== "cancelled" && <button type="button" onClick={() => repetirProximoMes(entry)} disabled={saving} title="Gera o mesmo título com vencimento no mês seguinte">Repetir mês</button>}</article>;
         })}
       </div>
       {paymentFor && <>

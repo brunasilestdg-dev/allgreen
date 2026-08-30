@@ -66,6 +66,80 @@ export const TODO_GREEN_WORKSPACE_TOOLS = Object.freeze([
     label: "Quadro livre",
     description: "Post-its, votação, agrupamento e conversão em tarefas.",
   },
+  // ===== Reaproveitado do Seu Funcionário, adaptado à transportadora =====
+  // Pedido da titular: tudo o que o app já tem e faz sentido para uma
+  // empresa de transporte elétrico entra aqui, operando no negócio To Do
+  // Green — nada é recriado, nada do que existia se perde.
+  {
+    id: "especialistas",
+    label: "Especialistas",
+    description: "Um especialista de IA por área — os seis da casa e os do app, todos no contexto da transportadora.",
+  },
+  {
+    id: "chat",
+    label: "Chat corporativo",
+    description: "Conversa interna da equipe: comercial, operação e diretoria no mesmo canal.",
+  },
+  {
+    id: "reunioes",
+    label: "Reuniões e atas",
+    description: "Pauta, condução, ata e encaminhamentos — da reunião de rota ao comitê comercial.",
+  },
+  {
+    id: "agenda",
+    label: "Agenda do dia",
+    description: "O dia planejado: compromissos, follow-ups de conta e janelas de operação.",
+  },
+  {
+    id: "orcamentos",
+    label: "Orçamentos rápidos",
+    description: "Orçamento simples e compartilhável para pedidos fora do fluxo de proposta.",
+  },
+  {
+    id: "diagnostico",
+    label: "Plano e diagnóstico",
+    description: "Raio-X do negócio: posicionamento, riscos e plano de crescimento da transportadora.",
+  },
+  {
+    id: "marketing",
+    label: "Marca e marketing",
+    description: "Identidade, campanhas e conteúdo com o argumento ESG da frota elétrica.",
+  },
+  {
+    id: "captacao",
+    label: "Captação (formulários)",
+    description: "Formulários públicos para captar embarcadores e pedidos de cotação.",
+  },
+  {
+    id: "site",
+    label: "Site e presença",
+    description: "Página pública da To Do Green a partir de um briefing — presença digital sem agência.",
+  },
+  {
+    id: "agentes",
+    label: "Agentes de IA",
+    description: "Agentes que executam rotinas inteiras, com as automações que já rodam no espaço.",
+  },
+  {
+    id: "diagramas",
+    label: "Diagramas",
+    description: "Fluxos de operação, malha e processos desenhados — do briefing ao diagrama.",
+  },
+  {
+    id: "quadro-rapido",
+    label: "Quadro rápido",
+    description: "Desenho livre para destravar uma rota, uma malha ou uma reunião em segundos.",
+  },
+  {
+    id: "midia",
+    label: "Estúdio de mídia",
+    description: "Imagens e material visual da marca — frota, ESG e campanhas.",
+  },
+  {
+    id: "laboratorio",
+    label: "Laboratório de dados",
+    description: "Explore qualquer base do espaço com gráficos e cruzamentos, sem planilha.",
+  },
 ]);
 
 const normalizedUrl = (value) => String(value || "").trim().replace(/[?#].*$/, "").replace(/\/$/, "");

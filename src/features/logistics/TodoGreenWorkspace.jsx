@@ -2,6 +2,19 @@ import { Suspense, lazy, useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
+  Bot,
+  CalendarDays,
+  ClipboardList,
+  Globe2,
+  Megaphone,
+  MessageSquareText,
+  Receipt,
+  ScanSearch,
+  Shapes,
+  Stethoscope,
+  FlaskConical,
+  Clapperboard,
+  PenLine,
   Boxes,
   BriefcaseBusiness,
   CircleAlert,
@@ -39,6 +52,21 @@ const DataBases = lazy(() => import("../databases/DataBasesScreen.jsx"));
 const ProcessStudio = lazy(() => import("../processes/ProcessStudio.jsx"));
 const CapacityPlanner = lazy(() => import("../resources/CapacityPlanner.jsx"));
 const CanvasBoard = lazy(() => import("../canvas/CanvasBoard.jsx"));
+// Reaproveitados do app, operando no negócio To Do Green (regra 5: não recriar).
+const TodoGreenEspecialistas = lazy(() => import("./TodoGreenEspecialistas.jsx"));
+const CorporateChat = lazy(() => import("../chat/CorporateChat.jsx"));
+const Meetings = lazy(() => import("../meetings/Meetings.jsx"));
+const DayPlanner = lazy(() => import("../planner/DayPlanner.jsx"));
+const Quotes = lazy(() => import("../omnichannel/Quotes.jsx"));
+const BusinessProfileStudio = lazy(() => import("../business-profile/BusinessProfileStudio.jsx"));
+const CreativeToolkit = lazy(() => import("../creative/CreativeToolkit.jsx"));
+const PublicFormsStudio = lazy(() => import("../forms/PublicFormsStudio.jsx"));
+const SitesScreen = lazy(() => import("../sites/SitesScreen.jsx"));
+const AgentStudio = lazy(() => import("../agents/AgentStudio.jsx"));
+const DiagramStudio = lazy(() => import("../diagrams/DiagramStudio.jsx"));
+const QuickWhiteboard = lazy(() => import("../whiteboard/QuickWhiteboard.jsx"));
+const MediaStudio = lazy(() => import("../media/MediaStudio.jsx"));
+const DataLab = lazy(() => import("../analytics/DataLab.jsx"));
 
 const TOOL_ICONS = {
   "visao-geral": LayoutDashboard,
@@ -54,6 +82,20 @@ const TOOL_ICONS = {
   processos: GitBranch,
   capacidade: Users,
   "quadro-livre": Boxes,
+  especialistas: Bot,
+  chat: MessageSquareText,
+  reunioes: ClipboardList,
+  agenda: CalendarDays,
+  orcamentos: Receipt,
+  diagnostico: Stethoscope,
+  marketing: Megaphone,
+  captacao: ScanSearch,
+  site: Globe2,
+  agentes: Sparkles,
+  diagramas: Shapes,
+  "quadro-rapido": PenLine,
+  midia: Clapperboard,
+  laboratorio: FlaskConical,
 };
 
 const newId = () =>
@@ -90,6 +132,20 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
     processos: summary.processes,
     capacidade: summary.resources,
     "quadro-livre": summary.boards,
+    especialistas: "Perguntar",
+    chat: "Conversar",
+    reunioes: "Abrir",
+    agenda: "Hoje",
+    orcamentos: "Abrir",
+    diagnostico: "Abrir",
+    marketing: "Abrir",
+    captacao: "Abrir",
+    site: "Abrir",
+    agentes: "Abrir",
+    diagramas: "Abrir",
+    "quadro-rapido": "Abrir",
+    midia: "Abrir",
+    laboratorio: "Abrir",
   };
 
   const routineLinks = [
@@ -327,6 +383,20 @@ export default function TodoGreenWorkspace({ db, update, verticalData, setToast,
           {tool === "processos" && <ProcessStudio {...commonProps} />}
           {tool === "capacidade" && <CapacityPlanner {...commonProps} />}
           {tool === "quadro-livre" && <CanvasBoard {...commonProps} />}
+          {tool === "especialistas" && <TodoGreenEspecialistas authHeaders={authHeaders} setToast={setToast} />}
+          {tool === "chat" && <CorporateChat {...commonProps} />}
+          {tool === "reunioes" && <Meetings {...commonProps} />}
+          {tool === "agenda" && <DayPlanner {...commonProps} />}
+          {tool === "orcamentos" && <Quotes {...commonProps} />}
+          {tool === "diagnostico" && <BusinessProfileStudio business={business} update={update} db={db} setToast={setToast} go={() => openTool("visao-geral")} />}
+          {tool === "marketing" && <CreativeToolkit business={business} setToast={setToast} db={db} update={update} />}
+          {tool === "captacao" && <PublicFormsStudio {...commonProps} />}
+          {tool === "site" && <SitesScreen {...commonProps} go={() => openTool("visao-geral")} />}
+          {tool === "agentes" && <AgentStudio {...commonProps} />}
+          {tool === "diagramas" && <DiagramStudio {...commonProps} />}
+          {tool === "quadro-rapido" && <QuickWhiteboard {...commonProps} />}
+          {tool === "midia" && <MediaStudio {...commonProps} />}
+          {tool === "laboratorio" && <DataLab db={db} business={business} />}
         </div>
       </Suspense>
     </section>

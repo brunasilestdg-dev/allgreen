@@ -1757,3 +1757,10 @@
    tem a barra no topo e embaixo); o grid interno só se estende. */
 .tdg-topscroll-body .tdg-crm-kanban,
 .tdg-topscroll-body .tdg-opp-kanban { overflow: visible; padding-bottom: 0; width: max-content; min-width: 100%; }
+/* Aging por faixa de atraso (motor do app geral via ponte). */
+.tdg-aging-row { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: -4px 0 14px; }
+.tdg-aging-row > span { background: #fbfdfc; border: 1px solid var(--tdg-line); border-left: 3px solid #bad5ca; border-radius: 9px; display: grid; gap: 1px; padding: 8px 11px; }
+.tdg-aging-row > span.atrasada { border-left-color: #c96e6e; }
+.tdg-aging-row small { color: var(--tdg-muted); font-size: 10.5px; font-weight: 800; text-transform: uppercase; }
+.tdg-aging-row strong { font-size: .98rem; }
+.tdg-aging-row em { color: var(--tdg-muted); font-size: 11.5px; font-style: normal; }

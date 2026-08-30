@@ -535,3 +535,26 @@
   .tdg-playbook-list article { grid-template-columns: 1fr; }
   .tdg-playbook-list article button { justify-self: start; }
 }
+
+/* ===== Especialistas na vertical (reuso do app, cara To Do Green) ===== */
+.tdg-especialistas { display: grid; gap: 14px; }
+.tdg-esp-grade { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.tdg-esp-grade > button { background: #fff; border: 1px solid var(--tdg-line, #dce7e2); border-radius: 11px; cursor: pointer; display: grid; gap: 4px; padding: 13px 14px; position: relative; text-align: left; }
+.tdg-esp-grade > button:hover { border-color: #2b8267; box-shadow: 0 2px 8px rgba(23, 55, 46, .08); }
+.tdg-esp-grade > button strong { color: #17372e; }
+.tdg-esp-grade > button small { color: #5b7069; line-height: 1.4; }
+.tdg-esp-grade > button.da-casa { background: #f4faf7; border-color: #bad5ca; }
+.tdg-esp-grade > button em { background: #17624f; border-radius: 999px; color: #fff; font-size: 10px; font-style: normal; font-weight: 800; letter-spacing: .04em; padding: 2px 9px; position: absolute; right: 10px; top: 10px; text-transform: uppercase; }
+.tdg-esp-vazio { color: #667e75; margin: 8px 2px; }
+.tdg-esp-chat { background: #fff; border: 1px solid var(--tdg-line, #dce7e2); border-radius: 13px; display: grid; gap: 0; }
+.tdg-esp-chat > header { align-items: center; border-bottom: 1px solid var(--tdg-line, #dce7e2); display: flex; gap: 12px; padding: 11px 14px; }
+.tdg-esp-chat > header button { background: none; border: 0; color: #17624f; cursor: pointer; font: inherit; font-weight: 800; }
+.tdg-esp-chat > header strong { color: #17372e; }
+.tdg-esp-mensagens { display: grid; gap: 10px; max-height: 430px; min-height: 220px; overflow-y: auto; padding: 14px; }
+.tdg-esp-mensagens article { display: grid; gap: 3px; }
+.tdg-esp-mensagens article span { color: #667e75; font-size: 10.5px; font-weight: 800; text-transform: uppercase; }
+.tdg-esp-mensagens article div { background: #f6faf8; border: 1px solid #e2ece7; border-radius: 10px; line-height: 1.55; padding: 10px 12px; white-space: pre-wrap; }
+.tdg-esp-mensagens article.voce div { background: #eaf5ef; border-color: #cfe4d7; }
+.tdg-esp-chat > form { border-top: 1px solid var(--tdg-line, #dce7e2); display: flex; gap: 8px; padding: 11px 14px; }
+.tdg-esp-chat > form input { border: 1px solid var(--tdg-line, #dce7e2); border-radius: 9px; flex: 1; font: inherit; min-height: 40px; outline: none; padding: 0 12px; }
+.tdg-esp-chat > form input:focus { border-color: #2b8267; }

@@ -2675,6 +2675,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <button type="button" className={navigationMode === "area" ? "active" : ""} onClick={() => escolherModo("area")}>Por área</button>
             <button type="button" className={navigationMode === "function" ? "active" : ""} onClick={() => escolherModo("function")}>Funcionalidades</button>
           </div>
+          <small className="tdg-nav-dica">Por área agrupa o dia a dia; Funcionalidades lista todas as telas para achar pela busca.</small>
           {navigationMode === "area" ? (
             <nav className="tdg-tabs" aria-label="Navegação To Do Green">
               {PRIMARY_NAVIGATION.map((item) => (

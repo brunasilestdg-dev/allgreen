@@ -1537,7 +1537,10 @@
   max-height: calc(100vh - 24px);
   min-width: 0;
   /* A lista de funcionalidades é maior que a tela: sem rolagem própria ela
-     era cortada no limite do cartão. A barra fina já é padrão do .tdg. */
+     era cortada no limite do cartão. A barra fina já é padrão do .tdg.
+     overflow-x fica travado: pela regra do CSS, fixar só o eixo Y faz o X
+     virar 'auto' sozinho — e o menu ganhava uma barra deitada torta. */
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 12px;
   position: sticky;
@@ -1944,3 +1947,122 @@
   border: 1px solid var(--tdg-line, #c4d3ca);
   color: var(--tdg-muted, #46574f);
 }
+
+/* ===== Camada de clareza (pedido: simplificar sem excluir telas) =====
+   O app tinha um jeito de aba por tela e dois títulos grandes competindo em
+   cada página. A regra vira UMA só, e o olho aprende uma vez:
+   - Nível 2 (seções de uma tela): abas sublinhadas, como as da área.
+   - Nível 3 (troca de visão: Lista×Kanban, Por área×Funcionalidades): pílula
+     segmentada.
+   - Título grande é um por tela — o do topo do shell; cabeçalho interno vira
+     compacto. Nenhum conteúdo sai; só o excesso de moldura. */
+
+.tdg .tdg-space-tabs,
+.tdg .tdg-intelligence-tabs {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--tdg-line);
+  border-radius: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 18px;
+  min-height: 38px;
+  overflow-x: auto;
+  padding: 0;
+  scrollbar-width: none;
+}
+.tdg .tdg-space-tabs::-webkit-scrollbar,
+.tdg .tdg-intelligence-tabs::-webkit-scrollbar { display: none; }
+.tdg .tdg-space-tabs button,
+.tdg .tdg-intelligence-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--tdg-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 750;
+  gap: 7px;
+  min-height: 0;
+  padding: 7px 1px 10px;
+}
+.tdg .tdg-space-tabs button.active,
+.tdg .tdg-intelligence-tabs button.active {
+  background: transparent;
+  border-bottom-color: var(--tdg-green);
+  box-shadow: none;
+  color: var(--tdg-green);
+}
+.tdg .tdg-intelligence-tabs button b {
+  background: var(--tdg-soft);
+  border-radius: 999px;
+  color: inherit;
+  font-size: .72rem;
+  padding: 1px 8px;
+}
+
+.tdg .tdg-view-switch,
+.tdg .tdg-crm-view-switch,
+.tdg .tdg-nav-switch {
+  background: var(--tdg-soft);
+  border: 1px solid var(--tdg-line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+}
+/* Dentro do menu de 205px a pílula precisa caber inteira: ocupa a largura,
+   divide por igual e encolhe a fonte — senão quebra em duas linhas torta. */
+.tdg .tdg-erp-sidebar .tdg-nav-switch { display: flex; width: 100%; }
+.tdg .tdg-erp-sidebar .tdg-nav-switch button {
+  flex: 1 1 0;
+  font-size: .76rem;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tdg .tdg-view-switch button,
+.tdg .tdg-crm-view-switch button,
+.tdg .tdg-nav-switch button {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  color: var(--tdg-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 700;
+  gap: 6px;
+  padding: 6px 13px;
+}
+.tdg .tdg-view-switch button.active,
+.tdg .tdg-crm-view-switch button.active,
+.tdg .tdg-nav-switch button.active {
+  background: var(--tdg-card);
+  box-shadow: 0 1px 3px rgba(23, 50, 42, .14);
+  color: var(--tdg-ink, #17372e);
+}
+
+/* Um título grande por tela: o cabeçalho interno encolhe e perde a moldura. */
+.tdg-module-page .tdg-intelligence-hero {
+  background: transparent;
+  border: 0;
+  padding: 2px 0 10px;
+}
+.tdg-module-page .tdg-intelligence-hero h2 { font-size: 1.06rem; margin: 2px 0; }
+.tdg-module-page .tdg-intelligence-hero p { font-size: 13px; margin: 0; }
+.tdg-module-page .tdg-intelligence-hero > svg { display: none; }
+.tdg-module-page .tdg-page-title { margin-bottom: 12px; }
+.tdg-module-page .tdg-page-title h2 { font-size: 1.06rem; }
+
+/* A dica que faltava embaixo do seletor de navegação. */
+.tdg-nav-dica { color: var(--tdg-muted); display: block; font-size: .7rem; line-height: 1.35; margin: 6px 2px 0; }
