@@ -327,9 +327,8 @@ export default function ConnectedNotes({ db, update, business, setToast, initial
         <div>
           <h2>Conhecimento conectado</h2>
           <p className="muted">
-            Cada anotação vira parte de uma rede: você escreve{" "}
-            <code>[[nome da nota]]</code> e as duas passam a se enxergar, nos dois
-            sentidos.
+            Suas anotações formam uma rede: cite uma nota dentro da outra — pelo
+            botão “Citar nota” — e as duas passam a se enxergar, nos dois sentidos.
           </p>
         </div>
         <div className="nt-actions">
@@ -433,15 +432,34 @@ export default function ConnectedNotes({ db, update, business, setToast, initial
                   }
                   onBlur={gravarRascunho}
                   placeholder={
-                    "Escreva livremente.\n\n[[Outra nota]] cria uma ligação.\n#etiqueta organiza.\n![[Outra nota]] traz o texto dela para cá.\npergunta :: resposta vira cartão de revisão."
+                    "Escreva livremente.\n\nPara ligar esta anotação a outra, use “Citar nota” aqui embaixo.\n#etiqueta organiza os assuntos.\nUma linha “pergunta :: resposta” vira cartão de revisão."
                   }
                 />
                 <div className="nt-editor-actions">
+                  <label className="nt-citar">
+                    <Link2 size={15} />
+                    <select
+                      aria-label="Citar outra nota"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) ligarNotas(e.target.value);
+                      }}
+                    >
+                      <option value="">Citar nota…</option>
+                      {notas
+                        .filter((n) => n.id !== atual.id)
+                        .map((n) => (
+                          <option key={n.id} value={n.title}>
+                            {n.title}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
                   <button type="button" className="btn" onClick={gerarCartoes}>
                     <Layers size={15} /> Gerar cartões desta nota
                   </button>
                   <button type="button" className="btn" onClick={exportarTudo}>
-                    <Download size={15} /> Exportar markdown
+                    <Download size={15} /> Baixar todas as notas
                   </button>
                   <button
                     type="button"
@@ -622,8 +640,8 @@ export default function ConnectedNotes({ db, update, business, setToast, initial
 
           {!stats.total && (
             <p className="muted">
-              Nenhum cartão ainda. Numa nota, escreva{" "}
-              <code>pergunta :: resposta</code> e use “Gerar cartões desta nota”.
+              Nenhum cartão ainda. Numa nota, escreva uma linha no formato
+              “pergunta :: resposta” e use “Gerar cartões desta nota”.
             </p>
           )}
 
@@ -723,8 +741,8 @@ export default function ConnectedNotes({ db, update, business, setToast, initial
           <section>
             <h3>Títulos repetidos ({repetidas.length})</h3>
             <p className="muted">
-              Título repetido deixa a ligação ambígua: <code>[[nome]]</code> não
-              sabe para qual das duas ir.
+              Título repetido deixa a ligação ambígua: quem cita esse nome não
+              sabe para qual das duas notas ir.
             </p>
             <ul className="nt-refs">
               {repetidas.map((r) => (

@@ -6,9 +6,12 @@ const result = (title, url, snippet = "") => ({ title, url, snippet, provider: "
 describe("inteligência externa comercial", () => {
   it("separa inteligência e faz duas buscas brasileiras de contatos", () => {
     const plans = buildCompanyResearchPlans({ company: "Adidas", segment: "Varejo", year: 2026 });
-    expect(plans).toHaveLength(8);
+    // A busca do decisor com cargo (diretor/gerente/head) roda SEMPRE — a
+    // titular precisa do nome de quem assina já na pesquisa padrão da conta.
+    expect(plans).toHaveLength(9);
     expect(new Set(plans.flatMap((item) => item.kinds))).toEqual(new Set(["identity", "registry", "supplier", "rfq", "esg", "news", "segment", "contacts"]));
     expect(plans.every((item) => item.query.includes("Brasil"))).toBe(true);
+    expect(plans.filter((item) => /diretor OR gerente OR head/.test(item.query))).toHaveLength(1);
     expect(buildCompanyResearchPlans({ company: "Adidas", segment: "Varejo", year: 2026, focus: "contacts" })).toHaveLength(9);
     const focused = buildCompanyResearchPlans({
       company: "Adidas", segment: "Varejo", year: 2026, focus: "contacts",
@@ -385,5 +388,69 @@ describe("inteligência externa comercial", () => {
     expect(report.companyNews.map((item) => item.url)).toEqual(["https://noticias.example.com/caffeine-army-logistica"]);
     expect(report.segmentNews.map((item) => item.url)).toEqual(["https://setor.example.com/logistica-alimentos"]);
     expect(report.companyNews[0].snippet).not.toContain("###");
+  });
+});
+
+describe("correções pedidas pela titular na pesquisa da conta", () => {
+  it("página de portal de vaga (Gupy e afins) nunca vira notícia da empresa", () => {
+    const gupy = result(
+      "Grupo Três Corações — Carreiras",
+      "https://trescoracoes.gupy.io/",
+      "Conheça o Grupo Três Corações e nossas oportunidades.",
+    );
+    const noticia = result(
+      "Três Corações amplia centro de distribuição",
+      "https://noticias.example.com/tres-coracoes-cd",
+      "O Grupo Três Corações anunciou novo CD com foco em logística.",
+    );
+    const report = classifyCompanyResearch({
+      company: "Três Corações",
+      segment: "Alimentos",
+      searches: [{ kind: "news", results: [gupy, noticia] }],
+    });
+    expect(report.companyNews.map((item) => item.url)).toEqual(["https://noticias.example.com/tres-coracoes-cd"]);
+  });
+
+  it("URL descartada pela titular não volta na pesquisa seguinte e fica registrada", () => {
+    const indesejada = result(
+      "Três Corações — informação errada",
+      "https://errada.example.com/pagina",
+      "Conteúdo que a Três Corações não reconhece como seu, com logística citada.",
+    );
+    const report = classifyCompanyResearch({
+      company: "Três Corações",
+      segment: "Alimentos",
+      searches: [{ kind: "news", results: [indesejada] }],
+      discardedUrls: ["https://errada.example.com/pagina"],
+    });
+    expect(report.companyNews).toEqual([]);
+    expect(report.descartes).toContain("https://errada.example.com/pagina");
+  });
+
+  it("contato cadastrado à mão não vira 'ex' por coincidência de nome; identidade forte vira", () => {
+    const formerContacts = [
+      { name: "Ana Lima", linkedinUrl: "https://linkedin.com/in/ana-lima-x" },
+      { name: "Bruno Costa", linkedinUrl: "https://linkedin.com/in/bruno-costa-real" },
+    ];
+    const { contacts, formerContactsMarkedInactive } = reconcileResearchedContacts({
+      existingContacts: [
+        // Manual, só o nome coincide: fica ativa.
+        { id: "c1", name: "Ana Lima", phone: "11 99999-0000" },
+        // Manual com o MESMO LinkedIn do desligamento: vira histórico.
+        { id: "c2", name: "Bruno Costa", linkedinUrl: "https://linkedin.com/in/bruno-costa-real" },
+        // Descoberta pela web, nome coincide: a régua antiga continua valendo.
+        { id: "c3", name: "Ana Lima", source: "Pesquisa web", email: "ana@empresa.com" },
+      ],
+      contactCandidates: [],
+      formerContacts,
+      checkedAt: "2026-08-30T00:00:00.000Z",
+    });
+    const porId = Object.fromEntries(contacts.map((item) => [item.id, item]));
+    expect(porId.c1.active).not.toBe(false);
+    expect(porId.c1.employmentStatus).not.toBe("former");
+    expect(porId.c2.employmentStatus).toBe("former");
+    expect(porId.c2.active).toBe(false);
+    expect(porId.c3.employmentStatus).toBe("former");
+    expect(formerContactsMarkedInactive).toBe(2);
   });
 });

@@ -1536,10 +1536,16 @@
   flex-direction: column;
   max-height: calc(100vh - 24px);
   min-width: 0;
+  /* A lista de funcionalidades é maior que a tela: sem rolagem própria ela
+     era cortada no limite do cartão. A barra fina já é padrão do .tdg. */
+  overflow-y: auto;
   padding: 12px;
   position: sticky;
   top: 12px;
 }
+/* "Esconder menu" precisa esconder de verdade: o display:flex acima vence o
+   atributo [hidden] do navegador, e o menu "escondido" só pulava de coluna. */
+.tdg-erp-sidebar[hidden] { display: none; }
 .tdg-erp-sidebar-head {
   align-items: center;
   border-bottom: 1px solid var(--tdg-line);

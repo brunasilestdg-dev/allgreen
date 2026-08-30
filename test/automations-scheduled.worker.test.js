@@ -42,6 +42,12 @@ async function workspace(userId) {
   return { data: JSON.parse(row.data), revision: row.revision };
 }
 
+// Estes dois testes aguardam o fanout COMPLETO do cron (waitUntil de todos os
+// serviços agendados). Em runner de CI estrangulado o setup já passou de 3
+// minutos e os 15s padrão estouram sem bug nenhum — localmente rodam em ~1s.
+// Timeout próprio de cron; as asserções continuam integrais.
+const TEMPO_DE_CRON = 60_000;
+
 describe("automações executadas pelo servidor", () => {
   it("cria tarefas e lembretes com o app fechado e não duplica o período", async () => {
     const userId = "scheduled-automation-owner";
@@ -118,7 +124,7 @@ describe("automações executadas pelo servidor", () => {
         actionType: "task",
       },
     ]);
-  });
+  }, TEMPO_DE_CRON);
 
   it("ignora regras desligadas e regras que ainda não venceram", async () => {
     const userId = "scheduled-automation-not-due";
@@ -150,5 +156,5 @@ describe("automações executadas pelo servidor", () => {
     expect(current.revision).toBe(0);
     expect(current.data.tasks).toEqual([]);
     expect(current.data.notifications).toEqual([]);
-  });
+  }, TEMPO_DE_CRON);
 });

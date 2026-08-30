@@ -348,7 +348,9 @@ export const dailyTitle = (date) => {
 };
 
 export const dailyTemplate = () =>
-  DAILY_PROMPTS.map((p) => `## ${p.label}\n\n`).join("\n");
+  // O texto vive num campo de escrita simples: prefixo de markdown ali é
+  // ruído visual, não título. As perguntas entram como linhas de gente.
+  DAILY_PROMPTS.map((p) => `${p.label}:\n\n`).join("\n");
 
 export const ensureDailyNote = (notes = [], date, businessId = "") => {
   if (!isDate(date)) return { notes, note: null, created: false };

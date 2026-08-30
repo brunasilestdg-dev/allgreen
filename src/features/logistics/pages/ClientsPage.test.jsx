@@ -178,7 +178,11 @@ describe("página de clientes", () => {
     render(<ClientsPage authHeaders={() => ({})} />);
     fireEvent.click(await screen.findByRole("button", { name: /Adidas/ }));
     expect((await screen.findAllByText("Contato salvo")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("Ian Aranjo")).not.toBeInTheDocument();
+    // O contato web sem comprovação brasileira NÃO entra no mapa ativo de
+    // decisores — mas também não some da tela: fica listado, rotulado, na
+    // seção "Fora do mapa ativo". Sumiço silencioso era o bug reclamado.
+    const foraDoMapa = screen.getByText(/Fora do mapa ativo \(1\)/).closest("details");
+    expect(foraDoMapa).toContainElement(screen.getByText("Ian Aranjo"));
     expect(screen.queryByText("O que é RFQ")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Pesquisar empresa/ }).length).toBeGreaterThan(0);
   });

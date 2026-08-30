@@ -1,275 +1,403 @@
-/* ===== Conhecimento conectado ===== */
+/* ===== Conhecimento conectado =====
+   A tela vive dentro do espaço To Do Green e também no app geral. As cores
+   saem de variáveis locais que herdam o tema da vertical quando ele existe
+   (--tdg-*) e caem no tema do app fora dela — uma única folha, dois lares. */
+.nt {
+  --nt-accent: var(--tdg-green, #1b8a5a);
+  --nt-accent-ink: #0f5136;
+  --nt-line: var(--tdg-line, var(--border, #d9e4dd));
+  --nt-card: var(--tdg-card, var(--surface, #ffffff));
+  --nt-ink: var(--tdg-ink, var(--text, #17322a));
+  --nt-muted: var(--tdg-muted, var(--text-muted, #5f7a6e));
+  --nt-soft: var(--tdg-soft, #eef6f1);
+}
+
+/* Botões da tela: mesmo vocabulário visual do resto do produto. */
+.nt .btn {
+  align-items: center;
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
+  border-radius: 9px;
+  color: var(--nt-ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.85rem;
+  font-weight: 600;
+  gap: 7px;
+  padding: 8px 13px;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.nt .btn:hover,
+.nt .btn:focus-visible { border-color: var(--nt-accent); color: var(--nt-accent-ink); outline: none; }
+.nt .btn.primary {
+  background: var(--nt-accent);
+  border-color: var(--nt-accent);
+  color: #fff;
+}
+.nt .btn.primary:hover,
+.nt .btn.primary:focus-visible { background: var(--nt-accent-ink); border-color: var(--nt-accent-ink); color: #fff; }
+.nt .btn.danger { border-color: #e4c2c2; color: #a23b3b; }
+.nt .btn.danger:hover,
+.nt .btn.danger:focus-visible { background: #fdf1f1; border-color: #c96e6e; color: #8f2727; }
+.nt .btn.tiny { border-radius: 999px; font-size: 0.76rem; padding: 3px 11px; }
+
 .nt-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* Abas como controle segmentado, não texto solto. */
 .nt-tabs {
-  display: flex;
-  gap: 6px;
+  background: var(--nt-soft);
+  border: 1px solid var(--nt-line);
+  border-radius: 999px;
+  display: inline-flex;
   flex-wrap: wrap;
+  gap: 4px;
   margin: 14px 0 18px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+  padding: 4px;
 }
 .nt-tabs button {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
   background: none;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 0.9rem;
-  color: var(--text-muted);
+  border: none;
+  border-radius: 999px;
+  color: var(--nt-muted);
   cursor: pointer;
+  display: inline-flex;
+  font-size: 0.86rem;
+  font-weight: 600;
+  gap: 6px;
+  padding: 7px 14px;
 }
 .nt-tabs button.active {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--text);
-  font-weight: 600;
+  background: var(--nt-card);
+  box-shadow: 0 1px 3px rgba(23, 50, 42, .12);
+  color: var(--nt-accent-ink);
 }
+
 .nt-layout {
-  display: grid;
-  grid-template-columns: minmax(180px, 250px) 1fr;
-  gap: 18px;
   align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(190px, 260px) 1fr;
 }
 @media (max-width: 860px) {
   .nt-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Painel da lista: um cartão de verdade, com item ativo marcado. */
+.nt-list {
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
+  border-radius: 12px;
+  padding: 12px;
+}
 .nt-list ul {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  list-style: none;
+  margin: 10px 0 0;
   max-height: 460px;
   overflow-y: auto;
+  padding: 0;
 }
 .nt-list li button {
-  width: 100%;
-  text-align: left;
+  align-items: center;
   background: none;
   border: 1px solid transparent;
+  border-left: 3px solid transparent;
   border-radius: 8px;
-  padding: 8px 10px;
+  color: var(--nt-ink);
   cursor: pointer;
-  color: var(--text);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
 }
+.nt-list li button:hover { background: var(--nt-soft); }
 .nt-list li button.active {
-  background: var(--surface-2);
-  border-color: var(--border);
+  background: var(--nt-soft);
+  border-color: var(--nt-line);
+  border-left-color: var(--nt-accent);
 }
 .nt-list li strong {
-  font-weight: 500;
   font-size: 0.92rem;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .nt-chip {
-  font-size: 0.7rem;
-  padding: 2px 6px;
+  background: var(--nt-soft);
   border-radius: 999px;
-  background: var(--surface-3, var(--surface-2));
-  color: var(--text-muted);
+  color: var(--nt-muted);
   flex-shrink: 0;
+  font-size: 0.7rem;
+  padding: 2px 8px;
 }
 .nt-search {
-  display: flex;
   align-items: center;
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
+  border-radius: 999px;
+  color: var(--nt-muted);
+  display: flex;
   gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 10px;
-  color: var(--text-muted);
+  padding: 7px 12px;
 }
+.nt-search:focus-within { border-color: var(--nt-accent); }
 .nt-search input {
-  border: none;
   background: none;
+  border: none;
+  color: var(--nt-ink);
+  font-size: 0.9rem;
   outline: none;
   width: 100%;
-  color: var(--text);
-  font-size: 0.9rem;
 }
 .nt-empty {
-  margin-top: 12px;
   font-size: 0.88rem;
+  margin-top: 12px;
+}
+
+/* Editor: um documento, não um formulário. */
+.nt-editor {
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
+  border-radius: 12px;
+  padding: 16px 18px 14px;
 }
 .nt-title {
-  width: 100%;
-  font-size: 1.25rem;
-  font-weight: 600;
-  border: none;
-  border-bottom: 1px solid var(--border);
   background: none;
-  color: var(--text);
-  padding: 6px 2px;
-  margin-bottom: 10px;
+  border: none;
+  border-bottom: 1px solid var(--nt-line);
+  color: var(--nt-ink);
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 12px;
   outline: none;
+  padding: 6px 2px 10px;
+  width: 100%;
+}
+.nt-title:focus { border-bottom-color: var(--nt-accent); }
+.nt-linked-entities {
+  align-items: center;
+  color: var(--nt-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.nt-linked-entities button {
+  background: var(--nt-soft);
+  border: 1px solid var(--nt-line);
+  border-radius: 999px;
+  color: var(--nt-accent-ink);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 11px;
 }
 .nt-body {
-  width: 100%;
-  border: 1px solid var(--border);
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
   border-radius: 10px;
-  padding: 12px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.95rem;
-  line-height: 1.6;
-  resize: vertical;
+  color: var(--nt-ink);
   font-family: inherit;
+  font-size: 0.96rem;
+  line-height: 1.65;
+  min-height: 300px;
+  padding: 14px;
+  resize: vertical;
+  width: 100%;
 }
+.nt-body:focus { border-color: var(--nt-accent); outline: none; }
 .nt-editor-actions {
+  align-items: center;
+  border-top: 1px solid var(--nt-line);
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
-  margin: 10px 0 4px;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.nt-citar {
+  align-items: center;
+  border: 1px solid var(--nt-line);
+  border-radius: 9px;
+  color: var(--nt-muted);
+  display: inline-flex;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+}
+.nt-citar:focus-within { border-color: var(--nt-accent); }
+.nt-citar select {
+  background: none;
+  border: none;
+  color: var(--nt-ink);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  max-width: 200px;
+  outline: none;
+  padding: 8px 4px;
 }
 .nt-warn {
-  border: 1px solid var(--warn-border, #e0b070);
   background: var(--warn-bg, #fff8ec);
+  border: 1px solid var(--warn-border, #e0b070);
   border-radius: 8px;
-  padding: 10px 12px;
-  margin: 10px 0;
   font-size: 0.88rem;
+  margin: 10px 0;
+  padding: 10px 12px;
 }
 .nt-warn p {
   margin: 3px 0;
 }
+
+/* Os três painéis da rede: cabeçalho suave, referências com respiro. */
 .nt-panels {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 14px;
-  margin-top: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  margin-top: 16px;
 }
 .nt-panels section {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
+  border-radius: 12px;
+  padding: 0 0 12px;
 }
 .nt-panels h3 {
-  display: flex;
   align-items: center;
+  background: var(--nt-soft);
+  border-bottom: 1px solid var(--nt-line);
+  border-radius: 12px 12px 0 0;
+  color: var(--nt-accent-ink);
+  display: flex;
+  font-size: 0.86rem;
   gap: 6px;
-  font-size: 0.9rem;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
+  padding: 9px 14px;
 }
+.nt-panels section > p,
+.nt-panels .nt-refs { padding: 0 14px; }
 .nt-refs {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 .nt-refs li {
   display: flex;
   flex-direction: column;
-  gap: 3px;
   font-size: 0.86rem;
+  gap: 3px;
 }
 .nt-refs li > button:first-child {
   background: none;
   border: none;
+  color: var(--nt-accent-ink);
+  cursor: pointer;
+  font-weight: 600;
   padding: 0;
   text-align: left;
-  color: var(--accent, #3ddfcc);
-  font-weight: 600;
-  cursor: pointer;
 }
+.nt-refs li > button:first-child:hover { text-decoration: underline; }
 .nt-refs .btn.tiny {
   align-self: flex-start;
-  padding: 3px 9px;
-  font-size: 0.78rem;
 }
+
 .nt-graph-wrap {
+  align-items: center;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  align-items: center;
 }
 .nt-graph {
-  width: 100%;
-  max-width: 420px;
   height: auto;
+  max-width: 420px;
+  width: 100%;
 }
 .nt-edge {
-  stroke: var(--border);
+  stroke: var(--nt-line);
   stroke-width: 1.4;
 }
 .nt-edge.ausente {
-  stroke-dasharray: 4 3;
   opacity: 0.7;
+  stroke-dasharray: 4 3;
 }
 .nt-node circle {
-  fill: var(--surface-2);
-  stroke: var(--border);
+  fill: var(--nt-soft);
+  stroke: var(--nt-line);
   stroke-width: 1.5;
 }
 .nt-node.atual circle {
-  fill: var(--accent, #3ddfcc);
-  stroke: var(--accent, #3ddfcc);
+  fill: var(--nt-accent);
+  stroke: var(--nt-accent);
 }
 .nt-node.ausente circle {
   fill: none;
   stroke-dasharray: 3 2;
 }
 .nt-node text {
+  fill: var(--nt-muted);
   font-size: 9px;
   text-anchor: middle;
-  fill: var(--text-muted);
 }
 .nt-node[role="button"] {
   cursor: pointer;
 }
+
 .nt-review {
+  align-items: flex-start;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  align-items: flex-start;
 }
 .nt-cards-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   width: 100%;
 }
 .nt-cards-stats article {
-  border: 1px solid var(--border);
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
   border-radius: 10px;
-  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 10px 12px;
 }
 .nt-cards-stats small {
-  color: var(--text-muted);
+  color: var(--nt-muted);
   font-size: 0.78rem;
 }
 .nt-cards-stats strong {
+  color: var(--nt-accent-ink);
   font-size: 1.3rem;
 }
 .nt-card {
-  border: 1px solid var(--border);
+  align-items: center;
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
   border-radius: 12px;
-  padding: 22px;
-  width: 100%;
-  max-width: 520px;
+  box-shadow: 0 6px 18px rgba(23, 50, 42, .07);
   display: flex;
   flex-direction: column;
   gap: 14px;
-  align-items: center;
+  max-width: 520px;
+  padding: 22px;
   text-align: center;
+  width: 100%;
 }
 .nt-card-front {
   font-size: 1.1rem;
@@ -277,53 +405,56 @@
   margin: 0;
 }
 .nt-card-back {
+  color: var(--nt-muted);
   margin: 0;
-  color: var(--text-muted);
 }
 .nt-grades {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
   justify-content: center;
 }
 .nt-health {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
   gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
 }
 .nt-health section {
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
+  border-radius: 12px;
   padding: 14px;
 }
 .nt-health h3 {
+  color: var(--nt-accent-ink);
   font-size: 0.92rem;
   margin: 0 0 6px;
 }
 .nt-graph-links {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
+  list-style: none;
+  margin: 0;
   max-width: 520px;
+  padding: 0;
 }
 .nt-graph-links li {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
+  background: var(--nt-card);
+  border: 1px solid var(--nt-line);
   border-radius: 999px;
-  padding: 5px 12px;
+  display: inline-flex;
   font-size: 0.85rem;
+  gap: 6px;
+  padding: 5px 12px;
 }
 .nt-graph-links li > button:first-child {
   background: none;
   border: none;
-  padding: 0;
-  color: var(--accent, #3ddfcc);
-  font-weight: 600;
+  color: var(--nt-accent-ink);
   cursor: pointer;
+  font-weight: 600;
+  padding: 0;
 }

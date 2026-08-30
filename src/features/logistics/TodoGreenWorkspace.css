@@ -310,7 +310,11 @@
 .tdg-playbook-rule { padding: 17px; border-left: 4px solid #2b8267; border-radius: 0 12px 12px 0; background: #f2f8f5; }
 .tdg-playbook-rule p { margin: 5px 0 0; color: #526861; line-height: 1.5; }
 
-.tdg-help-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tdg-help-group { display: grid; gap: 9px; }
+.tdg-help-group > h3,
+.tdg-help-answers > h3 { margin: 0; color: #567068; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.tdg-help-search-hero { justify-self: stretch !important; min-height: 46px; border-radius: 12px; font-size: 14px; }
+.tdg-help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
 .tdg-help-grid > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 98px; padding: 13px; border: 1px solid var(--tdg-line, #dce7e2); border-radius: 12px; background: #fff; color: inherit; text-align: left; cursor: pointer; }
 .tdg-help-grid > button > svg:first-child { color: #237a5f; }
 .tdg-help-grid > button > svg:last-child { color: #8ba39b; }

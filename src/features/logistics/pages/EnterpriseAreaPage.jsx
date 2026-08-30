@@ -1,256 +1,35 @@
 import { ArrowRight, BadgeCheck, Boxes, BriefcaseBusiness, Gauge, GitBranch, Megaphone, Route, Scale, ScrollText, Settings, Table2, Target, TrendingUp, Users } from "lucide-react";
+import EnterpriseWorkflowPanel from "./EnterpriseWorkflowPanel.jsx";
 
-// Exportado para a página de Fluxos consumir as passagens entre áreas e o Manual
-// do ERP consumir as responsabilidades — a mesma fonte, sem duplicar conteúdo.
+// Exportado para Fluxos e Manual consumirem a mesma definição das áreas.
 export const cards = {
-  products: {
-    kicker: "PRODUTOS",
-    title: "Produtos logísticos",
-    description: "A área define o que pode ser vendido e executado: first mile, middle mile, last mile, operação dedicada, transferência, coletas em fornecedores e projetos especiais.",
-    icon: Boxes,
-    actions: [
-      ["Abrir precificação", "/todogreen/precificacao"],
-      ["Parâmetros do simulador", "/todogreen/parametros-simulador"],
-    ],
-    responsibilities: [
-      "Governar escopo, SLA, unidade de cobrança e restrições de cada produto.",
-      "Definir premissas comerciais antes de proposta, aceite e execução.",
-      "Manter margem alvo, indicadores operacionais e evidências ESG por serviço.",
-    ],
-    handoff: [
-      ["Comercial vende com escopo correto", "Comercial"],
-      ["Planejamento usa o produto para aceitar a OS", "Planejamento"],
-      ["Operação executa dentro do SLA definido", "Operação"],
-    ],
-  },
-  planning: {
-    kicker: "PLANEJAMENTO",
-    title: "Aceite de viagem e liberação de OS",
-    description: "Planejamento e Produtos decidem se a viagem ou OS pode ser aceita, já preparando CIOT quando a operação exigir TRC. Financeiro entra depois, quando a operação concluída vira fila fiscal e recebível.",
-    icon: Route,
-    actions: [
-      ["Abrir OS e aceite", "/todogreen/ordens-servico"],
-      ["Preparar CIOT", "/todogreen/ciot"],
-    ],
-    responsibilities: [
-      "Validar contrato, produto, capacidade, janela, risco, SLA, margem e CIOT antes de liberar.",
-      "Bloquear preparação quando o frete declarado estiver abaixo do piso mínimo informado.",
-      "Separar aceite de execução: Operação inicia depois da OS liberada.",
-      "Manter rastreabilidade entre solicitação, contrato, OS, CIOT, operação e faturamento.",
-    ],
-    handoff: [
-      ["Comercial entrega contrato aprovado", "Comercial"],
-      ["Produtos confirma o serviço contratado", "Produtos"],
-      ["Operação recebe somente o que foi aceito", "Operação"],
-    ],
-  },
-  dp: {
-    kicker: "DEPARTAMENTO PESSOAL",
-    title: "Colaboradores, vínculos e documentação",
-    description: "DP concentra colaboradores, contratos, documentos, férias, afastamentos, vencimentos e dados sensíveis, separado de clientes e contatos comerciais.",
-    icon: BriefcaseBusiness,
-    actions: [
-      ["Cadastro de colaboradores", "/todogreen/cadastros"],
-      ["Ver RH", "/todogreen/rh"],
-    ],
-    responsibilities: [
-      "Controlar colaboradores, vínculos, documentos, vencimentos e dados cadastrais sensíveis.",
-      "Apoiar admissões, desligamentos, férias, afastamentos e obrigações recorrentes.",
-      "Separar pessoa interna de contato de cliente, fornecedor ou parceiro.",
-    ],
-    handoff: [
-      ["RH acompanha capacidade e escala", "RH"],
-      ["Operação consulta disponibilidade liberada", "Operação"],
-      ["Administração governa acesso aos dados sensíveis", "Administração"],
-    ],
-  },
-  hr: {
-    kicker: "RH",
-    title: "Capacidade, escalas e desenvolvimento",
-    description: "RH acompanha disponibilidade, escala, treinamento, capacidade e alocação. Motorista em rota e veículo operacional ficam na Central de Frota.",
-    icon: Users,
-    actions: [
-      ["Abrir Frota e motoristas", "/todogreen/motorista-frota"],
-      ["Ver metas", "/todogreen/metas"],
-    ],
-    responsibilities: [
-      "Planejar escala, disponibilidade, capacidade e alocação de colaboradores.",
-      "Acompanhar treinamento, metas e planos de desenvolvimento.",
-      "Consultar motoristas operacionais pela Central de Frota, sem tratá-los como contatos de cliente.",
-    ],
-    handoff: [
-      ["Planejamento consulta capacidade humana", "Planejamento"],
-      ["Operação usa escala e alocação", "Operação"],
-      ["Gestão acompanha metas e planos", "Gestão"],
-    ],
-  },
-  quality: {
-    kicker: "QUALIDADE",
-    title: "Qualidade, SLA e melhoria contínua",
-    description: "Qualidade acompanha SLA, BSC, não conformidades, planos de ação e reincidências operacionais.",
-    icon: BadgeCheck,
-    actions: [
-      ["Ver ocorrências", "/todogreen/ocorrencias"],
-      ["Ver indicadores", "/todogreen/indicadores"],
-    ],
-    responsibilities: [
-      "Medir cumprimento de SLA e registrar não conformidades.",
-      "Tratar causa raiz, recorrência, plano de ação e dono da correção.",
-      "Conectar qualidade ao contrato, ao cliente e ao frete afetado.",
-    ],
-    handoff: [
-      ["Operação registra a ocorrência", "Operação"],
-      ["Qualidade define tratamento e prevenção", "Qualidade"],
-      ["Indicadores consolidam SLA e recorrência", "Indicadores"],
-    ],
-  },
-  marketing: {
-    kicker: "MARKETING",
-    title: "Campanhas, marca e materiais comerciais",
-    description: "Marketing transforma provas operacionais e ESG em demanda, relacionamento, materiais e campanhas por segmento e produto.",
-    icon: TrendingUp,
-    actions: [
-      ["Ver documentos ESG", "/todogreen/documentos"],
-      ["Ver relatórios", "/todogreen/relatorios"],
-    ],
-    responsibilities: [
-      "Planejar campanhas por produto, segmento, cliente e objetivo comercial.",
-      "Manter narrativa, materiais e evidências alinhados com Comercial e ESG.",
-      "Acompanhar demandas geradas e aprendizados para Produto e Comercial.",
-    ],
-    handoff: [
-      ["ESG fornece evidências auditáveis", "ESG"],
-      ["Comercial usa materiais e campanhas", "Comercial"],
-      ["Produtos ajusta oferta com o retorno do mercado", "Produtos"],
-    ],
-  },
-  legal: {
-    kicker: "JURÍDICO",
-    title: "Contratos, riscos e formalizações",
-    description: "Jurídico organiza minutas, aprovações, riscos, anexos, vigências, aditivos e evidências formais ligadas ao cliente e à operação.",
-    icon: Scale,
-    actions: [
-      ["Ver propostas e contratos", "/todogreen/propostas"],
-      ["Ver documentos", "/todogreen/documentos"],
-    ],
-    responsibilities: [
-      "Acompanhar versão, aprovação, assinatura, vigência e reajuste contratual.",
-      "Formalizar riscos, exceções, anexos e condições especiais.",
-      "Garantir que implantação e faturamento só avancem com base contratual válida.",
-    ],
-    handoff: [
-      ["Comercial negocia condição", "Comercial"],
-      ["Jurídico formaliza e controla risco", "Jurídico"],
-      ["Implantação usa o contrato como gate", "Implantação"],
-    ],
-  },
-  indicators: {
-    kicker: "INDICADORES",
-    title: "KPIs e painéis executivos",
-    description: "Indicadores consolida KPIs comerciais, operacionais, financeiros, ESG, qualidade, implantação e produtividade.",
-    icon: Gauge,
-    actions: [
-      ["Criar painel", "/todogreen/dashboards"],
-      ["Ver relatórios", "/todogreen/relatorios"],
-    ],
-    responsibilities: [
-      "Consolidar dados de múltiplas áreas sem duplicar origem.",
-      "Separar indicador real, estimativa, pendência e dado demonstrativo.",
-      "Dar visão executiva de margem, SLA, receita, implantação, fretes e impacto ESG.",
-    ],
-    handoff: [
-      ["Áreas registram na fonte transacional", "Áreas"],
-      ["Indicadores consolida e compara", "Indicadores"],
-      ["Administração audita permissões e rastreabilidade", "Administração"],
-    ],
-  },
-  admin: {
-    kicker: "ADMINISTRAÇÃO",
-    title: "Governança da vertical",
-    description: "Administração concentra acessos, permissões, integrações, auditoria, configurações e regras de governança da vertical.",
-    icon: Settings,
-    actions: [
-      ["Usuários e acessos", "/todogreen/acessos"],
-      ["Integrações", "/todogreen/integracoes"],
-    ],
-    responsibilities: [
-      "Controlar perfis, permissões e segregação por área.",
-      "Auditar alterações relevantes em cliente, contrato, frete, financeiro e ESG.",
-      "Manter integrações e configurações sem expor credenciais ao usuário final.",
-    ],
-    handoff: [
-      ["Todas as áreas usam permissões por papel", "Áreas"],
-      ["Administração governa acesso e auditoria", "Administração"],
-      ["Indicadores acompanha aderência e risco", "Indicadores"],
-    ],
-  },
-  communication: {
-    kicker: "COMUNICAÇÃO INTERNA",
-    title: "Alinhamentos, conhecimento e trabalho",
-    description: "Comunicação interna organiza documentos, comunicados, quadros, decisões e contexto compartilhado da To Do Green.",
-    icon: Megaphone,
-    actions: [
-      ["Abrir espaço de trabalho", "/todogreen/espaco"],
-      ["Abrir quadros", "/todogreen/central-trabalho"],
-    ],
-    responsibilities: [
-      "Manter decisões, materiais internos e contexto de projetos acessíveis.",
-      "Evitar que alinhamentos comerciais, operacionais e financeiros se percam em mensagens soltas.",
-      "Conectar tarefas, responsáveis e documentos ao processo certo.",
-    ],
-    handoff: [
-      ["Áreas registram decisões e pendências", "Áreas"],
-      ["Comunicação organiza contexto", "Comunicação"],
-      ["Gestores acompanham execução", "Indicadores"],
-    ],
-  },
+  products: { kicker: "PRODUTOS", title: "Produtos logísticos", description: "A área define o que pode ser vendido e executado: first mile, middle mile, last mile, operação dedicada, transferência, coletas em fornecedores e projetos especiais.", icon: Boxes, actions: [["Abrir precificação", "/todogreen/precificacao"], ["Parâmetros do simulador", "/todogreen/parametros-simulador"]], responsibilities: ["Governar escopo, SLA, unidade de cobrança e restrições de cada produto.", "Definir premissas comerciais antes de proposta, aceite e execução.", "Manter margem alvo, indicadores operacionais e evidências ESG por serviço."], handoff: [["Comercial vende com escopo correto", "Comercial"], ["Planejamento usa o produto para aceitar a OS", "Planejamento"], ["Operação executa dentro do SLA definido", "Operação"]] },
+  planning: { kicker: "PLANEJAMENTO", title: "Aceite de viagem e liberação de OS", description: "Planejamento e Produtos decidem se a viagem ou OS pode ser aceita, já preparando CIOT quando a operação exigir TRC. Financeiro entra depois, quando a operação concluída vira fila fiscal e recebível.", icon: Route, actions: [["Abrir OS e aceite", "/todogreen/ordens-servico"], ["Preparar CIOT", "/todogreen/ciot"]], responsibilities: ["Validar contrato, produto, capacidade, janela, risco, SLA, margem e CIOT antes de liberar.", "Bloquear preparação quando o frete declarado estiver abaixo do piso mínimo informado.", "Separar aceite de execução: Operação inicia depois da OS liberada.", "Manter rastreabilidade entre solicitação, contrato, OS, CIOT, operação e faturamento."], handoff: [["Comercial entrega contrato aprovado", "Comercial"], ["Produtos confirma o serviço contratado", "Produtos"], ["Operação recebe somente o que foi aceito", "Operação"]] },
+  dp: { kicker: "DEPARTAMENTO PESSOAL", title: "Colaboradores, vínculos e documentação", description: "DP concentra colaboradores, contratos, documentos, férias, afastamentos, vencimentos e dados sensíveis, separado de clientes e contatos comerciais.", icon: BriefcaseBusiness, actions: [["Cadastro de colaboradores", "/todogreen/cadastros"], ["Ver RH", "/todogreen/rh"]], responsibilities: ["Controlar colaboradores, vínculos, documentos, vencimentos e dados cadastrais sensíveis.", "Apoiar admissões, desligamentos, férias, afastamentos e obrigações recorrentes.", "Separar pessoa interna de contato de cliente, fornecedor ou parceiro."], handoff: [["RH acompanha capacidade e escala", "RH"], ["Operação consulta disponibilidade liberada", "Operação"], ["Administração governa acesso aos dados sensíveis", "Administração"]] },
+  hr: { kicker: "RH", title: "Capacidade, escalas e desenvolvimento", description: "RH acompanha disponibilidade, escala, treinamento, capacidade e alocação. Motorista em rota e veículo operacional ficam na Central de Frota.", icon: Users, actions: [["Abrir Frota e motoristas", "/todogreen/motorista-frota"], ["Ver metas", "/todogreen/metas"]], responsibilities: ["Planejar escala, disponibilidade, capacidade e alocação de colaboradores.", "Acompanhar treinamento, metas e planos de desenvolvimento.", "Consultar motoristas operacionais pela Central de Frota, sem tratá-los como contatos de cliente."], handoff: [["Planejamento consulta capacidade humana", "Planejamento"], ["Operação usa escala e alocação", "Operação"], ["Gestão acompanha metas e planos", "Gestão"]] },
+  quality: { kicker: "QUALIDADE", title: "Qualidade, SLA e melhoria contínua", description: "Qualidade acompanha SLA, BSC, não conformidades, auditorias, CAPA, planos de ação e reincidências operacionais.", icon: BadgeCheck, actions: [["Ver ocorrências", "/todogreen/ocorrencias"], ["Ver indicadores", "/todogreen/indicadores"]], responsibilities: ["Medir cumprimento de SLA e registrar não conformidades.", "Tratar causa raiz, recorrência, ação corretiva e preventiva com dono e prazo.", "Conectar qualidade ao contrato, ao cliente e ao frete afetado."], handoff: [["Operação registra a ocorrência", "Operação"], ["Qualidade conduz causa raiz e CAPA", "Qualidade"], ["Responsáveis aprovam e executam ações", "Áreas"], ["Indicadores consolidam SLA e reincidência", "Indicadores"]] },
+  marketing: { kicker: "MARKETING", title: "Campanhas, marca e materiais comerciais", description: "Marketing transforma provas operacionais e ESG em demanda, relacionamento, materiais e campanhas por segmento e produto.", icon: TrendingUp, actions: [["Ver documentos ESG", "/todogreen/documentos"], ["Ver relatórios", "/todogreen/relatorios"]], responsibilities: ["Planejar campanhas por produto, segmento, cliente e objetivo comercial.", "Submeter orçamento e peças às aprovações necessárias.", "Acompanhar leads, receita atribuída e aprendizados para Produto e Comercial."], handoff: [["ESG fornece evidências auditáveis", "ESG"], ["Marketing planeja e aprova campanha", "Marketing"], ["Comercial trabalha a demanda gerada", "Comercial"], ["Produtos ajusta oferta com o retorno do mercado", "Produtos"]] },
+  legal: { kicker: "JURÍDICO", title: "Contratos, riscos e formalizações", description: "Jurídico organiza minutas, aprovações, riscos, anexos, vigências, aditivos e evidências formais ligadas ao cliente e à operação.", icon: Scale, actions: [["Ver propostas e contratos", "/todogreen/propostas"], ["Ver documentos", "/todogreen/documentos"]], responsibilities: ["Acompanhar versão, origem do documento, revisão, aprovação, assinatura, vigência e reajuste contratual.", "Formalizar riscos, exceções, anexos, aditivos e condições especiais.", "Garantir que implantação e faturamento avancem com base contratual válida."], handoff: [["Comercial negocia condição e abre revisão", "Comercial"], ["Jurídico revisa riscos e minuta", "Jurídico"], ["Liderança aprova a condição formal", "Liderança"], ["Implantação recebe contrato válido", "Implantação"]] },
+  indicators: { kicker: "INDICADORES", title: "KPIs e painéis executivos", description: "Indicadores consolida KPIs comerciais, operacionais, financeiros, ESG, qualidade, implantação e produtividade.", icon: Gauge, actions: [["Criar painel", "/todogreen/dashboards"], ["Ver relatórios", "/todogreen/relatorios"]], responsibilities: ["Consolidar dados de múltiplas áreas sem duplicar origem.", "Separar indicador real, estimativa, pendência e dado demonstrativo.", "Dar visão executiva de margem, SLA, receita, implantação, fretes e impacto ESG."], handoff: [["Áreas registram na fonte transacional", "Áreas"], ["Indicadores consolida e compara", "Indicadores"], ["Administração audita permissões e rastreabilidade", "Administração"]] },
+  admin: { kicker: "ADMINISTRAÇÃO", title: "Governança da vertical", description: "Administração concentra acessos, permissões, integrações, auditoria, configurações e regras de governança da vertical.", icon: Settings, actions: [["Usuários e acessos", "/todogreen/acessos"], ["Integrações", "/todogreen/integracoes"]], responsibilities: ["Controlar perfis, permissões e segregação por área.", "Auditar alterações relevantes em cliente, contrato, frete, financeiro e ESG.", "Manter integrações e configurações sem expor credenciais ao usuário final."], handoff: [["Todas as áreas usam permissões por papel", "Áreas"], ["Administração governa acesso e auditoria", "Administração"], ["Indicadores acompanha aderência e risco", "Indicadores"]] },
+  communication: { kicker: "COMUNICAÇÃO INTERNA", title: "Alinhamentos, conhecimento e trabalho", description: "Comunicação interna organiza documentos, comunicados, quadros, decisões e contexto compartilhado da To Do Green.", icon: Megaphone, actions: [["Abrir espaço de trabalho", "/todogreen/espaco"], ["Abrir quadros", "/todogreen/central-trabalho"]], responsibilities: ["Manter decisões, materiais internos e contexto de projetos acessíveis.", "Evitar que alinhamentos comerciais, operacionais e financeiros se percam em mensagens soltas.", "Conectar tarefas, responsáveis e documentos ao processo certo."], handoff: [["Áreas registram decisões e pendências", "Áreas"], ["Comunicação organiza contexto", "Comunicação"], ["Gestores acompanham execução", "Indicadores"]] },
 };
 
 function ProductStrip({ products = [] }) {
   if (!products.length) return null;
-  return (
-    <div className="tdg-product-strip">
-      {products.slice(0, 6).map((product) => (
-        <article className="tdg-product-card" key={product.id}>
-          <span>{product.code}</span>
-          <strong>{product.name}</strong>
-          <small>{product.modality} · cobrança por {product.billingUnit}</small>
-        </article>
-      ))}
-    </div>
-  );
+  return <div className="tdg-product-strip">{products.slice(0, 6).map((product) => <article className="tdg-product-card" key={product.id}><span>{product.code}</span><strong>{product.name}</strong><small>{product.modality} · cobrança por {product.billingUnit}</small></article>)}</div>;
 }
 
-export default function EnterpriseAreaPage({ area, products = [], onNavigate }) {
+function References({ onNavigate }) {
+  return <div className="tdg-area-referencias"><button type="button" onClick={() => onNavigate?.("/todogreen/rasci")}><Table2 size={16} /><span><strong>Responsabilidades (RASCI)</strong><small>Quem executa, aprova, apoia, consulta e é informado</small></span><ArrowRight size={14} /></button><button type="button" onClick={() => onNavigate?.("/todogreen/fluxos")}><GitBranch size={16} /><span><strong>Fluxos entre áreas</strong><small>Como o trabalho passa de uma área para a outra</small></span><ArrowRight size={14} /></button><button type="button" onClick={() => onNavigate?.("/todogreen/manual")}><ScrollText size={16} /><span><strong>Manual do ERP</strong><small>O que cada módulo faz e como usar</small></span><ArrowRight size={14} /></button></div>;
+}
+
+export default function EnterpriseAreaPage({ area, products = [], onNavigate, setToast }) {
+  // Jurídico e Qualidade deixam de ser páginas descritivas: usam o motor
+  // transacional comum com aprovação, histórico, prazo e recorrência.
+  if (area === "legal" || area === "quality") return <section className="tdg-panel tdg-enterprise-area-page"><EnterpriseWorkflowPanel domain={area === "legal" ? "legal" : "quality"} setToast={setToast} /><References onNavigate={onNavigate} /></section>;
+
   const config = cards[area] || cards.planning;
   const Icon = config.icon;
-  return (
-    <section className="tdg-panel tdg-enterprise-area-page">
-      <div className="tdg-section-head">
-        <div>
-          <span className="tdg-kicker">{config.kicker}</span>
-          <h2>{config.title}</h2>
-          <p>{config.description}</p>
-        </div>
-        <Icon size={28} />
-      </div>
-
-      <article className="tdg-work-area tdg-area-actions">
-        <div className="tdg-work-area-heading"><span><Target size={20} /></span><div><strong>Ações desta área</strong><small>Entrar no trabalho</small></div></div>
-        <div className="tdg-work-area-links">
-          {config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}
-        </div>
-      </article>
-
-      {/* Responsabilidades, fluxos e manual não moram mais em cada área: viram três
-          referências únicas, sem repetir o mesmo conteúdo em toda tela. */}
-      <div className="tdg-area-referencias">
-        <button type="button" onClick={() => onNavigate?.("/todogreen/rasci")}><Table2 size={16} /><span><strong>Responsabilidades (RASCI)</strong><small>Quem executa, aprova, apoia, consulta e é informado</small></span><ArrowRight size={14} /></button>
-        <button type="button" onClick={() => onNavigate?.("/todogreen/fluxos")}><GitBranch size={16} /><span><strong>Fluxos entre áreas</strong><small>Como o trabalho passa de uma área para a outra</small></span><ArrowRight size={14} /></button>
-        <button type="button" onClick={() => onNavigate?.("/todogreen/manual")}><ScrollText size={16} /><span><strong>Manual do ERP</strong><small>O que cada módulo faz e como usar</small></span><ArrowRight size={14} /></button>
-      </div>
-
-      {area === "products" && <ProductStrip products={products} />}
-    </section>
-  );
+  return <section className="tdg-panel tdg-enterprise-area-page"><div className="tdg-section-head"><div><span className="tdg-kicker">{config.kicker}</span><h2>{config.title}</h2><p>{config.description}</p></div><Icon size={28} /></div><article className="tdg-work-area tdg-area-actions"><div className="tdg-work-area-heading"><span><Target size={20} /></span><div><strong>Ações desta área</strong><small>Entrar no trabalho</small></div></div><div className="tdg-work-area-links">{config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}</div></article><References onNavigate={onNavigate} />{area === "products" && <ProductStrip products={products} />}</section>;
 }

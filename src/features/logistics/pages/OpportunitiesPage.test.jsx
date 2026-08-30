@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OpportunitiesPage from "./OpportunitiesPage.jsx";
 
 // A configuração do projeto não usa `globals`, então o auto-cleanup da
@@ -45,7 +45,24 @@ const mapeada = {
 
 const abrir = (nome) => fireEvent.click(screen.getByRole("button", { name: new RegExp(nome) }));
 
+// O kanban simplificado virou a visão padrão (pedido da titular). Estes testes
+// exercitam os fluxos da LISTA (cartão aberto, memória de cálculo, edição), então
+// pré-gravam a preferência — exatamente o que a pessoa que escolheu Lista teria.
+beforeEach(() => {
+  localStorage.setItem("todogreen-opp-view", "lista");
+});
+
 describe("página de oportunidades", () => {
+  it("abre no kanban simplificado por padrão, com total por etapa", () => {
+    localStorage.removeItem("todogreen-opp-view");
+    render(<OpportunitiesPage opportunities={[completa]} />);
+    // Coluna do estágio da oportunidade com contagem e o cartão nome+valor.
+    expect(screen.getByRole("tab", { name: "Kanban", selected: true })).toBeInTheDocument();
+    expect(screen.getByText(/Proposta · 1/)).toBeInTheDocument();
+    const cartao = screen.getByRole("button", { name: /Distribuidora Norte.*240\.000/ });
+    expect(cartao).toBeInTheDocument();
+  });
+
   it("mostra o pipeline separando valor cheio de valor ponderado", () => {
     render(<OpportunitiesPage opportunities={[completa]} />);
     const resumo = screen.getByText("Ponderado pela probabilidade").closest("article");

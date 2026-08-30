@@ -7,6 +7,8 @@
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { searchWeb } from "./web-search.js";
+import { foraDoEscopoDeTransporte } from "./todogreen-market-radar.js";
+import { limparResumoDeBusca } from "../../src/features/logistics/noticiaDomain.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -125,12 +127,18 @@ async function research(env, access, user, body) {
   const found = results.flatMap((result) => (result.results || []).map((item) => ({
     kind: result.kind,
     company: result.kind === "decisors" ? company : "",
-    title: clean(item.title, 500),
+    // O texto entra limpo no banco: sem "Title:", markdown ou resto de
+    // pipeline de imagem — o que a tela mostra é linguagem de gente.
+    title: limparResumoDeBusca(clean(item.title, 500)),
     url: validUrl(item.url),
-    snippet: clean(item.snippet || item.description, 2000),
+    snippet: limparResumoDeBusca(clean(item.snippet || item.description, 2000)),
     provider: clean((result.providers || [])[0], 80),
     sourceQuery: clean(result.query, 500),
-  }))).filter((item) => item.title && item.url && !seen.has(`${item.kind}:${item.url}`) && seen.add(`${item.kind}:${item.url}`));
+  }))).filter((item) => item.title && item.url && !seen.has(`${item.kind}:${item.url}`) && seen.add(`${item.kind}:${item.url}`))
+    // Candidato a RFQ cujo objeto não é transporte de carga (seguro de
+    // veículos, pavimentação, merenda...) não entra: a To Do Green vende
+    // transporte B2B.
+    .filter((item) => item.kind !== "rfq" || !foraDoEscopoDeTransporte(`${item.title} ${item.snippet}`));
 
   const now = new Date().toISOString();
   const runId = crypto.randomUUID();

@@ -223,9 +223,9 @@ const isPortugueseSource = (item) => {
   return portuguese >= 2 || (portuguese >= 1 && /[áàâãéêíóôõúç]|\.br\b/i.test(text));
 };
 
-function ResearchLinks({ title, items = [], empty }) {
+function ResearchLinks({ title, items = [], empty, onDiscard }) {
   return <div className="tdg-crm-research-group"><span>{title}</span>{items.length
-    ? <ul>{items.map((item) => { const portuguese = isPortugueseSource(item); return <li key={item.url}><a href={item.url} target="_blank" rel="noreferrer">{portuguese ? item.title : `Fonte pública · ${sourceHost(item.url)}`}</a>{item.snippet && <small>{portuguese ? item.snippet : "Fonte mantida apenas para conferência. Conteúdo em outro idioma não é reproduzido na ficha."}</small>}{item.validation && <em>{item.validation}</em>}</li>; })}</ul>
+    ? <ul>{items.map((item) => { const portuguese = isPortugueseSource(item); return <li key={item.url}><a href={item.url} target="_blank" rel="noreferrer">{portuguese ? item.title : `Fonte pública · ${sourceHost(item.url)}`}</a>{item.snippet && <small>{portuguese ? item.snippet : "Fonte mantida apenas para conferência. Conteúdo em outro idioma não é reproduzido na ficha."}</small>}{item.validation && <em>{item.validation}</em>}{onDiscard && <button type="button" className="tdg-crm-research-remove" onClick={() => onDiscard(item.url)} title="Remover esta informação; ela não volta nas próximas pesquisas">Remover</button>}</li>; })}</ul>
     : <small>{empty}</small>}</div>;
 }
 
@@ -234,18 +234,18 @@ function AccountSource({ url, evidence }) {
   return sourceUrl ? <small><a href={sourceUrl} target="_blank" rel="noreferrer">Ver fonte <ExternalLink size={11} /></a>{evidence?.checkedAt ? ` · ${formatCheckedAt(evidence.checkedAt)}` : ""}{evidence?.confidence ? ` · confiança ${evidence.confidence}` : ""}</small> : null;
 }
 
-function ExternalIntelligence({ report, researching, error, onResearch, watch, onToggleWatch }) {
+function ExternalIntelligence({ report, researching, error, onResearch, watch, onToggleWatch, onDiscard, onToggleAction }) {
   return <section className="tdg-crm-web-intelligence">
     <header><div><strong>Inteligência externa</strong><small>{formatCheckedAt(report?.checkedAt)}{watch?.enabled ? ` · monitoramento diário ativo` : ""}</small></div><div><button type="button" onClick={() => onToggleWatch?.(!watch?.enabled)} disabled={researching}>{watch?.enabled ? "Pausar monitoramento" : "Monitorar diariamente"}</button><button type="button" onClick={() => onResearch?.("company")} disabled={researching}><RefreshCw size={14} className={researching ? "spin" : ""} />{researching ? "Pesquisando..." : report ? "Atualizar web" : "Pesquisar empresa"}</button></div></header>
     {error && <p className="tdg-crm-research-error">{error}</p>}
     {!report && !error && <p>A IA ainda não pesquisou esta empresa na web. A busca verifica site, LinkedIn, ESG, fornecedores, RFQs, procurement e notícias.</p>}
     {report && <>
       <div className="tdg-crm-research-identity">{report.officialWebsite && <a href={report.officialWebsite.url} target="_blank" rel="noreferrer">Site provável <ExternalLink size={13} /></a>}{report.linkedinCompany && <a href={report.linkedinCompany.url} target="_blank" rel="noreferrer">LinkedIn da empresa <ExternalLink size={13} /></a>}<b>ESG: {report.esg?.relevance || "A validar"}</b></div>
-      <ResearchLinks title="RFQs de transporte abertas" items={report.openRfqs} empty="Nenhuma RFQ acionável comprovada nesta pesquisa." />
-      <ResearchLinks title="Cadastro de fornecedores" items={report.supplierLinks} empty="Nenhum portal oficial identificado." />
-      <ResearchLinks title="Procurement de Logística e Transportes no Brasil" items={report.procurementPeople} empty="Nenhum contato público passou pelos critérios de empresa, Brasil e escopo logístico." />
-      <ResearchLinks title="LinkedIn dos contatos cadastrados" items={report.knownContactProfiles} empty="Nenhum LinkedIn adicional foi confirmado para os contatos já cadastrados." />
-      <ResearchLinks title="Candidatos para validação" items={report.reviewCandidates} empty="Nenhum candidato pendente de validação." />
+      <ResearchLinks title="RFQs de transporte abertas" items={report.openRfqs} onDiscard={onDiscard} empty="Nenhuma RFQ acionável comprovada nesta pesquisa." />
+      <ResearchLinks title="Cadastro de fornecedores" items={report.supplierLinks} onDiscard={onDiscard} empty="Nenhum portal oficial identificado." />
+      <ResearchLinks title="Procurement de Logística e Transportes no Brasil" items={report.procurementPeople} onDiscard={onDiscard} empty="Nenhum contato público passou pelos critérios de empresa, Brasil e escopo logístico." />
+      <ResearchLinks title="LinkedIn dos contatos cadastrados" items={report.knownContactProfiles} onDiscard={onDiscard} empty="Nenhum LinkedIn adicional foi confirmado para os contatos já cadastrados." />
+      <ResearchLinks title="Candidatos para validação" items={report.reviewCandidates} onDiscard={onDiscard} empty="Nenhum candidato pendente de validação." />
       {report.contactSearchQuality && <div className="tdg-crm-research-enrichment"><strong>Resultado da busca de contatos</strong><small>{report.contactSearchQuality.accepted || 0} com vínculo atual comprovado, {report.contactSearchQuality.formerEmploymentRejected || 0} ex-contato(s) rejeitado(s), {report.contactSearchQuality.currentEmploymentUnverified || 0} sem atualidade comprovada, {report.contactSearchQuality.candidatesForReview || 0} candidato(s) para validação, {report.contactSearchQuality.foreignRejected || 0} estrangeiro(s) e {report.contactSearchQuality.nonLogisticsRejected || 0} sem escopo logístico.</small></div>}
       {report.suggestedLegalName?.value && <div className="tdg-crm-research-enrichment"><strong>Razão social identificada: {report.suggestedLegalName.value}</strong><small>Confiança {report.suggestedLegalName.confidence}. {report.autoEnrichment?.legalNameFilled ? "Preenchida automaticamente na conta." : "A conta já possuía uma razão social e foi preservada."}</small></div>}
       {report.suggestedSegment?.value && <div className="tdg-crm-research-enrichment"><strong>Segmento identificado: {report.suggestedSegment.value}</strong><small>Confiança {report.suggestedSegment.confidence}. {report.autoEnrichment?.segmentFilled ? "Preenchido automaticamente no CRM." : "O CRM já possuía um segmento e foi preservado."}</small></div>}
@@ -258,10 +258,17 @@ function ExternalIntelligence({ report, researching, error, onResearch, watch, o
       {report.autoEnrichment?.legacyContactsRemoved > 0 && <div className="tdg-crm-research-enrichment"><strong>{report.autoEnrichment.legacyContactsRemoved} contato(s) web sem vínculo atual removido(s)</strong><small>O CRM retirou do mapa ativo resultados antigos, ex-funcionários e perfis cuja atualidade não pôde ser comprovada.</small></div>}
       {report.autoEnrichment?.formerContactsMarkedInactive > 0 && <div className="tdg-crm-research-enrichment"><strong>{report.autoEnrichment.formerContactsMarkedInactive} contato(s) manual(is) preservado(s) como histórico</strong><small>A fonte indica vínculo anterior. A pessoa foi retirada do mapa de decisores ativos, sem apagar o cadastro feito pela equipe.</small></div>}
       {report.autoEnrichment?.legacyContactsRetained > 0 && <div className="tdg-crm-research-enrichment"><strong>{report.autoEnrichment.legacyContactsRetained} contato(s) antigo(s) preservado(s)</strong><small>Continuam no cadastro para revisão manual, mas não contam como decisores brasileiros confirmados.</small></div>}
-      <ResearchLinks title="Sinais ESG" items={report.esg?.signals} empty="Nenhuma evidência pública suficiente." />
-      <ResearchLinks title="Notícias da empresa" items={report.companyNews} empty="Nenhuma notícia relevante encontrada." />
-      <ResearchLinks title="Notícias e tendências do segmento" items={report.segmentNews} empty="Nenhuma notícia setorial relevante encontrada." />
-      <div className="tdg-crm-research-next"><span>Próximas ações sugeridas</span>{report.nextActions?.map((item) => <strong key={item}>{item}</strong>)}</div>
+      <ResearchLinks title="Sinais ESG" items={report.esg?.signals} onDiscard={onDiscard} empty="Nenhuma evidência pública suficiente." />
+      <ResearchLinks title="Notícias da empresa" items={report.companyNews} onDiscard={onDiscard} empty="Nenhuma notícia relevante encontrada." />
+      <ResearchLinks title="Notícias e tendências do segmento" items={report.segmentNews} onDiscard={onDiscard} empty="Nenhuma notícia setorial relevante encontrada." />
+      <div className="tdg-crm-research-next"><span>Próximas ações sugeridas</span>{report.nextActions?.map((item) => {
+        const feitaEm = report.nextActionsDone?.[item];
+        return <div className={feitaEm ? "tdg-crm-research-acao concluida" : "tdg-crm-research-acao"} key={item}>
+          {onToggleAction && <button type="button" onClick={() => onToggleAction(item, Boolean(feitaEm))} aria-label={feitaEm ? "Reabrir ação" : "Concluir ação"}>{feitaEm ? "Desfazer" : "Concluir"}</button>}
+          <strong>{item}</strong>
+          {feitaEm && <small>concluída em {new Date(feitaEm).toLocaleDateString("pt-BR")}</small>}
+        </div>;
+      })}</div>
       <small className="tdg-crm-research-note">{report.disclaimer}</small>
     </>}
   </section>;
@@ -936,6 +943,21 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       setToast?.(enabled ? "Monitoramento diário ativado. Notícias e sinais serão atualizados automaticamente." : "Monitoramento pausado.");
     } catch (reason) { setResearchError(reason.message); }
   };
+  // Edição humana sobre a pesquisa: remove item errado (definitivo — a URL
+  // entra nos descartes) ou conclui/reabre uma ação sugerida. Sem busca nova.
+  const editResearch = async (body, mensagem) => {
+    if (!selected) return;
+    try {
+      const data = await api(`client-intelligence/${encodeURIComponent(selected.id)}`, authHeaders, {
+        method: "POST", body: JSON.stringify(body),
+      });
+      setResearchReports((current) => ({ ...current, [selected.id]: data.intelligence || null }));
+      if (data.revision) setClients((current) => current.map((client) => client.id === selected.id
+        ? { ...client, revision: data.revision, crm: { ...(client.crm || {}), intelligence: data.intelligence } }
+        : client));
+      if (mensagem) setToast?.(mensagem);
+    } catch (reason) { setToast?.(reason.message); }
+  };
   const createTask = async (task) => {
     if (!onCreateTask) throw new Error("Não foi possível vincular a tarefa ao cliente.");
     await onCreateTask(task); setToast?.("Tarefa criada e vinculada ao cliente.");
@@ -1091,6 +1113,30 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         ].map(([id, label]) => <button type="button" className={detailTab === id ? "active" : ""} aria-current={detailTab === id ? "page" : undefined} onClick={() => openDetailTab(id)} key={id}>{label}</button>)}
       </nav>
       <div className="tdg-crm-detail-metrics"><article><small>Saúde da conta</small><strong>{selectedSummary.score}</strong><span>{selectedSummary.attention === "healthy" ? "Saudável" : selectedSummary.attention === "critical" ? "Crítica" : "Atenção"}</span></article><article><small>Receita atual</small><strong>{selectedStrategy.shareOfWallet.status === "missing-our-revenue" || selectedAccount.ourAnnualRevenue === "" || selectedAccount.ourAnnualRevenue === undefined ? "Não informada" : BRL.format(selectedStrategy.shareOfWallet.ourRevenue)}</strong><span>receita anual To Do Green</span></article><article><small>Potencial anual</small><strong>{selectedStrategy.potential.annual ? BRL.format(selectedStrategy.potential.annual) : "Não calculado"}</strong><span>sem estimativa quando falta base</span></article><article><small>Share of Wallet</small><strong>{selectedStrategy.shareOfWallet.percentage === null ? "Não calculado" : `${selectedStrategy.shareOfWallet.percentage.toLocaleString("pt-BR")}%`}</strong><span>participação no gasto logístico</span></article><article><small>Cobertura de decisores</small><strong>{selectedSummary.coverage}%</strong><span>{selectedAccount.contacts.length} contato(s)</span></article><article><small>Pipeline da conta</small><strong>{BRL.format(selectedSummary.pipeline || 0)}</strong><span>{selectedSummary.openOpportunities || 0} oportunidade(s)</span></article></div>
+      {(() => {
+        const crm = selected.crm || {};
+        const notas = [
+          ["Potencial estratégico", crm.strategicPotential],
+          ["Força do relacionamento", crm.relationshipStrength],
+          ["Aderência operacional", crm.operationalFit],
+          ["Aderência ESG", crm.esgFit],
+          ["Qualidade dos dados", crm.dataQuality],
+          ["Risco de perda (quanto menor, melhor)", crm.churnRisk],
+        ];
+        const semAvaliacao = notas.every(([, valor]) => !Number(valor));
+        return (
+          <details className="tdg-crm-health-breakdown">
+            <summary>Por que a saúde está assim? {semAvaliacao ? "· conta ainda não avaliada" : ""}</summary>
+            {semAvaliacao && <p>Esta conta ainda não recebeu as suas notas de avaliação — por isso o número parece ruim. A saúde combina as seis notas abaixo (0 a 100), que são SUAS: preencha em Editar conta e o score passa a refletir a realidade.</p>}
+            <ul>
+              {notas.map(([rotulo, valor]) => (
+                <li key={rotulo}><span>{rotulo}</span><b>{Number(valor) || 0}/100</b></li>
+              ))}
+            </ul>
+            {access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={14} />Ajustar avaliação da conta</button>}
+          </details>
+        );
+      })()}
       <section className="tdg-crm-next"><Target size={17} /><div><small>PRÓXIMA MELHOR AÇÃO</small><strong>{selectedIntelligence.nextTask}</strong></div><button type="button" onClick={() => setTaskClientId(selected.id)}>Transformar em tarefa</button><button type="button" onClick={completeSuggestedAction} disabled={!selectedIntelligence.nextTaskCanComplete}>Marcar feita e ver próxima</button></section>
       {portalPreviewOpen && <ClientPortalPreview client={selected} authHeaders={authHeaders} open onClose={() => setPortalPreviewOpen(false)} />}
       <div className={`tdg-crm-detail-grid tdg-account-tab-${detailTab}`}><main>
@@ -1139,7 +1185,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-relationship"><header><strong>Mapa de relacionamento</strong><small>Papéis associados às pessoas</small></header><div className="tdg-crm-relationship-map">{[["Quem decide", selectedStrategy.relationshipMap.buyers], ["Quem apoia", selectedStrategy.relationshipMap.influencers], ["Quem bloqueia", selectedStrategy.relationshipMap.blockers], ["Usuário operacional", selectedStrategy.relationshipMap.users]].map(([label, names]) => <div className={label === "Quem bloqueia" && names.length ? "risk" : ""} key={label}><span>{label}</span><strong>{names.length ? names.join(", ") : "Não mapeado"}</strong></div>)}</div></section>
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-opportunities"><header><strong>White Space</strong><small>Produtos ainda não trabalhados com o cliente</small></header><div className="tdg-crm-chip-list">{selectedStrategy.whiteSpace.length ? selectedStrategy.whiteSpace.map((item) => <span key={item}>{item}</span>) : <span>Portfólio principal já coberto</span>}</div></section>
         <section className="tdg-crm-detail-section tdg-crm-account-strategy tdg-account-panel tdg-account-strategy"><header><strong>Account Plan</strong><small>Cadastro e recomendações derivadas do CRM</small></header><dl className="tdg-crm-account-data"><div><dt>Objetivo</dt><dd>{selectedStrategy.accountPlan.objective || "Não definido"}{selectedStrategy.accountPlan.generated?.objective && <small>Sugerido pelos dados atuais</small>}</dd></div><div><dt>Barreiras</dt><dd>{selectedStrategy.accountPlan.barriers || "Não mapeadas"}{selectedStrategy.accountPlan.generated?.barriers && <small>Derivadas dos alertas reais</small>}</dd></div><div><dt>Concorrentes</dt><dd>{selectedStrategy.accountPlan.competitors || "Não mapeados"}</dd></div><div><dt>30 dias</dt><dd>{selectedStrategy.accountPlan.plan30 || "Não definido"}{selectedStrategy.accountPlan.generated?.plan30 && <small>Próxima melhor ação calculada</small>}</dd></div><div><dt>60 dias</dt><dd>{selectedStrategy.accountPlan.plan60 || "Não definido"}{selectedStrategy.accountPlan.generated?.plan60 && <small>Sugerido pelos dados atuais</small>}</dd></div><div><dt>90 dias</dt><dd>{selectedStrategy.accountPlan.plan90 || "Não definido"}{selectedStrategy.accountPlan.generated?.plan90 && <small>Sugerido pelos dados atuais</small>}</dd></div></dl></section>
-        <div className="tdg-account-panel tdg-account-intelligence"><ExternalIntelligence report={selectedReport} researching={researching} error={researchError} onResearch={researchSelected} watch={selectedWatch} onToggleWatch={toggleResearchWatch} /></div>
+        <div className="tdg-account-panel tdg-account-intelligence"><ExternalIntelligence report={selectedReport} researching={researching} error={researchError} onResearch={researchSelected} watch={selectedWatch} onToggleWatch={toggleResearchWatch} onDiscard={access.podeEditar ? (url) => editResearch({ descartarUrl: url }, "Informação removida. Ela não volta nas próximas pesquisas.") : undefined} onToggleAction={access.podeEditar ? (acao, desfazer) => editResearch({ concluirAcao: acao, desfazer }, desfazer ? "Ação reaberta." : "Ação concluída.") : undefined} /></div>
         <div className="tdg-account-panel tdg-account-relationship"><RelationshipMap contatos={selectedAccount.contacts} conta={selected.name} /></div>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-relationship">
           <header>
@@ -1158,6 +1204,18 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
             </form>
           )}
           <div className="tdg-crm-roles">{selectedAccount.contacts.map((contact) => <ContactCard key={contact.id} contact={contact} clientName={selected.name} />)}{selectedAccount.contacts.length === 0 && <p>Nenhum decisor ou patrocinador mapeado.</p>}</div>
+          {(() => {
+            const fora = (selected.crm?.contacts || []).filter((contact) => !trustedCrmContact(contact));
+            if (!fora.length) return null;
+            return (
+              <details className="tdg-crm-contatos-historicos">
+                <summary>Fora do mapa ativo ({fora.length}) — históricos ou sem vínculo confirmado</summary>
+                <p>Ninguém some do CRM: estes contatos só saíram do mapa de decisores. Para reativar, abra Editar conta e marque o vínculo como atual.</p>
+                <ul>{fora.map((contact) => <li key={contact.id || contact.name}><strong>{contact.name}</strong><small>{contact.validation || (contact.employmentStatus === "former" ? "Vínculo marcado como encerrado." : "Vínculo atual não confirmado.")}</small></li>)}</ul>
+                {access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={14} />Abrir edição de contatos</button>}
+              </details>
+            );
+          })()}
         </section>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-activity"><header><strong>Atividade da conta</strong><small>Mensagens e movimentações realmente registradas</small></header>{activityLoading ? <p>Carregando histórico...</p> : accountInteractions.length ? <div className="tdg-crm-activity-feed">{accountInteractions.map((item) => <article key={item.id}><span><strong>{item.contactName || item.contactHandle || "Contato"}</strong><small>{item.channel || "atividade"} · {item.direction === "out" ? "enviado" : "recebido"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("pt-BR") : "data não informada"}</small></span>{item.subject && <b>{item.subject}</b>}{item.body && <p>{item.body}</p>}</article>)}</div> : <div className="tdg-crm-activity-empty"><strong>Nenhuma mensagem ou reunião registrada</strong><span>WhatsApp e e-mails enviados pelo app aparecem aqui quando associados a esta conta ou a um de seus contatos.</span></div>}<div className="tdg-crm-activity-list"><article><span>Última atualização da conta</span><strong>{selected.updatedAt ? new Date(selected.updatedAt).toLocaleString("pt-BR") : "Ainda não registrada"}</strong></article><article><span>Próxima ação</span><strong>{selected.crm?.nextAction || selectedIntelligence.nextTask || "Ainda não definida"}</strong><small>{selected.crm?.nextActionAt || "Sem prazo registrado"}</small></article><article><span>Histórico comercial</span><strong>{selectedOpportunities.length} oportunidade(s) vinculada(s)</strong></article></div><p>O CRM não cria atividades que não aconteceram.</p></section>
       </main><aside>

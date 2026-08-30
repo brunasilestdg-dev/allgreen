@@ -36,16 +36,16 @@ async function criarUsuario(id, email) {
   return { id, email, token };
 }
 
-async function autorizar(usuario, papel = "admin", permissoes = ["*"]) {
+async function autorizar(usuario, papel = "admin", permissoes = ["*"], espaco = "") {
   const agora = new Date().toISOString();
   await env.DB.prepare(
     `INSERT INTO todogreen_access_emails
-       (id, tenant_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
-     VALUES (?, 'todogreen', ?, ?, 'active', ?, '', ?, ?, ?)
+       (id, tenant_id, workspace_owner_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
+     VALUES (?, 'todogreen', ?, ?, ?, 'active', ?, '', ?, ?, ?)
      ON CONFLICT(tenant_id, workspace_owner_id, email) DO UPDATE SET role = excluded.role,
        permissions_json = excluded.permissions_json, status = 'active'`,
   )
-    .bind(crypto.randomUUID(), usuario.email, papel, JSON.stringify(permissoes), usuario.id, agora, agora)
+    .bind(crypto.randomUUID(), espaco, usuario.email, papel, JSON.stringify(permissoes), usuario.id, agora, agora)
     .run();
 }
 
@@ -567,5 +567,35 @@ describe("permissão e escopo", () => {
       metodo: "PATCH", token: gestora.token, corpo: { notas: "segunda", revision: pedido.revision },
     });
     expect(segunda.status).toBe(409);
+  });
+});
+
+// A alçada existe para a equipe: quem abriu a compra não faz a própria
+// primeira aprovação. A dona operando o PRÓPRIO espaço fica fora da trava —
+// os cenários acima, todos de um ator só, são exatamente esse caso.
+describe("alçada com segregação para a equipe", () => {
+  it("colaborador em espaço alheio não aprova a própria requisição; a dona aprova", async () => {
+    const assistente = await criarUsuario("compras-assistente", "assistente@compras.test");
+    await autorizar(assistente, "gestor", ["purchase:manage"], gestora.id);
+
+    const criada = await pedir("/api/todogreen/purchasing/requisicoes", {
+      metodo: "POST", token: assistente.token,
+      corpo: { title: "Compra do assistente", items: [{ itemId: material.id, quantidade: 1 }] },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+
+    const propria = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
+      metodo: "PATCH", token: assistente.token,
+      corpo: { status: "aprovada", revision: registro.revision },
+    });
+    expect(propria.status).toBe(403);
+
+    const aprovada = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { status: "aprovada", revision: registro.revision },
+    });
+    expect(aprovada.status).toBe(200);
+    expect((await aprovada.json()).registro.status).toBe("aprovada");
   });
 });

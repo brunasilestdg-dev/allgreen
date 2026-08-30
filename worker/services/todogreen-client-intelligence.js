@@ -174,7 +174,22 @@ const unique = (items, limit = 8) => {
   }).slice(0, limit);
 };
 
-const isVacancy = (item) => includesAny(normalize(`${item.title} ${item.snippet} ${item.url}`), VACANCY);
+// Portais de vaga e ATS: página institucional deles fala da empresa sem dizer
+// "vaga" no título — foi assim que a Gupy entrou como "informação" do Grupo
+// Três Corações. Domínio de recrutamento nunca é notícia nem evidência de
+// decisor.
+const JOB_PORTAL_HOSTS = [
+  "gupy.io", "gupy.com", "vagas.com", "vagas.com.br", "catho.com", "indeed.com",
+  "glassdoor.com", "infojobs.com.br", "99jobs.com", "kenoby.com", "abler.com.br",
+  "solides.com", "trabalhabrasil.com.br", "lever.co", "greenhouse.io",
+  "myworkdayjobs.com", "linkedin.com/jobs",
+];
+const isJobPortal = (item) => {
+  const url = normalize(item?.url);
+  return JOB_PORTAL_HOSTS.some((host) => url.includes(host));
+};
+const isVacancy = (item) =>
+  isJobPortal(item) || includesAny(normalize(`${item.title} ${item.snippet} ${item.url}`), VACANCY);
 
 const isCompanyProfileNoise = (item) => {
   const url = safeUrl(item?.url);
@@ -513,7 +528,14 @@ export function reconcileResearchedContacts({ existingContacts = [], contactCand
     const webDiscovered = normalize(contact.source).startsWith("pesquisa web");
     const protectedChannel = Boolean(clean(contact.email, 320) || clean(contact.phone, 500));
     const current = identities.some((identity) => currentCandidateIdentities.has(identity));
-    const former = identities.some((identity) => formerIdentities.has(identity));
+    // Contato cadastrado À MÃO é patrimônio da carteira: só vira "ex" com
+    // identidade forte (LinkedIn ou e-mail) apontando o desligamento. Nome
+    // solto coincide com homônimo e com lixo de portal de vaga — foi assim
+    // que contato recém-criado "sumia" do mapa logo após uma pesquisa.
+    const strongIdentities = [normalize(contact.linkedinUrl), normalize(contact.email)].filter(Boolean);
+    const former = webDiscovered
+      ? identities.some((identity) => formerIdentities.has(identity))
+      : strongIdentities.some((identity) => formerIdentities.has(identity));
     if (webDiscovered && !current && !protectedChannel) {
       staleWebContactsRemoved += 1;
       return [];
@@ -564,7 +586,17 @@ const reviewReason = (reason) => ({
   vacancy: "O resultado é uma vaga, não um contato",
 }[reason] || "Resultado insuficiente para cadastro automático");
 
-export function classifyCompanyResearch({ company, segment, searches, knownContacts = [], publicRegistry = null, checkedAt = new Date().toISOString() }) {
+export function classifyCompanyResearch({ company, segment, searches, knownContacts = [], publicRegistry = null, checkedAt = new Date().toISOString(), discardedUrls = [] }) {
+  // O que a titular descartou não volta: a pesquisa erra (Gupy no Grupo Três
+  // Corações) e a correção humana precisa ser definitiva, não até a próxima
+  // atualização.
+  const descartadas = new Set((discardedUrls || []).map((url) => normalize(safeUrl(url))).filter(Boolean));
+  if (descartadas.size) {
+    searches = (searches || []).map((busca) => ({
+      ...busca,
+      results: (busca.results || []).filter((item) => !descartadas.has(normalize(safeUrl(item?.url)))),
+    }));
+  }
   const byKind = resultsByKind(searches);
   const all = unique(searches.flatMap((item) => item.results || []), 40);
   const companyToken = companyTokens(company)[0] || "";
@@ -723,6 +755,7 @@ export function classifyCompanyResearch({ company, segment, searches, knownConta
     companyNews,
     segmentNews,
     nextActions,
+    descartes: [...descartadas],
     excludedVacancies: all.filter(isVacancy).length,
     disclaimer: "Resultados públicos verificados na data indicada. Contatos só são aceitos com evidência de vínculo atual, Brasil, empresa e escopo de procurement logístico. Perfis com vínculo anterior ou sem atualidade comprovada não entram no mapa ativo. RFQ só aparece quando há empresa-alvo, transporte, processo aberto e canal real de participação.",
   };
@@ -776,7 +809,9 @@ export function buildCompanyResearchPlans({ company, segment, year, focus = "com
       query: `${contactTarget} Brasil LinkedIn gerente compras suprimentos transportes logística`,
     },
   ];
-  if (focus === "contacts") plans.push({
+  // A busca do decisor com cargo de decisão roda SEMPRE: a titular precisa do
+  // nome de quem assina, não só do analista de compras que o filtro básico traz.
+  plans.push({
     kinds: ["contacts"],
     contactScope: "brazil-procurement-logistics",
     query: `site:linkedin.com/in ${contactTarget} (Brasil OR Brazil OR "São Paulo") (diretor OR gerente OR head) ("supply chain" OR transportes OR distribuição OR outbound)`,
@@ -865,6 +900,50 @@ export async function handleTodoGreenClientIntelligence(request, env, access, us
       } : null,
     });
   const body = await request.json().catch(() => ({}));
+
+  // Edições humanas sobre o que a pesquisa trouxe — sem disparar busca nova.
+  // A pesquisa erra (a Gupy entrou como "informação" de conta); a correção da
+  // titular é definitiva: o item sai da ficha e a URL entra nos descartes, que
+  // as próximas pesquisas respeitam.
+  const urlDescartada = safeUrl(clean(body.descartarUrl, 2000));
+  const acaoConcluida = clean(body.concluirAcao, 300);
+  if (urlDescartada || acaoConcluida) {
+    if (!podeNaVertical(access, "crm:manage"))
+      return response({ error: "Seu papel não pode editar a inteligência desta conta." }, 403);
+    const atual = fields.intelligence && typeof fields.intelligence === "object" ? fields.intelligence : {};
+    let intelligence = atual;
+    if (urlDescartada) {
+      const alvo = normalize(urlDescartada);
+      const semItem = (lista) => (Array.isArray(lista) ? lista.filter((item) => normalize(safeUrl(item?.url)) !== alvo) : lista);
+      intelligence = {
+        ...atual,
+        descartes: [...new Set([...(Array.isArray(atual.descartes) ? atual.descartes : []), urlDescartada])].slice(0, 300),
+        companyNews: semItem(atual.companyNews),
+        segmentNews: semItem(atual.segmentNews),
+        openRfqs: semItem(atual.openRfqs),
+        supplierLinks: semItem(atual.supplierLinks),
+        procurementPeople: semItem(atual.procurementPeople),
+        knownContactProfiles: semItem(atual.knownContactProfiles),
+        logisticsSignals: semItem(atual.logisticsSignals),
+        reviewCandidates: semItem(atual.reviewCandidates),
+        esg: atual.esg && typeof atual.esg === "object" ? { ...atual.esg, signals: semItem(atual.esg.signals) } : atual.esg,
+      };
+    }
+    if (acaoConcluida) {
+      const feitas = { ...(intelligence.nextActionsDone && typeof intelligence.nextActionsDone === "object" ? intelligence.nextActionsDone : {}) };
+      if (body.desfazer === true) delete feitas[acaoConcluida];
+      else feitas[acaoConcluida] = new Date().toISOString();
+      intelligence = { ...intelligence, nextActionsDone: feitas };
+    }
+    const agora = new Date().toISOString();
+    const gravou = await env.DB.prepare(
+      `UPDATE todogreen_clients SET fields_json=?,revision=revision+1,updated_by=?,updated_at=?
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
+    ).bind(JSON.stringify({ ...fields, intelligence }), user.id, agora, row.id, TENANT_ID, access.ownerId, row.revision).run();
+    if (!gravou?.meta?.changes) return response({ error: "A conta mudou enquanto você editava. Recarregue a tela." }, 409);
+    return response({ intelligence, revision: Number(row.revision || 0) + 1 });
+  }
+
   const resultado = await pesquisarEmpresa(env, {
     linha: row,
     ownerId: access.ownerId,
@@ -951,7 +1030,11 @@ export async function pesquisarEmpresa(env, { linha, ownerId, userId, forcar = f
     console.error("Pesquisa de empresa: nenhuma fonte de busca configurada", { company });
     return { erro: "Pesquisa web indisponível. A integração precisa ser revisada por um administrador.", status: 503 };
   }
-  const report = classifyCompanyResearch({ company, segment, searches: settled, knownContacts, publicRegistry, checkedAt: new Date().toISOString() });
+  const report = classifyCompanyResearch({
+    company, segment, searches: settled, knownContacts, publicRegistry,
+    checkedAt: new Date().toISOString(),
+    discardedUrls: Array.isArray(fields.intelligence?.descartes) ? fields.intelligence.descartes : [],
+  });
   report.providers = [...new Set(planResults.flatMap((item) => item.providers || []))];
   report.failures = planResults.flatMap((item) => item.failures || []).slice(0, 12);
   if (!report.providers.length && report.failures.length) {

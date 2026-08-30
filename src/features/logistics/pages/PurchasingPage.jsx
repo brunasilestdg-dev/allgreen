@@ -45,6 +45,9 @@ const REQUISICAO_VAZIA = {
   linhas: [{ itemId: "", descricao: "", quantity: "", estimatedUnitPrice: "" }],
 };
 
+const proximaAprovacao = (registro) => registro?.campos?.purchaseApprovalFlow?.next?.label || "";
+const aprovacoesFeitas = (registro) => registro?.campos?.purchaseApprovalFlow?.approvals || [];
+
 export default function PurchasingPage({ authHeaders, setToast, registros }) {
   const [requisicoes, setRequisicoes] = useState([]);
   const [pedidos, setPedidos] = useState([]);
@@ -53,15 +56,14 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
   const [erro, setErro] = useState("");
   const [form, setForm] = useState(REQUISICAO_VAZIA);
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [formPedido, setFormPedido] = useState(null); // { requestId, supplierPartyId, warehouseId, esperadoEm, notas }
-  const [recebimento, setRecebimento] = useState(null); // { pedido, linhas:{}, warehouseId, receivedAt, invoiceNumber, gerarConta }
+  const [formPedido, setFormPedido] = useState(null);
+  const [recebimento, setRecebimento] = useState(null);
 
   const itens = registros?.items || [];
   const centrosDeCusto = registros?.costCenters || [];
   const fornecedores = registros?.parties || [];
   const depositos = registros?.warehouses || [];
 
-  // Campos em português, como o resto dos registros da vertical.
   const nomeDoItem = (id) => {
     const item = itens.find((registro) => registro.id === id);
     if (!item) return id || "—";
@@ -91,8 +93,6 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
   const indicadores = useMemo(() => {
     const aguardando = requisicoes.filter((r) => r.status === "pendente").length;
     const abertos = pedidos.filter((p) => !["encerrado", "cancelado"].includes(p.status)).length;
-    // O valor comprometido é o dos pedidos que ainda vão gerar pagamento.
-    // Incluir encerrado e cancelado responderia outra pergunta.
     const comprometido = pedidos
       .filter((p) => !["encerrado", "cancelado"].includes(p.status))
       .reduce((soma, p) => soma + totalDoPedido(p, p.items || []).total, 0);
@@ -138,7 +138,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
             })),
         }),
       });
-      setToast?.("Requisição registrada.");
+      setToast?.("Requisição registrada e enviada para a alçada aplicável.");
       setForm(REQUISICAO_VAZIA);
       setMostrarForm(false);
       await carregar();
@@ -151,8 +151,13 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
 
   const aprovarRequisicao = async (req) => {
     try {
-      await request(`/requisicoes/${req.id}`, authHeaders, { method: "PATCH", body: JSON.stringify({ status: "aprovada", revision: req.revision }) });
-      setToast?.("Requisição aprovada.");
+      const resultado = await request(`/requisicoes/${req.id}`, authHeaders, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "aprovada", revision: req.revision }),
+      });
+      setToast?.(resultado.approvalPending
+        ? resultado.message
+        : "Todas as etapas foram aprovadas. Requisição liberada para gerar pedido.");
       await carregar();
     } catch (motivo) { setToast?.(motivo.message); }
   };
@@ -177,7 +182,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
           notas: formPedido.notas || undefined,
         }),
       });
-      setToast?.("Pedido criado. Aprove e envie para poder receber.");
+      setToast?.("Pedido criado. A alçada será recalculada pelo valor real antes do envio.");
       setFormPedido(null);
       await carregar();
     } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(""); }
@@ -185,8 +190,13 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
 
   const mudarStatusPedido = async (pedido, status) => {
     try {
-      await request(`/pedidos/${pedido.id}`, authHeaders, { method: "PATCH", body: JSON.stringify({ status, revision: pedido.revision }) });
-      setToast?.(`Pedido: ${comRotulo(NOME_DO_STATUS_DO_PEDIDO, status)}.`);
+      const resultado = await request(`/pedidos/${pedido.id}`, authHeaders, {
+        method: "PATCH",
+        body: JSON.stringify({ status, revision: pedido.revision }),
+      });
+      setToast?.(resultado.approvalPending
+        ? resultado.message
+        : `Pedido: ${comRotulo(NOME_DO_STATUS_DO_PEDIDO, status)}.`);
       await carregar();
     } catch (motivo) { setToast?.(motivo.message); }
   };
@@ -241,7 +251,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
         <div>
           <span>COMPRAS</span>
           <h2>Da requisição ao recebimento</h2>
-          <p>Quem pediu, o que foi aprovado, o que já chegou e o que ainda falta chegar.</p>
+          <p>Alçada por valor, pedido, recebimento, estoque e conta a pagar no mesmo fluxo.</p>
         </div>
         <div className="tdg-page-actions">
           <button className="tdg-action" type="button" onClick={carregar} disabled={Boolean(ocupado)}>
@@ -261,223 +271,89 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
         <article className={`tdg-metric ${indicadores.aguardando ? "warn" : ""}`}>
           <span>Aguardando aprovação</span>
           <strong>{indicadores.aguardando}</strong>
-          <small>{indicadores.aguardando ? "requisições paradas esperando decisão" : "nenhuma pendência"}</small>
+          <small>{indicadores.aguardando ? "requisições paradas em uma etapa da alçada" : "nenhuma pendência"}</small>
         </article>
-        <article className="tdg-metric">
-          <span>Pedidos abertos</span>
-          <strong>{indicadores.abertos}</strong>
-          <small>ainda não encerrados</small>
-        </article>
-        <article className="tdg-metric">
-          <span>Valor comprometido</span>
-          <strong>{dinheiro(indicadores.comprometido)}</strong>
-          <small>somente pedidos abertos</small>
-        </article>
-        <article className="tdg-metric">
-          <span>Requisições</span>
-          <strong>{indicadores.requisicoes}</strong>
-          <small>no total</small>
-        </article>
+        <article className="tdg-metric"><span>Pedidos abertos</span><strong>{indicadores.abertos}</strong><small>ainda não encerrados</small></article>
+        <article className="tdg-metric"><span>Valor comprometido</span><strong>{dinheiro(indicadores.comprometido)}</strong><small>somente pedidos abertos</small></article>
+        <article className="tdg-metric"><span>Requisições</span><strong>{indicadores.requisicoes}</strong><small>no total</small></article>
       </section>
 
       {mostrarForm && acesso.podeComprar && (
         <form className="tdg-panel tdg-form" onSubmit={enviar}>
-          <label className="full">
-            <span>O que precisa ser comprado</span>
-            <input value={form.title} onChange={(e) => alterar("title", e.target.value)} required maxLength={160} />
-          </label>
-          <label>
-            <span>Prioridade</span>
-            <select value={form.prioridade} onChange={(e) => alterar("prioridade", e.target.value)}>
-              <option value="baixa">Baixa</option>
-              <option value="media">Média</option>
-              <option value="alta">Alta</option>
-              <option value="critica">Crítica</option>
-            </select>
-          </label>
-          <label>
-            <span>Precisa em</span>
-            <input type="date" value={form.precisaEm} onChange={(e) => alterar("precisaEm", e.target.value)} />
-          </label>
-          <label>
-            <span>Centro de custo</span>
-            <select value={form.costCenterId} onChange={(e) => alterar("costCenterId", e.target.value)}>
-              <option value="">Não informado</option>
-              {centrosDeCusto.map((centro) => (
-                <option value={centro.id} key={centro.id}>{centro.nome}</option>
-              ))}
-            </select>
-          </label>
-          <label className="full">
-            <span>Justificativa</span>
-            <input
-              value={form.justificativa}
-              onChange={(e) => alterar("justificativa", e.target.value)}
-              maxLength={400}
-            />
-          </label>
-
+          <label className="full"><span>O que precisa ser comprado</span><input value={form.title} onChange={(e) => alterar("title", e.target.value)} required maxLength={160} /></label>
+          <label><span>Prioridade</span><select value={form.prioridade} onChange={(e) => alterar("prioridade", e.target.value)}><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></label>
+          <label><span>Precisa em</span><input type="date" value={form.precisaEm} onChange={(e) => alterar("precisaEm", e.target.value)} /></label>
+          <label><span>Centro de custo</span><select value={form.costCenterId} onChange={(e) => alterar("costCenterId", e.target.value)}><option value="">Não informado</option>{centrosDeCusto.map((centro) => <option value={centro.id} key={centro.id}>{centro.nome}</option>)}</select></label>
+          <label className="full"><span>Justificativa</span><input value={form.justificativa} onChange={(e) => alterar("justificativa", e.target.value)} maxLength={400} /></label>
           <div className="full">
             <strong>Itens</strong>
             {form.linhas.map((linha, indice) => (
-              // A chave é o índice porque a linha não tem id antes de existir
-              // no banco, e a ordem só muda por ação explícita de quem escreve.
               <div className="tdg-form-row" key={`linha-${indice}`}>
-                <select
-                  value={linha.itemId}
-                  onChange={(e) => alterarLinha(indice, "itemId", e.target.value)}
-                  aria-label="Material"
-                >
+                <select value={linha.itemId} onChange={(e) => alterarLinha(indice, "itemId", e.target.value)} aria-label="Material">
                   <option value="">Selecione o material</option>
-                  {itens.map((item) => (
-                    <option value={item.id} key={item.id}>{nomeDoItem(item.id)}</option>
-                  ))}
+                  {itens.map((item) => <option value={item.id} key={item.id}>{nomeDoItem(item.id)}</option>)}
                 </select>
-                <input
-                  placeholder="Descrição livre"
-                  aria-label="Descrição do item"
-                  value={linha.descricao}
-                  onChange={(e) => alterarLinha(indice, "descricao", e.target.value)}
-                />
-                <input
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  placeholder="Quantidade"
-                  aria-label="Quantidade"
-                  value={linha.quantity}
-                  onChange={(e) => alterarLinha(indice, "quantity", e.target.value)}
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Preço estimado"
-                  aria-label="Preço unitário estimado"
-                  value={linha.estimatedUnitPrice}
-                  onChange={(e) => alterarLinha(indice, "estimatedUnitPrice", e.target.value)}
-                />
-                <span>{dinheiro(totalDaLinha({
-                  quantity: Number(linha.quantity || 0),
-                  unitPrice: Number(linha.estimatedUnitPrice || 0),
-                }))}</span>
-                <button type="button" onClick={() => removerLinha(indice)} disabled={form.linhas.length === 1}>
-                  Remover
-                </button>
+                <input placeholder="Descrição livre" aria-label="Descrição do item" value={linha.descricao} onChange={(e) => alterarLinha(indice, "descricao", e.target.value)} />
+                <input type="number" step="0.001" min="0" placeholder="Quantidade" aria-label="Quantidade" value={linha.quantity} onChange={(e) => alterarLinha(indice, "quantity", e.target.value)} />
+                <input type="number" step="0.01" min="0" placeholder="Preço estimado" aria-label="Preço unitário estimado" value={linha.estimatedUnitPrice} onChange={(e) => alterarLinha(indice, "estimatedUnitPrice", e.target.value)} />
+                <span>{dinheiro(totalDaLinha({ quantity: Number(linha.quantity || 0), unitPrice: Number(linha.estimatedUnitPrice || 0) }))}</span>
+                <button type="button" onClick={() => removerLinha(indice)} disabled={form.linhas.length === 1}>Remover</button>
               </div>
             ))}
             <button type="button" onClick={novaLinha}>+ Adicionar item</button>
           </div>
-
           <div className="tdg-form-actions full">
-            <button className="tdg-action" type="submit" disabled={ocupado === "salvando"}>
-              {ocupado === "salvando" ? "Registrando..." : "Registrar requisição"}
-            </button>
+            <button className="tdg-action" type="submit" disabled={ocupado === "salvando"}>{ocupado === "salvando" ? "Registrando..." : "Registrar requisição"}</button>
             <button type="button" onClick={() => setMostrarForm(false)}>Cancelar</button>
           </div>
         </form>
       )}
 
       <section className="tdg-panel">
-        <div className="tdg-section-head">
-          <div><span className="tdg-kicker">REQUISIÇÕES</span><h2>O que foi pedido</h2></div>
-          <ClipboardCheck size={22} />
-        </div>
-        {!requisicoes.length
-          ? <p className="tdg-empty">Nenhuma requisição registrada.</p>
-          : (
-            <div className="tdg-table-wrap">
-              <table className="tdg-table">
-                <thead>
-                  <tr><th>Documento</th><th>O quê</th><th>Prioridade</th><th>Precisa em</th><th>Situação</th>{acesso.podeComprar && <th>Ações</th>}</tr>
-                </thead>
-                <tbody>
-                  {requisicoes.map((requisicao) => (
-                    <tr key={requisicao.id}>
-                      <td>{requisicao.numeroDocumento || "—"}</td>
-                      <td>{requisicao.title}</td>
-                      <td>{requisicao.prioridade}</td>
-                      <td>{dia(requisicao.precisaEm)}</td>
-                      <td>{comRotulo(NOME_DO_STATUS_DA_REQUISICAO, requisicao.status)}</td>
-                      {acesso.podeComprar && (
-                        <td className="tdg-fiscal-acoes">
-                          {requisicao.status === "pendente" && <button type="button" onClick={() => aprovarRequisicao(requisicao)}>Aprovar</button>}
-                          {requisicao.status === "aprovada" && <button type="button" onClick={() => abrirPedido(requisicao)}>Gerar pedido</button>}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div className="tdg-section-head"><div><span className="tdg-kicker">REQUISIÇÕES</span><h2>O que foi pedido</h2></div><ClipboardCheck size={22} /></div>
+        {!requisicoes.length ? <p className="tdg-empty">Nenhuma requisição registrada.</p> : (
+          <div className="tdg-table-wrap"><table className="tdg-table">
+            <thead><tr><th>Documento</th><th>O quê</th><th>Prioridade</th><th>Precisa em</th><th>Situação</th>{acesso.podeComprar && <th>Ações</th>}</tr></thead>
+            <tbody>{requisicoes.map((requisicao) => (
+              <tr key={requisicao.id}>
+                <td>{requisicao.numeroDocumento || "—"}</td><td>{requisicao.title}</td><td>{requisicao.prioridade}</td><td>{dia(requisicao.precisaEm)}</td>
+                <td><span>{comRotulo(NOME_DO_STATUS_DA_REQUISICAO, requisicao.status)}</span>{proximaAprovacao(requisicao) && <small>Próxima: {proximaAprovacao(requisicao)} · {aprovacoesFeitas(requisicao).length} etapa(s) concluída(s)</small>}</td>
+                {acesso.podeComprar && <td className="tdg-fiscal-acoes">{requisicao.status === "pendente" && <button type="button" onClick={() => aprovarRequisicao(requisicao)}>Aprovar minha etapa</button>}{requisicao.status === "aprovada" && <button type="button" onClick={() => abrirPedido(requisicao)}>Gerar pedido</button>}</td>}
+              </tr>
+            ))}</tbody>
+          </table></div>
+        )}
       </section>
 
       <section className="tdg-panel">
-        <div className="tdg-section-head">
-          <div><span className="tdg-kicker">PEDIDOS</span><h2>O que foi comprado</h2></div>
-          {acesso.podeComprar
-            ? <button type="button" className="tdg-action" onClick={() => abrirPedido(null)}><PackageCheck size={16} />Novo pedido</button>
-            : <PackageCheck size={22} />}
-        </div>
-        {!pedidos.length
-          ? <p className="tdg-empty">Nenhum pedido de compra emitido.</p>
-          : (
-            <div className="tdg-table-wrap">
-              <table className="tdg-table">
-                <thead>
-                  <tr><th>Documento</th><th>Fornecedor</th><th>Total</th><th>Previsto para</th><th>Situação</th>{acesso.podeComprar && <th>Ações</th>}</tr>
-                </thead>
-                <tbody>
-                  {pedidos.map((pedido) => (
-                    <tr key={pedido.id}>
-                      <td>{pedido.numeroDocumento || "—"}</td>
-                      <td>{pedido.supplierName || "—"}</td>
-                      <td>{dinheiro(totalDoPedido(pedido, pedido.items || []).total)}</td>
-                      <td>{dia(pedido.esperadoEm)}</td>
-                      <td>{comRotulo(NOME_DO_STATUS_DO_PEDIDO, pedido.status)}</td>
-                      {acesso.podeComprar && (
-                        <td className="tdg-fiscal-acoes">
-                          {pedido.status === "rascunho" && <button type="button" onClick={() => mudarStatusPedido(pedido, "aprovado")}>Aprovar</button>}
-                          {pedido.status === "aprovado" && <button type="button" onClick={() => mudarStatusPedido(pedido, "enviado")}>Enviar</button>}
-                          {["aprovado", "enviado"].includes(pedido.status) && <button type="button" onClick={() => abrirRecebimento(pedido)}>Receber</button>}
-                          {pedido.status === "enviado" && <button type="button" onClick={() => mudarStatusPedido(pedido, "encerrado")}>Encerrar</button>}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div className="tdg-section-head"><div><span className="tdg-kicker">PEDIDOS</span><h2>O que foi comprado</h2></div>{acesso.podeComprar ? <button type="button" className="tdg-action" onClick={() => abrirPedido(null)}><PackageCheck size={16} />Novo pedido</button> : <PackageCheck size={22} />}</div>
+        {!pedidos.length ? <p className="tdg-empty">Nenhum pedido de compra emitido.</p> : (
+          <div className="tdg-table-wrap"><table className="tdg-table">
+            <thead><tr><th>Documento</th><th>Fornecedor</th><th>Total</th><th>Previsto para</th><th>Situação</th>{acesso.podeComprar && <th>Ações</th>}</tr></thead>
+            <tbody>{pedidos.map((pedido) => (
+              <tr key={pedido.id}>
+                <td>{pedido.numeroDocumento || "—"}</td><td>{pedido.supplierName || "—"}</td><td>{dinheiro(totalDoPedido(pedido, pedido.items || []).total)}</td><td>{dia(pedido.esperadoEm)}</td>
+                <td><span>{comRotulo(NOME_DO_STATUS_DO_PEDIDO, pedido.status)}</span>{proximaAprovacao(pedido) && <small>Próxima: {proximaAprovacao(pedido)} · {aprovacoesFeitas(pedido).length} etapa(s) concluída(s)</small>}</td>
+                {acesso.podeComprar && <td className="tdg-fiscal-acoes">{pedido.status === "rascunho" && <button type="button" onClick={() => mudarStatusPedido(pedido, "aprovado")}>Aprovar minha etapa</button>}{pedido.status === "aprovado" && <button type="button" onClick={() => mudarStatusPedido(pedido, "enviado")}>Enviar</button>}{["aprovado", "enviado"].includes(pedido.status) && <button type="button" onClick={() => abrirRecebimento(pedido)}>Receber</button>}{pedido.status === "enviado" && <button type="button" onClick={() => mudarStatusPedido(pedido, "encerrado")}>Encerrar</button>}</td>}
+              </tr>
+            ))}</tbody>
+          </table></div>
+        )}
       </section>
 
       {formPedido && (
         <Modal title={formPedido.requestId ? `Pedido da requisição: ${formPedido.titulo}` : "Novo pedido de compra"} onClose={() => setFormPedido(null)}>
           <form className="tdg-planner-form" onSubmit={enviarPedido}>
             {formPedido.requestId
-              ? <p className="tdg-fiscal-nota">Os itens vêm da requisição aprovada. Escolha o fornecedor e o depósito.</p>
-              : <p className="tdg-fiscal-nota">Sem requisição vinculada, o pedido nasce vazio: gere-o a partir de uma requisição aprovada para trazer os itens.</p>}
-            <label>Fornecedor *
-              <select value={formPedido.supplierPartyId} onChange={(e) => setFormPedido((f) => ({ ...f, supplierPartyId: e.target.value }))} required>
-                <option value="">— selecione —</option>
-                {fornecedores.map((p) => <option key={p.id} value={p.id}>{p.razaoSocial || p.nomeFantasia || p.id}</option>)}
-              </select>
-            </label>
+              ? <p className="tdg-fiscal-nota">Os itens vêm da requisição aprovada. O pedido terá nova alçada calculada pelo preço real.</p>
+              : <p className="tdg-fiscal-nota">Sem requisição vinculada, o pedido nasce vazio. Prefira gerar a partir de uma requisição aprovada.</p>}
+            <label>Fornecedor *<select value={formPedido.supplierPartyId} onChange={(e) => setFormPedido((f) => ({ ...f, supplierPartyId: e.target.value }))} required><option value="">— selecione —</option>{fornecedores.map((p) => <option key={p.id} value={p.id}>{p.razaoSocial || p.nomeFantasia || p.id}</option>)}</select></label>
             <div className="tdg-planner-grid3">
-              <label>Depósito
-                <select value={formPedido.warehouseId} onChange={(e) => setFormPedido((f) => ({ ...f, warehouseId: e.target.value }))}>
-                  <option value="">— opcional —</option>
-                  {depositos.map((d) => <option key={d.id} value={d.id}>{d.nome || d.id}</option>)}
-                </select>
-              </label>
+              <label>Depósito<select value={formPedido.warehouseId} onChange={(e) => setFormPedido((f) => ({ ...f, warehouseId: e.target.value }))}><option value="">— opcional —</option>{depositos.map((d) => <option key={d.id} value={d.id}>{d.nome || d.id}</option>)}</select></label>
               <label>Previsto para<input type="date" value={formPedido.esperadoEm} onChange={(e) => setFormPedido((f) => ({ ...f, esperadoEm: e.target.value }))} /></label>
               <label>Observações<input value={formPedido.notas} onChange={(e) => setFormPedido((f) => ({ ...f, notas: e.target.value }))} maxLength={400} /></label>
             </div>
-            <div className="tdg-form-actions">
-              <button type="button" onClick={() => setFormPedido(null)}>Cancelar</button>
-              <button type="submit" className="tdg-action" disabled={ocupado === "salvando"}>Criar pedido</button>
-            </div>
+            <div className="tdg-form-actions"><button type="button" onClick={() => setFormPedido(null)}>Cancelar</button><button type="submit" className="tdg-action" disabled={ocupado === "salvando"}>Criar pedido</button></div>
           </form>
         </Modal>
       )}
@@ -486,38 +362,18 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
         <Modal title={`Receber pedido ${recebimento.pedido.numeroDocumento || ""}`.trim()} onClose={() => setRecebimento(null)} wide>
           <form className="tdg-planner-form" onSubmit={enviarRecebimento}>
             <div className="tdg-planner-grid3">
-              <label>Depósito *
-                <select value={recebimento.warehouseId} onChange={(e) => setRecebimento((r) => ({ ...r, warehouseId: e.target.value }))} required>
-                  <option value="">— selecione —</option>
-                  {depositos.map((d) => <option key={d.id} value={d.id}>{d.nome || d.id}</option>)}
-                </select>
-              </label>
+              <label>Depósito *<select value={recebimento.warehouseId} onChange={(e) => setRecebimento((r) => ({ ...r, warehouseId: e.target.value }))} required><option value="">— selecione —</option>{depositos.map((d) => <option key={d.id} value={d.id}>{d.nome || d.id}</option>)}</select></label>
               <label>Data *<input type="date" value={recebimento.receivedAt} onChange={(e) => setRecebimento((r) => ({ ...r, receivedAt: e.target.value }))} required /></label>
               <label>Nota fiscal<input value={recebimento.invoiceNumber} onChange={(e) => setRecebimento((r) => ({ ...r, invoiceNumber: e.target.value }))} maxLength={60} /></label>
             </div>
-            <div className="tdg-table-wrap">
-              <table className="tdg-table">
-                <thead><tr><th>Item</th><th>Pendente</th><th>Receber agora</th></tr></thead>
-                <tbody>
-                  {recebimento.linhasPendentes.map((l) => (
-                    <tr key={l.orderItemId}>
-                      <td>{nomeDoItem(l.itemId) || l.descricao || l.orderItemId}</td>
-                      <td>{l.pendente}</td>
-                      <td>
-                        <input type="number" min="0" max={l.pendente} step="0.001"
-                          value={recebimento.quantidades[l.orderItemId] || ""}
-                          onChange={(e) => setRecebimento((r) => ({ ...r, quantidades: { ...r.quantidades, [l.orderItemId]: e.target.value } }))} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <div className="tdg-table-wrap"><table className="tdg-table">
+              <thead><tr><th>Item</th><th>Pendente</th><th>Receber agora</th></tr></thead>
+              <tbody>{recebimento.linhasPendentes.map((l) => (
+                <tr key={l.orderItemId}><td>{nomeDoItem(l.itemId) || l.descricao || l.orderItemId}</td><td>{l.pendente}</td><td><input type="number" min="0" max={l.pendente} step="0.001" value={recebimento.quantidades[l.orderItemId] || ""} onChange={(e) => setRecebimento((r) => ({ ...r, quantidades: { ...r.quantidades, [l.orderItemId]: e.target.value } }))} /></td></tr>
+              ))}</tbody>
+            </table></div>
             <label className="tdg-check-field"><input type="checkbox" checked={recebimento.gerarConta} onChange={(e) => setRecebimento((r) => ({ ...r, gerarConta: e.target.checked }))} /><span>Gerar conta a pagar deste recebimento</span></label>
-            <div className="tdg-form-actions">
-              <button type="button" onClick={() => setRecebimento(null)}>Cancelar</button>
-              <button type="submit" className="tdg-action" disabled={ocupado === "salvando"}>Lançar recebimento</button>
-            </div>
+            <div className="tdg-form-actions"><button type="button" onClick={() => setRecebimento(null)}>Cancelar</button><button type="submit" className="tdg-action" disabled={ocupado === "salvando"}>Lançar recebimento</button></div>
           </form>
         </Modal>
       )}

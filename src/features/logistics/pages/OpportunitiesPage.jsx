@@ -566,7 +566,9 @@ export default function OpportunitiesPage({
   const [filtroEstagio, setFiltroEstagio] = useState("todas");
   const [busca, setBusca] = useState("");
   const [visao, setVisao] = useState(() => {
-    try { return localStorage.getItem("todogreen-opp-view") || "lista"; } catch { return "lista"; }
+    // O kanban simplificado é a visão pedida pela titular como padrão do
+    // pipeline; a lista continua a um clique e a escolha fica gravada.
+    try { return localStorage.getItem("todogreen-opp-view") || "kanban"; } catch { return "kanban"; }
   });
   const trocarVisao = (v) => { setVisao(v); try { localStorage.setItem("todogreen-opp-view", v); } catch { /* ok */ } };
 
@@ -767,30 +769,38 @@ export default function OpportunitiesPage({
       )}
 
       {visao === "kanban" && registros.length > 0 && (
-        <TopScrollRow className="tdg-opp-kanban-wrap" ariaLabel="Kanban de oportunidades por etapa">
-          <div className="tdg-opp-kanban">
-            {etapas.map((coluna) => {
-              const itens = visiveis.filter((registro) => registro.estagio === coluna.estagio);
-              return (
-                <section className="tdg-opp-kb-col" key={coluna.estagio}>
-                  <header>
-                    <strong>{coluna.estagio} · {coluna.quantidade}</strong>
-                    <span>{BRL.format(coluna.valor)}</span>
-                  </header>
-                  <div className="tdg-opp-kb-body">
-                    {itens.map((registro) => (
-                      <button type="button" className="tdg-opp-kb-card" key={registro.id} onClick={() => setEditandoId(registro.id)} title={registro.cliente}>
-                        <span>{registro.cliente || "Sem conta"}</span>
-                        <b>{BRL.format(analisarOportunidade(registro).financeiro.valorContrato)}</b>
-                      </button>
-                    ))}
-                    {!itens.length && <p className="tdg-opp-kb-vazio">—</p>}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        </TopScrollRow>
+        <>
+          <p className="tdg-opp-kb-resumo">{visiveis.length} oportunidade(s), cada uma na etapa em que está hoje. Clique no cartão para abrir.</p>
+          <TopScrollRow className="tdg-opp-kanban-wrap" ariaLabel="Kanban de oportunidades por etapa">
+            <div className="tdg-opp-kanban">
+              {etapas.map((coluna, indice) => {
+                const itens = visiveis.filter((registro) => registro.estagio === coluna.estagio);
+                const perdida = coluna.estagio === "Fechada perdida";
+                return (
+                  <section
+                    className={`tdg-opp-kb-col${perdida ? " perdida" : ""}`}
+                    style={{ "--kb-tom": Math.min(indice, 5) }}
+                    key={coluna.estagio}
+                  >
+                    <header>
+                      <strong>{coluna.estagio} · {coluna.quantidade}</strong>
+                      <span>{BRL.format(coluna.valor)}</span>
+                    </header>
+                    <div className="tdg-opp-kb-body">
+                      {itens.map((registro) => (
+                        <button type="button" className="tdg-opp-kb-card" key={registro.id} onClick={() => setEditandoId(registro.id)} title={registro.cliente}>
+                          <span>{registro.cliente || "Sem conta"}</span>
+                          <b>{BRL.format(analisarOportunidade(registro).financeiro.valorContrato)}</b>
+                        </button>
+                      ))}
+                      {!itens.length && <p className="tdg-opp-kb-vazio">—</p>}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </TopScrollRow>
+        </>
       )}
 
       <div className="tdg-opp-lista" hidden={visao === "kanban"}>

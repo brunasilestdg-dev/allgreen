@@ -260,7 +260,12 @@ describe("LogisticsVertical", () => {
     expect(screen.queryByRole("button", { name: /Playbook comercial.*Jornada de venda/ })).toBeNull();
 
     fireEvent.click(screen.getAllByRole("button", { name: /Notícias e inteligência/ })[0]);
-    expect(await screen.findByRole("heading", { name: "Notícias, RFQs e mercado" })).toBeTruthy();
+    // O hub virou "campanhas primeiro"; as notícias moram na aba própria.
+    expect(await screen.findByRole("heading", { name: "Campanhas, mercado e geração de demanda" })).toBeTruthy();
+    const abaNoticias = screen
+      .getAllByRole("button", { name: /^Notícias/ })
+      .find((botao) => !/intelig[êe]ncia/i.test(botao.textContent || ""));
+    fireEvent.click(abaNoticias);
     expect(await screen.findByText("Empresa Alfa amplia operação elétrica")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Contatos/ })[0]);

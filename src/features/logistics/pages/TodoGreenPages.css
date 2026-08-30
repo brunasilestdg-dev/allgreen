@@ -643,6 +643,30 @@
 .tdg-crm-research-group li em { color: #8a5b00; font-size: 10px; font-style: normal; line-height: 1.35; }
 .tdg-crm-web-intelligence details summary { color: #745800; cursor: pointer; font-size: 10.5px; font-weight: 800; }
 .tdg-crm-research-next { background: #edf7f2; border-radius: 10px; display: grid; gap: 6px; padding: 10px; }
+/* Edição humana da pesquisa: remover item errado e concluir ação sugerida. */
+.tdg-crm-research-remove { align-self: start; background: #fff; border: 1px solid #dcc9c9; border-radius: 999px; color: #8f4a4a; cursor: pointer; font-size: 11px; font-weight: 800; margin-top: 2px; padding: 2px 10px; width: fit-content; }
+.tdg-crm-research-remove:hover { background: #fdf1f1; border-color: #c96e6e; }
+.tdg-crm-research-acao { align-items: center; display: flex; gap: 8px; }
+.tdg-crm-research-acao > button { background: #fff; border: 1px solid #bad5ca; border-radius: 999px; color: #17624f; cursor: pointer; flex-shrink: 0; font-size: 11px; font-weight: 800; padding: 3px 11px; }
+.tdg-crm-research-acao > button:hover { background: #e7f5ef; }
+.tdg-crm-research-acao.concluida strong { color: #74867f; text-decoration: line-through; }
+.tdg-crm-research-acao small { color: #74867f; flex-shrink: 0; }
+/* Saúde explicável: as seis notas são da titular; a tela agora diz isso. */
+.tdg-crm-health-breakdown { background: #fbfdfc; border: 1px solid var(--tdg-line); border-radius: 11px; margin-top: 10px; padding: 11px 14px; }
+.tdg-crm-health-breakdown summary { color: #17624f; cursor: pointer; font-weight: 800; }
+.tdg-crm-health-breakdown p { color: #596f67; line-height: 1.5; margin: 9px 0; }
+.tdg-crm-health-breakdown ul { display: grid; gap: 5px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); list-style: none; margin: 9px 0; padding: 0; }
+.tdg-crm-health-breakdown li { align-items: center; background: #fff; border: 1px solid var(--tdg-line); border-radius: 8px; display: flex; font-size: 12.5px; gap: 8px; justify-content: space-between; padding: 7px 10px; }
+.tdg-crm-health-breakdown li b { color: #17624f; }
+.tdg-crm-health-breakdown > button { align-items: center; background: #e7f5ef; border: 0; border-radius: 8px; color: #17624f; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 800; gap: 6px; padding: 8px 11px; }
+/* Contatos fora do mapa ativo: nada some, tudo tem onde ser visto. */
+.tdg-crm-contatos-historicos { border-top: 1px dashed var(--tdg-line); margin-top: 10px; padding-top: 10px; }
+.tdg-crm-contatos-historicos summary { color: #667e75; cursor: pointer; font-size: 12.5px; font-weight: 800; }
+.tdg-crm-contatos-historicos p { color: #596f67; font-size: 12.5px; line-height: 1.5; margin: 8px 0; }
+.tdg-crm-contatos-historicos ul { display: grid; gap: 6px; list-style: none; margin: 0 0 9px; padding: 0; }
+.tdg-crm-contatos-historicos li { display: grid; gap: 2px; }
+.tdg-crm-contatos-historicos li small { color: #74867f; }
+.tdg-crm-contatos-historicos > button { align-items: center; background: #fff; border: 1px solid #bad5ca; border-radius: 8px; color: #17624f; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 800; gap: 6px; padding: 7px 10px; }
 .tdg-crm-research-next strong { color: #204b3e; font-size: 10.5px; line-height: 1.4; }
 .tdg-crm-research-note { color: #6d7b76; font-size: 9.5px; line-height: 1.4; }
 .tdg-crm-research-error { background: #fff1ee; border-radius: 9px; color: #8f2e20 !important; font-size: 11px; padding: 9px; }
@@ -1699,14 +1723,32 @@
 .tdg-view-switch { display: inline-flex; gap: 2px; background: var(--tdg-soft); border-radius: 9px; padding: 2px; margin-left: auto; }
 .tdg-view-switch button { background: none; border: 0; border-radius: 7px; color: var(--tdg-muted); cursor: pointer; font-size: .82rem; font-weight: 700; padding: 5px 12px; }
 .tdg-view-switch button.active { background: #fff; color: var(--tdg-green); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.tdg-opp-kb-resumo { color: var(--tdg-muted); margin: 2px 0 10px; }
 .tdg-opp-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 1fr); gap: 12px; padding-bottom: 4px; }
 .tdg-opp-kb-col { background: #f5f9f7; border: 1px solid var(--tdg-line); border-radius: 12px; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
-.tdg-opp-kb-col > header { background: #eaf3ee; display: grid; gap: 2px; padding: 12px 14px; }
-.tdg-opp-kb-col > header strong { color: var(--tdg-green); font-size: .82rem; letter-spacing: .02em; text-transform: uppercase; }
-.tdg-opp-kb-col > header span { font-size: 1.05rem; font-weight: 800; }
+/* Cabeçalho no tom do funil: clareia na prospecção, escurece rumo ao
+   fechamento — o formato pedido pela titular. --kb-tom vem do índice da
+   coluna (0..5); o texto vira branco quando o fundo escurece. */
+.tdg-opp-kb-col > header {
+  background: hsl(150, calc(30% + var(--kb-tom, 0) * 8%), calc(88% - var(--kb-tom, 0) * 9%));
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+}
+.tdg-opp-kb-col > header strong { color: #14532d; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; }
+.tdg-opp-kb-col > header span { color: #123b26; font-size: 1.35rem; font-weight: 800; }
+.tdg-opp-kb-col[style*="--kb-tom: 3"] > header strong,
+.tdg-opp-kb-col[style*="--kb-tom: 3"] > header span,
+.tdg-opp-kb-col[style*="--kb-tom: 4"] > header strong,
+.tdg-opp-kb-col[style*="--kb-tom: 4"] > header span,
+.tdg-opp-kb-col[style*="--kb-tom: 5"] > header strong,
+.tdg-opp-kb-col[style*="--kb-tom: 5"] > header span { color: #fff; }
+.tdg-opp-kb-col.perdida > header { background: #eceff0; }
+.tdg-opp-kb-col.perdida > header strong,
+.tdg-opp-kb-col.perdida > header span { color: #5c6b66; }
 .tdg-opp-kb-body { display: grid; gap: 6px; padding: 10px; align-content: start; min-height: 60px; }
-.tdg-opp-kb-card { align-items: center; background: #fff; border: 1px solid var(--tdg-line); border-radius: 8px; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 8px 10px; text-align: left; }
-.tdg-opp-kb-card:hover { border-color: var(--tdg-green); }
+.tdg-opp-kb-card { align-items: center; background: #fff; border: 1px solid #cfe4d7; border-radius: 8px; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 9px 11px; text-align: left; }
+.tdg-opp-kb-card:hover { border-color: var(--tdg-green); box-shadow: 0 1px 4px rgba(20, 83, 45, .12); }
 .tdg-opp-kb-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tdg-opp-kb-card b { color: var(--tdg-green); font-size: .82rem; white-space: nowrap; }
 .tdg-opp-kb-vazio { color: var(--tdg-muted); text-align: center; margin: 8px 0; }

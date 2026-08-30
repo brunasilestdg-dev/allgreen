@@ -834,20 +834,13 @@ const renderWorkCenter = () => {
   });
 };
 
-const ensureTab = () => {
-  const nav = document.querySelector("[data-tdg-management-tools]");
-  if (!nav || nav.querySelector("[data-tdg-work-center-tab]")) return;
-  const button = document.createElement("button");
-  button.type = "button";
-  button.dataset.tdgWorkCenterTab = "true";
-  button.textContent = "Projetos e tarefas";
-  button.addEventListener("click", () => { history.pushState({}, "", "/todogreen/central-trabalho"); window.dispatchEvent(new PopStateEvent("popstate")); render(); });
-  nav.appendChild(button);
-};
+// A entrada de "Projetos e tarefas" é o cartão fixo no topo do menu lateral.
+// Este módulo injetava um segundo botão dentro do menu "Configurações", o que
+// fazia a titular perguntar por que projetos viraram configuração — não são.
+// A injeção saiu; o toggle de classe abaixo tolera a ausência do botão.
 
 const render = () => {
   if (!location.pathname.startsWith("/todogreen")) return;
-  ensureTab();
   const active = location.pathname.includes("/central-trabalho");
   const main = document.querySelector("main.tdg");
   if (!main) return;

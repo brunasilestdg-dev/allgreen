@@ -308,9 +308,9 @@ export default function FiscalPage({ authHeaders, setToast }) {
           <ShieldAlert size={18} />
           <span>
             <strong>Transmissão à SEFAZ desligada.</strong>{" "}
-            Falta o certificado digital (A1/A3) no cofre — sem <code>NFE_CERT_PFX</code> e{" "}
-            <code>NFE_CERT_PASSWORD</code> o sistema prepara o documento, calcula os impostos e gera o XML e o
-            DACTE, mas não transmite. Cadastrado o certificado, o mesmo documento segue à SEFAZ sem retrabalho.
+            Falta instalar o certificado digital (A1/A3) e a senha dele no cofre do servidor. Enquanto isso,
+            o sistema prepara o documento, calcula os impostos e gera o XML e o DACTE — só não transmite.
+            Instalado o certificado, o mesmo documento segue à SEFAZ sem retrabalho.
           </span>
         </div>
       )}

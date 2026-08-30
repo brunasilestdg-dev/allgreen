@@ -2630,12 +2630,15 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <summary>Configurações</summary>
             <div data-tdg-management-tools="true">
               {MANAGEMENT_TOOLS
+                // Projetos e tarefas não é configuração: já tem o cartão fixo
+                // no topo do menu lateral. Aqui ficam só as ferramentas de
+                // administração (integrações, usuários e acessos).
+                .filter((item) => item.id !== "projects")
                 .filter((item) => podeAcessarFuncionalidade(role, remoteAccess.permissions, item.permission))
                 .map((item) => (
                   <button
                     type="button"
-                    className={(isWorkCenter && item.id === "projects") || page === item.id ? "active" : ""}
-                    data-tdg-work-center-tab={item.id === "projects" ? "true" : undefined}
+                    className={page === item.id ? "active" : ""}
                     onClick={() => navigate(item.route)}
                     key={item.id}
                   >

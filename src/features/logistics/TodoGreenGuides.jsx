@@ -23,16 +23,35 @@ const PLAYBOOK = [
   { title: "7. Implantar e comprovar", text: "Conecte operação, entregas, SLA e evidências ambientais ao que foi vendido.", route: "/todogreen/operacoes", action: "Abrir operação" },
 ];
 
-const HELP_LINKS = [
-  { icon: BarChart3, title: "Visão geral", text: "Indicadores, riscos e prioridades reais.", route: "/todogreen/dashboard" },
-  { icon: Users, title: "Clientes e contatos", text: "Contas, decisores, histórico e inteligência externa.", route: "/todogreen/clientes" },
-  { icon: Handshake, title: "Oportunidades", text: "Pipeline, forecast e próximos passos.", route: "/todogreen/oportunidades" },
-  { icon: Gauge, title: "Precificação", text: "Custos, margens e preços recomendados.", route: "/todogreen/precificacao" },
-  { icon: FileCheck2, title: "Propostas", text: "Condições comerciais e contratos.", route: "/todogreen/propostas" },
-  { icon: Route, title: "Operação", text: "Rotas, viagens, frota, entregas e ocorrências.", route: "/todogreen/operacoes" },
-  { icon: Route, title: "Gestão operacional de frota", text: "Jornada, veículo, telemetria disponível e alertas.", route: "/todogreen/motorista-frota" },
-  { icon: Leaf, title: "ESG", text: "CO₂ evitado, Green Score, método e evidências.", route: "/todogreen/central-esg" },
-  { icon: Workflow, title: "Central de implementação", text: "Implantações, projetos, tarefas, marcos, dependências e automações.", route: "/todogreen/central-trabalho" },
+// Agrupados por área: uma parede única de cartões obrigava a ler tudo para
+// achar qualquer coisa. Cada grupo é uma pergunta ("quero vender", "quero
+// operar"), não uma lista de telas.
+const HELP_GROUPS = [
+  {
+    label: "Vender e precificar",
+    links: [
+      { icon: BarChart3, title: "Visão geral", text: "Indicadores, riscos e prioridades reais.", route: "/todogreen/dashboard" },
+      { icon: Users, title: "Clientes e contatos", text: "Contas, decisores, histórico e inteligência externa.", route: "/todogreen/clientes" },
+      { icon: Handshake, title: "Oportunidades", text: "Pipeline, forecast e próximos passos.", route: "/todogreen/oportunidades" },
+      { icon: Gauge, title: "Precificação", text: "Custos, margens e preços recomendados.", route: "/todogreen/precificacao" },
+      { icon: FileCheck2, title: "Propostas", text: "Condições comerciais e contratos.", route: "/todogreen/propostas" },
+    ],
+  },
+  {
+    label: "Operar e comprovar",
+    links: [
+      { icon: Route, title: "Operação", text: "Rotas, viagens, frota, entregas e ocorrências.", route: "/todogreen/operacoes" },
+      { icon: Route, title: "Gestão operacional de frota", text: "Jornada, veículo, telemetria disponível e alertas.", route: "/todogreen/motorista-frota" },
+      { icon: Leaf, title: "ESG", text: "CO₂ evitado, Green Score, método e evidências.", route: "/todogreen/central-esg" },
+    ],
+  },
+  {
+    label: "Organizar e conectar",
+    links: [
+      { icon: Workflow, title: "Central de implementação", text: "Implantações, projetos, tarefas, marcos, dependências e automações.", route: "/todogreen/central-trabalho" },
+      { icon: Workflow, title: "Integrações", text: "Conecte seu Claude, ChatGPT ou Gemini e os provedores de pesquisa.", route: "/todogreen/integracoes" },
+    ],
+  },
 ];
 
 function Playbook({ onNavigate }) {
@@ -47,17 +66,24 @@ function Playbook({ onNavigate }) {
 
 function Help({ onNavigate }) {
   return <section className="tdg-guide">
-    <header className="tdg-intelligence-hero"><div><span className="tdg-kicker">CENTRAL DE AJUDA</span><h2>Encontre o que precisa sem treinamento</h2><p>Atalhos para as rotinas da To Do Green e orientação sobre onde cada informação fica.</p></div><CircleHelp size={28} /></header>
-    <div className="tdg-help-grid">
-      {HELP_LINKS.map(({ icon: Icon, ...item }) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.title}><Icon size={19} /><span><strong>{item.title}</strong><small>{item.text}</small></span><ArrowRight size={15} /></button>)}
-    </div>
+    <header className="tdg-intelligence-hero"><div><span className="tdg-kicker">CENTRAL DE AJUDA</span><h2>Encontre o que precisa sem treinamento</h2><p>Comece pela busca; abaixo, os atalhos por objetivo e as dúvidas mais comuns.</p></div><CircleHelp size={28} /></header>
+    <button type="button" className="tdg-help-search tdg-help-search-hero" onClick={() => onNavigate?.("/todogreen/dashboard?ferramentas=1")}><Search size={16} />Buscar qualquer ferramenta ou rotina</button>
+    {HELP_GROUPS.map((grupo) => (
+      <section className="tdg-help-group" key={grupo.label}>
+        <h3>{grupo.label}</h3>
+        <div className="tdg-help-grid">
+          {grupo.links.map(({ icon: Icon, ...item }) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.title}><Icon size={19} /><span><strong>{item.title}</strong><small>{item.text}</small></span><ArrowRight size={15} /></button>)}
+        </div>
+      </section>
+    ))}
     <section className="tdg-help-answers">
+      <h3>Dúvidas comuns</h3>
       <details><summary>Onde vejo notícias, RFQs e portais de fornecedores?</summary><p>Em Espaço, abra Notícias e inteligência. Os itens vêm das pesquisas realizadas nas contas e sempre mantêm o link da fonte.</p></details>
+      <details><summary>Como conecto meu próprio Claude, ChatGPT ou Gemini?</summary><p>Em Configurações → Integrações, no painel de IA, cole a chave da sua conta. A chave fica criptografada no cofre do seu espaço e passa a atender as rotinas de IA do ERP.</p></details>
       <details><summary>Onde ficam os contatos?</summary><p>O Espaço mostra uma agenda rápida. O cadastro completo, mapa de relacionamento, histórico e atualização de contatos continuam em Clientes.</p></details>
       <details><summary>Onde acompanho implantações, tarefas e automações?</summary><p>A Central de implementação concentra implantações de clientes, projetos, tarefas, marcos e dependências. No Espaço, a aba Automações permite criar, ativar, pausar e acompanhar regras.</p></details>
       <details><summary>Como encontro uma rotina que não aparece no menu?</summary><p>Use Buscar ferramenta no topo da To Do Green. A busca inclui as rotinas do ERP sem lotar o menu principal.</p></details>
     </section>
-    <button type="button" className="tdg-help-search" onClick={() => onNavigate?.("/todogreen/dashboard?ferramentas=1")}><Search size={16} />Buscar todas as ferramentas</button>
   </section>;
 }
 

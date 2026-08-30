@@ -1,19 +1,61 @@
-import { useEffect, useState } from "react";
-import { Cable, CheckCircle2, CircleDashed, Mail, MessageCircle, RefreshCw, Search, Workflow, Zap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Cable,
+  CheckCircle2,
+  CircleDashed,
+  Database,
+  Mail,
+  MessageCircle,
+  RefreshCw,
+  Search,
+  ServerCog,
+  Workflow,
+  Zap,
+} from "lucide-react";
 import AiKeysPanel from "../../integrations/AiKeysPanel.jsx";
 import SearchKeysPanel from "../../integrations/SearchKeysPanel.jsx";
 import "./TodoGreenPages.css";
 
+const STATUS = {
+  connected: { label: "Conectada e validada", Icon: CheckCircle2 },
+  configured: { label: "Configurada, validação pendente", Icon: CircleDashed },
+  requires_setup: { label: "Configuração necessária", Icon: CircleDashed },
+  external_dependency: { label: "Depende de serviço externo", Icon: ServerCog },
+  error: { label: "Erro na integração", Icon: AlertTriangle },
+};
+
 const ProviderList = ({ title, icon: Icon, items = [], testing, onTest }) => (
   <section className="tdg-panel">
-    <div className="tdg-section-head"><div><span className="tdg-kicker">INTEGRAÇÕES</span><h2>{title}</h2></div><Icon size={22} /></div>
+    <div className="tdg-section-head">
+      <div><span className="tdg-kicker">INTEGRAÇÕES</span><h2>{title}</h2></div>
+      <Icon size={22} />
+    </div>
     <div className="tdg-access-list">
-      {items.map((item) => (
-        <div className="tdg-access-row" key={item.id}>
-          <span>{item.configured ? <CheckCircle2 size={16} /> : <CircleDashed size={16} />}<strong>{item.name || item.id}</strong><small>{item.detail || (item.configured ? "Configurado" : "Pendente de credencial")}</small></span>
-          {onTest && <button type="button" disabled={!item.configured || testing === item.id} onClick={() => onTest(item.id)}>{testing === item.id ? "Testando..." : "Testar"}</button>}
-        </div>
-      ))}
+      {items.length === 0 && <p>Nenhuma integração cadastrada nesta categoria.</p>}
+      {items.map((item) => {
+        const state = STATUS[item.status] || STATUS[item.configured ? "configured" : "requires_setup"];
+        const StateIcon = state.Icon;
+        return (
+          <div className="tdg-access-row" key={item.id}>
+            <span>
+              <StateIcon size={16} />
+              <strong>{item.name || item.id}</strong>
+              <small><b>{state.label}.</b> {item.detail || "Sem detalhe adicional."}</small>
+              {item.requirement && <small>Necessário: {item.requirement}</small>}
+            </span>
+            {onTest && item.canTest && (
+              <button
+                type="button"
+                disabled={!item.configured || testing === item.id}
+                onClick={() => onTest(item.id)}
+              >
+                {testing === item.id ? "Testando..." : "Testar"}
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   </section>
 );
@@ -22,6 +64,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState("");
+
   const load = async () => {
     setLoading(true);
     try {
@@ -35,11 +78,9 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       setLoading(false);
     }
   };
+
   useEffect(() => { load(); }, []);
-  // O teste da busca não cabe em "respondeu em N ms": ela tem vários
-  // provedores, e o desfecho que mais confunde é o provedor que responde
-  // certinho e não traz nada — que se parece com estar fora do ar, sem ser.
-  // Cada caso ganha uma frase que diz o que está acontecendo.
+
   const resumoDaBusca = (t) => {
     if (!t) return "Não foi possível testar a busca.";
     if (!t.configured) return "Nenhuma fonte de pesquisa está configurada.";
@@ -50,6 +91,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       return `${t.providers.join(", ")} respondeu em ${t.latencyMs} ms, mas sem nenhum resultado.${falhas ? ` Falhas: ${falhas}` : ""}`;
     return `${t.providers.join(", ")}: ${t.resultCount} resultado(s) em ${t.latencyMs} ms.${falhas ? ` Falhas: ${falhas}` : ""}`;
   };
+
   const test = async (provider) => {
     setTesting(provider);
     try {
@@ -71,11 +113,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       setTesting("");
     }
   };
-  if (loading && !status) return <section className="tdg-panel" aria-busy="true">Carregando integrações...</section>;
-  // "Configurada" respondia à pergunta errada. A pesquisa de empresa podia
-  // falhar com a busca marcada como configurada, e a tela não tinha como
-  // dizer o motivo — nem sequer QUAL fonte estava ligada. Agora cada provedor
-  // aparece com nome, e o de "Pesquisa web" pode ser testado de verdade.
+
   const nomeDaFonte = {
     searxng: "SearXNG",
     brave: "Brave Search",
@@ -92,34 +130,75 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
     wikidata: "Wikidata (sem chave)",
     wikipedia: "Wikipédia (sem chave)",
   };
-  const fontes = (status?.search?.providers || []).filter((p) => p.configured);
-  const searchItems = [
-    {
-      id: "web-search",
-      name: "Pesquisa web pública",
-      configured: Boolean(status?.search?.configured),
-      detail: status?.search?.configured
-        ? `Fonte(s) ligada(s): ${fontes.map((p) => nomeDaFonte[p.id] || p.id).join(", ") || "nenhuma"}. Use "Testar" para ver se respondem e se trazem resultado.`
-        : "Pendente de uma fonte de pesquisa",
-    },
-  ];
+
+  const marketItems = useMemo(() => {
+    const fontes = (status?.search?.providers || []).filter((provider) => provider.configured);
+    return (status?.market || []).map((item) => item.id !== "web-search" ? item : {
+      ...item,
+      detail: item.configured
+        ? `Fonte(s) ligada(s): ${fontes.map((provider) => nomeDaFonte[provider.id] || provider.id).join(", ") || "nenhuma"}. Use “Testar” para validar resposta e resultados.`
+        : item.detail,
+    });
+  }, [status]);
+
+  const summary = useMemo(() => {
+    const items = [
+      ...(status?.ai || []),
+      ...(status?.market || []),
+      ...(status?.messaging || []),
+      ...(status?.communication || []),
+      ...(status?.operational || []),
+      ...(status?.management || []),
+      ...(status?.dataExchange || []),
+      ...(status?.automation || []),
+    ];
+    return {
+      connected: items.filter((item) => item.status === "connected").length,
+      configured: items.filter((item) => item.status === "configured").length,
+      external: items.filter((item) => item.status === "external_dependency").length,
+      errors: items.filter((item) => item.status === "error").length,
+    };
+  }, [status]);
+
+  if (loading && !status)
+    return <section className="tdg-panel" aria-busy="true">Carregando integrações...</section>;
+
   return (
     <div className="tdg-page">
-      <header className="tdg-page-title"><div><span>CONFIABILIDADE</span><h2>Integrações de IA, busca e automação</h2><p>O Plantû usa a cascata de IA e as fontes de busca configuradas. As automações essenciais rodam na própria Cloudflare.</p></div><button className="tdg-action" type="button" onClick={load}><RefreshCw size={16} />Atualizar</button></header>
-      {/* As suas chaves de IA (Claude, GPT, Google e outras), guardadas no cofre
-          e usadas pela cascata. É aqui que o usuário conecta a própria conta —
-          antes só dava para ver o status, não para adicionar a chave. */}
+      <header className="tdg-page-title">
+        <div>
+          <span>CONFIABILIDADE</span>
+          <h2>Central de Integrações</h2>
+          <p>Conectores do ERP com estado real. “Configurada” não significa “validada”: serviços externos só ficam verdes depois de evidência de conexão ou execução.</p>
+        </div>
+        <button className="tdg-action" type="button" onClick={load}><RefreshCw size={16} />Atualizar</button>
+      </header>
+
+      <section className="tdg-panel">
+        <div className="tdg-section-head"><div><span className="tdg-kicker">RESUMO</span><h2>Prontidão das integrações</h2></div><Cable size={22} /></div>
+        <div className="tdg-access-list">
+          <div className="tdg-access-row"><span><CheckCircle2 size={16} /><strong>{summary.connected} conectada(s) e validada(s)</strong><small>Há evidência de funcionamento no ERP.</small></span></div>
+          <div className="tdg-access-row"><span><CircleDashed size={16} /><strong>{summary.configured} configurada(s)</strong><small>Credencial ou infraestrutura presente, ainda sem prova suficiente para chamar de conectada.</small></span></div>
+          <div className="tdg-access-row"><span><ServerCog size={16} /><strong>{summary.external} dependência(s) externa(s)</strong><small>Exigem API, certificado, OAuth, servidor ou autorização do provedor.</small></span></div>
+          {summary.errors > 0 && <div className="tdg-access-row"><span><AlertTriangle size={16} /><strong>{summary.errors} integração(ões) com erro</strong><small>Precisam de correção antes do uso operacional.</small></span></div>}
+        </div>
+      </section>
+
       <AiKeysPanel setToast={setToast} authHeaders={authHeaders} />
       <ProviderList title="Cascata de IA (status)" icon={Zap} items={status?.ai} testing={testing} onTest={test} />
-      <ProviderList title="Busca web" icon={Search} items={searchItems} testing={testing} onTest={test} />
-      <section className="tdg-panel">
-        <SearchKeysPanel authHeaders={authHeaders} setToast={setToast} />
-      </section>
-      <ProviderList title="WhatsApp" icon={MessageCircle} items={status?.messaging} />
-      <ProviderList title="E-mail e produtividade" icon={Mail} items={status?.communication} />
+      <ProviderList title="Mercado e prospecção" icon={Search} items={marketItems} testing={testing} onTest={test} />
+      <section className="tdg-panel"><SearchKeysPanel authHeaders={authHeaders} setToast={setToast} /></section>
+      <ProviderList title="Mensageria" icon={MessageCircle} items={status?.messaging} />
+      <ProviderList title="Comunicação e produtividade" icon={Mail} items={status?.communication} />
+      <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} />
+      <ProviderList title="Dados e gestão" icon={Database} items={status?.management} />
       <ProviderList title="API e troca de dados" icon={Cable} items={status?.dataExchange} />
       <ProviderList title="Automação ativa na Cloudflare" icon={Workflow} items={status?.automation} />
-      <section className="tdg-panel"><h2>Fora do escopo atual</h2><p>Whisper e geração de imagens permanecem desligados porque não fazem parte da jornada comercial, logística ou ESG.</p></section>
+
+      <section className="tdg-panel">
+        <h2>Fora do escopo atual</h2>
+        <p>Whisper e geração de imagens permanecem desligados porque não fazem parte da jornada comercial, logística ou ESG.</p>
+      </section>
     </div>
   );
 }
