@@ -265,3 +265,68 @@ describe("responsável por id precisa ser gente do espaço", () => {
     expect(trocada.assigneeLabel).toBe("Alguém de fora");
   });
 });
+
+describe("plano compartilhado com pessoas específicas", () => {
+  // Pedido da titular (30/08): "o planner pode ser compartilhado com pessoas
+  // específicas". O plano continua privado; quem está na lista vê e trabalha
+  // nas tarefas. Quem é do espaço mas NÃO está na lista continua de fora, e
+  // id de fora do espaço não entra na lista nem por engano.
+  let planId;
+
+  it("cria plano privado com pessoas escolhidas; id de fora do espaço é descartado", async () => {
+    const r = await pedir("/api/todogreen/planner/planos", {
+      metodo: "POST", token: ana.token,
+      corpo: {
+        name: "Implantação Cliente X", visibility: "private",
+        buckets: [{ id: "todo", nome: "A fazer" }],
+        members: [bia.id, externo.id, bia.id],
+      },
+    });
+    expect(r.status).toBe(201);
+    const plano = await r.json();
+    planId = plano.id;
+    expect(plano.visibility).toBe("private");
+    expect(plano.members).toEqual([bia.id]);
+  });
+
+  it("quem está na lista vê o plano e cria tarefa; quem não está, não vê (404)", async () => {
+    const daBia = await (await pedir("/api/todogreen/planner/planos", { token: bia.token })).json();
+    expect(daBia.registros.some((p) => p.id === planId)).toBe(true);
+
+    const tarefa = await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, {
+      metodo: "POST", token: bia.token,
+      corpo: { title: "Levantar janelas de entrega", assigneeUserId: bia.id, assigneeLabel: "Bia" },
+    });
+    expect(tarefa.status).toBe(201);
+
+    // Leo é do MESMO espaço, mas não foi listado: o plano não existe para ele.
+    const doLeo = await (await pedir("/api/todogreen/planner/planos", { token: leo.token })).json();
+    expect(doLeo.registros.some((p) => p.id === planId)).toBe(false);
+    expect((await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, { token: leo.token })).status).toBe(404);
+  });
+
+  it("a tarefa atribuída entra em Minhas tarefas de quem foi listado", async () => {
+    const minhas = await (await pedir("/api/todogreen/planner/minhas-tarefas", { token: bia.token })).json();
+    expect(minhas.registros.some((t) => t.planId === planId)).toBe(true);
+  });
+
+  it("só quem criou mexe na lista; tirar a pessoa fecha a porta na hora", async () => {
+    const atual = await (await pedir("/api/todogreen/planner/planos", { token: ana.token })).json();
+    const plano = atual.registros.find((p) => p.id === planId);
+
+    const daBia = await pedir(`/api/todogreen/planner/planos/${planId}`, {
+      metodo: "PATCH", token: bia.token,
+      corpo: { revision: plano.revision, members: [] },
+    });
+    expect(daBia.status).toBe(403);
+
+    const daAna = await pedir(`/api/todogreen/planner/planos/${planId}`, {
+      metodo: "PATCH", token: ana.token,
+      corpo: { revision: plano.revision, members: [] },
+    });
+    expect(daAna.status).toBe(200);
+    expect((await daAna.json()).members).toEqual([]);
+
+    expect((await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, { token: bia.token })).status).toBe(404);
+  });
+});

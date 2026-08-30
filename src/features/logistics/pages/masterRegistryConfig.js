@@ -20,6 +20,26 @@ export const TABS = [
   { id:"bankAccounts", title:"Contas bancárias", icon:WalletCards, singular:"conta bancária", source:"master", resource:"bank-accounts" },
 ];
 
+// Regra da titular (30/08): "não tem que ter tela de cadastros unitárias a
+// menos que se correlacionem — veículo e motorista pode ficar na mesma tela,
+// mas não tá tabela de preço". Cada grupo abaixo é UMA tela; as seções dentro
+// dele aparecem juntas porque uma alimenta a outra na operação. Cadastro sem
+// correlação (tabela de preço, dados da empresa) fica sozinho de propósito.
+export const GROUPS = [
+  { id: "frota", title: "Frota", tabs: ["vehicles", "drivers"] },
+  { id: "suprimentos", title: "Suprimentos", tabs: ["items", "warehouses", "parties"] },
+  { id: "rede", title: "Rede logística", tabs: ["operationalUnits", "routes"] },
+  { id: "financeiro", title: "Financeiro", tabs: ["costCenters", "accounts", "bankAccounts"] },
+  { id: "pessoas", title: "Colaboradores", tabs: ["employees"] },
+  { id: "precos", title: "Tabelas de preço", tabs: ["priceTables"] },
+  { id: "empresa", title: "Dados da empresa", tabs: ["companyProfiles"] },
+];
+
+// O ?secao= do menu aponta para a SEÇÃO (materiais, veículos...); a tela abre
+// o grupo que a contém.
+export const groupOfTab = (tabId) =>
+  GROUPS.find((group) => group.tabs.includes(tabId)) || GROUPS[0];
+
 export const SELECTS = {
   warehouseKind:[["proprio","Próprio"],["terceiro","De terceiro"],["transito","Em trânsito"],["veiculo","Veículo"]],
   partyRole:[["fornecedor","Fornecedor"],["cliente","Cliente"],["transportador","Transportador"],["prestador","Prestador de serviço"]],

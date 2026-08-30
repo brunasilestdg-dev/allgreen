@@ -5,6 +5,7 @@ import {
   checklistCompleto,
   minhasTarefas,
   normalizarBaldes,
+  normalizarMembros,
   normalizarPrioridade,
   normalizarProgresso,
   normalizarVisibilidade,
@@ -12,6 +13,7 @@ import {
   podeEditarPlano,
   podeVerPlano,
   progressoNumerico,
+  resumoDoCompartilhamento,
   resumoPlano,
   tarefaAtendeBusca,
   validarPlano,
@@ -78,6 +80,25 @@ describe("visibilidade: pode ser compartilhado ou não", () => {
   it("admin e owner enxergam o próprio espaço inteiro", () => {
     expect(podeVerPlano(privado, { userId: "u9", role: "admin" })).toBe(true);
     expect(podeVerPlano(privado, { userId: "u9", role: "owner" })).toBe(true);
+  });
+
+  it("plano privado com pessoas escolhidas: listado vê, não listado não", () => {
+    const comPessoas = { visibility: "private", ownerUserId: "u1", members: ["u2", "u3"] };
+    expect(podeVerPlano(comPessoas, { userId: "u2", role: "vendedor" })).toBe(true);
+    expect(podeVerPlano(comPessoas, { userId: "u4", role: "vendedor" })).toBe(false);
+  });
+
+  it("a lista de pessoas sai limpa: sem vazio, sem repetido, com teto", () => {
+    expect(normalizarMembros(["u1", " u1 ", "", null, "u2"])).toEqual(["u1", "u2"]);
+    expect(normalizarMembros(Array.from({ length: 80 }, (_, i) => `u${i}`))).toHaveLength(60);
+    expect(normalizarMembros("não é lista")).toEqual([]);
+  });
+
+  it("o resumo do compartilhamento conta a mesma história em toda tela", () => {
+    expect(resumoDoCompartilhamento({ visibility: "shared" })).toBe("Todo o espaço de trabalho vê.");
+    expect(resumoDoCompartilhamento({ visibility: "private" })).toBe("Só quem criou vê.");
+    expect(resumoDoCompartilhamento({ visibility: "private", members: ["u2", "u3"] }))
+      .toBe("Quem criou e mais 2 pessoa(s) escolhida(s).");
   });
 
   it("editar a estrutura do plano é do criador, mesmo quando compartilhado", () => {

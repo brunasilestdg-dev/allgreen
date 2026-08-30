@@ -1781,3 +1781,16 @@
 
 /* Responsável do Planner vinculado a uma pessoa da plataforma. */
 .tdg-planner-vinculo { color: var(--tdg-green); display: block; font-size: 11.5px; margin-top: 3px; }
+
+/* Compartilhamento do plano com pessoas específicas (Planner). */
+.tdg-planner-membros { display: grid; gap: 8px; margin-top: 4px; }
+.tdg-planner-membros > label { display: grid; gap: 4px; font-size: 12px; font-weight: 750; color: var(--tdg-muted); }
+.tdg-planner-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tdg-planner-chips small { color: var(--tdg-muted); font-weight: 400; }
+.tdg-planner-chip { align-items: center; background: var(--tdg-soft); border: 1px solid var(--tdg-line); border-radius: 999px; display: inline-flex; font-size: .82rem; gap: 6px; padding: 3px 6px 3px 11px; }
+.tdg-planner-chip button { align-items: center; background: transparent; border: none; border-radius: 999px; color: var(--tdg-muted); cursor: pointer; display: inline-flex; height: 18px; justify-content: center; padding: 0; width: 18px; }
+.tdg-planner-chip button:hover { background: #fff; color: #b42318; }
+.tdg-planner-partilha-resumo { color: var(--tdg-muted); font-size: .85rem; margin: 2px 0 0; }
+
+/* Cadastros agrupados por correlação: o formulário abre dentro da seção. */
+.tdg-registry-form { margin: 0 0 14px; }

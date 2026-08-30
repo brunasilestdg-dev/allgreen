@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authHeaders as sessionAuthHeaders } from "../../../session/armazenamento.js";
 import {
   COLUMNS,
   FORMS,
+  GROUPS,
   SELECTS,
   TABS,
   UNITS,
+  groupOfTab,
   payloadFor,
   rowFor,
 } from "./masterRegistryConfig.js";
@@ -28,80 +30,98 @@ async function api(path, options = {}) {
 }
 
 export default function ErpRegistriesPage({ registros, criar, setToast }) {
-  // A seção pode vir da URL (?secao=) — é assim que cada área do menu abre
-  // direto o SEU cadastro: Compras→materiais, Financeiro→plano de contas,
-  // DP→colaboradores... A página única continua sendo o "ver tudo".
-  const [tab, setTab] = useState(() => {
+  // Regra da titular (30/08): cadastro correlato mora na MESMA tela (veículo
+  // com motorista); sem correlação, fica sozinho (tabela de preço). O ?secao=
+  // do menu continua apontando para a seção — a tela abre o grupo dela.
+  const [grupoId, setGrupoId] = useState(() => {
     try {
       const pedida = new URLSearchParams(window.location.search).get("secao") || "";
-      return TABS.some((item) => item.id === pedida) ? pedida : "items";
-    } catch { return "items"; }
+      return groupOfTab(TABS.some((item) => item.id === pedida) ? pedida : "items").id;
+    } catch { return GROUPS[0].id; }
   });
   const [external, setExternal] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [erros, setErros] = useState({});
+  const [carregando, setCarregando] = useState({});
+  const [formTab, setFormTab] = useState("");
+  const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
+  // Uma seção externa é pedida uma vez por sessão da tela; sem este registro,
+  // o efeito re-pediria a lista a cada resposta que chega.
+  const pedidas = useRef(new Set());
 
-  const currentTab = TABS.find((item) => item.id === tab) || TABS[0];
-  const formConfig = FORMS[tab] || FORMS.items;
-  const [form, setForm] = useState(formConfig.initial);
+  const grupo = GROUPS.find((item) => item.id === grupoId) || GROUPS[0];
 
-  useEffect(() => {
-    setForm(FORMS[tab]?.initial || {});
-    setShowForm(false);
-  }, [tab]);
+  useEffect(() => { setFormTab(""); }, [grupoId]);
 
   useEffect(() => {
-    if (currentTab.source === "records") return undefined;
     let active = true;
-    setLoading(true);
-    const path = currentTab.source === "fleet"
-      ? "/api/todogreen/fleet"
-      : `${MASTER_API}/${currentTab.resource}?limit=500`;
-    api(path)
-      .then((payload) => {
-        if (!active) return;
-        setExternal((now) => ({
-          ...now,
-          [tab]: currentTab.source === "fleet" ? payload.vehicles || [] : payload.records || [],
-        }));
-      })
-      .catch((error) => { if (active) setToast?.(error.message); })
-      .finally(() => { if (active) setLoading(false); });
+    for (const tabId of grupo.tabs) {
+      const cfg = TABS.find((item) => item.id === tabId);
+      if (!cfg || cfg.source === "records" || pedidas.current.has(tabId)) continue;
+      pedidas.current.add(tabId);
+      setCarregando((now) => ({ ...now, [tabId]: true }));
+      const path = cfg.source === "fleet"
+        ? "/api/todogreen/fleet"
+        : `${MASTER_API}/${cfg.resource}?limit=500`;
+      api(path)
+        .then((payload) => {
+          if (!active) return;
+          setExternal((now) => ({
+            ...now,
+            [tabId]: cfg.source === "fleet" ? payload.vehicles || [] : payload.records || [],
+          }));
+          setErros((now) => ({ ...now, [tabId]: "" }));
+        })
+        .catch((error) => {
+          if (!active) return;
+          // O erro fica NA seção (ex.: colaboradores exigem papel de RH) — as
+          // vizinhas do grupo continuam funcionando normalmente.
+          setErros((now) => ({ ...now, [tabId]: error.message }));
+        })
+        .finally(() => { if (active) setCarregando((now) => ({ ...now, [tabId]: false })); });
+    }
     return () => { active = false; };
-  }, [tab, currentTab.resource, currentTab.source, setToast]);
+  }, [grupo]);
 
-  const list = currentTab.source === "records" ? registros?.[tab] || [] : external[tab] || [];
-  const columns = useMemo(() => COLUMNS[tab] || [], [tab]);
-  const Icon = currentTab.icon;
+  const abrirFormulario = (tabId) => {
+    setForm(FORMS[tabId]?.initial || {});
+    setFormTab(tabId);
+  };
   const change = (field, value) => setForm((now) => ({ ...now, [field]: value }));
 
   const submit = async (event) => {
     event.preventDefault();
+    const cfg = TABS.find((item) => item.id === formTab);
+    if (!cfg) return;
     setSaving(true);
     try {
-      const body = payloadFor(tab, form);
+      const body = payloadFor(formTab, form);
       let created;
-      if (currentTab.source === "records") {
-        created = await criar(tab, body);
-      } else if (currentTab.source === "fleet") {
+      if (cfg.source === "records") {
+        created = await criar(formTab, body);
+      } else if (cfg.source === "fleet") {
         const payload = await api("/api/todogreen/fleet", { method: "POST", body });
         created = payload.vehicle;
       } else {
-        const payload = await api(`${MASTER_API}/${currentTab.resource}`, { method: "POST", body });
+        const payload = await api(`${MASTER_API}/${cfg.resource}`, { method: "POST", body });
         created = payload.record;
       }
-      if (currentTab.source !== "records" && created) {
-        setExternal((now) => ({ ...now, [tab]: [created, ...(now[tab] || [])] }));
+      if (cfg.source !== "records" && created) {
+        setExternal((now) => ({ ...now, [formTab]: [created, ...(now[formTab] || [])] }));
       }
-      setToast?.(`${currentTab.singular[0].toUpperCase()}${currentTab.singular.slice(1)} cadastrado.`);
-      setForm(FORMS[tab]?.initial || {});
-      setShowForm(false);
+      setToast?.(`${cfg.singular[0].toUpperCase()}${cfg.singular.slice(1)} cadastrado.`);
+      setForm(FORMS[formTab]?.initial || {});
+      setFormTab("");
     } catch (error) {
       setToast?.(error.message || "Não foi possível cadastrar.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const listaDe = (tabId) => {
+    const cfg = TABS.find((item) => item.id === tabId);
+    return cfg?.source === "records" ? registros?.[tabId] || [] : external[tabId] || [];
   };
 
   return (
@@ -110,90 +130,107 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
         <div>
           <span>CADASTROS MESTRES</span>
           <h2>A base operacional do ERP</h2>
-          <p>As estruturas ficam disponíveis agora e permanecem vazias até o cadastro dos dados reais da To Do Green.</p>
-        </div>
-        <div className="tdg-page-actions">
-          <button className="tdg-action" type="button" onClick={() => setShowForm((value) => !value)}>
-            <Icon size={16} />{showForm ? "Fechar" : `Novo ${currentTab.singular}`}
-          </button>
+          <p>Cadastros que se correlacionam vivem na mesma tela — veículo com motorista, material com depósito e fornecedor. Os demais ficam sozinhos.</p>
         </div>
       </header>
 
-      <nav className="tdg-registry-tabs" aria-label="Cadastros mestres do ERP">
-        {TABS.map((item) => {
-          const count = item.source === "records" ? registros?.[item.id]?.length : external[item.id]?.length;
+      <nav className="tdg-registry-tabs" aria-label="Grupos de cadastros do ERP">
+        {GROUPS.map((item) => {
+          const total = item.tabs.reduce((sum, tabId) => sum + listaDe(tabId).length, 0);
           return (
             <button
               type="button"
               key={item.id}
-              className={tab === item.id ? "active" : ""}
-              onClick={() => setTab(item.id)}
+              className={grupoId === item.id ? "active" : ""}
+              onClick={() => setGrupoId(item.id)}
             >
-              {item.title}{count ? ` (${count})` : ""}
+              {item.title}{total ? ` (${total})` : ""}
             </button>
           );
         })}
       </nav>
 
-      {showForm && (
-        <form className="tdg-panel tdg-form" onSubmit={submit}>
-          {(formConfig.fields || []).map(([field, label, type = "text", required = false, selectKey]) => (
-            <label key={field}>
-              <span>{label}</span>
-              {type === "select" ? (
-                <select value={form[field] ?? ""} onChange={(event) => change(field, event.target.value)} required={required}>
-                  {(SELECTS[selectKey] || []).map(([optionValue, optionLabel]) => (
-                    <option value={optionValue} key={optionValue || "empty"}>{optionLabel}</option>
-                  ))}
-                </select>
-              ) : type === "unit" ? (
-                <select value={form[field] || "UN"} onChange={(event) => change(field, event.target.value)}>
-                  {UNITS.map((unit) => <option value={unit.code} key={unit.code}>{unit.code} — {unit.name}</option>)}
-                </select>
-              ) : (
-                <input
-                  type={type}
-                  value={form[field] ?? ""}
-                  onChange={(event) => change(field, event.target.value)}
-                  required={required}
-                  min={type === "number" ? "0" : undefined}
-                  step={type === "number" ? "any" : undefined}
-                  maxLength={type === "number" ? undefined : 500}
-                />
-              )}
-            </label>
-          ))}
-          <div className="tdg-form-actions full">
-            <button className="tdg-action" type="submit" disabled={saving}>{saving ? "Cadastrando..." : "Cadastrar"}</button>
-            <button type="button" onClick={() => setShowForm(false)}>Cancelar</button>
-          </div>
-        </form>
-      )}
+      {grupo.tabs.map((tabId) => {
+        const cfg = TABS.find((item) => item.id === tabId);
+        if (!cfg) return null;
+        const lista = listaDe(tabId);
+        const columns = COLUMNS[tabId] || [];
+        const formConfig = FORMS[tabId] || { fields: [] };
+        const Icon = cfg.icon;
+        return (
+          <section className="tdg-panel" key={tabId}>
+            <div className="tdg-section-head">
+              <div>
+                <span className="tdg-kicker">{cfg.title.toUpperCase()}</span>
+                <h3>{cfg.title}{lista.length ? ` (${lista.length})` : ""}</h3>
+              </div>
+              <button
+                className="tdg-action"
+                type="button"
+                onClick={() => (formTab === tabId ? setFormTab("") : abrirFormulario(tabId))}
+              >
+                <Icon size={16} />{formTab === tabId ? "Fechar" : `Novo ${cfg.singular}`}
+              </button>
+            </div>
 
-      <section className="tdg-panel">
-        <div className="tdg-section-head">
-          <div><span className="tdg-kicker">{currentTab.title.toUpperCase()}</span><h2>{currentTab.title}</h2></div>
-          <Icon size={22} />
-        </div>
-        {loading ? (
-          <p className="tdg-empty">Carregando cadastros...</p>
-        ) : !list.length ? (
-          <p className="tdg-empty">Nenhum {currentTab.singular} cadastrado ainda.</p>
-        ) : (
-          <div className="tdg-table-wrap">
-            <table className="tdg-table">
-              <thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
-              <tbody>
-                {list.map((record) => (
-                  <tr key={record.id}>
-                    {rowFor(tab, record).map((cell, index) => <td key={`${record.id}-${index}`}>{cell}</td>)}
-                  </tr>
+            {formTab === tabId && (
+              <form className="tdg-form tdg-registry-form" onSubmit={submit}>
+                {(formConfig.fields || []).map(([field, label, type = "text", required = false, selectKey]) => (
+                  <label key={field}>
+                    <span>{label}</span>
+                    {type === "select" ? (
+                      <select value={form[field] ?? ""} onChange={(event) => change(field, event.target.value)} required={required}>
+                        {(SELECTS[selectKey] || []).map(([optionValue, optionLabel]) => (
+                          <option value={optionValue} key={optionValue || "empty"}>{optionLabel}</option>
+                        ))}
+                      </select>
+                    ) : type === "unit" ? (
+                      <select value={form[field] || "UN"} onChange={(event) => change(field, event.target.value)}>
+                        {UNITS.map((unit) => <option value={unit.code} key={unit.code}>{unit.code} — {unit.name}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type={type}
+                        value={form[field] ?? ""}
+                        onChange={(event) => change(field, event.target.value)}
+                        required={required}
+                        min={type === "number" ? "0" : undefined}
+                        step={type === "number" ? "any" : undefined}
+                        maxLength={type === "number" ? undefined : 500}
+                      />
+                    )}
+                  </label>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                <div className="tdg-form-actions full">
+                  <button className="tdg-action" type="submit" disabled={saving}>{saving ? "Cadastrando..." : "Cadastrar"}</button>
+                  <button type="button" onClick={() => setFormTab("")}>Cancelar</button>
+                </div>
+              </form>
+            )}
+
+            {erros[tabId] ? (
+              <p className="tdg-empty">{erros[tabId]}</p>
+            ) : carregando[tabId] ? (
+              <p className="tdg-empty">Carregando cadastros...</p>
+            ) : !lista.length ? (
+              <p className="tdg-empty">Nenhum {cfg.singular} cadastrado ainda.</p>
+            ) : (
+              <div className="tdg-table-wrap">
+                <table className="tdg-table">
+                  <thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
+                  <tbody>
+                    {lista.map((record) => (
+                      <tr key={record.id}>
+                        {rowFor(tabId, record).map((cell, index) => <td key={`${record.id}-${index}`}>{cell}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

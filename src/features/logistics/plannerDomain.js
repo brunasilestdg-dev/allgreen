@@ -9,6 +9,8 @@
 //
 // 1. **Visibilidade** — um plano é `private` (só quem criou vê) ou `shared`
 //    (todo o espaço de trabalho vê). É o "pode ser compartilhado ou não".
+//    Um plano privado pode ainda listar PESSOAS ESPECÍFICAS (`members`), que
+//    passam a vê-lo e a trabalhar nas tarefas — pedido da titular (30/08).
 //    `podeVerPlano` é a regra; o worker a repete no SQL, o front a usa para não
 //    mostrar botão que o servidor recusaria.
 //
@@ -57,6 +59,23 @@ export const DEFAULT_BUCKET = { id: "a_fazer", nome: "A fazer" };
 export const normalizarVisibilidade = (v) =>
   VISIBILITY_IDS.includes(texto(v)) ? texto(v) : "private";
 
+// Pessoas específicas de um plano privado. O banco só conhece
+// private/shared; a lista estende o alcance do privado sem criar um terceiro
+// valor de visibilidade. Teto de 60 para o JSON não crescer sem limite.
+export const normalizarMembros = (valor) =>
+  [...new Set(lista(valor).map((v) => texto(v)).filter(Boolean))].slice(0, 60);
+
+// O texto que a tela mostra sobre quem alcança o plano — uma frase só, para a
+// pílula do plano e o modal de compartilhamento contarem a mesma história.
+export const resumoDoCompartilhamento = (plano) => {
+  if (normalizarVisibilidade(plano?.visibility || plano?.visibilidade) === "shared")
+    return "Todo o espaço de trabalho vê.";
+  const n = normalizarMembros(plano?.members || plano?.membros).length;
+  return n === 0
+    ? "Só quem criou vê."
+    : `Quem criou e mais ${n} pessoa(s) escolhida(s).`;
+};
+
 export const normalizarProgresso = (v) =>
   PROGRESS_IDS.includes(texto(v)) ? texto(v) : "nao_iniciada";
 
@@ -87,6 +106,10 @@ export const podeVerPlano = (plano, { userId, role } = {}) => {
   if (!plano) return false;
   if (normalizarVisibilidade(plano.visibility || plano.visibilidade) === "shared") return true;
   if (["owner", "admin"].includes(role)) return true;
+  // Pessoa listada no plano privado vê o plano — é o compartilhamento com
+  // pessoas específicas.
+  if (Boolean(userId) && normalizarMembros(plano.members || plano.membros).includes(texto(userId)))
+    return true;
   const dono = texto(plano.ownerUserId || plano.owner_user_id);
   return Boolean(userId) && dono === texto(userId);
 };

@@ -16,6 +16,7 @@
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
 import {
   normalizarBaldes,
+  normalizarMembros,
   normalizarPrioridade,
   normalizarProgresso,
   normalizarVisibilidade,
@@ -66,6 +67,9 @@ const planoDaLinha = (row) => ({
   visibility: row.visibility,
   color: row.color,
   buckets: parse(row.buckets_json, []),
+  // Pessoas específicas de um plano privado (0077). Linha anterior à
+  // migração volta [] pelo DEFAULT da coluna.
+  members: parse(row.members_json, []),
   ownerUserId: row.owner_user_id,
   campos: parse(row.fields_json, {}),
   revision: row.revision,
@@ -101,10 +105,17 @@ const tarefaDaLinha = (row) => ({
 // ---------------------------------------------------------------------------
 
 // Corte de visibilidade como SQL. Admin/owner veem o espaço inteiro; os demais
-// veem os compartilhados e os próprios privados.
-const recorteVisibilidade = (access) => {
+// veem os compartilhados, os próprios privados e os privados em que foram
+// listados como pessoa específica (json_each sobre members_json — espelho em
+// SQL do podeVerPlano do plannerDomain). O prefixo serve para a consulta de
+// "minhas tarefas", onde o plano entra por JOIN como `p`.
+const recorteVisibilidade = (access, p = "") => {
   if (ehAdmin(access)) return { sql: "", params: [] };
-  return { sql: " AND (visibility = 'shared' OR owner_user_id = ?)", params: [access.userId] };
+  return {
+    sql: ` AND (${p}visibility = 'shared' OR ${p}owner_user_id = ?
+      OR EXISTS (SELECT 1 FROM json_each(${p}members_json) WHERE json_each.value = ?))`,
+    params: [access.userId, access.userId],
+  };
 };
 
 const listarPlanos = async (env, access) => {
@@ -137,20 +148,34 @@ const colunasPlano = (corpo) => ({
   fields_json: JSON.stringify(objeto(corpo.campos)),
 });
 
+// As pessoas específicas de um plano vêm do navegador: id que não é gente do
+// espaço é descartado em silêncio — a mesma régua do responsável de tarefa.
+// A lista sobrevive à troca de visibilidade (voltar de 'shared' para privado
+// não perde quem foi escolhido).
+const membrosValidados = async (env, access, valor) => {
+  const ids = normalizarMembros(valor);
+  const validos = [];
+  for (const id of ids) {
+    if (await responsavelValidado(env, access, id)) validos.push(id);
+  }
+  return validos;
+};
+
 const criarPlano = async (env, access, corpo) => {
   const erros = validarPlano({ name: corpo.name || corpo.nome });
   if (erros.length) return json({ error: "Plano com pendências.", erros }, 400);
   const dados = colunasPlano(corpo);
+  const membros = await membrosValidados(env, access, corpo.members || corpo.membros);
   const id = crypto.randomUUID();
   const agora = new Date().toISOString();
   await env.DB.prepare(
     `INSERT INTO todogreen_planner_plans
       (id, tenant_id, workspace_owner_id, name, description, visibility, color, buckets_json,
-       owner_user_id, fields_json, revision, created_by, updated_by, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?, ?,?,1,?,?,?,?)`,
+       members_json, owner_user_id, fields_json, revision, created_by, updated_by, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?, ?,?,?,1,?,?,?,?)`,
   ).bind(
     id, TENANT_ID, access.ownerId, dados.name, dados.description, dados.visibility,
-    dados.color, dados.buckets_json, access.userId, dados.fields_json,
+    dados.color, dados.buckets_json, JSON.stringify(membros), access.userId, dados.fields_json,
     access.userId, access.userId, agora, agora,
   ).run();
   const row = await env.DB.prepare("SELECT * FROM todogreen_planner_plans WHERE id = ?").bind(id).first();
@@ -170,15 +195,17 @@ const atualizarPlano = async (env, access, id, corpo) => {
   if (numero(corpo.revision) !== atual.revision)
     return json({ error: "O plano foi alterado por outra pessoa. Recarregue." }, 409);
 
-  const dados = colunasPlano({ ...planoDaLinha(atual), ...corpo });
+  const mesclado = { ...planoDaLinha(atual), ...corpo };
+  const dados = colunasPlano(mesclado);
+  const membros = await membrosValidados(env, access, mesclado.members ?? mesclado.membros);
   await env.DB.prepare(
     `UPDATE todogreen_planner_plans
-       SET name = ?, description = ?, visibility = ?, color = ?, buckets_json = ?, fields_json = ?,
+       SET name = ?, description = ?, visibility = ?, color = ?, buckets_json = ?, members_json = ?, fields_json = ?,
            revision = revision + 1, updated_by = ?, updated_at = ?
       WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
   ).bind(
     dados.name, dados.description, dados.visibility, dados.color, dados.buckets_json,
-    dados.fields_json, access.userId, new Date().toISOString(), id, TENANT_ID, access.ownerId,
+    JSON.stringify(membros), dados.fields_json, access.userId, new Date().toISOString(), id, TENANT_ID, access.ownerId,
   ).run();
   const row = await env.DB.prepare("SELECT * FROM todogreen_planner_plans WHERE id = ?").bind(id).first();
   return json(planoDaLinha(row));
@@ -225,9 +252,7 @@ const listarTarefas = async (env, access, planId) => {
 // aparece, mesmo que por algum engano eu esteja como responsável.
 const minhasTarefas = async (env, access, url) => {
   const { limit, offset } = paginacao(url);
-  const corte = ehAdmin(access)
-    ? { sql: "", params: [] }
-    : { sql: " AND (p.visibility = 'shared' OR p.owner_user_id = ?)", params: [access.userId] };
+  const corte = recorteVisibilidade(access, "p.");
   const incluirConcluidas = url.searchParams.get("concluidas") === "1";
   const filtroStatus = incluirConcluidas ? "" : " AND t.progress != 'concluida'";
   const { results } = await env.DB.prepare(
