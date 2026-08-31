@@ -66,5 +66,9 @@ export default defineConfig({
     maxWorkers: 4,
     testTimeout: 20_000,
     hookTimeout: 20_000,
+    // O prazo de espera das consultas assíncronas da testing-library (findBy,
+    // waitFor) é OUTRO, e o padrão de 1s é o que estourava só na CI. Fica no
+    // setup para valer em todo teste, não em quem lembrar de passar a opção.
+    setupFiles: ["./vitest.setup.js"],
   },
 })

@@ -249,6 +249,16 @@ quantos resultados vieram.
   e a explicação na tela (`pages/SaudeDaContaPanel.jsx`), com as notas editáveis
   no próprio painel. Mudar peso ou gatilho num lugar só faria a tela ensinar uma
   regra e o número obedecer a outra.
+- **Importação do pipeline do quadro externo**: o export do quadro de Novos
+  Negócios entra por `pipelineImportDomain.js` (puro) + `ImportarPipelineModal`.
+  A conta usa o MESMO id estável do resto do CRM
+  (`crmSpreadsheetImportDomain.js#idEstavelDaConta`) — importar pela planilha de
+  CRM ou pelo quadro cai na mesma conta, nunca em duas. Reimportar é o caso
+  normal (o quadro recebe update toda semana): oportunidade é reconhecida pelo
+  nome do projeto sem o prefixo "Projeto/Proposta" e interação pelo par assunto
+  + data. Linha sem prefixo de projeto, sem grupo com dona e sem etapa de funil
+  é trabalho interno e entra SEM criar conta de cliente — conta inventada suja a
+  carteira para sempre. O que não encaixa vira aviso na prévia, não palpite.
 - **Menu da vertical**: `PRIMARY_NAVIGATION` (`LogisticsVertical.jsx`) é a lista
   de áreas; cada tela aparece em UMA área e em um item só — dois rótulos para a
   mesma rota é repetição, e `moduleNavLabels.test.js` reprova. Cadastro mora na

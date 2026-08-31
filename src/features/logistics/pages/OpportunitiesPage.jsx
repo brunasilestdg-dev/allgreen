@@ -12,10 +12,12 @@ import {
   Save,
   Search,
   Target,
+  Upload,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import ComentariosPanel from "./ComentariosPanel.jsx";
 import InteracoesPanel from "./InteracoesPanel.jsx";
+import ImportarPipelineModal from "./ImportarPipelineModal.jsx";
 import { interacoesVisiveis } from "../interacoesDomain.js";
 import TopScrollRow from "./TopScrollRow.jsx";
 import {
@@ -591,6 +593,7 @@ export default function OpportunitiesPage({
   onComment,
   interactions = [],
   onInteraction,
+  authHeaders,
   onCreate,
   onUpdate,
   onNavigate,
@@ -664,6 +667,7 @@ export default function OpportunitiesPage({
     setForm((atual) => ({ ...atual, [key]: event.target.value }));
 
   const [novaAberta, setNovaAberta] = useState(false);
+  const [importacaoAberta, setImportacaoAberta] = useState(false);
 
   const salvar = async (event) => {
     event.preventDefault();
@@ -711,6 +715,11 @@ export default function OpportunitiesPage({
           </p>
         </div>
         <div className="tdg-page-actions">
+          {authHeaders && (
+            <button type="button" onClick={() => setImportacaoAberta(true)}>
+              <Upload size={16} /> Importar pipeline
+            </button>
+          )}
           <button type="button" className="tdg-action" onClick={() => setNovaAberta(true)}>
             <Plus size={16} /> Nova oportunidade
           </button>
@@ -889,6 +898,16 @@ export default function OpportunitiesPage({
           onInteraction={onInteraction}
         />
       )}
+      <ImportarPipelineModal
+        aberto={importacaoAberta}
+        onClose={() => setImportacaoAberta(false)}
+        authHeaders={authHeaders}
+        opportunities={opportunities}
+        interactions={interactions}
+        onCriarOportunidade={onCreate}
+        onCriarInteracao={onInteraction}
+        setToast={setToast}
+      />
     </section>
   );
 }

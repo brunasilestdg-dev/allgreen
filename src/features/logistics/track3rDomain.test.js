@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   PERGUNTAS_AO_TRACK3R,
+  achatarOcorrenciaDoWebhook,
   casarEmbarcador,
+  eventoDoCodigoDeOcorrencia,
   hashDoDocumento,
   mapearStatusParaEvento,
   normalizarDocumento,
+  normalizarOcorrenciaDoWebhook,
   normalizeDate,
   normalizeDateTime,
   normalizeDocumentKind,
@@ -381,5 +384,149 @@ describe("validação e retrato", () => {
     expect(PERGUNTAS_AO_TRACK3R.length).toBeGreaterThanOrEqual(6);
     expect(PERGUNTAS_AO_TRACK3R.join(" ")).toMatch(/API REST/);
     expect(PERGUNTAS_AO_TRACK3R.join(" ")).toMatch(/carreta/);
+  });
+});
+
+// O payload é o modelo oficial entregue pela titular (WebHook Envio de
+// Ocorrências/Tracking 5.1.2), com os acentos corrigidos.
+const WEBHOOK = {
+  data_hora_envio: "01/03/2024 15:21:19",
+  cnpj_transportadora: "89516147000142",
+  cnpj_transportadora_unidade_origem: "11222333000101",
+  cnpj_transportadora_unidade_destino: "11222333000101",
+  cnpj_embarcador: "05517785000198",
+  data_prevista: "01/03/2024",
+  data_agendamento: "01/03/2024",
+  encomenda: "22558899",
+  nota_fiscal: {
+    numero: "987654321",
+    serie: "1",
+    chave: "11112222333344445555666677778888999933335555",
+    pedido: "PED123456",
+    pedido_integracao: "PED_INT132456",
+  },
+  recebedor: {
+    tipo: "PORTEIRO",
+    nome: "JOÃO DA SILVA",
+    documento: { tipo: "OUTROS", numero: "123465789X" },
+  },
+  motorista: { cpf: "99944455588", nome: "JOSÉ SILVA", placa: "ABH-1A99" },
+  ocorrencia: {
+    cnpj_transportadora_unidade_atual: "11222333000101",
+    codigo: "03",
+    descricao: "Entregue",
+    data: "01/03/2024 15:21:19",
+    observacao: "Entregue",
+    comprovante: { caminho: "https://tmstransportador.blob.core.windows.net/comprovante/1.jpg" },
+    assinatura: { caminho: "https://tmstransportador.blob.core.windows.net/assinatura/1.jpg" },
+    latitude: -23.49532,
+    longitude: -46.84704,
+  },
+};
+
+describe("webhook de ocorrências do TRACK3R", () => {
+  it("achata o corpo aninhado no vocabulário que o normalizador já lê", () => {
+    const linha = achatarOcorrenciaDoWebhook(WEBHOOK);
+    expect(linha).toMatchObject({
+      codigo: "22558899",
+      status: "Entregue",
+      "nota fiscal": "987654321",
+      placa: "ABH-1A99",
+      data: "01/03/2024 15:21:19",
+    });
+  });
+
+  it("produz o registro canônico com o que só o webhook traz", () => {
+    const doc = normalizarOcorrenciaDoWebhook(WEBHOOK);
+    // O que já era canônico continua saindo igual ao do relatório e da API.
+    expect(doc).toMatchObject({
+      externalId: "22558899",
+      kind: "ocorrencia",
+      origem: "webhook",
+      status: "Entregue",
+      invoiceNumber: "987654321",
+      invoiceKey: "11112222333344445555666677778888999933335555",
+      vehiclePlate: "ABH1A99",
+      driverName: "JOSÉ SILVA",
+      occurredAt: "2024-03-01T15:21:19",
+      promisedAt: "2024-03-01",
+    });
+    // E o que é do webhook: prova de entrega, coordenada e recebedor.
+    expect(doc).toMatchObject({
+      occurrenceCode: "03",
+      eventoPreferido: "entrega",
+      orderId: "22558899",
+      invoiceSeries: "1",
+      purchaseOrder: "PED123456",
+      receiverName: "JOÃO DA SILVA",
+      receiverKind: "PORTEIRO",
+      receiverDocument: "123465789X",
+      latitude: -23.49532,
+      longitude: -46.84704,
+    });
+    expect(doc.proofUrl).toContain("comprovante/1.jpg");
+    expect(doc.signatureUrl).toContain("assinatura/1.jpg");
+    // O payload guardado é o ORIGINAL, para reprocessar quando o mapa mudar.
+    expect(doc.payload).toBe(WEBHOOK);
+  });
+
+  it("o embarcador entra por CNPJ e o normalizador recusa documento inválido", () => {
+    expect(normalizarOcorrenciaDoWebhook(WEBHOOK).shipperDocument).toBe("05517785000198");
+    const torto = { ...WEBHOOK, cnpj_embarcador: "11111111111111" };
+    expect(normalizarOcorrenciaDoWebhook(torto).shipperDocument).toBe("");
+  });
+
+  it("caminho de comprovante que não é http vira vazio", () => {
+    const hostil = {
+      ...WEBHOOK,
+      ocorrencia: {
+        ...WEBHOOK.ocorrencia,
+        comprovante: { caminho: "javascript:alert(1)" },
+        assinatura: { caminho: "data:text/html;base64,PHNjcmlwdD4=" },
+      },
+    };
+    const doc = normalizarOcorrenciaDoWebhook(hostil);
+    expect(doc.proofUrl).toBe("");
+    expect(doc.signatureUrl).toBe("");
+  });
+
+  it("coordenada fora do mundo não entra", () => {
+    const doc = normalizarOcorrenciaDoWebhook({
+      ...WEBHOOK,
+      ocorrencia: { ...WEBHOOK.ocorrencia, latitude: 999, longitude: "abc" },
+    });
+    expect(doc.latitude).toBeNull();
+    expect(doc.longitude).toBeNull();
+  });
+
+  it("sem a tabela oficial, o código não decide o evento — a descrição decide", () => {
+    // "07" é desconhecido: sem mapa configurado, vale a descrição.
+    const doc = normalizarOcorrenciaDoWebhook({
+      ...WEBHOOK,
+      ocorrencia: { ...WEBHOOK.ocorrencia, codigo: "07", descricao: "Cliente ausente" },
+    });
+    expect(doc.occurrenceCode).toBe("07");
+    expect(doc.eventoPreferido).toBe("");
+    expect(eventoDoCodigoDeOcorrencia("07", {})).toBe("");
+  });
+
+  it("com a tabela configurada, o código manda", () => {
+    const mapa = { 7: "Nova tentativa agendada", "03": "entrega" };
+    expect(eventoDoCodigoDeOcorrencia("07", mapa)).toBe("reagendamento");
+    expect(eventoDoCodigoDeOcorrencia("03", mapa)).toBe("entrega");
+    const doc = normalizarOcorrenciaDoWebhook(
+      { ...WEBHOOK, ocorrencia: { ...WEBHOOK.ocorrencia, codigo: "07", descricao: "Cliente ausente" } },
+      { ocorrenciaPorCodigo: mapa },
+    );
+    expect(doc.eventoPreferido).toBe("reagendamento");
+  });
+
+  it("corpo vazio não quebra e não inventa nada", () => {
+    const doc = normalizarOcorrenciaDoWebhook({});
+    expect(doc.kind).toBe("ocorrencia");
+    expect(doc.externalId).toBe("");
+    expect(doc.occurredAt).toBe("");
+    expect(doc.proofUrl).toBe("");
+    expect(doc.latitude).toBeNull();
   });
 });

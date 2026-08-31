@@ -233,6 +233,129 @@ export const normalizarDocumento = (bruto = {}, fieldMap = {}) => {
 };
 
 // ---------------------------------------------------------------------------
+// O webhook de ocorrências/tracking
+// ---------------------------------------------------------------------------
+//
+// Especificação entregue pela titular (31/08): o TRACK3R chama a NOSSA API com
+// header `Token`, POST, JSON. O corpo é ANINHADO — nota_fiscal, recebedor,
+// motorista e ocorrencia são objetos —, enquanto `normalizarDocumento` lê linha
+// achatada (relatório e API). Em vez de dois normalizadores, o webhook é achatado
+// PARA o vocabulário que já existe e depois passa pelo mesmo caminho: um registro
+// canônico só, um dedup só, uma projeção só.
+//
+// O que o webhook traz e o relatório não tinha — comprovante, assinatura,
+// coordenada, recebedor, código da ocorrência — entra como campo próprio do
+// registro, porque é exatamente isso que destrava POD, prova de entrega e
+// posição da operação.
+
+// Só http(s) e tamanho sensato. O caminho do comprovante vem de fora e vai
+// parar em atributo de link na tela: um "javascript:" aqui viraria execução no
+// navegador de quem abre a operação.
+const urlSegura = (valor) => {
+  const bruto = texto(valor).slice(0, 1000);
+  if (!/^https?:\/\//i.test(bruto)) return "";
+  return bruto;
+};
+
+const coordenada = (valor, limite) => {
+  // Ausência é null, não zero: 0,0 é um ponto no Golfo da Guiné, e uma operação
+  // sem coordenada apareceria no mapa lá.
+  if (valor === null || valor === undefined || texto(valor) === "") return null;
+  const n = typeof valor === "number" ? valor : Number(texto(valor).replace(",", "."));
+  if (!Number.isFinite(n) || Math.abs(n) > limite) return null;
+  return n;
+};
+
+// A data do webhook vem "01/03/2024 15:21:19" — dd/mm/aaaa com hora. É o mesmo
+// formato que `normalizeDateTime` já entende.
+const ocorrenciaDoPayload = (payload) => (payload && typeof payload.ocorrencia === "object" ? payload.ocorrencia : {}) || {};
+
+// O código da ocorrência é numérico e o documento só revela um ("03" =
+// Entregue). Sem a tabela oficial, o código NÃO decide sozinho o evento: ele é
+// guardado cru e a descrição manda. Quando a titular tiver a lista, ela entra
+// em `field_map_json.ocorrenciaPorCodigo` e passa a mandar — sem tocar em código.
+export const eventoDoCodigoDeOcorrencia = (codigo, mapaDeCodigos = {}) => {
+  const chave = texto(codigo);
+  if (!chave) return "";
+  const declarado = texto(mapaDeCodigos?.[chave] || mapaDeCodigos?.[chave.replace(/^0+/, "")]);
+  if (!declarado) return "";
+  // O valor configurado pode ser o próprio nome do evento ou uma descrição.
+  const direto = ["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"];
+  const normalizado = semAcento(declarado);
+  return direto.includes(normalizado) ? normalizado : mapearStatusParaEvento(declarado);
+};
+
+// O corpo aninhado do webhook vira a linha achatada que o normalizador já lê.
+export const achatarOcorrenciaDoWebhook = (payload = {}) => {
+  const corpo = payload && typeof payload === "object" ? payload : {};
+  const nota = (corpo.nota_fiscal && typeof corpo.nota_fiscal === "object" ? corpo.nota_fiscal : {}) || {};
+  const motorista = (corpo.motorista && typeof corpo.motorista === "object" ? corpo.motorista : {}) || {};
+  const ocorrencia = ocorrenciaDoPayload(corpo);
+  return {
+    // "encomenda" é o identificador do TRACK3R para a remessa — é ele que amarra
+    // todos os eventos da mesma entrega.
+    codigo: texto(corpo.encomenda),
+    "cnpj embarcador": texto(corpo.cnpj_embarcador),
+    "unidade origem": texto(corpo.cnpj_transportadora_unidade_origem),
+    "unidade atual": texto(ocorrencia.cnpj_transportadora_unidade_atual) || texto(corpo.cnpj_transportadora_unidade_destino),
+    status: texto(ocorrencia.descricao),
+    observacao: texto(ocorrencia.observacao),
+    "nota fiscal": texto(nota.numero),
+    chave: texto(nota.chave),
+    placa: texto(motorista.placa),
+    motorista: texto(motorista.nome),
+    "data prevista": texto(corpo.data_prevista),
+    data: texto(ocorrencia.data) || texto(corpo.data_hora_envio),
+  };
+};
+
+// O registro canônico do webhook: o mesmo de sempre, mais o que só o webhook
+// traz. Campo que não vem fica vazio ou nulo — nada é inventado.
+export const normalizarOcorrenciaDoWebhook = (payload = {}, fieldMap = {}) => {
+  const corpo = payload && typeof payload === "object" ? payload : {};
+  const ocorrencia = ocorrenciaDoPayload(corpo);
+  const nota = (corpo.nota_fiscal && typeof corpo.nota_fiscal === "object" ? corpo.nota_fiscal : {}) || {};
+  const recebedor = (corpo.recebedor && typeof corpo.recebedor === "object" ? corpo.recebedor : {}) || {};
+  const documentoDoRecebedor = (recebedor.documento && typeof recebedor.documento === "object" ? recebedor.documento : {}) || {};
+  const motorista = (corpo.motorista && typeof corpo.motorista === "object" ? corpo.motorista : {}) || {};
+
+  const base = normalizarDocumento(achatarOcorrenciaDoWebhook(corpo), fieldMap);
+  const codigo = texto(ocorrencia.codigo).slice(0, 20);
+  const porCodigo = eventoDoCodigoDeOcorrencia(codigo, fieldMap?.ocorrenciaPorCodigo);
+
+  return {
+    ...base,
+    // O tipo do documento do webhook é sempre ocorrência: é um EVENTO da
+    // remessa, não um documento novo de coleta.
+    kind: "ocorrencia",
+    origem: "webhook",
+    occurrenceCode: codigo,
+    // Quando a tabela oficial de códigos estiver configurada, ela manda; sem
+    // ela, vale a descrição — e "" quando nenhuma das duas reconhece.
+    eventoPreferido: porCodigo || mapearStatusParaEvento(texto(ocorrencia.descricao)),
+    orderId: texto(corpo.encomenda).slice(0, 120),
+    invoiceSeries: texto(nota.serie).slice(0, 10),
+    purchaseOrder: texto(nota.pedido).slice(0, 120),
+    integrationOrder: texto(nota.pedido_integracao).slice(0, 120),
+    carrierDocument: normalizeDocument(corpo.cnpj_transportadora),
+    scheduledAt: normalizeDateTime(corpo.data_agendamento),
+    sentAt: normalizeDateTime(corpo.data_hora_envio),
+    driverDocument: normalizeDocument(motorista.cpf),
+    receiverName: texto(recebedor.nome).slice(0, 200),
+    receiverKind: texto(recebedor.tipo).slice(0, 60),
+    receiverDocumentKind: texto(documentoDoRecebedor.tipo).slice(0, 60),
+    receiverDocument: texto(documentoDoRecebedor.numero).slice(0, 60),
+    proofUrl: urlSegura(ocorrencia?.comprovante?.caminho),
+    signatureUrl: urlSegura(ocorrencia?.assinatura?.caminho),
+    latitude: coordenada(ocorrencia.latitude, 90),
+    longitude: coordenada(ocorrencia.longitude, 180),
+    // O payload guardado é o ORIGINAL, não a linha achatada: é ele que permite
+    // reprocessar quando o mapeamento mudar.
+    payload: corpo,
+  };
+};
+
+// ---------------------------------------------------------------------------
 // Deduplicação
 // ---------------------------------------------------------------------------
 
