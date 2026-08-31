@@ -259,6 +259,31 @@ quantos resultados vieram.
   + data. Linha sem prefixo de projeto, sem grupo com dona e sem etapa de funil
   é trabalho interno e entra SEM criar conta de cliente — conta inventada suja a
   carteira para sempre. O que não encaixa vira aviso na prévia, não palpite.
+- **A oportunidade tem NOME, e o nome não é o cliente**: a coluna `title`
+  (migração `0081`) guarda o nome do negócio; `tituloDaOportunidade()`
+  (`opportunityIntelligenceDomain.js`) cai em nome próprio → `nomeDoProjeto` do
+  quadro → `cliente · estágio`. Não voltar a exibir `registro.cliente` como
+  título: uma conta com três frentes abertas vira três cartões idênticos, que é
+  exatamente o que a importação do quadro expôs. E não existe "sem título" —
+  negócio sem nome ainda é o negócio de alguém numa etapa.
+- **O que a IA sabe da To Do Green é DADO, não prompt**: `businessContextDomain.js`
+  (semente auditada + `blocoDeContexto`) e a tabela `todogreen_business_context`
+  (migração `0082`), lidas por `dossieDoEspaco()` em `todogreen-semente.js` e
+  injetadas no CABEÇALHO da pergunta, nunca no `system` (o system é igual para
+  todo espaço e fica em cache; o dossiê é de um espaço só). Regras que não se
+  quebram: todo fato carrega FONTE e data de posição; `sigilo` restrito não
+  entra no prompt de quem não tem `finance:manage` — não chega ao modelo, então
+  não há o que vazar; a semente do código NÃO carrega CPF, conta bancária nem
+  CNH (isso se cadastra na tela, no espaço da titular); e fato ruim documentado
+  (apólice vencida, frota divergente) vale mais que fato bom inventado — o
+  assistente precisa poder dizer que o número está a confirmar. A escrita exige
+  `business:teach`; a leitura é aberta a quem entra na vertical. A coleção é
+  `escopoDeCarteira: false`: o dossiê é da empresa, não da carteira de ninguém.
+- **Aprender é ato confirmado**: a ação `aprender` do Plantû PROPÕE, a pessoa
+  CONFIRMA e o servidor GRAVA — mesma regra das outras ações, porque um modelo
+  que escreve conhecimento no banco a partir de texto livre aprende também o que
+  alguém plantar numa mensagem. Reensinar pela mesma `fact_key` corrige em vez
+  de empilhar duas versões contraditórias que o modelo leria juntas.
 - **Menu da vertical**: `PRIMARY_NAVIGATION` (`LogisticsVertical.jsx`) é a lista
   de áreas; cada tela aparece em UMA área e em um item só — dois rótulos para a
   mesma rota é repetição, e `moduleNavLabels.test.js` reprova. Cadastro mora na

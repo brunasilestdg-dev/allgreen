@@ -25,6 +25,8 @@ import {
   analisarOportunidade,
   normalizarOportunidade,
   resumirPipeline,
+  subtituloDaOportunidade,
+  tituloDaOportunidade,
 } from "../opportunityIntelligenceDomain.js";
 import { montarForecast, pendenciasDoForecast } from "../forecastDomain.js";
 import {
@@ -58,6 +60,7 @@ const CAMPOS_CONTRATO = [
 ];
 
 const FORM_VAZIO = {
+  titulo: "",
   clientId: "",
   cliente: "",
   productId: "middle-mile",
@@ -80,6 +83,10 @@ const FORM_VAZIO = {
 const gravidadeRotulo = { alta: "Crítico", media: "Atenção", baixa: "Observação" };
 
 const CAMPOS_ESTUDO = [
+  // O nome do negócio entra aqui porque este é o único lugar onde uma
+  // oportunidade JÁ criada pode ser editada — sem ele, os 67 projetos que
+  // vieram do quadro ficariam presos ao nome que a importação deu.
+  "titulo",
   "origin",
   "destination",
   "distanciaKm",
@@ -172,7 +179,7 @@ function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast, comment
   };
 
   return (
-    <Modal title={`Estudo de eletrificação · ${registro.cliente}`} onClose={onClose} wide>
+    <Modal title={`Estudo de eletrificação · ${tituloDaOportunidade(registro)}`} onClose={onClose} wide>
       <form className="tdg-estudo-form" onSubmit={salvar}>
         <p className="tdg-estudo-intro">
           O diagnóstico alimenta a precificação, o plano do piloto e o relatório. Campos sem
@@ -182,6 +189,7 @@ function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast, comment
         <fieldset>
           <legend>1. Rota e demanda</legend>
           <div className="tdg-estudo-grid">
+            <CampoEstudo form={form} campo="titulo" rotulo="Nome do negócio" onChange={mudar} />
             <CampoEstudo form={form} campo="origin" rotulo="Origem" onChange={mudar} />
             <CampoEstudo form={form} campo="destination" rotulo="Destino" onChange={mudar} />
             <CampoEstudo form={form} campo="distanciaKm" rotulo="Distância por viagem (km)" tipo="number" onChange={mudar} />
@@ -443,9 +451,11 @@ function CartaoOportunidade({ registro, analise, jornada, aberta, alternar, onEd
       <button type="button" className="tdg-opp-head" onClick={alternar} aria-expanded={aberta}>
         {aberta ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
         <span className="tdg-opp-head-nome">
-          <strong>{registro.cliente || "Oportunidade sem cliente"}</strong>
+          <strong>{tituloDaOportunidade(registro)}</strong>
           <small>
-            {analise.estagio} · {financeiro.probabilidade}% de probabilidade
+            {[subtituloDaOportunidade(registro), analise.estagio, `${financeiro.probabilidade}% de probabilidade`]
+              .filter(Boolean)
+              .join(" · ")}
           </small>
         </span>
         <span className="tdg-opp-head-valor">
@@ -659,7 +669,7 @@ export default function OpportunitiesPage({
   }), [registros]);
   const visiveis = useMemo(() => registros.filter((registro) => {
     const stageMatches = filtroEstagio === "todas" || registro.estagio === filtroEstagio;
-    const queryMatches = `${registro.cliente} ${registro.nextStep || ""} ${registro.source || ""}`.toLowerCase().includes(busca.toLowerCase());
+    const queryMatches = `${tituloDaOportunidade(registro)} ${registro.cliente} ${registro.nextStep || ""} ${registro.source || ""}`.toLowerCase().includes(busca.toLowerCase());
     return stageMatches && queryMatches;
   }), [busca, filtroEstagio, registros]);
 
@@ -761,6 +771,14 @@ export default function OpportunitiesPage({
       <form className="tdg-client-admin-form tdg-form-em-modal" onSubmit={salvar}>
         <div className="tdg-form-row">
           <label>
+            <span>Nome do negócio</span>
+            <input
+              value={form.titulo}
+              onChange={campo("titulo")}
+              placeholder="Middle Mile Sorocaba, Same Day, retomada..."
+            />
+          </label>
+          <label>
             <span>Cliente</span>
             {clients.length ? <select required value={form.clientId} onChange={(event) => { const client = clients.find((item) => item.id === event.target.value); setForm((current) => ({ ...current, clientId: event.target.value, cliente: client?.name || "" })); }}><option value="">Selecione a conta</option>{clients.map((client) => <option value={client.id} key={client.id}>{client.name}</option>)}</select> : <input required value={form.cliente} onChange={campo("cliente")} />}
           </label>
@@ -856,8 +874,9 @@ export default function OpportunitiesPage({
                     </header>
                     <div className="tdg-opp-kb-body">
                       {itens.map((registro) => (
-                        <button type="button" className="tdg-opp-kb-card" key={registro.id} onClick={() => setEditandoId(registro.id)} title={registro.cliente}>
-                          <span>{registro.cliente || "Sem conta"}</span>
+                        <button type="button" className="tdg-opp-kb-card" key={registro.id} onClick={() => setEditandoId(registro.id)} title={`${tituloDaOportunidade(registro)}${subtituloDaOportunidade(registro) ? ` — ${subtituloDaOportunidade(registro)}` : ""}`}>
+                          <span>{tituloDaOportunidade(registro)}</span>
+                          {subtituloDaOportunidade(registro) && <em>{subtituloDaOportunidade(registro)}</em>}
                           <b>{BRL.format(analisarOportunidade(registro).financeiro.valorContrato)}</b>
                         </button>
                       ))}

@@ -6,10 +6,15 @@
 // recente da oportunidade (ou o próximo passo registrado). No rodapé, quem
 // esfriou: aberta e parada há duas semanas ou mais, candidata a follow-up.
 //
-// Movimento é fato registrado, não impressão: a última interação gravada na
-// oportunidade ou um comentário novo. Sem registro, não há avanço — é a
-// mesma régua do resto da vertical ("o CRM não cria atividades que não
+// Movimento é fato registrado, não impressão: uma INTERAÇÃO registrada
+// (reunião com ata, ligação, visita, tentativa de contato), um comentário novo
+// ou a última interação carimbada na oportunidade. Sem registro, não há avanço —
+// é a mesma régua do resto da vertical ("o CRM não cria atividades que não
 // aconteceram").
+//
+// As três fontes entram juntas de propósito: quem registra a ata da reunião não
+// deveria precisar comentar de novo para a oportunidade aparecer aqui. Vale a
+// mais recente das três, e é dela que sai a frase do avanço.
 
 import { estagioValido } from "./opportunityIntelligenceDomain.js";
 
@@ -26,16 +31,34 @@ const numero = (valor) => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
-export function avancosDaSemana({ oportunidades = [], comentarios = [], agora = Date.now() } = {}) {
-  // O comentário mais novo de cada oportunidade é a voz do avanço.
-  const ultimoComentarioPor = new Map();
-  for (const item of Array.isArray(comentarios) ? comentarios : []) {
-    if (!item?.opportunityId) continue;
-    const atual = ultimoComentarioPor.get(item.opportunityId);
-    if (!atual || instante(item.criadoEm) > instante(atual.criadoEm)) {
-      ultimoComentarioPor.set(item.opportunityId, item);
-    }
-  }
+// Uma interação vira avanço com a data em que ACONTECEU (não a da digitação) e
+// com o assunto como frase — a ata inteira não cabe num cartão, e o assunto é o
+// que a pessoa escreveu para resumir.
+const doRegistro = (item) => {
+  if (!item) return null;
+  const ehInteracao = item.ocorridaEm !== undefined || item.assunto !== undefined;
+  const quando = ehInteracao
+    ? Math.max(instante(item.ocorridaEm), instante(String(item.ocorridaEm || "").slice(0, 10)))
+    : instante(item.criadoEm);
+  const texto = ehInteracao
+    ? String(item.assunto || item.ata || "").trim()
+    : String(item.comentario || "").trim();
+  return quando > 0 ? { quando, texto } : null;
+};
+
+export function avancosDaSemana({ oportunidades = [], comentarios = [], interacoes = [], agora = Date.now() } = {}) {
+  // O registro mais novo de cada oportunidade — comentário ou interação — é a
+  // voz do avanço.
+  const ultimoRegistroPor = new Map();
+  const considerar = (opportunityId, candidato) => {
+    if (!opportunityId || !candidato) return;
+    const atual = ultimoRegistroPor.get(opportunityId);
+    if (!atual || candidato.quando > atual.quando) ultimoRegistroPor.set(opportunityId, candidato);
+  };
+  for (const item of Array.isArray(comentarios) ? comentarios : [])
+    considerar(item?.opportunityId, doRegistro(item));
+  for (const item of Array.isArray(interacoes) ? interacoes : [])
+    considerar(item?.opportunityId, doRegistro(item));
 
   const inicioDaJanela = agora - JANELA_DO_AVANCO_DIAS * DIA;
   const comMovimento = [];
@@ -46,10 +69,10 @@ export function avancosDaSemana({ oportunidades = [], comentarios = [], agora = 
     // Perdida saiu do jogo: nem avanço, nem follow-up.
     if (estagio === "Fechada perdida") continue;
 
-    const comentario = ultimoComentarioPor.get(bruto?.id);
+    const registro = ultimoRegistroPor.get(bruto?.id);
     const ultimaInteracao = Math.max(
       instante(bruto?.lastInteractionAt || bruto?.ultimaInteracaoEm),
-      instante(comentario?.criadoEm),
+      registro?.quando || 0,
     );
     const valorMensal = numero(bruto?.valorMensal);
     const item = {
@@ -59,7 +82,7 @@ export function avancosDaSemana({ oportunidades = [], comentarios = [], agora = 
       estagio,
       valorMensal,
       valor: valorMensal || numero(bruto?.valorContrato) || numero(bruto?.value),
-      nota: String(comentario?.comentario || bruto?.nextStep || "").trim(),
+      nota: registro?.texto || String(bruto?.nextStep || "").trim(),
       diasParado: ultimaInteracao > 0 ? Math.floor((agora - ultimaInteracao) / DIA) : null,
     };
 

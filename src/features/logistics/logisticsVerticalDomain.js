@@ -149,14 +149,19 @@ export const TODO_GREEN_PERMISSION_KEYS = Object.freeze(
 export const TODO_GREEN_PERMISSIONS = {
   owner: ["*"],
   admin: ["*"],
-  lideranca_comercial: ["read", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
+  // `business:teach` edita o dossiê que o Plantû lê antes de responder sobre a
+  // To Do Green. Quem tem essa permissão muda o que o assistente AFIRMA para
+  // todo mundo do espaço, inclusive dentro de proposta — por isso ela fica com
+  // quem já responde por discurso institucional, e não com todo papel que
+  // conversa com o assistente.
+  lideranca_comercial: ["read", "business:teach", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
   vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "fleet:manage", "integration:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
-  marketing: ["read", "marketing:manage", "evidence:manage", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
+  marketing: ["read", "business:teach", "marketing:manage", "evidence:manage", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "market:read", "market:research", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   auditor: ["read", "audit:read", "export:read", "market:read", "goal:read", "goal:export"],
   // RH lê a vertical e administra pessoal — e nada além disso. Em particular,
@@ -599,6 +604,11 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("usuarios", "Usuários", "administracao", "/todogreen/acessos", { icon: "Users", order: 67 }),
   module("permissoes", "Permissões", "administracao", "/todogreen/acessos", { icon: "LockKeyhole", order: 68 }),
   module("configuracoes", "Configurações", "administracao", "/todogreen/acessos", { icon: "Settings", order: 69 }),
+  module("sobre-o-negocio", "Sobre o negócio", "administracao", "/todogreen/sobre-o-negocio", {
+    icon: "BookOpen",
+    order: 70,
+    description: "O dossiê que a IA lê antes de responder: identidade, proposta, operação, números com fonte e habilitação.",
+  }),
 ];
 
 export const TODO_GREEN_FEATURE_COUNT = TODO_GREEN_MODULE_CATALOG.length;

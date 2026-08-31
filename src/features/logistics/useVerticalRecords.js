@@ -36,6 +36,11 @@ const VAZIO = Object.freeze({
   accounts: [],
   costCenters: [],
   bankAccounts: [],
+  // O que a IA sabe sobre a própria To Do Green (migração 0082). Vem na carga
+  // inicial porque é uma lista curta e porque a tela que a edita precisa dela
+  // inteira — não há paginação a fazer sobre um dossiê de duas dezenas de
+  // fatos.
+  businessContext: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {

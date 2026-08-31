@@ -424,6 +424,38 @@ export const proximaAcao = (oportunidade = {}, riscos = null) => {
   };
 };
 
+// ---- O nome do negócio ----
+//
+// A oportunidade nasceu sem nome: a tela mostrava o CLIENTE como se fosse o
+// negócio, e uma conta com três frentes abertas virava três cartões idênticos.
+// A importação do quadro de Novos Negócios tornou isso impossível de ignorar —
+// 67 projetos entraram com nome próprio ("AMXL ABC", "Same Day", "Projeto
+// DHL") e nenhum aparecia.
+//
+// A ordem de queda é deliberada: o nome que a pessoa escreveu, depois o nome
+// que veio do quadro, e por último um rótulo DERIVADO do que existe. "Sem
+// título" nunca sai daqui — negócio sem nome ainda é o negócio de alguém numa
+// etapa, e é isso que a pessoa precisa ler no cartão.
+export const tituloDaOportunidade = (registro = {}) => {
+  const proprio = texto(registro.titulo || registro.title);
+  if (proprio) return proprio;
+  const doQuadro = texto(registro.campos?.nomeDoProjeto || registro.nomeDoProjeto);
+  if (doQuadro) return doQuadro;
+  const cliente = texto(registro.cliente || registro.client || registro.accountName);
+  const estagio = texto(registro.estagio || registro.stage);
+  if (cliente && estagio) return `${cliente} · ${estagio}`;
+  if (cliente) return cliente;
+  return "Negócio sem conta";
+};
+
+// O subtítulo só repete o cliente quando o título NÃO é o cliente. Sem isso o
+// cartão exibiria "Amazon" duas vezes, uma embaixo da outra.
+export const subtituloDaOportunidade = (registro = {}) => {
+  const titulo = tituloDaOportunidade(registro);
+  const cliente = texto(registro.cliente || registro.client || registro.accountName);
+  return cliente && !titulo.startsWith(cliente) ? cliente : "";
+};
+
 // ---- Adaptador do registro guardado ----
 //
 // O CRM guarda a oportunidade com nomes em inglês e herdados de versões
@@ -443,6 +475,7 @@ export const normalizarOportunidade = (registro = {}, agora = Date.now()) => {
   return {
     ...registro,
     id: registro.id,
+    titulo: texto(registro.titulo || registro.title),
     cliente: texto(registro.cliente || registro.client || registro.accountName),
     estagio: estagioValido(registro.estagio ?? registro.stage),
     probabilidade: registro.probabilidade ?? registro.probability,

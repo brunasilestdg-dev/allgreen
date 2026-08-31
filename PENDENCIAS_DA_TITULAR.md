@@ -332,3 +332,37 @@ URL informada. Enquanto isso, o modo arquivo cobre a operação inteira.
 TRACK3R traz o DOCUMENTO (o que foi coletado e entregue); a Sistemas Tracker traz
 a POSIÇÃO (onde o veículo está). As duas integrações convivem e não se
 substituem.
+
+## Dossiê do negócio — o que só você pode cadastrar (31/08)
+
+A IA já sabe da To Do Green tudo o que os documentos que você enviou tornaram
+público ou interno: identidade, história, portfólio, malha, indicadores com
+fonte, ficha cadastral, CNAEs, alçada societária, seguros e o painel de
+validades da Central de RFQ/RFI. Isso vem carregado sozinho na primeira
+pergunta feita ao Plantû e fica editável em **Administração › Sobre o negócio**.
+
+O que **não** foi para o código, de propósito, e por isso precisa ser cadastrado
+por você na tela com sigilo **Restrito**:
+
+- **Conta bancária** (Santander, agência e conta). Dado bancário não entra em
+  repositório de código.
+- **CPF da sócia administradora e do administrador não sócio**, e o número da
+  CNH. Vale a mesma regra que já vale no resto do produto: documento de pessoa
+  só para dona, administração e RH, e nunca no payload do portal do cliente.
+
+Cadastrados com sigilo Restrito, esses pontos entram nas respostas do Plantû
+apenas para quem tem `finance:manage` (ou é dona/admin) — para os outros o fato
+nem chega ao modelo, então não há o que vazar na resposta.
+
+### Três correções que o dossiê registra e ninguém resolve por você
+
+1. **As apólices RCTR-C e RC-DC constam como vencidas em 13/08/2026.** Existe
+   certificado da Porto Seguro emitido em 14/08/2026 com vigência até
+   13/02/2027 — confirme com a Prata Corretora qual documento vale e corrija o
+   ponto "O que trava um RFQ hoje" na tela.
+2. **O número da frota diverge**: +500 na apresentação, 100 próprios + 10
+   agregados na apólice, 13 ativos no RNTRC. Enquanto não houver um número
+   conferido, a IA foi instruída a dizer que é preciso confirmar antes de
+   responder frota em RFI — o que é melhor do que mandar o número errado, mas
+   não substitui resolver.
+3. **Endereço no RNTRC (Av. Paulista, 1842) diverge do CNPJ (Rua Quatá, 157).**

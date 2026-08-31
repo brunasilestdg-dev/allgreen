@@ -46,12 +46,46 @@ import {
 import { runWithFallback } from "./ai.js";
 import { envComChavesDoEspaco } from "./ai-keys.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
+import { blocoDeContexto as blocoDeContextoDoNegocio } from "../../src/features/logistics/businessContextDomain.js";
 import { podeVerTodaCarteira } from "./todogreen-access.js";
 import { normalizeCrmContacts } from "../../src/features/logistics/crmContactNormalizationDomain.js";
 
 const TENANT_ID = "todogreen";
 const MAX_LIMIT = 100;
 const CRM_TEMPERATURES = new Set(["Quente", "Morno", "Frio"]);
+
+// ===== O perfil público da To Do Green no portal =====
+//
+// Lê APENAS as linhas com sigilo 'publico'. O corte é no SQL, de propósito: um
+// filtro depois da leitura deixaria o dado interno passar por variável de
+// aplicação, e basta um `JSON.stringify` distraído para ele acabar num log ou
+// num payload. Aqui o que é interno nunca sai do banco.
+const dossiePublicoDoEspaco = async (env, workspaceOwnerId) => {
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT fact_key, category, title, content, source, effective_at, secrecy, pinned
+         FROM todogreen_business_context
+        WHERE tenant_id='todogreen' AND workspace_owner_id=? AND archived_at IS NULL
+          AND secrecy='publico'
+        ORDER BY pinned DESC, updated_at DESC LIMIT 60`,
+    ).bind(workspaceOwnerId).all();
+    return (results || []).map((row) => ({
+      chave: row.fact_key,
+      categoria: row.category,
+      titulo: row.title,
+      conteudo: row.content,
+      fonte: row.source,
+      vigenteEm: row.effective_at,
+      sigilo: "publico",
+      fixado: Number(row.pinned || 0) === 1,
+    }));
+  } catch (erro) {
+    // Sem perfil o assistente responde só sobre a operação do cliente, como
+    // fazia antes. Perder o perfil não pode derrubar o portal.
+    console.error("portal: perfil público indisponível", erro?.message || erro);
+    return [];
+  }
+};
 
 const response = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -1241,8 +1275,25 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     // motor.
     try {
       const envIa = await envComChavesDoEspaco(env, escopo.workspaceOwnerId);
+      // O portal sabia tudo do CLIENTE e nada da To Do Green: perguntado
+      // "vocês atendem Curitiba?" ou "qual é o OTD de vocês?", o assistente
+      // não tinha o que responder sobre a própria transportadora.
+      //
+      // Entra só o que está marcado como PÚBLICO no dossiê — é o conteúdo que
+      // a empresa já publica em apresentação comercial. Interno e restrito não
+      // chegam ao modelo, então não há o que a resposta possa vazar: a regra de
+      // confidencialidade do portal continua sendo cumprida pelo que NÃO é
+      // enviado, não pela obediência do modelo.
+      const perfilPublico = blocoDeContextoDoNegocio(
+        await dossiePublicoDoEspaco(env, escopo.workspaceOwnerId),
+        { incluirRestrito: false },
+      );
       const { ok, result, errors } = await runWithFallback(envIa, {
-        prompt: `Dados do cliente (únicos disponíveis):\n${JSON.stringify(contexto, null, 2)}\n\nPergunta: ${pergunta}`,
+        prompt: [
+          perfilPublico,
+          `Dados do cliente (únicos disponíveis):\n${JSON.stringify(contexto, null, 2)}`,
+          `Pergunta: ${pergunta}`,
+        ].filter(Boolean).join("\n\n"),
         system: INSTRUCAO_ASSISTENTE,
       });
       if (!ok) {

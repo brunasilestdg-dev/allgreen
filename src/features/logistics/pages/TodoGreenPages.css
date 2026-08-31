@@ -2038,3 +2038,86 @@
 .tdg-import-progresso { background: var(--tdg-soft); border-radius: 8px; margin: 0; padding: 8px 11px; }
 .tdg-import-resultado { background: #dcfce7; border-radius: 10px; display: grid; gap: 6px; padding: 10px 12px; }
 .tdg-import-resultado ul { list-style: disc; padding-left: 18px; }
+
+/* ===== Sobre o negócio: o dossiê que a IA lê ===== */
+.tdg-sobre-resumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.tdg-sobre-resumo article {
+  background: var(--tdg-surface, #fff);
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tdg-sobre-resumo small { color: var(--tdg-muted, #6b7a72); font-size: 12px; }
+.tdg-sobre-resumo strong { font-size: 22px; line-height: 1.1; }
+.tdg-sobre-resumo span { font-size: 11px; color: var(--tdg-muted, #6b7a72); }
+
+.tdg-sobre-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.tdg-sobre-filtros button {
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  background: transparent;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tdg-sobre-filtros button.ativo {
+  background: var(--tdg-accent-soft, #e8f5ee);
+  border-color: var(--tdg-accent, #14966b);
+  font-weight: 600;
+}
+
+.tdg-sobre-lista { display: grid; gap: 12px; }
+.tdg-sobre-fato {
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--tdg-surface, #fff);
+}
+.tdg-sobre-fato header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.tdg-sobre-fato header strong { font-size: 15px; }
+.tdg-sobre-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.tdg-sobre-tags em {
+  font-style: normal;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tdg-accent-soft, #e8f5ee);
+  color: var(--tdg-ink, #1d2b25);
+}
+.tdg-sobre-tags .tdg-sigilo-restrito { background: #fdecec; color: #9b2226; }
+.tdg-sobre-tags .tdg-sigilo-publico { background: #e6f0fb; color: #1b4d80; }
+/* O conteúdo vem com quebra de linha real — o dossiê é lido, não é rótulo. */
+.tdg-sobre-fato p { white-space: pre-wrap; margin: 10px 0; font-size: 13px; line-height: 1.55; }
+.tdg-sobre-fato footer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.tdg-sobre-fato footer small { color: var(--tdg-muted, #6b7a72); font-size: 11px; }
+.tdg-sobre-fato footer span { display: flex; gap: 8px; }
+.tdg-sobre-fato footer button {
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  background: transparent;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tdg-sobre-fato footer .tdg-sobre-remover { color: #9b2226; border-color: #f0d3d3; }
+.tdg-form-check { flex-direction: row !important; align-items: center; gap: 8px; }
+
+/* O nome do negócio manda no cartão do kanban; a conta vira legenda. */
+.tdg-opp-kb-card em {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 2px;
+}

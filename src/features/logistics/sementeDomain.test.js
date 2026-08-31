@@ -161,6 +161,24 @@ describe("a proposta dita em português", () => {
     );
   });
 
+  it("o aprendizado mostra o texto INTEIRO que vai virar conhecimento", () => {
+    // Nas outras ações confere-se um título; nesta a pessoa autoriza o
+    // assistente a AFIRMAR aquilo para todo o espaço. Resumir seria pedir
+    // assinatura no que ela não leu.
+    const texto = textoDaProposta({
+      tipo: "aprender",
+      titulo: "Nova base em Curitiba",
+      conteudo: "A base de Curitiba abriu em agosto de 2026 com 12 vans elétricas.",
+      fonte: "Paula, na reunião de 31/08",
+      sigilo: "interno",
+    });
+    expect(texto).toContain("Guardar no dossiê da To Do Green");
+    expect(texto).toContain("A base de Curitiba abriu em agosto de 2026 com 12 vans elétricas.");
+    expect(texto).toContain("fonte: Paula, na reunião de 31/08");
+    expect(texto).toContain("sigilo: interno");
+    expect(texto).not.toBe("Ação desconhecida — não confirme.");
+  });
+
   it("tipo desconhecido manda não confirmar em vez de fingir que entendeu", () => {
     expect(textoDaProposta({ tipo: "apagar_tudo" })).toBe("Ação desconhecida — não confirme.");
     expect(textoDaProposta()).toBe("Ação desconhecida — não confirme.");

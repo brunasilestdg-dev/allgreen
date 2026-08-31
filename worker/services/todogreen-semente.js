@@ -28,6 +28,11 @@ import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { pesquisarEmpresa } from "./todogreen-client-intelligence.js";
 import { pessoasAtribuiveis, resolverResponsavel } from "../../src/features/logistics/taskAssignmentDomain.js";
 import { montarPauta } from "../../src/features/logistics/sementeBriefingDomain.js";
+import {
+  blocoDeContexto,
+  propostaDeAprendizado,
+  sementeDoNegocio,
+} from "../../src/features/logistics/businessContextDomain.js";
 
 const response = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -66,6 +71,7 @@ export const ACOES = Object.freeze({
   criar_tarefa: "cria uma tarefa na Central de Implantação. Campos: titulo (obrigatório), descricao, cliente, responsavel (nome ou e-mail; se omitido vai para o vendedor da conta), prazo (AAAA-MM-DD), prioridade (baixa|media|alta|critica).",
   definir_proxima_acao: "grava a próxima ação de uma conta. Campos: cliente (obrigatório), acao (obrigatório), prazo (AAAA-MM-DD).",
   pesquisar_empresa: "dispara a pesquisa externa de uma conta na web. Campo: cliente (obrigatório).",
+  aprender: "guarda no dossiê da To Do Green um fato NOVO sobre o próprio negócio que a pessoa acabou de te contar e que você não sabia. Campos: titulo (obrigatório), conteudo (obrigatório), categoria (identidade|proposta|operacao|numeros|clientes|habilitacao|fiscal|vocabulario|aprendido), fonte (quem contou ou de onde veio), sigilo (publico|interno|restrito). Só proponha quando o fato for sobre a EMPRESA, valer para as próximas conversas e não estiver no dossiê. Nunca proponha aprender dado de uma conta de cliente: isso é registro de CRM, não conhecimento do negócio.",
 });
 
 export const INSTRUCAO = `Você é o Plantû, assistente operacional do ERP To Do Green. Você cruza carteira comercial, propostas, contratos, preço, frota, financeiro, execução logística, notícias, RFQs e ESG, sempre dentro das permissões da pessoa.
@@ -98,6 +104,10 @@ REGRAS QUE NÃO SE QUEBRAM
 Você responde sobre a carteira de quem está perguntando, e só sobre ela. Nunca cite conta que não apareça nos dados recebidos.
 
 Se faltar dado para concluir, diga qual falta. Nunca estime, complete ou suponha número, nome, cargo, telefone ou e-mail. Um dado inventado sobre a carteira de um cliente vale menos que dizer "não sei". Saber a diferença entre medição e estimativa é o que a To Do Green vende — você não pode ser a parte do produto que inventa.
+
+O dossiê "O QUE VOCÊ SABE SOBRE A TO DO GREEN" é a sua fonte sobre a própria empresa. Ele foi cadastrado pela empresa e vale mais que qualquer coisa que você ache que sabe. Quando ele marcar um documento como vencido, uma informação como divergente ou um número como a confirmar, diga isso — principalmente em resposta de RFQ, RFI ou proposta. Afirmar cobertura de seguro que expirou ou número de frota que não bate entre documentos é o tipo de erro que desclassifica a empresa numa cotação.
+
+Quando a pessoa te contar um fato NOVO sobre a To Do Green que não está no dossiê e que vale para as próximas conversas, proponha a ação "aprender". Ela confirma, e a partir daí você sabe. Não proponha aprender o que já está no dossiê, nem dado de conta de cliente.
 
 Você trabalha DENTRO do ERP da To Do Green. Nunca recomende planilha, Google Sheets, HubSpot ou qualquer ferramenta externa: os dados vivem aqui. Se algo não está cadastrado, diga em qual tela da To Do Green cadastrar (Clientes, Oportunidades, Central de Implantação) ou proponha uma das suas ações. Nunca mencione outro negócio que não seja a To Do Green e as contas desta carteira.
 
@@ -566,6 +576,59 @@ export async function executarAcao(env, { access, user, email, acao, linhas }) {
     };
   }
 
+  if (tipo === "aprender") {
+    // Ensinar o assistente é ato de quem responde por discurso institucional.
+    // Sem essa trava, qualquer pessoa que conversa com ele mudaria o que ele
+    // afirma para todo mundo do espaço — inclusive dentro de uma proposta.
+    if (!podeNaVertical(access, "business:teach"))
+      return { erro: "Seu papel não edita o que a IA sabe sobre a To Do Green.", status: 403 };
+    const { valida, motivo, fato } = propostaDeAprendizado({
+      titulo: acao?.titulo,
+      conteudo: acao?.conteudo,
+      categoria: acao?.categoria,
+      fonte: acao?.fonte,
+      sigilo: acao?.sigilo,
+    });
+    if (!valida) return { erro: motivo, status: 400 };
+
+    // Mesma chave = mesmo fato: reensinar CORRIGE em vez de empilhar duas
+    // versões contraditórias que o modelo leria juntas na próxima pergunta.
+    const existente = await env.DB.prepare(
+      `SELECT id FROM todogreen_business_context
+        WHERE tenant_id=? AND workspace_owner_id=? AND fact_key=? AND archived_at IS NULL LIMIT 1`,
+    ).bind(TENANT_ID, access.ownerId, fato.chave).first();
+
+    if (existente?.id) {
+      await env.DB.prepare(
+        `UPDATE todogreen_business_context
+            SET category=?, title=?, content=?, source=?, effective_at=?, secrecy=?,
+                origin='aprendido', revision=revision+1, updated_by=?, updated_at=?
+          WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+      ).bind(
+        fato.categoria, fato.titulo, fato.conteudo, fato.fonte, agora.slice(0, 10),
+        fato.sigilo, user.id, agora, existente.id, TENANT_ID, access.ownerId,
+      ).run();
+      return { ok: true, tipo, resumo: `Aprendido (corrigindo o que eu sabia): ${fato.titulo}.`, id: existente.id };
+    }
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_business_context
+       (id, tenant_id, workspace_owner_id, fact_key, category, title, content, source,
+        effective_at, secrecy, origin, pinned, revision, created_by, updated_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?, 'aprendido', 0, 1, ?,?,?,?)`,
+    ).bind(
+      id, TENANT_ID, access.ownerId, fato.chave, fato.categoria, fato.titulo, fato.conteudo,
+      fato.fonte, agora.slice(0, 10), fato.sigilo, user.id, user.id, agora, agora,
+    ).run();
+    return {
+      ok: true,
+      tipo,
+      resumo: `Aprendido: ${fato.titulo}. A partir de agora eu sei disso — dá para revisar e corrigir em Sobre o negócio.`,
+      id,
+    };
+  }
+
   // pesquisar_empresa
   const { linha, ambiguidade } = escolherCliente(linhas, acao?.cliente);
   if (ambiguidade.length) return { erro: `Mais de uma conta corresponde: ${ambiguidade.join(", ")}.`, status: 409 };
@@ -593,6 +656,63 @@ export async function executarAcao(env, { access, user, email, acao, linhas }) {
     resumo: `Pesquisa externa de ${linha.name} concluída${detalhes.length ? ` — ${detalhes.join("; ")}` : ""}.`,
     id: linha.id,
   };
+}
+
+// ===== O dossiê do negócio =====
+//
+// O que o Plantû sabe sobre a To Do Green deixou de ser texto fixo no código e
+// virou linha de banco. Na PRIMEIRA leitura de um espaço que ainda não tem
+// dossiê, a semente auditada é gravada — assim o assistente já nasce sabendo, e
+// a partir dali quem manda é o que estiver na tela, não o que está aqui.
+//
+// A semeadura é oportunista de propósito: se o INSERT falhar (corrida entre
+// duas perguntas simultâneas, tabela ainda não migrada), a pergunta continua
+// com o dossiê em memória em vez de virar erro na cara de quem perguntou.
+export async function dossieDoEspaco(env, access, user) {
+  let linhas = [];
+  try {
+    linhas = await env.DB.prepare(
+      `SELECT fact_key, category, title, content, source, effective_at, secrecy, origin, pinned
+         FROM todogreen_business_context
+        WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+        ORDER BY pinned DESC, updated_at DESC LIMIT 300`,
+    ).bind(TENANT_ID, access.ownerId).all().then((r) => r.results || []);
+  } catch (erro) {
+    console.error("Plantû: dossiê do negócio indisponível", erro?.message || erro);
+    return sementeDoNegocio();
+  }
+
+  if (!linhas.length) {
+    const agora = new Date().toISOString();
+    const semente = sementeDoNegocio();
+    try {
+      await env.DB.batch(semente.map((fato) => env.DB.prepare(
+        `INSERT INTO todogreen_business_context
+         (id, tenant_id, workspace_owner_id, fact_key, category, title, content, source,
+          effective_at, secrecy, origin, pinned, revision, created_by, updated_by, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
+      ).bind(
+        crypto.randomUUID(), TENANT_ID, access.ownerId, fato.chave, fato.categoria,
+        fato.titulo, fato.conteudo, fato.fonte, fato.vigenteEm, fato.sigilo,
+        fato.origem, fato.fixado ? 1 : 0, user?.id || "sistema", user?.id || "sistema", agora, agora,
+      )));
+    } catch (erro) {
+      console.error("Plantû: não foi possível semear o dossiê do negócio", erro?.message || erro);
+    }
+    return semente;
+  }
+
+  return linhas.map((row) => ({
+    chave: row.fact_key,
+    categoria: row.category,
+    titulo: row.title,
+    conteudo: row.content,
+    fonte: row.source,
+    vigenteEm: row.effective_at,
+    sigilo: row.secrecy,
+    origem: row.origin,
+    fixado: Number(row.pinned || 0) === 1,
+  }));
 }
 
 // ===== A porta =====
@@ -646,6 +766,14 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   const envBusca = await envComChavesDeBuscaDoEspaco(envIa, access.ownerId);
   if (!configuredAiProviders(envIa).some((provider) => provider.configured))
     return response({ error: "Plantû está sem provedor de IA. Um administrador precisa conectar GPT, Claude, Gemini ou outro provedor em Integrações." }, 503);
+  // O dossiê entra no cabeçalho, não no `system`: o system é o mesmo para todo
+  // espaço e fica em cache; o dossiê é de UM espaço e muda quando ela edita.
+  const dossie = blocoDeContexto(await dossieDoEspaco(env, access, user), {
+    // Quem tem `finance:manage` (ou é dona/admin) vê o que está marcado como
+    // restrito — conta bancária, documento de pessoa. Os outros nem sabem que
+    // existe: o fato não entra no prompt, então não há o que vazar na resposta.
+    incluirRestrito: podeNaVertical(access, "finance:manage"),
+  });
   const cabecalho = [
     `Pessoa atendida: ${clean(user?.name, 120) || email || "usuária da To Do Green"}.`,
     `Tela em que a pessoa está: ${clean(body.tela, 60) || "não informada"}.`,
@@ -654,6 +782,8 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     `Pesquisa web neste ambiente: ${webSearchConfiguration(envBusca).configured ? "configurada" : "NÃO configurada — não proponha pesquisar_empresa"}.`,
     "",
     catalogoTextual(),
+    "",
+    dossie,
     "",
     `ÍNDICE DA CARTEIRA (resumo; use as ferramentas para o detalhe):\n${JSON.stringify(indice.slice(0, 200), null, 1)}`,
     historico.length ? `\nCONVERSA ATÉ AQUI:\n${historico.join("\n")}` : "",

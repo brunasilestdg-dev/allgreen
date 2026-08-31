@@ -16,10 +16,10 @@ const BRL_COMPACTO = (valor) => {
   return `R$ ${n.toLocaleString("pt-BR")}`;
 };
 
-export default function AvancosDaSemanaPage({ opportunities = [], comments = [], onNavigate }) {
+export default function AvancosDaSemanaPage({ opportunities = [], comments = [], interactions = [], onNavigate }) {
   const { avancos, totalMensal, frios } = useMemo(
-    () => avancosDaSemana({ oportunidades: opportunities, comentarios: comments }),
-    [opportunities, comments],
+    () => avancosDaSemana({ oportunidades: opportunities, comentarios: comments, interacoes: interactions }),
+    [opportunities, comments, interactions],
   );
 
   return (

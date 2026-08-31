@@ -717,6 +717,7 @@ describe("a vertical inteira numa chamada só", () => {
     expect(Object.keys(corpo).sort()).toEqual([
       "accounts",
       "bankAccounts",
+      "businessContext",
       "comments",
       "contracts",
       "costCenters",
@@ -1020,5 +1021,85 @@ describe("comentários do comercial: conta replica, oportunidade fica nela", () 
   it("o espaço de outra pessoa não vê os comentários", async () => {
     const doColega = await (await pedir("/api/todogreen/records/comments", { token: colega.token })).json();
     expect(doColega.registros.map((r) => r.comentario)).not.toContain("Reunião ótima — cliente quer piloto em SP.");
+  });
+});
+
+// ===== O dossiê do negócio =====
+//
+// É o que o Plantû lê antes de responder qualquer coisa sobre a To Do Green.
+// O que estes testes impedem de voltar: o dossiê de um espaço aparecendo no
+// outro, e qualquer papel que conversa com o assistente conseguindo mudar o
+// que ele afirma para todo mundo.
+describe("o que a IA sabe sobre o negócio", () => {
+  let vendedora;
+
+  beforeAll(async () => {
+    vendedora = await criarUsuario(`u-vend-${crypto.randomUUID().slice(0, 8)}`, `vend-${crypto.randomUUID().slice(0, 8)}@todogreen.com.br`);
+    await autorizar(vendedora, "vendedor", ["read", "crm:manage"], gestora.id);
+  });
+
+  it("a dona cadastra um ponto e ele volta na leitura", async () => {
+    const criada = await pedir("/api/todogreen/records/businessContext", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: {
+        chave: "frota-real",
+        categoria: "operacao",
+        titulo: "Frota real conferida",
+        conteudo: "A contagem real da frota foi conferida em agosto de 2026.",
+        fonte: "Conferência interna",
+        sigilo: "interno",
+        fixado: true,
+      },
+    });
+    expect(criada.status).toBe(201);
+    const lista = await (await pedir("/api/todogreen/records/businessContext", { token: gestora.token })).json();
+    const fato = lista.registros.find((item) => item.chave === "frota-real");
+    expect(fato.titulo).toBe("Frota real conferida");
+    expect(fato.fixado).toBe(true);
+    expect(fato.origem).toBe("cadastrado");
+  });
+
+  it("vendedora LÊ o dossiê mas não ensina — ensinar muda o que a IA afirma para todo mundo", async () => {
+    const leitura = await pedir("/api/todogreen/records/businessContext", { token: vendedora.token });
+    expect(leitura.status).toBe(200);
+    expect((await leitura.json()).registros.some((item) => item.chave === "frota-real")).toBe(true);
+
+    const tentativa = await pedir("/api/todogreen/records/businessContext", {
+      metodo: "POST",
+      token: vendedora.token,
+      corpo: { titulo: "Inventado", conteudo: "A empresa aceita qualquer preço." },
+    });
+    expect(tentativa.status).toBe(403);
+  });
+
+  it("o dossiê de um espaço não vaza para o outro", async () => {
+    const doColega = await (await pedir("/api/todogreen/records/businessContext", { token: colega.token })).json();
+    expect(doColega.registros.map((item) => item.chave)).not.toContain("frota-real");
+  });
+
+  it("ponto sem conteúdo é recusado — dossiê vazio ensina o assistente a inventar", async () => {
+    const vazio = await pedir("/api/todogreen/records/businessContext", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { titulo: "Só o título" },
+    });
+    expect(vazio.status).toBe(400);
+  });
+});
+
+// ===== O nome do negócio =====
+describe("oportunidade com nome próprio", () => {
+  it("grava e devolve o título, e duas frentes da mesma conta não ficam idênticas", async () => {
+    const criar = (titulo) => pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { titulo, cliente: "Amazon", estagio: "Negociação", valorMensal: 1000 },
+    });
+    const primeira = await (await criar("Middle Mile Sorocaba")).json();
+    const segunda = await (await criar("Same Day SP")).json();
+    expect(primeira.registro.titulo).toBe("Middle Mile Sorocaba");
+    expect(segunda.registro.titulo).toBe("Same Day SP");
+    expect(primeira.registro.titulo).not.toBe(segunda.registro.titulo);
   });
 });

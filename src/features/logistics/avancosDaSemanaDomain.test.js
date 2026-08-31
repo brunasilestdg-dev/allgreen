@@ -72,3 +72,42 @@ describe("avanços da semana", () => {
     expect(avancosDaSemana({ agora: AGORA, oportunidades: [{ id: "b", cliente: "Só contrato", valorContrato: 150_000, lastInteractionAt: diasAtras(1) }] }).totalMensal).toBe(0);
   });
 });
+
+describe("interação registrada também é avanço", () => {
+  // A titular pediu as duas coisas: registrar interações (ata de reunião,
+  // ligação, tentativa de contato) e ver os avanços da semana. Se só comentário
+  // contasse, quem registra a ata precisaria comentar de novo para a
+  // oportunidade aparecer aqui — e os updates importados do quadro entrariam
+  // mudos nesta tela.
+  const agora = Date.parse("2026-08-30T12:00:00Z");
+
+  it("a ata da reunião move a oportunidade e vira a frase do avanço", () => {
+    const { avancos } = avancosDaSemana({
+      oportunidades: [{ id: "opp-1", cliente: "Magalog", estagio: "Negociação", valorMensal: 110000 }],
+      interacoes: [{ id: "i1", opportunityId: "opp-1", assunto: "Reunião de integração com a Magalu", ocorridaEm: "2026-08-28" }],
+      agora,
+    });
+    expect(avancos).toHaveLength(1);
+    expect(avancos[0].nota).toBe("Reunião de integração com a Magalu");
+  });
+
+  it("entre comentário e interação, vale o mais recente", () => {
+    const { avancos } = avancosDaSemana({
+      oportunidades: [{ id: "opp-1", cliente: "DHL", estagio: "Homologação", valorMensal: 300000 }],
+      comentarios: [{ id: "c1", opportunityId: "opp-1", comentario: "Comentário antigo", criadoEm: "2026-08-25T10:00:00Z" }],
+      interacoes: [{ id: "i1", opportunityId: "opp-1", assunto: "Visita ao CD ontem", ocorridaEm: "2026-08-29" }],
+      agora,
+    });
+    expect(avancos[0].nota).toBe("Visita ao CD ontem");
+  });
+
+  it("interação antiga não conta como movimento da semana", () => {
+    const { avancos, frios } = avancosDaSemana({
+      oportunidades: [{ id: "opp-1", cliente: "Track & Field", estagio: "Prospecção", valorMensal: 100000 }],
+      interacoes: [{ id: "i1", opportunityId: "opp-1", assunto: "Tentativa sem retorno", ocorridaEm: "2026-07-01" }],
+      agora,
+    });
+    expect(avancos).toHaveLength(0);
+    expect(frios.map((item) => item.cliente)).toEqual(["Track & Field"]);
+  });
+});

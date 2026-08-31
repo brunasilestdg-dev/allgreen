@@ -108,6 +108,7 @@ const FiscalPage = lazy(() => import("./pages/FiscalPage.jsx"));
 const TreasuryPage = lazy(() => import("./pages/TreasuryPage.jsx"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage.jsx"));
 const PlannerPage = lazy(() => import("./pages/PlannerPage.jsx"));
+const SobreONegocioPage = lazy(() => import("./pages/SobreONegocioPage.jsx"));
 const AvancosDaSemanaPage = lazy(() => import("./pages/AvancosDaSemanaPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
 const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
@@ -774,6 +775,17 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["access:manage", "integration:manage", "audit:read"],
     description: "Acessos, permissões, auditoria, integrações, configurações e governança da vertical.",
   },
+  "sobre-o-negocio": {
+    title: "Sobre o negócio",
+    navLabel: "Sobre o negócio",
+    route: "/todogreen/sobre-o-negocio",
+    area: "administracao",
+    status: "functional",
+    // Ler é aberto a quem entra na vertical: um vendedor precisa saber a
+    // história da casa para responder um RFI sem inventar. Editar exige
+    // `business:teach`, checado no servidor — a tela só esconde o botão.
+    description: "O dossiê que a IA lê antes de responder: identidade, proposta, operação, números com fonte, habilitação e o que ela aprendeu.",
+  },
   planner: {
     title: "Planner",
     navLabel: "Planner",
@@ -794,7 +806,8 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // Workspace primeiro (pedido de 30/08): é a mesa de trabalho — planner,
   // projetos e implantações moram aqui. Implantação é um TIPO de projeto,
   // por isso vive dentro deste grupo sem perder o nome próprio.
-  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"] },
+  // `jornadasInternas`: o menu não repete o que o Workspace já mostra dentro.
+  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"], jornadasInternas: ["central-trabalho", "visualizacoes", "agentes-funcoes"] },
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
   // Planejamento decide o que entra; Operação executa o que foi aceito. Antes
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
@@ -821,7 +834,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "integracoes", "acessos"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "integracoes", "acessos", "sobre-o-negocio"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
@@ -2570,6 +2583,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     erro: erroDosRegistros,
     criar,
     atualizar,
+    arquivar,
     registrarPagamento,
     estornarPagamento,
     registrarEventoOperacao,
@@ -2748,7 +2762,18 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               {PRIMARY_NAVIGATION.map((item) => {
                 const ativa = primaryNavigation.id === item.id;
                 const aberta = areasAbertas.has(item.id) || ativa;
+                // O Workspace apresenta "Projetos e tarefas", "Visualizações e
+                // gráficos" e "Agentes e funções" na barra de jornadas dele.
+                // Repetir os mesmos rótulos no menu lateral é o mesmo nome
+                // levando ao mesmo lugar em duas navegações da MESMA tela — a
+                // repetição que a titular mandou eliminar, e o que quebrava
+                // `LogisticsVertical.test.jsx` desde a unificação do workspace
+                // (dois botões com o nome acessível idêntico). As rotas
+                // continuam válidas e o `pages` continua completo, para o link
+                // direto ainda destacar a área certa.
+                const jornadasInternas = new Set(item.jornadasInternas || []);
                 const paginas = navigationModules(item.pages)
+                  .filter(([id]) => !jornadasInternas.has(id))
                   .filter(([, modulo]) => podeAcessarFuncionalidade(role, remoteAccess.permissions, modulo.permission));
                 return (
                   <div className={`tdg-nav-area${aberta ? " aberta" : ""}`} key={item.id}>
@@ -2848,6 +2873,18 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "tesouraria" && <Suspense fallback={<section className="tdg-panel">Carregando a tesouraria...</section>}><TreasuryPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "sobre-o-negocio" && (
+        <Suspense fallback={<section className="tdg-panel">Carregando o dossiê do negócio...</section>}>
+          <SobreONegocioPage
+            businessContext={registros.businessContext}
+            onCreate={(registro) => criar("businessContext", registro)}
+            onUpdate={(id, registro) => atualizar("businessContext", id, registro)}
+            onArchive={(id) => arquivar("businessContext", id)}
+            podeEditar={podeAcessarFuncionalidade(role, remoteAccess.permissions, "business:teach")}
+            setToast={setToast}
+          />
+        </Suspense>
+      )}
       {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} financial={registros.financial} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} authHeaders={authHeaders} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
@@ -2887,7 +2924,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "dp-rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP...</section>}><EnterpriseAreaPage area="dp" onNavigate={navigate} /></Suspense>}
       {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><PeoplePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "planner" && <Suspense fallback={<section className="tdg-panel">Carregando o Planner...</section>}><PlannerPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} role={role} espacoId={remoteAccess.ownerId || ""} /></Suspense>}
-      {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} onNavigate={navigate} /></Suspense>}
+      {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} interactions={verticalData.interactions} onNavigate={navigate} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><EnterpriseAreaPage area="quality" onNavigate={navigate} /></Suspense>}
       {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando inteligência de mercado...</section>}><TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={navigate} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><EnterpriseAreaPage area="legal" onNavigate={navigate} /></Suspense>}

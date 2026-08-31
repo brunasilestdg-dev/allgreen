@@ -13,6 +13,8 @@ import {
   proximaAcao,
   resumirPipeline,
   riscosDaOportunidade,
+  subtituloDaOportunidade,
+  tituloDaOportunidade,
 } from "./opportunityIntelligenceDomain.js";
 
 // Uma oportunidade completa, com dado medido. Serve de base; cada teste tira
@@ -519,5 +521,33 @@ describe("resumo do pipeline", () => {
       semDadoAmbiental: 0,
     });
     expect(r.porEstagio).toEqual({});
+  });
+});
+
+describe("nome do negócio", () => {
+  it("prefere o nome próprio, depois o do quadro, e nunca diz 'sem título'", () => {
+    expect(tituloDaOportunidade({ titulo: "Same Day SP", campos: { nomeDoProjeto: "AMXL ABC" }, cliente: "Amazon" }))
+      .toBe("Same Day SP");
+    expect(tituloDaOportunidade({ campos: { nomeDoProjeto: "AMXL ABC" }, cliente: "Amazon" })).toBe("AMXL ABC");
+    // Sem nome nenhum o cartão ainda diz de quem é e onde está — que é o que
+    // a pessoa precisa ler no kanban.
+    expect(tituloDaOportunidade({ cliente: "Amazon", estagio: "Negociação" })).toBe("Amazon · Negociação");
+    expect(tituloDaOportunidade({ cliente: "Amazon" })).toBe("Amazon");
+    expect(tituloDaOportunidade({})).toBe("Negócio sem conta");
+  });
+
+  it("o subtítulo não repete o cliente quando o título já é o cliente", () => {
+    expect(subtituloDaOportunidade({ titulo: "AMXL ABC", cliente: "Amazon" })).toBe("Amazon");
+    expect(subtituloDaOportunidade({ cliente: "Amazon", estagio: "Negociação" })).toBe("");
+  });
+
+  it("duas frentes da mesma conta deixam de ser cartões idênticos", () => {
+    const middle = { campos: { nomeDoProjeto: "Middle Mile Sorocaba" }, cliente: "Amazon", estagio: "Negociação" };
+    const same = { campos: { nomeDoProjeto: "Same Day" }, cliente: "Amazon", estagio: "Negociação" };
+    expect(tituloDaOportunidade(middle)).not.toBe(tituloDaOportunidade(same));
+  });
+
+  it("normalizarOportunidade carrega o título guardado", () => {
+    expect(normalizarOportunidade({ titulo: "Projeto DHL", cliente: "DHL" }).titulo).toBe("Projeto DHL");
   });
 });

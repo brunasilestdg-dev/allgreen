@@ -164,5 +164,19 @@ export const textoDaProposta = (proposta = {}) => {
   }
   if (tipo === "pesquisar_empresa")
     return `Pesquisar ${proposta.cliente || "a empresa"} na web agora`;
+  if (tipo === "aprender") {
+    // Aqui o texto INTEIRO importa. Nas outras ações a pessoa confere um
+    // título e um prazo; nesta ela está autorizando o assistente a afirmar
+    // aquilo para todo mundo do espaço, inclusive dentro de uma proposta.
+    // Resumir o conteúdo seria pedir assinatura no que ela não leu.
+    const partes = [`Guardar no dossiê da To Do Green: "${proposta.titulo || "sem título"}"`];
+    if (proposta.conteudo) partes.push(`\n${proposta.conteudo}`);
+    const carimbo = [
+      proposta.fonte && `fonte: ${proposta.fonte}`,
+      proposta.sigilo && `sigilo: ${proposta.sigilo}`,
+    ].filter(Boolean).join(" · ");
+    if (carimbo) partes.push(`\n(${carimbo})`);
+    return partes.join(" ");
+  }
   return "Ação desconhecida — não confirme.";
 };

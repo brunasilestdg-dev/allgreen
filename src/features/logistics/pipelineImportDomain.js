@@ -308,6 +308,10 @@ export const planoDeImportacao = ({ projetos = [], updates = [] } = {}) => {
 // de ser descartado: grupo do quadro, prioridade, responsáveis por nome, datas
 // de proposta e término e o resumo do acompanhamento.
 export const oportunidadeParaRegistro = (item, clientId = "") => ({
+  // O nome do projeto no quadro É o nome do negócio. Antes ele só entrava em
+  // `campos.nomeDoProjeto` e a tela não o mostrava: seis frentes da Amazon
+  // viravam seis cartões escritos "Amazon".
+  titulo: item.nome,
   cliente: item.conta || item.nome,
   clientId,
   estagio: item.estagio,
@@ -336,7 +340,7 @@ export const chaveDaOportunidade = (registro = {}) =>
   // existe no CRM com o nome da empresa é a MESMA que o quadro chama de
   // "Projeto <empresa>". Sem isso, a primeira importação criaria uma segunda
   // oportunidade ao lado da que a equipe já acompanhava.
-  semAcento(registro.campos?.nomeDoProjeto || registro.nomeDoProjeto || registro.cliente || "")
+  semAcento(registro.titulo || registro.campos?.nomeDoProjeto || registro.nomeDoProjeto || registro.cliente || "")
     .replace(/^(projeto|proposta)\s+/, "");
 
 export const chaveDaInteracao = (registro = {}) =>
