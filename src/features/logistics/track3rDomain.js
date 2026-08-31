@@ -328,6 +328,12 @@ export const normalizarOcorrenciaDoWebhook = (payload = {}, fieldMap = {}) => {
     // O tipo do documento do webhook é sempre ocorrência: é um EVENTO da
     // remessa, não um documento novo de coleta.
     kind: "ocorrencia",
+    // `external_id` é ÚNICO por espaço na tabela de documentos (índice da 0063),
+    // e a encomenda se repete em toda ocorrência da mesma entrega. Guardar a
+    // encomenda ali faria a segunda ocorrência estourar a restrição — ela vive
+    // em `orderId`, que é coluna própria sem unicidade. Quem identifica a linha
+    // da ocorrência é o hash do evento.
+    externalId: "",
     origem: "webhook",
     occurrenceCode: codigo,
     // Quando a tabela oficial de códigos estiver configurada, ela manda; sem
@@ -378,6 +384,23 @@ export const hashDoDocumento = (doc = {}) => {
     String(doc.packages ?? 0),
   ].join("|");
 };
+
+// A ocorrência do webhook precisa de OUTRO hash, e a razão é o oposto da do
+// documento: ali o objetivo é COLAPSAR (a mesma coleta reaparece no relatório do
+// dia seguinte com status novo e deve atualizar a linha que existe); aqui o
+// objetivo é PRESERVAR (cada ocorrência da mesma encomenda é um evento distinto
+// da linha do tempo, e colapsá-las apagaria o histórico do rastreio).
+//
+// Reenvio do MESMO evento — o TRACK3R repete quando não recebe 200 — cai no
+// mesmo hash e atualiza uma linha só. Evento diferente da mesma encomenda muda
+// código ou data e vira linha nova.
+export const hashDaOcorrencia = (doc = {}) => [
+  "ocr",
+  texto(doc.orderId) || texto(doc.externalId),
+  texto(doc.invoiceKey) || texto(doc.invoiceNumber),
+  texto(doc.occurrenceCode),
+  normalizeDateTime(doc.occurredAt),
+].join("|");
 
 // ---------------------------------------------------------------------------
 // Casamento do embarcador — sem forçar
@@ -515,8 +538,10 @@ export const projetarEvento = (doc = {}) => {
 // O mínimo para o documento valer a pena guardar. Deliberadamente baixo: cliente,
 // veículo e operação são vínculos que podem faltar, e faltar não é erro.
 export const validarDocumento = (doc = {}) => {
-  if (!texto(doc.externalId) && !texto(doc.invoiceNumber) && !texto(doc.shipperName))
-    return "A linha não tem documento, nota fiscal nem embarcador — não há como identificá-la.";
+  // A encomenda do webhook identifica tão bem quanto o número do documento do
+  // relatório: é ela que amarra todas as ocorrências da mesma entrega.
+  if (!texto(doc.externalId) && !texto(doc.orderId) && !texto(doc.invoiceNumber) && !texto(doc.shipperName))
+    return "A linha não tem documento, encomenda, nota fiscal nem embarcador — não há como identificá-la.";
   if (!normalizeDate(doc.occurredAt) && !normalizeDate(doc.promisedAt))
     return "A linha não tem data reconhecível (use AAAA-MM-DD ou dd/mm/aaaa).";
   return "";
@@ -548,10 +573,16 @@ export const resumoDaImportacao = (documentos = []) => {
 
 // As perguntas a fazer ao suporte do TRACK3R. Ficam no código porque é aqui que
 // se sabe exatamente o que falta para ligar API e webhook.
+// Duas delas o documento de webhook (31/08) já respondeu: existe webhook de
+// ocorrência, e o segredo é um token fixo no cabeçalho `Token`. O que ele NÃO
+// respondeu virou pergunta nova — a tabela de códigos é a mais importante,
+// porque é ela que diz o que cada ocorrência significa.
 export const PERGUNTAS_AO_TRACK3R = Object.freeze([
+  "Qual é a tabela oficial de códigos de ocorrência? (o modelo só revela o código 03, Entregue)",
+  "A encomenda é estável entre as ocorrências da mesma entrega, e é o mesmo número do relatório de coletas?",
+  "Um POST do webhook traz uma ocorrência ou uma lista? E o TRACK3R reenvia quando não recebe 200?",
   "Existe API REST? Qual a URL base e onde está a documentação?",
   "Como se emite o token de acesso, e em qual cabeçalho ele vai?",
-  "Existe webhook de mudança de status de coleta e de entrega? Como o segredo é validado?",
   "Quais campos vêm em Consulta Dados Nota Fiscal (número, série, chave de 44 dígitos, valor)?",
   "O relatório exportado sai em CSV ou XLSX, e com quais colunas exatas no cabeçalho?",
   "O embarcador vem com CNPJ, ou só com nome e agrupador?",

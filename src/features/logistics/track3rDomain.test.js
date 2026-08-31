@@ -440,7 +440,9 @@ describe("webhook de ocorrências do TRACK3R", () => {
     const doc = normalizarOcorrenciaDoWebhook(WEBHOOK);
     // O que já era canônico continua saindo igual ao do relatório e da API.
     expect(doc).toMatchObject({
-      externalId: "22558899",
+      // A encomenda NÃO vai para external_id: aquela coluna é única por espaço
+      // e a mesma encomenda tem muitas ocorrências.
+      externalId: "",
       kind: "ocorrencia",
       origem: "webhook",
       status: "Entregue",

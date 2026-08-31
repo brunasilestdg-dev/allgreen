@@ -23,7 +23,7 @@ import { handleTodoGreenDriverPortal } from "./todogreen-driver-portal.js";
 import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
 import { handleTodoGreenPlanner } from "./todogreen-planner.js";
-import { handleTodoGreenTms } from "./todogreen-tms.js";
+import { handleTodoGreenTms, receberOcorrenciaTrack3r } from "./todogreen-tms.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
 import { handleTodoGreenClientIntelligence } from "./todogreen-client-intelligence.js";
@@ -201,6 +201,18 @@ export async function routeTodoGreenApi(request, env, ctx) {
       if (resolved.response) return resolved.response;
       return handleTodoGreenTreasury(request, env, resolved.access, resolved.user);
     });
+  }
+
+  // Receptor de ocorrências do TRACK3R. Vem ANTES do bloco do TMS de propósito:
+  // aquele exige sessão, e o fornecedor não tem sessão nem papel. Aqui quem
+  // autoriza é o header `Token` conferido contra o cofre do Worker, e o id da
+  // integração na URL diz de qual espaço é a chamada.
+  if (path.startsWith("/api/todogreen/tms/webhook")) {
+    return guarded(
+      "To Do Green TMS webhook error",
+      "Não foi possível receber a ocorrência do TRACK3R.",
+      () => receberOcorrenciaTrack3r(request, env),
+    );
   }
 
   // TMS TRACK3R. Não confundir com `/tracker`, que é a Sistemas Tracker — outro
