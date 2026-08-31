@@ -53,8 +53,10 @@ export function sameHash(left, right) {
 export async function createSession(env, userId) {
   const token = randomHex(32);
   const id = crypto.randomUUID();
+  // 24 horas, absoluto. Era 30 dias — uma máquina esquecida logada ficava
+  // um mês inteiro como porta aberta para a conta. Login diário é o custo.
   const expiresAt = new Date(
-    Date.now() + 30 * 24 * 60 * 60 * 1000,
+    Date.now() + 24 * 60 * 60 * 1000,
   ).toISOString();
   await env.DB.prepare(
     "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",

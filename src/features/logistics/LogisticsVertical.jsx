@@ -79,6 +79,7 @@ import {
 } from "./pricingPremisesDomain.js";
 import { liberacaoDaProposta } from "./dealDeskDomain.js";
 import { endSession } from "../../session/armazenamento.js";
+import { useSaidaPorInatividade } from "../../session/useSaidaPorInatividade.js";
 import { useVerticalRecords } from "./useVerticalRecords.js";
 import { inputsDePrecificacaoDaOportunidade } from "./electrificationJourneyDomain.js";
 import { buildTodoGreenDecisionCenter } from "./decisionCenterDomain.js";
@@ -2569,6 +2570,11 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     return () => { ativo = false; };
   }, [authHeaders]);
   const allowed = estadoDoAcesso === ACESSO.liberado;
+  const sairPorInatividade = useCallback(() => {
+    endSession();
+    window.location.assign("/");
+  }, []);
+  useSaidaPorInatividade(allowed ? sairPorInatividade : null);
   const role = allowed ? remoteAccess.role || "" : "";
   const page = todoGreenRouteToPage(path);
   const secaoDeCadastro = secaoDaRota(path);
@@ -2724,6 +2730,17 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                     {item.label}
                   </button>
                 ))}
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm("Encerrar a sessão em TODOS os aparelhos? Quem estiver com esta conta aberta em qualquer lugar será desconectado.")) return;
+                  await fetch("/api/auth/sessions", { method: "DELETE", headers: authHeaders?.() || {} }).catch(() => {});
+                  endSession();
+                  window.location.assign("/");
+                }}
+              >
+                Sair de todos os aparelhos
+              </button>
             </div>
           </details>
           <button

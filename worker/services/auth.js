@@ -64,6 +64,20 @@ export async function handleAuth(request, env, url) {
       : json({ error: "Sua sessão expirou. Entre novamente." }, 401);
   }
 
+  // Derruba TODAS as sessões da conta, em todos os aparelhos — o remédio
+  // para "esqueci uma máquina logada": revoga à distância, sem esperar o
+  // prazo de expiração.
+  if (url.pathname === "/api/auth/sessions") {
+    if (request.method !== "DELETE")
+      return json({ error: "Método não permitido." }, 405);
+    const account = await sessionUser(request, env);
+    if (!account) return json({ error: "Sessão inválida." }, 401);
+    await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?")
+      .bind(account.id)
+      .run();
+    return json({ ok: true });
+  }
+
   if (url.pathname === "/api/auth/account") {
     if (request.method !== "DELETE")
       return json({ error: "Método não permitido." }, 405);
