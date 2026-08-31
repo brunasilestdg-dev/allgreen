@@ -2773,7 +2773,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                       )}
                     </div>
                     {aberta && (paginas.length > 1 || (item.extras || []).length > 0) && (
-                      <div className="tdg-nav-area-itens">
+                      <nav className="tdg-nav-area-itens" aria-label={`Seções de ${item.label}`}>
                         {paginas.length > 1 && paginas.map(([id, modulo]) => (
                           <button
                             type="button"
@@ -2789,7 +2789,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                             {rotulo}
                           </button>
                         ))}
-                      </div>
+                      </nav>
                     )}
                   </div>
                 );
