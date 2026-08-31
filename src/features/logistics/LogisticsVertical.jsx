@@ -401,27 +401,9 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: "product:manage",
     description: "Catálogo de first, middle e last mile com escopo, SLA, unidade de cobrança, premissas e restrições por produto.",
   },
-  "catalogo-produtos": {
-    title: "Catálogo de produtos",
-    navLabel: "Catálogo",
-    route: "/todogreen/produtos",
-    area: "produtos",
-    status: "functional",
-    permission: "product:manage",
-    description: "Regras, indicadores, premissas e evidências de cada serviço contratado.",
-  },
-  "produtos-logisticos": {
-    title: "Produtos logísticos",
-    navLabel: "Produtos logísticos",
-    route: "/todogreen/produtos",
-    area: "produtos",
-    status: "functional",
-    permission: "product:manage",
-    description: "Serviços logísticos que Comercial vende, Produtos governa, Planejamento aceita e Operação executa.",
-  },
   planejamento: {
     title: "Planejamento operacional",
-    navLabel: "Planejamento",
+    navLabel: "Liberação de OS",
     route: "/todogreen/planejamento",
     area: "operacao",
     status: "functional",
@@ -430,7 +412,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
   "aceite-viagens": {
     title: "Aceito esta viagem?",
-    navLabel: "Aceite",
+    navLabel: "Aceito esta viagem?",
     route: "/todogreen/aceite-viagens",
     area: "operacao",
     status: "functional",
@@ -490,7 +472,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
   esg: {
     title: "ESG, Green Score e emissões da cadeia logística",
-    navLabel: "ESG",
+    navLabel: "ESG operacional",
     route: "/todogreen/esg",
     area: "esg",
     status: "functional",
@@ -659,32 +641,14 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: "hr:manage",
     description: "Administração de pessoal, documentação, alocação e rotinas trabalhistas separadas do Financeiro.",
   },
-  motoristas: {
-    title: "Motoristas",
-    navLabel: "Motoristas",
-    route: "/todogreen/motorista-frota",
-    area: "operacao",
-    status: "functional",
-    permission: ["fleet:manage", "operations:manage", "hr:manage"],
-    description: "Motoristas vinculados às operações, rotas ativas, jornada, produtividade e ocorrências.",
-  },
   "motorista-frota": {
     title: "Frota e motoristas",
-    navLabel: "Frota",
+    navLabel: "Veículos e motoristas",
     route: "/todogreen/motorista-frota",
     area: "operacao",
     status: "functional",
     permission: ["fleet:manage", "operations:manage", "hr:manage"],
     description: "Gestão operacional de frota, motoristas, telemetria disponível, custo, bateria, manutenção e alertas.",
-  },
-  escalas: {
-    title: "Escalas",
-    navLabel: "Escalas",
-    route: "/todogreen/rh",
-    area: "rh",
-    status: "functional",
-    permission: ["hr:manage", "operations:manage", "planning:manage"],
-    description: "Escalas e disponibilidade de motoristas e equipes por operação, janela e produto.",
   },
   marketing: {
     title: "Inteligência de mercado",
@@ -694,15 +658,6 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     permission: "market:read",
     description: "Pesquisa de notícias, RFQs e possíveis decisores no mercado inteiro, com fonte e classificação.",
-  },
-  campanhas: {
-    title: "Sinais e oportunidades de mercado",
-    navLabel: "Sinais de mercado",
-    route: "/todogreen/marketing",
-    area: "marketing",
-    status: "functional",
-    permission: "market:read",
-    description: "Triagem de sinais externos para virar oportunidade comercial, inclusive fora da carteira atual.",
   },
   relatorios: {
     title: "Relatórios executivos",
@@ -775,14 +730,6 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["audit:read", "operations:manage", "evidence:manage"],
     description: "SLA, BSC, auditoria de execução, não conformidades, planos de ação e melhoria contínua.",
   },
-  "comunicacao-interna": {
-    title: "Comunicação interna",
-    navLabel: "Comunicados",
-    route: "/todogreen/espaco",
-    area: "comunicacao-interna",
-    status: "functional",
-    description: "Comunicados, conhecimento, documentos internos e alinhamentos entre áreas.",
-  },
   juridico: {
     title: "Jurídico",
     navLabel: "Jurídico",
@@ -794,7 +741,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
   indicadores: {
     title: "Indicadores",
-    navLabel: "Indicadores",
+    navLabel: "KPIs por área",
     route: "/todogreen/indicadores",
     area: "indicadores",
     status: "functional",
@@ -802,7 +749,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
   administracao: {
     title: "Administração",
-    navLabel: "Administração",
+    navLabel: "Governança",
     route: "/todogreen/administracao",
     area: "administracao",
     status: "functional",
@@ -831,28 +778,63 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // por isso vive dentro deste grupo sem perder o nome próprio.
   { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "avancos", "planner", "central-trabalho", "implantacao", "solicitacoes"] },
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "planejamento", "aceite-viagens", "ordens-servico", "ocorrencias", "rastreamento"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  // Planejamento decide o que entra; Operação executa o que foi aceito. Antes
+  // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
+  // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
+  // indicadores) existia no menu. Um nome, um lugar.
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "rastreamento"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento", "aceite-viagens"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
-  { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing", "campanhas"] },
+  { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
   { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "rasci", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
-  { id: "planejamento", label: "Planejamento", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
+  { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
   // Cada cadastro mora na área dona do dado (atalhos "Cadastro · ..." no
   // segundo nível): materiais/depósitos/fornecedores em Compras, contas no
   // Financeiro, veículos/motoristas na Frota, colaboradores no DP, tabelas
   // de preço no Comercial, bases/rotas na Operação. A página completa
   // continua em Administração como o "ver tudo".
   { id: "suprimentos", label: "Compras", route: "/todogreen/compras", pages: ["compras", "estoque"], extras: [["Cadastro · Materiais", "/todogreen/cadastros?secao=items"], ["Cadastro · Depósitos", "/todogreen/cadastros?secao=warehouses"], ["Cadastro · Fornecedores e parceiros", "/todogreen/cadastros?secao=parties"]] },
-  { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "motoristas", "ciot"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
+  { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "ciot"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
   { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
-  { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh", "escalas"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
+  { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
-  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "catalogo-produtos"] },
+  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "integracoes", "acessos", "cadastros"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "integracoes", "acessos"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
+
+// Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
+// área certa, mas abrir "Cadastro · Veículos" jogava a pessoa em Administração
+// › Cadastros com as sete abas de todas as áreas na cara — e um segundo clique
+// em outro cadastro não trocava de seção. Este mapa devolve a área dona da
+// seção: o menu fica onde estava, a trilha diz de onde é e a tela abre só os
+// cadastros daquela área.
+const AREA_DO_CADASTRO = Object.freeze({
+  operationalUnits: "operations",
+  routes: "operations",
+  priceTables: "commercial",
+  items: "suprimentos",
+  warehouses: "suprimentos",
+  parties: "suprimentos",
+  vehicles: "frota",
+  drivers: "frota",
+  costCenters: "finance",
+  accounts: "finance",
+  bankAccounts: "finance",
+  employees: "dp",
+  companyProfiles: "administracao",
+});
+
+export const secaoDaRota = (rota = "") => {
+  try {
+    return new URLSearchParams(String(rota).split("?")[1] || "").get("secao") || "";
+  } catch {
+    return "";
+  }
+};
 
 const MANAGEMENT_TOOLS = Object.freeze([
   {
@@ -881,7 +863,11 @@ const MANAGEMENT_TOOLS = Object.freeze([
   },
 ]);
 
-const navigationFor = (page) => {
+const navigationFor = (page, secao = "") => {
+  if (page === "cadastros") {
+    const area = PRIMARY_NAVIGATION.find((item) => item.id === AREA_DO_CADASTRO[secao]);
+    if (area) return area;
+  }
   return PRIMARY_NAVIGATION.find((item) => item.pages.includes(page)) || PRIMARY_NAVIGATION[0];
 };
 
@@ -908,8 +894,8 @@ const podeAcessarFuncionalidade = (role, permissions, required) => {
 // A trilha (breadcrumb) vem do mesmo config do menu: a área da navegação
 // primária, a tela do módulo (ou da ferramenta de administração). Menu e trilha
 // lendo a mesma fonte nunca discordam sobre onde a pessoa está.
-export const trilhaDaPagina = (page) => {
-  const area = navigationFor(page);
+export const trilhaDaPagina = (page, secao = "") => {
+  const area = navigationFor(page, secao);
   const modulo = MODULE_IMPLEMENTATION[page];
   const ferramenta = MANAGEMENT_TOOLS.find((item) => item.id === page);
   const trilha = [{ label: "To Do Green", route: "/todogreen/dashboard" }];
@@ -2526,14 +2512,15 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const allowed = estadoDoAcesso === ACESSO.liberado;
   const role = allowed ? remoteAccess.role || "" : "";
   const page = todoGreenRouteToPage(path);
-  const primaryNavigation = navigationFor(page);
+  const secaoDeCadastro = secaoDaRota(path);
+  const primaryNavigation = navigationFor(page, secaoDeCadastro);
   const isOverview = page === "dashboard";
   const isWorkCenter = String(path).includes("/central-trabalho");
   const activeManagement = isWorkCenter
     ? MANAGEMENT_TOOLS[0]
     : MANAGEMENT_TOOLS.find((item) => item.id === page) || null;
   const currentPage = activeManagement || MODULE_IMPLEMENTATION[page] || MODULE_IMPLEMENTATION.dashboard;
-  const trilha = trilhaDaPagina(page);
+  const trilha = trilhaDaPagina(page, secaoDeCadastro);
   // A permissão da tela é conferida AQUI, na rota, e não só no menu: o menu
   // esconde o botão, mas voltar no histórico, atualizar ou digitar a URL
   // chegam à tela sem passar por ele. A fonte é a mesma que o menu usa.
@@ -2825,7 +2812,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "performance-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando performance comercial...</section>}><SalesPerformancePage authHeaders={authHeaders} onNavigate={navigate} /></Suspense>}
       {page === "playbook-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando playbook comercial...</section>}><TodoGreenGuides mode="playbook" onNavigate={navigate} /></Suspense>}
       {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
-      {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} setToast={setToast} /></Suspense>}
+      {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} setToast={setToast} secao={secaoDeCadastro} areaLabel={AREA_DO_CADASTRO[secaoDeCadastro] ? primaryNavigation.label : ""} /></Suspense>}
       {page === "implantacao" && (
         <Suspense fallback={<section className="tdg-panel">Carregando implantação...</section>}>
           <ClientActivationPage db={db} update={update} authHeaders={authHeaders} setToast={setToast} />
@@ -2835,8 +2822,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "tesouraria" && <Suspense fallback={<section className="tdg-panel">Carregando a tesouraria...</section>}><TreasuryPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} financial={registros.financial} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
-      {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
+      {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} financial={registros.financial} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
+      {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
       {page === "precificacao" && <PricingPanel key={`${produtoDaRota(path) || "nova"}:${new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"}`} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
       {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}

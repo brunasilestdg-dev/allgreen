@@ -9,6 +9,8 @@ import {
   createTodoGreenAccount,
   createTodoGreenContact,
   crmAccountSummary,
+  explicarSaudeDaConta,
+  PESOS_DA_SAUDE,
   recommendNextCommercialAction,
   TODO_GREEN_RELATIONSHIP_ROLES,
 } from "./todoGreenCrmDomain.js";
@@ -263,5 +265,49 @@ describe("To Do Green enterprise CRM", () => {
     expect(intelligence.accountPlan.plan60).toContain("volumes mensais");
     expect(intelligence.accountPlan.competitors).toBe("");
     expect(intelligence.accountPlan.generated.plan90).toBe(true);
+  });
+});
+
+describe("a régua da saúde explicada", () => {
+  // A titular pediu a regra clara na tela; a explicação tem que sair do MESMO
+  // cálculo, senão a tela ensina uma regra e o número obedece a outra.
+  it("os pesos somam 100", () => {
+    expect(PESOS_DA_SAUDE.reduce((soma, item) => soma + item.peso, 0)).toBe(100);
+  });
+
+  it("a contribuição de cada nota bate com o score das avaliações", () => {
+    const conta = {
+      id: "c1", strategicPotential: 80, relationshipStrength: 60, operationalFit: 40,
+      esgFit: 100, dataQuality: 20, churnRisk: 0, nextAction: "Visitar", nextActionAt: "2999-01-01",
+    };
+    const explicacao = explicarSaudeDaConta(conta, [], []);
+    const soma = explicacao.linhas.reduce((total, linha) => total + linha.contribuicao, 0);
+    expect(Math.abs(soma - explicacao.notaDasAvaliacoes)).toBeLessThanOrEqual(1);
+    // Risco de perda é invertido: risco zero contribui com o peso inteiro.
+    const risco = explicacao.linhas.find((linha) => linha.id === "churnRisk");
+    expect(risco.contribuicao).toBe(10);
+    expect(explicacao.semAvaliacao).toBe(false);
+  });
+
+  it("conta sem nota nenhuma é declarada não avaliada, e não 'ruim'", () => {
+    const explicacao = explicarSaudeDaConta({ id: "c2" }, [], []);
+    expect(explicacao.semAvaliacao).toBe(true);
+    expect(explicacao.linhas.every((linha) => linha.preenchida === false)).toBe(true);
+  });
+
+  it("ação atrasada explica a conta crítica com essas palavras", () => {
+    const explicacao = explicarSaudeDaConta(
+      { id: "c3", nextAction: "Ligar para o diretor", nextActionAt: "2000-01-01" }, [], [],
+    );
+    expect(explicacao.classificacao).toBe("critical");
+    expect(explicacao.motivo).toContain("atrasada");
+  });
+
+  it("risco alto também joga a conta para crítica", () => {
+    const explicacao = explicarSaudeDaConta(
+      { id: "c4", nextAction: "Reunião", nextActionAt: "2999-01-01", churnRisk: 80 }, [], [],
+    );
+    expect(explicacao.classificacao).toBe("critical");
+    expect(explicacao.motivo).toContain("risco de perda");
   });
 });

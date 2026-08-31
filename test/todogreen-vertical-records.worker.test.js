@@ -721,6 +721,7 @@ describe("a vertical inteira numa chamada só", () => {
       "contracts",
       "costCenters",
       "financial",
+      "interactions",
       "items",
       "operations",
       "opportunities",
@@ -863,6 +864,115 @@ describe("leitura por funcionalidade", () => {
     expect(payload.bankAccounts).toEqual([]);
     expect(payload.totals.financial).toBe(0);
     expect(payload.totals.bankAccounts).toBe(0);
+  });
+});
+
+describe("interações do comercial: ata, tentativa de contato e carimbo da data", () => {
+  // Pedido da titular (30/08): "preciso registrar as interações, atas de agenda
+  // com o cliente, tentativas de contato, etc nas oportunidades e clientes".
+  // Mesma regra de alcance dos comentários, e a data da interação carimba a
+  // última interação da conta e da oportunidade — é dela que a saúde da conta e
+  // os Avanços da semana vivem.
+  const criarConta = async (id, campos = {}) => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_clients
+         (id, tenant_id, workspace_owner_id, name, status, portal_enabled, fields_json,
+          created_by, updated_by, created_at, updated_at)
+       VALUES (?, 'todogreen', ?, ?, 'ativo', 0, ?, ?, ?, ?, ?)`,
+    ).bind(id, gestora.id, id, JSON.stringify(campos), gestora.id, gestora.id, agora, agora).run();
+  };
+
+  it("grava a ata da reunião com autor da sessão e carimba a conta e a oportunidade", async () => {
+    await criarConta("cli-ata", { temperature: "Morno", lastInteractionAt: "2026-01-10" });
+    const oportunidade = (await (await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { cliente: "cli-ata", clientId: "cli-ata", valorMensal: 5000 },
+    })).json()).registro;
+
+    const criada = await pedir("/api/todogreen/records/interactions", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: {
+        clientId: "cli-ata",
+        opportunityId: oportunidade.id,
+        tipo: "reuniao",
+        assunto: "Agenda com o time de logística",
+        ata: "Cliente pediu piloto em SP com 4 veículos. Jurídico deles revisa a minuta.",
+        participantes: "Bruna, Diretor de logística",
+        resultado: "avancou",
+        proximoPasso: "Enviar minuta revisada",
+        proximoPassoEm: "2026-09-05",
+        ocorridaEm: "2026-08-30",
+        autorEmail: "forjado@x.com",
+      },
+    });
+    expect(criada.status).toBe(201);
+    const registro = (await criada.json()).registro;
+    expect(registro.tipo).toBe("reuniao");
+    expect(registro.ata).toContain("piloto em SP");
+    // Assinatura é da sessão, nunca do corpo.
+    expect(registro.autorEmail).toBe(gestora.email);
+
+    const conta = await env.DB.prepare("SELECT fields_json FROM todogreen_clients WHERE id = ?")
+      .bind("cli-ata").first();
+    expect(JSON.parse(conta.fields_json).lastInteractionAt).toBe("2026-08-30");
+    const linha = await env.DB.prepare(
+      "SELECT last_interaction_at FROM todogreen_opportunities WHERE id = ?",
+    ).bind(oportunidade.id).first();
+    expect(linha.last_interaction_at).toBe("2026-08-30");
+  });
+
+  it("ata antiga registrada depois não rejuvenesce a conta", async () => {
+    await criarConta("cli-antiga", { lastInteractionAt: "2026-08-20" });
+    await pedir("/api/todogreen/records/interactions", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { clientId: "cli-antiga", tipo: "ligacao", assunto: "Ligação de julho", ocorridaEm: "2026-07-01" },
+    });
+    const conta = await env.DB.prepare("SELECT fields_json FROM todogreen_clients WHERE id = ?")
+      .bind("cli-antiga").first();
+    expect(JSON.parse(conta.fields_json).lastInteractionAt).toBe("2026-08-20");
+  });
+
+  it("tentativa de contato é registro de primeira classe", async () => {
+    const r = await pedir("/api/todogreen/records/interactions", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { clientId: "cli-ata", tipo: "tentativa", assunto: "Liguei, caiu na caixa postal", ocorridaEm: "2026-08-29" },
+    });
+    expect(r.status).toBe(201);
+    expect((await r.json()).registro.tipo).toBe("tentativa");
+  });
+
+  it("tipo desconhecido não entra cru na coluna", async () => {
+    const r = await pedir("/api/todogreen/records/interactions", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { clientId: "cli-ata", tipo: "<script>", assunto: "Qualquer coisa", ocorridaEm: "2026-08-29" },
+    });
+    expect((await r.json()).registro.tipo).toBe("reuniao");
+  });
+
+  it("interação sem vínculo, sem texto ou sem data é recusada", async () => {
+    const semVinculo = await pedir("/api/todogreen/records/interactions", {
+      metodo: "POST", token: gestora.token, corpo: { assunto: "Solta", ocorridaEm: "2026-08-30" },
+    });
+    expect(semVinculo.status).toBe(400);
+    const semTexto = await pedir("/api/todogreen/records/interactions", {
+      metodo: "POST", token: gestora.token, corpo: { clientId: "cli-ata", ocorridaEm: "2026-08-30" },
+    });
+    expect(semTexto.status).toBe(400);
+    const semData = await pedir("/api/todogreen/records/interactions", {
+      metodo: "POST", token: gestora.token, corpo: { clientId: "cli-ata", assunto: "Sem data" },
+    });
+    expect(semData.status).toBe(400);
+  });
+
+  it("o espaço de outra pessoa não vê as interações", async () => {
+    const doColega = await (await pedir("/api/todogreen/records/interactions", { token: colega.token })).json();
+    expect(doColega.registros.map((r) => r.assunto)).not.toContain("Agenda com o time de logística");
   });
 });
 

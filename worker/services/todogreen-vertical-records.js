@@ -146,6 +146,53 @@ const aquecerContaPorOportunidade = async (env, access, user, clientId) => {
   return true;
 };
 
+// Registrar interação é dizer "falei com o cliente em tal dia" — e é essa data
+// que a saúde da conta e os Avanços da semana leem para saber o que esfriou.
+// Por isso a interação carimba a última interação na oportunidade (coluna
+// própria) e na conta (campo do CRM), em vez de exigir que alguém edite a data
+// à mão depois de cada reunião. Só avança no tempo: uma ata antiga registrada
+// hoje não faz a conta parecer mais quente do que está.
+const carimbarUltimaInteracao = async (env, access, user, interacao) => {
+  const quando = texto(interacao.ocorridaEm, 40);
+  if (!quando) return;
+  const maisRecente = (anterior) => !anterior || String(anterior) < quando;
+  const agora = new Date().toISOString();
+
+  const opportunityId = texto(interacao.opportunityId, 120);
+  if (opportunityId) {
+    const oportunidade = await env.DB.prepare(
+      `SELECT id, last_interaction_at, revision FROM todogreen_opportunities
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+    ).bind(opportunityId, TENANT_ID, access.ownerId).first();
+    if (oportunidade && maisRecente(oportunidade.last_interaction_at)) {
+      await env.DB.prepare(
+        `UPDATE todogreen_opportunities
+            SET last_interaction_at=?, revision=revision+1, updated_by=?, updated_at=?
+          WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
+      ).bind(quando, user.id, agora, oportunidade.id, TENANT_ID, access.ownerId, oportunidade.revision).run();
+    }
+  }
+
+  const clientId = texto(interacao.clientId, 120);
+  if (!clientId) return;
+  const conta = await env.DB.prepare(
+    `SELECT id, fields_json, revision FROM todogreen_clients
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(clientId, TENANT_ID, access.ownerId).first();
+  if (!conta) return;
+  let campos = {};
+  try { campos = JSON.parse(conta.fields_json || "{}") || {}; } catch { campos = {}; }
+  if (!maisRecente(campos.lastInteractionAt)) return;
+  await env.DB.prepare(
+    `UPDATE todogreen_clients
+        SET fields_json=?, revision=revision+1, updated_by=?, updated_at=?
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
+  ).bind(
+    JSON.stringify({ ...campos, lastInteractionAt: quando }), user.id, agora,
+    conta.id, TENANT_ID, access.ownerId, conta.revision,
+  ).run();
+};
+
 // Cada coleção declara como uma linha vira registro e como um registro vira
 // linha. Sem essa tabela, cada endpoint reescreveria o mesmo mapeamento com
 // uma diferença sutil — e a diferença sutil é o que faz o painel somar errado.
@@ -166,6 +213,12 @@ const extrasDaOportunidade = (corpo) =>
       ([chave, valor]) => !COLUNAS_DA_OPORTUNIDADE.has(chave) && valor !== undefined,
     ),
   );
+
+// Tipos de interação aceitos. Um tipo desconhecido vira "reuniao" em vez de
+// entrar cru: a coluna é filtrada e somada, e lixo nela quebra o corte.
+const TIPOS_DE_INTERACAO = new Set([
+  "reuniao", "ligacao", "email", "visita", "whatsapp", "tentativa", "proposta", "outro",
+]);
 
 const COLECOES = {
   opportunities: {
@@ -246,6 +299,56 @@ const COLECOES = {
       if (!texto(corpo.comentario || corpo.body)) return "Escreva o comentário.";
       if (!texto(corpo.clientId) && !texto(corpo.opportunityId))
         return "Vincule o comentário a uma conta ou a uma oportunidade.";
+      return "";
+    },
+  },
+
+  // Interações do comercial (0079): reunião com ata, ligação, e-mail, visita,
+  // WhatsApp, proposta enviada e TENTATIVA de contato — a tentativa que não deu
+  // certo também é registro, é ela que mostra o cliente que não retorna.
+  // Mesma regra de alcance dos comentários: conta espelha nas oportunidades
+  // dela, oportunidade fica só nela.
+  interactions: {
+    tabela: "todogreen_crm_interactions",
+    permissao: "crm:manage",
+    permissoesLeitura: ["crm:manage", "clients:manage", "audit:read"],
+    ordem: "occurred_at DESC",
+    daLinha: (row) => ({
+      id: row.id,
+      clientId: row.client_id || "",
+      opportunityId: row.opportunity_id || "",
+      tipo: row.kind || "reuniao",
+      assunto: row.subject || "",
+      ata: row.notes || "",
+      participantes: row.participants || "",
+      resultado: row.outcome || "",
+      proximoPasso: row.next_step || "",
+      ocorridaEm: row.occurred_at || "",
+      proximoPassoEm: row.next_step_at || "",
+      autorEmail: row.author_email || "",
+      revision: row.revision,
+      criadoEm: row.created_at,
+      atualizadoEm: row.updated_at,
+    }),
+    colunas: (corpo) => ({
+      client_id: texto(corpo.clientId, 120),
+      opportunity_id: texto(corpo.opportunityId, 120),
+      kind: TIPOS_DE_INTERACAO.has(texto(corpo.tipo)) ? texto(corpo.tipo) : "reuniao",
+      subject: texto(corpo.assunto, 200),
+      notes: texto(corpo.ata, 8000),
+      participants: texto(corpo.participantes, 500),
+      outcome: texto(corpo.resultado, 300),
+      next_step: texto(corpo.proximoPasso, 500),
+      occurred_at: texto(corpo.ocorridaEm, 40),
+      next_step_at: texto(corpo.proximoPassoEm, 40),
+      author_email: texto(corpo.autorEmail, 200),
+    }),
+    exigido: (corpo) => {
+      if (!texto(corpo.clientId) && !texto(corpo.opportunityId))
+        return "Vincule a interação a uma conta ou a uma oportunidade.";
+      if (!texto(corpo.assunto) && !texto(corpo.ata))
+        return "Escreva o assunto ou a ata da interação.";
+      if (!texto(corpo.ocorridaEm)) return "Informe quando a interação aconteceu.";
       return "";
     },
   },
@@ -1031,7 +1134,8 @@ const criar = async (env, colecao, access, user, corpo) => {
 
   // O autor do comentário é a sessão, nunca o corpo — assinatura não se
   // escolhe pelo navegador.
-  if (colecao === COLECOES.comments) corpo = { ...corpo, autorEmail: texto(user.email, 200) };
+  if (colecao === COLECOES.comments || colecao === COLECOES.interactions)
+    corpo = { ...corpo, autorEmail: texto(user.email, 200) };
   if (colecao === COLECOES.financial) {
     const erroFinanceiro = validarFinanceiro(corpo);
     if (erroFinanceiro) return json({ error: erroFinanceiro }, 400);
@@ -1103,6 +1207,8 @@ const criar = async (env, colecao, access, user, corpo) => {
   const tipo = nomeDaColecao(colecao);
   if (colecao === COLECOES.opportunities && texto(registro.clientId))
     await aquecerContaPorOportunidade(env, access, user, registro.clientId);
+  if (colecao === COLECOES.interactions)
+    await carimbarUltimaInteracao(env, access, user, registro);
   if (colecao === COLECOES.contracts)
     await registrarEventoContrato(env, access, user, id, "created", {}, registro, texto(corpo.nota, 1000));
   await registrarAuditoriaTodoGreen(env, {
@@ -1134,7 +1240,8 @@ const atualizar = async (env, colecao, access, user, id, corpo) => {
 
   const proximo = { ...colecao.daLinha(atual), ...corpo };
   // Editar um comentário não troca a assinatura: o autor original permanece.
-  if (colecao === COLECOES.comments) proximo.autorEmail = atual.author_email || "";
+  if (colecao === COLECOES.comments || colecao === COLECOES.interactions)
+    proximo.autorEmail = atual.author_email || "";
   if (colecao === COLECOES.contracts && texto(corpo.aprovacao, 40)) {
     proximo.aprovadoPor = texto(corpo.aprovacao, 40) === "approved" ? user.id : "";
     proximo.aprovadoEm = texto(corpo.aprovacao, 40) === "approved" ? new Date().toISOString() : "";

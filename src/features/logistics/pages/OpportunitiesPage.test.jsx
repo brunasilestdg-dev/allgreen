@@ -223,6 +223,38 @@ describe("página de oportunidades", () => {
     await waitFor(() => expect(onComment).toHaveBeenCalledWith({ clientId: "cli-1", opportunityId: "opp-1", comentario: "Renegociar prazo" }));
   });
 
+  it("interação da conta aparece na oportunidade; a nova sai carimbada com ela", async () => {
+    // Mesmo alcance dos comentários, agora com ata, participantes e próximo
+    // passo: o que é da conta acompanha todas as oportunidades dela.
+    const onInteraction = vi.fn().mockResolvedValue({});
+    const interactions = [
+      { id: "i1", clientId: "cli-1", opportunityId: "", tipo: "reuniao", assunto: "Agenda anual com o board", ocorridaEm: "2026-08-20" },
+      { id: "i2", clientId: "cli-1", opportunityId: "outra-opp", tipo: "ligacao", assunto: "Assunto de outra oportunidade", ocorridaEm: "2026-08-21" },
+    ];
+    localStorage.setItem("todogreen-opp-view", "kanban");
+    render(<OpportunitiesPage
+      opportunities={[{ ...completa, clientId: "cli-1" }]}
+      interactions={interactions}
+      onInteraction={onInteraction}
+      setToast={vi.fn()}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Distribuidora Norte/ }));
+    expect(await screen.findByText("Agenda anual com o board")).toBeInTheDocument();
+    expect(screen.queryByText("Assunto de outra oportunidade")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Registrar interação/ }));
+    fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Reunião de fechamento" } });
+    fireEvent.change(screen.getByLabelText("Quando aconteceu"), { target: { value: "2026-08-30" } });
+    fireEvent.change(screen.getByLabelText("Ata / o que foi tratado"), { target: { value: "Cliente aceitou o preço com 12 meses." } });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar interação/ }));
+
+    await waitFor(() => expect(onInteraction).toHaveBeenCalledWith(expect.objectContaining({
+      clientId: "cli-1", opportunityId: "opp-1", assunto: "Reunião de fechamento",
+      ata: "Cliente aceitou o preço com 12 meses.",
+    })));
+  });
+
   it("avisa que a conta Fria saiu para Morno — e não repete o aviso para conta Quente", async () => {
     // O servidor aquece a conta (Frio/sem classificação → Morno) quando a
     // oportunidade nasce vinculada; o toast espelha a mesma régua.

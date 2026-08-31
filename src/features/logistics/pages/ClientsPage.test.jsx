@@ -176,6 +176,75 @@ describe("página de clientes", () => {
     await waitFor(() => expect(onComment).toHaveBeenCalledWith({ clientId: "client-1", comentario: "Piloto em SP fechado" }));
   });
 
+  it("registra a ata da reunião na conta, com alcance de conta", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      clientes: [{ id: "client-1", name: "Rede Alfa", status: "ativo", revision: 1, vendedores: [], crm: { contacts: [] } }],
+      acesso: { podeGerenciar: false, podeEditar: true, somenteCarteira: true },
+    }), { status: 200 }))));
+    const onInteraction = vi.fn().mockResolvedValue({});
+
+    render(<ClientsPage
+      authHeaders={() => ({})}
+      setToast={vi.fn()}
+      onInteraction={onInteraction}
+      interactions={[
+        { id: "i1", clientId: "client-1", opportunityId: "", tipo: "reuniao", assunto: "Kick-off da malha", ata: "Cliente quer piloto em SP.", ocorridaEm: "2026-08-25" },
+        { id: "i2", clientId: "client-1", opportunityId: "opp-9", tipo: "ligacao", assunto: "Detalhe da oportunidade", ocorridaEm: "2026-08-28" },
+      ]}
+    />);
+    fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Atividade" }));
+
+    // Na conta só entra o que é da conta: a interação da oportunidade fica nela.
+    expect(screen.getByText("Kick-off da malha")).toBeInTheDocument();
+    expect(screen.queryByText("Detalhe da oportunidade")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Registrar interação/ }));
+    fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "tentativa" } });
+    fireEvent.change(screen.getByLabelText("Quando aconteceu"), { target: { value: "2026-08-30" } });
+    fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Liguei, sem retorno" } });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar interação/ }));
+
+    await waitFor(() => expect(onInteraction).toHaveBeenCalledWith(expect.objectContaining({
+      clientId: "client-1", tipo: "tentativa", assunto: "Liguei, sem retorno", ocorridaEm: "2026-08-30",
+    })));
+    // Sem opportunityId: é interação da conta, aparece em todas as dela.
+    expect(onInteraction.mock.calls[0][0].opportunityId).toBeUndefined();
+  });
+
+  it("mostra a régua da saúde e salva as notas no próprio painel", async () => {
+    const chamadas = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {
+      if (options.method === "PATCH") chamadas.push(JSON.parse(options.body));
+      return Promise.resolve(new Response(JSON.stringify({
+        clientes: [{
+          id: "client-1", name: "Rede Alfa", status: "ativo", revision: 4, vendedores: [],
+          crm: { contacts: [], strategicPotential: 80, relationshipStrength: 40, nextAction: "Visitar o CD" },
+        }],
+        acesso: { podeGerenciar: true, podeEditar: true, somenteCarteira: false },
+      }), { status: 200 }));
+    }));
+
+    render(<ClientsPage authHeaders={() => ({})} setToast={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
+
+    // A regra deixou de ser segredo do código: peso, fórmula e classificação.
+    expect(screen.getByText(/70% da média ponderada das seis notas/)).toBeInTheDocument();
+    expect(screen.getByText(/Potencial estratégico/)).toBeInTheDocument();
+    expect(screen.getByText(/Por que está assim:/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Avaliar esta conta" }));
+    fireEvent.change(screen.getByLabelText("Aderência ESG (0 a 100)"), { target: { value: "70" } });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar avaliação/ }));
+
+    await waitFor(() => expect(chamadas.length).toBe(1));
+    expect(chamadas[0].revision).toBe(4);
+    expect(chamadas[0].crm.esgFit).toBe(70);
+    // Editar a nota não pode apagar o resto do CRM da conta.
+    expect(chamadas[0].crm.strategicPotential).toBe(80);
+    expect(chamadas[0].crm.nextAction).toBe("Visitar o CD");
+  });
+
   it("novo contato sem conta da lista não grava em lugar nenhum", async () => {
     const chamadas = [];
     vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {

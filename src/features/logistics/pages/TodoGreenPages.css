@@ -1824,3 +1824,54 @@
 .tdg-avanco-cartao > p { color: var(--tdg-text); font-size: .86rem; line-height: 1.45; margin: 0; }
 .tdg-avancos-atencao { border-top: 1px solid var(--tdg-line); color: var(--tdg-muted); margin: 16px 0 0; padding-top: 12px; }
 .tdg-avancos-atencao strong { color: #a05e03; }
+
+/* ===== Interações registradas (ata, ligação, visita, tentativa) ===== */
+.tdg-interacoes { border-top: 1px solid var(--tdg-line); display: grid; gap: 10px; margin-top: 14px; padding-top: 12px; }
+.tdg-interacoes > header { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.tdg-interacoes > header strong { align-items: center; display: inline-flex; font-size: .9rem; gap: 6px; }
+.tdg-interacoes > header .tdg-action { margin-left: auto; }
+.tdg-interacoes-silencio { color: var(--tdg-muted); font-size: 12px; }
+.tdg-interacoes-aviso { color: var(--tdg-muted); }
+.tdg-interacoes-compromissos { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.tdg-interacoes-compromissos li { align-items: center; background: var(--tdg-soft); border-radius: 8px; display: flex; font-size: 12.5px; gap: 8px; padding: 6px 10px; }
+.tdg-interacoes-compromissos li b { margin-left: auto; white-space: nowrap; }
+.tdg-interacoes-lista { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.tdg-interacoes-lista li { background: #fbfdfc; border: 1px solid var(--tdg-line); border-radius: 9px; display: flex; gap: 10px; padding: 9px 11px; }
+.tdg-interacoes-lista li[data-origem="conta"] { background: var(--tdg-soft); }
+.tdg-interacoes-lista li > div { display: grid; gap: 3px; min-width: 0; }
+.tdg-interacoes-lista li p { margin: 0; white-space: pre-wrap; }
+.tdg-interacoes-lista li small { color: var(--tdg-muted); font-size: 11.5px; }
+.tdg-interacao-tag { align-self: flex-start; background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-deep, #14532d); font-size: 11px; font-weight: 600; padding: 3px 9px; white-space: nowrap; }
+.tdg-interacao-passo { color: var(--tdg-deep, #14532d) !important; font-weight: 600; }
+.tdg-interacoes .tdg-interacoes-vazio { border-style: dashed; color: var(--tdg-muted); display: block; text-align: center; }
+
+/* ===== Saúde da conta: régua visível e notas editáveis no lugar ===== */
+.tdg-saude-conta { background: #fff; border: 1px solid var(--tdg-line); border-radius: 12px; display: grid; gap: 10px; margin: 12px 0; padding: 14px 16px; }
+.tdg-saude-conta > header { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.tdg-saude-conta > header strong { align-items: center; display: inline-flex; font-size: .95rem; gap: 6px; }
+.tdg-saude-conta > header b { font-size: 1.35rem; }
+.tdg-saude-conta > header button { background: none; border: 1px solid var(--tdg-line); border-radius: 8px; cursor: pointer; font: inherit; margin-left: auto; padding: 5px 12px; }
+.tdg-saude-classe { border-radius: 999px; font-size: 11.5px; font-weight: 700; padding: 3px 10px; }
+.tdg-saude-classe.healthy { background: #dcfce7; color: #14532d; }
+.tdg-saude-classe.attention { background: #fef3c7; color: #78350f; }
+.tdg-saude-classe.critical { background: #fee2e2; color: #7f1d1d; }
+.tdg-saude-motivo { margin: 0; }
+.tdg-saude-aviso { background: var(--tdg-soft); border-radius: 9px; color: var(--tdg-muted); margin: 0; padding: 8px 11px; }
+.tdg-saude-regra summary { cursor: pointer; font-weight: 600; }
+.tdg-saude-regra p, .tdg-saude-regra ul { color: var(--tdg-muted); margin: 6px 0 0; }
+.tdg-saude-regra ul { padding-left: 18px; }
+.tdg-saude-notas { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.tdg-saude-notas li { align-items: baseline; border-bottom: 1px dashed var(--tdg-line); display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 5px; }
+.tdg-saude-notas li b { margin-left: auto; }
+.tdg-saude-notas li em { color: var(--tdg-muted); font-size: 11.5px; font-style: normal; min-width: 160px; text-align: right; }
+.tdg-saude-notas .tdg-saude-total { border-bottom: none; font-weight: 600; }
+.tdg-saude-form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.tdg-saude-form label { display: grid; gap: 4px; }
+.tdg-saude-form label.full { grid-column: 1 / -1; }
+.tdg-saude-form label span { font-size: 12.5px; font-weight: 600; }
+.tdg-saude-form label span em { color: var(--tdg-muted); font-style: normal; font-weight: 400; }
+.tdg-saude-form label small { color: var(--tdg-muted); font-size: 11px; }
+.tdg-saude-form input { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; padding: 7px 10px; }
+.tdg-saude-form .tdg-form-actions { display: flex; gap: 10px; grid-column: 1 / -1; justify-content: flex-end; }
+.tdg-saude-alertas { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.tdg-saude-alertas li { background: #fef3c7; border-radius: 999px; color: #78350f; font-size: 11.5px; padding: 3px 10px; }

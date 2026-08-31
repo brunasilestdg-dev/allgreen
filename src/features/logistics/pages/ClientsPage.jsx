@@ -31,6 +31,9 @@ import {
 import Modal from "../../../components/Modal.jsx";
 import TopScrollRow from "./TopScrollRow.jsx";
 import ComentariosPanel from "./ComentariosPanel.jsx";
+import InteracoesPanel from "./InteracoesPanel.jsx";
+import SaudeDaContaPanel from "./SaudeDaContaPanel.jsx";
+import { interacoesVisiveis } from "../interacoesDomain.js";
 import { ESTAGIOS_OPORTUNIDADE, estagioValido } from "../opportunityIntelligenceDomain.js";
 import { inboxUrl } from "../../../session/telemetria.js";
 import RelationshipMap from "../RelationshipMap.jsx";
@@ -43,6 +46,7 @@ import {
   buildAccountIntelligence,
   calculatePortfolioPotential,
   crmAccountSummary,
+  explicarSaudeDaConta,
   normalizeRelationshipRole,
 } from "../todoGreenCrmDomain.js";
 import { assessAccount, gmailComposeUrl, outlookComposeUrl, whatsappUrl } from "../accountIntelligenceDomain.js";
@@ -649,7 +653,7 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], comments = [], onComment, onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
   const [clients, setClients] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
   const [query, setQuery] = useState("");
@@ -1206,30 +1210,19 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         ].map(([id, label]) => <button type="button" className={detailTab === id ? "active" : ""} aria-current={detailTab === id ? "page" : undefined} onClick={() => openDetailTab(id)} key={id}>{label}</button>)}
       </nav>
       <div className="tdg-crm-detail-metrics"><article><small>Saúde da conta</small><strong>{selectedSummary.score}</strong><span>{selectedSummary.attention === "healthy" ? "Saudável" : selectedSummary.attention === "critical" ? "Crítica" : "Atenção"}</span></article><article><small>Receita atual</small><strong>{selectedStrategy.shareOfWallet.status === "missing-our-revenue" || selectedAccount.ourAnnualRevenue === "" || selectedAccount.ourAnnualRevenue === undefined ? "Não informada" : BRL.format(selectedStrategy.shareOfWallet.ourRevenue)}</strong><span>receita anual To Do Green</span></article><article><small>Potencial anual</small><strong>{selectedStrategy.potential.annual ? BRL.format(selectedStrategy.potential.annual) : "Não calculado"}</strong><span>sem estimativa quando falta base</span></article><article><small>Share of Wallet</small><strong>{selectedStrategy.shareOfWallet.percentage === null ? "Não calculado" : `${selectedStrategy.shareOfWallet.percentage.toLocaleString("pt-BR")}%`}</strong><span>participação no gasto logístico</span></article><article><small>Cobertura de decisores</small><strong>{selectedSummary.coverage}%</strong><span>{selectedAccount.contacts.length} contato(s)</span></article><article><small>Pipeline da conta</small><strong>{BRL.format(selectedSummary.pipeline || 0)}</strong><span>{selectedSummary.openOpportunities || 0} oportunidade(s)</span></article></div>
-      {(() => {
-        const crm = selected.crm || {};
-        const notas = [
-          ["Potencial estratégico", crm.strategicPotential],
-          ["Força do relacionamento", crm.relationshipStrength],
-          ["Aderência operacional", crm.operationalFit],
-          ["Aderência ESG", crm.esgFit],
-          ["Qualidade dos dados", crm.dataQuality],
-          ["Risco de perda (quanto menor, melhor)", crm.churnRisk],
-        ];
-        const semAvaliacao = notas.every(([, valor]) => !Number(valor));
-        return (
-          <details className="tdg-crm-health-breakdown">
-            <summary>Por que a saúde está assim? {semAvaliacao ? "· conta ainda não avaliada" : ""}</summary>
-            {semAvaliacao && <p>Esta conta ainda não recebeu as suas notas de avaliação — por isso o número parece ruim. A saúde combina as seis notas abaixo (0 a 100), que são SUAS: preencha em Editar conta e o score passa a refletir a realidade.</p>}
-            <ul>
-              {notas.map(([rotulo, valor]) => (
-                <li key={rotulo}><span>{rotulo}</span><b>{Number(valor) || 0}/100</b></li>
-              ))}
-            </ul>
-            {access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={14} />Ajustar avaliação da conta</button>}
-          </details>
-        );
-      })()}
+      <SaudeDaContaPanel
+        conta={selected}
+        explicacao={explicarSaudeDaConta(selectedAccount, selectedAccount.contacts, crmOpportunities)}
+        podeEditar={access.podeEditar}
+        setToast={setToast}
+        onSalvar={async (avaliacao) => {
+          await saveClient(selected, {
+            revision: selected.revision,
+            crm: { ...(selected.crm || {}), ...avaliacao },
+          });
+          setToast?.("Avaliação da conta salva — a saúde já reflete as novas notas.");
+        }}
+      />
       <section className="tdg-crm-next"><Target size={17} /><div><small>PRÓXIMA MELHOR AÇÃO</small><strong>{selectedIntelligence.nextTask}</strong></div><button type="button" onClick={() => setTaskClientId(selected.id)}>Transformar em tarefa</button><button type="button" onClick={completeSuggestedAction} disabled={!selectedIntelligence.nextTaskCanComplete}>Marcar feita e ver próxima</button></section>
       {portalPreviewOpen && <ClientPortalPreview client={selected} authHeaders={authHeaders} open onClose={() => setPortalPreviewOpen(false)} />}
       <div className={`tdg-crm-detail-grid tdg-account-tab-${detailTab}`}><main>
@@ -1313,6 +1306,19 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
               </details>
             );
           })()}
+        </section>
+        <section className="tdg-crm-detail-section tdg-account-panel tdg-account-activity tdg-account-interacoes">
+          <InteracoesPanel
+            interacoes={interacoesVisiveis({ interacoes: interactions, clientId: selected.id })}
+            escopo="conta"
+            aviso="Interação registrada na conta aparece em todas as oportunidades dela. O que for específico de uma negociação, registre dentro da oportunidade."
+            podeRegistrar={Boolean(access.podeEditar && onInteraction)}
+            onRegistrar={async (interacao) => {
+              await onInteraction({ ...interacao, clientId: selected.id });
+              setToast?.("Interação registrada na conta — visível em todas as oportunidades dela.");
+            }}
+            setToast={setToast}
+          />
         </section>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-activity tdg-account-comments">
           <ComentariosPanel

@@ -233,6 +233,28 @@ quantos resultados vieram.
   nome quando houver identificador. Vendedor pode atualizar a visão 360º
   somente da própria carteira e toda alteração exige `revision`; o portal não
   recebe scores, pipeline, forecast, responsáveis ou observações internas.
+- **Interações e comentários do CRM**: comentário (`todogreen_crm_comments`,
+  migração `0078`) e interação (`todogreen_crm_interactions`, migração `0079` —
+  reunião com ata, ligação, e-mail, visita, WhatsApp, tentativa de contato,
+  proposta) compartilham a MESMA regra de alcance, e ela mora no dado: registro
+  com `client_id` e sem `opportunity_id` é da conta e aparece em todas as
+  oportunidades dela; com `opportunity_id` fica só naquela oportunidade. Não
+  criar tabela de espelhamento — o corte é feito na leitura
+  (`interacoesDomain.js#interacoesVisiveis`). O autor é carimbado da sessão,
+  nunca do corpo, e não muda em PATCH. Registrar interação carimba a última
+  interação da conta e da oportunidade, e o carimbo só AVANÇA no tempo: ata
+  antiga lançada depois não rejuvenesce a conta.
+- **A régua da saúde da conta é dado, não código escondido**: `PESOS_DA_SAUDE` e
+  `REGRA_DA_SAUDE` (`todoGreenCrmDomain.js`) alimentam ao mesmo tempo o cálculo
+  e a explicação na tela (`pages/SaudeDaContaPanel.jsx`), com as notas editáveis
+  no próprio painel. Mudar peso ou gatilho num lugar só faria a tela ensinar uma
+  regra e o número obedecer a outra.
+- **Menu da vertical**: `PRIMARY_NAVIGATION` (`LogisticsVertical.jsx`) é a lista
+  de áreas; cada tela aparece em UMA área e em um item só — dois rótulos para a
+  mesma rota é repetição, e `moduleNavLabels.test.js` reprova. Cadastro mora na
+  área dona do dado: o atalho `?secao=` mantém o menu na área (`AREA_DO_CADASTRO`)
+  e a tela de cadastros abre recortada por ela, em vez de despejar as sete abas
+  de todas as áreas.
 - **Automações configuráveis da Central To Do Green**: regras ficam na tabela
   `todogreen_work_automation_rules` (migração `0049`) e são sempre isoladas por
   `workspace_owner_id`. A interface da Central permite escolher quadro,

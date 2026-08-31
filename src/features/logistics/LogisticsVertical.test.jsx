@@ -163,10 +163,11 @@ describe("LogisticsVertical", () => {
   it("renders the private hub for authorized To Do Green users", async () => {
     await renderarAutorizada();
     expect(screen.getByRole("heading", { name: "Principal", level: 1 }).hidden).toBe(false);
-    // Acordeão: 18 áreas (taxonomia da titular; Implantação mora no Workspace) + as setas de expandir das
-    // áreas com segundo nível. Conta-se as ÁREAS, não um total frágil.
+    // Acordeão: 19 áreas (taxonomia da titular; Implantação mora no Workspace e
+    // Planejamento voltou a ser área própria, separada de Operação e de
+    // Indicadores). Conta-se as ÁREAS, não um total frágil.
     const navegacao = screen.getByRole("navigation", { name: "Navegação To Do Green" });
-    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(18);
+    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(19);
     expect(screen.getByText("Configurações")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Olá, Bruna" })).toBeTruthy();
     expect(screen.getByText("Novos Negócios e Comercial. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.")).toBeTruthy();
@@ -717,9 +718,11 @@ describe("LogisticsVertical", () => {
     window.history.pushState({}, "", "/todogreen/ordens-servico");
     await renderarAutorizada();
     expect(await screen.findByRole("heading", { name: "Aceite e ordens de serviço", level: 2 })).toBeTruthy();
-    // CIOT agora mora na área Frota (taxonomia da titular); Operação segue
-    // com planejamento e aceite.
-    expect(screen.getByRole("navigation", { name: /Seções de Operação/ }).textContent).toContain("Planejamento");
+    // CIOT mora na Frota e o planejamento saiu daqui: Operação executa o que
+    // já foi aceito. Quem decide o aceite tem área própria.
+    const secoesDeOperacao = screen.getByRole("navigation", { name: /Seções de Operação/ }).textContent;
+    expect(secoesDeOperacao).toContain("Fretes");
+    expect(secoesDeOperacao).not.toContain("Planejamento");
     fireEvent.click(screen.getByRole("button", { name: "Financeiro" }));
     expect(await screen.findByRole("heading", { name: "Fila de faturamento", level: 2 })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: /Seções de Financeiro/ }).textContent).toContain("Títulos e baixas");

@@ -23,6 +23,9 @@ const VAZIO = Object.freeze({
   // Comentários do comercial (conta e oportunidade) — a regra de alcance
   // mora nos campos clientId/opportunityId de cada registro.
   comments: [],
+  // Interações registradas (reunião com ata, ligação, e-mail, visita,
+  // tentativa de contato) — mesma regra de alcance dos comentários.
+  interactions: [],
   // Cadastros de base do ERP (migração 0053). São listas pequenas e estáveis,
   // consultadas por quase toda tela do ERP — material, depósito, parte, conta e
   // centro de custo —, então vêm na mesma carga inicial em vez de uma chamada

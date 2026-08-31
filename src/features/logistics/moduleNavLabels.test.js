@@ -68,6 +68,58 @@ describe("propriedade das abas principais", () => {
     expect(new Set(paginas).size).toBe(paginas.length);
   });
 
+  it("nenhum item do menu abre a mesma tela que outro", () => {
+    // "Sinais de mercado" abria a tela de "Mercado"; "Motoristas", a de
+    // "Frota"; "Catálogo", a de "Produtos"; e "Escalas", dentro do DP, abria
+    // a tela de RH. Quatro nomes diferentes para quatro telas que já estavam
+    // no menu — repetição pura.
+    const paginas = [...blocoDaNavegacaoPrincipal.matchAll(/pages: \[([^\]]*)\]/g)]
+      .flatMap((match) => [...match[1].matchAll(/"([^"]+)"/g)].map((page) => page[1]));
+    const rotaDe = (pagina) => {
+      const bloco = blocoDosModulos.match(
+        new RegExp(`\n {2}"?${pagina}"?: \\{[\\s\\S]*?\n {2}\\},`),
+      );
+      return bloco ? (bloco[0].match(/route: "([^"]+)"/) || [])[1] : "";
+    };
+    const rotas = paginas.map(rotaDe).filter(Boolean);
+    expect(rotas.length).toBeGreaterThan(20);
+    expect(new Set(rotas).size).toBe(rotas.length);
+  });
+
+  it("Planejamento é uma área só, e não um item dentro de Operação", () => {
+    // Havia uma aba "Planejamento" que na verdade era indicadores, e um item
+    // "Planejamento" dentro de Operação. Mesmo nome, dois lugares.
+    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Planejamento", route: "\/todogreen\/planejamento"/);
+    expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Operação"[^\n]+"planejamento"/);
+    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Indicadores"[^\n]+indicadores/);
+  });
+
+  it("nenhum item repete, letra por letra, o nome da própria área", () => {
+    const grupos = [...blocoDaNavegacaoPrincipal.matchAll(/label: "([^"]+)", route: "[^"]+", pages: \[([^\]]*)\]/g)];
+    const rotuloDe = (pagina) => {
+      const bloco = blocoDosModulos.match(
+        new RegExp(`\n {2}"?${pagina}"?: \\{[\\s\\S]*?\n {2}\\},`),
+      );
+      return bloco ? (bloco[0].match(/navLabel: "([^"]+)"/) || [])[1] : "";
+    };
+    const repetidos = [];
+    for (const [, area, paginasCru] of grupos) {
+      const paginas = [...paginasCru.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+      // Área com uma tela só não abre segundo nível: não há o que repetir.
+      if (paginas.length < 2) continue;
+      for (const pagina of paginas) if (rotuloDe(pagina) === area) repetidos.push(`${area} › ${pagina}`);
+    }
+    expect(repetidos).toEqual([]);
+  });
+
+  it("cadastro não joga a pessoa em Administração", () => {
+    // A aba agregada com as sete abas de todas as áreas saiu do menu: cada
+    // cadastro abre recortado pela área dona do dado.
+    expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Administração"[^\n]+"cadastros"/);
+    expect(fonte).toContain("const AREA_DO_CADASTRO");
+    expect(fonte).toMatch(/navigationFor\(page, secaoDeCadastro\)/);
+  });
+
   it("funções que tinham dono errado ficam em abas próprias", () => {
     // Taxonomia da titular (30/08): cadastro mora na área dona do dado —
     // fornecedores, itens e depósitos são de Compras; e Suprimentos assina

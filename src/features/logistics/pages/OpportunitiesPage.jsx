@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import ComentariosPanel from "./ComentariosPanel.jsx";
+import InteracoesPanel from "./InteracoesPanel.jsx";
+import { interacoesVisiveis } from "../interacoesDomain.js";
 import TopScrollRow from "./TopScrollRow.jsx";
 import {
   ESTAGIOS_OPORTUNIDADE,
@@ -133,7 +135,7 @@ function CampoEstudo({ form, campo, rotulo, tipo = "text", onChange, opcoes }) {
   );
 }
 
-function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast, comments = [], onComment }) {
+function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast, comments = [], onComment, interactions = [], onInteraction }) {
   // Regra da titular (30/08): comentário feito AQUI fica só nesta
   // oportunidade; comentário feito na conta aparece em todas as
   // oportunidades dela — por isso a lista junta os dois, rotulando a origem.
@@ -295,6 +297,18 @@ function EstudoEletrificacaoModal({ registro, onClose, onSave, setToast, comment
           </button>
         </footer>
       </form>
+      {onInteraction && (
+        <InteracoesPanel
+          interacoes={interacoesVisiveis({ interacoes: interactions, clientId: registro.clientId || "", opportunityId: registro.id })}
+          escopo="oportunidade"
+          aviso="Reunião, ligação, visita e tentativa de contato desta negociação. O que for da conta inteira, registre na conta — aparece aqui marcado como interação da conta."
+          onRegistrar={async (interacao) => {
+            await onInteraction({ ...interacao, clientId: registro.clientId || "", opportunityId: registro.id });
+            setToast?.("Interação registrada nesta oportunidade.");
+          }}
+          setToast={setToast}
+        />
+      )}
       {onComment && (
         <ComentariosPanel
           comentarios={comentariosVisiveis}
@@ -575,6 +589,8 @@ export default function OpportunitiesPage({
   scenarios = [],
   comments = [],
   onComment,
+  interactions = [],
+  onInteraction,
   onCreate,
   onUpdate,
   onNavigate,
@@ -869,6 +885,8 @@ export default function OpportunitiesPage({
           setToast={setToast}
           comments={comments}
           onComment={onComment}
+          interactions={interactions}
+          onInteraction={onInteraction}
         />
       )}
     </section>

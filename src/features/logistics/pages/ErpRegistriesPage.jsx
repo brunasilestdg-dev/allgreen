@@ -30,16 +30,21 @@ async function api(path, options = {}) {
   return payload;
 }
 
-export default function ErpRegistriesPage({ registros, criar, setToast }) {
+const secaoConhecida = (secao) => TABS.some((item) => item.id === secao);
+
+export default function ErpRegistriesPage({ registros, criar, setToast, secao = "", areaLabel = "" }) {
   // Regra da titular (30/08): cadastro correlato mora na MESMA tela (veículo
-  // com motorista); sem correlação, fica sozinho (tabela de preço). O ?secao=
-  // do menu continua apontando para a seção — a tela abre o grupo dela.
-  const [grupoId, setGrupoId] = useState(() => {
-    try {
-      const pedida = new URLSearchParams(window.location.search).get("secao") || "";
-      return groupOfTab(TABS.some((item) => item.id === pedida) ? pedida : "items").id;
-    } catch { return GROUPS[0].id; }
-  });
+  // com motorista); sem correlação, fica sozinho (tabela de preço). E cada
+  // cadastro no galho da sua área: quando o menu manda uma seção, esta tela
+  // abre SÓ os cadastros daquela área — sem as abas das outras seis na cara.
+  // A seção vem por propriedade (não do window.location lido uma vez): trocar
+  // de cadastro pelo menu antes não trocava de grupo, porque o estado inicial
+  // já tinha sido calculado na primeira montagem.
+  const recortadaPorArea = Boolean(areaLabel) && secaoConhecida(secao);
+  const [grupoId, setGrupoId] = useState(() => groupOfTab(secaoConhecida(secao) ? secao : "items").id);
+  useEffect(() => {
+    if (secaoConhecida(secao)) setGrupoId(groupOfTab(secao).id);
+  }, [secao]);
   const [external, setExternal] = useState({});
   const [erros, setErros] = useState({});
   const [carregando, setCarregando] = useState({});
@@ -129,13 +134,17 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
     <div className="tdg-page">
       <header className="tdg-page-title">
         <div>
-          <span>CADASTROS MESTRES</span>
-          <h2>A base operacional do ERP</h2>
-          <p>Cadastros que se correlacionam vivem na mesma tela — veículo com motorista, material com depósito e fornecedor. Os demais ficam sozinhos.</p>
+          <span>{recortadaPorArea ? `CADASTROS · ${areaLabel.toUpperCase()}` : "CADASTROS MESTRES"}</span>
+          <h2>{recortadaPorArea ? `Cadastros de ${areaLabel}` : "A base operacional do ERP"}</h2>
+          <p>
+            {recortadaPorArea
+              ? "Cada cadastro fica na área dona do dado. Aqui estão só os desta área — os das outras moram no menu delas."
+              : "Cadastros que se correlacionam vivem na mesma tela — veículo com motorista, material com depósito e fornecedor. Os demais ficam sozinhos."}
+          </p>
         </div>
       </header>
 
-      <nav className="tdg-registry-tabs" aria-label="Grupos de cadastros do ERP">
+      {!recortadaPorArea && <nav className="tdg-registry-tabs" aria-label="Grupos de cadastros do ERP">
         {GROUPS.map((item) => {
           const total = item.tabs.reduce((sum, tabId) => sum + listaDe(tabId).length, 0);
           return (
@@ -149,7 +158,7 @@ export default function ErpRegistriesPage({ registros, criar, setToast }) {
             </button>
           );
         })}
-      </nav>
+      </nav>}
 
       {grupo.tabs.map((tabId) => {
         const cfg = TABS.find((item) => item.id === tabId);

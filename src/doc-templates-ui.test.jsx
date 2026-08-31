@@ -88,6 +88,12 @@ describe("Modelos prontos de documentos", () => {
     render(<App />);
     await screen.findByRole("heading", { name: /Vamos fazer acontecer/ });
 
+    // O modelo é preenchido com o nome do negócio ATIVO. Sem esperar o negócio
+    // aparecer na casca, um runner lento chega a abrir o modelo antes de o
+    // espaço terminar de carregar — e aí o documento nasce com "{{empresa}}"
+    // no lugar do nome, que é justamente o que este teste existe para impedir.
+    expect((await screen.findAllByText("Doces da Ana")).length).toBeGreaterThan(0);
+
     fireEvent.click(screen.getByRole("button", { name: "Documentos" }));
     await screen.findByRole("heading", {
       name: "Crie, edite e leve seu trabalho com você",
@@ -104,7 +110,10 @@ describe("Modelos prontos de documentos", () => {
     // preenchido com o nome do negócio.
     const title = await screen.findByDisplayValue("Recibo de pagamento");
     expect(title).toBeInTheDocument();
-    const content = await screen.findByDisplayValue(/Doces da Ana/);
+    // O editor de blocos monta o corpo num segundo passo de render; em máquina
+    // lenta o padrão de 1s da testing-library estoura antes disso. A asserção
+    // é a mesma — só a paciência muda.
+    const content = await screen.findByDisplayValue(/Doces da Ana/, {}, { timeout: 5000 });
     expect(content).toBeInTheDocument();
     expect(content.value).not.toContain("{{empresa}}");
   });

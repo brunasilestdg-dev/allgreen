@@ -151,6 +151,70 @@ export const createTodoGreenContact = (input = {}) => ({
   updatedAt: new Date().toISOString(),
 });
 
+// ===== A regra da saúde, escrita uma vez =====
+//
+// A titular pediu (30/08) que a regra da saúde ficasse CLARA na tela. Ela estava
+// só no código: seis pesos aqui, uma média 70/30 ali e três gatilhos de
+// classificação em outra função. Agora a régua é dado — a tela lê daqui e
+// mostra nota, peso, contribuição e o motivo da classificação, em vez de exibir
+// um número que ninguém sabe de onde veio.
+export const PESOS_DA_SAUDE = Object.freeze([
+  { id: "strategicPotential", rotulo: "Potencial estratégico", peso: 25, invertido: false, ajuda: "Tamanho do que essa conta pode virar para a To Do Green." },
+  { id: "relationshipStrength", rotulo: "Força do relacionamento", peso: 20, invertido: false, ajuda: "Quanto acesso e confiança a equipe tem hoje." },
+  { id: "operationalFit", rotulo: "Aderência operacional", peso: 20, invertido: false, ajuda: "O quanto a operação dela cabe na nossa malha e frota." },
+  { id: "esgFit", rotulo: "Aderência ESG", peso: 15, invertido: false, ajuda: "Metas de descarbonização que a eletrificação atende." },
+  { id: "dataQuality", rotulo: "Qualidade dos dados", peso: 10, invertido: false, ajuda: "Se há base suficiente para precificar sem chutar." },
+  { id: "churnRisk", rotulo: "Risco de perda", peso: 10, invertido: true, ajuda: "Quanto maior o risco, menor a nota que ele gera." },
+]);
+
+export const REGRA_DA_SAUDE = Object.freeze({
+  formula: "Saúde = 70% da média ponderada das seis notas + 30% da cobertura de decisores.",
+  cobertura: "Cobertura é quanto do trio Quem decide / Quem apoia / Usuário operacional já está mapeado nos contatos ativos: 100%, 67%, 33% ou 0%.",
+  classificacao: [
+    "Crítica: a próxima ação está atrasada ou o risco de perda é 70 ou mais.",
+    "Atenção: existe algum ponto de atenção aberto ou a cobertura de decisores está abaixo de 60%.",
+    "Saudável: nenhum ponto de atenção aberto e cobertura de 60% ou mais.",
+  ],
+  semNota: "Nota em branco conta como zero: conta nova aparece com saúde baixa até alguém avaliar — é falta de avaliação, não diagnóstico ruim.",
+});
+
+// Por que a saúde desta conta está nesse número, linha por linha.
+export const explicarSaudeDaConta = (account = {}, contacts = [], opportunities = []) => {
+  const saude = accountHealth(account, contacts, opportunities);
+  const linhas = PESOS_DA_SAUDE.map((item) => {
+    const bruta = clamp(asNumber(account[item.id]));
+    const efetiva = item.invertido ? 100 - bruta : bruta;
+    return {
+      ...item,
+      nota: bruta,
+      contribuicao: Math.round((efetiva * item.peso) / 100),
+      preenchida: account[item.id] !== undefined && account[item.id] !== null && account[item.id] !== "",
+    };
+  });
+  const classificacao = crmAttention({
+    alerts: saude.alerts,
+    coverage: saude.relationshipCoverage.score,
+    churnRisk: asNumber(account.churnRisk),
+  });
+  const motivo = classificacao === "critical"
+    ? (saude.overdue
+      ? "A próxima ação combinada está atrasada."
+      : "O risco de perda registrado está em 70 ou mais.")
+    : classificacao === "attention"
+      ? (saude.alerts[0] || "A cobertura de decisores está abaixo de 60%.")
+      : "Sem pontos de atenção abertos e com o mapa de decisores coberto.";
+  return {
+    linhas,
+    notaDasAvaliacoes: saude.accountScore,
+    cobertura: saude.relationshipCoverage.score,
+    score: saude.score,
+    classificacao,
+    motivo,
+    alertas: saude.alerts,
+    semAvaliacao: linhas.every((linha) => !linha.preenchida),
+  };
+};
+
 export const calculateAccountScore = (account = {}) => {
   const strategic = clamp(asNumber(account.strategicPotential));
   const relationship = clamp(asNumber(account.relationshipStrength));
