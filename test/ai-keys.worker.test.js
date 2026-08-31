@@ -186,3 +186,51 @@ describe("remover", () => {
     expect(await chavesDoEspaco(ambiente(), "ia-dona")).toEqual({});
   });
 });
+
+// ===== A tela de Integrações enxerga a chave do espaço =====
+//
+// O que este teste impede de voltar: a titular cadastrar a chave dela, o
+// Plantû responder usando essa chave, e a tela de Integrações dizer que o
+// provedor está INATIVO — porque a conferência só olhava as chaves de busca do
+// espaço e o cofre global, nunca as workspace_ai_keys.
+describe("integrações mostram a IA do espaço como ativa", () => {
+  it("depois de cadastrar a chave, o provedor aparece configurado na tela", async () => {
+    const espiao = comProvedorRespondendo(true);
+    try {
+      const salvo = await worker.fetch(
+        new Request("https://app.test/api/ai-keys/anthropic", {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${tokenDona}`, "cf-connecting-ip": "203.0.114.61" },
+          body: JSON.stringify({ chave: CHAVE_CLAUDE, rotulo: "Conta da diretoria" }),
+        }),
+        ambiente(), { waitUntil() {}, passThroughOnException() {} },
+      );
+      expect([200, 201, 409]).toContain(salvo.status);
+    } finally {
+      espiao.mockRestore();
+    }
+
+    // Vínculo com a vertical: a tela de Integrações é da To Do Green.
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO todogreen_access_emails
+         (id, tenant_id, workspace_owner_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
+       VALUES (?, 'todogreen', 'ia-dona', 'ia-dona@teste.test', 'admin', 'active', '["*"]', '', 'ia-dona', ?, ?)`,
+    ).bind(crypto.randomUUID(), agora, agora).run();
+
+    const resposta = await worker.fetch(
+      new Request("https://app.test/api/todogreen/integrations", {
+        headers: { authorization: `Bearer ${tokenDona}`, "cf-connecting-ip": "203.0.114.62" },
+      }),
+      ambiente(), { waitUntil() {}, passThroughOnException() {} },
+    );
+    expect(resposta.status).toBe(200);
+    const status = await resposta.json();
+    const claude = status.ai.find((item) => item.id === "anthropic");
+    expect(claude).toBeTruthy();
+    // A chave do espaço CONTA como configurada — é a mesma que o Plantû usa.
+    expect(claude.configured).toBe(true);
+    // E o segredo não vaza no payload da tela.
+    expect(JSON.stringify(status)).not.toContain(CHAVE_CLAUDE);
+  });
+});

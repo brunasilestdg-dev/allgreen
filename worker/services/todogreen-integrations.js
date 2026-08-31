@@ -2,6 +2,7 @@ import { configuredAiProviders, probeAiProvider } from "./ai.js";
 import { podeNaVertical } from "./todogreen-access.js";
 import { probeWebSearch, webSearchConfiguration } from "./web-search.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
+import { envComChavesDoEspaco } from "./ai-keys.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -284,7 +285,14 @@ export function todoGreenIntegrationStatus(env = {}, { activeWebhooks = 0 } = {}
 }
 
 export async function handleTodoGreenIntegrations(request, env, access) {
-  const envBusca = await envComChavesDeBuscaDoEspaco(env, access.ownerId);
+  // As DUAS famílias de chave do espaço entram na conferência: as de IA
+  // (workspace_ai_keys — as mesmas que o Plantû usa) e as de busca. Antes só a
+  // busca entrava, e a tela dizia "inativa" para uma IA que estava ativa e
+  // respondendo — a titular via todos os provedores dela como desligados
+  // ("as IAs constam inativas", 31/08). O teste de conexão sofria do mesmo:
+  // provava a chave do cofre global em vez da chave que o espaço realmente usa.
+  const envIa = await envComChavesDoEspaco(env, access.ownerId);
+  const envBusca = await envComChavesDeBuscaDoEspaco(envIa, access.ownerId);
   if (request.method === "GET") {
     const activeWebhooks = env.DB
       ? await env.DB.prepare(

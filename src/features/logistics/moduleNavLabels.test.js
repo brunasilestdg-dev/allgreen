@@ -126,8 +126,10 @@ describe("propriedade das abas principais", () => {
     // como "Compras". Implantação vive dentro do Workspace (é um tipo de
     // projeto), e o Workspace abre a lista.
     expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Compras"[^\n]+cadastros/);
-    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Workspace"[^\n]+implantacao/);
-    expect(blocoDaNavegacaoPrincipal).toMatch(/^const PRIMARY_NAVIGATION[\s\S]{0,400}label: "Workspace"/);
+    // "Espaço de trabalho", nunca "Workspace": o polidor apaga a palavra
+    // banida e o botão ficava com fundo e sem nome (31/08).
+    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Espaço de trabalho"[^\n]+implantacao/);
+    expect(blocoDaNavegacaoPrincipal).toMatch(/^const PRIMARY_NAVIGATION[\s\S]{0,700}label: "Espaço de trabalho"/);
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Documentos"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Administração"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Operação", route: "/todogreen/operacoes"');

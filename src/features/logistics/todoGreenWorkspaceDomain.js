@@ -42,6 +42,14 @@ export const TODO_GREEN_WORKSPACE_TOOLS = Object.freeze([
     description: "Áreas, pastas e listas sem duplicar projetos.",
   },
   {
+    // O To Do pessoal do aplicativo geral. Sumiu do alcance quando a vertical
+    // virou a casa única ("perdemos o to do", titular 31/08) — e com ele foram
+    // os botões de Google Agenda e Gmail que vivem dentro de cada tarefa.
+    id: "tarefas",
+    label: "To Do",
+    description: "Tarefas rápidas com prazo, responsável, Google Agenda e Gmail.",
+  },
+  {
     id: "visoes",
     label: "Visualizações",
     description: "Gantt, timeline, calendário, workload e gráficos dos mesmos itens do quadro.",

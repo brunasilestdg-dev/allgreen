@@ -32,6 +32,7 @@ import {
   Sparkles,
   UserRoundSearch,
   Users,
+  ListChecks,
   Workflow,
 } from "lucide-react";
 import { makeNote } from "../notes/notesDomain.js";
@@ -49,6 +50,7 @@ const TodoGreenAutomations = lazy(() => import("./TodoGreenAutomations.jsx"));
 const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
 const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
 const WorkStructure = lazy(() => import("../work/WorkStructure.jsx"));
+const TasksScreen = lazy(() => import("../tasks/TasksScreen.jsx"));
 const WorkViews = lazy(() => import("./pages/WorkViews.jsx"));
 const DataBases = lazy(() => import("../databases/DataBasesScreen.jsx"));
 const ProcessStudio = lazy(() => import("../processes/ProcessStudio.jsx"));
@@ -79,6 +81,7 @@ const TOOL_ICONS = {
   automacoes: Workflow,
   ajuda: CircleHelp,
   estrutura: Network,
+  tarefas: ListChecks,
   visoes: GanttChartSquare,
   bases: Database,
   processos: GitBranch,
@@ -115,6 +118,9 @@ const newId = () =>
     : `nt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const LoadingTool = () => <section className="tdg-space-loading">Abrindo a ferramenta...</section>;
+
+// Para telas do app geral que exigem um kit de área: aqui ele não existe.
+const FerramentaNula = () => null;
 
 function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCreateLinkedNote, onCreateLinkedPage }) {
   const [clientId, setClientId] = useState("");
@@ -369,10 +375,10 @@ export default function TodoGreenWorkspace({
       <header className="tdg-space-toolbar">
         <div className="tdg-space-toolbar-title">
           <span>TO DO GREEN</span>
-          <h2>Workspace corporativo</h2>
+          <h2>Espaço corporativo</h2>
           <p>Projetos, tarefas, visualizações, agentes e integrações em uma única navegação.</p>
         </div>
-        <nav className="tdg-space-tabs" aria-label="Jornadas principais do workspace">
+        <nav className="tdg-space-tabs" aria-label="Jornadas principais do espaço de trabalho">
           {WORKSPACE_PRIMARY_TOOLS.map((item) => {
             const Icon = TOOL_ICONS[item.id] || BriefcaseBusiness;
             return (
@@ -433,6 +439,20 @@ export default function TodoGreenWorkspace({
           {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} />}
           {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}
+          {tool === "tarefas" && (
+            <TasksScreen
+              {...commonProps}
+              /* A tela nasceu no aplicativo geral e espera três coisas que o
+                 espaço não tem: o kit da área (aqui não existe — componente
+                 nulo), o `go` para telas do app geral (volta para a visão
+                 geral do espaço) e a ação de mural compartilhado (devolve {}
+                 e a tela cai no caminho local, que é o comportamento certo
+                 para o To Do de uma pessoa). */
+              AreaToolkit={FerramentaNula}
+              go={() => openTool("visao-geral")}
+              workspaceAction={async () => ({})}
+            />
+          )}
           {tool === "visoes" && <WorkViews setToast={setToast} profiles={db?.resourceProfiles || []} />}
           {tool === "bases" && <DataBases {...commonProps} excludedTemplates={["Clientes"]} />}
           {tool === "processos" && <ProcessStudio {...commonProps} />}

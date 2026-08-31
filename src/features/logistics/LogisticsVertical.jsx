@@ -309,7 +309,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Criação de painéis pessoais ou compartilhados com indicadores escolhidos por cada usuário.",
   },
   espaco: {
-    title: "Workspace To Do Green",
+    title: "Espaço de trabalho To Do Green",
     navLabel: "Visão geral",
     route: "/todogreen/espaco",
     area: "espaco-trabalho",
@@ -368,7 +368,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Jornada de venda, critérios de avanço e atalhos comerciais.",
   },
   clientes: {
-    title: "Clientes e contatos",
+    title: "Clientes",
     navLabel: "Clientes",
     route: "/todogreen/clientes",
     area: "comercial",
@@ -774,7 +774,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "administracao",
     status: "functional",
     permission: ["access:manage", "integration:manage", "audit:read"],
-    description: "Acessos, permissões, auditoria, integrações, configurações e governança da vertical.",
+    description: "Acessos, permissões, auditoria, integrações, configurações e governança do ambiente To Do Green.",
   },
   "central-rfq": {
     title: "Central de RFQ e RFI",
@@ -818,7 +818,9 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // projetos e implantações moram aqui. Implantação é um TIPO de projeto,
   // por isso vive dentro deste grupo sem perder o nome próprio.
   // `jornadasInternas`: o menu não repete o que o Workspace já mostra dentro.
-  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"], jornadasInternas: ["central-trabalho", "visualizacoes", "agentes-funcoes"] },
+  // "Espaço de trabalho", nunca "Workspace": o polidor apaga a palavra banida
+  // e o botão fica sem nome (31/08). Guarda: rotulosNaoBanidos.test.js.
+  { id: "espaco-trabalho", label: "Espaço de trabalho", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"], jornadasInternas: ["central-trabalho", "visualizacoes", "agentes-funcoes"] },
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
   // Planejamento decide o que entra; Operação executa o que foi aceito. Antes
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
@@ -2729,7 +2731,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         )}
         <aside className="tdg-erp-sidebar" hidden={menuOculto}>
           <div className="tdg-erp-sidebar-head">
-            <div><strong>To Do Green</strong><small>Workspace corporativo</small></div>
+            <div><strong>To Do Green</strong><small>Espaço corporativo</small></div>
             <button type="button" className="tdg-menu-ocultar" onClick={alternarMenu} aria-label="Esconder menu lateral" title="Esconder menu">
               <PanelLeftClose size={16} />
             </button>
@@ -2848,7 +2850,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           <LockKeyhole size={20} />
           <div>
             <strong>Esta tela é restrita ao seu perfil.</strong>
-            <p>Seu acesso não inclui {currentPage.title}. Fale com quem administra os acessos da vertical se precisar entrar aqui.</p>
+            <p>Seu acesso não inclui {currentPage.title}. Fale com quem administra os acessos da To Do Green se precisar entrar aqui.</p>
             <button type="button" className="tdg-action" onClick={() => navigate("/todogreen/dashboard")}>Voltar ao painel</button>
           </div>
         </section>

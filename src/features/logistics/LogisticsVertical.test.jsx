@@ -234,7 +234,7 @@ describe("LogisticsVertical", () => {
     window.history.pushState({}, "", "/todogreen/espaco");
     await renderarAutorizada();
     // O workspace é lazy: a barra de jornadas chega num segundo passo de render.
-    expect(await screen.findByRole("navigation", { name: "Jornadas principais do workspace" })).toBeTruthy();
+    expect(await screen.findByRole("navigation", { name: "Jornadas principais do espaço de trabalho" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Estrutura de trabalho/ }));
     expect(await screen.findByRole("heading", { name: "Uma hierarquia para toda a empresa" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Visualizações e gráficos/ })).toBeTruthy();
@@ -247,7 +247,7 @@ describe("LogisticsVertical", () => {
     // O conteúdo dos quadros é montado por módulo próprio fora do React; o que
     // o React NÃO pode fazer é empilhar o workspace na mesma rota.
     expect(screen.queryByRole("heading", { name: "Uma hierarquia para toda a empresa" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "Jornadas principais do workspace" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Jornadas principais do espaço de trabalho" })).toBeNull();
   });
 
   it("mantém notícias, contatos, ajuda e rotinas anteriores visíveis no espaço", async () => {
@@ -275,7 +275,7 @@ describe("LogisticsVertical", () => {
     await renderarAutorizada();
 
     expect(await screen.findByText("O que já existia continua acessível")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Clientes e contatos.*Contas, decisores/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Clientes.*Contas, decisores/ })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Central de ajuda/ }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Playbook comercial.*Jornada de venda/ })).toBeNull();
 
@@ -320,7 +320,7 @@ describe("LogisticsVertical", () => {
   it("cada página mantém um título principal único e compreensível", async () => {
     window.history.pushState({}, "", "/todogreen/clientes");
     const { container } = await renderarAutorizada();
-    expect(screen.getByRole("heading", { name: "Clientes e contatos", level: 1 }).hidden).toBe(false);
+    expect(screen.getByRole("heading", { name: "Clientes", level: 1 }).hidden).toBe(false);
     expect(container.querySelectorAll("#tdg-title")).toHaveLength(1);
     expect(container.querySelector("main.tdg")?.getAttribute("aria-labelledby")).toBe("tdg-title");
   });

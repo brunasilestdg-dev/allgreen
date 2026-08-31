@@ -58,7 +58,6 @@ const LABELS = new Map([
   ["Certificados e declarações", "Declarações"],
   ["Remuneração Variável", "Comissões"],
   ["Oportunidades e pipeline", "Oportunidades"],
-  ["Clientes e contatos", "Clientes"],
   ["Propostas e contratos", "Propostas"],
   ["Precificação e aprovação comercial", "Precificação"],
   ["Receita e forecast", "Receita"],
@@ -81,7 +80,7 @@ const LABELS = new Map([
   ["Abrir módulo", "Abrir rotina"],
 ]);
 
-const BLOCKED_PATTERNS = [
+export const BLOCKED_PATTERNS = [
   /\bvertical\b/gi,
   /\btenant\b/gi,
   /\bworkspace\b/gi,
@@ -160,20 +159,42 @@ const CRM_FIELDS = [
   ["Inteligência", "dor logística, risco, fit e próxima ação"],
 ];
 
-const replaceTextNode = (node) => {
-  const original = node.nodeValue;
-  if (!original) return;
+// O polimento como função PURA, exportada para o teste que impede o apagador
+// de comer rótulo de menu: foi exatamente assim que o primeiro botão do menu
+// ficou com fundo e sem nome — o grupo se chamava "Workspace", palavra banida
+// aqui dentro, e o apagador a removia de todo texto da vertical.
+// As trocas de UMA palavra respeitam fronteira de palavra. Sem isso a troca
+// "funcional" → "ativo" comia o MIOLO de "funcionalidade" e a tela de acessos
+// pedia para "selecionar cada ativoidade" (defeito apontado pela titular,
+// 31/08). E "todogreen" → "To Do Green" quebrava qualquer e-mail ou domínio
+// (@To Do Green.com.br), por isso não troca quando vem seguido de ponto.
+const escapar = (texto) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const TROCAS = [...LABELS.entries()].map(([from, to]) => ({
+  regex: /\s/.test(from)
+    ? new RegExp(escapar(from), "g")
+    : new RegExp(`\\b${escapar(from)}\\b(?![.@-])`, "g"),
+  to,
+}));
+
+export const polirTexto = (original) => {
   let next = original;
-  for (const [from, to] of LABELS.entries()) {
-    next = next.replaceAll(from, to);
+  for (const { regex, to } of TROCAS) {
+    regex.lastIndex = 0;
+    next = next.replace(regex, to);
   }
   BLOCKED_PATTERNS.forEach((pattern) => {
     next = next.replace(pattern, "").replace(/\s{2,}/g, " ");
   });
-  next = next
+  return next
     .replace(/ · planejado$/i, "")
     .replace(/ · ativo$/i, "")
     .replace(/\s+([,.])/g, "$1");
+};
+
+const replaceTextNode = (node) => {
+  const original = node.nodeValue;
+  if (!original) return;
+  let next = polirTexto(original);
   // Só apara o começo quando este é o primeiro nó do elemento. O React quebra
   // `{40} funcionais · {13} backlog` em nós separados — "40", " funcionais · ",
   // "13", " backlog" — e aparar o começo de cada um colava as palavras nos
