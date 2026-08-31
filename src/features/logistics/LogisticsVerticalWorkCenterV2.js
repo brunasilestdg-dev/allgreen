@@ -844,8 +844,13 @@ const render = () => {
   const active = location.pathname.includes("/central-trabalho");
   const main = document.querySelector("main.tdg");
   if (!main) return;
+  // O painel mora DENTRO do palco do grid (a coluna ao lado do menu). Anexado
+  // ao fim do <main>, ele caía abaixo do grid inteiro: menu com um vazio do
+  // lado e a Central jogada no rodapé da página.
+  const palco = main.querySelector(".tdg-erp-stage") || main;
   let root = main.querySelector("[data-tdg-work-center-root]");
-  if (!root) { root = document.createElement("div"); root.dataset.tdgWorkCenterRoot = "true"; main.appendChild(root); }
+  if (!root) { root = document.createElement("div"); root.dataset.tdgWorkCenterRoot = "true"; }
+  if (root.parentElement !== palco) palco.appendChild(root);
   const pageContent = main.querySelector("[data-tdg-page-content]");
   if (pageContent) pageContent.style.display = active ? "none" : "";
   // Simétrico ao que a Frota já faz: se os dois painéis chegarem a existir ao

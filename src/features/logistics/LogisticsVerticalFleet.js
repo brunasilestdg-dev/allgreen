@@ -76,7 +76,7 @@ const renderFleet = () => {
 };
 
 const load = async () => { loading=true;renderFleet();try{const payload=await api();vehicles=payload.vehicles||[];canWrite=!!payload.access?.canWrite;}catch(error){console.error(error);}finally{loading=false;renderFleet();} };
-const render = () => { ensureTab(); const active=location.pathname.startsWith("/todogreen/frota"); hideOtherContent(active); let root=document.querySelector("[data-tdg-fleet-root]"); if(active&&!root){root=document.createElement("div");root.dataset.tdgFleetRoot="true";document.querySelector("main.tdg")?.appendChild(root);load();} if(root) root.style.display=active?"":"none"; if(active) renderFleet(); };
+const render = () => { ensureTab(); const active=location.pathname.startsWith("/todogreen/frota"); hideOtherContent(active); let root=document.querySelector("[data-tdg-fleet-root]"); if(active&&!root){root=document.createElement("div");root.dataset.tdgFleetRoot="true";(document.querySelector("main.tdg .tdg-erp-stage") || document.querySelector("main.tdg"))?.appendChild(root);load();} if(root) root.style.display=active?"":"none"; if(active) renderFleet(); };
 // `[data-tdg-page-content]` só existe depois que o React termina de verificar
 // acesso e montar a vertical inteira — um número fixo de tentativas
 // (`setTimeout(render, 0/100)`) adivinhava esse tempo e, numa sessão nova
