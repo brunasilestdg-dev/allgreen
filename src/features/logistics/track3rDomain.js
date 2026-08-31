@@ -233,6 +233,135 @@ export const normalizarDocumento = (bruto = {}, fieldMap = {}) => {
 };
 
 // ---------------------------------------------------------------------------
+// O webhook de ocorrências/tracking
+// ---------------------------------------------------------------------------
+//
+// Especificação entregue pela titular (31/08): o TRACK3R chama a NOSSA API com
+// header `Token`, POST, JSON. O corpo é ANINHADO — nota_fiscal, recebedor,
+// motorista e ocorrencia são objetos —, enquanto `normalizarDocumento` lê linha
+// achatada (relatório e API). Em vez de dois normalizadores, o webhook é achatado
+// PARA o vocabulário que já existe e depois passa pelo mesmo caminho: um registro
+// canônico só, um dedup só, uma projeção só.
+//
+// O que o webhook traz e o relatório não tinha — comprovante, assinatura,
+// coordenada, recebedor, código da ocorrência — entra como campo próprio do
+// registro, porque é exatamente isso que destrava POD, prova de entrega e
+// posição da operação.
+
+// Só http(s) e tamanho sensato. O caminho do comprovante vem de fora e vai
+// parar em atributo de link na tela: um "javascript:" aqui viraria execução no
+// navegador de quem abre a operação.
+const urlSegura = (valor) => {
+  const bruto = texto(valor).slice(0, 1000);
+  if (!/^https?:\/\//i.test(bruto)) return "";
+  return bruto;
+};
+
+const coordenada = (valor, limite) => {
+  // Ausência é null, não zero: 0,0 é um ponto no Golfo da Guiné, e uma operação
+  // sem coordenada apareceria no mapa lá.
+  if (valor === null || valor === undefined || texto(valor) === "") return null;
+  const n = typeof valor === "number" ? valor : Number(texto(valor).replace(",", "."));
+  if (!Number.isFinite(n) || Math.abs(n) > limite) return null;
+  return n;
+};
+
+// A data do webhook vem "01/03/2024 15:21:19" — dd/mm/aaaa com hora. É o mesmo
+// formato que `normalizeDateTime` já entende.
+const ocorrenciaDoPayload = (payload) => (payload && typeof payload.ocorrencia === "object" ? payload.ocorrencia : {}) || {};
+
+// O código da ocorrência é numérico e o documento só revela um ("03" =
+// Entregue). Sem a tabela oficial, o código NÃO decide sozinho o evento: ele é
+// guardado cru e a descrição manda. Quando a titular tiver a lista, ela entra
+// em `field_map_json.ocorrenciaPorCodigo` e passa a mandar — sem tocar em código.
+export const eventoDoCodigoDeOcorrencia = (codigo, mapaDeCodigos = {}) => {
+  const chave = texto(codigo);
+  if (!chave) return "";
+  const declarado = texto(mapaDeCodigos?.[chave] || mapaDeCodigos?.[chave.replace(/^0+/, "")]);
+  if (!declarado) return "";
+  // O valor configurado pode ser o próprio nome do evento ou uma descrição.
+  const direto = ["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"];
+  const normalizado = semAcento(declarado);
+  return direto.includes(normalizado) ? normalizado : mapearStatusParaEvento(declarado);
+};
+
+// O corpo aninhado do webhook vira a linha achatada que o normalizador já lê.
+export const achatarOcorrenciaDoWebhook = (payload = {}) => {
+  const corpo = payload && typeof payload === "object" ? payload : {};
+  const nota = (corpo.nota_fiscal && typeof corpo.nota_fiscal === "object" ? corpo.nota_fiscal : {}) || {};
+  const motorista = (corpo.motorista && typeof corpo.motorista === "object" ? corpo.motorista : {}) || {};
+  const ocorrencia = ocorrenciaDoPayload(corpo);
+  return {
+    // "encomenda" é o identificador do TRACK3R para a remessa — é ele que amarra
+    // todos os eventos da mesma entrega.
+    codigo: texto(corpo.encomenda),
+    "cnpj embarcador": texto(corpo.cnpj_embarcador),
+    "unidade origem": texto(corpo.cnpj_transportadora_unidade_origem),
+    "unidade atual": texto(ocorrencia.cnpj_transportadora_unidade_atual) || texto(corpo.cnpj_transportadora_unidade_destino),
+    status: texto(ocorrencia.descricao),
+    observacao: texto(ocorrencia.observacao),
+    "nota fiscal": texto(nota.numero),
+    chave: texto(nota.chave),
+    placa: texto(motorista.placa),
+    motorista: texto(motorista.nome),
+    "data prevista": texto(corpo.data_prevista),
+    data: texto(ocorrencia.data) || texto(corpo.data_hora_envio),
+  };
+};
+
+// O registro canônico do webhook: o mesmo de sempre, mais o que só o webhook
+// traz. Campo que não vem fica vazio ou nulo — nada é inventado.
+export const normalizarOcorrenciaDoWebhook = (payload = {}, fieldMap = {}) => {
+  const corpo = payload && typeof payload === "object" ? payload : {};
+  const ocorrencia = ocorrenciaDoPayload(corpo);
+  const nota = (corpo.nota_fiscal && typeof corpo.nota_fiscal === "object" ? corpo.nota_fiscal : {}) || {};
+  const recebedor = (corpo.recebedor && typeof corpo.recebedor === "object" ? corpo.recebedor : {}) || {};
+  const documentoDoRecebedor = (recebedor.documento && typeof recebedor.documento === "object" ? recebedor.documento : {}) || {};
+  const motorista = (corpo.motorista && typeof corpo.motorista === "object" ? corpo.motorista : {}) || {};
+
+  const base = normalizarDocumento(achatarOcorrenciaDoWebhook(corpo), fieldMap);
+  const codigo = texto(ocorrencia.codigo).slice(0, 20);
+  const porCodigo = eventoDoCodigoDeOcorrencia(codigo, fieldMap?.ocorrenciaPorCodigo);
+
+  return {
+    ...base,
+    // O tipo do documento do webhook é sempre ocorrência: é um EVENTO da
+    // remessa, não um documento novo de coleta.
+    kind: "ocorrencia",
+    // `external_id` é ÚNICO por espaço na tabela de documentos (índice da 0063),
+    // e a encomenda se repete em toda ocorrência da mesma entrega. Guardar a
+    // encomenda ali faria a segunda ocorrência estourar a restrição — ela vive
+    // em `orderId`, que é coluna própria sem unicidade. Quem identifica a linha
+    // da ocorrência é o hash do evento.
+    externalId: "",
+    origem: "webhook",
+    occurrenceCode: codigo,
+    // Quando a tabela oficial de códigos estiver configurada, ela manda; sem
+    // ela, vale a descrição — e "" quando nenhuma das duas reconhece.
+    eventoPreferido: porCodigo || mapearStatusParaEvento(texto(ocorrencia.descricao)),
+    orderId: texto(corpo.encomenda).slice(0, 120),
+    invoiceSeries: texto(nota.serie).slice(0, 10),
+    purchaseOrder: texto(nota.pedido).slice(0, 120),
+    integrationOrder: texto(nota.pedido_integracao).slice(0, 120),
+    carrierDocument: normalizeDocument(corpo.cnpj_transportadora),
+    scheduledAt: normalizeDateTime(corpo.data_agendamento),
+    sentAt: normalizeDateTime(corpo.data_hora_envio),
+    driverDocument: normalizeDocument(motorista.cpf),
+    receiverName: texto(recebedor.nome).slice(0, 200),
+    receiverKind: texto(recebedor.tipo).slice(0, 60),
+    receiverDocumentKind: texto(documentoDoRecebedor.tipo).slice(0, 60),
+    receiverDocument: texto(documentoDoRecebedor.numero).slice(0, 60),
+    proofUrl: urlSegura(ocorrencia?.comprovante?.caminho),
+    signatureUrl: urlSegura(ocorrencia?.assinatura?.caminho),
+    latitude: coordenada(ocorrencia.latitude, 90),
+    longitude: coordenada(ocorrencia.longitude, 180),
+    // O payload guardado é o ORIGINAL, não a linha achatada: é ele que permite
+    // reprocessar quando o mapeamento mudar.
+    payload: corpo,
+  };
+};
+
+// ---------------------------------------------------------------------------
 // Deduplicação
 // ---------------------------------------------------------------------------
 
@@ -255,6 +384,23 @@ export const hashDoDocumento = (doc = {}) => {
     String(doc.packages ?? 0),
   ].join("|");
 };
+
+// A ocorrência do webhook precisa de OUTRO hash, e a razão é o oposto da do
+// documento: ali o objetivo é COLAPSAR (a mesma coleta reaparece no relatório do
+// dia seguinte com status novo e deve atualizar a linha que existe); aqui o
+// objetivo é PRESERVAR (cada ocorrência da mesma encomenda é um evento distinto
+// da linha do tempo, e colapsá-las apagaria o histórico do rastreio).
+//
+// Reenvio do MESMO evento — o TRACK3R repete quando não recebe 200 — cai no
+// mesmo hash e atualiza uma linha só. Evento diferente da mesma encomenda muda
+// código ou data e vira linha nova.
+export const hashDaOcorrencia = (doc = {}) => [
+  "ocr",
+  texto(doc.orderId) || texto(doc.externalId),
+  texto(doc.invoiceKey) || texto(doc.invoiceNumber),
+  texto(doc.occurrenceCode),
+  normalizeDateTime(doc.occurredAt),
+].join("|");
 
 // ---------------------------------------------------------------------------
 // Casamento do embarcador — sem forçar
@@ -392,8 +538,10 @@ export const projetarEvento = (doc = {}) => {
 // O mínimo para o documento valer a pena guardar. Deliberadamente baixo: cliente,
 // veículo e operação são vínculos que podem faltar, e faltar não é erro.
 export const validarDocumento = (doc = {}) => {
-  if (!texto(doc.externalId) && !texto(doc.invoiceNumber) && !texto(doc.shipperName))
-    return "A linha não tem documento, nota fiscal nem embarcador — não há como identificá-la.";
+  // A encomenda do webhook identifica tão bem quanto o número do documento do
+  // relatório: é ela que amarra todas as ocorrências da mesma entrega.
+  if (!texto(doc.externalId) && !texto(doc.orderId) && !texto(doc.invoiceNumber) && !texto(doc.shipperName))
+    return "A linha não tem documento, encomenda, nota fiscal nem embarcador — não há como identificá-la.";
   if (!normalizeDate(doc.occurredAt) && !normalizeDate(doc.promisedAt))
     return "A linha não tem data reconhecível (use AAAA-MM-DD ou dd/mm/aaaa).";
   return "";
@@ -425,10 +573,16 @@ export const resumoDaImportacao = (documentos = []) => {
 
 // As perguntas a fazer ao suporte do TRACK3R. Ficam no código porque é aqui que
 // se sabe exatamente o que falta para ligar API e webhook.
+// Duas delas o documento de webhook (31/08) já respondeu: existe webhook de
+// ocorrência, e o segredo é um token fixo no cabeçalho `Token`. O que ele NÃO
+// respondeu virou pergunta nova — a tabela de códigos é a mais importante,
+// porque é ela que diz o que cada ocorrência significa.
 export const PERGUNTAS_AO_TRACK3R = Object.freeze([
+  "Qual é a tabela oficial de códigos de ocorrência? (o modelo só revela o código 03, Entregue)",
+  "A encomenda é estável entre as ocorrências da mesma entrega, e é o mesmo número do relatório de coletas?",
+  "Um POST do webhook traz uma ocorrência ou uma lista? E o TRACK3R reenvia quando não recebe 200?",
   "Existe API REST? Qual a URL base e onde está a documentação?",
   "Como se emite o token de acesso, e em qual cabeçalho ele vai?",
-  "Existe webhook de mudança de status de coleta e de entrega? Como o segredo é validado?",
   "Quais campos vêm em Consulta Dados Nota Fiscal (número, série, chave de 44 dígitos, valor)?",
   "O relatório exportado sai em CSV ou XLSX, e com quais colunas exatas no cabeçalho?",
   "O embarcador vem com CNPJ, ou só com nome e agrupador?",

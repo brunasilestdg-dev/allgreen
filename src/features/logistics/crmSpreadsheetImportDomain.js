@@ -8,7 +8,12 @@ const hash = (value) => {
   for (const character of normalized(value)) result = Math.imul(result ^ character.charCodeAt(0), 16777619);
   return (result >>> 0).toString(36);
 };
-const stableId = (company) => `crm-${slug(company)}-${hash(company)}`;
+// O id da conta é derivado do nome e é ESTÁVEL: a mesma empresa importada por
+// caminhos diferentes (planilha de CRM, quadro de pipeline) cai na mesma conta,
+// em vez de virar duas. Por isso é exportado — quem importa qualquer coisa que
+// tenha empresa usa este mesmo id.
+export const idEstavelDaConta = (company) => `crm-${slug(company)}-${hash(company)}`;
+const stableId = idEstavelDaConta;
 
 const canonicalCompany = (value) => {
   const original = text(value).replace(/\s*\((?:grupo|group)\)\s*$/i, "").trim();

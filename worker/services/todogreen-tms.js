@@ -19,11 +19,16 @@
 // diz o que está ligado, e a tela mostra o que falta.
 
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
+import { sameHash } from "../auth/credenciais.js";
+import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
+import { aplicarEventoOperacional } from "./todogreen-vertical-records.js";
 import {
   PERGUNTAS_AO_TRACK3R,
   casarEmbarcador,
+  hashDaOcorrencia,
   hashDoDocumento,
   normalizarDocumento,
+  normalizarOcorrenciaDoWebhook,
   projetarEvento,
   projetarOperacao,
   resumoDaImportacao,
@@ -228,7 +233,18 @@ const salvarConfiguracao = async (env, access, user, corpo) => {
 
 // Grava um lote de linhas brutas. Vale para os três transportes: arquivo, API e
 // webhook chamam esta mesma função, com `origem` diferente.
-const importarLinhas = async (env, access, user, { linhas, origem, integracao }) => {
+const importarLinhas = async (env, access, user, {
+  linhas,
+  origem,
+  integracao,
+  // Arquivo e API usam o normalizador e o hash de documento; o webhook de
+  // ocorrências troca os dois (corpo aninhado, e cada evento é uma linha
+  // própria). Todo o resto — dedup, casamento por CNPJ, upsert que preserva o
+  // vínculo feito à mão, contagem e motivos — continua sendo um caminho só.
+  normalizar = normalizarDocumento,
+  calcularHash = hashDoDocumento,
+  registrarExecucao = true,
+} = {}) => {
   const comeco = new Date().toISOString();
   const fieldMap = integracao ? parse(integracao.field_map_json, {}) : {};
 
@@ -243,7 +259,7 @@ const importarLinhas = async (env, access, user, { linhas, origem, integracao })
   const paraGravar = [];
 
   for (const [indice, bruta] of linhas.entries()) {
-    const doc = normalizarDocumento(bruta, fieldMap);
+    const doc = normalizar(bruta, fieldMap);
     const erro = validarDocumento(doc);
     if (erro) {
       // O motivo, com a linha. "12 ignorados" sem dizer por quê deixa a pessoa
@@ -254,7 +270,7 @@ const importarLinhas = async (env, access, user, { linhas, origem, integracao })
     const casado = casarEmbarcador(doc, clientes || []);
     paraGravar.push({
       doc,
-      hash: hashDoDocumento(doc),
+      hash: calcularHash(doc),
       // Vazio é estado legítimo: o documento entra sem conta e fica na fila.
       clientId: casado?.clientId || "",
     });
@@ -268,9 +284,9 @@ const importarLinhas = async (env, access, user, { linhas, origem, integracao })
           shipper_name, shipper_group, shipper_document, client_id, origin_unit, current_unit,
           service, product, status, occurrence, invoice_number, invoice_key,
           vehicle_plate, vehicle_class, driver_name, packages, weight_kg, distance_km,
-          promised_at, occurred_at, payload_json, import_hash, operation_id,
+          promised_at, occurred_at, payload_json, import_hash, order_ref, occurrence_code, operation_id,
           revision, created_by, updated_by, created_at, updated_at, archived_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 1, ?, ?, ?, ?, NULL)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 1, ?, ?, ?, ?, NULL)
        ON CONFLICT(workspace_owner_id, import_hash) DO UPDATE SET
          -- Só o que MUDA numa reimportação. O status é justamente o que muda, e
          -- é por isso que ele fica fora do hash.
@@ -302,6 +318,7 @@ const importarLinhas = async (env, access, user, { linhas, origem, integracao })
       doc.packages, doc.weightKg, doc.distanceKm,
       doc.promisedAt || null, doc.occurredAt || null,
       JSON.stringify(doc.payload || {}), hash,
+      texto(doc.orderId, 120), texto(doc.occurrenceCode, 20),
       user.id, user.id, agora, agora,
     ),
   );
@@ -314,7 +331,10 @@ const importarLinhas = async (env, access, user, { linhas, origem, integracao })
   const gravados = resultado.reduce((soma, item) => soma + (item?.meta?.changes || 0), 0);
 
   const fim = new Date().toISOString();
-  await env.DB.prepare(
+  // O webhook chega uma ocorrência por vez: uma linha de execução por chamada
+  // encheria a tabela de histórico com ruído. Ali só se registra quando algo
+  // deu errado — que é o que alguém vai querer procurar depois.
+  if (registrarExecucao || erros.length) await env.DB.prepare(
     `INSERT INTO todogreen_tms_sync_runs
        (id, tenant_id, workspace_owner_id, integration_id, origem, status,
         recebidos, importados, repetidos, atualizados, ignorados, erros_json,
@@ -669,6 +689,177 @@ const projetar = async (env, access, user, corpo) => {
 // ---------------------------------------------------------------------------
 // Roteamento
 // ---------------------------------------------------------------------------
+
+// ===========================================================================
+// Receptor de ocorrências do TRACK3R (webhook de entrada)
+// ===========================================================================
+//
+// Especificação entregue pela titular (WebHook Envio de Ocorrências/Tracking):
+// NÓS expomos a API e informamos a URL ao fornecedor; ele chama com header
+// `Token`, POST, JSON, uma ocorrência por chamada. As respostas são as DELE —
+// 200 {status:true,...} e 401 {status:false,...} —, por isso este é o único
+// lugar da vertical que não responde no formato {error}.
+//
+// É rota pública de propósito: o TRACK3R não tem sessão nem papel. Quem
+// autoriza é o token conferido contra o COFRE do Worker (o banco guarda apenas
+// o NOME da variável), e quem diz de qual espaço é a chamada é o id da
+// integração na URL — nunca um CNPJ do corpo, que identifica CLIENTE e não
+// espaço.
+const MAX_CORPO_DO_WEBHOOK = 1_000_000;
+
+const respostaDoFornecedor = (ok, descricao, status) =>
+  new Response(JSON.stringify({ status: ok, descricao }), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+
+// Token ausente, token errado e integração inexistente respondem IGUAL: se o id
+// desconhecido tivesse resposta própria, a URL viraria um oráculo de quais
+// integrações existem.
+const TOKEN_INVALIDO = () => respostaDoFornecedor(false, "O Token informado é inválido!", 401);
+
+const integracaoDoWebhook = async (env, integracaoId) => {
+  if (!integracaoId) return null;
+  return env.DB.prepare(
+    `SELECT * FROM todogreen_tms_integrations
+      WHERE id = ? AND tenant_id = ? AND provider = 'track3r' AND archived_at IS NULL`,
+  ).bind(integracaoId, TENANT_ID).first();
+};
+
+// A remessa que a ocorrência descreve, achada pelo documento do TMS que já foi
+// projetado em operação — a encomenda primeiro, depois a chave da nota. A
+// tabela de operações não tem identificador externo, e inventar um vínculo por
+// aproximação seria pior do que não achar.
+const operacaoDaRemessa = async (env, ownerId, doc) => {
+  const encomenda = texto(doc.orderId, 120);
+  const chave = texto(doc.invoiceKey, 60);
+  const nota = texto(doc.invoiceNumber, 60);
+  if (!encomenda && !chave && !nota) return "";
+  const linha = await env.DB.prepare(
+    `SELECT operation_id FROM todogreen_tms_documents
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL
+        AND operation_id <> ''
+        AND ((? <> '' AND order_ref = ?) OR (? <> '' AND invoice_key = ?) OR (? <> '' AND invoice_number = ?))
+      ORDER BY created_at LIMIT 1`,
+  ).bind(TENANT_ID, ownerId, encomenda, encomenda, chave, chave, nota, nota).first();
+  return texto(linha?.operation_id, 120);
+};
+
+// A ocorrência vira EVENTO de uma operação que já existe. Criar operação
+// continua sendo ato explícito de alguém (POST /projecoes) — um fornecedor não
+// abre operação no nosso ERP.
+const aplicarOcorrenciaNaOperacao = async (env, { ownerId, userId, doc }) => {
+  const tipo = texto(doc.eventoPreferido, 40);
+  if (!tipo) return { aplicado: false, motivo: "ocorrência sem evento reconhecível" };
+  const operationId = await operacaoDaRemessa(env, ownerId, doc);
+  if (!operationId) return { aplicado: false, motivo: "remessa ainda sem operação projetada" };
+
+  const operacao = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_operations
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(operationId, TENANT_ID, ownerId).first();
+  if (!operacao) return { aplicado: false, motivo: "operação não encontrada neste espaço" };
+
+  const resultado = await aplicarEventoOperacional(env, {
+    ownerId,
+    operacao,
+    userId,
+    origem: "track3r-webhook",
+    corpo: {
+      tipo,
+      titulo: texto(doc.status, 200) || "Ocorrência do TRACK3R",
+      descricao: texto(doc.occurrence, 3000),
+      local: texto(doc.currentUnit, 200) || texto(doc.originUnit, 200),
+      ocorridoEm: texto(doc.occurredAt, 40),
+      // Só a entrega carrega comprovante e recebedor — é o que destrava o POD.
+      comprovanteUrl: texto(doc.proofUrl, 800),
+      recebedor: texto(doc.receiverName, 200),
+    },
+  });
+  if (resultado?.erro) return { aplicado: false, motivo: resultado.erro };
+  return { aplicado: true, operationId };
+};
+
+export async function receberOcorrenciaTrack3r(request, env) {
+  if (!env.DB) return respostaDoFornecedor(false, "Banco indisponível.", 503);
+  if (request.method !== "POST") return respostaDoFornecedor(false, "Método não permitido.", 405);
+
+  const url = new URL(request.url);
+  // api, todogreen, tms, webhook, [id]
+  const partes = url.pathname.split("/").filter(Boolean);
+  const integracaoId = texto(partes[4], 120);
+
+  // Teto de rajada por integração e por IP: o receptor é público, e público sem
+  // teto é convite. `edgeIp` devolve vazio em loopback — sem IP, só o teto da
+  // integração vale.
+  if (!limitarTaxa(`tms-webhook:${integracaoId}`, 600))
+    return respostaDoFornecedor(false, "Muitas chamadas em sequência. Tente novamente em instantes.", 429);
+  const ip = edgeIp(request);
+  if (ip && !limitarTaxa(`tms-webhook-ip:${ip}`, 600))
+    return respostaDoFornecedor(false, "Muitas chamadas em sequência. Tente novamente em instantes.", 429);
+
+  const integracao = await integracaoDoWebhook(env, integracaoId);
+  if (!integracao) return TOKEN_INVALIDO();
+
+  const nomeDoSegredo = texto(integracao.webhook_secret_env_key, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET";
+  const esperado = String(env[nomeDoSegredo] || "");
+  // Sem segredo cadastrado o receptor NÃO aceita. Aceitar "enquanto não
+  // configuram" é como deixar a porta encostada e escrever um bilhete.
+  if (!esperado)
+    return respostaDoFornecedor(false, `Integração sem segredo configurado (${nomeDoSegredo}).`, 503);
+
+  const enviado = String(request.headers.get("Token") || "").trim().slice(0, 500);
+  if (!enviado || !sameHash(enviado, esperado)) return TOKEN_INVALIDO();
+
+  // O corpo é lido como texto UMA vez, para poder medir antes de interpretar.
+  const bruto = await request.text().catch(() => "");
+  if (bruto.length > MAX_CORPO_DO_WEBHOOK)
+    return respostaDoFornecedor(false, "Corpo maior do que o aceito.", 413);
+  let corpo;
+  try { corpo = JSON.parse(bruto || "{}"); } catch { corpo = null; }
+  if (!corpo || typeof corpo !== "object" || Array.isArray(corpo))
+    return respostaDoFornecedor(false, "Não foi possível ler o JSON enviado.", 400);
+
+  const access = { ownerId: integracao.workspace_owner_id };
+  // As escritas precisam de um ator real (created_by tem chave estrangeira para
+  // users): é quem configurou a integração. Fica auditável como "entrou pela
+  // integração que fulana ligou", sem inventar usuário de sistema.
+  const user = { id: integracao.updated_by || integracao.created_by };
+
+  const importado = await importarLinhas(env, access, user, {
+    linhas: [corpo],
+    origem: "webhook",
+    integracao,
+    normalizar: normalizarOcorrenciaDoWebhook,
+    calcularHash: hashDaOcorrencia,
+    registrarExecucao: false,
+  });
+
+  // Ocorrência que não dá para identificar não é motivo para o fornecedor
+  // reenviar para sempre: responde 200 e fica registrada como execução com erro.
+  if (!importado.gravados)
+    return respostaDoFornecedor(true, "Recebido com sucesso!", 200);
+
+  const fieldMap = parse(integracao.field_map_json, {});
+  const doc = normalizarOcorrenciaDoWebhook(corpo, fieldMap);
+  // A projeção na linha do tempo é melhor-esforço: a ocorrência já está
+  // guardada, e falhar aqui não pode fazer o fornecedor reenviar tudo.
+  const projecao = await aplicarOcorrenciaNaOperacao(env, {
+    ownerId: access.ownerId, userId: user.id, doc,
+  }).catch((erro) => ({ aplicado: false, motivo: erro?.message || "falha ao aplicar o evento" }));
+
+  await env.DB.prepare(
+    `UPDATE todogreen_tms_integrations
+        SET status = 'ativa', last_sync_at = ?, last_error = ?, updated_at = ?
+      WHERE id = ? AND tenant_id = ?`,
+  ).bind(
+    new Date().toISOString(),
+    projecao.aplicado ? "" : texto(projecao.motivo, 300),
+    new Date().toISOString(), integracao.id, TENANT_ID,
+  ).run().catch(() => {});
+
+  return respostaDoFornecedor(true, "Recebido com sucesso!", 200);
+}
 
 export async function handleTodoGreenTms(request, env, access, user) {
   if (!env.DB) return json({ error: "Banco indisponível." }, 503);
