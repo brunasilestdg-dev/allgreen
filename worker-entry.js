@@ -10,6 +10,7 @@ import {
 } from "./worker/services/todogreen-enterprise-workflows.js";
 import { handleTodoGreenPurchasingEnterprise } from "./worker/services/todogreen-purchasing-enterprise.js";
 import { handleTodoGreenFileVault } from "./worker/services/todogreen-file-vault.js";
+import { handleTodoGreenTmsLocalBridge } from "./worker/services/todogreen-tms-local-bridge.js";
 import { routeTodoGreenApi } from "./worker/services/todogreen-router.js";
 
 const forbiddenDriver = () => new Response(JSON.stringify({ error: "Este recurso é restrito ao portal interno." }), {
@@ -27,6 +28,12 @@ const resolveInternal = async (request, env) => {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Ponte temporária do TMS TRACK3R: a máquina local entra aqui sem sessão do
+    // ERP e autentica com segredo próprio. Fica antes do router porque o bloco
+    // normal de /tms exige sessão humana. API/webhook oficiais continuam ativos.
+    if (url.pathname.startsWith("/api/todogreen/tms/local-bridge")) {
+      return handleTodoGreenTmsLocalBridge(request, env);
+    }
     if (url.pathname.startsWith("/api/todogreen/market-radar")) {
       const resolved = await resolveInternal(request, env);
       if (resolved.response) return resolved.response;

@@ -1,0 +1,21 @@
+{
+  "portalUrl": "https://SEU-ENDERECO-TRACK3R/",
+  "reportUrl": "https://SEU-ENDERECO-TRACK3R/RELATORIO",
+  "erpBridgeUrl": "https://SEU-ERP/api/todogreen/tms/local-bridge/ID-DA-INTEGRACAO",
+  "strategy": "download",
+  "downloadSelector": "text=Exportar",
+  "tableSelector": "table",
+  "jsonEndpoint": {
+    "url": "/api/consulta-coletas",
+    "method": "GET",
+    "collectionPath": "data"
+  },
+  "profileDir": ".track3r-profile",
+  "downloadDir": ".track3r-downloads",
+  "stateFile": ".track3r-state.json",
+  "headless": true,
+  "machineId": "track3r-bridge-01",
+  "maxRowsPerBatch": 250,
+  "navigationTimeoutMs": 45000,
+  "downloadTimeoutMs": 45000
+}

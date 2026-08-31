@@ -16,7 +16,10 @@
     "deploy:cloudflare": "npx wrangler d1 migrations apply seu-funcionario-db --remote && npx wrangler deploy",
     "db:migrate": "npx wrangler d1 migrations apply seu-funcionario-db --remote",
     "test:e2e": "playwright test",
-    "test:e2e:acesso": "playwright test e2e/vertical-acesso.spec.js"
+    "test:e2e:acesso": "playwright test e2e/vertical-acesso.spec.js",
+    "track3r:login": "node scripts/track3r-local-bridge/agent.js login",
+    "track3r:probe": "node scripts/track3r-local-bridge/agent.js probe",
+    "track3r:sync": "node scripts/track3r-local-bridge/agent.js sync"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",
