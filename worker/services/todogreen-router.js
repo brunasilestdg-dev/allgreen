@@ -31,6 +31,7 @@ import { handleTodoGreenMarketIntelligence } from "./todogreen-market-intelligen
 import { handleTodoGreenSemente } from "./todogreen-semente.js";
 import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
+import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
 
@@ -277,6 +278,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenSemente(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  if (path.startsWith("/api/todogreen/mcp-connections")) {
+    return guarded("To Do Green MCP connection error", "Não foi possível gerenciar a conexão MCP.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenMcpConnections(request, env, resolved.access, resolved.user);
     });
   }
 
