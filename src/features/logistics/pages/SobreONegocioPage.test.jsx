@@ -3,6 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SobreONegocioPage from "./SobreONegocioPage.jsx";
+import { sementeDoNegocio } from "../businessContextDomain.js";
 
 afterEach(cleanup);
 
@@ -52,8 +53,11 @@ describe("Sobre o negócio", () => {
 
   it("o que falta do dossiê é oferecido para acrescentar, nunca para sobrescrever o que ela escreveu", () => {
     render(<SobreONegocioPage businessContext={[fato()]} podeEditar />);
-    // A semente tem 18 pontos; um já está cadastrado, então faltam 17.
-    expect(screen.getByRole("button", { name: /Acrescentar 17 ponto\(s\) do dossiê/ })).toBeInTheDocument();
+    // O número sai da própria semente: fixar "17" aqui obrigaria a mexer no
+    // teste a cada ponto novo do dossiê, sem provar nada a mais.
+    const faltam = sementeDoNegocio().length - 1;
+    expect(screen.getByRole("button", { name: new RegExp(`Acrescentar ${faltam} ponto\\(s\\) do dossiê`) }))
+      .toBeInTheDocument();
   });
 
   it("o painel diz o tamanho real do que a IA lê a cada pergunta", () => {

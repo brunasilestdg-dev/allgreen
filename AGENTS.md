@@ -284,6 +284,29 @@ quantos resultados vieram.
   que escreve conhecimento no banco a partir de texto livre aprende também o que
   alguém plantar numa mensagem. Reensinar pela mesma `fact_key` corrige em vez
   de empilhar duas versões contraditórias que o modelo leria juntas.
+- **Central de RFQ e RFI: status é FÓRMULA, nunca coluna**: `habilitacaoDomain.js`
+  (puro) + `pages/CentralRfqPage.jsx` + as coleções `habilitacao`,
+  `habilitacaoKits` e `rfq` (migração `0083`). Nenhuma tabela guarda status: o
+  semáforo sai de `situacaoDoDocumento(doc, hoje)` a cada leitura. Não voltar a
+  gravar status — status gravado envelhece calado, e o preço é mandar ao
+  comprador uma apólice vencida confiando na etiqueta. Regras que não se
+  quebram: os estados são os da titular (VENCIDO / CRÍTICO ≤30 dias / ATENÇÃO
+  31-90 / REEMITIR sem validade e velho demais / VÁLIDO / PERMANENTE / FALTANDO);
+  documento com arquivo e SEM data nenhuma é REEMITIR, nunca VÁLIDO
+  (indeterminado que passa por válido é como o comprador descobre por nós); o
+  nome do arquivo é GERADO por `nomeDoArquivo()` no padrão
+  `CATEGORIA_TIPO_UNIDADE_VAAAA-MM-DD.pdf`, porque "final", "v2" e "0526" só
+  existem quando alguém digita o nome à mão; o kit guarda TIPOS e nunca
+  arquivos, e item essencial vencido/ausente TRAVA o envio; RFQ fechado sem
+  motivo é recusado (é o motivo que vira inteligência comercial) e o texto do
+  pedido entra cru, sem resumir. O acervo é da empresa:
+  `escopoDeCarteira: false`. Escrever exige `compliance:manage`; vendedor LÊ
+  para responder RFQ.
+- **O dossiê da IA aponta para a Central, não concorre com ela**: o ponto
+  `habilitacao-pendente` do dossiê é uma FOTOGRAFIA da auditoria de 15/08 e diz
+  isso; a ferramenta `habilitacao` do Plantû lê o acervo de agora. Quando as
+  duas discordam, a ferramenta ganha. Não transcrever validade de documento para
+  dentro do dossiê como se fosse fato permanente.
 - **Menu da vertical**: `PRIMARY_NAVIGATION` (`LogisticsVertical.jsx`) é a lista
   de áreas; cada tela aparece em UMA área e em um item só — dois rótulos para a
   mesma rota é repetição, e `moduleNavLabels.test.js` reprova. Cadastro mora na

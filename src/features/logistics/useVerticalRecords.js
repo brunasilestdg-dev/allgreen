@@ -41,6 +41,13 @@ const VAZIO = Object.freeze({
   // inteira — não há paginação a fazer sobre um dossiê de duas dezenas de
   // fatos.
   businessContext: [],
+  // Central de RFQ e RFI (migração 0083): o acervo de habilitação, os kits e o
+  // ciclo do pedido. Vêm na carga inicial porque a tela calcula o semáforo e a
+  // prontidão dos kits cruzando as três — pedir uma por vez faria a tela
+  // mostrar kit liberado antes de o acervo chegar.
+  habilitacao: [],
+  habilitacaoKits: [],
+  rfq: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {

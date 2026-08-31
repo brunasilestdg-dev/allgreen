@@ -33,6 +33,11 @@ import {
   propostaDeAprendizado,
   sementeDoNegocio,
 } from "../../src/features/logistics/businessContextDomain.js";
+import {
+  documentosQueFaltam,
+  resumoDoAcervo,
+  situacaoDoDocumento,
+} from "../../src/features/logistics/habilitacaoDomain.js";
 
 const response = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -60,6 +65,7 @@ export const FERRAMENTAS = Object.freeze({
   contatos: "procura pessoas em toda a carteira por cargo, área ou nome. Requer {\"termo\":\"compras\"}.",
   inteligencia: "devolve a pesquisa externa já feita de uma conta: site oficial, LinkedIn, portais de fornecedor, RFQs, sinais ESG e notícias, com as fontes. Requer {\"cliente\":\"nome ou id\"}.",
   tarefas: "lista as tarefas abertas da Central de Implantação, com responsável, prazo e situação.",
+  habilitacao: "abre o acervo de habilitação da Central de RFQ e RFI com o semáforo de HOJE: o que está vencido, crítico, a reemitir, em dia, e o que nunca entrou. Use SEMPRE antes de afirmar que a To Do Green tem ou não um documento — o dossiê descreve a posição de uma auditoria antiga, esta ferramenta é o estado atual. Sem filtro.",
   financeiro: "analisa lançamentos, saldo aberto, vencimentos e baixas de receita, custo ou comissão. Aceita {\"tipo\":\"revenue|cost|commission\"} e {\"cliente\":\"nome ou id\"}.",
   operacoes: "lista execução real, SLA, prazo prometido, ETA, entrega, frota, distância e ocorrências. Aceita {\"cliente\":\"nome ou id\"}.",
   contratos: "consulta assinatura, vigência, renovação, aviso e valores dos contratos. Aceita {\"cliente\":\"nome ou id\"}.",
@@ -339,6 +345,66 @@ async function responsaveis(env, clienteId) {
 
 export async function executarFerramenta(env, { access, pedido, linhas }) {
   const ferramenta = clean(pedido?.ferramenta, 40);
+
+  if (ferramenta === "habilitacao") {
+    // O dossiê do negócio guarda a posição da auditoria de 15/08 — texto, e
+    // texto envelhece. Aqui a resposta é o acervo de agora, com o semáforo
+    // recalculado contra a data de hoje. Sem isso o assistente afirmaria que a
+    // apólice está vencida meses depois de renovada, e o inverso é pior.
+    let linhasDoAcervo = [];
+    try {
+      linhasDoAcervo = await env.DB.prepare(
+        `SELECT doc_type, category, title, numero, orgao, unidade, issued_at, expires_at,
+                permanente, dias_aceitaveis, arquivo_url, arquivo_id
+           FROM todogreen_habilitacao_documentos
+          WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+          LIMIT 400`,
+      ).bind(TENANT_ID, access.ownerId).all().then((r) => r.results || []);
+    } catch (erro) {
+      console.error("Plantû: acervo de habilitação indisponível", erro?.message || erro);
+      return { ferramenta, erro: "O acervo de habilitação não pôde ser lido agora." };
+    }
+
+    const documentos = linhasDoAcervo.map((row) => ({
+      tipo: row.doc_type,
+      categoria: row.category,
+      titulo: row.title,
+      numero: row.numero,
+      orgao: row.orgao,
+      unidade: row.unidade,
+      emitidoEm: row.issued_at,
+      venceEm: row.expires_at,
+      permanente: Number(row.permanente || 0) === 1,
+      diasAceitaveis: Number(row.dias_aceitaveis || 0),
+      arquivoUrl: row.arquivo_url,
+      arquivoId: row.arquivo_id,
+    }));
+    const hoje = new Date().toISOString().slice(0, 10);
+    return {
+      ferramenta,
+      posicaoEm: hoje,
+      resumo: resumoDoAcervo(documentos, hoje),
+      documentos: documentos.map((documento) => {
+        const situacao = situacaoDoDocumento(documento, hoje);
+        return {
+          titulo: documento.titulo,
+          tipo: documento.tipo,
+          numero: documento.numero,
+          orgao: documento.orgao,
+          unidade: documento.unidade,
+          venceEm: documento.venceEm,
+          emitidoEm: documento.emitidoEm,
+          estado: situacao.estado,
+          motivo: situacao.motivo,
+        };
+      }),
+      nuncaEntraram: documentosQueFaltam(documentos).map((item) => ({
+        titulo: item.titulo,
+        tipo: item.tipo,
+        essencial: Boolean(item.essencial),
+      })),
+    };
+  }
 
   if (ferramenta === "carteira") {
     const indice = montarIndice(linhas);

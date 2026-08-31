@@ -109,6 +109,7 @@ const TreasuryPage = lazy(() => import("./pages/TreasuryPage.jsx"));
 const PeoplePage = lazy(() => import("./pages/PeoplePage.jsx"));
 const PlannerPage = lazy(() => import("./pages/PlannerPage.jsx"));
 const SobreONegocioPage = lazy(() => import("./pages/SobreONegocioPage.jsx"));
+const CentralRfqPage = lazy(() => import("./pages/CentralRfqPage.jsx"));
 const AvancosDaSemanaPage = lazy(() => import("./pages/AvancosDaSemanaPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
 const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
@@ -775,6 +776,16 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["access:manage", "integration:manage", "audit:read"],
     description: "Acessos, permissões, auditoria, integrações, configurações e governança da vertical.",
   },
+  "central-rfq": {
+    title: "Central de RFQ e RFI",
+    navLabel: "RFQ e RFI",
+    route: "/todogreen/central-rfq",
+    area: "comercial",
+    status: "functional",
+    // Ler é aberto a quem responde cotação; cadastrar documento oficial exige
+    // `compliance:manage`, checado no servidor.
+    description: "Acervo de habilitação com semáforo de validade, kits conferidos antes de enviar e o ciclo do RFQ do e-mail ao resultado.",
+  },
   "sobre-o-negocio": {
     title: "Sobre o negócio",
     navLabel: "Sobre o negócio",
@@ -817,7 +828,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento", "aceite-viagens"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "rasci", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
@@ -2873,6 +2884,24 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "tesouraria" && <Suspense fallback={<section className="tdg-panel">Carregando a tesouraria...</section>}><TreasuryPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "central-rfq" && (
+        <Suspense fallback={<section className="tdg-panel">Carregando a Central de RFQ...</section>}>
+          <CentralRfqPage
+            habilitacao={registros.habilitacao}
+            habilitacaoKits={registros.habilitacaoKits}
+            rfq={registros.rfq}
+            clientes={clientes}
+            onCriarDocumento={(registro) => criar("habilitacao", registro)}
+            onAtualizarDocumento={(id, registro) => atualizar("habilitacao", id, registro)}
+            onArquivarDocumento={(id) => arquivar("habilitacao", id)}
+            onCriarKit={(registro) => criar("habilitacaoKits", registro)}
+            onCriarRfq={(registro) => criar("rfq", registro)}
+            onAtualizarRfq={(id, registro) => atualizar("rfq", id, registro)}
+            podeEditar={podeAcessarFuncionalidade(role, remoteAccess.permissions, "compliance:manage")}
+            setToast={setToast}
+          />
+        </Suspense>
+      )}
       {page === "sobre-o-negocio" && (
         <Suspense fallback={<section className="tdg-panel">Carregando o dossiê do negócio...</section>}>
           <SobreONegocioPage

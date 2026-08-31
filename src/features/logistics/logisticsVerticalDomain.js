@@ -154,12 +154,15 @@ export const TODO_GREEN_PERMISSIONS = {
   // todo mundo do espaço, inclusive dentro de proposta — por isso ela fica com
   // quem já responde por discurso institucional, e não com todo papel que
   // conversa com o assistente.
-  lideranca_comercial: ["read", "business:teach", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
+  lideranca_comercial: ["read", "business:teach", "compliance:manage", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
   vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   planejamento: ["read", "planning:manage", "product:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
-  financeiro: ["read", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
+  // O acervo de habilitação passa por Financeiro (balanço, DRE, certidões,
+  // declaração bancária) e por Administração. Vendedor LÊ para responder RFQ,
+  // não cadastra documento oficial.
+  financeiro: ["read", "compliance:manage", "cost:manage", "revenue:manage", "commission:manage", "finance:manage", "purchase:manage", "fiscal:manage", "ciot:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   operacoes: ["read", "operation:manage", "operations:manage", "stock:manage", "purchase:manage", "production:manage", "tms:manage", "fleet:manage", "integration:manage", "ciot:manage", "deal:review", "evidence:manage", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
   marketing: ["read", "business:teach", "marketing:manage", "evidence:manage", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   sustentabilidade: ["read", "esg:manage", "deal:review", "audit:read", "evidence:manage", "market:read", "market:research", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
@@ -604,6 +607,11 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("usuarios", "Usuários", "administracao", "/todogreen/acessos", { icon: "Users", order: 67 }),
   module("permissoes", "Permissões", "administracao", "/todogreen/acessos", { icon: "LockKeyhole", order: 68 }),
   module("configuracoes", "Configurações", "administracao", "/todogreen/acessos", { icon: "Settings", order: 69 }),
+  module("central-rfq", "RFQ e RFI", "comercial", "/todogreen/central-rfq", {
+    icon: "ClipboardList",
+    order: 22,
+    description: "Acervo de habilitação com semáforo de validade, kits conferidos e o ciclo do RFQ do e-mail ao resultado.",
+  }),
   module("sobre-o-negocio", "Sobre o negócio", "administracao", "/todogreen/sobre-o-negocio", {
     icon: "BookOpen",
     order: 70,

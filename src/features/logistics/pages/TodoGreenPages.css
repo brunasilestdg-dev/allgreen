@@ -2121,3 +2121,156 @@
   opacity: 0.75;
   margin-top: 2px;
 }
+
+/* ===== Central de RFQ e RFI ===== */
+.tdg-rfq-resumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.tdg-rfq-resumo article {
+  background: var(--tdg-surface, #fff);
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* O que trava um RFQ agora é a única urgência real do painel. */
+.tdg-rfq-resumo article.alerta { border-color: #e07a7a; background: #fdf3f3; }
+.tdg-rfq-resumo small { color: var(--tdg-muted, #6b7a72); font-size: 12px; }
+.tdg-rfq-resumo strong { font-size: 24px; line-height: 1.1; }
+.tdg-rfq-resumo span { font-size: 11px; color: var(--tdg-muted, #6b7a72); }
+
+.tdg-rfq-abas, .tdg-rfq-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.tdg-rfq-abas button, .tdg-rfq-filtros button {
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tdg-rfq-filtros button { font-size: 12px; padding: 4px 11px; }
+.tdg-rfq-abas button.ativo, .tdg-rfq-filtros button.ativo {
+  background: var(--tdg-accent-soft, #e8f5ee);
+  border-color: var(--tdg-accent, #14966b);
+  font-weight: 600;
+}
+
+.tdg-rfq-nota {
+  font-size: 13px;
+  color: var(--tdg-muted, #6b7a72);
+  background: var(--tdg-accent-soft, #e8f5ee);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+/* Tabela larga rola dentro do próprio contêiner: a página nunca rola de lado. */
+.tdg-rfq-tabela-wrap { overflow-x: auto; }
+.tdg-rfq-tabela { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px; }
+.tdg-rfq-tabela th, .tdg-rfq-tabela td {
+  text-align: left;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--tdg-border, #e3e8e5);
+  vertical-align: top;
+}
+.tdg-rfq-tabela th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--tdg-muted, #6b7a72); }
+.tdg-rfq-tabela td small { display: block; font-size: 11px; color: var(--tdg-muted, #6b7a72); margin-top: 2px; }
+.tdg-rfq-acoes { white-space: nowrap; }
+.tdg-rfq-acoes button {
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  background: transparent;
+  border-radius: 8px;
+  padding: 3px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+}
+
+/* O semáforo. As cores repetem a régua da titular, e o rótulo em texto carrega
+   a informação sozinho — quem não distingue as cores lê VENCIDO igual. */
+.tdg-rfq-estado {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef1f0;
+  color: #33413a;
+}
+.tdg-rfq-estado--vencido { background: #fbdcdc; color: #8c1c1c; }
+.tdg-rfq-estado--ausente { background: #f6dede; color: #7a1f1f; }
+.tdg-rfq-estado--critico { background: #fde5cf; color: #8a4708; }
+.tdg-rfq-estado--reemitir { background: #fbf0cd; color: #7a5a06; }
+.tdg-rfq-estado--atencao { background: #f3f4d4; color: #5f6410; }
+.tdg-rfq-estado--valido { background: #d8f0e2; color: #10603c; }
+.tdg-rfq-estado--permanente { background: #dde8f6; color: #1b4d80; }
+
+.tdg-rfq-kits, .tdg-rfq-pedidos { display: grid; gap: 12px; }
+.tdg-rfq-kit, .tdg-rfq-pedido {
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  border-left-width: 4px;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--tdg-surface, #fff);
+}
+.tdg-rfq-kit.liberado { border-left-color: var(--tdg-accent, #14966b); }
+.tdg-rfq-kit.travado, .tdg-rfq-pedido.atrasado { border-left-color: #c94f4f; }
+.tdg-rfq-kit header, .tdg-rfq-pedido header {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  align-items: baseline; justify-content: space-between;
+}
+.tdg-rfq-kit header small, .tdg-rfq-pedido header small {
+  display: block; font-size: 12px; color: var(--tdg-muted, #6b7a72); margin-top: 2px;
+}
+.tdg-rfq-kit-contagem, .tdg-rfq-pedido header > span { font-size: 12px; color: var(--tdg-muted, #6b7a72); }
+.tdg-rfq-kit-bloqueio {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #8c1c1c;
+  background: #fdf3f3; border-radius: 8px; padding: 7px 10px; margin: 10px 0 0;
+}
+.tdg-rfq-kit details, .tdg-rfq-pedido details { margin-top: 10px; font-size: 13px; }
+.tdg-rfq-kit details ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.tdg-rfq-kit details li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tdg-rfq-kit details li small { font-size: 11px; color: var(--tdg-muted, #6b7a72); }
+.tdg-rfq-kit > button, .tdg-rfq-pedido footer button {
+  margin-top: 10px;
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  background: transparent; border-radius: 9px;
+  padding: 5px 11px; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.tdg-rfq-pedido footer { display: flex; gap: 8px; flex-wrap: wrap; }
+/* O texto do pedido é o e-mail cru: preserva quebra e rola sozinho. */
+.tdg-rfq-pedido pre {
+  white-space: pre-wrap; font-family: inherit; font-size: 12px;
+  background: #f6f8f7; border-radius: 8px; padding: 10px; margin: 8px 0 0;
+  max-height: 260px; overflow-y: auto;
+}
+
+.tdg-rfq-falta ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.tdg-rfq-falta li {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+  border: 1px solid var(--tdg-border, #e3e8e5); border-radius: 10px; padding: 9px 13px;
+}
+.tdg-rfq-falta li small { display: block; font-size: 11px; color: var(--tdg-muted, #6b7a72); }
+.tdg-rfq-falta li button {
+  border: 1px solid var(--tdg-border, #e3e8e5); background: transparent;
+  border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.tdg-rfq-essencial {
+  font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  background: #fde5cf; color: #8a4708; padding: 2px 8px; border-radius: 999px;
+}
+.tdg-rfq-nome-sugerido { font-size: 12px; color: var(--tdg-muted, #6b7a72); }
+.tdg-rfq-nome-sugerido code {
+  background: #f0f3f2; padding: 2px 6px; border-radius: 5px; font-size: 12px;
+}
+.tdg-rfq-nome-sugerido em { color: #8a4708; font-style: normal; }
+.tdg-rfq-ajuda { font-size: 12px; color: var(--tdg-muted, #6b7a72); margin: -4px 0 8px; }

@@ -257,6 +257,18 @@ FALTAM NO ACERVO, e sem eles um RFI de conta grande não fecha: CND Federal (RFB
     fixado: true,
   },
   {
+    chave: "onde-conferir-habilitacao",
+    categoria: "habilitacao",
+    titulo: "Este texto é uma FOTOGRAFIA — o acervo vivo é a Central de RFQ",
+    conteudo: `O ponto acima descreve a posição da auditoria de 15/08/2026. Texto envelhece: uma apólice renovada continuaria "vencida" aqui, e afirmar isso a um cliente é tão ruim quanto o contrário.
+Antes de responder QUALQUER coisa sobre documento, validade, certidão, apólice ou habilitação da To Do Green, use a ferramenta "habilitacao". Ela devolve o acervo de agora com o semáforo recalculado na data de hoje, o que trava um RFQ e o que nunca entrou.
+Se a ferramenta e este texto discordarem, a ferramenta ganha — e vale dizer que o texto está desatualizado.`,
+    fonte: "Regra do produto",
+    vigenteEm: "2026-08-31",
+    sigilo: "interno",
+    fixado: true,
+  },
+  {
     chave: "divergencias-cadastrais",
     categoria: "habilitacao",
     titulo: "Divergências que o comprador vai achar",

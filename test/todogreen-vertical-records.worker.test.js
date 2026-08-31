@@ -722,12 +722,15 @@ describe("a vertical inteira numa chamada só", () => {
       "contracts",
       "costCenters",
       "financial",
+      "habilitacao",
+      "habilitacaoKits",
       "interactions",
       "items",
       "operations",
       "opportunities",
       "parties",
       "proposals",
+      "rfq",
       "scenarios",
       "warehouses",
     ]);
@@ -1101,5 +1104,125 @@ describe("oportunidade com nome próprio", () => {
     expect(primeira.registro.titulo).toBe("Middle Mile Sorocaba");
     expect(segunda.registro.titulo).toBe("Same Day SP");
     expect(primeira.registro.titulo).not.toBe(segunda.registro.titulo);
+  });
+});
+
+// ===== Central de RFQ e RFI =====
+//
+// O que estes testes impedem de voltar: acervo de habilitação de um espaço
+// aparecendo no outro, vendedor cadastrando documento oficial, e RFQ fechado
+// sem motivo — que joga fora a única inteligência comercial que um ano de
+// cotações produz.
+describe("Central de RFQ e RFI", () => {
+  let vendedoraRfq;
+
+  beforeAll(async () => {
+    vendedoraRfq = await criarUsuario(
+      `u-rfq-${crypto.randomUUID().slice(0, 8)}`,
+      `rfq-${crypto.randomUUID().slice(0, 8)}@todogreen.com.br`,
+    );
+    await autorizar(vendedoraRfq, "vendedor", ["read", "crm:manage"], gestora.id);
+  });
+
+  it("a dona cadastra documento e ele volta sem coluna de status", async () => {
+    const criada = await pedir("/api/todogreen/records/habilitacao", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: {
+        tipo: "APOLICE-RCTR-C",
+        numero: "654 66 04001125",
+        unidade: "EMPRESA",
+        venceEm: "2026-08-13",
+      },
+    });
+    expect(criada.status).toBe(201);
+    const registro = (await criada.json()).registro;
+    // O tipo vira canônico e o catálogo preenche título, categoria e órgão:
+    // o que a casa já sabe não se digita de novo.
+    expect(registro.tipo).toBe("APOLICE-RCTR-C");
+    expect(registro.titulo).toBe("Apólice RCTR-C");
+    expect(registro.categoria).toBe("seguros");
+    // E não existe campo de status: o semáforo é derivado na leitura.
+    expect(registro.status).toBeUndefined();
+    expect(registro.situacao).toBeUndefined();
+  });
+
+  it("documento sem data nenhuma é recusado — sem data não há semáforo", async () => {
+    const semData = await pedir("/api/todogreen/records/habilitacao", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { tipo: "CND-FEDERAL" },
+    });
+    expect(semData.status).toBe(400);
+    expect((await semData.json()).error).toMatch(/emissão ou o vencimento/);
+  });
+
+  it("documento permanente não guarda vencimento", async () => {
+    const criada = await pedir("/api/todogreen/records/habilitacao", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { tipo: "CONTRATO-SOCIAL-CONSOLIDADO", numero: "NIRE 35.237.011.921", venceEm: "2030-01-01" },
+    });
+    expect(criada.status).toBe(201);
+    const registro = (await criada.json()).registro;
+    expect(registro.permanente).toBe(true);
+    // Guardar os dois deixaria a tela ter que escolher em qual acreditar.
+    expect(registro.venceEm).toBe("");
+  });
+
+  it("vendedora LÊ o acervo para responder RFQ mas não cadastra documento oficial", async () => {
+    const leitura = await pedir("/api/todogreen/records/habilitacao", { token: vendedoraRfq.token });
+    expect(leitura.status).toBe(200);
+    expect((await leitura.json()).registros.some((item) => item.tipo === "APOLICE-RCTR-C")).toBe(true);
+
+    const tentativa = await pedir("/api/todogreen/records/habilitacao", {
+      metodo: "POST",
+      token: vendedoraRfq.token,
+      corpo: { tipo: "CND-FEDERAL", emitidoEm: "2026-08-31" },
+    });
+    expect(tentativa.status).toBe(403);
+  });
+
+  it("o acervo de um espaço não vaza para o outro", async () => {
+    const doColega = await (await pedir("/api/todogreen/records/habilitacao", { token: colega.token })).json();
+    expect(doColega.registros.map((item) => item.tipo)).not.toContain("APOLICE-RCTR-C");
+  });
+
+  it("kit vazio é recusado — não anexa nada", async () => {
+    const vazio = await pedir("/api/todogreen/records/habilitacaoKits", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { nome: "Kit sem nada", tipos: [] },
+    });
+    expect(vazio.status).toBe(400);
+  });
+
+  it("RFQ fechado sem motivo é recusado", async () => {
+    const semMotivo = await pedir("/api/todogreen/records/rfq", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { titulo: "RFQ last mile", cliente: "DHL", etapa: "perdido" },
+    });
+    expect(semMotivo.status).toBe(400);
+    expect((await semMotivo.json()).error).toMatch(/motivo/);
+
+    const comMotivo = await pedir("/api/todogreen/records/rfq", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { titulo: "RFQ last mile", cliente: "DHL", etapa: "perdido", motivo: "Preço 12% acima do incumbente." },
+    });
+    expect(comMotivo.status).toBe(201);
+  });
+
+  it("o texto do pedido é guardado cru, sem resumir", async () => {
+    const bruto = "Prezados,\n\nSolicitamos:\n1) CNPJ\n2) CND Federal\n\nPrazo: 05/09.";
+    const criada = await pedir("/api/todogreen/records/rfq", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { titulo: "RFQ com pedido cru", cliente: "Maersk", pedido: bruto, prazo: "2026-09-05" },
+    });
+    expect(criada.status).toBe(201);
+    // A quebra de linha sobrevive: é o que responde "mandaram o quê mesmo?".
+    expect((await criada.json()).registro.pedido).toContain("1) CNPJ");
   });
 });
