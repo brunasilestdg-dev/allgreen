@@ -169,6 +169,9 @@ describe("LogisticsVertical", () => {
     const navegacao = screen.getByRole("navigation", { name: "Navegação To Do Green" });
     expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(19);
     expect(screen.getByText("Configurações")).toBeTruthy();
+    // Sem "Sair" a sessão fica eterna no navegador: quem pega o mesmo
+    // aparelho entra direto na conta de quem esqueceu de sair.
+    expect(screen.getByRole("button", { name: "Sair" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Olá, Bruna" })).toBeTruthy();
     expect(screen.getByText("Novos Negócios e Comercial. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Minha fila" })).toBeTruthy();

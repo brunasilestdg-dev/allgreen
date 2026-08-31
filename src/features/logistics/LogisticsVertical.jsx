@@ -30,6 +30,7 @@ import {
   PackageCheck,
   Plus,
   Landmark,
+  LogOut,
   ReceiptText,
   Route,
   Search,
@@ -77,6 +78,7 @@ import {
   situacaoDoResultado,
 } from "./pricingPremisesDomain.js";
 import { liberacaoDaProposta } from "./dealDeskDomain.js";
+import { endSession } from "../../session/armazenamento.js";
 import { useVerticalRecords } from "./useVerticalRecords.js";
 import { inputsDePrecificacaoDaOportunidade } from "./electrificationJourneyDomain.js";
 import { buildTodoGreenDecisionCenter } from "./decisionCenterDomain.js";
@@ -161,6 +163,7 @@ const iconMap = {
   Network,
   PackageCheck,
   Landmark,
+  LogOut,
   ReceiptText,
   Route,
   Settings,
@@ -2696,6 +2699,9 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           <p title={currentPage.description}>{currentPage.description}</p>
         </div>
         <div className="tdg-shell-actions">
+          <span className="tdg-shell-quem" title={`Sessão de ${db?.user?.name || ""} — ${db?.user?.email || ""}`}>
+            <UserRound size={13} />{db?.user?.email || db?.user?.name || ""}
+          </span>
           <button className="tdg-shell-search" type="button" onClick={() => navigate("/todogreen/dashboard?ferramentas=1")}>
             <Search size={15} />Buscar ferramenta
           </button>
@@ -2720,6 +2726,18 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                 ))}
             </div>
           </details>
+          <button
+            className="tdg-shell-sair"
+            type="button"
+            onClick={() => {
+              if (confirm("Sair da conta neste navegador? A sessão também é encerrada no servidor.")) {
+                endSession();
+                window.location.assign("/");
+              }
+            }}
+          >
+            <LogOut size={15} />Sair
+          </button>
         </div>
       </header>
 

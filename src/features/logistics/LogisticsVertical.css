@@ -217,6 +217,49 @@
   outline: none;
 }
 
+/* De quem é a sessão aberta — em aparelho compartilhado isso evita usar a
+   conta de outra pessoa sem perceber. */
+.tdg-shell-quem {
+  align-items: center;
+  color: var(--tdg-muted);
+  display: inline-flex;
+  font-size: .74rem;
+  font-weight: 650;
+  gap: 5px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tdg-shell-quem svg { flex: 0 0 auto; }
+
+@media (max-width: 900px) {
+  .tdg-shell-quem { display: none; }
+}
+
+/* Saída sempre à vista: sem ela a sessão fica eterna no navegador e quem
+   pega o mesmo aparelho entra direto na conta de quem esqueceu de sair. */
+.tdg-shell-sair {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  color: #8a3d3d;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: .78rem;
+  font-weight: 800;
+  gap: 6px;
+  padding: 9px 13px;
+}
+
+.tdg-shell-sair:hover,
+.tdg-shell-sair:focus-visible {
+  border-color: #8a3d3d;
+  outline: none;
+}
+
 .tdg-management-menu {
   position: relative;
 }
