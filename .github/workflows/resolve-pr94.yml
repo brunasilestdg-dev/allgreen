@@ -23,20 +23,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
-
           set +e
           git merge origin/main --no-commit --no-ff
           merge_status=$?
           set -e
-
           if [ "$merge_status" -ne 0 ]; then
             git checkout --ours src/features/logistics/LogisticsVertical.jsx
             git checkout --ours src/features/logistics/pages/TodoGreenPages.css
             git checkout --ours worker/services/todogreen-router.js
           fi
-
           python3 <<'PY'
           from pathlib import Path
+          import subprocess
 
           vertical = Path("src/features/logistics/LogisticsVertical.jsx")
           text = vertical.read_text()
@@ -52,10 +50,7 @@ jobs:
           css_text = css.read_text()
           marker = "/* ===== Importação do pipeline do quadro externo ===== */"
           if marker not in css_text:
-              import subprocess
-              main_css = subprocess.check_output([
-                  "git", "show", "origin/main:src/features/logistics/pages/TodoGreenPages.css"
-              ], text=True)
+              main_css = subprocess.check_output(["git", "show", "origin/main:src/features/logistics/pages/TodoGreenPages.css"], text=True)
               if marker not in main_css:
                   raise SystemExit("Bloco CSS do importador não encontrado na main.")
               css_text = css_text.rstrip() + "\n\n" + main_css[main_css.index(marker):].lstrip()
@@ -69,36 +64,16 @@ jobs:
               if old_import not in router_text:
                   raise SystemExit("Import do TMS não encontrado no router.")
               router_text = router_text.replace(old_import, new_import, 1)
-
           webhook_marker = 'if (path.startsWith("/api/todogreen/tms/webhook")) {'
           tms_marker = 'if (path.startsWith("/api/todogreen/tms")) {'
           if webhook_marker not in router_text:
               if tms_marker not in router_text:
                   raise SystemExit("Rota TMS não encontrada para inserir o webhook TRACK3R.")
-              webhook = '''// Receptor de ocorrências do TRACK3R. Vem ANTES do bloco do TMS de propósito:
-  // aquele exige sessão, e o fornecedor não tem sessão nem papel. Aqui quem
-  // autoriza é o header `Token` conferido contra o cofre do Worker, e o id da
-  // integração na URL diz de qual espaço é a chamada.
-  if (path.startsWith("/api/todogreen/tms/webhook")) {
-    return guarded(
-      "To Do Green TMS webhook error",
-      "Não foi possível receber a ocorrência do TRACK3R.",
-      () => receberOcorrenciaTrack3r(request, env),
-    );
-  }
-
-  '''
+              webhook = '// Receptor de ocorrências do TRACK3R. Vem ANTES do bloco do TMS de propósito:\n  // aquele exige sessão, e o fornecedor não tem sessão nem papel. Aqui quem\n  // autoriza é o header `Token` conferido contra o cofre do Worker, e o id da\n  // integração na URL diz de qual espaço é a chamada.\n  if (path.startsWith("/api/todogreen/tms/webhook")) {\n    return guarded(\n      "To Do Green TMS webhook error",\n      "Não foi possível receber a ocorrência do TRACK3R.",\n      () => receberOcorrenciaTrack3r(request, env),\n    );\n  }\n\n  '
               router_text = router_text.replace(tms_marker, webhook + tms_marker, 1)
           router.write_text(router_text)
           PY
-
           git add src/features/logistics/LogisticsVertical.jsx src/features/logistics/pages/TodoGreenPages.css worker/services/todogreen-router.js
           git rm .github/workflows/resolve-pr94.yml
-
-          if git diff --cached --quiet; then
-            echo "Nada a commitar."
-            exit 0
-          fi
-
           git commit -m "Merge main into PR #94 preserving pipeline and TRACK3R"
           git push origin HEAD:fix/todogreen-workspace-ux-mcp-20260831-v2
