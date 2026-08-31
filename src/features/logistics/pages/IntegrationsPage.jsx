@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import AiKeysPanel from "../../integrations/AiKeysPanel.jsx";
+import McpConnectionsPanel from "../../integrations/McpConnectionsPanel.jsx";
 import SearchKeysPanel from "../../integrations/SearchKeysPanel.jsx";
 import "./TodoGreenPages.css";
 
@@ -184,6 +185,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
         </div>
       </section>
 
+      <McpConnectionsPanel setToast={setToast} authHeaders={authHeaders} />
       <AiKeysPanel setToast={setToast} authHeaders={authHeaders} />
       <ProviderList title="Cascata de IA (status)" icon={Zap} items={status?.ai} testing={testing} onTest={test} />
       <ProviderList title="Mercado e prospecção" icon={Search} items={marketItems} testing={testing} onTest={test} />
