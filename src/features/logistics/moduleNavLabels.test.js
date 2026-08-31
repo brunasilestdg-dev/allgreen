@@ -54,7 +54,7 @@ describe("rótulos da navegação da vertical", () => {
   });
 
   it("a barra usa o rótulo declarado, não a primeira palavra do título", () => {
-    expect(fonte).toContain("{item.navLabel}");
+    expect(fonte).toContain("{modulo.navLabel || modulo.title}");
     expect(fonte).not.toContain('item.title.split(" ")[0]');
   });
 });
