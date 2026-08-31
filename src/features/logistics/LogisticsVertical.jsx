@@ -2750,7 +2750,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               mostra o resultado atravessando todas as áreas. */}
           <label className="tdg-sidebar-search">
             <Search size={15} />
-            <input value={navigationQuery} onChange={(event) => setNavigationQuery(event.target.value)} placeholder="Buscar funcionalidade" aria-label="Buscar funcionalidades" />
+            <input value={navigationQuery} onChange={(event) => setNavigationQuery(event.target.value)} placeholder="Buscar no menu" aria-label="Buscar funcionalidades" />
           </label>
           {navigationQuery.trim() ? (
             <nav className="tdg-tabs" aria-label="Navegação por funcionalidades">
