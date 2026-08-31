@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Clock, Inbox, ListPlus, Lock, Send } from "lucide-react";
+import { AlertTriangle, Clock, Inbox, ListPlus, Lock, PhoneIncoming, Send } from "lucide-react";
 import {
   STATUS_SOLICITACAO,
   TIPOS_SOLICITACAO,
 } from "../clientRequestDomain.js";
+import Modal from "../../../components/Modal.jsx";
 import "./TodoGreenPages.css";
 
 // A outra metade da caixa de entrada do portal. Sem esta tela, o cliente
@@ -38,7 +39,7 @@ const prazoEmPalavras = (prazo) => {
   return prazo.emAtraso ? `atrasada há ${texto}` : `vence em ${texto}`;
 };
 
-export default function ClientRequestsPage({ authHeaders, setToast, onCreateTask, currentUserId }) {
+export default function ClientRequestsPage({ authHeaders, setToast, onCreateTask, currentUserId, clientes = [] }) {
   const [dados, setDados] = useState(null);
   const [abertaId, setAbertaId] = useState("");
   const [mensagens, setMensagens] = useState([]);
@@ -48,6 +49,11 @@ export default function ClientRequestsPage({ authHeaders, setToast, onCreateTask
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [enviando, setEnviando] = useState(false);
+  const [registroAberto, setRegistroAberto] = useState(false);
+  const [registro, setRegistro] = useState({
+    clienteId: "", tipo: "outro", assunto: "", descricao: "",
+    urgencia: "normal", canal: "telefone", campos: {},
+  });
 
   const carregar = useCallback(
     async (id = "") => {
@@ -69,6 +75,34 @@ export default function ClientRequestsPage({ authHeaders, setToast, onCreateTask
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  const mudarRegistro = (chave) => (evento) =>
+    setRegistro((atual) => ({ ...atual, [chave]: evento.target.value }));
+  const mudarCampoDoTipo = (chave) => (evento) =>
+    setRegistro((atual) => ({ ...atual, campos: { ...atual.campos, [chave]: evento.target.value } }));
+
+  // Registrar em NOME do cliente: o pedido chegou por telefone, WhatsApp ou
+  // e-mail e precisa entrar na mesma fila (mesmo prazo, mesma régua) do que
+  // chega pelo portal — senão o pedido falado fura a fila ou some.
+  const registrarSolicitacao = async (evento) => {
+    evento.preventDefault();
+    setEnviando(true);
+    try {
+      const { id } = await api("requests", authHeaders, {
+        method: "POST",
+        body: JSON.stringify(registro),
+      });
+      setRegistroAberto(false);
+      setRegistro({ clienteId: "", tipo: "outro", assunto: "", descricao: "", urgencia: "normal", canal: "telefone", campos: {} });
+      setToast?.("Solicitação registrada na fila, com o mesmo prazo do portal.");
+      await carregar(id);
+      setAbertaId(id);
+    } catch (razao) {
+      setToast?.(razao.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
 
   const lista = useMemo(() => {
     const todas = dados?.solicitacoes || [];
@@ -172,7 +206,90 @@ export default function ClientRequestsPage({ authHeaders, setToast, onCreateTask
               : ""}
           </p>
         </div>
+        <button type="button" className="tdg-action" onClick={() => setRegistroAberto(true)}>
+          <PhoneIncoming size={16} /> Registrar solicitação
+        </button>
       </header>
+
+      {registroAberto && (
+        <Modal title="Registrar solicitação em nome do cliente" onClose={() => setRegistroAberto(false)} wide>
+          <form className="tdg-client-admin-form tdg-form-em-modal" onSubmit={registrarSolicitacao}>
+            <p className="tdg-req-registro-nota">
+              Para o pedido que chegou por telefone, WhatsApp ou e-mail. Ele entra na mesma fila e
+              com o mesmo prazo do portal, e a conversa diz que foi a equipe quem registrou.
+            </p>
+            <div className="tdg-form-row">
+              <label>
+                <span>Cliente</span>
+                <select required value={registro.clienteId} onChange={mudarRegistro("clienteId")}>
+                  <option value="">Selecione o cliente</option>
+                  {clientes.map((cliente) => (
+                    <option value={cliente.id} key={cliente.id}>{cliente.nome || cliente.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Como chegou</span>
+                <select value={registro.canal} onChange={mudarRegistro("canal")}>
+                  <option value="telefone">Telefone</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="email">E-mail</option>
+                  <option value="reuniao">Reunião</option>
+                  <option value="presencial">Presencial</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </label>
+            </div>
+            <div className="tdg-form-row">
+              <label>
+                <span>Tipo</span>
+                <select value={registro.tipo} onChange={mudarRegistro("tipo")}>
+                  {Object.values(TIPOS_SOLICITACAO).map((tipo) => (
+                    <option value={tipo.id} key={tipo.id}>{tipo.rotulo}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Urgência</span>
+                <select value={registro.urgencia} onChange={mudarRegistro("urgencia")}>
+                  <option value="baixa">Baixa</option>
+                  <option value="normal">Normal</option>
+                  <option value="alta">Alta</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>Assunto</span>
+              <input required minLength={4} maxLength={160} value={registro.assunto} onChange={mudarRegistro("assunto")} />
+            </label>
+            {/* Os campos que o TIPO exige — os mesmos do portal, para o pedido
+                falado não entrar mais raso do que o digitado. */}
+            {(TIPOS_SOLICITACAO[registro.tipo]?.obrigatorios || []).map((chave) => (
+              <label key={chave}>
+                <span>{TIPOS_SOLICITACAO[registro.tipo].camposRotulo[chave] || chave}</span>
+                <input required value={registro.campos[chave] || ""} onChange={mudarCampoDoTipo(chave)} />
+              </label>
+            ))}
+            <label>
+              <span>O que o cliente pediu</span>
+              <textarea
+                required
+                minLength={10}
+                rows={5}
+                value={registro.descricao}
+                onChange={mudarRegistro("descricao")}
+                placeholder="Escreva como o cliente pediu, sem resumir."
+              />
+            </label>
+            <div className="tdg-form-actions">
+              <button type="button" onClick={() => setRegistroAberto(false)} disabled={enviando}>Cancelar</button>
+              <button type="submit" className="tdg-action" disabled={enviando}>
+                <Send size={16} /> {enviando ? "Registrando..." : "Registrar na fila"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {erro && <div className="tdg-page-error">{erro}</div>}
 

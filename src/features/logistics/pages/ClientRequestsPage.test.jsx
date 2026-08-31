@@ -202,3 +202,55 @@ describe("responder", () => {
     expect(await screen.findByText("Solicitação não encontrada.")).toBeInTheDocument();
   });
 });
+
+describe("registrar em nome do cliente", () => {
+  it("abre o formulário com os campos que o TIPO exige, iguais aos do portal", () => {
+    render(
+      <ClientRequestsPage
+        authHeaders={() => ({})}
+        clientes={[{ id: "cli-1", name: "Distribuidora Norte" }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Registrar solicitação/ }));
+    expect(screen.getByRole("heading", { name: "Registrar solicitação em nome do cliente" })).toBeInTheDocument();
+    // Trocar o tipo troca os campos obrigatórios — o pedido falado não entra
+    // mais raso do que o digitado no portal.
+    fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "coleta_extra" } });
+    expect(screen.getByLabelText("Local da coleta")).toBeInTheDocument();
+    expect(screen.getByLabelText("Data desejada")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "nova_rota" } });
+    expect(screen.getByLabelText("Origem")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Local da coleta")).not.toBeInTheDocument();
+  });
+
+  it("manda cliente, canal e campos do tipo no POST", async () => {
+    const chamadas = [];
+    global.fetch = vi.fn(async (url, opts = {}) => {
+      chamadas.push({ url, opts });
+      if ((opts.method || "GET") === "POST") return { ok: true, json: async () => ({ ok: true, id: "req-nova" }) };
+      return { ok: true, json: async () => ({ solicitacoes: [], indicadores: null, mensagens: [] }) };
+    });
+    render(
+      <ClientRequestsPage
+        authHeaders={() => ({})}
+        clientes={[{ id: "cli-1", name: "Distribuidora Norte" }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Registrar solicitação/ }));
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-1" } });
+    fireEvent.change(screen.getByLabelText("Como chegou"), { target: { value: "whatsapp" } });
+    fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Coleta pedida no grupo" } });
+    fireEvent.change(screen.getByLabelText("O que o cliente pediu"), {
+      target: { value: "Pediu retirada extra amanhã no CD, como escreveu no WhatsApp." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Registrar na fila/ }));
+    await waitFor(() => {
+      const post = chamadas.find((c) => c.opts.method === "POST");
+      expect(post).toBeTruthy();
+      const corpo = JSON.parse(post.opts.body);
+      expect(corpo.clienteId).toBe("cli-1");
+      expect(corpo.canal).toBe("whatsapp");
+      expect(corpo.assunto).toBe("Coleta pedida no grupo");
+    });
+  });
+});

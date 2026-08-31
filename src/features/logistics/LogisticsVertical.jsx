@@ -2855,7 +2855,11 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       )}
       {podeVerPagina && (<>
       {page === "dashboard" && <ErpHome role={role} user={db?.user || {}} data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} products={LOGISTICS_PRODUCTS} preferences={db?.preferences?.todoGreenHome} onSave={saveHomePreferences} onNavigate={navigate} />}
-      {["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes"].includes(page) && (
+      {/* /central-trabalho fica FORA desta lista de propósito: é a rota da
+          Central de Trabalho (quadros), que monta a própria tela. Montar o
+          workspace ali também deixava duas telas empilhadas, cada uma com
+          metade. */}
+      {["espaco", "visualizacoes", "agentes-funcoes"].includes(page) && (
         <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
           <TodoGreenWorkspace
             key={page}
@@ -2865,7 +2869,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             setToast={setToast}
             onNavigate={navigate}
             authHeaders={authHeaders}
-            initialTool={page === "central-trabalho" ? "estrutura" : page === "visualizacoes" ? "visoes" : page === "agentes-funcoes" ? "agentes" : "visao-geral"}
+            initialTool={page === "visualizacoes" ? "visoes" : page === "agentes-funcoes" ? "agentes" : "visao-geral"}
           />
         </Suspense>
       )}
@@ -2873,7 +2877,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "metas" && <Suspense fallback={<section className="tdg-panel">Carregando metas...</section>}><GoalsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "performance-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando performance comercial...</section>}><SalesPerformancePage authHeaders={authHeaders} onNavigate={navigate} /></Suspense>}
       {page === "playbook-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando playbook comercial...</section>}><TodoGreenGuides mode="playbook" onNavigate={navigate} /></Suspense>}
-      {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
+      {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} clientes={clientes} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} setToast={setToast} secao={secaoDeCadastro} areaLabel={AREA_DO_CADASTRO[secaoDeCadastro] ? primaryNavigation.label : ""} /></Suspense>}
       {page === "implantacao" && (
         <Suspense fallback={<section className="tdg-panel">Carregando implantação...</section>}>

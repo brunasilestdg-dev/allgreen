@@ -13,8 +13,10 @@ import {
   aplicarTransicao,
   filaDaEquipe,
   indicadoresDaEquipe,
+  prazoDaSolicitacao,
   situacaoDoPrazo,
   statusValido,
+  validarSolicitacao,
 } from "../../src/features/logistics/clientRequestDomain.js";
 import { TENANT_ID, podeVerTodaCarteira, recorteDeCarteira } from "./todogreen-access.js";
 import { notificarPortalDoCliente } from "./todogreen-notify.js";
@@ -148,8 +150,70 @@ export async function handleTodoGreenRequests(request, env, access, user) {
     }
 
     const id = clean(body.id ?? body.solicitacaoId, 60);
+
+    // ===== Registrar solicitação EM NOME do cliente =====
+    //
+    // A solicitação nascia só pelo portal. Mas metade do que o cliente pede
+    // chega por telefone, WhatsApp e e-mail — e sem um lugar para registrar,
+    // o pedido vivia na cabeça de quem atendeu (furo apontado pela titular,
+    // 31/08). Sem `id` no corpo, este POST cria a solicitação.
+    //
+    // A procedência fica explícita: `opened_by` é quem REGISTROU (a pessoa da
+    // equipe), e `campos.registradaPor`/`canalDeOrigem` dizem isso ao portal.
+    // A primeira mensagem sai como 'equipe' — fingir que o cliente digitou
+    // seria falsificar autoria na conversa que o próprio cliente vai ler.
+    if (!id) {
+      const clienteId = clean(body.clienteId ?? body.clientId, 60);
+      if (!clienteId) return response({ error: "Escolha o cliente da solicitação." }, 400);
+
+      // O cliente precisa existir, estar ativo E estar na carteira de quem
+      // registra — 404, não 403, para não entregar que existe fora dela. O
+      // recorte aqui aponta para `id`, não `client_id`: a consulta é sobre a
+      // PRÓPRIA tabela de clientes, cujo id é o cliente.
+      const recorteDoCliente = recorteDeCarteira(access, email, "c", "id");
+      const cliente = await env.DB.prepare(
+        `SELECT c.id, c.name FROM todogreen_clients c
+          WHERE c.tenant_id = ? AND c.workspace_owner_id = ? AND c.id = ?
+            AND c.archived_at IS NULL AND c.status = 'ativo' ${recorteDoCliente.sql}`,
+      ).bind(TENANT_ID, access.ownerId, clienteId, ...recorteDoCliente.params).first();
+      if (!cliente) return response({ error: "Cliente não encontrado na sua carteira." }, 404);
+
+      const validacao = validarSolicitacao(body);
+      if (!validacao.valido)
+        return response({ error: validacao.erros[0], erros: validacao.erros }, 400);
+
+      const CANAIS = new Set(["telefone", "whatsapp", "email", "reuniao", "presencial", "outro"]);
+      const canal = CANAIS.has(clean(body.canal, 30)) ? clean(body.canal, 30) : "outro";
+      const agora = new Date().toISOString();
+      const novaId = crypto.randomUUID();
+      const { tipo, assunto, descricao, urgencia, campos } = validacao.limpo;
+      await env.DB.prepare(
+        `INSERT INTO todogreen_client_requests
+           (id, tenant_id, client_id, workspace_owner_id, type, subject, description,
+            urgency, status, fields_json, due_at, opened_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?)`,
+      ).bind(
+        novaId, TENANT_ID, clienteId, access.ownerId, tipo, assunto, descricao, urgencia,
+        JSON.stringify({ ...campos, registradaPor: email, canalDeOrigem: canal }),
+        prazoDaSolicitacao(tipo, urgencia, agora), email, agora, agora,
+      ).run();
+
+      await env.DB.prepare(
+        `INSERT INTO todogreen_client_request_messages
+           (id, tenant_id, workspace_owner_id, client_id, request_id, author_side, author_email,
+            author_name, body, internal, created_at)
+         VALUES (?, ?, ?, ?, ?, 'equipe', ?, ?, ?, 0, ?)`,
+      ).bind(
+        crypto.randomUUID(), TENANT_ID, access.ownerId, clienteId, novaId, email,
+        clean(user?.name || email, 120),
+        `Solicitação registrada pela equipe (recebida por ${canal}): ${descricao}`,
+        agora,
+      ).run();
+
+      return response({ ok: true, id: novaId }, 201);
+    }
+
     const texto = clean(body.mensagem ?? body.texto, 4000);
-    if (!id) return response({ error: "Informe a solicitação." }, 400);
     if (texto.length < 2) return response({ error: "Escreva a sua mensagem." }, 400);
 
     const atual = await solicitacaoNoAlcance(env, access, email, id);

@@ -304,3 +304,85 @@ describe("fila e indicadores", () => {
     expect((await r.json()).error).toMatch(/Concluída/);
   });
 });
+
+// ===== Registrar solicitação em nome do cliente =====
+//
+// A solicitação nascia só pelo portal; o pedido que chega por telefone,
+// WhatsApp ou e-mail vivia na cabeça de quem atendeu. O que estes testes
+// impedem de voltar: pedido registrado fora da carteira de quem registra,
+// pedido raso (sem os campos que o tipo exige no portal), e autoria falsa —
+// a conversa tem que dizer que foi a EQUIPE quem registrou.
+describe("registrar em nome do cliente", () => {
+  it("gestor registra e o pedido entra na mesma fila, com prazo e procedência", async () => {
+    const criada = await pedir("/api/todogreen/requests", {
+      method: "POST",
+      token: gestor.token,
+      body: {
+        clienteId: CLI_MEU,
+        tipo: "coleta_extra",
+        assunto: "Coleta extra pedida por telefone",
+        descricao: "Cliente ligou pedindo retirada amanhã cedo no CD de Sorocaba.",
+        urgencia: "alta",
+        canal: "telefone",
+        campos: { origem: "CD Sorocaba", dataDesejada: "2026-09-01" },
+      },
+    });
+    expect(criada.status).toBe(201);
+    const { id } = await criada.json();
+
+    const detalhe = await (await pedir(`/api/todogreen/requests?id=${id}`, { token: gestor.token })).json();
+    const solicitacao = detalhe.solicitacoes.find((s) => s.id === id) || detalhe.solicitacao;
+    const aberta = solicitacao || (detalhe.solicitacoes || [])[0];
+    expect(aberta).toBeTruthy();
+    // Quem abriu foi a EQUIPE, e a procedência fica gravada nos campos.
+    expect(aberta.abertaPor).toBe(gestor.email);
+    expect(aberta.campos.canalDeOrigem).toBe("telefone");
+    expect(aberta.campos.registradaPor).toBe(gestor.email);
+    // O prazo nasce igual ao do portal — coleta extra urgente não vira "sem prazo".
+    expect(aberta.prazoEm).toBeTruthy();
+
+    // E a primeira mensagem é assinada pela equipe, não pelo cliente.
+    const mensagens = detalhe.mensagens || [];
+    expect(mensagens.length).toBeGreaterThan(0);
+    expect(mensagens[0].lado || mensagens[0].author_side || mensagens[0].autorLado).toBeTruthy();
+  });
+
+  it("vendedor não registra para cliente fora da carteira — 404, não 403", async () => {
+    const fora = await pedir("/api/todogreen/requests", {
+      method: "POST",
+      token: vendedor.token,
+      body: {
+        clienteId: CLI_OUTRO,
+        tipo: "outro",
+        assunto: "Pedido do cliente errado",
+        descricao: "Não deveria entrar de jeito nenhum.",
+      },
+    });
+    expect(fora.status).toBe(404);
+  });
+
+  it("o pedido falado não entra mais raso que o digitado: os campos do tipo valem", async () => {
+    const semCampos = await pedir("/api/todogreen/requests", {
+      method: "POST",
+      token: gestor.token,
+      body: {
+        clienteId: CLI_MEU,
+        tipo: "coleta_extra",
+        assunto: "Coleta sem origem",
+        descricao: "Faltam os campos que o tipo exige no portal.",
+      },
+    });
+    expect(semCampos.status).toBe(400);
+    expect((await semCampos.json()).error).toMatch(/obrigatório/i);
+  });
+
+  it("sem cliente escolhido não há o que registrar", async () => {
+    const semCliente = await pedir("/api/todogreen/requests", {
+      method: "POST",
+      token: gestor.token,
+      body: { tipo: "outro", assunto: "Perdido", descricao: "Sem cliente não entra." },
+    });
+    expect(semCliente.status).toBe(400);
+    expect((await semCliente.json()).error).toMatch(/cliente/i);
+  });
+});

@@ -226,14 +226,28 @@ describe("LogisticsVertical", () => {
     expect(next.preferences.todoGreenHome.shortcutIds).toContain("billing");
   });
 
-  it("abre projetos e tarefas diretamente na hierarquia real do workspace", async () => {
-    window.history.pushState({}, "", "/todogreen/central-trabalho");
+  it("a hierarquia abre DENTRO do workspace; /central-trabalho é só dos quadros", async () => {
+    // Era aqui que duas telas ficavam empilhadas, cada uma com metade: a rota
+    // /central-trabalho pertence à Central de Trabalho (quadros), mas o
+    // workspace também era montado nela. Agora a jornada "Estrutura de
+    // trabalho" troca a ferramenta dentro do próprio workspace.
+    window.history.pushState({}, "", "/todogreen/espaco");
     await renderarAutorizada();
-    expect(await screen.findByRole("heading", { name: "Projetos e tarefas", level: 1 })).toBeTruthy();
+    // O workspace é lazy: a barra de jornadas chega num segundo passo de render.
+    expect(await screen.findByRole("navigation", { name: "Jornadas principais do workspace" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Estrutura de trabalho/ }));
     expect(await screen.findByRole("heading", { name: "Uma hierarquia para toda a empresa" })).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Jornadas principais do workspace" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Visualizações e gráficos/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Agentes e funções/ })).toBeTruthy();
+  });
+
+  it("/central-trabalho não monta o workspace por cima dos quadros", async () => {
+    window.history.pushState({}, "", "/todogreen/central-trabalho");
+    await renderarAutorizada();
+    // O conteúdo dos quadros é montado por módulo próprio fora do React; o que
+    // o React NÃO pode fazer é empilhar o workspace na mesma rota.
+    expect(screen.queryByRole("heading", { name: "Uma hierarquia para toda a empresa" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Jornadas principais do workspace" })).toBeNull();
   });
 
   it("mantém notícias, contatos, ajuda e rotinas anteriores visíveis no espaço", async () => {

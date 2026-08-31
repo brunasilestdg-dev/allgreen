@@ -102,7 +102,7 @@ const TOOL_ICONS = {
 
 const WORKSPACE_PRIMARY_TOOLS = Object.freeze([
   { id: "visao-geral", label: "Visão geral" },
-  { id: "estrutura", label: "Projetos e tarefas" },
+  { id: "estrutura", label: "Estrutura de trabalho" },
   { id: "visoes", label: "Visualizações e gráficos" },
   { id: "agentes", label: "Agentes e funções" },
 ]);
@@ -346,9 +346,12 @@ export default function TodoGreenWorkspace({
 
   const openTool = (nextTool) => {
     if (nextTool === "paginas") setFocusPageId("");
+    // "estrutura" NÃO navega: /central-trabalho é a rota da Central de
+    // Trabalho (os quadros), que é outra tela com outra dona. Mandar a jornada
+    // para lá foi o que deixou duas telas empilhadas, cada uma com metade
+    // (defeito apontado pela titular, 31/08). A hierarquia abre aqui dentro.
     const directRoutes = {
       "visao-geral": "/todogreen/espaco",
-      estrutura: "/todogreen/central-trabalho",
       visoes: "/todogreen/visualizacoes",
       agentes: "/todogreen/agentes",
     };
