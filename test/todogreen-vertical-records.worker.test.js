@@ -721,6 +721,7 @@ describe("a vertical inteira numa chamada só", () => {
       "comments",
       "contracts",
       "costCenters",
+      "documentFolders",
       "financial",
       "habilitacao",
       "habilitacaoKits",
@@ -1224,5 +1225,121 @@ describe("Central de RFQ e RFI", () => {
     expect(criada.status).toBe(201);
     // A quebra de linha sobrevive: é o que responde "mandaram o quê mesmo?".
     expect((await criada.json()).registro.pedido).toContain("1) CNPJ");
+  });
+});
+
+// ===== Pastas do cofre =====
+//
+// O que estes testes impedem de voltar: subpasta "do espaço" dentro de uma
+// privada vazando o conteúdo do pai, arquivo escondido na lista mas baixável
+// pela URL, e a dona do espaço virando dona de toda pasta privada que abrir
+// para arrumar.
+describe("pastas do cofre de documentos", () => {
+  let outraPessoa;
+  let privadaId;
+  let dentroDaPrivadaId;
+
+  beforeAll(async () => {
+    outraPessoa = await criarUsuario(
+      `u-pasta-${crypto.randomUUID().slice(0, 8)}`,
+      `pasta-${crypto.randomUUID().slice(0, 8)}@todogreen.com.br`,
+    );
+    // Papel que escreve no cofre, para provar que a trava é de VISIBILIDADE e
+    // não de permissão de escrita.
+    await autorizar(outraPessoa, "operacoes", ["read", "evidence:manage", "operations:manage"], gestora.id);
+  });
+
+  it("a pasta privada nasce com a dona da sessão, não com quem o corpo disser", async () => {
+    const criada = await pedir("/api/todogreen/records/documentFolders", {
+      metodo: "POST",
+      token: outraPessoa.token,
+      corpo: { nome: "Privada da operação", visibilidade: "private", donoEmail: gestora.email },
+    });
+    expect(criada.status).toBe(201);
+    const pasta = (await criada.json()).registro;
+    // O corpo tentou pôr a gestora como dona. O servidor ignorou.
+    expect(pasta.donoEmail).toBe(outraPessoa.email.toLowerCase());
+    privadaId = pasta.id;
+  });
+
+  it("subpasta 'do espaço' dentro de uma privada NÃO vaza para quem não vê o pai", async () => {
+    const criada = await pedir("/api/todogreen/records/documentFolders", {
+      metodo: "POST",
+      token: outraPessoa.token,
+      corpo: { nome: "Dentro da privada", visibilidade: "shared", paiId: privadaId },
+    });
+    expect(criada.status).toBe(201);
+    dentroDaPrivadaId = (await criada.json()).registro.id;
+
+    // Uma terceira pessoa do MESMO espaço, sem ser dona nem membro.
+    const terceira = await criarUsuario(
+      `u-terc-${crypto.randomUUID().slice(0, 8)}`,
+      `terc-${crypto.randomUUID().slice(0, 8)}@todogreen.com.br`,
+    );
+    await autorizar(terceira, "operacoes", ["read", "evidence:manage", "operations:manage"], gestora.id);
+    const lista = await (await pedir("/api/todogreen/records/documentFolders", { token: terceira.token })).json();
+    const ids = lista.registros.map((item) => item.id);
+    expect(ids).not.toContain(privadaId);
+    // Esta é a regra que importa: marcada como 'shared', mas dentro da privada.
+    expect(ids).not.toContain(dentroDaPrivadaId);
+  });
+
+  it("quem criou vê a própria pasta e a subpasta dela", async () => {
+    const lista = await (await pedir("/api/todogreen/records/documentFolders", { token: outraPessoa.token })).json();
+    const ids = lista.registros.map((item) => item.id);
+    expect(ids).toContain(privadaId);
+    expect(ids).toContain(dentroDaPrivadaId);
+  });
+
+  it("a dona do espaço vê a pasta privada de terceiro — e editá-la NÃO transfere a dona", async () => {
+    const lista = await (await pedir("/api/todogreen/records/documentFolders", { token: gestora.token })).json();
+    const pasta = lista.registros.find((item) => item.id === privadaId);
+    expect(pasta).toBeTruthy();
+
+    const editada = await pedir(`/api/todogreen/records/documentFolders/${privadaId}`, {
+      metodo: "PATCH",
+      token: gestora.token,
+      corpo: { nome: "Privada da operação (arrumada)", revision: pasta.revision },
+    });
+    expect(editada.status).toBe(200);
+    // Sem isto a gestora viraria dona ao abrir a pasta para arrumar, e quem
+    // criou perderia o acesso.
+    expect((await editada.json()).registro.donoEmail).toBe(outraPessoa.email.toLowerCase());
+  });
+
+  it("pasta não entra dentro da própria descendência", async () => {
+    const minha = await (await pedir("/api/todogreen/records/documentFolders", { token: outraPessoa.token })).json();
+    const pasta = minha.registros.find((item) => item.id === privadaId);
+    const anel = await pedir(`/api/todogreen/records/documentFolders/${privadaId}`, {
+      metodo: "PATCH",
+      token: outraPessoa.token,
+      corpo: { paiId: dentroDaPrivadaId, revision: pasta.revision },
+    });
+    expect(anel.status).toBe(409);
+    expect((await anel.json()).error).toMatch(/dentro de si mesma/);
+  });
+
+  it("duas pastas irmãs com o mesmo nome são recusadas", async () => {
+    const repetida = await pedir("/api/todogreen/records/documentFolders", {
+      metodo: "POST",
+      token: outraPessoa.token,
+      corpo: { nome: "Privada da operação (arrumada)", visibilidade: "private" },
+    });
+    expect(repetida.status).toBe(409);
+  });
+
+  it("pasta da área sem área escolhida é recusada", async () => {
+    const semArea = await pedir("/api/todogreen/records/documentFolders", {
+      metodo: "POST",
+      token: outraPessoa.token,
+      corpo: { nome: "Área nenhuma", visibilidade: "area" },
+    });
+    expect(semArea.status).toBe(400);
+    expect((await semArea.json()).error).toMatch(/qual área/);
+  });
+
+  it("as pastas de um espaço não vazam para o outro", async () => {
+    const doColega = await (await pedir("/api/todogreen/records/documentFolders", { token: colega.token })).json();
+    expect(doColega.registros.map((item) => item.id)).not.toContain(privadaId);
   });
 });

@@ -307,6 +307,31 @@ quantos resultados vieram.
   isso; a ferramenta `habilitacao` do Plantû lê o acervo de agora. Quando as
   duas discordam, a ferramenta ganha. Não transcrever validade de documento para
   dentro do dossiê como se fosse fato permanente.
+- **Pastas do cofre: a visibilidade é da LINHAGEM, não da pasta**:
+  `pastasDomain.js` + `todogreen_document_folders` (migração `0084`) +
+  `folder_id` em `todogreen_internal_files`. Três visibilidades no vocabulário
+  que o Planner já usa (`private`/`shared` + `members_json`, 0077) mais `area`,
+  regida por uma permissão da lista fechada `PERMISSOES_DE_AREA`. A regra que
+  não se quebra: `podeVerPasta` sobe TODA a linhagem — uma subpasta `shared`
+  dentro de uma privada continua invisível, senão bastaria criar uma subpasta
+  para vazar o que o pai protege. Pasta órfã (pai arquivado) NÃO é promovida a
+  pública, e pasta `area` sem permissão escolhida é fechada, não aberta.
+  Arquivo SEM pasta continua visível: é o acervo que já existia, e esconder numa
+  migração seria o mesmo que apagar. `download` e `DELETE` do cofre aplicam o
+  mesmo corte e respondem 404 (não 403 — 403 confirmaria que o documento existe
+  naquela pasta): esconder na lista e liberar no download dá a impressão de
+  privacidade que não existe. O dono sai da sessão na CRIAÇÃO e o anterior
+  permanece na EDIÇÃO — carimbar a sessão no update faria a dona do espaço
+  virar dona de toda pasta privada que abrisse para arrumar. O ciclo é barrado
+  no servidor (`guardaDeEscrita`), porque anel na árvore trava a leitura
+  recursiva do próprio servidor.
+- **`filtrarLeitura` é exceção, não padrão**: só `documentFolders` filtra fora
+  do SQL, porque a visibilidade é recursiva sobre um conjunto pequeno. Os três
+  cortes de escopo (tenant, espaço, arquivado) seguem no SQL para toda coleção.
+  Não generalizar: filtro em JS para qualquer outra coleção é dado sensível
+  passando por variável de aplicação. Quando `filtrarLeitura` existe, o `total`
+  acompanha o filtro — senão a paginação do gancho pede páginas que nunca
+  chegam e a tela carrega para sempre.
 - **Menu da vertical**: `PRIMARY_NAVIGATION` (`LogisticsVertical.jsx`) é a lista
   de áreas; cada tela aparece em UMA área e em um item só — dois rótulos para a
   mesma rota é repetição, e `moduleNavLabels.test.js` reprova. Cadastro mora na

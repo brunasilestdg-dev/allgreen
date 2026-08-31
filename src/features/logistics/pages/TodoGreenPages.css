@@ -2274,3 +2274,46 @@
 }
 .tdg-rfq-nome-sugerido em { color: #8a4708; font-style: normal; }
 .tdg-rfq-ajuda { font-size: 12px; color: var(--tdg-muted, #6b7a72); margin: -4px 0 8px; }
+
+/* ===== Pastas do cofre de documentos ===== */
+.tdg-pasta-arvore { display: grid; gap: 2px; margin: 10px 0; }
+.tdg-pasta-linha {
+  /* O recuo mostra a hierarquia sem aninhar elemento: um <nav> plano é o que
+     um leitor de tela percorre sem se perder em níveis. */
+  display: grid;
+  grid-template-columns: 16px 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 6px 10px;
+  padding-left: calc(10px + var(--recuo, 0) * 18px);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+.tdg-pasta-linha:hover { background: var(--tdg-accent-soft, #e8f5ee); }
+.tdg-pasta-linha.ativa {
+  background: var(--tdg-accent-soft, #e8f5ee);
+  border-color: var(--tdg-accent, #14966b);
+  font-weight: 600;
+}
+.tdg-pasta-linha em {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tdg-muted, #6b7a72);
+}
+.tdg-pasta-linha b { font-size: 11px; color: var(--tdg-muted, #6b7a72); min-width: 20px; text-align: right; }
+.tdg-pasta-trilha {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+  font-size: 12px; color: var(--tdg-muted, #6b7a72);
+  border-top: 1px solid var(--tdg-border, #e3e8e5); padding-top: 10px; margin-top: 6px;
+}
+.tdg-pasta-trilha button {
+  border: 1px solid var(--tdg-border, #e3e8e5); background: transparent;
+  border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.tdg-pasta-ajuda { font-size: 12px; color: var(--tdg-muted, #6b7a72); margin: -4px 0 8px; }
