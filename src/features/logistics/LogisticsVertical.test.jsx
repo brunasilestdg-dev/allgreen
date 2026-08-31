@@ -226,20 +226,14 @@ describe("LogisticsVertical", () => {
     expect(next.preferences.todoGreenHome.shortcutIds).toContain("billing");
   });
 
-  it("abre o espaço de trabalho conectado dentro da vertical", async () => {
+  it("abre projetos e tarefas diretamente na hierarquia real do workspace", async () => {
     window.history.pushState({}, "", "/todogreen/central-trabalho");
     await renderarAutorizada();
     expect(await screen.findByRole("heading", { name: "Projetos e tarefas", level: 1 })).toBeTruthy();
-    expect(await screen.findByRole("heading", { name: "O contexto fica junto do trabalho" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /Notas conectadas/ }).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getAllByRole("button", { name: /Páginas e documentos/ })[0]);
-    expect(await screen.findByRole("heading", { name: "Páginas e documentos", level: 2 })).toBeTruthy();
-    expect(document.querySelectorAll("main.tdg h1")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Mala direta" })).toBeNull();
-
-    fireEvent.click(screen.getAllByRole("button", { name: /^Automações/ })[0]);
-    expect(await screen.findByRole("heading", { name: "Quando isso acontecer, faça aquilo" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Uma hierarquia para toda a empresa" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Jornadas principais do workspace" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Visualizações e gráficos/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Agentes e funções/ })).toBeTruthy();
   });
 
   it("mantém notícias, contatos, ajuda e rotinas anteriores visíveis no espaço", async () => {

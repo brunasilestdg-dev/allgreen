@@ -26,6 +26,8 @@ import {
   FileText,
   Network,
   Newspaper,
+  MoreHorizontal,
+  Plug,
   Plus,
   Sparkles,
   UserRoundSearch,
@@ -97,6 +99,15 @@ const TOOL_ICONS = {
   midia: Clapperboard,
   laboratorio: FlaskConical,
 };
+
+const WORKSPACE_PRIMARY_TOOLS = Object.freeze([
+  { id: "visao-geral", label: "Visão geral" },
+  { id: "estrutura", label: "Projetos e tarefas" },
+  { id: "visoes", label: "Visualizações e gráficos" },
+  { id: "agentes", label: "Agentes e funções" },
+]);
+
+const WORKSPACE_PRIMARY_IDS = new Set(WORKSPACE_PRIMARY_TOOLS.map((item) => item.id));
 
 const newId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -253,8 +264,16 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
   );
 }
 
-export default function TodoGreenWorkspace({ db, update, verticalData, setToast, onNavigate, authHeaders }) {
-  const [tool, setTool] = useState("visao-geral");
+export default function TodoGreenWorkspace({
+  db,
+  update,
+  verticalData,
+  setToast,
+  onNavigate,
+  authHeaders,
+  initialTool = "visao-geral",
+}) {
+  const [tool, setTool] = useState(initialTool);
   const [focusNoteId, setFocusNoteId] = useState("");
   const [focusPageId, setFocusPageId] = useState("");
   const business = useMemo(() => ({ id: "todogreen", name: "To Do Green" }), []);
@@ -327,6 +346,16 @@ export default function TodoGreenWorkspace({ db, update, verticalData, setToast,
 
   const openTool = (nextTool) => {
     if (nextTool === "paginas") setFocusPageId("");
+    const directRoutes = {
+      "visao-geral": "/todogreen/espaco",
+      estrutura: "/todogreen/central-trabalho",
+      visoes: "/todogreen/visualizacoes",
+      agentes: "/todogreen/agentes",
+    };
+    if (directRoutes[nextTool] && nextTool !== tool) {
+      onNavigate?.(directRoutes[nextTool]);
+      return;
+    }
     setTool(nextTool);
   };
 
@@ -334,16 +363,39 @@ export default function TodoGreenWorkspace({ db, update, verticalData, setToast,
 
   return (
     <section className="tdg-space">
-      <nav className="tdg-space-tabs" aria-label="Ferramentas do espaço">
-        {TODO_GREEN_WORKSPACE_TOOLS.map((item) => {
-          const Icon = TOOL_ICONS[item.id] || BriefcaseBusiness;
-          return (
-            <button type="button" className={tool === item.id ? "active" : ""} onClick={() => openTool(item.id)} key={item.id}>
-              <Icon size={16} /> {item.label}
-            </button>
-          );
-        })}
-      </nav>
+      <header className="tdg-space-toolbar">
+        <div className="tdg-space-toolbar-title">
+          <span>TO DO GREEN</span>
+          <h2>Workspace corporativo</h2>
+          <p>Projetos, tarefas, visualizações, agentes e integrações em uma única navegação.</p>
+        </div>
+        <nav className="tdg-space-tabs" aria-label="Jornadas principais do workspace">
+          {WORKSPACE_PRIMARY_TOOLS.map((item) => {
+            const Icon = TOOL_ICONS[item.id] || BriefcaseBusiness;
+            return (
+              <button type="button" className={tool === item.id ? "active" : ""} onClick={() => openTool(item.id)} key={item.id}>
+                <Icon size={16} /> {item.label}
+              </button>
+            );
+          })}
+          <button type="button" onClick={() => onNavigate?.("/todogreen/integracoes")}>
+            <Plug size={16} /> Integrações
+          </button>
+          <details className="tdg-space-more">
+            <summary><MoreHorizontal size={16} /> Mais funções</summary>
+            <div>
+              {TODO_GREEN_WORKSPACE_TOOLS.filter((item) => !WORKSPACE_PRIMARY_IDS.has(item.id)).map((item) => {
+                const Icon = TOOL_ICONS[item.id] || BriefcaseBusiness;
+                return (
+                  <button type="button" className={tool === item.id ? "active" : ""} onClick={() => openTool(item.id)} key={item.id}>
+                    <Icon size={16} /> {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </details>
+        </nav>
+      </header>
 
       {tool === "visao-geral" && (
         <WorkspaceOverview

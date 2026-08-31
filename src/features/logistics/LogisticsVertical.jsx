@@ -285,6 +285,8 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "manual",
   "comissoes",
   "espaco",
+  "visualizacoes",
+  "agentes-funcoes",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -305,12 +307,28 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Criação de painéis pessoais ou compartilhados com indicadores escolhidos por cada usuário.",
   },
   espaco: {
-    title: "Espaço de trabalho",
-    navLabel: "Espaço",
+    title: "Workspace To Do Green",
+    navLabel: "Visão geral",
     route: "/todogreen/espaco",
     area: "espaco-trabalho",
     status: "functional",
-    description: "Notas, bases relacionais, processos, automações, capacidade e quadros — o hub de trabalho da vertical.",
+    description: "Projetos, tarefas, conhecimento, visualizações e agentes no mesmo espaço de trabalho.",
+  },
+  visualizacoes: {
+    title: "Visualizações do trabalho",
+    navLabel: "Visualizações e gráficos",
+    route: "/todogreen/visualizacoes",
+    area: "espaco-trabalho",
+    status: "functional",
+    description: "Lista, Gantt, timeline, calendário, workload e gráficos alimentados pela mesma base de projetos e tarefas.",
+  },
+  "agentes-funcoes": {
+    title: "Agentes e funções",
+    navLabel: "Agentes e funções",
+    route: "/todogreen/agentes",
+    area: "espaco-trabalho",
+    status: "functional",
+    description: "Agentes herdados do Seu Funcionário, suas funções, execuções e aprovações.",
   },
   avancos: {
     title: "Avanços da semana",
@@ -776,7 +794,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // Workspace primeiro (pedido de 30/08): é a mesa de trabalho — planner,
   // projetos e implantações moram aqui. Implantação é um TIPO de projeto,
   // por isso vive dentro deste grupo sem perder o nome próprio.
-  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "avancos", "planner", "central-trabalho", "implantacao", "solicitacoes"] },
+  { id: "espaco-trabalho", label: "Workspace", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"] },
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
   // Planejamento decide o que entra; Operação executa o que foi aceito. Antes
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
@@ -862,6 +880,17 @@ const MANAGEMENT_TOOLS = Object.freeze([
     permission: "access:manage",
   },
 ]);
+
+const navigationModules = (ids = []) => {
+  const seenRoutes = new Set();
+  return ids
+    .map((id) => [id, MODULE_IMPLEMENTATION[id]])
+    .filter(([, module]) => {
+      if (!module?.route || seenRoutes.has(module.route)) return false;
+      seenRoutes.add(module.route);
+      return true;
+    });
+};
 
 const navigationFor = (page, secao = "") => {
   if (page === "cadastros") {
@@ -1232,6 +1261,7 @@ const TODO_GREEN_PAGE_ALIASES = Object.freeze({
   usuarios: "acessos",
   permissoes: "acessos",
   configuracoes: "acessos",
+  agentes: "agentes-funcoes",
 });
 
 export const todoGreenRouteToPage = (path) => {
@@ -2619,6 +2649,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
       <header className="tdg-shell-header">
         <div className="tdg-shell-location">
+          <span className="tdg-workspace-name">TO DO GREEN · WORKSPACE CORPORATIVO</span>
           <nav className="tdg-breadcrumb" aria-label="Trilha de navegação">
             {trilha.map((passo, indice) => {
               const ultimo = indice === trilha.length - 1;
@@ -2673,7 +2704,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         )}
         <aside className="tdg-erp-sidebar" hidden={menuOculto}>
           <div className="tdg-erp-sidebar-head">
-            <div><strong>ERP</strong><small>{remoteAccess.email || db?.user?.email || "To Do Green"}</small></div>
+            <div><strong>To Do Green</strong><small>Workspace corporativo</small></div>
             <button type="button" className="tdg-menu-ocultar" onClick={alternarMenu} aria-label="Esconder menu lateral" title="Esconder menu">
               <PanelLeftClose size={16} />
             </button>
@@ -2717,9 +2748,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               {PRIMARY_NAVIGATION.map((item) => {
                 const ativa = primaryNavigation.id === item.id;
                 const aberta = areasAbertas.has(item.id) || ativa;
-                const paginas = item.pages
-                  .map((id) => [id, MODULE_IMPLEMENTATION[id]])
-                  .filter(([, modulo]) => modulo && podeAcessarFuncionalidade(role, remoteAccess.permissions, modulo.permission));
+                const paginas = navigationModules(item.pages)
+                  .filter(([, modulo]) => podeAcessarFuncionalidade(role, remoteAccess.permissions, modulo.permission));
                 return (
                   <div className={`tdg-nav-area${aberta ? " aberta" : ""}`} key={item.id}>
                     <div className="tdg-nav-area-cabeca">
@@ -2743,7 +2773,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                       )}
                     </div>
                     {aberta && (paginas.length > 1 || (item.extras || []).length > 0) && (
-                      <div className="tdg-nav-area-itens">
+                      <nav className="tdg-nav-area-itens" aria-label={`Seções de ${item.label}`}>
                         {paginas.length > 1 && paginas.map(([id, modulo]) => (
                           <button
                             type="button"
@@ -2759,7 +2789,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                             {rotulo}
                           </button>
                         ))}
-                      </div>
+                      </nav>
                     )}
                   </div>
                 );
@@ -2769,19 +2799,6 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </aside>
 
         <section className="tdg-erp-stage">
-          {!isWorkCenter && primaryNavigation.pages.length > 1 && (
-            <nav className="tdg-subtabs" aria-label={`Seções de ${primaryNavigation.label}`}>
-              {primaryNavigation.pages
-                .map((id) => [id, MODULE_IMPLEMENTATION[id]])
-                .filter(([, item]) => item && podeAcessarFuncionalidade(role, remoteAccess.permissions, item.permission))
-                .map(([id, item]) => (
-                  <button type="button" className={page === id ? "active" : ""} onClick={() => navigate(item.route)} key={id}>
-                    {item.navLabel}
-                  </button>
-                ))}
-            </nav>
-          )}
-
           <div data-tdg-page-content="true">
       {erroDosRegistros && (
         <div className="tdg-alert" role="alert">
@@ -2802,9 +2819,18 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       )}
       {podeVerPagina && (<>
       {page === "dashboard" && <ErpHome role={role} user={db?.user || {}} data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} products={LOGISTICS_PRODUCTS} preferences={db?.preferences?.todoGreenHome} onSave={saveHomePreferences} onNavigate={navigate} />}
-      {["espaco", "central-trabalho"].includes(page) && (
+      {["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes"].includes(page) && (
         <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
-          <TodoGreenWorkspace db={db} update={update} verticalData={verticalData} setToast={setToast} onNavigate={navigate} authHeaders={authHeaders} />
+          <TodoGreenWorkspace
+            key={page}
+            db={db}
+            update={update}
+            verticalData={verticalData}
+            setToast={setToast}
+            onNavigate={navigate}
+            authHeaders={authHeaders}
+            initialTool={page === "central-trabalho" ? "estrutura" : page === "visualizacoes" ? "visoes" : page === "agentes-funcoes" ? "agentes" : "visao-geral"}
+          />
         </Suspense>
       )}
       {page === "dashboards" && <Suspense fallback={<section className="tdg-panel">Carregando seus painéis...</section>}><DashboardBuilderPage authHeaders={authHeaders} summary={dashboard} data={registros} setToast={setToast} /></Suspense>}
