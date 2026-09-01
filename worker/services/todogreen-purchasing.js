@@ -309,7 +309,10 @@ const atualizarRequisicao = async (env, access, user, id, corpo) => {
   const erro = validateRequest(proximo);
   if (erro) return json({ error: erro }, 400);
 
-  const decide = ["aprovada", "recusada"].includes(novoStatus) && novoStatus !== atual.status;
+  // Toda decisão de Suprimentos/gestão registra quem agiu e quando — aprovar,
+  // recusar, devolver ao requisitante ou direcionar à gestão. Sem isso, a
+  // devolução e o encaminhamento aconteceriam sem autor.
+  const decide = ["aprovada", "recusada", "devolvida", "em_gestao"].includes(novoStatus) && novoStatus !== atual.status;
   const agora = new Date().toISOString();
   const meta = await env.DB.prepare(
     `UPDATE todogreen_purchase_requests
@@ -665,13 +668,25 @@ export async function handleTodoGreenPurchasing(request, env, access, user) {
     return json({ error: "Recurso desconhecido." }, 404);
   }
 
+  const corpo = await request.json().catch(() => ({}));
+
+  // Requisitar é de qualquer área: pedir não gasta, quem gasta é o pedido. Por
+  // isso CRIAR uma requisição é aberto a qualquer papel da vertical — a
+  // solicitação nasce e aparece para Suprimentos. Enviar/reenviar a própria
+  // requisição a Suprimentos (status "pendente") também é do requisitante: é
+  // seguro porque "pendente" só é alcançável de "rascunho" ou "devolvida" pela
+  // máquina de estados — nunca dá aprovação. A triagem (aprovar, recusar,
+  // devolver, direcionar à gestão), os pedidos e os recebimentos seguem
+  // restritos a purchase:manage logo abaixo.
+  if (request.method === "POST" && recurso === "requisicoes")
+    return criarRequisicao(env, access, user, corpo);
+  if (request.method === "PATCH" && id && recurso === "requisicoes" && texto(corpo.status, 40) === "pendente")
+    return atualizarRequisicao(env, access, user, id, corpo);
+
   if (!podeNaVertical(access, "purchase:manage"))
     return json({ error: "Seu papel não pode movimentar compras." }, 403);
 
-  const corpo = await request.json().catch(() => ({}));
-
   if (request.method === "POST") {
-    if (recurso === "requisicoes") return criarRequisicao(env, access, user, corpo);
     if (recurso === "pedidos") return criarPedido(env, access, user, corpo);
     if (recurso === "recebimentos") return criarRecebimento(env, access, user, corpo);
     return json({ error: "Recurso desconhecido." }, 404);

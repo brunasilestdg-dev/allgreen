@@ -72,6 +72,19 @@ describe("máquina de estados", () => {
     expect(podeMudarStatusDaRequisicao("recusada", "rascunho")).toBe(true);
     expect(podeMudarStatusDaRequisicao("atendida", "rascunho")).toBe(false);
   });
+
+  it("Suprimentos pode devolver, recusar ou direcionar à gestão o que está pendente", () => {
+    expect(podeMudarStatusDaRequisicao("pendente", "devolvida")).toBe(true);
+    expect(podeMudarStatusDaRequisicao("pendente", "em_gestao")).toBe(true);
+    expect(podeMudarStatusDaRequisicao("pendente", "recusada")).toBe(true);
+    // A devolvida volta ao requisitante, que reenvia; não vira aprovada direto.
+    expect(podeMudarStatusDaRequisicao("devolvida", "pendente")).toBe(true);
+    expect(podeMudarStatusDaRequisicao("devolvida", "aprovada")).toBe(false);
+    // A gestão decide o que foi direcionado.
+    expect(podeMudarStatusDaRequisicao("em_gestao", "aprovada")).toBe(true);
+    expect(podeMudarStatusDaRequisicao("em_gestao", "devolvida")).toBe(true);
+    expect(podeMudarStatusDaRequisicao("em_gestao", "recusada")).toBe(true);
+  });
 });
 
 describe("totais", () => {

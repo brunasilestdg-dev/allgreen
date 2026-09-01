@@ -1388,6 +1388,11 @@
   border-color: var(--tdg-green);
 }
 
+/* Motivo da devolução/recusa/direcionamento, à vista para o requisitante (#66). */
+.tdg-req-motivo { color: var(--tdg-muted, #5a6b64); display: block; font-style: italic; margin-top: 2px; }
+/* Contexto no topo do modal de decisão de Suprimentos. */
+.tdg-dd-contexto { color: var(--tdg-muted, #5a6b64); font-size: .86rem; margin: 0 0 4px; }
+
 .tdg-fiscal-nota {
   color: var(--tdg-muted);
   font-size: 0.85rem;

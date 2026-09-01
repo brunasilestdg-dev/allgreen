@@ -598,4 +598,60 @@ describe("alçada com segregação para a equipe", () => {
     expect(aprovada.status).toBe(200);
     expect((await aprovada.json()).registro.status).toBe("aprovada");
   });
+
+  it("qualquer área requisita, mas só Suprimentos tria e compra", async () => {
+    // Requisitante de outra área (TI), no MESMO espaço da Suprimentos, sem
+    // purchase:manage. Pedir não gasta: ele CRIA a requisição.
+    const requisitante = await criarUsuario("compras-ti", "ti@compras.test");
+    await autorizar(requisitante, "auditor", ["read"], gestora.id);
+    const criada = await pedir("/api/todogreen/purchasing/requisicoes", {
+      metodo: "POST", token: requisitante.token,
+      corpo: { title: "Cabos de rede para a TI", items: [{ itemId: material.id, quantidade: 3 }], campos: { area: "TI" } },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+    expect(registro.status).toBe("pendente");
+    expect(registro.campos.area).toBe("TI");
+
+    // Mas ele não pode triar (aprovar/recusar/devolver/direcionar)...
+    const triarProibido = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
+      metodo: "PATCH", token: requisitante.token,
+      corpo: { status: "recusada", notaDecisao: "não", revision: registro.revision },
+    });
+    expect(triarProibido.status).toBe(403);
+    // ...nem abrir pedido (selecionar fornecedor é de Suprimentos).
+    const pedidoProibido = await pedir("/api/todogreen/purchasing/pedidos", {
+      metodo: "POST", token: requisitante.token,
+      corpo: { supplierPartyId: fornecedor.id, linhas: [{ itemId: material.id, quantidade: 3, unitPrice: 10 }] },
+    });
+    expect(pedidoProibido.status).toBe(403);
+
+    // Suprimentos direciona à gestão com um motivo, e a decisão fica registrada.
+    const direcionada = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { status: "em_gestao", notaDecisao: "acima da minha alçada", revision: registro.revision },
+    });
+    expect(direcionada.status).toBe(200);
+    const emGestao = (await direcionada.json()).registro;
+    expect(emGestao.status).toBe("em_gestao");
+    expect(emGestao.notaDecisao).toBe("acima da minha alçada");
+    expect(emGestao.aprovadoPor).toBe(gestora.id);
+
+    // A gestão devolve para ajuste; o requisitante reenvia.
+    const devolvida = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { status: "devolvida", notaDecisao: "detalhe a especificação", revision: emGestao.revision },
+    });
+    expect(devolvida.status).toBe(200);
+    const dev = (await devolvida.json()).registro;
+    expect(dev.status).toBe("devolvida");
+
+    const reenviada = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
+      metodo: "PATCH", token: requisitante.token,
+      corpo: { status: "pendente", revision: dev.revision },
+    });
+    // Reenviar (devolvida → pendente) não é triagem: o requisitante retoma.
+    expect(reenviada.status).toBe(200);
+    expect((await reenviada.json()).registro.status).toBe("pendente");
+  });
 });

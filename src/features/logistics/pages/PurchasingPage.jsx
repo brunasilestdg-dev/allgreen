@@ -36,14 +36,31 @@ const dia = (valor) => (valor
 const NOME_DO_STATUS_DA_REQUISICAO = Object.fromEntries(REQUEST_STATUSES.map((s) => [s.id, s.name]));
 const NOME_DO_STATUS_DO_PEDIDO = Object.fromEntries(ORDER_STATUSES.map((s) => [s.id, s.name]));
 
+const ROTULO_DA_DECISAO = {
+  devolvida: "Requisição devolvida ao requisitante com o motivo.",
+  recusada: "Requisição recusada.",
+  em_gestao: "Requisição direcionada à gestão.",
+};
+const TITULO_DA_DECISAO = {
+  devolvida: "Devolver para ajuste",
+  recusada: "Recusar requisição",
+  em_gestao: "Direcionar à gestão",
+};
+
 const REQUISICAO_VAZIA = {
   title: "",
   justificativa: "",
+  area: "",
   prioridade: "media",
   precisaEm: "",
   costCenterId: "",
   linhas: [{ itemId: "", descricao: "", quantity: "", estimatedUnitPrice: "" }],
 };
+
+// A requisição pode vir de qualquer área — não é Suprimentos que pede. Não é
+// campo obrigatório de esquema (mora em campos), mas registrar a origem ajuda
+// Suprimentos a triar.
+const AREAS_SOLICITANTES = ["Operação", "Comercial", "Frota", "Manutenção", "Administrativo", "Financeiro", "TI", "RH", "Qualidade", "Outra"];
 
 const proximaAprovacao = (registro) => registro?.campos?.purchaseApprovalFlow?.next?.label || "";
 const aprovacoesFeitas = (registro) => registro?.campos?.purchaseApprovalFlow?.approvals || [];
@@ -125,6 +142,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
           prioridade: form.prioridade,
           precisaEm: form.precisaEm || undefined,
           costCenterId: form.costCenterId || undefined,
+          campos: form.area ? { area: form.area } : undefined,
           status: "pendente",
           items: form.linhas
             .filter((linha) => (linha.itemId || linha.descricao) && linha.quantity)
@@ -158,6 +176,37 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
       setToast?.(resultado.approvalPending
         ? resultado.message
         : "Todas as etapas foram aprovadas. Requisição liberada para gerar pedido.");
+      await carregar();
+    } catch (motivo) { setToast?.(motivo.message); }
+  };
+
+  // Devolver, recusar e direcionar à gestão pedem um porquê — a decisão de
+  // Suprimentos volta ao requisitante (ou sobe à gestão) com o motivo à vista.
+  // O reenvio de uma devolvida não pede nota: é o requisitante retomando.
+  const [decisao, setDecisao] = useState(null);
+  const abrirDecisao = (req, novoStatus) => setDecisao({ req, novoStatus, nota: "" });
+  const confirmarDecisao = async (evento) => {
+    evento.preventDefault();
+    const { req, novoStatus, nota } = decisao;
+    if (!nota.trim()) { setToast?.("Diga o motivo para o requisitante entender."); return; }
+    setOcupado("salvando");
+    try {
+      await request(`/requisicoes/${req.id}`, authHeaders, {
+        method: "PATCH",
+        body: JSON.stringify({ status: novoStatus, notaDecisao: nota.trim(), revision: req.revision }),
+      });
+      setToast?.(ROTULO_DA_DECISAO[novoStatus] || "Requisição atualizada.");
+      setDecisao(null);
+      await carregar();
+    } catch (motivo) { setToast?.(motivo.message); } finally { setOcupado(""); }
+  };
+  const reenviarRequisicao = async (req) => {
+    try {
+      await request(`/requisicoes/${req.id}`, authHeaders, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "pendente", revision: req.revision }),
+      });
+      setToast?.("Requisição reenviada a Suprimentos.");
       await carregar();
     } catch (motivo) { setToast?.(motivo.message); }
   };
@@ -257,11 +306,11 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
           <button className="tdg-action" type="button" onClick={carregar} disabled={Boolean(ocupado)}>
             <RefreshCw size={16} />Atualizar
           </button>
-          {acesso.podeComprar && (
-            <button className="tdg-action" type="button" onClick={() => setMostrarForm(true)}>
-              <FileText size={16} />Nova requisição
-            </button>
-          )}
+          {/* Requisitar é de qualquer área — o botão aparece para todos. Quem
+              seleciona fornecedor e fecha o pedido é Suprimentos, mais abaixo. */}
+          <button className="tdg-action" type="button" onClick={() => setMostrarForm(true)}>
+            <FileText size={16} />Nova requisição
+          </button>
         </div>
       </header>
 
@@ -280,10 +329,11 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
 
       {/* Ação em janela própria: o formulário não empurra mais as tabelas
           da tela (rodada "nada corta a tela", 30/08). */}
-      {mostrarForm && acesso.podeComprar && (
+      {mostrarForm && (
         <Modal title="Nova requisição" onClose={() => setMostrarForm(false)} wide>
         <form className="tdg-form tdg-form-em-modal" onSubmit={enviar}>
           <label className="full"><span>O que precisa ser comprado</span><input value={form.title} onChange={(e) => alterar("title", e.target.value)} required maxLength={160} /></label>
+          <label><span>Área solicitante</span><select value={form.area} onChange={(e) => alterar("area", e.target.value)}><option value="">Não informada</option>{AREAS_SOLICITANTES.map((a) => <option value={a} key={a}>{a}</option>)}</select></label>
           <label><span>Prioridade</span><select value={form.prioridade} onChange={(e) => alterar("prioridade", e.target.value)}><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></label>
           <label><span>Precisa em</span><input type="date" value={form.precisaEm} onChange={(e) => alterar("precisaEm", e.target.value)} /></label>
           <label><span>Centro de custo</span><select value={form.costCenterId} onChange={(e) => alterar("costCenterId", e.target.value)}><option value="">Não informado</option>{centrosDeCusto.map((centro) => <option value={centro.id} key={centro.id}>{centro.nome}</option>)}</select></label>
@@ -313,16 +363,48 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
         </Modal>
       )}
 
+      {decisao && (
+        <Modal title={TITULO_DA_DECISAO[decisao.novoStatus] || "Decisão"} onClose={() => setDecisao(null)}>
+          <form className="tdg-form tdg-form-em-modal" onSubmit={confirmarDecisao}>
+            <p className="tdg-dd-contexto">{decisao.req.title}{decisao.req.campos?.area ? ` · ${decisao.req.campos.area}` : ""}</p>
+            <label className="full">
+              <span>{decisao.novoStatus === "em_gestao" ? "O que a gestão precisa decidir" : "Motivo (o requisitante vai ler)"}</span>
+              <textarea rows={3} value={decisao.nota} maxLength={2000} onChange={(e) => setDecisao((d) => ({ ...d, nota: e.target.value }))} required />
+            </label>
+            <div className="tdg-form-actions full">
+              <button type="button" onClick={() => setDecisao(null)}>Cancelar</button>
+              <button className="tdg-action" type="submit" disabled={ocupado === "salvando"}>{ocupado === "salvando" ? "Enviando..." : "Confirmar"}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       <section className="tdg-panel">
         <div className="tdg-section-head"><div><span className="tdg-kicker">REQUISIÇÕES</span><h2>O que foi pedido</h2></div><ClipboardCheck size={22} /></div>
         {!requisicoes.length ? <p className="tdg-empty">Nenhuma requisição registrada.</p> : (
           <div className="tdg-table-wrap"><table className="tdg-table">
-            <thead><tr><th>Documento</th><th>O quê</th><th>Prioridade</th><th>Precisa em</th><th>Situação</th>{acesso.podeComprar && <th>Ações</th>}</tr></thead>
+            <thead><tr><th>Documento</th><th>O quê</th><th>Área</th><th>Prioridade</th><th>Precisa em</th><th>Situação</th><th>Ações</th></tr></thead>
             <tbody>{requisicoes.map((requisicao) => (
               <tr key={requisicao.id}>
-                <td>{requisicao.numeroDocumento || "—"}</td><td>{requisicao.title}</td><td>{requisicao.prioridade}</td><td>{dia(requisicao.precisaEm)}</td>
-                <td><span>{comRotulo(NOME_DO_STATUS_DA_REQUISICAO, requisicao.status)}</span>{proximaAprovacao(requisicao) && <small>Próxima: {proximaAprovacao(requisicao)} · {aprovacoesFeitas(requisicao).length} etapa(s) concluída(s)</small>}</td>
-                {acesso.podeComprar && <td className="tdg-fiscal-acoes">{requisicao.status === "pendente" && <button type="button" onClick={() => aprovarRequisicao(requisicao)}>Aprovar minha etapa</button>}{requisicao.status === "aprovada" && <button type="button" onClick={() => abrirPedido(requisicao)}>Gerar pedido</button>}</td>}
+                <td>{requisicao.numeroDocumento || "—"}</td><td>{requisicao.title}</td><td>{requisicao.campos?.area || "—"}</td><td>{requisicao.prioridade}</td><td>{dia(requisicao.precisaEm)}</td>
+                <td>
+                  <span>{comRotulo(NOME_DO_STATUS_DA_REQUISICAO, requisicao.status)}</span>
+                  {proximaAprovacao(requisicao) && <small>Próxima: {proximaAprovacao(requisicao)} · {aprovacoesFeitas(requisicao).length} etapa(s) concluída(s)</small>}
+                  {["devolvida", "recusada", "em_gestao"].includes(requisicao.status) && requisicao.notaDecisao && <small className="tdg-req-motivo">Motivo: {requisicao.notaDecisao}</small>}
+                </td>
+                <td className="tdg-fiscal-acoes">
+                  {/* Suprimentos (e a gestão) triam o que chega. Devolver ou
+                      reenviar não é privilégio de Suprimentos: o requisitante
+                      retoma a própria requisição devolvida. */}
+                  {acesso.podeComprar && (requisicao.status === "pendente" || requisicao.status === "em_gestao") && <>
+                    <button type="button" onClick={() => aprovarRequisicao(requisicao)}>Aprovar</button>
+                    <button type="button" onClick={() => abrirDecisao(requisicao, "devolvida")}>Devolver</button>
+                    <button type="button" onClick={() => abrirDecisao(requisicao, "recusada")}>Recusar</button>
+                    {requisicao.status === "pendente" && <button type="button" onClick={() => abrirDecisao(requisicao, "em_gestao")}>Direcionar à gestão</button>}
+                  </>}
+                  {requisicao.status === "devolvida" && <button type="button" onClick={() => reenviarRequisicao(requisicao)}>Reenviar a Suprimentos</button>}
+                  {acesso.podeComprar && requisicao.status === "aprovada" && <button type="button" onClick={() => abrirPedido(requisicao)}>Gerar pedido</button>}
+                </td>
               </tr>
             ))}</tbody>
           </table></div>

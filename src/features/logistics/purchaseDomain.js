@@ -35,7 +35,12 @@ const valor = (bruto) => procurementNumber(bruto);
 
 export const REQUEST_STATUSES = Object.freeze([
   { id: "rascunho", name: "Rascunho" },
-  { id: "pendente", name: "Aguardando aprovação" },
+  { id: "pendente", name: "Com Suprimentos" },
+  // A requisição chega a Suprimentos, que decide: aprova, devolve para o
+  // requisitante ajustar, recusa, ou direciona à gestão quando a decisão é
+  // acima da alçada de Suprimentos.
+  { id: "devolvida", name: "Devolvida para ajuste" },
+  { id: "em_gestao", name: "Na gestão" },
   { id: "aprovada", name: "Aprovada" },
   { id: "recusada", name: "Recusada" },
   { id: "atendida", name: "Atendida" },
@@ -64,7 +69,14 @@ const TRANSICOES_DO_PEDIDO = Object.freeze({
 
 const TRANSICOES_DA_REQUISICAO = Object.freeze({
   rascunho: ["pendente", "cancelada"],
-  pendente: ["aprovada", "recusada", "cancelada"],
+  // Suprimentos triam o que chega: aprova, devolve, recusa ou direciona à
+  // gestão. Não é Suprimentos que escolhe o fornecedor — isso é o pedido/RFQ
+  // depois de aprovada.
+  pendente: ["aprovada", "recusada", "devolvida", "em_gestao", "cancelada"],
+  // A gestão decide o que Suprimentos direcionou.
+  em_gestao: ["aprovada", "recusada", "devolvida", "cancelada"],
+  // Devolvida volta ao requisitante: ele ajusta e reenvia (pendente) ou desiste.
+  devolvida: ["pendente", "cancelada"],
   aprovada: ["atendida", "cancelada"],
   recusada: ["rascunho"],
   atendida: [],
