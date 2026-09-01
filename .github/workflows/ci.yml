@@ -90,3 +90,7 @@ jobs:
         run: npm run test:e2e:acesso
         env:
           CI: true
+      - name: E2E das jornadas e do layout da To Do Green
+        run: npm run test:e2e:todogreen
+        env:
+          CI: true

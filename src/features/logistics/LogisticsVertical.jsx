@@ -95,6 +95,7 @@ import Semente from "./Semente.jsx";
 import ErpHome from "./ErpHome.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
+import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
 const PricingParametersPanel = lazy(() => import("./PricingParametersPanel.jsx"));
@@ -1297,8 +1298,8 @@ const TODO_GREEN_PAGE_ALIASES = Object.freeze({
 export const todoGreenRouteToPage = (path) => {
   const section = sectionFromPath(path);
   if (section === "comercial") return "clientes";
-  if (!section || section === "dashboard") return "dashboard";
-  return TODO_GREEN_PAGE_ALIASES[section] || section;
+  const canonical = todoGreenCanonicalPage(path);
+  return TODO_GREEN_PAGE_ALIASES[canonical] || canonical;
 };
 
 
@@ -2572,7 +2573,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const allowed = estadoDoAcesso === ACESSO.liberado;
   const sairPorInatividade = useCallback(() => {
     endSession();
-    window.location.assign("/todogreen");
+    window.location.assign("/");
   }, []);
   useSaidaPorInatividade(allowed ? sairPorInatividade : null);
   const role = allowed ? remoteAccess.role || "" : "";
@@ -2580,10 +2581,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const secaoDeCadastro = secaoDaRota(path);
   const primaryNavigation = navigationFor(page, secaoDeCadastro);
   const isOverview = page === "dashboard";
-  const isWorkCenter = String(path).includes("/central-trabalho");
-  const activeManagement = isWorkCenter
-    ? MANAGEMENT_TOOLS[0]
-    : MANAGEMENT_TOOLS.find((item) => item.id === page) || null;
+  const isWorkCenter = page === "espaco";
+  const activeManagement = MANAGEMENT_TOOLS.find((item) => item.id === page) || null;
   const currentPage = activeManagement || MODULE_IMPLEMENTATION[page] || MODULE_IMPLEMENTATION.dashboard;
   const trilha = trilhaDaPagina(page, secaoDeCadastro);
   // A permissão da tela é conferida AQUI, na rota, e não só no menu: o menu
@@ -2736,7 +2735,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                   if (!confirm("Encerrar a sessão em TODOS os aparelhos? Quem estiver com esta conta aberta em qualquer lugar será desconectado.")) return;
                   await fetch("/api/auth/sessions", { method: "DELETE", headers: authHeaders?.() || {} }).catch(() => {});
                   endSession();
-                  window.location.assign("/todogreen");
+                  window.location.assign("/");
                 }}
               >
                 Sair de todos os aparelhos
@@ -2749,7 +2748,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             onClick={() => {
               if (confirm("Sair da conta neste navegador? A sessão também é encerrada no servidor.")) {
                 endSession();
-                window.location.assign("/todogreen");
+                window.location.assign("/");
               }
             }}
           >
@@ -2892,10 +2891,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       )}
       {podeVerPagina && (<>
       {page === "dashboard" && <ErpHome role={role} user={db?.user || {}} data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} products={LOGISTICS_PRODUCTS} preferences={db?.preferences?.todoGreenHome} onSave={saveHomePreferences} onNavigate={navigate} />}
-      {/* /central-trabalho fica FORA desta lista de propósito: é a rota da
-          Central de Trabalho (quadros), que monta a própria tela. Montar o
-          workspace ali também deixava duas telas empilhadas, cada uma com
-          metade. */}
+      {/* Espaço de trabalho é a dona única de /espaco e do link legado
+          /central-trabalho. O alias é resolvido antes desta renderização. */}
       {["espaco", "visualizacoes", "agentes-funcoes"].includes(page) && (
         <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
           <TodoGreenWorkspace

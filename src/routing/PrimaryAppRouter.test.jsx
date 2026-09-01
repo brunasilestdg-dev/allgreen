@@ -22,7 +22,7 @@ describe("roteador principal", () => {
   });
 
   it("não deixa rota interna passar sem sessão", () => {
-    expect(resolvePrimaryRoute("/todogreen/clientes", false).kind).toBe("login");
+    expect(resolvePrimaryRoute("/todogreen/clientes", false).kind).toBe("todogreen-login");
   });
 
   it("entrega as demais rotas ao ambiente principal", () => {

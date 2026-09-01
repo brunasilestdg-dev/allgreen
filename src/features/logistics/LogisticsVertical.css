@@ -2170,3 +2170,29 @@
 .tdg-erp-sidebar { scrollbar-width: thin; scrollbar-color: #b9cfc5 transparent; }
 .tdg-nav-area-itens button.tdg-nav-extra { color: #6d8a7e; font-style: italic; font-weight: 550; }
 .tdg-nav-area-itens button.tdg-nav-extra:hover { color: var(--tdg-green); }
+
+/* Faixa estreita: o shell precisa permanecer na largura útil. O menu pode
+   rolar por dentro, mas não pode herdar a largura do catálogo nem esconder a
+   busca ou as ações fora do visor. */
+@media (max-width: 640px) {
+  .tdg,
+  .tdg-erp-layout,
+  .tdg-erp-layout > *,
+  .tdg-erp-sidebar,
+  .tdg-erp-stage {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .tdg-erp-layout,
+  .tdg-erp-sidebar,
+  .tdg-erp-stage {
+    width: 100%;
+  }
+
+  .tdg .tdg-sidebar-search,
+  .tdg .tdg-sidebar-search input {
+    max-width: 100%;
+    min-width: 0;
+  }
+}

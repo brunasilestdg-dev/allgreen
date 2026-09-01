@@ -26,7 +26,7 @@ const STATUS = {
   error: { label: "Erro na integração", Icon: AlertTriangle },
 };
 
-const ProviderList = ({ title, icon: Icon, items = [], testing, onTest }) => (
+const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, healthById = new Map() }) => (
   <section className="tdg-panel">
     <div className="tdg-section-head">
       <div><span className="tdg-kicker">INTEGRAÇÕES</span><h2>{title}</h2></div>
@@ -37,6 +37,15 @@ const ProviderList = ({ title, icon: Icon, items = [], testing, onTest }) => (
       {items.map((item) => {
         const state = STATUS[item.status] || STATUS[item.configured ? "configured" : "requires_setup"];
         const StateIcon = state.Icon;
+        const health = healthById.get(item.id) || {
+          configured: Boolean(item.configured),
+          authenticated: false,
+          online: false,
+          checkedAt: "",
+          nextAction: item.configured
+            ? "Execute o teste para validar autenticação e disponibilidade."
+            : item.requirement || "Conclua a configuração desta integração.",
+        };
         return (
           <div className="tdg-access-row" key={item.id}>
             <span>
@@ -44,6 +53,9 @@ const ProviderList = ({ title, icon: Icon, items = [], testing, onTest }) => (
               <strong>{item.name || item.id}</strong>
               <small><b>{state.label}.</b> {item.detail || "Sem detalhe adicional."}</small>
               {item.requirement && <small>Necessário: {item.requirement}</small>}
+              <small className="tdg-integration-health">Configurada: {health.configured ? "sim" : "não"} · Autenticada: {health.authenticated ? "sim" : "não"} · Online: {health.online ? "sim" : "não"}{health.checkedAt ? ` · Verificada: ${new Date(health.checkedAt).toLocaleString("pt-BR")}` : ""}</small>
+              {health?.error && <small className="tdg-integration-error">Erro: {health.error}</small>}
+              {health?.nextAction && <small>Ação disponível: {health.nextAction}</small>}
             </span>
             {onTest && item.canTest && (
               <button
@@ -142,6 +154,11 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
     });
   }, [status]);
 
+  const healthById = useMemo(
+    () => new Map((status?.health || []).map((item) => [item.integrationId, item])),
+    [status],
+  );
+
   const summary = useMemo(() => {
     const items = [
       ...(status?.ai || []),
@@ -187,15 +204,15 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
 
       <McpConnectionsPanel setToast={setToast} authHeaders={authHeaders} />
       <AiKeysPanel setToast={setToast} authHeaders={authHeaders} />
-      <ProviderList title="Cascata de IA (status)" icon={Zap} items={status?.ai} testing={testing} onTest={test} />
-      <ProviderList title="Mercado e prospecção" icon={Search} items={marketItems} testing={testing} onTest={test} />
+      <ProviderList title="Cascata de IA (status)" icon={Zap} items={status?.ai} testing={testing} onTest={test} healthById={healthById} />
+      <ProviderList title="Mercado e prospecção" icon={Search} items={marketItems} testing={testing} onTest={test} healthById={healthById} />
       <section className="tdg-panel"><SearchKeysPanel authHeaders={authHeaders} setToast={setToast} /></section>
-      <ProviderList title="Mensageria" icon={MessageCircle} items={status?.messaging} />
-      <ProviderList title="Comunicação e produtividade" icon={Mail} items={status?.communication} />
-      <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} />
-      <ProviderList title="Dados e gestão" icon={Database} items={status?.management} />
-      <ProviderList title="API e troca de dados" icon={Cable} items={status?.dataExchange} />
-      <ProviderList title="Automação ativa na Cloudflare" icon={Workflow} items={status?.automation} />
+      <ProviderList title="Mensageria" icon={MessageCircle} items={status?.messaging} healthById={healthById} />
+      <ProviderList title="Comunicação e produtividade" icon={Mail} items={status?.communication} healthById={healthById} />
+      <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} healthById={healthById} />
+      <ProviderList title="Dados e gestão" icon={Database} items={status?.management} healthById={healthById} />
+      <ProviderList title="API e troca de dados" icon={Cable} items={status?.dataExchange} healthById={healthById} />
+      <ProviderList title="Automação ativa na Cloudflare" icon={Workflow} items={status?.automation} healthById={healthById} />
 
       <section className="tdg-panel">
         <h2>Fora do escopo atual</h2>

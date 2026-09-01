@@ -12,7 +12,7 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   if (publicMatch) return { kind: "public-site", slug: publicMatch[1], page: publicMatch[2] || "" };
   const inviteMatch = path.match(/^\/convite\/([^/]+)/);
   if (inviteMatch) return { kind: "invite", token: inviteMatch[1] };
-  if (!authenticated) return { kind: "login" };
+  if (!authenticated) return /^\/todogreen(?:\/|$)/.test(path) ? { kind: "todogreen-login" } : { kind: "login" };
   if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-portal" };
   // O portal DO motorista (celular, minhas viagens) é outra coisa que a
   // central DE frota (gestão interna). Antes as quatro rotas caíam na tela de
@@ -41,6 +41,7 @@ export default function PrimaryAppRouter({
   if (route.kind === "invite")
     return <AcceptInvite db={db} update={update} token={route.token} />;
   if (route.kind === "login") return <Login update={update} />;
+  if (route.kind === "todogreen-login") return <Login update={update} vertical />;
   if (route.kind === "customer-portal")
     return (
       <Suspense fallback={<div className="inbox-loading">Abrindo seu portal...</div>}>

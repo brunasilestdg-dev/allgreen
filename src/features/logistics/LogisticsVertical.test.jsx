@@ -244,13 +244,13 @@ describe("LogisticsVertical", () => {
     expect(screen.getByRole("button", { name: /Agentes e funções/ })).toBeTruthy();
   });
 
-  it("/central-trabalho não monta o workspace por cima dos quadros", async () => {
+  it("/central-trabalho é alias canônico do workspace, sem segunda tela concorrente", async () => {
     window.history.pushState({}, "", "/todogreen/central-trabalho");
     await renderarAutorizada();
-    // O conteúdo dos quadros é montado por módulo próprio fora do React; o que
-    // o React NÃO pode fazer é empilhar o workspace na mesma rota.
+    // A rota histórica resolve para a única dona: Espaço de trabalho. Ela não
+    // monta um painel paralelo de quadros nem força a jornada de hierarquia.
+    expect(await screen.findByRole("navigation", { name: "Jornadas principais do espaço de trabalho" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Uma hierarquia para toda a empresa" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "Jornadas principais do espaço de trabalho" })).toBeNull();
   });
 
   it("mantém notícias, contatos, ajuda e rotinas anteriores visíveis no espaço", async () => {

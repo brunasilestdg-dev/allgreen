@@ -3,6 +3,7 @@ import { podeNaVertical } from "./todogreen-access.js";
 import { probeWebSearch, webSearchConfiguration } from "./web-search.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { envComChavesDoEspaco } from "./ai-keys.js";
+import { latestTodoGreenIntegrationHealth, recordTodoGreenIntegrationHealth } from "./todogreen-integration-health.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -300,6 +301,7 @@ export async function handleTodoGreenIntegrations(request, env, access) {
         ).bind(access.ownerId).first().then((row) => Number(row?.total || 0)).catch(() => 0)
       : 0;
     const status = todoGreenIntegrationStatus(envBusca, { activeWebhooks });
+    status.health = await latestTodoGreenIntegrationHealth(envBusca, access.ownerId);
     status.operational = [
       await trackerStatusForOwner(envBusca, access.ownerId),
       sefazStatus(envBusca),
@@ -313,10 +315,31 @@ export async function handleTodoGreenIntegrations(request, env, access) {
   const body = await request.json().catch(() => ({}));
   const provider = String(body.provider || "").trim().slice(0, 40);
   try {
-    if (provider === "web-search")
-      return json({ searchTest: await probeWebSearch(envBusca), checkedAt: new Date().toISOString() });
-    return json({ test: await probeAiProvider(envBusca, provider), checkedAt: new Date().toISOString() });
+    if (provider === "web-search") {
+      const searchTest = await probeWebSearch(envBusca);
+      const online = Boolean(searchTest?.providers?.length);
+      await recordTodoGreenIntegrationHealth(envBusca, {
+        ownerId: access.ownerId, integrationId: provider, configured: true, authenticated: online, online,
+        error: online ? "" : (searchTest?.failures || []).map((item) => item.error).filter(Boolean).join(" · "),
+        nextAction: online ? "" : "Revise a fonte configurada e rode o teste novamente.",
+      });
+      return json({ searchTest, checkedAt: new Date().toISOString() });
+    }
+    const test = await probeAiProvider(envBusca, provider);
+    await recordTodoGreenIntegrationHealth(envBusca, {
+      ownerId: access.ownerId, integrationId: provider, configured: true,
+      authenticated: Boolean(test.ok), online: Boolean(test.ok),
+      error: test.ok ? "" : "O provedor não respondeu ao teste técnico.",
+      nextAction: test.ok ? "" : "Revise a credencial e rode o teste novamente.",
+    });
+    return json({ test, checkedAt: new Date().toISOString() });
   } catch (error) {
-    return json({ error: String(error?.message || "Falha no teste do provedor").slice(0, 180), provider }, 502);
+    const message = String(error?.message || "Falha no teste do provedor").slice(0, 180);
+    await recordTodoGreenIntegrationHealth(envBusca, {
+      ownerId: access.ownerId, integrationId: provider || "desconhecida", configured: true,
+      authenticated: false, online: false, error: message,
+      nextAction: "Revise a configuração e execute um novo teste.",
+    });
+    return json({ error: message, provider }, 502);
   }
 }
