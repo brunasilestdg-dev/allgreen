@@ -3,7 +3,10 @@ import {
   MOTIVOS,
   calcularDistancia,
   geocodificar,
+  normalizarCarregadores,
   resumoDaDistancia,
+  otimizarOrdemDeParadas,
+  sugerirEnderecos,
   tracarRota,
 } from "./distanciaRodoviariaDomain.js";
 
@@ -247,5 +250,93 @@ describe("tracarRota com várias paradas", () => {
     const r = await tracarRota({ paradas: ["Santos", ""] }, { fetcher });
     expect(r.ok).toBe(false);
     expect(r.motivo).toBe(MOTIVOS.incompleto);
+  });
+});
+
+describe("otimizarOrdemDeParadas (rota dinâmica)", () => {
+  const P = (endereco, lat, lon) => ({ endereco, coord: [lat, lon] });
+
+  it("mantém origem e destino fixos e reordena o meio por proximidade", () => {
+    // Origem SP; meio fora de ordem (RJ longe, Campinas perto); destino Curitiba.
+    const paradas = [
+      P("Sao Paulo", -23.55, -46.63),
+      P("Rio de Janeiro", -22.90, -43.20),
+      P("Campinas", -22.90, -47.06),
+      P("Curitiba", -25.43, -49.27),
+    ];
+    const ordem = otimizarOrdemDeParadas(paradas);
+    expect(ordem[0]).toBe("Sao Paulo");
+    expect(ordem[ordem.length - 1]).toBe("Curitiba");
+    // Campinas (perto de SP) vem antes do Rio.
+    expect(ordem.indexOf("Campinas")).toBeLessThan(ordem.indexOf("Rio de Janeiro"));
+  });
+
+  it("com 3 ou menos paradas não há meio para reordenar", () => {
+    const paradas = [P("A", -23, -46), P("B", -22, -47), P("C", -25, -49)];
+    expect(otimizarOrdemDeParadas(paradas)).toEqual(["A", "B", "C"]);
+  });
+
+  it("ignora paradas sem coordenada em vez de quebrar", () => {
+    const paradas = [P("A", -23, -46), { endereco: "sem-coord" }, P("C", -25, -49)];
+    expect(otimizarOrdemDeParadas(paradas)).toEqual(["A", "C"]);
+  });
+});
+
+describe("sugerirEnderecos (autocompletar endereço)", () => {
+  it("pede até 5 candidatos ao Nominatim, restrito ao Brasil", async () => {
+    const fetcher = vi.fn(async () => resposta([
+      { lat: "-23.9", lon: "-46.3", display_name: "Santos, SP, Brasil" },
+      { lat: "-23.5", lon: "-46.6", display_name: "São Paulo, SP, Brasil" },
+    ]));
+    const lista = await sugerirEnderecos("Sant", { fetcher });
+    const url = new URL(fetcher.mock.calls[0][0]);
+    expect(url.searchParams.get("countrycodes")).toBe("br");
+    expect(url.searchParams.get("limit")).toBe("5");
+    expect(lista).toHaveLength(2);
+    expect(lista[0]).toEqual({ rotulo: "Santos, SP, Brasil", latitude: -23.9, longitude: -46.3 });
+  });
+
+  it("termo curto não gasta chamada", async () => {
+    const fetcher = vi.fn();
+    expect(await sugerirEnderecos("SP", { fetcher })).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("falha do serviço vira lista vazia, nunca exceção", async () => {
+    const fetcher = vi.fn(async () => resposta({}, false, 503));
+    expect(await sugerirEnderecos("Campinas", { fetcher })).toEqual([]);
+  });
+});
+
+describe("normalizarCarregadores (Open Charge Map → mapa)", () => {
+  const poi = {
+    ID: 42,
+    AddressInfo: { Title: "Eletroposto BR-116", Town: "Registro", Latitude: -24.5, Longitude: -47.8 },
+    Connections: [
+      { ConnectionTypeID: 33, PowerKW: 150 },
+      { ConnectionTypeID: 2, PowerKW: 50 },
+    ],
+  };
+
+  it("extrai coordenada, potência máxima e tipos de conector", () => {
+    const [c] = normalizarCarregadores([poi]);
+    expect(c.coord).toEqual([-24.5, -47.8]);
+    expect(c.potenciaKw).toBe(150);
+    expect(c.tipos).toContain("CCS (Type 2)");
+    expect(c.tipos).toContain("CHAdeMO");
+  });
+
+  it("marca como para pesados quando há DC de alta potência (>=50 kW)", () => {
+    const [rapido] = normalizarCarregadores([poi]);
+    expect(rapido.pesados).toBe(true);
+    const [lento] = normalizarCarregadores([
+      { ID: 7, AddressInfo: { Title: "AC lento", Latitude: -23, Longitude: -46 }, Connections: [{ ConnectionTypeID: 25, PowerKW: 22 }] },
+    ]);
+    expect(lento.pesados).toBe(false);
+  });
+
+  it("descarta POI sem coordenada e não quebra com lista vazia", () => {
+    expect(normalizarCarregadores([{ AddressInfo: {} }])).toEqual([]);
+    expect(normalizarCarregadores(null)).toEqual([]);
   });
 });

@@ -65,4 +65,52 @@ test("roteirização mostra o mapa e desenha a rota com várias paradas", async 
   // E a polyline SVG existe dentro do mapa.
   expect(await page.locator(".tdg-roteirizacao-mapa path").count()).toBeGreaterThan(0);
 
+  // #91: marcar uma parada como recarga soma 1h30 ao total.
+  await page.locator(".tdg-roteirizacao-recarga input").nth(1).check();
+  await expect(page.locator(".tdg-roteirizacao-resumo")).toContainText("recarga(s) de 1h30");
+
+  // #92: otimizar a ordem reordena e mantém a rota (3 paradas seguem lá).
+  await page.getByRole("button", { name: /Otimizar ordem/ }).click();
+  await expect(page.locator(".tdg-roteirizacao-resumo")).toContainText("3 paradas");
+});
+
+// #90: carregadores elétricos no mapa (Open Charge Map via gateway). A chamada
+// ao backend é dublada para o teste não depender de chave nem de rede.
+test("roteirização mostra carregadores elétricos com foco em pesados", async ({ page }) => {
+  const pngVazio = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await page.route(/tile\.openstreetmap\.org/, (rota) =>
+    rota.fulfill({ status: 200, contentType: "image/png", body: pngVazio }));
+  // O gateway de integrações → dois pontos: um DC rápido (pesado) e um AC lento.
+  await page.route(/\/api\/todogreen\/integrations$/, (rota) => {
+    if (rota.request().method() !== "POST") return rota.continue();
+    return rota.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        provider: "open-charge-map",
+        action: "nearby",
+        result: [
+          { ID: 1, AddressInfo: { Title: "Eletroposto BR-116", Town: "Registro", Latitude: -20, Longitude: -47 }, Connections: [{ ConnectionTypeID: 33, PowerKW: 150 }] },
+          { ID: 2, AddressInfo: { Title: "AC lento", Town: "Bauru", Latitude: -19, Longitude: -46 }, Connections: [{ ConnectionTypeID: 25, PowerKW: 22 }] },
+        ],
+      }),
+    });
+  });
+
+  await criarConta(page, contaNova("carreg"));
+  await habilitarTodoGreen(page, "owner");
+  await page.goto("/todogreen/roteirizacao");
+  await expect(page.locator(".tdg-roteirizacao-mapa")).toHaveClass(/leaflet-container/);
+
+  await page.getByRole("button", { name: /^Carregadores/ }).click();
+
+  // A linha de resumo confirma a contagem e destaca os que servem pesado.
+  await expect(page.locator(".tdg-roteirizacao-carregadores-info")).toContainText("2 carregador(es)");
+  await expect(page.locator(".tdg-roteirizacao-carregadores-info")).toContainText("1");
+  // Os pinos de carregador aparecem no mapa (um pesado, um leve).
+  expect(await page.locator(".tdg-mapa-pin-carregador").count()).toBe(2);
+  expect(await page.locator(".tdg-mapa-pin-carregador .pesado").count()).toBe(1);
 });

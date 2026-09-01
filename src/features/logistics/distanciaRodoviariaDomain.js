@@ -207,6 +207,136 @@ export async function tracarRota(
   }
 }
 
+// Distância em linha reta (Haversine, km) — barata, só para ORDENAR paradas.
+// A distância rodoviária real continua vindo do OSRM depois de reordenar.
+const kmEntre = ([lat1, lon1], [lat2, lon2]) => {
+  const R = 6371;
+  const rad = (g) => (g * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1);
+  const dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+};
+
+/**
+ * Otimiza a ORDEM das paradas do meio por vizinho mais próximo, mantendo origem
+ * (primeira) e destino (última) fixos. Recebe [{endereco, coord:[lat,lon]}] e
+ * devolve a lista de endereços na ordem otimizada. Rota dinâmica sem servidor:
+ * a régua é aproximada (linha reta), mas suficiente para tirar o "zigue-zague"
+ * de digitar as paradas fora de ordem; o OSRM recalcula a distância real.
+ */
+export function otimizarOrdemDeParadas(paradas) {
+  const lista = Array.isArray(paradas) ? paradas.filter((p) => Array.isArray(p?.coord)) : [];
+  if (lista.length <= 3) return lista.map((p) => p.endereco);
+  const origem = lista[0];
+  const destino = lista[lista.length - 1];
+  const restantes = lista.slice(1, -1);
+  const ordem = [];
+  let atual = origem;
+  while (restantes.length) {
+    let melhor = 0;
+    let melhorKm = Infinity;
+    restantes.forEach((p, i) => {
+      const d = kmEntre(atual.coord, p.coord);
+      if (d < melhorKm) { melhorKm = d; melhor = i; }
+    });
+    atual = restantes[melhor];
+    ordem.push(atual);
+    restantes.splice(melhor, 1);
+  }
+  return [origem, ...ordem, destino].map((p) => p.endereco);
+}
+
+/**
+ * Sugestão de endereço enquanto a pessoa digita (#95/#96). Usa o mesmo
+ * Nominatim público de sempre, só que pedindo até 5 candidatos em vez de 1.
+ * Devolve [{rotulo, latitude, longitude}] — a tela alimenta um <datalist>.
+ * Nunca lança: em erro ou consulta curta devolve lista vazia, então digitar
+ * à mão continua funcionando exatamente como antes.
+ */
+export async function sugerirEnderecos(termo, { fetcher = fetch, sinal, limite = 5 } = {}) {
+  const busca = texto(termo);
+  if (busca.length < 3) return [];
+  try {
+    const url = new URL(NOMINATIM);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("limit", String(Math.min(10, Math.max(1, limite))));
+    url.searchParams.set("countrycodes", "br");
+    url.searchParams.set("addressdetails", "0");
+    url.searchParams.set("q", busca);
+    const resposta = await fetcher(url, {
+      headers: { accept: "application/json", "user-agent": IDENTIFICACAO },
+      signal: sinal,
+    });
+    if (!resposta.ok) return [];
+    const lista = await resposta.json();
+    if (!Array.isArray(lista)) return [];
+    return lista
+      .filter((item) => item?.lat && item?.lon && item?.display_name)
+      .map((item) => ({
+        rotulo: texto(item.display_name).slice(0, 200),
+        latitude: Number(item.lat),
+        longitude: Number(item.lon),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// Tipos de conector mais comuns por ConnectionTypeID do Open Charge Map. O foco
+// da To Do Green é pesado elétrico, então o que importa é distinguir a recarga
+// rápida em corrente contínua (CCS2, CHAdeMO) do carregador lento AC (Type 2).
+const TIPOS_CONECTOR = Object.freeze({
+  2: "CHAdeMO",
+  25: "Type 2",
+  27: "Tesla (proprietário)",
+  32: "CCS (Type 1)",
+  33: "CCS (Type 2)",
+  1036: "Type 2 (cabo)",
+  1050: "NACS / Tesla",
+});
+
+/**
+ * Normaliza a resposta do Open Charge Map (via gateway) em pontos prontos para o
+ * mapa (#90). Puro e testável: recebe a lista de POIs e devolve
+ * [{id, nome, cidade, coord:[lat,lon], potenciaKw, tipos:[...], pesados}].
+ *
+ * `pesados = true` quando há recarga em corrente contínua de alta potência
+ * (>= 50 kW): é o que serve caminhão elétrico, o foco pedido pela titular.
+ */
+export function normalizarCarregadores(lista) {
+  const pois = Array.isArray(lista) ? lista : [];
+  return pois
+    .map((poi) => {
+      const info = poi?.AddressInfo || {};
+      const lat = Number(info.Latitude);
+      const lon = Number(info.Longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      const conexoes = Array.isArray(poi?.Connections) ? poi.Connections : [];
+      const potencias = conexoes
+        .map((c) => Number(c?.PowerKW))
+        .filter((kw) => Number.isFinite(kw) && kw > 0);
+      const potenciaKw = potencias.length ? Math.max(...potencias) : null;
+      const tipos = [
+        ...new Set(
+          conexoes
+            .map((c) => TIPOS_CONECTOR[Number(c?.ConnectionTypeID)])
+            .filter(Boolean),
+        ),
+      ];
+      return {
+        id: String(poi?.ID ?? poi?.UUID ?? `${lat},${lon}`),
+        nome: texto(info.Title).slice(0, 120) || "Ponto de recarga",
+        cidade: texto(info.Town || info.StateOrProvince).slice(0, 80),
+        coord: [lat, lon],
+        potenciaKw,
+        tipos,
+        pesados: potenciaKw !== null && potenciaKw >= 50,
+      };
+    })
+    .filter(Boolean);
+}
+
 /**
  * Texto curto para a tela, a partir do resultado. Existe para a mensagem ser
  * a mesma onde quer que a distância apareça.

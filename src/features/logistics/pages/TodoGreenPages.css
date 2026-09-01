@@ -3051,3 +3051,41 @@
   z-index: 0;
 }
 .tdg-roteirizacao-mapa .leaflet-container { height: 100%; width: 100%; font: inherit; }
+
+/* #91: marcar parada como recarga (+1h30). */
+.tdg-roteirizacao-recarga {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--tdg-muted, #5a6f68);
+  cursor: pointer;
+}
+.tdg-roteirizacao-recarga input { position: absolute; opacity: 0; width: 0; height: 0; }
+.tdg-roteirizacao-recarga.ativa { border-color: #0b9f8f; background: #e7f7f3; color: #0b9f8f; }
+.tdg-action-ghost.ativa { border-color: #0b9f8f; background: #e7f7f3; color: #0b9f8f; }
+.tdg-mapa-pin-carregador span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.tdg-mapa-pin-carregador span.pesado { background: #0b9f8f; }
+.tdg-mapa-pin-carregador span.leve { background: #9aa8a3; }
+.tdg-roteirizacao-carregadores-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--tdg-muted, #5a6f68);
+}
