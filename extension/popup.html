@@ -4,12 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="popup.css" />
-    <title>Seu Funcionário</title>
+    <title>To Do Green ERP</title>
   </head>
   <body>
     <header class="top">
-      <strong>Seu Funcionário</strong>
-      <button id="gear" class="icon-btn" title="Configurar" aria-label="Configurar">⚙️</button>
+      <div>
+        <strong>To Do Green ERP</strong>
+        <small>Plantû no navegador</small>
+      </div>
+      <button id="gear" class="icon-btn" title="Configurar" aria-label="Configurar">Config</button>
     </header>
 
     <section id="settings" class="settings hidden">
@@ -22,24 +25,26 @@
         <input id="token" type="password" placeholder="Cole aqui o token do app" />
       </label>
       <p class="hint">
-        Pegue o token em <strong>Configurações → Extensão do navegador</strong> no
-        app e cole aqui. Fica salvo só neste navegador.
+        Pegue o token em <strong>Administração → Integrações → Extensão do navegador</strong>.
+        Ele fica salvo só neste navegador.
       </p>
       <button id="saveSettings" class="btn primary">Salvar</button>
     </section>
 
     <section id="main">
       <div class="modes">
-        <button class="mode" data-mode="summary">Resumir a página</button>
-        <button class="mode" data-mode="translate">Traduzir seleção</button>
-        <button class="mode" data-mode="reply">Responder mensagem</button>
-        <button class="mode" data-mode="explain">Explicar seleção</button>
+        <button class="mode" data-mode="summary">Resumo para o ERP</button>
+        <button class="mode" data-mode="task">Sugerir tarefa</button>
+        <button class="mode" data-mode="next-action">Próxima ação CRM</button>
+        <button class="mode" data-mode="reply">Responder e-mail</button>
       </div>
-      <textarea id="question" rows="2" placeholder="Ou faça uma pergunta sobre esta página..."></textarea>
-      <button id="ask" class="btn primary block">Perguntar</button>
+      <textarea id="question" rows="2" placeholder="Ou pergunte ao Plantû sobre esta página..."></textarea>
+      <button id="ask" class="btn primary block">Perguntar ao Plantû</button>
 
       <div id="status" class="status hidden"></div>
       <div id="result" class="result hidden"></div>
+      <div id="proposal" class="proposal hidden"></div>
+      <button id="execute" class="btn primary block hidden">Executar ação no ERP</button>
       <button id="copy" class="btn ghost block hidden">Copiar resposta</button>
     </section>
 

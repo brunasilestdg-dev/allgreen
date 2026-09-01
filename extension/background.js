@@ -1,9 +1,9 @@
 // Service worker da extensão: cria um item de menu de contexto que abre o
-// popup do Seu Funcionário com o texto selecionado guardado para uso.
+// popup do To Do Green ERP com o texto selecionado guardado para uso.
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "sf-ask",
-    title: "Perguntar ao Seu Funcionário",
+    title: "Perguntar ao Plantû no ERP",
     contexts: ["selection", "page"],
   });
 });

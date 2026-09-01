@@ -1,12 +1,13 @@
-# Extensão do navegador — Seu Funcionário
+# Extensão do navegador — To Do Green ERP
 
-Leva a IA do Seu Funcionário para **qualquer página** do navegador: resumir,
-traduzir uma seleção, escrever uma resposta a uma mensagem/e-mail, explicar um
-trecho ou perguntar sobre o que você está vendo.
+Leva o Plantû para **qualquer página** do navegador: resumir uma página para o
+ERP, preparar resposta de e-mail, sugerir tarefa, sugerir próxima ação do CRM ou
+perguntar sobre o que você está vendo. Quando a IA sugerir uma ação suportada,
+a extensão mostra **Executar ação no ERP** para gravar depois da sua confirmação.
 
 É a **frente 4** do pacote de funções grandes. Não é uma página do app: é um
-pequeno pacote de extensão que conversa com a mesma IA (o mesmo endpoint
-`/api/ai`), usando o seu token de acesso.
+pequeno pacote de extensão que conversa com o endpoint da vertical
+`/api/todogreen/semente`, usando o seu token de acesso.
 
 ## Como instalar (Chrome / Edge / Brave)
 
@@ -23,20 +24,21 @@ pequeno pacote de extensão que conversa com a mesma IA (o mesmo endpoint
 
 ## Como conectar
 
-1. No app, vá em **Configurações → Extensão do navegador** e copie o **token**.
-2. Clique no ícone da extensão → engrenagem (⚙️) → cole o token → **Salvar**.
+1. No app, vá em **Administração → Integrações → Extensão do navegador** e copie o **token**.
+2. Clique no ícone da extensão → **Config** → cole o token → **Salvar**.
    O token fica salvo só no seu navegador.
 
 ## O que ela faz
 
-- **Resumir a página** — resumo + pontos principais.
-- **Traduzir seleção** — traduz o texto selecionado para português.
-- **Responder mensagem** — escreve uma resposta cordial para o texto
-  selecionado (e-mail, mensagem).
-- **Explicar seleção** — explica um trecho de forma simples.
-- **Perguntar** — pergunte qualquer coisa sobre a página aberta.
+- **Resumo para o ERP** — transforma a página em leitura operacional curta.
+- **Sugerir tarefa** — pede ao Plantû uma tarefa para a Central de Implantação.
+- **Próxima ação CRM** — sugere atualização da próxima ação da conta.
+- **Executar ação no ERP** — cria tarefa, atualiza próxima ação ou dispara
+  pesquisa externa somente depois do clique de confirmação.
+- **Responder e-mail** — prepara resposta profissional com contexto da página.
+- **Perguntar ao Plantû** — pergunta qualquer coisa sobre a página aberta.
 
-Também há um item no **menu do botão direito**: "Perguntar ao Seu Funcionário".
+Também há um item no **menu do botão direito**: "Perguntar ao Plantû no ERP".
 
 ## Gratuidade e privacidade
 

@@ -31,6 +31,20 @@ describe("buildExtensionPrompt", () => {
     expect(p).toContain("trecho selecionado");
   });
 
+  it("modo tarefa pede criação de tarefa dentro do ERP", () => {
+    const p = buildExtensionPrompt("task", ctx);
+    expect(p).toContain("criar_tarefa");
+    expect(p).toContain("Central de Implantação");
+    expect(p).toContain("trecho selecionado");
+  });
+
+  it("modo próxima ação pede atualização do CRM", () => {
+    const p = buildExtensionPrompt("next-action", ctx);
+    expect(p).toContain("definir_proxima_acao");
+    expect(p).toContain("CRM");
+    expect(p).toContain("trecho selecionado");
+  });
+
   it("perguntar usa a pergunta e restringe ao conteúdo (não inventar)", () => {
     const p = buildExtensionPrompt("ask", ctx);
     expect(p).toContain("qual o prazo?");

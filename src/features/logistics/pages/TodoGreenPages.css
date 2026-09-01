@@ -2345,3 +2345,154 @@
 .tdg-campo-arquivo-botao { align-items: center; background: var(--tdg-green, #17624f); border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; font-size: .82rem; font-weight: 600; padding: 8px 12px; white-space: nowrap; }
 .tdg-campo-arquivo-botao:hover { filter: brightness(1.06); }
 .tdg-campo-arquivo-nome { color: var(--tdg-green, #17624f); font-size: .8rem; word-break: break-all; }
+
+/* ===== To Do Green page polish v40 ===== */
+.tdg-page {
+  max-width: none;
+}
+
+.tdg-page-title {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid #c5dbd0;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(16, 36, 31, 0.06);
+  padding: 16px;
+}
+
+.tdg-page-title h2 {
+  font-size: clamp(1.55rem, 2.2vw, 2.05rem);
+  line-height: 1.08;
+}
+
+.tdg-page-title p {
+  color: #4b675c;
+  font-size: 0.9rem;
+  max-width: 880px;
+}
+
+.tdg-crm-metrics,
+.tdg-opp-resumo,
+.tdg-tracker-metrics,
+.tdg-dashboard-preview {
+  gap: 12px;
+}
+
+.tdg-crm-metrics article,
+.tdg-opp-resumo article,
+.tdg-tracker-metrics article,
+.tdg-dashboard-preview article {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fcfa 100%);
+  border-color: #c6ddd2;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(16, 36, 31, 0.05);
+  min-height: 96px;
+}
+
+.tdg-crm-workspace {
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(360px, 0.9fr);
+}
+
+.tdg-crm-table,
+.tdg-crm-account,
+.tdg-form-card,
+.tdg-chart-card,
+.tdg-kanban-board,
+.tdg-timeline-card {
+  border-color: #c5dbd0;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(16, 36, 31, 0.06);
+}
+
+.tdg-crm-account {
+  top: 24px;
+}
+
+.tdg-crm-table > button {
+  min-height: 72px;
+  padding: 14px;
+}
+
+.tdg-crm-table > button:hover,
+.tdg-crm-table > button:focus-visible {
+  background: #f1faf5;
+  border-color: #9bc2b3;
+}
+
+.tdg-crm-view-switch,
+.tdg-view-switch,
+.tdg-page-actions {
+  gap: 8px;
+}
+
+.tdg-crm-view-switch button,
+.tdg-view-switch button,
+.tdg-page-actions button {
+  border-radius: 9px;
+  min-height: 36px;
+}
+
+.tdg-kanban-board {
+  background: rgba(255, 255, 255, 0.68);
+  padding: 14px;
+}
+
+.tdg-kanban-column {
+  background: #f6fbf8;
+  border-color: #c6ddd2;
+  border-radius: 12px;
+  min-width: 280px;
+}
+
+.tdg-kanban-card {
+  border-color: #c9ded4;
+  border-radius: 10px;
+  box-shadow: 0 8px 16px rgba(16, 36, 31, 0.05);
+}
+
+@media (max-width: 1100px) {
+  .tdg-crm-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .tdg-crm-account {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .tdg-page-title {
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .tdg-page-title h2 {
+    font-size: 1.35rem;
+  }
+
+  .tdg-crm-metrics,
+  .tdg-opp-resumo,
+  .tdg-tracker-metrics,
+  .tdg-dashboard-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .tdg-crm-view-switch,
+  .tdg-view-switch,
+  .tdg-page-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .tdg-crm-view-switch button,
+  .tdg-view-switch button,
+  .tdg-page-actions button {
+    justify-content: center;
+  }
+
+  .tdg-kanban-board {
+    overflow-x: auto;
+    padding: 10px;
+  }
+}

@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Seu Funcionário — Assistente",
+  "name": "To Do Green ERP",
   "version": "1.0.0",
-  "description": "Leve a IA do Seu Funcionário para qualquer página: resumir, traduzir, responder mensagens e perguntar sobre o que você está vendo.",
+  "description": "Leve o Plantû e o ERP To Do Green para o navegador: resumir páginas, preparar respostas, sugerir tarefas e registrar próximos passos.",
   "default_locale": "pt_BR",
   "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
   "host_permissions": ["https://seufuncionario-expo.brunapsiles.workers.dev/*"],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Seu Funcionário"
+    "default_title": "To Do Green ERP"
   },
   "background": {
     "service_worker": "background.js"
