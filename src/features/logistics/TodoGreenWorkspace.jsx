@@ -101,12 +101,15 @@ const TOOL_ICONS = {
 
 const WORKSPACE_PRIMARY_TOOLS = Object.freeze([
   { id: "visao-geral", label: "Visão geral" },
+  { id: "tarefas", label: "To Do" },
   { id: "estrutura", label: "Estrutura de trabalho" },
   { id: "visoes", label: "Visualizações e gráficos" },
   { id: "agentes", label: "Agentes e funções" },
 ]);
 
 const WORKSPACE_PRIMARY_IDS = new Set(WORKSPACE_PRIMARY_TOOLS.map((item) => item.id));
+const WORKSPACE_TOOL_IDS = new Set(TODO_GREEN_WORKSPACE_TOOLS.map((item) => item.id));
+const workspaceTool = (value) => WORKSPACE_TOOL_IDS.has(value) ? value : "visao-geral";
 
 // As 28 ferramentas do espaço vinham numa grade única — um paredão de botões
 // caindo todos no mesmo lugar. Agrupadas por propósito, cada uma tem seu galho.
@@ -198,7 +201,7 @@ function WorkspaceOverview({ summary, onOpenTool, onNavigate }) {
   const metricCards = [
     ["Clientes", summary.clients, () => onNavigate("/todogreen/clientes")],
     ["Oportunidades abertas", summary.openOpportunities, () => onNavigate("/todogreen/oportunidades")],
-    ["Tarefas abertas", summary.openTasks, () => onNavigate("/todogreen/central-trabalho")],
+    ["Tarefas abertas", summary.openTasks, () => onNavigate("/todogreen/espaco?ferramenta=tarefas")],
     ["Casos em andamento", summary.openCases, () => onOpenTool("processos")],
   ];
 
@@ -238,7 +241,7 @@ function WorkspaceOverview({ summary, onOpenTool, onNavigate }) {
     ["Operações", "Rotas, viagens, entregas e ocorrências", "/todogreen/operacoes"],
     ["ESG", "Green Score, emissões, método e evidências", "/todogreen/central-esg"],
     ["Relatórios", "Leitura executiva comercial, operacional e ambiental", "/todogreen/relatorios"],
-    ["Central de implementação", "Implantações, projetos, tarefas, marcos e dependências", "/todogreen/central-trabalho"],
+    ["Projetos e tarefas", "To Do, Kanban, cronograma, marcos e dependências", "/todogreen/espaco?ferramenta=tarefas"],
   ];
 
   return (
@@ -303,7 +306,7 @@ function WorkspaceOverview({ summary, onOpenTool, onNavigate }) {
               {summary.openCases > 0 ? ` · ${summary.openCases} caso(s) em andamento` : ""}
             </span>
           </div>
-          <button type="button" onClick={() => onNavigate("/todogreen/central-trabalho")}>Abrir implementação</button>
+          <button type="button" onClick={() => onNavigate("/todogreen/espaco?ferramenta=tarefas")}>Abrir tarefas</button>
         </section>
       )}
 
@@ -360,9 +363,10 @@ export default function TodoGreenWorkspace({
   authHeaders,
   initialTool = "visao-geral",
 }) {
-  const [tool, setTool] = useState(initialTool);
+  const [tool, setTool] = useState(() => workspaceTool(initialTool));
   const [focusNoteId] = useState("");
   const [focusPageId, setFocusPageId] = useState("");
+  useEffect(() => setTool(workspaceTool(initialTool)), [initialTool]);
   // "Mais funções" é um menu controlado (não um <details> nativo, que a
   // titular reportou não abrir no ambiente publicado). Estado explícito +
   // fechar ao clicar fora e ao escolher uma função.
@@ -393,12 +397,13 @@ export default function TodoGreenWorkspace({
   const openTool = (nextTool) => {
     setMoreOpen(false);
     if (nextTool === "paginas") setFocusPageId("");
-    // "estrutura" NÃO navega: /central-trabalho é a rota da Central de
-    // Trabalho (os quadros), que é outra tela com outra dona. Mandar a jornada
-    // para lá foi o que deixou duas telas empilhadas, cada uma com metade
-    // (defeito apontado pela titular, 31/08). A hierarquia abre aqui dentro.
+    // As jornadas principais têm URL própria, para que um atalho, atualização
+    // ou recarregamento abra a ferramenta certa, sem dividir uma mesma rota
+    // entre duas telas concorrentes.
     const directRoutes = {
       "visao-geral": "/todogreen/espaco",
+      tarefas: "/todogreen/espaco?ferramenta=tarefas",
+      estrutura: "/todogreen/espaco?ferramenta=estrutura",
       visoes: "/todogreen/visualizacoes",
       agentes: "/todogreen/agentes",
     };

@@ -11,6 +11,12 @@ describe("propriedade de rota da To Do Green", () => {
     expect(todoGreenCanonicalPage("/todogreen/central-trabalho?aba=kanban")).toBe("espaco");
   });
 
+  it("resolve todos os nomes legados pela mesma fonte", () => {
+    expect(todoGreenCanonicalPage("/todogreen/comercial")).toBe("clientes");
+    expect(todoGreenCanonicalPage("/todogreen/parametros-simulador")).toBe("regua");
+    expect(todoGreenCanonicalPage("/todogreen/agentes")).toBe("agentes-funcoes");
+  });
+
   it("recusa duas telas donas da mesma rota", () => {
     expect(() => assertUniqueRouteOwnership([
       { id: "espaco", route: "/todogreen/espaco" },

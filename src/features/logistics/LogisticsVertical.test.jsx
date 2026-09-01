@@ -253,6 +253,12 @@ describe("LogisticsVertical", () => {
     expect(screen.queryByRole("heading", { name: "Uma hierarquia para toda a empresa" })).toBeNull();
   });
 
+  it("abre o To Do diretamente pela jornada do espaço de trabalho", async () => {
+    window.history.pushState({}, "", "/todogreen/espaco?ferramenta=tarefas");
+    await renderarAutorizada();
+    expect(await screen.findByRole("button", { name: "Nova tarefa" })).toBeTruthy();
+  });
+
   it("mantém notícias, contatos, ajuda e rotinas anteriores visíveis no espaço", async () => {
     window.history.pushState({}, "", "/todogreen/espaco");
     stubDeRede({

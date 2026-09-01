@@ -1263,58 +1263,12 @@ export const produtoDaRota = (path) => {
   return LOGISTICS_PRODUCTS.some((item) => item.id === id) ? id : "";
 };
 
-const TODO_GREEN_PAGE_ALIASES = Object.freeze({
-  "dashboard-esg": "esg",
-  "relatorios-esg": "relatorios",
-  "cofre-evidencias": "auditoria",
-  certificados: "relatorios",
-  contatos: "clientes",
-  pipeline: "oportunidades",
-  contratos: "propostas",
-  simulacoes: "precificacao",
-  "parametros-simulador": "regua",
-  // "deal-desk" era apelido de "precificacao" porque não havia tela. Agora há.
-  aprovacoes: "deal-desk",
-  alcada: "deal-desk",
-  remuneracao: "comissoes",
-  forecast: "receita",
-  recebimento: "titulos",
-  opex: "custos",
-  "centros-custo": "rateios",
-  margem: "custos",
-  rentabilidade: "custos",
-  "produtos-logisticos": "produtos",
-  "catalogo-produtos": "produtos",
-  fretes: "operacoes",
-  rotas: "operacoes",
-  viagens: "operacoes",
-  veiculos: "motorista-frota",
-  motoristas: "motorista-frota",
-  dp: "dp-rh",
-  escalas: "rh",
-  campanhas: "marketing",
-  entregas: "operacoes",
-  pacotes: "operacoes",
-  ocupacao: "dashboard",
-  produtividade: "dashboard",
-  energia: "esg",
-  tarefas: "dashboard",
-  notificacoes: "dashboard",
-  inbox: "dashboard",
-  exportacoes: "relatorios",
-  usuarios: "acessos",
-  permissoes: "acessos",
-  configuracoes: "acessos",
-  agentes: "agentes-funcoes",
-});
 
-export const todoGreenRouteToPage = (path) => {
-  const section = sectionFromPath(path);
-  if (section === "comercial") return "clientes";
-  const canonical = todoGreenCanonicalPage(path);
-  return TODO_GREEN_PAGE_ALIASES[canonical] || canonical;
-};
 
+export const todoGreenRouteToPage = (path) => todoGreenCanonicalPage(path);
+
+const workspaceToolFromPath = (path = "") =>
+  new URLSearchParams(String(path).split("?")[1] || "").get("ferramenta") || "visao-geral";
 
 const navigate = (route) => {
   if (typeof window === "undefined") return;
@@ -2896,7 +2850,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           <button
             type="button"
             className={`tdg-work-entry ${isWorkCenter ? "active" : ""}`}
-            onClick={() => navigate("/todogreen/central-trabalho")}
+            onClick={() => navigate("/todogreen/espaco?ferramenta=tarefas")}
           >
             <strong>Projetos e tarefas</strong>
             <small>Boards, Kanban, Gantt e Workload</small>
@@ -3019,14 +2973,14 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {["espaco", "visualizacoes", "agentes-funcoes"].includes(page) && (
         <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
           <TodoGreenWorkspace
-            key={page}
+            key={`${page}:${workspaceToolFromPath(path)}`}
             db={db}
             update={update}
             verticalData={verticalData}
             setToast={setToast}
             onNavigate={navigate}
             authHeaders={authHeaders}
-            initialTool={page === "visualizacoes" ? "visoes" : page === "agentes-funcoes" ? "agentes" : "visao-geral"}
+            initialTool={page === "visualizacoes" ? "visoes" : page === "agentes-funcoes" ? "agentes" : workspaceToolFromPath(path)}
           />
         </Suspense>
       )}
