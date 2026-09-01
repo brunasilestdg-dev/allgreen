@@ -389,6 +389,81 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
     return response({ error:"Método não permitido." },405);
   }
 
+  // Fila de aprovação dos pedidos feitos na tela de login (migração 0086). Só
+  // administradores enxergam e decidem. Aprovar concede pelo MESMO caminho da
+  // liberação manual por e-mail — não há um segundo jeito de virar usuário.
+  if (resource === "access-requests") {
+    if (!canManage(access)) return response({ error:"Você não pode gerenciar acessos da To Do Green." },403);
+    if (request.method === "GET") {
+      const rows = await env.DB.prepare(
+        `SELECT id,email,name,company,phone,message,status,decided_role AS decidedRole,
+                decided_by AS decidedBy,decided_at AS decidedAt,decision_note AS decisionNote,
+                created_at AS createdAt,updated_at AS updatedAt
+           FROM todogreen_access_requests
+          WHERE tenant_id=?
+          ORDER BY status='pending' DESC, created_at DESC LIMIT 200`,
+      ).bind(TODO_GREEN_TENANT.id).all().catch(() => ({ results: [] }));
+      return response({ requests: rows.results || [] });
+    }
+    if (request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const id = String(body.id || "").trim();
+      const decisao = (body.decisao === "aprovar" || body.decision === "approve") ? "approved"
+        : (body.decisao === "recusar" || body.decision === "reject") ? "rejected" : "";
+      if (!id || !decisao) return response({ error:"Informe o pedido e a decisão." },400);
+      const pedido = await env.DB.prepare(
+        "SELECT id,email,name,status FROM todogreen_access_requests WHERE tenant_id=? AND id=?",
+      ).bind(TODO_GREEN_TENANT.id, id).first();
+      if (!pedido) return response({ error:"Pedido não encontrado." },404);
+      if (pedido.status !== "pending") return response({ error:"Este pedido já foi decidido." },409);
+      const now = new Date().toISOString();
+      const nota = String(body.note || body.nota || "").trim().slice(0,240);
+
+      if (decisao === "rejected") {
+        await env.DB.prepare(
+          "UPDATE todogreen_access_requests SET status='rejected',decided_by=?,decided_at=?,decision_note=?,updated_at=? WHERE tenant_id=? AND id=?",
+        ).bind(user.id, now, nota, now, TODO_GREEN_TENANT.id, id).run();
+        await registrarAuditoriaTodoGreen(env, {
+          access,user,action:"rejected",resourceType:"access-request",resourceId:email(pedido.email),after:{ status:"rejected" },
+        });
+        return response({ ok:true, status:"rejected" });
+      }
+
+      // O papel vem da decisão do administrador; sem papel válido, 'auditor'.
+      const role = TODO_GREEN_ROLES.includes(body.role) ? body.role : "auditor";
+      const permissions = TODO_GREEN_PERMISSIONS[role] || ["read"];
+      const alvo = email(pedido.email);
+      await env.DB.prepare(
+        `INSERT INTO todogreen_access_emails
+         (id,tenant_id,email,role,status,permissions_json,note,expires_at,revoked_at,created_by,workspace_owner_id,created_at,updated_at)
+         VALUES (?,?,?,?,'active',?,?,NULL,NULL,?,?,?,?) ON CONFLICT(tenant_id,workspace_owner_id,email) DO UPDATE SET
+          role=excluded.role,status='active',permissions_json=excluded.permissions_json,
+          revoked_at=NULL,workspace_owner_id=excluded.workspace_owner_id,updated_at=excluded.updated_at`,
+      ).bind(
+        crypto.randomUUID(), TODO_GREEN_TENANT.id, alvo, role,
+        JSON.stringify(permissions), `Aprovado da fila de acesso${nota ? ` — ${nota}` : ""}`.slice(0,240),
+        user.id, espacoDaConcessao(access), now, now,
+      ).run();
+      // Se a conta já existe, o vínculo com o espaço nasce agora; se ainda não,
+      // nasce no primeiro acesso, como na liberação manual.
+      const conta = await contaPorEmail(env, alvo);
+      if (conta?.id) await vincularAoEspaco(env, { access, userId: conta.id, email: alvo, role, permissions });
+
+      await env.DB.prepare(
+        `UPDATE todogreen_access_requests SET status='approved',decided_workspace_owner_id=?,decided_role=?,
+           decided_by=?,decided_at=?,decision_note=?,updated_at=? WHERE tenant_id=? AND id=?`,
+      ).bind(espacoDaConcessao(access), role, user.id, now, nota, now, TODO_GREEN_TENANT.id, id).run();
+
+      if (dependencies.audit) await dependencies.audit(env,access.ownerId,user,"todogreen_acesso_autorizado",alvo,`papel: ${role} (fila de acesso)`);
+      await registrarAuditoriaTodoGreen(env, {
+        access,user,action:"authorized",resourceType:"access-request",resourceId:alvo,
+        after:{ email:alvo, role, status:"approved", workspaceOwnerId: espacoDaConcessao(access) },
+      });
+      return response({ ok:true, status:"approved", role, email:alvo, aguardandoCadastro: Boolean(!conta?.id) });
+    }
+    return response({ error:"Método não permitido." },405);
+  }
+
   if (["catalog","dashboard","products"].includes(resource)) await seedCatalog(env);
   if (request.method === "GET" && resource === "catalog")
     return response({ tenant:TODO_GREEN_TENANT,modules:TODO_GREEN_MODULE_CATALOG,products:LOGISTICS_PRODUCTS,access });

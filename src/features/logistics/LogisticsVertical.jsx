@@ -2416,7 +2416,51 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
   const [saving, setSaving] = useState(false);
   const [loadedAt, setLoadedAt] = useState(0);
   const [form, setForm] = useState({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
+  // Fila dos pedidos feitos na tela de login (migração 0086). Aprovar aqui
+  // concede pelo mesmo caminho da liberação manual por e-mail.
+  const [pedidos, setPedidos] = useState([]);
+  const [carregandoPedidos, setCarregandoPedidos] = useState(false);
+  const [papelDoPedido, setPapelDoPedido] = useState({});
+  const [decidindo, setDecidindo] = useState("");
   const canManage = hasTodoGreenPermission(role, "access:manage", permissions);
+  const carregarPedidos = useCallback(() => {
+    const headers = authHeaders?.() || {};
+    if (!headers.authorization || !canManage) return;
+    setCarregandoPedidos(true);
+    fetch(`/api/todogreen/access-requests?owner=${encodeURIComponent(ownerId())}`, { headers })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "Não foi possível carregar os pedidos.");
+        setPedidos(payload.requests || []);
+      })
+      .catch((error) => setToast?.(error.message))
+      .finally(() => setCarregandoPedidos(false));
+  }, [authHeaders, canManage, setToast]);
+  useEffect(() => { carregarPedidos(); }, [carregarPedidos]);
+  const decidirPedido = async (pedido, decisao) => {
+    const headers = authHeaders?.() || {};
+    if (!headers.authorization || !canManage) return;
+    if (decisao === "recusar" && !confirm(`Recusar o pedido de ${pedido.email}?`)) return;
+    setDecidindo(pedido.id);
+    try {
+      const body = { id: pedido.id, decisao };
+      if (decisao === "aprovar") body.role = papelDoPedido[pedido.id] || "auditor";
+      const response = await fetch(`/api/todogreen/access-requests?owner=${encodeURIComponent(ownerId())}`, {
+        method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Não foi possível decidir o pedido.");
+      setToast?.(decisao === "aprovar"
+        ? `Acesso aprovado para ${pedido.email}${payload.aguardandoCadastro ? " — o vínculo nasce no primeiro acesso dela." : "."}`
+        : `Pedido de ${pedido.email} recusado.`);
+      carregarPedidos();
+      if (decisao === "aprovar") load();
+    } catch (error) {
+      setToast?.(error.message);
+    } finally {
+      setDecidindo("");
+    }
+  };
   const load = useCallback(() => {
     const headers = authHeaders?.() || {};
     if (!headers.authorization || !canManage) return;
@@ -2484,6 +2528,56 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
   if (!canManage) return <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Você tem acesso, mas não pode gerenciar usuários.</h2></div><strong>{role || "sem papel"}</strong></div></section>;
   return (
     <section className="tdg-panel tdg-access-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Autorize usuários por perfil pronto ou selecione cada funcionalidade.</h2></div><strong>{loading ? "carregando" : `${emails.length} e-mail(s)`}</strong></div>
+      {(() => {
+        const pendentes = pedidos.filter((item) => item.status === "pending");
+        const decididos = pedidos.filter((item) => item.status !== "pending").slice(0, 20);
+        return (
+          <div className="tdg-access-requests">
+            <div className="tdg-section-head"><div><span className="tdg-kicker">PEDIDOS DE ACESSO</span><h3>Solicitações feitas na tela de login</h3></div><strong>{carregandoPedidos ? "carregando" : `${pendentes.length} pendente(s)`}</strong></div>
+            {!carregandoPedidos && pendentes.length === 0 && <p className="tdg-empty">Nenhum pedido pendente.</p>}
+            {pendentes.map((pedido) => (
+              <div className="tdg-access-request" key={pedido.id}>
+                <div className="tdg-access-request-quem">
+                  <strong>{pedido.name || pedido.email}</strong>
+                  <small>{pedido.email}{pedido.company ? ` · ${pedido.company}` : ""}{pedido.phone ? ` · ${pedido.phone}` : ""}</small>
+                  {pedido.message && <p className="tdg-access-request-msg">{pedido.message}</p>}
+                  <small className="tdg-access-request-data">Pedido em {new Date(pedido.createdAt).toLocaleString("pt-BR")}</small>
+                </div>
+                <div className="tdg-access-request-acoes">
+                  <label><span>Perfil ao aprovar</span>
+                    <select
+                      value={papelDoPedido[pedido.id] || "auditor"}
+                      onChange={(e) => setPapelDoPedido((atual) => ({ ...atual, [pedido.id]: e.target.value }))}
+                    >
+                      {TODO_GREEN_ROLES.filter((item) => item !== "owner").map((item) => <option value={item} key={item}>{item.replace(/_/g, " ")}</option>)}
+                    </select>
+                  </label>
+                  <div className="tdg-access-request-botoes">
+                    <button type="button" className="tdg-action" disabled={decidindo === pedido.id} onClick={() => decidirPedido(pedido, "aprovar")}>
+                      <ShieldCheck size={16} />{decidindo === pedido.id ? "..." : "Aprovar"}
+                    </button>
+                    <button type="button" disabled={decidindo === pedido.id} onClick={() => decidirPedido(pedido, "recusar")}>
+                      Recusar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {decididos.length > 0 && (
+              <details className="tdg-access-request-historico">
+                <summary>{decididos.length} pedido(s) já decidido(s)</summary>
+                {decididos.map((pedido) => (
+                  <div className="tdg-access-request-decidido" key={pedido.id}>
+                    <span><strong>{pedido.name || pedido.email}</strong><small>{pedido.email}</small></span>
+                    <span className={pedido.status === "approved" ? "good" : ""}>{pedido.status === "approved" ? `aprovado · ${(pedido.decidedRole || "").replace(/_/g, " ")}` : "recusado"}</span>
+                    <small>{pedido.decidedAt ? new Date(pedido.decidedAt).toLocaleDateString("pt-BR") : ""}</small>
+                  </div>
+                ))}
+              </details>
+            )}
+          </div>
+        );
+      })()}
       <form className="tdg-access-form" onSubmit={save}>
         <label><span>E-mail autorizado</span><input value={form.email} type="email" required placeholder="nome@empresa.com.br" onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
         <label><span>Perfil base</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{TODO_GREEN_ROLES.filter((item) => item !== "owner").map((item) => <option value={item} key={item}>{item.replace(/_/g, " ")}</option>)}</select></label>

@@ -24,6 +24,7 @@ import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
 import { handleTodoGreenPlanner } from "./todogreen-planner.js";
 import { handleTodoGreenTms, receberOcorrenciaTrack3r } from "./todogreen-tms.js";
+import { receberSolicitacaoDeAcesso } from "./todogreen-access-requests.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
 import { handleTodoGreenClientIntelligence } from "./todogreen-client-intelligence.js";
@@ -76,6 +77,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
   if (path === "/api/todogreen/arquivo") {
     return guarded("To Do Green document error", "Não foi possível entregar o documento.", () =>
       entregarArquivo(env, url.searchParams.get("t") || ""),
+    );
+  }
+
+  // Porta pública do login: um visitante sem conta pede acesso. Fica aqui, antes
+  // de qualquer checagem de sessão, porque quem pede ainda não tem sessão.
+  if (path === "/api/todogreen/solicitar-acesso") {
+    return guarded("To Do Green access request error", "Não foi possível registrar o pedido de acesso.", () =>
+      receberSolicitacaoDeAcesso(request, env),
     );
   }
 

@@ -1012,6 +1012,60 @@
 
 .tdg-access-list { display: grid; gap: 9px; margin-top: 14px; }
 
+/* Fila de pedidos de acesso feitos na tela de login (#61). */
+.tdg-access-requests {
+  border: 1px solid var(--tdg-line);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 6px;
+  padding: 14px;
+}
+.tdg-access-request {
+  align-items: center;
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto;
+  padding: 12px 14px;
+}
+.tdg-access-request-quem { display: grid; gap: 3px; }
+.tdg-access-request-quem strong { color: var(--tdg-ink, #123); }
+.tdg-access-request-quem small { color: var(--tdg-muted, #5a6b64); }
+.tdg-access-request-msg { color: var(--tdg-ink, #123); font-size: .86rem; margin: 4px 0 0; }
+.tdg-access-request-data { color: var(--tdg-muted, #5a6b64); font-size: .76rem; }
+.tdg-access-request-acoes { align-items: end; display: grid; gap: 8px; justify-items: end; }
+.tdg-access-request-acoes label { display: grid; gap: 3px; }
+.tdg-access-request-acoes label span { color: var(--tdg-muted, #5a6b64); font-size: .74rem; }
+.tdg-access-request-acoes select { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; padding: 7px 9px; }
+.tdg-access-request-botoes { display: flex; gap: 8px; }
+.tdg-access-request-botoes button[type="button"]:not(.tdg-action) {
+  background: transparent;
+  border: 1px solid var(--tdg-line);
+  border-radius: 8px;
+  color: var(--tdg-muted, #5a6b64);
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 14px;
+}
+.tdg-access-request-historico summary { color: var(--tdg-muted, #5a6b64); cursor: pointer; font-size: .82rem; }
+.tdg-access-request-decidido {
+  align-items: center;
+  border-top: 1px solid var(--tdg-line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto auto;
+  padding: 8px 2px;
+}
+.tdg-access-request-decidido span:first-child { display: grid; }
+.tdg-access-request-decidido small { color: var(--tdg-muted, #5a6b64); }
+.tdg-access-request-decidido .good { color: var(--tdg-green, #17624f); font-weight: 600; }
+@media (max-width: 640px) {
+  .tdg-access-request { grid-template-columns: 1fr; }
+  .tdg-access-request-acoes { justify-items: stretch; }
+}
+
 .tdg-permission-editor {
   border: 1px solid var(--tdg-line);
   border-radius: 12px;

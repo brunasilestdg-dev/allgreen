@@ -32,7 +32,8 @@ describe("tela de entrada por rota", () => {
     expect(document.title).toBe("To Do Green");
     // Acesso por convite: nada de auto-cadastro na entrada da vertical.
     expect(screen.queryByRole("tab", { name: "Criar conta" })).toBeNull();
-    expect(screen.getByText(/peça a um administrador para autorizar/)).toBeTruthy();
+    // Em vez do auto-cadastro, um pedido de acesso que cai na fila do admin.
+    expect(screen.getByRole("button", { name: "Solicitar acesso" })).toBeTruthy();
   });
 
   it("na raiz, o login continua do Seu Funcionário", async () => {

@@ -1597,6 +1597,27 @@ function Login({ update }) {
   const [googleId, setGoogleId] = useState("");
   const [showLegal, setShowLegal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Pedido de acesso à To Do Green: quem não tem conta pede aqui e um
+  // administrador decide dentro do app. Fica só na entrada da To Do Green.
+  const [pedindoAcesso, setPedindoAcesso] = useState(false);
+  const [pedidoForm, setPedidoForm] = useState({ nome: "", email: "", empresa: "", telefone: "", mensagem: "" });
+  const [pedidoStatus, setPedidoStatus] = useState("");
+  const enviarPedidoDeAcesso = async (evento) => {
+    evento.preventDefault();
+    setPedidoStatus("enviando");
+    try {
+      const resposta = await fetch("/api/todogreen/solicitar-acesso", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(pedidoForm),
+      });
+      const corpo = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(corpo.error || "Não foi possível registrar o pedido.");
+      setPedidoStatus("enviado");
+    } catch (razao) {
+      setPedidoStatus(razao.message || "Não foi possível registrar o pedido.");
+    }
+  };
   const googleRef = useRef(null);
   useEffect(() => {
     fetch("/api/config")
@@ -2153,11 +2174,73 @@ function Login({ update }) {
               </button>
             )}
           </div>
-          {entradaToDoGreen && (
-            <p className="auth-invite-note">
-              O acesso à To Do Green é liberado pela administração. Se ainda não
-              tem login, peça a um administrador para autorizar o seu e-mail em
-              Usuários e acessos.
+          {entradaToDoGreen && !pedindoAcesso && pedidoStatus !== "enviado" && (
+            <div className="auth-invite-note">
+              <p>
+                O acesso à To Do Green é liberado pela administração. Se ainda
+                não tem login, solicite abaixo — um administrador avalia e
+                libera dentro do app.
+              </p>
+              <button type="button" className="tdg-auth-solicitar" onClick={() => setPedindoAcesso(true)}>
+                Solicitar acesso
+              </button>
+            </div>
+          )}
+          {entradaToDoGreen && pedindoAcesso && pedidoStatus !== "enviado" && (
+            <form className="tdg-auth-pedido" onSubmit={enviarPedidoDeAcesso}>
+              <strong>Solicitar acesso à To Do Green</strong>
+              <label>
+                <span>Nome</span>
+                <input
+                  type="text" required maxLength={160} value={pedidoForm.nome}
+                  onChange={(e) => setPedidoForm((f) => ({ ...f, nome: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>E-mail corporativo</span>
+                <input
+                  type="email" required maxLength={160} value={pedidoForm.email}
+                  onChange={(e) => setPedidoForm((f) => ({ ...f, email: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Empresa / área</span>
+                <input
+                  type="text" maxLength={160} value={pedidoForm.empresa}
+                  onChange={(e) => setPedidoForm((f) => ({ ...f, empresa: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Telefone (opcional)</span>
+                <input
+                  type="text" maxLength={40} value={pedidoForm.telefone}
+                  onChange={(e) => setPedidoForm((f) => ({ ...f, telefone: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Por que precisa de acesso?</span>
+                <textarea
+                  rows={3} maxLength={1000} value={pedidoForm.mensagem}
+                  onChange={(e) => setPedidoForm((f) => ({ ...f, mensagem: e.target.value }))}
+                />
+              </label>
+              {pedidoStatus && pedidoStatus !== "enviando" && (
+                <p className="tdg-auth-pedido-erro">{pedidoStatus}</p>
+              )}
+              <div className="tdg-auth-pedido-acoes">
+                <button type="button" onClick={() => { setPedindoAcesso(false); setPedidoStatus(""); }}>
+                  Voltar
+                </button>
+                <button type="submit" className="tdg-auth-solicitar" disabled={pedidoStatus === "enviando"}>
+                  {pedidoStatus === "enviando" ? "Enviando..." : "Enviar pedido"}
+                </button>
+              </div>
+            </form>
+          )}
+          {entradaToDoGreen && pedidoStatus === "enviado" && (
+            <p className="auth-invite-note tdg-auth-pedido-ok">
+              Pedido enviado. Um administrador da To Do Green vai avaliar e você
+              receberá um convite por e-mail se for aprovado.
             </p>
           )}
           <p className="privacy">
