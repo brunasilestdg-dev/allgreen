@@ -2500,6 +2500,78 @@
   }
 }
 
+/* Kanban dinâmico do pipeline: chips para mostrar/ocultar etapas. */
+.tdg-opp-kb-colunas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.tdg-opp-kb-colunas > span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--tdg-muted, #5a6f68);
+}
+.tdg-opp-kb-colunas button {
+  min-height: 30px;
+  padding: 5px 11px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 999px;
+  background: var(--tdg-card, #fff);
+  color: var(--tdg-muted, #5a6f68);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.tdg-opp-kb-colunas button.active {
+  border-color: #17624f;
+  background: #17624f;
+  color: #fff;
+  opacity: 1;
+  text-decoration: none;
+}
+
+/* Avanços da semana: registro manual (vira comentário na oportunidade). */
+.tdg-avanco-registro {
+  display: grid;
+  gap: 12px;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.tdg-avanco-registro-campos {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(240px, 2fr);
+  gap: 12px;
+}
+.tdg-avanco-registro label {
+  display: grid;
+  gap: 4px;
+}
+.tdg-avanco-registro label span {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--tdg-muted, #5a6f68);
+}
+.tdg-avanco-registro select,
+.tdg-avanco-registro input {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  font: inherit;
+}
+.tdg-avanco-registro > button {
+  justify-self: start;
+}
+@media (max-width: 640px) {
+  .tdg-avanco-registro-campos { grid-template-columns: 1fr; }
 /* ===== Planner sharing modal polish v42 ===== */
 .tdg-planner-form {
   gap: 14px;

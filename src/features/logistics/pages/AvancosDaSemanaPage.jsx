@@ -1,5 +1,6 @@
 import "./TodoGreenPages.css";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { avancosDaSemana } from "../avancosDaSemanaDomain.js";
 
 // ===== Avanços da semana =====
@@ -16,11 +17,38 @@ const BRL_COMPACTO = (valor) => {
   return `R$ ${n.toLocaleString("pt-BR")}`;
 };
 
-export default function AvancosDaSemanaPage({ opportunities = [], comments = [], interactions = [], onNavigate }) {
+export default function AvancosDaSemanaPage({ opportunities = [], comments = [], interactions = [], onComment, onNavigate, setToast }) {
   const { avancos, totalMensal, frios } = useMemo(
     () => avancosDaSemana({ oportunidades: opportunities, comentarios: comments, interacoes: interactions }),
     [opportunities, comments, interactions],
   );
+
+  const oportunidadesOrdenadas = useMemo(
+    () => [...opportunities].sort((a, b) => String(a.title || a.cliente || "").localeCompare(String(b.title || b.cliente || ""))),
+    [opportunities],
+  );
+  const [oportunidadeId, setOportunidadeId] = useState("");
+  const [texto, setTexto] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const registrarAvanco = async (event) => {
+    event.preventDefault();
+    const nota = texto.trim();
+    if (!oportunidadeId || nota.length < 2) return;
+    const oportunidade = opportunities.find((item) => item.id === oportunidadeId);
+    setSalvando(true);
+    try {
+      // O avanço é um comentário na própria oportunidade: entra na timeline da
+      // conta e realimenta esta tela sozinho, atualizando a oportunidade/cliente.
+      await onComment?.({ clientId: oportunidade?.clientId || "", opportunityId: oportunidadeId, comentario: nota });
+      setTexto("");
+      setToast?.("Avanço registrado na oportunidade.");
+    } catch (erro) {
+      setToast?.(erro?.message || "Não foi possível registrar o avanço.");
+    } finally {
+      setSalvando(false);
+    }
+  };
 
   return (
     <section className="tdg-panel tdg-page tdg-avancos-page">
@@ -37,10 +65,38 @@ export default function AvancosDaSemanaPage({ opportunities = [], comments = [],
         </div>
       </header>
 
+      {onComment && (
+        <form className="tdg-avanco-registro" onSubmit={registrarAvanco}>
+          <div className="tdg-avanco-registro-campos">
+            <label>
+              <span>Oportunidade</span>
+              <select value={oportunidadeId} onChange={(event) => setOportunidadeId(event.target.value)} required>
+                <option value="">Selecione a oportunidade</option>
+                {oportunidadesOrdenadas.map((item) => (
+                  <option key={item.id} value={item.id}>{item.title || item.cliente || item.clientName || "Oportunidade sem título"}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Avanço desta semana</span>
+              <input
+                value={texto}
+                onChange={(event) => setTexto(event.target.value)}
+                placeholder="Ex.: fechou a homologação da frota, aguarda assinatura"
+                required
+              />
+            </label>
+          </div>
+          <button type="submit" className="tdg-action" disabled={salvando || !oportunidadeId || texto.trim().length < 2}>
+            <Plus size={16} />{salvando ? "Registrando..." : "Registrar avanço"}
+          </button>
+        </form>
+      )}
+
       {avancos.length === 0 && (
         <div className="tdg-empty-access">
-          Nenhum movimento registrado nos últimos sete dias. Comente nas oportunidades (ou
-          registre a interação) e os avanços aparecem aqui sozinhos.
+          Nenhum movimento registrado nos últimos sete dias. Registre o avanço acima (ou comente
+          na oportunidade) e os cartões aparecem aqui sozinhos.
         </div>
       )}
 

@@ -626,7 +626,7 @@
   position: relative;
 }
 
-.tdg-space-more > summary {
+.tdg-space-more > .tdg-space-more-summary {
   align-items: center;
   background: var(--tdg-card, #fff);
   border: 1px solid var(--tdg-line, #dce7e2);
@@ -642,9 +642,12 @@
   padding: 7px 11px;
 }
 
-.tdg-space-more > summary::-webkit-details-marker { display: none; }
+.tdg-space-more.is-open > .tdg-space-more-summary {
+  border-color: #17624f;
+  color: #17624f;
+}
 
-.tdg-space-more > div {
+.tdg-space-more > .tdg-space-more-menu {
   background: var(--tdg-card, #fff);
   border: 1px solid var(--tdg-line, #dce7e2);
   border-radius: 12px;
@@ -679,8 +682,8 @@
   .tdg-space-toolbar .tdg-space-tabs > button,
   .tdg-space-more { width: 100%; }
   .tdg-space-toolbar .tdg-space-tabs > button,
-  .tdg-space-more > summary { justify-content: flex-start; width: 100%; }
-  .tdg-space-more > div { left: 0; min-width: 0; right: auto; width: min(88vw, 320px); }
+  .tdg-space-more > .tdg-space-more-summary { justify-content: flex-start; width: 100%; }
+  .tdg-space-more > .tdg-space-more-menu { left: 0; min-width: 0; right: auto; width: min(88vw, 320px); }
 }
 
 /* ===== To Do Green workspace polish v40 ===== */
@@ -776,6 +779,121 @@
   }
 }
 
+/* #88: identidade fixa da To Do Green no lugar do setup genérico de segmento. */
+.tdg-negocio-exclusivo {
+  display: grid;
+  gap: 12px;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 14px;
+  padding: 22px 24px;
+  max-width: 720px;
+}
+.tdg-negocio-exclusivo h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+.tdg-negocio-exclusivo p {
+  margin: 0;
+  color: var(--tdg-muted, #5a6f68);
+  line-height: 1.5;
+}
+.tdg-negocio-exclusivo-lista {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--tdg-muted, #5a6f68);
+}
+.tdg-negocio-exclusivo-acoes {
+  margin-top: 4px;
+}
+
+/* #77: bloco de descobribilidade (agentes, comunicação, IA própria). */
+.tdg-space-descubra {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 12px;
+  background: var(--tdg-card, #fff);
+}
+.tdg-space-descubra > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 9px;
+}
+.tdg-space-descubra button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 10px;
+  background: #f9fcfa;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tdg-space-descubra button:hover { border-color: #79b9a4; background: #f0f8f4; }
+.tdg-space-descubra-ic {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #e7f5ef;
+  color: #17624f;
+}
+.tdg-space-descubra b { font-size: 13px; color: #17372e; }
+.tdg-space-descubra small { color: var(--tdg-muted, #60736d); line-height: 1.3; }
+
+/* #84: agentes prontos da To Do Green + estúdio de criação. */
+.tdg-agentes { display: grid; gap: 22px; }
+.tdg-agentes-prontos > header,
+.tdg-agentes-custom > header { display: grid; gap: 4px; margin-bottom: 12px; }
+.tdg-agentes-prontos h2 { margin: 2px 0 0; font-size: 1.25rem; color: #17372e; }
+.tdg-agentes-custom h3 { margin: 2px 0 0; font-size: 1.05rem; color: #17372e; }
+.tdg-agentes-prontos p,
+.tdg-agentes-custom p { margin: 0; color: var(--tdg-muted, #5a6f68); line-height: 1.45; max-width: 70ch; }
+.tdg-agentes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+.tdg-agentes-grid button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 3px;
+  align-items: start;
+  padding: 13px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 11px;
+  background: #f9fcfa;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tdg-agentes-grid button:hover { border-color: #79b9a4; background: #f0f8f4; }
+.tdg-agentes-ic {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #e7f5ef;
+  color: #17624f;
+}
+.tdg-agentes-grid b { font-size: 13px; color: #17372e; }
+.tdg-agentes-grid small { color: var(--tdg-muted, #60736d); line-height: 1.35; font-size: 12px; }
+.tdg-agentes-custom { border-top: 1px solid var(--tdg-line, #dce7e2); padding-top: 18px; }
 /* ===== To Do Green tool catalog density v41 ===== */
 .tdg-space-tools > .tdg-space-tool-group {
   background: transparent;

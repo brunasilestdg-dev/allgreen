@@ -105,8 +105,8 @@ export const TODO_GREEN_WORKSPACE_TOOLS = Object.freeze([
   },
   {
     id: "diagnostico",
-    label: "Plano e diagnóstico",
-    description: "Raio-X do negócio: posicionamento, riscos e plano de crescimento da transportadora.",
+    label: "Identidade do negócio",
+    description: "O ERP é exclusivo da To Do Green: segmento fixo de transportadora elétrica, sem setup genérico.",
   },
   {
     id: "marketing",

@@ -76,6 +76,11 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
   const [config, setConfig] = useState({ integrationStatus:"pending", trackingRequired:true });
   const [projectForm, setProjectForm] = useState({ title:"", contractId:"", operationId:"", targetGoLiveAt:"", ownerUserId:"" });
   const [gateForm, setGateForm] = useState({ phase:"", code:"", title:"", dueAt:"", blocking:true, evidenceRequired:false });
+  // Implantar um cliente que ainda não está no CRM: cadastra na hora (mesmo
+  // endpoint do CRM) e já seleciona. Antes o seletor só listava quem existia,
+  // então não dava para iniciar a implantação de uma conta nova.
+  const [novoAberto, setNovoAberto] = useState(false);
+  const [novoCliente, setNovoCliente] = useState({ nome:"", documento:"", contato:"", email:"", telefone:"" });
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === clientId) || snapshot?.client || null,
@@ -98,6 +103,35 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
     } catch (reason) {
       setError(reason.message);
       setStatus("error");
+    }
+  };
+
+  const criarCliente = async (event) => {
+    event.preventDefault();
+    const nome = novoCliente.nome.trim();
+    if (nome.length < 2) { setError("Informe o nome do cliente."); return; }
+    setAction("create-client");
+    setError("");
+    try {
+      const contato = novoCliente.contato.trim();
+      const email = novoCliente.email.trim();
+      const telefone = novoCliente.telefone.trim();
+      const crm = (contato || email || telefone)
+        ? { contacts: [{ name: contato || nome, email, phone: telefone, relationshipRole: "Decisor" }] }
+        : {};
+      const criado = await api("/api/todogreen/clients", authHeaders, {
+        method: "POST",
+        body: JSON.stringify({ nome, documento: novoCliente.documento.trim(), crm }),
+      });
+      await loadClients();
+      if (criado?.id) setClientId(criado.id);
+      setNovoCliente({ nome:"", documento:"", contato:"", email:"", telefone:"" });
+      setNovoAberto(false);
+      setToast?.("Cliente cadastrado no CRM e pronto para implantação.");
+    } catch (reason) {
+      setError(reason.message);
+    } finally {
+      setAction("");
     }
   };
 
@@ -270,7 +304,26 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
           </select>
         </label>
         <button type="button" onClick={() => (view === "activation" || view === "briefing") ? loadActivation() : loadProjects()} disabled={!clientId || Boolean(action)}><RefreshCw size={16}/>Atualizar</button>
+        <button type="button" className="ca-new-client-toggle" onClick={() => setNovoAberto((aberto) => !aberto)}><Plus size={16}/>{novoAberto ? "Fechar" : "Cliente novo"}</button>
       </section>
+
+      {novoAberto && (
+        <form className="ca-new-client" onSubmit={criarCliente}>
+          <div className="ca-new-client-head">
+            <span className="ca-eyebrow">CLIENTE NÃO CADASTRADO</span>
+            <h3>Cadastrar e já implantar</h3>
+            <p>O cliente entra no CRM automaticamente e fica selecionado para a implantação.</p>
+          </div>
+          <div className="ca-new-client-grid">
+            <label><span>Nome do cliente *</span><input value={novoCliente.nome} onChange={(event) => setNovoCliente({ ...novoCliente, nome:event.target.value })} required/></label>
+            <label><span>CNPJ / documento</span><input value={novoCliente.documento} onChange={(event) => setNovoCliente({ ...novoCliente, documento:event.target.value })}/></label>
+            <label><span>Contato</span><input value={novoCliente.contato} onChange={(event) => setNovoCliente({ ...novoCliente, contato:event.target.value })} placeholder="Nome da pessoa"/></label>
+            <label><span>E-mail do contato</span><input type="email" value={novoCliente.email} onChange={(event) => setNovoCliente({ ...novoCliente, email:event.target.value })}/></label>
+            <label><span>Telefone</span><input value={novoCliente.telefone} onChange={(event) => setNovoCliente({ ...novoCliente, telefone:event.target.value })}/></label>
+          </div>
+          <button type="submit" disabled={action === "create-client"}><Plus size={15}/>{action === "create-client" ? "Cadastrando..." : "Cadastrar cliente"}</button>
+        </form>
+      )}
 
       {error && <div className="ca-error"><CircleAlert size={17}/><span>{error}</span></div>}
       {!clientId && status !== "loading" && <div className="ca-empty">Cadastre um cliente para iniciar.</div>}

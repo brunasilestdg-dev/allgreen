@@ -634,6 +634,19 @@ export default function OpportunitiesPage({
     try { return localStorage.getItem("todogreen-opp-view") || "kanban"; } catch { return "kanban"; }
   });
   const trocarVisao = (v) => { setVisao(v); try { localStorage.setItem("todogreen-opp-view", v); } catch { /* ok */ } };
+  // Kanban dinâmico: a titular escolhe quais etapas quer ver. A escolha fica
+  // gravada por navegador; por padrão todas aparecem.
+  const [colunasOcultas, setColunasOcultas] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("todogreen-opp-cols-hidden") || "[]")); } catch { return new Set(); }
+  });
+  const alternarColuna = (estagio) => {
+    setColunasOcultas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(estagio)) proximo.delete(estagio); else proximo.add(estagio);
+      try { localStorage.setItem("todogreen-opp-cols-hidden", JSON.stringify([...proximo])); } catch { /* ok */ }
+      return proximo;
+    });
+  };
 
   useEffect(() => {
     const clientId = new URLSearchParams(window.location.search).get("client") || "";
@@ -881,9 +894,24 @@ export default function OpportunitiesPage({
       {visao === "kanban" && registros.length > 0 && (
         <>
           <p className="tdg-opp-kb-resumo">{visiveis.length} oportunidade(s), cada uma na etapa em que está hoje. Clique no cartão para abrir.</p>
+          <div className="tdg-opp-kb-colunas" role="group" aria-label="Escolher quais etapas aparecem no kanban">
+            <span>Etapas no quadro:</span>
+            {ESTAGIOS_OPORTUNIDADE.map((estagio) => (
+              <button
+                type="button"
+                key={estagio}
+                className={colunasOcultas.has(estagio) ? "" : "active"}
+                aria-pressed={!colunasOcultas.has(estagio)}
+                onClick={() => alternarColuna(estagio)}
+              >
+                {estagio}
+              </button>
+            ))}
+          </div>
           <TopScrollRow className="tdg-opp-kanban-wrap" ariaLabel="Kanban de oportunidades por etapa">
             <div className="tdg-opp-kanban">
               {etapas.map((coluna, indice) => {
+                if (colunasOcultas.has(coluna.estagio)) return null;
                 const itens = visiveis.filter((registro) => registro.estagio === coluna.estagio);
                 const perdida = coluna.estagio === "Fechada perdida";
                 return (

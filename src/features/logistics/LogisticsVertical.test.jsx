@@ -291,7 +291,10 @@ describe("LogisticsVertical", () => {
     fireEvent.click(abaNoticias);
     expect(await screen.findByText("Empresa Alfa amplia operação elétrica")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /^Contatos/ })[0]);
+    // "Contatos" mora no menu "Mais funções" (agora um menu controlado, não um
+    // <details> nativo): abre o menu e escolhe a função.
+    fireEvent.click(screen.getByRole("button", { name: /Mais funções/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Contatos/ }));
     expect(await screen.findByRole("heading", { name: "Contatos e decisores" })).toBeTruthy();
     expect(screen.getByText("Ana Compras")).toBeTruthy();
   });

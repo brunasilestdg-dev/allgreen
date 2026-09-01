@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -39,6 +39,7 @@ import {
   TODO_GREEN_WORKSPACE_TOOLS,
   buildTodoGreenWorkspaceSummary,
 } from "./todoGreenWorkspaceDomain.js";
+import { TODO_GREEN_AI_SPECIALISTS } from "./todoGreenAiSpecialists.js";
 
 const ConnectedNotes = lazy(() => import("../notes/ConnectedNotes.jsx"));
 const Documents = lazy(() => import("../documents/DocumentsScreen.jsx"));
@@ -58,7 +59,6 @@ const CorporateChat = lazy(() => import("../chat/CorporateChat.jsx"));
 const Meetings = lazy(() => import("../meetings/Meetings.jsx"));
 const DayPlanner = lazy(() => import("../planner/DayPlanner.jsx"));
 const Quotes = lazy(() => import("../omnichannel/Quotes.jsx"));
-const BusinessProfileStudio = lazy(() => import("../business-profile/BusinessProfileStudio.jsx"));
 const CreativeToolkit = lazy(() => import("../creative/CreativeToolkit.jsx"));
 const PublicFormsStudio = lazy(() => import("../forms/PublicFormsStudio.jsx"));
 const SitesScreen = lazy(() => import("../sites/SitesScreen.jsx"));
@@ -125,6 +125,75 @@ const LoadingTool = () => <section className="tdg-space-loading">Abrindo a ferra
 // Para telas do app geral que exigem um kit de área: aqui ele não existe.
 const FerramentaNula = () => null;
 
+// #84: a tela de agentes só mostrava o estúdio de criação — a titular via "só
+// vem criar agente e não funciona" e não achava os prontos. Os agentes prontos
+// da To Do Green já existem (os especialistas do motor de IA) e já operam sobre
+// os dados reais; aqui eles aparecem para lançar, e o estúdio de criação segue
+// abaixo para quem quiser um agente sob medida.
+function TodoGreenAgentes({ onOpenTool, commonProps }) {
+  const prontos = Object.entries(TODO_GREEN_AI_SPECIALISTS).map(([nome, dados]) => ({ nome, ...dados }));
+  return (
+    <div className="tdg-agentes">
+      <section className="tdg-agentes-prontos">
+        <header>
+          <span className="tdg-kicker">JÁ PRONTOS · TO DO GREEN</span>
+          <h2>Agentes que já entendem a operação</h2>
+          <p>
+            Cada um lê os dados reais da To Do Green (carteira, preços, frota, ESG, fiscal) e
+            responde na sua área. Clique para conversar — não precisa criar nada.
+          </p>
+        </header>
+        <div className="tdg-agentes-grid">
+          {prontos.map((agente) => (
+            <button type="button" key={agente.nome} onClick={() => onOpenTool("especialistas")}>
+              <span className="tdg-agentes-ic"><Bot size={18} /></span>
+              <b>{agente.nome}</b>
+              <small>{agente.instrucao.split(".")[0]}.</small>
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="tdg-agentes-custom">
+        <header>
+          <span className="tdg-kicker">SOB MEDIDA</span>
+          <h3>Criar um agente próprio</h3>
+          <p>Precisa de algo específico? Monte um agente novo — ele usa a mesma IA conectada em Integrações.</p>
+        </header>
+        <AgentStudio {...commonProps} />
+      </section>
+    </div>
+  );
+}
+
+// #88: o ERP é exclusivo da To Do Green. O antigo "diagnóstico" trazia o
+// seletor genérico de segmento e pacotes herdado do Seu Funcionário — não faz
+// sentido perguntar o ramo de quem já é uma transportadora 100% elétrica. Aqui
+// a identidade é fixa e o aprofundamento vai para o dossiê real do negócio.
+function NegocioTodoGreen({ onNavigate }) {
+  return (
+    <section className="tdg-negocio-exclusivo">
+      <span className="tdg-kicker">ERP EXCLUSIVO</span>
+      <h2>Este ERP é da To Do Green</h2>
+      <p>
+        Nada de escolher segmento ou montar pacote: o sistema já nasce para a
+        operação de uma <strong>transportadora rodoviária 100% elétrica</strong>.
+        Todas as telas — CRM, precificação, frota, fiscal, financeiro — vêm
+        prontas para esse negócio.
+      </p>
+      <ul className="tdg-negocio-exclusivo-lista">
+        <li>Segmento fixo: transporte rodoviário de cargas (logística verde).</li>
+        <li>Funções e agentes já configurados para a To Do Green.</li>
+        <li>O que a IA precisa saber do negócio fica no dossiê, não num setup genérico.</li>
+      </ul>
+      <div className="tdg-negocio-exclusivo-acoes">
+        <button type="button" className="tdg-action" onClick={() => onNavigate?.("/todogreen/sobre-o-negocio")}>
+          Abrir o dossiê do negócio <ArrowRight size={16} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function WorkspaceOverview({ summary, onOpenTool, onNavigate }) {
   const metricCards = [
     ["Clientes", summary.clients, () => onNavigate("/todogreen/clientes")],
@@ -189,6 +258,39 @@ function WorkspaceOverview({ summary, onOpenTool, onNavigate }) {
             <span>{label}</span><strong>{value}</strong><ArrowRight size={16} />
           </button>
         ))}
+      </section>
+
+      {/* #77: descobribilidade. A titular não achava agentes, comunicação
+          interna nem onde conectar a chave da IA. Aqui ficam à mão. */}
+      <section className="tdg-space-descubra" aria-label="Atalhos para agentes, comunicação e IA">
+        <span className="tdg-kicker">DESCUBRA RÁPIDO</span>
+        <div>
+          <button type="button" onClick={() => onOpenTool("agentes")}>
+            <span className="tdg-space-descubra-ic"><Bot size={18} /></span>
+            <b>Agentes de IA</b>
+            <small>Prontos da To Do Green e os que você criar</small>
+          </button>
+          <button type="button" onClick={() => onOpenTool("especialistas")}>
+            <span className="tdg-space-descubra-ic"><Sparkles size={18} /></span>
+            <b>Perguntar aos especialistas</b>
+            <small>Comercial, fiscal, ESG e operação</small>
+          </button>
+          <button type="button" onClick={() => onOpenTool("chat")}>
+            <span className="tdg-space-descubra-ic"><MessageSquareText size={18} /></span>
+            <b>Comunicação interna</b>
+            <small>Converse com o time no espaço</small>
+          </button>
+          <button type="button" onClick={() => onOpenTool("contatos")}>
+            <span className="tdg-space-descubra-ic"><UserRoundSearch size={18} /></span>
+            <b>Contatos e e-mail</b>
+            <small>Pessoas, canais e envio direto</small>
+          </button>
+          <button type="button" onClick={() => onNavigate("/todogreen/integracoes")}>
+            <span className="tdg-space-descubra-ic"><Plug size={18} /></span>
+            <b>Conectar Claude / GPT</b>
+            <small>Sua própria chave de IA em Integrações</small>
+          </button>
+        </div>
       </section>
 
       {(summary.overdueTasks > 0 || summary.openCases > 0) && (
@@ -261,6 +363,26 @@ export default function TodoGreenWorkspace({
   const [tool, setTool] = useState(initialTool);
   const [focusNoteId] = useState("");
   const [focusPageId, setFocusPageId] = useState("");
+  // "Mais funções" é um menu controlado (não um <details> nativo, que a
+  // titular reportou não abrir no ambiente publicado). Estado explícito +
+  // fechar ao clicar fora e ao escolher uma função.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const aoClicarFora = (event) => {
+      if (moreRef.current && !moreRef.current.contains(event.target)) setMoreOpen(false);
+    };
+    const aoTeclar = (event) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", aoClicarFora);
+    document.addEventListener("keydown", aoTeclar);
+    return () => {
+      document.removeEventListener("mousedown", aoClicarFora);
+      document.removeEventListener("keydown", aoTeclar);
+    };
+  }, [moreOpen]);
   const business = useMemo(() => ({ id: "todogreen", name: "To Do Green" }), []);
   const summary = useMemo(
     () => buildTodoGreenWorkspaceSummary({ db, verticalData, businessId: business.id }),
@@ -269,6 +391,7 @@ export default function TodoGreenWorkspace({
 
 
   const openTool = (nextTool) => {
+    setMoreOpen(false);
     if (nextTool === "paginas") setFocusPageId("");
     // "estrutura" NÃO navega: /central-trabalho é a rota da Central de
     // Trabalho (os quadros), que é outra tela com outra dona. Mandar a jornada
@@ -308,19 +431,29 @@ export default function TodoGreenWorkspace({
           <button type="button" onClick={() => onNavigate?.("/todogreen/integracoes")}>
             <Plug size={16} /> Integrações
           </button>
-          <details className="tdg-space-more">
-            <summary><MoreHorizontal size={16} /> Mais funções</summary>
-            <div>
-              {TODO_GREEN_WORKSPACE_TOOLS.filter((item) => !WORKSPACE_PRIMARY_IDS.has(item.id)).map((item) => {
-                const Icon = TOOL_ICONS[item.id] || BriefcaseBusiness;
-                return (
-                  <button type="button" className={tool === item.id ? "active" : ""} onClick={() => openTool(item.id)} key={item.id}>
-                    <Icon size={16} /> {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          </details>
+          <div className={`tdg-space-more${moreOpen ? " is-open" : ""}`} ref={moreRef}>
+            <button
+              type="button"
+              className="tdg-space-more-summary"
+              aria-haspopup="true"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((aberto) => !aberto)}
+            >
+              <MoreHorizontal size={16} /> Mais funções
+            </button>
+            {moreOpen && (
+              <div className="tdg-space-more-menu">
+                {TODO_GREEN_WORKSPACE_TOOLS.filter((item) => !WORKSPACE_PRIMARY_IDS.has(item.id)).map((item) => {
+                  const Icon = TOOL_ICONS[item.id] || BriefcaseBusiness;
+                  return (
+                    <button type="button" className={tool === item.id ? "active" : ""} onClick={() => openTool(item.id)} key={item.id}>
+                      <Icon size={16} /> {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </nav>
       </header>
 
@@ -378,11 +511,11 @@ export default function TodoGreenWorkspace({
           {tool === "reunioes" && <Meetings {...commonProps} />}
           {tool === "agenda" && <DayPlanner {...commonProps} />}
           {tool === "orcamentos" && <Quotes {...commonProps} />}
-          {tool === "diagnostico" && <BusinessProfileStudio business={business} update={update} db={db} setToast={setToast} go={() => openTool("visao-geral")} />}
+          {tool === "diagnostico" && <NegocioTodoGreen onNavigate={onNavigate} />}
           {tool === "marketing" && <CreativeToolkit business={business} setToast={setToast} db={db} update={update} />}
           {tool === "captacao" && <PublicFormsStudio {...commonProps} />}
           {tool === "site" && <SitesScreen {...commonProps} AreaToolkit={FerramentaNula} go={() => openTool("visao-geral")} />}
-          {tool === "agentes" && <AgentStudio {...commonProps} />}
+          {tool === "agentes" && <TodoGreenAgentes onOpenTool={openTool} commonProps={commonProps} />}
           {tool === "diagramas" && <DiagramStudio {...commonProps} />}
           {tool === "quadro-rapido" && <QuickWhiteboard {...commonProps} />}
           {tool === "midia" && <MediaStudio {...commonProps} />}
