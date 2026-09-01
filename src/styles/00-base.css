@@ -449,7 +449,12 @@ h3,
   min-width: 18px;
 }
 .auth-switch {
-  text-align: center !important;
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  /* "Criar conta" e "Esqueci minha senha" ficavam colados sem este respiro. */
+  gap: 4px 14px;
+  justify-content: center;
   font-size: 13px;
   margin: 18px 0 0 !important;
 }

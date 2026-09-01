@@ -76,3 +76,14 @@
 @import "./styles/57-integracoes.css";
 @import "./styles/58-porta-de-entrada-pedir-em-vez-de-procurar.css";
 @import "./styles/59-modais-responsivos.css";
+
+
+/* Marca To Do Green na tela de entrada da vertical (rota /todogreen). */
+.tdg-auth-marca {
+  color: #0e5c46;
+  display: inline-block;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.auth-art .tdg-auth-marca { color: #eafff5; font-size: 1.7rem; }

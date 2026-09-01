@@ -2572,7 +2572,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const allowed = estadoDoAcesso === ACESSO.liberado;
   const sairPorInatividade = useCallback(() => {
     endSession();
-    window.location.assign("/");
+    window.location.assign("/todogreen");
   }, []);
   useSaidaPorInatividade(allowed ? sairPorInatividade : null);
   const role = allowed ? remoteAccess.role || "" : "";
@@ -2736,7 +2736,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                   if (!confirm("Encerrar a sessão em TODOS os aparelhos? Quem estiver com esta conta aberta em qualquer lugar será desconectado.")) return;
                   await fetch("/api/auth/sessions", { method: "DELETE", headers: authHeaders?.() || {} }).catch(() => {});
                   endSession();
-                  window.location.assign("/");
+                  window.location.assign("/todogreen");
                 }}
               >
                 Sair de todos os aparelhos
@@ -2749,7 +2749,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             onClick={() => {
               if (confirm("Sair da conta neste navegador? A sessão também é encerrada no servidor.")) {
                 endSession();
-                window.location.assign("/");
+                window.location.assign("/todogreen");
               }
             }}
           >

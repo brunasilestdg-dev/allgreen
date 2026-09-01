@@ -1583,7 +1583,14 @@ function ModeOnboarding({ update }) {
 }
 
 function Login({ update }) {
+  // Quem chega pela rota da To Do Green (ou acabou de sair dela) vê a tela
+  // de entrada com a identidade da transportadora, não a do Seu Funcionário.
+  const entradaToDoGreen =
+    typeof window !== "undefined" && /^\/todogreen(\/|$)/.test(window.location.pathname);
   const [mode, setMode] = useState("login");
+  useEffect(() => {
+    if (entradaToDoGreen) document.title = "To Do Green";
+  }, [entradaToDoGreen]);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1926,38 +1933,70 @@ function Login({ update }) {
   return (
     <main className="auth-shell">
       <div className="auth-art">
-        <Logo />
-        <div>
-          <span className="eyebrow light">SEU NEGÓCIO EM MOVIMENTO</span>
-          <h1>
-            Tenha o funcionário que sua empresa precisa,{" "}
-            <em>quando precisar.</em>
-          </h1>
-          <p>
-            Mais de 40 funcionários especialistas — estratégia, jurídico,
-            marketing, vendas, financeiro, TI e muito mais — coordenados por um
-            Diretor de Inteligência.
-          </p>
-        </div>
+        {entradaToDoGreen ? <strong className="tdg-auth-marca">To Do Green</strong> : <Logo />}
+        {entradaToDoGreen ? (
+          <div>
+            <span className="eyebrow light">TRANSPORTADORA 100% ELÉTRICA</span>
+            <h1>
+              Ambiente corporativo <em>To Do Green.</em>
+            </h1>
+            <p>
+              Acesso restrito à equipe autorizada. Entre com o e-mail liberado
+              pela administração para abrir o ERP, o CRM e a operação.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <span className="eyebrow light">SEU NEGÓCIO EM MOVIMENTO</span>
+            <h1>
+              Tenha o funcionário que sua empresa precisa,{" "}
+              <em>quando precisar.</em>
+            </h1>
+            <p>
+              Mais de 40 funcionários especialistas — estratégia, jurídico,
+              marketing, vendas, financeiro, TI e muito mais — coordenados por um
+              Diretor de Inteligência.
+            </p>
+          </div>
+        )}
         <div className="auth-chips">
-          <span>
-            <Target />
-            Planeje
-          </span>
-          <span>
-            <WandSparkles />
-            Crie
-          </span>
-          <span>
-            <CheckCircle2 />
-            Execute
-          </span>
+          {entradaToDoGreen ? (
+            <>
+              <span>
+                <Target />
+                Operação
+              </span>
+              <span>
+                <WandSparkles />
+                Frota elétrica
+              </span>
+              <span>
+                <CheckCircle2 />
+                ESG
+              </span>
+            </>
+          ) : (
+            <>
+              <span>
+                <Target />
+                Planeje
+              </span>
+              <span>
+                <WandSparkles />
+                Crie
+              </span>
+              <span>
+                <CheckCircle2 />
+                Execute
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="auth-form">
         <div className="auth-card">
           <span className="mobile-logo">
-            <Logo />
+            {entradaToDoGreen ? <strong className="tdg-auth-marca">To Do Green</strong> : <Logo />}
           </span>
           <div className="auth-perfis" role="group" aria-label="Como você quer entrar">
             <button type="button" className="active" aria-pressed="true">
@@ -1997,12 +2036,16 @@ function Login({ update }) {
             </button>
           </div>
           <span className="eyebrow">
-            {mode === "login" ? "BEM-VINDO DE VOLTA" : "COMECE AGORA"}
+            {entradaToDoGreen ? "ACESSO TO DO GREEN" : mode === "login" ? "BEM-VINDO DE VOLTA" : "COMECE AGORA"}
           </span>
           <h2>
-            {mode === "login"
-              ? "Entre no seu espaço"
-              : "Crie seu espaço de trabalho"}
+            {entradaToDoGreen
+              ? mode === "login"
+                ? "Entre no ambiente To Do Green"
+                : "Crie sua conta autorizada"
+              : mode === "login"
+                ? "Entre no seu espaço"
+                : "Crie seu espaço de trabalho"}
           </h2>
           <p>
             {mode === "login"
