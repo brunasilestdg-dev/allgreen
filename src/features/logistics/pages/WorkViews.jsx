@@ -34,11 +34,11 @@ async function carregar(boardId) {
   return corpo;
 }
 
-async function carregarGrupos(boardId) {
-  const resposta = await fetch(`${API}/groups?board=${encodeURIComponent(boardId)}`, { headers: { ...authHeaders() } });
-  const corpo = await resposta.json().catch(() => ({}));
-  return resposta.ok ? (corpo.groups || []) : [];
-}
+// Os grupos já vêm dentro do quadro carregado (board.config.groups). Não existe
+// rota /work-center/groups no servidor — buscá-la à parte só rendia um 405 no
+// console. Lê do quadro que já está em mãos.
+const gruposDoQuadro = (boards, boardId) =>
+  (boards || []).find((b) => b.id === boardId)?.config?.groups || [];
 
 const VIEWS = [
   { id: "gantt", label: "Gantt", icon: GanttChartSquare },
@@ -56,7 +56,7 @@ const dataCurta = (iso) => {
   return `${d}/${MES[Number(m) - 1] || "?"}`;
 };
 
-export default function WorkViews({ setToast, profiles = [] }) {
+export default function WorkViews({ setToast, profiles = [], onOpenTool }) {
   const [boards, setBoards] = useState([]);
   const [boardId, setBoardId] = useState("");
   const [itens, setItens] = useState([]);
@@ -85,7 +85,7 @@ export default function WorkViews({ setToast, profiles = [] }) {
         isMilestone: i.isMilestone ?? i.fields?.milestone ?? false,
       }));
       setItens(itensNorm.filter((i) => !i.parentItemId));
-      if (board) setGrupos(await carregarGrupos(board));
+      setGrupos(board ? gruposDoQuadro(dados.boards, board) : []);
       setOcupado("");
     } catch (motivo) {
       setErro(motivo.message);
@@ -161,7 +161,16 @@ export default function WorkViews({ setToast, profiles = [] }) {
         })}
       </div>
 
-      {!itens.length && <p className="tdg-empty">Este quadro ainda não tem itens. Crie tarefas na aba Estrutura para vê-las aqui.</p>}
+      {!itens.length && (
+        <div className="tdg-empty tdg-empty-acao">
+          <p>Estas são visões de leitura: Gantt, Timeline, Calendário, Workload e Gráfico desenham o que existe no quadro. Os itens são criados na <strong>Estrutura de trabalho</strong> — depois de criados, aparecem aqui automaticamente.</p>
+          {onOpenTool && (
+            <button type="button" className="tdg-action" onClick={() => onOpenTool("estrutura")}>
+              Criar na Estrutura de trabalho
+            </button>
+          )}
+        </div>
+      )}
 
       {itens.length > 0 && view === "gantt" && (
         <section className="tdg-panel tdg-gantt">

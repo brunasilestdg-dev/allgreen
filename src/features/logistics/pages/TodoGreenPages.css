@@ -1017,6 +1017,9 @@
   padding: 26px;
   text-align: center;
 }
+/* Estado vazio com uma ação clara (ex.: criar na Estrutura a partir das visões). */
+.tdg-empty-acao { display: grid; gap: 12px; justify-items: center; }
+.tdg-empty-acao p { margin: 0; max-width: 60ch; }
 
 .tdg-form-actions {
   display: flex;

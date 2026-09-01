@@ -277,7 +277,7 @@ describe("LogisticsVertical", () => {
     });
     await renderarAutorizada();
 
-    expect(await screen.findByText("O que já existia continua acessível")).toBeTruthy();
+    expect(await screen.findByText("As áreas do dia a dia")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Clientes.*Contas, decisores/ })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Central de ajuda/ }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Playbook comercial.*Jornada de venda/ })).toBeNull();

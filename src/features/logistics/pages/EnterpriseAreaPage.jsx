@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeCheck, Boxes, BriefcaseBusiness, Gauge, GitBranch, Megaphone, Route, Scale, ScrollText, Settings, Table2, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, BadgeCheck, Boxes, BriefcaseBusiness, Gauge, GitBranch, Megaphone, Route, Scale, ScrollText, Settings, Target, TrendingUp, Users } from "lucide-react";
 import EnterpriseWorkflowPanel from "./EnterpriseWorkflowPanel.jsx";
 
 // Exportado para Fluxos e Manual consumirem a mesma definição das áreas.
@@ -21,7 +21,10 @@ function ProductStrip({ products = [], onNavigate }) {
 }
 
 function References({ onNavigate }) {
-  return <div className="tdg-area-referencias"><button type="button" onClick={() => onNavigate?.("/todogreen/rasci")}><Table2 size={16} /><span><strong>Responsabilidades (RASCI)</strong><small>Quem executa, aprova, apoia, consulta e é informado</small></span><ArrowRight size={14} /></button><button type="button" onClick={() => onNavigate?.("/todogreen/fluxos")}><GitBranch size={16} /><span><strong>Fluxos entre áreas</strong><small>Como o trabalho passa de uma área para a outra</small></span><ArrowRight size={14} /></button><button type="button" onClick={() => onNavigate?.("/todogreen/manual")}><ScrollText size={16} /><span><strong>Manual do ERP</strong><small>O que cada módulo faz e como usar</small></span><ArrowRight size={14} /></button></div>;
+  // A matriz RASCI saiu daqui: é artefato de governança e mora só em
+  // Administração › RASCI, não repetida no rodapé de cada área (pedido da
+  // titular). Fluxos e Manual continuam como referência de qualquer área.
+  return <div className="tdg-area-referencias"><button type="button" onClick={() => onNavigate?.("/todogreen/fluxos")}><GitBranch size={16} /><span><strong>Fluxos entre áreas</strong><small>Como o trabalho passa de uma área para a outra</small></span><ArrowRight size={14} /></button><button type="button" onClick={() => onNavigate?.("/todogreen/manual")}><ScrollText size={16} /><span><strong>Manual do ERP</strong><small>O que cada módulo faz e como usar</small></span><ArrowRight size={14} /></button></div>;
 }
 
 export default function EnterpriseAreaPage({ area, products = [], onNavigate, setToast }) {

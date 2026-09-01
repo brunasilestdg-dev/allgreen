@@ -832,11 +832,11 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
   // indicadores) existia no menu. Um nome, um lugar.
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "rastreamento"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
-  { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento", "aceite-viagens"] },
+  { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
-  { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "rasci", "manual", "fluxos"] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
+  { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
   // Cada cadastro mora na área dona do dado (atalhos "Cadastro · ..." no
@@ -852,7 +852,9 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "integracoes", "acessos", "sobre-o-negocio"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  // A matriz RASCI é artefato de governança: mora só aqui, não repetida em cada
+  // área nem no menu de Compliance (pedido da titular).
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "integracoes", "acessos", "sobre-o-negocio"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na

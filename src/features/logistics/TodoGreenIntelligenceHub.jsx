@@ -159,7 +159,11 @@ function MarketSourceList({ items, loading, onStatus }) {
                 ? `POSSÍVEL DECISOR${item.company ? ` · ${item.company}` : ""}`
                 : `NOTÍCIA · ${(TEMA_LABEL[item.tema] || "Mercado").toUpperCase()}`}
               {" · "}
-              {item.dataNoticia ? `Publicada em ${dataLegivel(item.dataNoticia)}` : "Sem data na fonte"}
+              {item.dataNoticia
+                ? `Publicada em ${dataLegivel(item.dataNoticia)}`
+                : item.checkedAt
+                  ? `Coletada em ${dataLegivel(item.checkedAt)}`
+                  : "Sem data"}
             </span>
             <a href={item.url} target="_blank" rel="noreferrer">{item.title || host(item.url)} <ExternalLink size={13} /></a>
             {item.snippet && <p>{item.snippet}</p>}
