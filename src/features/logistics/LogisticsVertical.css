@@ -1937,6 +1937,28 @@
 .tdg-custos-op label span { font-size: .78rem; font-weight: 650; }
 .tdg-custos-op input { border: 1px solid var(--tdg-line); border-radius: 8px; min-height: 40px; padding: 6px 10px; }
 .tdg-custos-nota { color: var(--tdg-muted); font-size: .72rem; grid-column: 1 / -1; margin: 2px 0 0; }
+/* Quando há custo ajustado, a seção recolhida sinaliza sem precisar abrir. */
+.tdg-custos-op-ativo { border-color: var(--tdg-green); }
+.tdg-custos-op-ativo > summary { color: var(--tdg-green); }
+
+/* Declutter do simulador (#64): indicadores secundários, saídas por produto,
+   documentos e o comparativo planejado × realizado ficam recolhidos. O preço,
+   o piso, a margem e a recomendação seguem à vista. */
+.tdg-price-mais {
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  margin-top: 12px;
+  padding: 10px 14px;
+}
+.tdg-price-mais > summary {
+  color: var(--tdg-green);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+.tdg-price-mais > .tdg-price-details { margin-top: 12px; }
+.tdg-price-mais > .tdg-method { margin-top: 12px; }
+.tdg-price-performance { margin-top: 14px; }
 
 /* Página de área: só ações clicáveis + três referências únicas (RASCI, Fluxos, Manual). */
 .tdg-area-actions { margin-top: 14px; }

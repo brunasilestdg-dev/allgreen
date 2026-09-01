@@ -2060,28 +2060,32 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
             <fieldset key={group}><legend>{group}</legend>{fields.map((field) => <FieldInput key={field} name={field} value={inputs[field]} required={product?.requiredFields?.includes(field)} onChange={changeInput} inputs={inputs} />)}</fieldset>
           ))}
           {/* Custos da operação, editáveis aqui mesmo. Vêm da régua em vigor;
-              ajustar sobrescreve só esta simulação. */}
-          <fieldset className="tdg-custos-op">
-            <legend>Custos da operação (motorista, energia, veículo)</legend>
-            {[
-              ["driverDailyCost", "Motorista por dia (R$)"],
-              ["energyCostPerKm", "Energia por km (R$)"],
-              ["vehicleMonthlyCost", "Veículo por mês (R$)"],
-              ["vehicleDailyCost", "Veículo por dia (R$)"],
-              ["maintenancePerKm", "Manutenção por km (R$)"],
-            ].map(([campo, rotulo]) => (
-              <label key={campo}>
-                <span>{rotulo}</span>
-                <input
-                  type="number" min="0" step="0.01"
-                  value={custosManuais[campo] ?? ""}
-                  placeholder={String(custosEfetivos[campo] ?? 0)}
-                  onChange={(e) => { setCustosManuais((c) => ({ ...c, [campo]: e.target.value })); setPremissasConfirmadas(false); setCenarioSalvoId(""); }}
-                />
-              </label>
-            ))}
-            <p className="tdg-custos-nota">{houveOverride ? "Usando custos ajustados só nesta simulação — a régua não muda." : "Em branco = usa a régua em vigor (valor cinza é o atual)."}</p>
-          </fieldset>
+              ajustar sobrescreve só esta simulação. Recolhidos por padrão: a
+              maioria das simulações usa a régua e nunca precisa abrir isto —
+              deixá-los sempre abertos era metade da poluição da tela. */}
+          <details className={`tdg-form-avancado tdg-custos-op${houveOverride ? " tdg-custos-op-ativo" : ""}`}>
+            <summary>Custos da operação (motorista, energia, veículo){houveOverride ? " · ajustados" : ""}</summary>
+            <div>
+              {[
+                ["driverDailyCost", "Motorista por dia (R$)"],
+                ["energyCostPerKm", "Energia por km (R$)"],
+                ["vehicleMonthlyCost", "Veículo por mês (R$)"],
+                ["vehicleDailyCost", "Veículo por dia (R$)"],
+                ["maintenancePerKm", "Manutenção por km (R$)"],
+              ].map(([campo, rotulo]) => (
+                <label key={campo}>
+                  <span>{rotulo}</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={custosManuais[campo] ?? ""}
+                    placeholder={String(custosEfetivos[campo] ?? 0)}
+                    onChange={(e) => { setCustosManuais((c) => ({ ...c, [campo]: e.target.value })); setPremissasConfirmadas(false); setCenarioSalvoId(""); }}
+                  />
+                </label>
+              ))}
+              <p className="tdg-custos-nota">{houveOverride ? "Usando custos ajustados só nesta simulação — a régua não muda." : "Em branco = usa a régua em vigor (valor cinza é o atual)."}</p>
+            </div>
+          </details>
           <details className="tdg-form-avancado"><summary>Dados usados no cálculo</summary><div><FieldInput name="dataQuality" value={inputs.dataQuality} onChange={changeInput} /><FieldInput name="occupancyPercent" value={inputs.occupancyPercent} onChange={changeInput} /></div></details>
         </form>
         <div
@@ -2099,11 +2103,6 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
           <div className={result.marginPercent < 18 ? "risk" : "good"}><span>Margem estimada</span><strong>{number.format(result.marginPercent)}%</strong><small>{BRL.format(result.marginValue)} por mês</small></div>
         </div>
       </div>
-      <div className="tdg-price-details">
-        {Object.entries(outputs)
-          .filter(([key]) => !["custoTotal", "precoMinimo", "precoRecomendado", "margem"].includes(key))
-          .map(([key, value]) => <span key={key}><small>{outputLabels[key] || key.replace(/[A-Z]/g, " $&").toLowerCase()}</small><strong>{formatOutputValue(key, value)}</strong></span>)}
-      </div>
       <section className="tdg-price-guidance">
         <div>
           <span className="tdg-kicker">RECOMENDAÇÃO: {decision.decision}</span>
@@ -2116,15 +2115,27 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
           {hasEnvironmentalInputs ? <><strong>{number.format(result.impact.co2AvoidedKg / 1000)} t de CO₂ evitadas</strong><small>{number.format(result.impact.reductionPercent)}% de redução em relação à referência informada</small></> : <><strong>Aguardando dados da rota</strong><small>Informe a quilometragem e o veículo de referência para calcular a redução de emissões.</small></>}
         </div>
       </section>
-      <div className="tdg-price-details" aria-label="Indicadores da decisão comercial">
-        <span><small>Margem</small><strong>{number.format(decision.marginPercent)}%</strong></span>
-        <span><small>Payback</small><strong>{decision.paybackMonths ? `${number.format(decision.paybackMonths)} meses` : "Não aplicável"}</strong></span>
-        <span><small>Capacidade</small><strong>{decision.capacity}</strong></span>
-        <span><small>Risco principal</small><strong>{friendlyCommercialText(decision.risk)}</strong></span>
-        <span><small>CO₂</small><strong>{hasEnvironmentalInputs ? `${number.format(decision.co2AvoidedKg / 1000)} t evitadas` : "Aguardando rota"}</strong></span>
-        <span><small>Aprovação necessária</small><strong>{friendlyCommercialText(decision.approval)}</strong></span>
-      </div>
-      <details className="tdg-calculation-details"><summary>Ver documentos necessários e detalhes do cálculo</summary><div className="tdg-method"><strong>Documentos necessários</strong><p>{blueprint.requiredEvidence.join(" · ")}</p><small>Relatórios: {blueprint.executiveOutputs.join(" · ")}</small></div></details>
+      {/* Tudo o que não é a decisão em si — indicadores secundários, saídas por
+          produto e documentos — recolhido num lugar só. O preço, o piso, a
+          margem e a recomendação ficam à vista; o resto abre quando precisa.
+          Era essa pilha de blocos repetindo margem e CO₂ que poluía a tela. */}
+      <details className="tdg-price-mais">
+        <summary>Todos os indicadores e detalhes do cálculo</summary>
+        <div className="tdg-price-details" aria-label="Indicadores da decisão comercial">
+          <span><small>Margem</small><strong>{number.format(decision.marginPercent)}%</strong></span>
+          <span><small>Payback</small><strong>{decision.paybackMonths ? `${number.format(decision.paybackMonths)} meses` : "Não aplicável"}</strong></span>
+          <span><small>Capacidade</small><strong>{decision.capacity}</strong></span>
+          <span><small>Risco principal</small><strong>{friendlyCommercialText(decision.risk)}</strong></span>
+          <span><small>CO₂</small><strong>{hasEnvironmentalInputs ? `${number.format(decision.co2AvoidedKg / 1000)} t evitadas` : "Aguardando rota"}</strong></span>
+          <span><small>Aprovação necessária</small><strong>{friendlyCommercialText(decision.approval)}</strong></span>
+        </div>
+        <div className="tdg-price-details">
+          {Object.entries(outputs)
+            .filter(([key]) => !["custoTotal", "precoMinimo", "precoRecomendado", "margem"].includes(key))
+            .map(([key, value]) => <span key={key}><small>{outputLabels[key] || key.replace(/[A-Z]/g, " $&").toLowerCase()}</small><strong>{formatOutputValue(key, value)}</strong></span>)}
+        </div>
+        <div className="tdg-method"><strong>Documentos necessários</strong><p>{blueprint.requiredEvidence.join(" · ")}</p><small>Relatórios: {blueprint.executiveOutputs.join(" · ")}</small></div>
+      </details>
       {result.approval.required && (
         // Antes isto era só um aviso: a tela dizia que precisava de aprovação e
         // a simulação era salva do mesmo jeito. Agora o aviso vem com o caminho.
@@ -2165,7 +2176,12 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
         </button>
         {!situacao.podeSalvar && <small>{situacao.resumo}</small>}
       </div>
-      <Suspense fallback={<p>Carregando planejado × realizado...</p>}><PricingPerformancePanel authHeaders={authHeaders} canManage={hasTodoGreenPermission(role, "pricing:manage")} setToast={setToast} /></Suspense>
+      {/* O comparativo planejado × realizado é acompanhamento, não parte do ato
+          de calcular — recolhido para a tela abrir focada no preço. */}
+      <details className="tdg-price-mais tdg-price-performance">
+        <summary>Comparar planejado × realizado</summary>
+        <Suspense fallback={<p>Carregando planejado × realizado...</p>}><PricingPerformancePanel authHeaders={authHeaders} canManage={hasTodoGreenPermission(role, "pricing:manage")} setToast={setToast} /></Suspense>
+      </details>
     </section>
   );
 }
