@@ -52,6 +52,9 @@ const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, healthBy
               <StateIcon size={16} />
               <strong>{item.name || item.id}</strong>
               <small><b>{state.label}.</b> {item.detail || "Sem detalhe adicional."}</small>
+              {Array.isArray(item.capabilities) && item.capabilities.length > 0 && (
+                <small>Recursos: {item.capabilities.join(" · ")}</small>
+              )}
               {item.requirement && <small>Necessário: {item.requirement}</small>}
               <small className="tdg-integration-health">Configurada: {health.configured ? "sim" : "não"} · Autenticada: {health.authenticated ? "sim" : "não"} · Online: {health.online ? "sim" : "não"}{health.checkedAt ? ` · Verificada: ${new Date(health.checkedAt).toLocaleString("pt-BR")}` : ""}</small>
               {health?.error && <small className="tdg-integration-error">Erro: {health.error}</small>}
@@ -115,11 +118,15 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "O provedor não respondeu.");
-      setToast?.(
-        data.searchTest
-          ? resumoDaBusca(data.searchTest)
-          : `${data.test.provider} respondeu em ${data.test.latencyMs} ms.`,
-      );
+      if (data.searchTest) {
+        setToast?.(resumoDaBusca(data.searchTest));
+      } else if (data.integrationTest?.skipped) {
+        setToast?.(data.integrationTest.detail || "A integração ainda depende de configuração.");
+      } else if (data.integrationTest) {
+        setToast?.(`${data.integrationTest.provider} respondeu em ${data.integrationTest.latencyMs} ms.`);
+      } else if (data.test) {
+        setToast?.(`${data.test.provider} respondeu em ${data.test.latencyMs} ms.`);
+      }
     } catch (error) {
       setToast?.(error.message);
     } finally {
@@ -169,6 +176,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       ...(status?.management || []),
       ...(status?.dataExchange || []),
       ...(status?.automation || []),
+      ...Object.values(status?.external || {}).flat(),
     ];
     return {
       connected: items.filter((item) => item.status === "connected").length,
@@ -207,6 +215,12 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       <ProviderList title="Cascata de IA (status)" icon={Zap} items={status?.ai} testing={testing} onTest={test} healthById={healthById} />
       <ProviderList title="Mercado e prospecção" icon={Search} items={marketItems} testing={testing} onTest={test} healthById={healthById} />
       <section className="tdg-panel"><SearchKeysPanel authHeaders={authHeaders} setToast={setToast} /></section>
+
+      <ProviderList title="CEP, CNPJ e cadastros" icon={Database} items={status?.external?.registration} testing={testing} onTest={test} healthById={healthById} />
+      <ProviderList title="Dados públicos, clima e ESG" icon={Search} items={status?.external?.intelligence} testing={testing} onTest={test} healthById={healthById} />
+      <ProviderList title="Roteirização própria" icon={ServerCog} items={status?.external?.routing} testing={testing} onTest={test} healthById={healthById} />
+      <ProviderList title="IA local preparada" icon={Zap} items={status?.external?.localAi} testing={testing} onTest={test} healthById={healthById} />
+
       <ProviderList title="Mensageria" icon={MessageCircle} items={status?.messaging} healthById={healthById} />
       <ProviderList title="Comunicação e produtividade" icon={Mail} items={status?.communication} healthById={healthById} />
       <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} healthById={healthById} />

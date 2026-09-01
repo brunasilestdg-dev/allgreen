@@ -4,6 +4,11 @@ import { probeWebSearch, webSearchConfiguration } from "./web-search.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { envComChavesDoEspaco } from "./ai-keys.js";
 import { latestTodoGreenIntegrationHealth, recordTodoGreenIntegrationHealth } from "./todogreen-integration-health.js";
+import {
+  probeTodoGreenExternalIntegration,
+  runTodoGreenExternalIntegration,
+  todoGreenExternalIntegrationCatalog,
+} from "./todogreen-integration-gateway.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -252,6 +257,12 @@ const dataExchangeIntegrations = (env, activeWebhooks) => [
   }, { connected: Boolean(env.DB) }),
 ];
 
+// Ids do catálogo de gateways externos (APIs públicas + stack self-hosted), para
+// o handler distinguir uma consulta de gateway de um teste de provedor de IA.
+const externalIds = (env) => new Set(
+  Object.values(todoGreenExternalIntegrationCatalog(env)).flat().map((item) => item.id),
+);
+
 export function todoGreenIntegrationStatus(env = {}, { activeWebhooks = 0 } = {}) {
   const search = webSearchConfiguration(env);
   return {
@@ -271,6 +282,9 @@ export function todoGreenIntegrationStatus(env = {}, { activeWebhooks = 0 } = {}
     management: managementIntegrations(),
     dataExchange: dataExchangeIntegrations(env, activeWebhooks),
     automation: nativeAutomations(env),
+    // Gateway de APIs públicas gratuitas (CEP, IBGE, Bacen, ANTT, ANEEL, Open
+    // Charge Map) e stack logística self-hosted (OSRM, Nominatim, VROOM, IA local).
+    external: todoGreenExternalIntegrationCatalog(env),
     automationEngine: {
       id: "cloudflare-native",
       name: "Cloudflare Worker + Cron + D1",
@@ -313,8 +327,30 @@ export async function handleTodoGreenIntegrations(request, env, access) {
   if (!podeNaVertical(access, "integration:manage"))
     return json({ error: "Seu papel não pode testar integrações." }, 403);
   const body = await request.json().catch(() => ({}));
-  const provider = String(body.provider || "").trim().slice(0, 40);
+  const provider = String(body.provider || "").trim().slice(0, 80);
+  const action = String(body.action || "").trim().slice(0, 80);
+  if (!provider) return json({ error: "Informe a integração." }, 400);
   try {
+    // Gateway externo: uma AÇÃO executa a consulta (ex.: CEP, carregadores);
+    // sem ação é só o teste de conexão, que também alimenta o integration-health.
+    if (externalIds(envBusca).has(provider)) {
+      if (action) {
+        return json({
+          provider, action,
+          result: await runTodoGreenExternalIntegration(envBusca, provider, action, body.input || {}),
+          checkedAt: new Date().toISOString(),
+        });
+      }
+      const integrationTest = await probeTodoGreenExternalIntegration(envBusca, provider);
+      const online = Boolean(integrationTest?.ok);
+      await recordTodoGreenIntegrationHealth(envBusca, {
+        ownerId: access.ownerId, integrationId: provider, configured: true,
+        authenticated: online, online,
+        error: online ? "" : "O gateway não respondeu ao teste.",
+        nextAction: online ? "" : "Confirme a URL/credencial e rode o teste novamente.",
+      });
+      return json({ integrationTest, checkedAt: new Date().toISOString() });
+    }
     if (provider === "web-search") {
       const searchTest = await probeWebSearch(envBusca);
       const online = Boolean(searchTest?.providers?.length);
