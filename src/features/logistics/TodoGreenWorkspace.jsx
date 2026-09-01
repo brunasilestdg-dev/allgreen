@@ -112,6 +112,18 @@ const WORKSPACE_PRIMARY_TOOLS = Object.freeze([
 
 const WORKSPACE_PRIMARY_IDS = new Set(WORKSPACE_PRIMARY_TOOLS.map((item) => item.id));
 
+// As 28 ferramentas do espaço vinham numa grade única — um paredão de botões
+// caindo todos no mesmo lugar. Agrupadas por propósito, cada uma tem seu galho.
+// Toda ferramenta que não estiver num grupo nomeado cai em "Outras", então
+// nenhuma some quando o catálogo do domínio muda.
+const TOOL_GROUPS = Object.freeze([
+  { title: "Conhecimento e dados", ids: ["inteligencia", "contatos", "notas", "paginas", "bases", "laboratorio"] },
+  { title: "Planejamento e execução", ids: ["estrutura", "tarefas", "visoes", "processos", "capacidade", "agenda"] },
+  { title: "IA e automação", ids: ["especialistas", "agentes", "automacoes"] },
+  { title: "Comunicação", ids: ["chat", "reunioes", "ajuda"] },
+  { title: "Criação e presença", ids: ["marketing", "site", "captacao", "midia", "diagramas", "quadro-livre", "quadro-rapido", "orcamentos", "diagnostico"] },
+]);
+
 const newId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
     ? `nt-${crypto.randomUUID()}`
@@ -244,9 +256,20 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
 
       <section className="tdg-space-tools">
         <header><div><span className="tdg-kicker">FERRAMENTAS</span><h3>Um lugar, várias formas de trabalhar</h3></div></header>
-        <div>
-          {TODO_GREEN_WORKSPACE_TOOLS.filter((tool) => tool.id !== "visao-geral").map((tool) => {
-            const Icon = TOOL_ICONS[tool.id];
+        {(() => {
+          const porId = new Map(
+            TODO_GREEN_WORKSPACE_TOOLS.filter((tool) => tool.id !== "visao-geral").map((tool) => [tool.id, tool]),
+          );
+          const agrupadas = new Set();
+          const grupos = TOOL_GROUPS.map((grupo) => ({
+            title: grupo.title,
+            tools: grupo.ids.map((id) => porId.get(id)).filter(Boolean),
+          })).filter((grupo) => grupo.tools.length > 0);
+          grupos.forEach((grupo) => grupo.tools.forEach((tool) => agrupadas.add(tool.id)));
+          const outras = [...porId.values()].filter((tool) => !agrupadas.has(tool.id));
+          if (outras.length) grupos.push({ title: "Outras", tools: outras });
+          const cartao = (tool) => {
+            const Icon = TOOL_ICONS[tool.id] || BriefcaseBusiness;
             return (
               <button type="button" onClick={() => onOpenTool(tool.id)} key={tool.id}>
                 <span className="tdg-space-tool-icon"><Icon size={20} /></span>
@@ -254,8 +277,14 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
                 <b>{toolCounts[tool.id]}</b><ArrowRight size={16} />
               </button>
             );
-          })}
-        </div>
+          };
+          return grupos.map((grupo) => (
+            <div className="tdg-space-tool-group" key={grupo.title}>
+              <h4>{grupo.title}</h4>
+              <div>{grupo.tools.map(cartao)}</div>
+            </div>
+          ));
+        })()}
       </section>
 
       <section className="tdg-space-routines">
