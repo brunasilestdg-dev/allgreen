@@ -673,9 +673,24 @@ function PartilhaCampos({ modo, members, pessoas, currentUserId, onChange }) {
     <fieldset className="tdg-planner-visibility">
       <legend>Compartilhamento</legend>
       {MODOS_DE_PARTILHA.map((m) => (
-        <label key={m.id} className="tdg-planner-radio">
-          <input type="radio" name="partilha" checked={modo === m.id} onChange={() => onChange({ modo: m.id })} />
-          <span>{m.id === "privado" ? <Lock size={14} /> : <Users size={14} />} <strong>{m.label}</strong> — {m.ajuda}</span>
+        <label
+          key={m.id}
+          className="tdg-planner-radio"
+          data-ativo={modo === m.id}
+          htmlFor={`tdg-planner-partilha-${m.id}`}
+          aria-label={`${m.label}. ${m.ajuda}`}
+        >
+          <input
+            id={`tdg-planner-partilha-${m.id}`}
+            type="radio"
+            name="partilha"
+            checked={modo === m.id}
+            onChange={() => onChange({ modo: m.id })}
+          />
+          <span className="tdg-planner-radio-copy" aria-hidden="true">
+            <span>{m.id === "privado" ? <Lock size={14} /> : <Users size={14} />} <strong>{m.label}</strong></span>
+            <small>{m.ajuda}</small>
+          </span>
         </label>
       ))}
       {modo === "pessoas" && (

@@ -775,3 +775,63 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== To Do Green tool catalog density v41 ===== */
+.tdg-space-tools > .tdg-space-tool-group {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: block;
+  padding: 0;
+}
+
+.tdg-space-tools > .tdg-space-tool-group + .tdg-space-tool-group {
+  border-top: 1px solid #dcebe4;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.tdg-space-tools > .tdg-space-tool-group > h4 {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.tdg-space-tools > .tdg-space-tool-group > h4::after {
+  background: linear-gradient(90deg, #cfe3da 0%, rgba(207, 227, 218, 0) 100%);
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
+.tdg-space-tools > .tdg-space-tool-group > div {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.tdg-space-tools > .tdg-space-tool-group > div > button {
+  min-height: 76px;
+}
+
+@media (min-width: 1360px) {
+  .tdg-space-tools > .tdg-space-tool-group > div {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .tdg-space-tools > .tdg-space-tool-group + .tdg-space-tool-group {
+    margin-top: 14px;
+    padding-top: 14px;
+  }
+
+  .tdg-space-tools > .tdg-space-tool-group > h4::after {
+    display: none;
+  }
+
+  .tdg-space-tools > .tdg-space-tool-group > div {
+    grid-template-columns: 1fr;
+  }
+}
