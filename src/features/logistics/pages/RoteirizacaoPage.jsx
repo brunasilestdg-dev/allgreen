@@ -1,25 +1,38 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapPin, Route, Navigation } from "lucide-react";
+import { MapPin, Plus, Route, Trash2 } from "lucide-react";
 import { tracarRota } from "../distanciaRodoviariaDomain.js";
 import "./TodoGreenPages.css";
 
-// #81: roteirização com mapa. A titular pediu "roteirização com mapa" e
-// escolheu o OpenStreetMap. O motor de rota já existia (Nominatim + OSRM, sem
-// chave); aqui ele ganha o mapa: origem e destino viram uma linha desenhada
-// sobre os tiles do OSM, com distância e tempo. Marcadores são círculos para
-// não depender dos ícones-imagem do Leaflet (que quebram no bundle).
+// #81: roteirização com mapa. A titular pediu "roteirização com mapa" e vários
+// endereços. O motor de rota já existia (Nominatim + OSRM, sem chave); aqui ele
+// ganha o mapa e passa a aceitar quantas paradas você quiser. Marcadores são
+// círculos numerados para não depender dos ícones-imagem do Leaflet (que
+// quebram no bundle), e o mapa é forçado a recalcular o tamanho quando o
+// container ganha dimensão — sem isso, um container que nasce com altura zero
+// (tela carregada sob demanda) mostrava um mapa cinza/vazio.
+const marcador = (coord, numero, cor) =>
+  L.marker(coord, {
+    icon: L.divIcon({
+      className: "tdg-mapa-pin",
+      html: `<span style="background:${cor}">${numero}</span>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+    }),
+  });
+
 export default function RoteirizacaoPage({ setToast }) {
-  const [origem, setOrigem] = useState("");
-  const [destino, setDestino] = useState("");
+  const [paradas, setParadas] = useState(["", ""]);
   const [estado, setEstado] = useState({ fase: "parado" });
 
   const containerRef = useRef(null);
   const mapaRef = useRef(null);
-  const camadaRotaRef = useRef(null);
+  const camadaRef = useRef(null);
 
-  // Cria o mapa uma vez, centrado no Brasil.
+  // Cria o mapa uma vez e o mantém do tamanho certo mesmo que o container só
+  // ganhe dimensão depois (Suspense/lazy). ResizeObserver + rAF resolvem o
+  // clássico "mapa cinza" do Leaflet.
   useEffect(() => {
     if (mapaRef.current || !containerRef.current) return undefined;
     const mapa = L.map(containerRef.current, { scrollWheelZoom: true }).setView([-15.78, -47.93], 4);
@@ -28,43 +41,51 @@ export default function RoteirizacaoPage({ setToast }) {
       attribution: "© OpenStreetMap",
     }).addTo(mapa);
     mapaRef.current = mapa;
-    // O container começa escondido em telas lazy; um invalidate garante o
-    // tamanho correto assim que ele aparece.
-    setTimeout(() => mapa.invalidateSize(), 0);
+    const recalc = () => mapa.invalidateSize();
+    requestAnimationFrame(recalc);
+    const observer = new ResizeObserver(recalc);
+    observer.observe(containerRef.current);
     return () => {
+      observer.disconnect();
       mapa.remove();
       mapaRef.current = null;
     };
   }, []);
 
+  const alterarParada = (indice, valor) =>
+    setParadas((atual) => atual.map((p, i) => (i === indice ? valor : p)));
+  const adicionarParada = () => setParadas((atual) => [...atual, ""]);
+  const removerParada = (indice) =>
+    setParadas((atual) => (atual.length <= 2 ? atual : atual.filter((_, i) => i !== indice)));
+
   const desenhar = (resultado) => {
     const mapa = mapaRef.current;
     if (!mapa) return;
-    if (camadaRotaRef.current) {
-      mapa.removeLayer(camadaRotaRef.current);
-      camadaRotaRef.current = null;
+    if (camadaRef.current) {
+      mapa.removeLayer(camadaRef.current);
+      camadaRef.current = null;
     }
     const grupo = L.layerGroup();
     L.polyline(resultado.pontos, { color: "#17624f", weight: 5, opacity: 0.85 }).addTo(grupo);
-    L.circleMarker(resultado.origem.coord, { radius: 8, color: "#0b9f8f", fillColor: "#0b9f8f", fillOpacity: 1 })
-      .bindPopup(`Origem: ${resultado.origem.rotulo}`)
-      .addTo(grupo);
-    L.circleMarker(resultado.destino.coord, { radius: 8, color: "#b4471f", fillColor: "#b4471f", fillOpacity: 1 })
-      .bindPopup(`Destino: ${resultado.destino.rotulo}`)
-      .addTo(grupo);
+    resultado.paradas.forEach((parada, indice) => {
+      const cor = indice === 0 ? "#0b9f8f" : indice === resultado.paradas.length - 1 ? "#b4471f" : "#2c6fb0";
+      marcador(parada.coord, indice + 1, cor).bindPopup(`${indice + 1}. ${parada.rotulo}`).addTo(grupo);
+    });
     grupo.addTo(mapa);
-    camadaRotaRef.current = grupo;
+    camadaRef.current = grupo;
     mapa.fitBounds(L.polyline(resultado.pontos).getBounds(), { padding: [40, 40] });
+    requestAnimationFrame(() => mapa.invalidateSize());
   };
 
   const calcular = async (event) => {
     event.preventDefault();
-    if (String(origem).trim().length < 3 || String(destino).trim().length < 3) {
-      setToast?.("Informe origem e destino (cidade e estado ajudam).");
+    const validas = paradas.map((p) => p.trim()).filter((p) => p.length >= 3);
+    if (validas.length < 2) {
+      setToast?.("Informe ao menos duas paradas (cidade e estado ajudam).");
       return;
     }
     setEstado({ fase: "calculando" });
-    const resultado = await tracarRota({ origem, destino });
+    const resultado = await tracarRota({ paradas: validas });
     if (resultado.ok) {
       setEstado({ fase: "pronto", resultado });
       desenhar(resultado);
@@ -87,33 +108,52 @@ export default function RoteirizacaoPage({ setToast }) {
         <div>
           <span>OPERAÇÃO · MAPA</span>
           <h2><Route size={20} /> Roteirização</h2>
-          <p>Origem e destino no mapa do OpenStreetMap, com a rota rodoviária, distância e tempo — sem chave e sem custo. A rota é referência (sem trânsito).</p>
+          <p>Adicione quantas paradas quiser: cada endereço vira um ponto no mapa do OpenStreetMap, com a rota, a distância e o tempo total — sem chave e sem custo. A rota é referência (sem trânsito).</p>
         </div>
       </header>
 
       <form className="tdg-roteirizacao-form" onSubmit={calcular}>
-        <label><span><MapPin size={14} /> Origem</span>
-          <input value={origem} onChange={(event) => setOrigem(event.target.value)} placeholder="Ex.: Santos SP" required />
-        </label>
-        <label><span><Navigation size={14} /> Destino</span>
-          <input value={destino} onChange={(event) => setDestino(event.target.value)} placeholder="Ex.: Campinas SP" required />
-        </label>
-        <button type="submit" className="tdg-action" disabled={estado.fase === "calculando"}>
-          <Route size={16} />{estado.fase === "calculando" ? "Traçando…" : "Traçar rota"}
-        </button>
+        <div className="tdg-roteirizacao-paradas">
+          {paradas.map((valor, indice) => (
+            <div className="tdg-roteirizacao-parada" key={indice}>
+              <span className="tdg-roteirizacao-num" aria-hidden="true">{indice + 1}</span>
+              <label className="tdg-roteirizacao-campo">
+                <span>{indice === 0 ? "Origem" : indice === paradas.length - 1 ? "Destino" : `Parada ${indice}`}</span>
+                <input
+                  value={valor}
+                  onChange={(event) => alterarParada(indice, event.target.value)}
+                  placeholder={indice === 0 ? "Ex.: Santos SP" : "Ex.: Campinas SP"}
+                />
+              </label>
+              {paradas.length > 2 && (
+                <button type="button" className="tdg-roteirizacao-remover" onClick={() => removerParada(indice)} aria-label={`Remover parada ${indice + 1}`}>
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="tdg-roteirizacao-acoes">
+          <button type="button" className="tdg-action tdg-action-ghost" onClick={adicionarParada}>
+            <Plus size={16} /> Adicionar parada
+          </button>
+          <button type="submit" className="tdg-action" disabled={estado.fase === "calculando"}>
+            <Route size={16} />{estado.fase === "calculando" ? "Traçando…" : "Traçar rota"}
+          </button>
+        </div>
       </form>
 
       {estado.fase === "erro" && <p className="tdg-roteirizacao-erro">{estado.motivo}</p>}
       {estado.fase === "pronto" && r && (
         <div className="tdg-roteirizacao-resumo">
           <strong>{r.distanciaKm} km</strong>
-          <span>{tempo} de viagem, sem trânsito</span>
-          <small>{r.origem.rotulo} → {r.destino.rotulo}</small>
+          <span>{tempo} de viagem, sem trânsito · {r.paradas.length} paradas</span>
+          <small>{r.paradas.map((p) => p.rotulo.split(",")[0]).join(" → ")}</small>
           <small className="tdg-roteirizacao-fonte">{r.fonte}</small>
         </div>
       )}
 
-      <div className="tdg-roteirizacao-mapa" ref={containerRef} aria-label="Mapa da rota" />
+      <div className="tdg-roteirizacao-mapa" ref={containerRef} style={{ minHeight: 360 }} aria-label="Mapa da rota" />
     </section>
   );
 }

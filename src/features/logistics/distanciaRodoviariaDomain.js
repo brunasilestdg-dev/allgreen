@@ -140,26 +140,39 @@ export async function calcularDistancia(
  * `calcularDistancia` (Nominatim + OSRM, sem chave), mas pede a linha completa
  * (`overview=full`, GeoJSON) e devolve os pontos já na ordem [lat, lon] que o
  * Leaflet espera. Nunca lança: devolve `{ ok:false, motivo }` como a irmã.
+ *
+ * Aceita duas formas: `{ origem, destino }` (dois pontos) ou
+ * `{ paradas: ["A", "B", "C", ...] }` (rota com quantas paradas quiser — o OSRM
+ * roteiriza a sequência inteira). A titular pediu vários endereços.
  */
 export async function tracarRota(
-  { origem, destino } = {},
+  { origem, destino, paradas } = {},
   { fetcher = fetch, sinal } = {},
 ) {
-  const de = texto(origem);
-  const para = texto(destino);
-  if (!de || !para) return { ok: false, motivo: MOTIVOS.incompleto };
-  if (de.length < 3 || para.length < 3) return { ok: false, motivo: MOTIVOS.curto };
+  // Normaliza para uma lista de endereços, seja qual for a forma de entrada.
+  const lista = (Array.isArray(paradas) ? paradas : [origem, destino])
+    .map((p) => texto(p))
+    .filter((p) => p.length > 0);
+  if (lista.length < 2) return { ok: false, motivo: MOTIVOS.incompleto };
+  if (lista.some((p) => p.length < 3)) return { ok: false, motivo: MOTIVOS.curto };
 
   try {
-    const pontoOrigem = await geocodificar(de, { fetcher, sinal });
-    if (!pontoOrigem) return { ok: false, motivo: MOTIVOS.origemNaoEncontrada };
-    const pontoDestino = await geocodificar(para, { fetcher, sinal });
-    if (!pontoDestino) return { ok: false, motivo: MOTIVOS.destinoNaoEncontrado };
+    // Sequencial, nunca em paralelo: o Nominatim público aceita ~1/s.
+    const pontos = [];
+    for (let i = 0; i < lista.length; i += 1) {
+      const ponto = await geocodificar(lista[i], { fetcher, sinal });
+      if (!ponto) {
+        const motivo = i === 0
+          ? MOTIVOS.origemNaoEncontrada
+          : i === lista.length - 1
+            ? MOTIVOS.destinoNaoEncontrado
+            : `Não encontrei a parada "${lista[i]}" no mapa. Tente incluir a cidade e o estado.`;
+        return { ok: false, motivo, paradaFalha: i };
+      }
+      pontos.push({ ...ponto, coord: [ponto.latitude, ponto.longitude] });
+    }
 
-    const coordenadas = [
-      `${pontoOrigem.longitude},${pontoOrigem.latitude}`,
-      `${pontoDestino.longitude},${pontoDestino.latitude}`,
-    ].join(";");
+    const coordenadas = pontos.map((p) => `${p.longitude},${p.latitude}`).join(";");
     const resposta = await fetcher(`${OSRM}/${coordenadas}?overview=full&geometries=geojson`, {
       headers: { accept: "application/json" },
       signal: sinal,
@@ -171,16 +184,19 @@ export async function tracarRota(
     if (!rota || !Array.isArray(linha) || !linha.length) return { ok: false, motivo: MOTIVOS.semRota };
 
     // GeoJSON é [lon, lat]; o Leaflet quer [lat, lon]. Invertemos aqui, uma vez.
-    const pontos = linha
+    const linhaMapa = linha
       .filter((par) => Array.isArray(par) && par.length >= 2)
       .map(([lon, lat]) => [Number(lat), Number(lon)]);
-    if (!pontos.length) return { ok: false, motivo: MOTIVOS.semRota };
+    if (!linhaMapa.length) return { ok: false, motivo: MOTIVOS.semRota };
 
     return {
       ok: true,
-      pontos,
-      origem: { ...pontoOrigem, coord: [pontoOrigem.latitude, pontoOrigem.longitude] },
-      destino: { ...pontoDestino, coord: [pontoDestino.latitude, pontoDestino.longitude] },
+      pontos: linhaMapa,
+      // `paradas`: cada endereço resolvido, na ordem, com coordenada e rótulo.
+      paradas: pontos.map((p) => ({ coord: p.coord, rotulo: p.rotulo, latitude: p.latitude, longitude: p.longitude })),
+      // `origem`/`destino` seguem existindo (primeira e última) para quem já usa.
+      origem: pontos[0],
+      destino: pontos[pontos.length - 1],
       distanciaKm: Math.round((Number(rota.distance || 0) / 1000) * 10) / 10,
       minutos: Math.round(Number(rota.duration || 0) / 60),
       fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito)",

@@ -213,3 +213,39 @@ describe("tracarRota (geometria para o mapa)", () => {
     expect(r.motivo).toBe(MOTIVOS.origemNaoEncontrada);
   });
 });
+
+describe("tracarRota com várias paradas", () => {
+  const CAMPINAS = { lat: "-22.90", lon: "-47.06", display_name: "Campinas, São Paulo, Brasil" };
+  const ROTA_3 = {
+    distance: 120000,
+    duration: 7200,
+    geometry: { coordinates: [[-46.33, -23.96], [-46.79, -23.53], [-47.06, -22.90]] },
+  };
+
+  it("aceita uma lista de paradas e devolve todas com coordenada", async () => {
+    const fetcher = fetchFalso({ geo: { Santos: SANTOS, Osasco: OSASCO, Campinas: CAMPINAS }, rota: ROTA_3 });
+    const r = await tracarRota({ paradas: ["Santos", "Osasco", "Campinas"] }, { fetcher });
+    expect(r.ok).toBe(true);
+    expect(r.paradas).toHaveLength(3);
+    expect(r.paradas[0].coord).toEqual([-23.96, -46.33]);
+    expect(r.paradas[2].coord).toEqual([-22.90, -47.06]);
+    expect(r.distanciaKm).toBe(120);
+    // origem/destino continuam sendo a primeira e a última, para compatibilidade.
+    expect(r.origem.coord).toEqual([-23.96, -46.33]);
+    expect(r.destino.coord).toEqual([-22.90, -47.06]);
+  });
+
+  it("uma parada do meio que não geocodifica aponta qual falhou", async () => {
+    const fetcher = fetchFalso({ geo: { Santos: SANTOS, Campinas: CAMPINAS }, rota: ROTA_3 });
+    const r = await tracarRota({ paradas: ["Santos", "lugar inexistente", "Campinas"] }, { fetcher });
+    expect(r.ok).toBe(false);
+    expect(r.paradaFalha).toBe(1);
+  });
+
+  it("menos de duas paradas é incompleto", async () => {
+    const fetcher = fetchFalso({ geo: { Santos: SANTOS } });
+    const r = await tracarRota({ paradas: ["Santos", ""] }, { fetcher });
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe(MOTIVOS.incompleto);
+  });
+});
