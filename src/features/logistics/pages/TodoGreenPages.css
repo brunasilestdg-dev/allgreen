@@ -2334,3 +2334,9 @@
 .tdg-rfq-upload .tdg-action { display: inline-flex; }
 .tdg-rfq-anexo-ok { color: var(--tdg-green, #17624f); font-size: .82rem; margin: 6px 0 0; }
 @media (max-width: 640px) { .tdg-rfq-arquivo { grid-template-columns: 1fr; } }
+
+.tdg-campo-arquivo { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.tdg-campo-arquivo > input[type="text"] { flex: 1 1 240px; min-width: 0; }
+.tdg-campo-arquivo-botao { align-items: center; background: var(--tdg-green, #17624f); border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; font-size: .82rem; font-weight: 600; padding: 8px 12px; white-space: nowrap; }
+.tdg-campo-arquivo-botao:hover { filter: brightness(1.06); }
+.tdg-campo-arquivo-nome { color: var(--tdg-green, #17624f); font-size: .8rem; word-break: break-all; }

@@ -94,6 +94,32 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
     setFormTab(tabId);
   };
   const change = (field, value) => setForm((now) => ({ ...now, [field]: value }));
+  const [enviandoArquivo, setEnviandoArquivo] = useState("");
+
+  // Upload de verdade: manda o arquivo (a planilha da tabela de preço, por ex.)
+  // ao cofre interno e grava o caminho de download no campo. Antes só dava para
+  // colar um link.
+  const subirArquivo = async (field, evento) => {
+    const arquivo = evento.target.files?.[0];
+    evento.target.value = "";
+    if (!arquivo) return;
+    setEnviandoArquivo(field);
+    try {
+      const dados = new FormData();
+      dados.append("file", arquivo);
+      const resposta = await fetch("/api/todogreen/file-vault", { method: "POST", headers: { ...sessionAuthHeaders() }, body: dados });
+      const corpo = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(corpo.error || "Não foi possível enviar o arquivo.");
+      const id = corpo.file?.id || corpo.id;
+      change(field, `/api/todogreen/file-vault/${id}/download`);
+      setForm((now) => ({ ...now, __arquivoNome: arquivo.name }));
+      setToast?.("Arquivo enviado ao cofre com versão e SHA-256.");
+    } catch (razao) {
+      setToast?.(razao.message);
+    } finally {
+      setEnviandoArquivo("");
+    }
+  };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -201,6 +227,29 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
                       <select value={form[field] || "UN"} onChange={(event) => change(field, event.target.value)}>
                         {UNITS.map((unit) => <option value={unit.code} key={unit.code}>{unit.code} — {unit.name}</option>)}
                       </select>
+                    ) : type === "file" ? (
+                      // Planilha da tabela de preço (ou outro anexo): sobe ao cofre
+                      // interno com versão + SHA-256 e grava o caminho de download.
+                      // O link continua colável para quem já tem a URL.
+                      <div className="tdg-campo-arquivo">
+                        <input
+                          type="text"
+                          value={form[field] ?? ""}
+                          onChange={(event) => change(field, event.target.value)}
+                          placeholder="Cole um link ou envie o arquivo"
+                          maxLength={500}
+                        />
+                        <label className="tdg-campo-arquivo-botao">
+                          {enviandoArquivo === field ? "Enviando..." : "Enviar arquivo"}
+                          <input
+                            type="file"
+                            hidden
+                            disabled={enviandoArquivo === field}
+                            onChange={(event) => subirArquivo(field, event)}
+                          />
+                        </label>
+                        {form.__arquivoNome && <span className="tdg-campo-arquivo-nome">{form.__arquivoNome}</span>}
+                      </div>
                     ) : (
                       <input
                         type={type}

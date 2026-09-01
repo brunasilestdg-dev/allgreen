@@ -64,6 +64,7 @@ const FORM_VAZIO = {
   clientId: "",
   cliente: "",
   productId: "middle-mile",
+  tabelaPrecoId: "",
   estagio: "Diagnóstico",
   tipoVeiculo: "elétrico",
   distanciaKm: "",
@@ -610,9 +611,21 @@ export default function OpportunitiesPage({
   setToast,
 }) {
   const [form, setForm] = useState(FORM_VAZIO);
+  const [tabelasDePreco, setTabelasDePreco] = useState([]);
   const [abertaId, setAbertaId] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
+
+  // As tabelas de preço cadastradas (Cadastro · Tabelas de preço) para escolher
+  // qual vale nesta oportunidade — o preço não é escolhido no ar, sai da tabela.
+  useEffect(() => {
+    let ativo = true;
+    fetch("/api/todogreen/master-data/price-tables?limit=200", { headers: authHeaders?.() || {} })
+      .then((r) => (r.ok ? r.json() : { records: [] }))
+      .then((d) => { if (ativo) setTabelasDePreco(d.records || d.items || []); })
+      .catch(() => {});
+    return () => { ativo = false; };
+  }, [authHeaders]);
   const [filtroEstagio, setFiltroEstagio] = useState("todas");
   const [busca, setBusca] = useState("");
   const [visao, setVisao] = useState(() => {
@@ -797,6 +810,17 @@ export default function OpportunitiesPage({
             <select value={form.tipoVeiculo} onChange={campo("tipoVeiculo")}>
               <option value="elétrico">Elétrico</option>
               <option value="diesel">Diesel</option>
+            </select>
+          </label>
+          <label>
+            <span>Tabela de preço</span>
+            <select value={form.tabelaPrecoId} onChange={campo("tabelaPrecoId")}>
+              <option value="">Sem tabela definida</option>
+              {tabelasDePreco.map((tabela) => (
+                <option value={tabela.id} key={tabela.id}>
+                  {tabela.name || tabela.code || tabela.id}{tabela.productId ? ` · ${tabela.productId}` : ""}
+                </option>
+              ))}
             </select>
           </label>
         </div>
