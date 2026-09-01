@@ -2976,3 +2976,50 @@
 .tdg-page-title .tdg-action {
   border-radius: 10px;
 }
+
+/* #81: roteirização com mapa (OpenStreetMap + Leaflet). */
+.tdg-roteirizacao-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+.tdg-roteirizacao-form label { display: grid; gap: 4px; flex: 1 1 220px; }
+.tdg-roteirizacao-form label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--tdg-muted, #5a6f68);
+}
+.tdg-roteirizacao-form input {
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  font: inherit;
+}
+.tdg-roteirizacao-erro { margin: 0 0 12px; color: #b4471f; font-weight: 600; }
+.tdg-roteirizacao-resumo {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: #f0f8f4;
+  border: 1px solid #cfe2da;
+  border-radius: 11px;
+}
+.tdg-roteirizacao-resumo strong { font-size: 1.3rem; color: #17372e; }
+.tdg-roteirizacao-resumo small { color: var(--tdg-muted, #5a6f68); }
+.tdg-roteirizacao-fonte { font-size: 0.72rem; }
+.tdg-roteirizacao-mapa {
+  width: 100%;
+  height: clamp(360px, 56vh, 640px);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 12px;
+  overflow: hidden;
+  z-index: 0;
+}
+.tdg-roteirizacao-mapa .leaflet-container { height: 100%; width: 100%; font: inherit; }

@@ -484,7 +484,7 @@ export default function TodoGreenWorkspace({
             <TodoGreenAutomations setToast={setToast} onNavigate={onNavigate} />
           )}
           {tool === "inteligencia" && <TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={onNavigate} authHeaders={authHeaders} setToast={setToast} />}
-          {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} />}
+          {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} authHeaders={authHeaders} setToast={setToast} />}
           {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}
           {tool === "tarefas" && (

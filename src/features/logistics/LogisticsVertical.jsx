@@ -127,6 +127,7 @@ const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.j
 const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
 const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
+const RoteirizacaoPage = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
 const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
 const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
 const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
@@ -249,6 +250,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "operacoes",
   "produtos-logisticos",
   "rotas",
+  "roteirizacao",
   "viagens",
   "veiculos",
   "motorista-frota",
@@ -558,6 +560,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["tms:manage", "operations:manage"],
     description: "Configuração, teste e sincronização segura de posições e eventos da frota em modo somente leitura.",
   },
+  roteirizacao: {
+    title: "Roteirização no mapa",
+    navLabel: "Roteirização",
+    route: "/todogreen/roteirizacao",
+    area: "operacao",
+    status: "functional",
+    permission: ["operations:manage", "planning:manage", "tms:manage"],
+    description: "Origem e destino no mapa do OpenStreetMap, com a rota rodoviária, distância e tempo — sem chave e sem custo.",
+  },
   cadastros: {
     title: "Cadastros logísticos",
     navLabel: "Cadastros",
@@ -831,7 +842,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
   // indicadores) existia no menu. Um nome, um lugar.
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "rastreamento"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "rastreamento", "roteirizacao"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
@@ -3087,6 +3098,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           "Aceite" apontava para Ordens de Serviço — na prática, sumiu. */}
       {page === "aceite-viagens" && <Suspense fallback={<section className="tdg-panel">Carregando o simulador de aceite...</section>}><TripViabilityPage authHeaders={authHeaders} /></Suspense>}
       {page === "operacoes" && <Suspense fallback={<section className="tdg-panel">Carregando operações...</section>}><OperationsPage operations={registros.operations} clients={clientes} contracts={registros.contracts} criar={criar} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
+      {page === "roteirizacao" && <Suspense fallback={<section className="tdg-panel">Carregando o mapa...</section>}><RoteirizacaoPage setToast={setToast} /></Suspense>}
       {page === "motorista-frota" && <Suspense fallback={<section className="tdg-panel">Carregando frota e motoristas...</section>}><DriverFleetCenterPage authHeaders={authHeaders} operations={registros.operations} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "ocorrencias" && <Suspense fallback={<section className="tdg-panel">Carregando ocorrências...</section>}><OccurrencesPage operations={registros.operations} clients={clientes} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
       {page === "ordens-servico" && <Suspense fallback={<section className="tdg-panel">Carregando ordens de serviço...</section>}><TransactionalSpinePage mode="service-orders" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}

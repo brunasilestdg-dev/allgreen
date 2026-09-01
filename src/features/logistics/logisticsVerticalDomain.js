@@ -520,6 +520,7 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("nfse", "NFS-e", "financeiro", "/todogreen/fiscal", { icon: "FileText", order: 39.8 }),
   module("operacoes", "Fretes", "operacao", "/todogreen/operacoes", { icon: "Workflow", order: 40 }),
   module("rotas", "Rotas", "operacao", "/todogreen/operacoes", { icon: "Route", order: 42 }),
+  module("roteirizacao", "Roteirização", "operacao", "/todogreen/roteirizacao", { icon: "Route", order: 42.5 }),
   module("viagens", "Viagens", "operacao", "/todogreen/operacoes", { icon: "Navigation", order: 43 }),
   module("veiculos", "Veículos e frota", "operacao", "/todogreen/motorista-frota", {
     icon: "Truck",

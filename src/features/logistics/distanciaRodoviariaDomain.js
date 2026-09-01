@@ -136,6 +136,62 @@ export async function calcularDistancia(
 }
 
 /**
+ * Rota rodoviária COM geometria, para desenhar no mapa. Mesma base do
+ * `calcularDistancia` (Nominatim + OSRM, sem chave), mas pede a linha completa
+ * (`overview=full`, GeoJSON) e devolve os pontos já na ordem [lat, lon] que o
+ * Leaflet espera. Nunca lança: devolve `{ ok:false, motivo }` como a irmã.
+ */
+export async function tracarRota(
+  { origem, destino } = {},
+  { fetcher = fetch, sinal } = {},
+) {
+  const de = texto(origem);
+  const para = texto(destino);
+  if (!de || !para) return { ok: false, motivo: MOTIVOS.incompleto };
+  if (de.length < 3 || para.length < 3) return { ok: false, motivo: MOTIVOS.curto };
+
+  try {
+    const pontoOrigem = await geocodificar(de, { fetcher, sinal });
+    if (!pontoOrigem) return { ok: false, motivo: MOTIVOS.origemNaoEncontrada };
+    const pontoDestino = await geocodificar(para, { fetcher, sinal });
+    if (!pontoDestino) return { ok: false, motivo: MOTIVOS.destinoNaoEncontrado };
+
+    const coordenadas = [
+      `${pontoOrigem.longitude},${pontoOrigem.latitude}`,
+      `${pontoDestino.longitude},${pontoDestino.latitude}`,
+    ].join(";");
+    const resposta = await fetcher(`${OSRM}/${coordenadas}?overview=full&geometries=geojson`, {
+      headers: { accept: "application/json" },
+      signal: sinal,
+    });
+    if (!resposta.ok) throw new Error(`OSRM indisponível (${resposta.status})`);
+    const dados = await resposta.json();
+    const rota = Array.isArray(dados?.routes) ? dados.routes[0] : null;
+    const linha = rota?.geometry?.coordinates;
+    if (!rota || !Array.isArray(linha) || !linha.length) return { ok: false, motivo: MOTIVOS.semRota };
+
+    // GeoJSON é [lon, lat]; o Leaflet quer [lat, lon]. Invertemos aqui, uma vez.
+    const pontos = linha
+      .filter((par) => Array.isArray(par) && par.length >= 2)
+      .map(([lon, lat]) => [Number(lat), Number(lon)]);
+    if (!pontos.length) return { ok: false, motivo: MOTIVOS.semRota };
+
+    return {
+      ok: true,
+      pontos,
+      origem: { ...pontoOrigem, coord: [pontoOrigem.latitude, pontoOrigem.longitude] },
+      destino: { ...pontoDestino, coord: [pontoDestino.latitude, pontoDestino.longitude] },
+      distanciaKm: Math.round((Number(rota.distance || 0) / 1000) * 10) / 10,
+      minutos: Math.round(Number(rota.duration || 0) / 60),
+      fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito)",
+    };
+  } catch (erro) {
+    if (erro?.name === "AbortError") return { ok: false, motivo: MOTIVOS.indisponivel, cancelado: true };
+    return { ok: false, motivo: MOTIVOS.indisponivel, detalhe: texto(erro?.message).slice(0, 200) };
+  }
+}
+
+/**
  * Texto curto para a tela, a partir do resultado. Existe para a mensagem ser
  * a mesma onde quer que a distância apareça.
  */

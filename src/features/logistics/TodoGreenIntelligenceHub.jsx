@@ -8,6 +8,7 @@ import {
   Newspaper,
   Phone,
   Search,
+  Send,
   UserRoundSearch,
 } from "lucide-react";
 import EnterpriseWorkflowPanel from "./pages/EnterpriseWorkflowPanel.jsx";
@@ -89,13 +90,56 @@ function SourceList({ items, empty, onNavigate }) {
   );
 }
 
-function Contacts({ items, onNavigate }) {
+function Contacts({ items, onNavigate, clients = [], authHeaders, setToast }) {
   const [query, setQuery] = useState("");
+  const [composeAberto, setComposeAberto] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [form, setForm] = useState({ clientId: "", para: "", contato: "", assunto: "", mensagem: "" });
+  const clientesOrdenados = useMemo(
+    () => [...clients].sort((a, b) => String(a.name || a.nome || "").localeCompare(String(b.name || b.nome || ""))),
+    [clients],
+  );
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return items;
     return items.filter((item) => `${item.name || ""} ${item.title || ""} ${item.department || ""} ${item.clientName || ""} ${item.email || ""} ${item.phone || ""}`.toLowerCase().includes(term));
   }, [items, query]);
+
+  const escreverPara = (contact) => {
+    setForm({
+      clientId: contact.clientId || "",
+      para: contact.email || "",
+      contato: contact.name || "",
+      assunto: "",
+      mensagem: "",
+    });
+    setComposeAberto(true);
+  };
+
+  const enviar = async (event) => {
+    event.preventDefault();
+    if (!authHeaders) { setToast?.("Envio indisponível nesta tela."); return; }
+    const para = form.para.trim();
+    if (!para || !para.includes("@")) { setToast?.("Informe um e-mail de destino válido."); return; }
+    if (!form.assunto.trim() || !form.mensagem.trim()) { setToast?.("Preencha assunto e mensagem."); return; }
+    setEnviando(true);
+    try {
+      const resposta = await fetch("/api/todogreen/send-email", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders() || {}) },
+        body: JSON.stringify({ to: para, contato: form.contato.trim(), assunto: form.assunto.trim(), mensagem: form.mensagem.trim(), clientId: form.clientId || undefined }),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.error || "Não foi possível enviar o e-mail.");
+      setToast?.(dados.salvouContato ? "E-mail enviado e contato salvo no CRM." : "E-mail enviado.");
+      setForm({ clientId: "", para: "", contato: "", assunto: "", mensagem: "" });
+      setComposeAberto(false);
+    } catch (erro) {
+      setToast?.(erro.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
 
   return (
     <section className="tdg-intelligence-contacts">
@@ -105,10 +149,47 @@ function Contacts({ items, onNavigate }) {
           <h2>Contatos e decisores</h2>
           <p>Contatos cadastrados e pessoas confirmadas pela pesquisa da conta, com vínculo e fonte.</p>
         </div>
-        <button type="button" className="tdg-action" onClick={() => onNavigate?.("/todogreen/clientes")}>
-          <UserRoundSearch size={16} />Abrir CRM completo
-        </button>
+        <div className="tdg-intelligence-hero-acoes">
+          <button type="button" className="tdg-action" onClick={() => { setComposeAberto((a) => !a); }}>
+            <Send size={16} />{composeAberto ? "Fechar" : "Enviar e-mail"}
+          </button>
+          <button type="button" className="tdg-action tdg-action-ghost" onClick={() => onNavigate?.("/todogreen/clientes")}>
+            <UserRoundSearch size={16} />Abrir CRM completo
+          </button>
+        </div>
       </header>
+
+      {composeAberto && (
+        <form className="tdg-contact-compose" onSubmit={enviar}>
+          <p className="tdg-contact-compose-nota">
+            Dá para escrever para um e-mail que ainda não está salvo. Escolhendo a empresa, o
+            contato entra no CRM dela automaticamente.
+          </p>
+          <div className="tdg-contact-compose-grid">
+            <label><span>Empresa (para salvar o contato)</span>
+              <select value={form.clientId} onChange={(event) => setForm({ ...form, clientId: event.target.value })}>
+                <option value="">Não salvar / sem empresa</option>
+                {clientesOrdenados.map((c) => <option key={c.id} value={c.id}>{c.name || c.nome}</option>)}
+              </select>
+            </label>
+            <label><span>Para (e-mail)</span>
+              <input type="email" value={form.para} onChange={(event) => setForm({ ...form, para: event.target.value })} placeholder="pessoa@empresa.com" required />
+            </label>
+            <label><span>Nome do contato</span>
+              <input value={form.contato} onChange={(event) => setForm({ ...form, contato: event.target.value })} placeholder="Opcional" />
+            </label>
+            <label className="tdg-contact-compose-wide"><span>Assunto</span>
+              <input value={form.assunto} onChange={(event) => setForm({ ...form, assunto: event.target.value })} required />
+            </label>
+            <label className="tdg-contact-compose-wide"><span>Mensagem</span>
+              <textarea rows={5} value={form.mensagem} onChange={(event) => setForm({ ...form, mensagem: event.target.value })} required />
+            </label>
+          </div>
+          <button type="submit" className="tdg-action" disabled={enviando}>
+            <Send size={16} />{enviando ? "Enviando..." : "Enviar e-mail"}
+          </button>
+        </form>
+      )}
       <label className="tdg-intelligence-search">
         <Search size={17} />
         <input
@@ -132,7 +213,7 @@ function Contacts({ items, onNavigate }) {
                 <Building2 size={14} />{contact.clientName}
               </button>
               <div className="tdg-intelligence-contact-links">
-                {contact.email && <a href={`mailto:${contact.email}`}><Mail size={14} />{contact.email}</a>}
+                {contact.email && <button type="button" className="tdg-contact-escrever" onClick={() => escreverPara(contact)}><Mail size={14} />{contact.email}</button>}
                 {contact.phone && <a href={`tel:${String(contact.phone).replace(/[^+\d]/g, "")}`}><Phone size={14} />{contact.phone}</a>}
                 {contact.linkedinUrl && <a href={contact.linkedinUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} />LinkedIn</a>}
                 {!contact.email && !contact.phone && !contact.linkedinUrl && <small>Nenhum canal registrado</small>}
@@ -327,7 +408,7 @@ export default function TodoGreenIntelligenceHub({
 
   useEffect(() => { loadMarket(); }, [loadMarket]);
 
-  if (initialView === "contacts") return <Contacts items={intelligence.contacts} onNavigate={onNavigate} />;
+  if (initialView === "contacts") return <Contacts items={intelligence.contacts} onNavigate={onNavigate} clients={verticalData.clients || []} authHeaders={authHeaders} setToast={setToast} />;
 
   const options = [
     ["campaigns", "Campanhas", "workflow"],

@@ -1946,6 +1946,80 @@ export async function handleTodoGreenClients(request, env, access, user) {
   return response({ error: "Método não permitido." }, 405);
 }
 
+// Enviar e-mail para um contato — salvando-o automaticamente no CRM se ainda
+// não existir (pedido da titular: "enviar e-mail pra contato não salvo, aí
+// salva automático"). O contato mora no cliente selecionado (crm.contacts),
+// que é o modelo que já existe — nada de segunda coleção de contatos. O envio
+// reusa o mesmo canal transacional (Brevo) do resto do produto; sem a chave no
+// cofre, a tela avisa em vez de falhar com erro de rede.
+export async function handleTodoGreenSendEmail(request, env, access, user) {
+  if (!env.DB) return response({ error: "Banco indisponível." }, 503);
+  if (request.method !== "POST") return response({ error: "Método não permitido." }, 405);
+  let body = {};
+  try { body = await request.json(); }
+  catch { return response({ error: "Corpo JSON inválido." }, 400); }
+
+  const to = normalizeEmail(body.to ?? body.para);
+  const subject = clean(body.subject ?? body.assunto, 200);
+  const texto = clean(body.body ?? body.mensagem ?? body.texto, 8000);
+  const contactName = clean(body.contactName ?? body.contato, 160);
+  const clientId = clean(body.clientId ?? body.clienteId, 60);
+  if (!isValidEmail(to)) return response({ error: "Informe um e-mail de destino válido." }, 400);
+  if (subject.length < 1) return response({ error: "Informe o assunto." }, 400);
+  if (texto.length < 1) return response({ error: "Escreva a mensagem." }, 400);
+  if (!emailEnabled(env))
+    return response({ error: "O envio de e-mail ainda não está ligado neste ambiente (falta a credencial de e-mail no cofre)." }, 503);
+
+  const podeVerTodos = podeVerTodaCarteira(access);
+  const emailSessao = normalizeEmail(user?.email);
+
+  // Auto-salvar o contato no cliente escolhido, respeitando a carteira: um
+  // vendedor com carteira restrita só grava em clientes atribuídos a ele.
+  let salvouContato = false;
+  if (clientId) {
+    const cliente = await env.DB.prepare(
+      `SELECT c.id, c.name, c.fields_json
+         FROM todogreen_clients c
+        WHERE c.id = ? AND c.tenant_id = ? AND c.workspace_owner_id = ? AND c.archived_at IS NULL
+          AND (? = 1 OR EXISTS (
+            SELECT 1 FROM todogreen_client_assignments a
+             WHERE a.tenant_id = c.tenant_id AND a.client_id = c.id
+               AND a.status = 'active' AND lower(a.seller_email) = ?
+          ))`,
+    ).bind(clientId, TENANT_ID, access.ownerId, podeVerTodos ? 1 : 0, emailSessao).first();
+    if (!cliente) return response({ error: "Cliente não encontrado." }, 404);
+    const crmAtual = parse(cliente.fields_json, {});
+    const contatos = Array.isArray(crmAtual.contacts) ? crmAtual.contacts : [];
+    const jaExiste = contatos.some((c) => normalizeEmail(c?.email) === to);
+    if (!jaExiste) {
+      const novo = {
+        id: crypto.randomUUID(),
+        name: contactName || to.split("@")[0],
+        email: to,
+        relationshipRole: "Contato",
+        source: "E-mail enviado pelo espaço",
+      };
+      const crmNovo = crmFields({ ...crmAtual, contacts: [...contatos, novo] }, cliente.name);
+      await env.DB.prepare(
+        `UPDATE todogreen_clients
+            SET fields_json = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+          WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+      ).bind(JSON.stringify(crmNovo), user.id, new Date().toISOString(), clientId, TENANT_ID, access.ownerId).run();
+      salvouContato = true;
+    }
+  }
+
+  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#1e2b27;white-space:pre-wrap">${escMail(texto)}</div>`;
+  const enviado = await sendEmail(env, to, subject, html).then(() => true).catch(() => false);
+  if (!enviado) return response({ error: "Não foi possível enviar o e-mail agora. Tente novamente." }, 502);
+
+  await registrarAuditoriaTodoGreen(env, {
+    access, user, action: "email_sent", resourceType: "contact", resourceId: to,
+    clientId: clientId || null, details: `E-mail "${subject}" enviado para ${to}.`,
+  });
+  return response({ ok: true, salvouContato });
+}
+
 export async function handleTodoGreenClientAssignments(request, env, access, user) {
   if (!env.DB) return response({ error: "Banco indisponível." }, 503);
   const podeAtribuir = ["owner", "admin"].includes(access?.role) ||

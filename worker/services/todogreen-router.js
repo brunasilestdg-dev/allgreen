@@ -9,6 +9,7 @@ import {
   handleTodoGreenClientPortalPreview,
   handleTodoGreenClients,
   handleTodoGreenClientAssignments,
+  handleTodoGreenSendEmail,
 } from "./todogreen-customer-portal.js";
 import { handleTodoGreenEsg } from "./todogreen-esg.js";
 import { handleTodoGreenPricingParameters } from "./todogreen-pricing-parameters.js";
@@ -273,6 +274,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenRequests(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  if (path === "/api/todogreen/send-email") {
+    return guarded("To Do Green send-email error", "Não foi possível enviar o e-mail.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenSendEmail(request, env, resolved.access, resolved.user);
     });
   }
 

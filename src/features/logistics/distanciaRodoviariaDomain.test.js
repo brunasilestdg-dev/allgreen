@@ -4,6 +4,7 @@ import {
   calcularDistancia,
   geocodificar,
   resumoDaDistancia,
+  tracarRota,
 } from "./distanciaRodoviariaDomain.js";
 
 // A régua deste módulo: a precificação NUNCA quebra por causa dele. Toda falha
@@ -176,5 +177,39 @@ describe("resumoDaDistancia", () => {
   it("resultado com falha não vira texto", () => {
     expect(resumoDaDistancia({ ok: false, motivo: "x" })).toBe("");
     expect(resumoDaDistancia(null)).toBe("");
+  });
+});
+
+// GeoJSON é [lon, lat]; a rota devolvida ao mapa precisa vir [lat, lon].
+const ROTA_GEO = {
+  distance: 80000,
+  duration: 5400,
+  geometry: { coordinates: [[-46.33, -23.96], [-46.5, -23.7], [-46.79, -23.53]] },
+};
+
+describe("tracarRota (geometria para o mapa)", () => {
+  it("devolve a linha em [lat, lon] com distância e pontos", async () => {
+    const fetcher = fetchFalso({ geo: { Santos: SANTOS, Osasco: OSASCO }, rota: ROTA_GEO });
+    const r = await tracarRota({ origem: "Santos", destino: "Osasco" }, { fetcher });
+    expect(r.ok).toBe(true);
+    expect(r.distanciaKm).toBe(80);
+    expect(r.pontos[0]).toEqual([-23.96, -46.33]);
+    expect(r.pontos.at(-1)).toEqual([-23.53, -46.79]);
+    expect(r.origem.coord).toEqual([-23.96, -46.33]);
+    expect(r.destino.coord).toEqual([-23.53, -46.79]);
+  });
+
+  it("sem geometria, informa que não há rota — não trava", async () => {
+    const fetcher = fetchFalso({ geo: { Santos: SANTOS, Osasco: OSASCO }, rota: { distance: 80000, duration: 5400 } });
+    const r = await tracarRota({ origem: "Santos", destino: "Osasco" }, { fetcher });
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe(MOTIVOS.semRota);
+  });
+
+  it("origem que não geocodifica vira motivo em português", async () => {
+    const fetcher = fetchFalso({ geo: {}, rota: ROTA_GEO });
+    const r = await tracarRota({ origem: "xyzabc inexistente", destino: "Osasco" }, { fetcher });
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe(MOTIVOS.origemNaoEncontrada);
   });
 });
