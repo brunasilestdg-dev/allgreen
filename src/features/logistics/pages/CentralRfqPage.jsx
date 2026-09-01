@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ClipboardList, FolderCheck, Package, Plus, Save, Send } from "lucide-react";
+import { AlertTriangle, ClipboardList, FolderCheck, Package, Plus, Save, Send, Upload } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import {
   CATALOGO_DE_HABILITACAO,
@@ -69,6 +69,7 @@ export default function CentralRfqPage({
   onCriarRfq,
   onAtualizarRfq,
   podeEditar = false,
+  authHeaders,
   setToast,
 }) {
   const [aba, setAba] = useState("acervo");
@@ -77,7 +78,37 @@ export default function CentralRfqPage({
   const [rfqAberto, setRfqAberto] = useState(null);
   const [formRfq, setFormRfq] = useState(RFQ_VAZIO);
   const [salvando, setSalvando] = useState(false);
+  const [enviandoArquivo, setEnviandoArquivo] = useState(false);
   const [filtro, setFiltro] = useState("todos");
+
+  // Upload de verdade: manda o arquivo ao cofre interno (mesmo /file-vault dos
+  // Documentos, com versão e SHA-256) e guarda o caminho de download em
+  // arquivoUrl. Antes só dava para colar um link — quem tinha o PDF na mão não
+  // tinha onde anexar.
+  const enviarArquivoDoDocumento = async (evento) => {
+    const arquivo = evento.target.files?.[0];
+    evento.target.value = "";
+    if (!arquivo) return;
+    setEnviandoArquivo(true);
+    try {
+      const dados = new FormData();
+      dados.append("file", arquivo);
+      const resposta = await fetch("/api/todogreen/file-vault", {
+        method: "POST",
+        headers: { ...(authHeaders?.() || {}) },
+        body: dados,
+      });
+      const corpo = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(corpo.error || "Não foi possível enviar o arquivo.");
+      const id = corpo.file?.id || corpo.id;
+      setFormDoc((atual) => ({ ...atual, arquivoUrl: `/api/todogreen/file-vault/${id}/download`, arquivoAnexado: arquivo.name }));
+      setToast?.("Arquivo anexado ao ERP com versão e SHA-256.");
+    } catch (razao) {
+      setToast?.(razao.message);
+    } finally {
+      setEnviandoArquivo(false);
+    }
+  };
 
   const hoje = hojeIso();
   const resumo = useMemo(() => resumoDoAcervo(habilitacao, hoje), [habilitacao, hoje]);
@@ -543,7 +574,14 @@ export default function CentralRfqPage({
                 <span>Não vence</span>
               </label>
             </div>
-            <label><span>Link do arquivo</span><input value={formDoc.arquivoUrl} onChange={campoDoc("arquivoUrl")} /></label>
+            <div className="tdg-rfq-arquivo">
+              <label><span>Arquivo do documento</span><input value={formDoc.arquivoUrl} onChange={campoDoc("arquivoUrl")} placeholder="Cole um link ou envie o arquivo →" /></label>
+              <label className="tdg-rfq-upload">
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx" onChange={enviarArquivoDoDocumento} disabled={enviandoArquivo} hidden />
+                <span className="tdg-action"><Upload size={16} />{enviandoArquivo ? "Enviando..." : "Enviar arquivo"}</span>
+              </label>
+            </div>
+            {formDoc.arquivoAnexado && <p className="tdg-rfq-anexo-ok">Anexado: <strong>{formDoc.arquivoAnexado}</strong></p>}
             <label><span>Observação</span><textarea rows={3} value={formDoc.observacao} onChange={campoDoc("observacao")} /></label>
             {nomeSugerido && (
               <p className="tdg-rfq-nome-sugerido">

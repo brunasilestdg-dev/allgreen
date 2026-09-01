@@ -2936,6 +2936,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             onCriarRfq={(registro) => criar("rfq", registro)}
             onAtualizarRfq={(id, registro) => atualizar("rfq", id, registro)}
             podeEditar={podeAcessarFuncionalidade(role, remoteAccess.permissions, "compliance:manage")}
+            authHeaders={authHeaders}
             setToast={setToast}
           />
         </Suspense>
