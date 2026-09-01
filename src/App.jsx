@@ -1810,7 +1810,7 @@ function Login({ update }) {
       <main className="auth-shell verify-shell">
         <div className="auth-card verify-card">
           <span className="mobile-logo">
-            <Logo />
+            {entradaToDoGreen ? <strong className="tdg-auth-marca">To Do Green</strong> : <Logo />}
           </span>
           <span className="eyebrow">RECUPERAR ACESSO</span>
           <h2>Redefinir senha</h2>
@@ -1875,7 +1875,7 @@ function Login({ update }) {
       <main className="auth-shell verify-shell">
         <div className="auth-card verify-card">
           <span className="mobile-logo">
-            <Logo />
+            {entradaToDoGreen ? <strong className="tdg-auth-marca">To Do Green</strong> : <Logo />}
           </span>
           <span className="eyebrow">VERIFICAÇÃO DE E-MAIL</span>
           <h2>Confirme seu e-mail</h2>
@@ -2015,26 +2015,28 @@ function Login({ update }) {
               Sou Motorista
             </button>
           </div>
-          <div className="auth-tabs" role="tablist" aria-label="Acesso">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "login"}
-              className={mode === "login" ? "active" : ""}
-              onClick={() => changeMode("login")}
-            >
-              Entrar
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "register"}
-              className={mode === "register" ? "active" : ""}
-              onClick={() => changeMode("register")}
-            >
-              Criar conta
-            </button>
-          </div>
+          {!entradaToDoGreen && (
+            <div className="auth-tabs" role="tablist" aria-label="Acesso">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "login"}
+                className={mode === "login" ? "active" : ""}
+                onClick={() => changeMode("login")}
+              >
+                Entrar
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "register"}
+                className={mode === "register" ? "active" : ""}
+                onClick={() => changeMode("register")}
+              >
+                Criar conta
+              </button>
+            </div>
+          )}
           <span className="eyebrow">
             {entradaToDoGreen ? "ACESSO TO DO GREEN" : mode === "login" ? "BEM-VINDO DE VOLTA" : "COMECE AGORA"}
           </span>
@@ -2130,25 +2132,34 @@ function Login({ update }) {
             </Button>
           </form>
           <div className="auth-switch">
-            <span>
-              {mode === "login"
-                ? "Ainda não tem uma conta?"
-                : "Já possui uma conta?"}{" "}
-              <button
-                type="button"
-                onClick={() =>
-                  changeMode(mode === "login" ? "register" : "login")
-                }
-              >
-                {mode === "login" ? "Criar conta" : "Entrar"}
-              </button>
-            </span>
+            {!entradaToDoGreen && (
+              <span>
+                {mode === "login"
+                  ? "Ainda não tem uma conta?"
+                  : "Já possui uma conta?"}{" "}
+                <button
+                  type="button"
+                  onClick={() =>
+                    changeMode(mode === "login" ? "register" : "login")
+                  }
+                >
+                  {mode === "login" ? "Criar conta" : "Entrar"}
+                </button>
+              </span>
+            )}
             {mode === "login" && (
               <button type="button" onClick={forgot} disabled={busy}>
                 Esqueci minha senha
               </button>
             )}
           </div>
+          {entradaToDoGreen && (
+            <p className="auth-invite-note">
+              O acesso à To Do Green é liberado pela administração. Se ainda não
+              tem login, peça a um administrador para autorizar o seu e-mail em
+              Usuários e acessos.
+            </p>
+          )}
           <p className="privacy">
             <ShieldCheck />
             Senha protegida com criptografia. Seus dados ficam na sua conta e

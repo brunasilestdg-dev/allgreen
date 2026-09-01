@@ -375,3 +375,47 @@ describe("aceite → OS: a ordem herda o preço", () => {
     expect(os.precoOrigem).toBe("digitado");
   });
 });
+
+describe("título manual (criação na tela)", () => {
+  it("lança um recebível avulso, com saldo em aberto igual ao valor", async () => {
+    const r = await request("/api/todogreen/transactions/titles", "POST", {
+      kind: "receivable", clientId: "txn-client", amount: 320.5, dueDate: "2099-06-10", description: "Acordo avulso",
+    });
+    expect(r.status).toBe(201);
+    const body = await r.json();
+    expect(body.number).toMatch(/^REC-/);
+    expect(body.openAmount).toBe(320.5);
+    const row = await env.DB.prepare("SELECT kind,open_amount,original_amount,status,client_id FROM todogreen_financial_titles WHERE id=?").bind(body.titleId).first();
+    expect(row.kind).toBe("receivable");
+    expect(row.open_amount).toBe(320.5);
+    expect(row.original_amount).toBe(320.5);
+    expect(row.status).toBe("open");
+    expect(row.client_id).toBe("txn-client");
+  });
+
+  it("lança um pagável avulso com prefixo PAG-", async () => {
+    const r = await request("/api/todogreen/transactions/titles", "POST", {
+      kind: "payable", supplierId: "Posto Elétrico X", amount: 90, dueDate: "2099-07-01",
+    });
+    expect(r.status).toBe(201);
+    const body = await r.json();
+    expect(body.number).toMatch(/^PAG-/);
+    expect(body.kind).toBe("payable");
+  });
+
+  it("recusa valor zero ou vencimento ausente", async () => {
+    const semValor = await request("/api/todogreen/transactions/titles", "POST", { kind: "receivable", amount: 0, dueDate: "2099-06-10" });
+    expect(semValor.status).toBe(400);
+    const semVenc = await request("/api/todogreen/transactions/titles", "POST", { kind: "receivable", amount: 10 });
+    expect(semVenc.status).toBe(400);
+  });
+
+  it("o título manual pode ser baixado como qualquer outro", async () => {
+    const criado = await (await request("/api/todogreen/transactions/titles", "POST", { kind: "receivable", clientId: "txn-client", amount: 200, dueDate: "2099-08-10" })).json();
+    const baixa = await request(`/api/todogreen/transactions/titles/${criado.titleId}/settle`, "POST", { amount: 200, method: "pix" });
+    expect(baixa.status).toBe(201);
+    const row = await env.DB.prepare("SELECT status,open_amount FROM todogreen_financial_titles WHERE id=?").bind(criado.titleId).first();
+    expect(row.status).toBe("settled");
+    expect(row.open_amount).toBe(0);
+  });
+});

@@ -87,3 +87,12 @@
   letter-spacing: -0.02em;
 }
 .auth-art .tdg-auth-marca { color: #eafff5; font-size: 1.7rem; }
+
+
+/* Nota de acesso por convite na entrada da To Do Green (sem auto-cadastro). */
+.auth-invite-note {
+  color: #5a6b64;
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 10px 0 0;
+}

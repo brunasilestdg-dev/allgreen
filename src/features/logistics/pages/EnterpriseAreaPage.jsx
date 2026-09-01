@@ -15,9 +15,9 @@ export const cards = {
   communication: { kicker: "COMUNICAÇÃO INTERNA", title: "Alinhamentos, conhecimento e trabalho", description: "Comunicação interna organiza documentos, comunicados, quadros, decisões e contexto compartilhado da To Do Green.", icon: Megaphone, actions: [["Abrir espaço de trabalho", "/todogreen/espaco"], ["Abrir quadros", "/todogreen/central-trabalho"]], responsibilities: ["Manter decisões, materiais internos e contexto de projetos acessíveis.", "Evitar que alinhamentos comerciais, operacionais e financeiros se percam em mensagens soltas.", "Conectar tarefas, responsáveis e documentos ao processo certo."], handoff: [["Áreas registram decisões e pendências", "Áreas"], ["Comunicação organiza contexto", "Comunicação"], ["Gestores acompanham execução", "Indicadores"]] },
 };
 
-function ProductStrip({ products = [] }) {
+function ProductStrip({ products = [], onNavigate }) {
   if (!products.length) return null;
-  return <div className="tdg-product-strip">{products.slice(0, 6).map((product) => <article className="tdg-product-card" key={product.id}><span>{product.code}</span><strong>{product.name}</strong><small>{product.modality} · cobrança por {product.billingUnit}</small></article>)}</div>;
+  return <div className="tdg-product-strip">{products.slice(0, 6).map((product) => <button type="button" className="tdg-product-card" key={product.id} onClick={() => onNavigate?.(`/todogreen/precificacao/${product.id}`)}><span>{product.code}</span><strong>{product.name}</strong><small>{product.modality} · cobrança por {product.billingUnit}</small></button>)}</div>;
 }
 
 function References({ onNavigate }) {
@@ -31,5 +31,5 @@ export default function EnterpriseAreaPage({ area, products = [], onNavigate, se
 
   const config = cards[area] || cards.planning;
   const Icon = config.icon;
-  return <section className="tdg-panel tdg-enterprise-area-page"><div className="tdg-section-head"><div><span className="tdg-kicker">{config.kicker}</span><h2>{config.title}</h2><p>{config.description}</p></div><Icon size={28} /></div><article className="tdg-work-area tdg-area-actions"><div className="tdg-work-area-heading"><span><Target size={20} /></span><div><strong>Ações desta área</strong><small>Entrar no trabalho</small></div></div><div className="tdg-work-area-links">{config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}</div></article><References onNavigate={onNavigate} />{area === "products" && <ProductStrip products={products} />}</section>;
+  return <section className="tdg-panel tdg-enterprise-area-page"><div className="tdg-section-head"><div><span className="tdg-kicker">{config.kicker}</span><h2>{config.title}</h2><p>{config.description}</p></div><Icon size={28} /></div><article className="tdg-work-area tdg-area-actions"><div className="tdg-work-area-heading"><span><Target size={20} /></span><div><strong>Ações desta área</strong><small>Entrar no trabalho</small></div></div><div className="tdg-work-area-links">{config.actions.map(([label, route]) => <button type="button" onClick={() => onNavigate?.(route)} key={route}>{label}<ArrowRight size={14} /></button>)}</div></article><References onNavigate={onNavigate} />{area === "products" && <ProductStrip products={products} onNavigate={onNavigate} />}</section>;
 }

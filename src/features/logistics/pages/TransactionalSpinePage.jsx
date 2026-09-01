@@ -288,12 +288,29 @@ function Ciot({ authHeaders, clients, contracts, operations, setToast }) {
   </section>;
 }
 
+const TITULO_VAZIO = { kind: "receivable", clientId: "", supplierId: "", amount: "", dueDate: "", competenceDate: "", description: "" };
 function Titles({ authHeaders, clients, setToast }) {
   const [records, setRecords] = useState([]); const [paying, setPaying] = useState(null); const [amount, setAmount] = useState("");
+  const [novoAberto, setNovoAberto] = useState(false); const [novo, setNovo] = useState(TITULO_VAZIO); const [salvando, setSalvando] = useState(false);
   const load = useCallback(() => request("titles", authHeaders).then((data) => setRecords(data.records || [])).catch((error) => setToast?.(error.message)), [authHeaders, setToast]); useEffect(() => { load(); }, [load]);
   const settle = async (event) => { event.preventDefault(); try { await request(`titles/${paying.id}/settle`, authHeaders, { method: "POST", body: JSON.stringify({ amount: Number(amount), settledAt: new Date().toISOString(), method: "pix" }) }); setToast?.("Baixa registrada"); setPaying(null); await load(); } catch (error) { setToast?.(error.message); } };
+  const criar = async (event) => { event.preventDefault(); setSalvando(true); try { await request("titles", authHeaders, { method: "POST", body: JSON.stringify(novo) }); setToast?.("Título lançado"); setNovoAberto(false); setNovo(TITULO_VAZIO); await load(); } catch (error) { setToast?.(error.message); } finally { setSalvando(false); } };
+  const mudar = (campo, valor) => setNovo((v) => ({ ...v, [campo]: valor }));
   const openTotal = useMemo(() => records.reduce((sum, item) => sum + Number(item.open_amount || 0), 0), [records]);
-  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">RECEBÍVEIS E CONCILIAÇÃO</span><h2>Títulos e baixas</h2><p>Competência, vencimento, parcela, origem fiscal/documental e saldo real em um único razão.</p></div><strong>{BRL.format(openTotal)} em aberto</strong></div><div className="tdg-txn-list">{!records.length && <Empty>Nenhum título financeiro.</Empty>}{records.map((item) => <article className="tdg-txn-row" key={item.id}><span><strong>{item.number}</strong><small>{item.kind === "receivable" ? clientName(clients, item.client_id) : item.supplier_id || "Fornecedor"} · vence {item.due_date}</small></span><span><small>Saldo</small><strong>{BRL.format(item.open_amount || 0)}</strong></span><Status value={item.status} />{["open", "partial", "overdue"].includes(item.status) && <button type="button" onClick={() => { setPaying(item); setAmount(String(item.open_amount)); }}>Dar baixa</button>}</article>)}</div>
+  return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">RECEBÍVEIS E CONCILIAÇÃO</span><h2>Títulos e baixas</h2><p>Competência, vencimento, parcela, origem fiscal/documental e saldo real em um único razão.</p></div><div className="tdg-section-head-acoes"><strong>{BRL.format(openTotal)} em aberto</strong><button type="button" className="tdg-action" onClick={() => { setNovo(TITULO_VAZIO); setNovoAberto(true); }}><Plus size={16} />Novo título</button></div></div>
+    {novoAberto && <Modal title="Novo título financeiro" onClose={() => setNovoAberto(false)}>
+      <form className="tdg-txn-close tdg-form-em-modal" onSubmit={criar}>
+        <label><span>Tipo</span><select value={novo.kind} onChange={(e) => mudar("kind", e.target.value)}><option value="receivable">A receber</option><option value="payable">A pagar</option></select></label>
+        {novo.kind === "receivable"
+          ? <label><span>Cliente</span><select value={novo.clientId} onChange={(e) => mudar("clientId", e.target.value)}><option value="">Selecione (opcional)</option>{clients.map((c) => <option value={c.id} key={c.id}>{c.name || c.nome}</option>)}</select></label>
+          : <label><span>Fornecedor</span><input value={novo.supplierId} onChange={(e) => mudar("supplierId", e.target.value)} placeholder="Nome ou identificador" /></label>}
+        <label><span>Valor</span><input required type="number" min="0.01" step="0.01" value={novo.amount} onChange={(e) => mudar("amount", e.target.value)} placeholder="0,00" /></label>
+        <label><span>Vencimento</span><input required type="date" value={novo.dueDate} onChange={(e) => mudar("dueDate", e.target.value)} /></label>
+        <label><span>Competência</span><input type="month" value={novo.competenceDate ? novo.competenceDate.slice(0, 7) : ""} onChange={(e) => mudar("competenceDate", e.target.value ? e.target.value + "-01" : "")} /><small>Vazio usa o mês do vencimento.</small></label>
+        <label><span>Descrição</span><input value={novo.description} onChange={(e) => mudar("description", e.target.value)} placeholder="Adiantamento, acordo, cobrança avulsa..." /></label>
+        <div className="tdg-form-actions"><button type="button" onClick={() => setNovoAberto(false)}>Cancelar</button><button className="tdg-action" disabled={salvando}><Plus size={17} />{salvando ? "Lançando..." : "Lançar título"}</button></div>
+      </form>
+    </Modal>}<div className="tdg-txn-list">{!records.length && <Empty>Nenhum título financeiro.</Empty>}{records.map((item) => <article className="tdg-txn-row" key={item.id}><span><strong>{item.number}</strong><small>{item.kind === "receivable" ? clientName(clients, item.client_id) : item.supplier_id || "Fornecedor"} · vence {item.due_date}</small></span><span><small>Saldo</small><strong>{BRL.format(item.open_amount || 0)}</strong></span><Status value={item.status} />{["open", "partial", "overdue"].includes(item.status) && <button type="button" onClick={() => { setPaying(item); setAmount(String(item.open_amount)); }}>Dar baixa</button>}</article>)}</div>
     {/* Baixa em janela própria: o botão fica na linha do título, mas o
         formulário nascia depois da lista inteira, fora da tela. */}
     {paying && <Modal title={`Baixa de ${paying.number}`} onClose={() => setPaying(null)}>

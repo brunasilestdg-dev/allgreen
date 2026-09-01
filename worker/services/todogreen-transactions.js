@@ -892,6 +892,44 @@ async function settleTitle(env, access, user, id, body) {
   return json({ settlementId, openAmount: state.remaining, status: state.status }, 201);
 }
 
+// Criação manual de título — nem todo recebível/pagável nasce do faturamento
+// ou do recebimento de compra. A tela precisa poder lançar um título "na mão"
+// (um adiantamento, um acordo, uma cobrança avulsa), com competência,
+// vencimento e valor. O saldo em aberto nasce igual ao valor original; a baixa
+// segue o mesmo caminho de settleTitle (ponte para o razão, respeitando mês
+// fechado). Não furamos período fechado nem na criação retroativa.
+async function createTitle(env, access, user, body) {
+  if (!allowed(access, "finance:manage")) return json({ error: "Sem permissão financeira." }, 403);
+  const kind = body.kind === "payable" ? "payable" : "receivable";
+  const amount = num(body.amount);
+  if (!(amount > 0)) return json({ error: "Informe um valor maior que zero." }, 400);
+  const due = text(body.dueDate, 10);
+  if (!due) return json({ error: "Informe a data de vencimento." }, 400);
+  const competence = text(body.competenceDate, 10) || due.slice(0, 7) + "-01";
+  const mesFechado = await competenciaFechada(env, access.ownerId, competence);
+  if (mesFechado)
+    return json({ error: `O período ${mesFechado} está fechado na Tesouraria. Reabra o período com justificativa para lançar aqui.` }, 409);
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const number = (kind === "payable" ? "PAG-" : "REC-") + substrId(id);
+  await env.DB.prepare(`INSERT INTO todogreen_financial_titles
+    (id,tenant_id,workspace_owner_id,number,kind,party_id,client_id,supplier_id,contract_id,service_order_id,
+     billing_run_id,invoice_id,purchase_order_id,installment,competence_date,issue_date,due_date,
+     original_amount,open_amount,status,chart_account_id,cost_center_id,fields_json,revision,created_by,updated_by,created_at,updated_at,archived_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      id, TENANT_ID, access.ownerId, number, kind, "",
+      kind === "receivable" ? text(body.clientId, 120) : "",
+      kind === "payable" ? text(body.supplierId, 120) : "",
+      "", "", "", "", "", 1, competence, text(body.issueDate, 10) || now.slice(0, 10), due,
+      amount, amount, "open", text(body.chartAccountId, 120), text(body.costCenterId, 120),
+      JSON.stringify({ source: "manual", description: text(body.description, 300), createdByName: user.name || "" }),
+      1, user.id, user.id, now, now, null,
+    ).run();
+  return json({ titleId: id, number, kind, openAmount: amount, status: "open" }, 201);
+}
+
+const substrId = (id) => String(id).replace(/-/g, "").slice(0, 16).toUpperCase();
+
 async function createCost(env, access, user, body) {
   if (!allowed(access, "finance:manage")) return json({ error: "Sem permissão financeira." }, 403);
   const amount = Math.max(0, num(body.amount));
@@ -953,6 +991,7 @@ export async function handleTodoGreenTransactions(request, env, access, user) {
   if (resource === "billing-items" && request.method === "POST" && id && action === "check") return checkBilling(env, access, user, id, body);
   if (resource === "billing-runs" && request.method === "POST" && !id) return closeBilling(env, access, user, body);
   if (resource === "titles" && request.method === "GET" && !id) return listTitles(env, access, url);
+  if (resource === "titles" && request.method === "POST" && !id) return createTitle(env, access, user, body);
   if (resource === "titles" && request.method === "POST" && id && action === "settle") return settleTitle(env, access, user, id, body);
   if (resource === "costs" && request.method === "GET" && !id) return listCosts(env, access, url);
   if (resource === "costs" && request.method === "POST" && !id) return createCost(env, access, user, body);

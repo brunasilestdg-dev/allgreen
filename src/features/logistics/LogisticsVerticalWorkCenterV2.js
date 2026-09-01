@@ -879,13 +879,33 @@ const waitForShell = () => {
   observer.observe(alvo, { childList: true, subtree: true });
 };
 
+// A vertical navega por history.pushState (client-side), que NÃO dispara
+// popstate. Sem ouvir a troca de rota, este painel ficava preso visível ao
+// sair de /central-trabalho por um clique no menu — a tela dividida que a
+// titular viu (tarefas em cima, quadros embaixo). Fazemos o pushState/
+// replaceState emitirem um evento próprio, uma única vez para todo o app.
+const garantirEventoDeRota = () => {
+  if (typeof window === "undefined" || window.__tdgRotaPatched) return;
+  window.__tdgRotaPatched = true;
+  for (const metodo of ["pushState", "replaceState"]) {
+    const original = history[metodo].bind(history);
+    history[metodo] = (...args) => {
+      const resultado = original(...args);
+      window.dispatchEvent(new Event("tdg:rota"));
+      return resultado;
+    };
+  }
+};
+
 if (typeof window !== "undefined") {
   loadCache();
   state.loading = false;
+  garantirEventoDeRota();
   const start = () => {
     waitForShell();
   };
   window.addEventListener("popstate", render);
   window.addEventListener("pageshow", render);
+  window.addEventListener("tdg:rota", render);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true }); else start();
 }

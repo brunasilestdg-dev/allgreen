@@ -180,11 +180,7 @@ function WorkspaceOverview({ verticalData, summary, onOpenTool, onNavigate, onCr
     <div className="tdg-space-overview">
       <section className="tdg-space-hero">
         <div>
-          <span className="tdg-kicker">ESPAÇO DE TRABALHO</span>
-          <h2>O contexto fica junto do trabalho</h2>
-          <p>
-            Notas, bases, processos, estrutura, capacidade e quadros usam os mesmos projetos e tarefas. O CRM continua sendo a fonte de clientes e oportunidades.
-          </p>
+          <h2>Resumo de hoje</h2>
         </div>
         <button type="button" className="tdg-action" onClick={() => onOpenTool("notas")}>
           <Plus size={17} /> Abrir notas
@@ -466,7 +462,7 @@ export default function TodoGreenWorkspace({
           {tool === "diagnostico" && <BusinessProfileStudio business={business} update={update} db={db} setToast={setToast} go={() => openTool("visao-geral")} />}
           {tool === "marketing" && <CreativeToolkit business={business} setToast={setToast} db={db} update={update} />}
           {tool === "captacao" && <PublicFormsStudio {...commonProps} />}
-          {tool === "site" && <SitesScreen {...commonProps} go={() => openTool("visao-geral")} />}
+          {tool === "site" && <SitesScreen {...commonProps} AreaToolkit={FerramentaNula} go={() => openTool("visao-geral")} />}
           {tool === "agentes" && <AgentStudio {...commonProps} />}
           {tool === "diagramas" && <DiagramStudio {...commonProps} />}
           {tool === "quadro-rapido" && <QuickWhiteboard {...commonProps} />}

@@ -30,6 +30,9 @@ describe("tela de entrada por rota", () => {
     expect(screen.getAllByText("To Do Green").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Tenha o funcionário que sua empresa precisa/)).toBeNull();
     expect(document.title).toBe("To Do Green");
+    // Acesso por convite: nada de auto-cadastro na entrada da vertical.
+    expect(screen.queryByRole("tab", { name: "Criar conta" })).toBeNull();
+    expect(screen.getByText(/peça a um administrador para autorizar/)).toBeTruthy();
   });
 
   it("na raiz, o login continua do Seu Funcionário", async () => {

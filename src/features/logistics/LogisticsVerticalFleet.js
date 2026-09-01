@@ -97,4 +97,4 @@ const waitForShell = () => {
   });
   observer.observe(alvo, { childList: true, subtree: true });
 };
-if(typeof window!=="undefined"){const start=()=>{waitForShell();addEventListener("popstate",render);addEventListener("pageshow",render);};document.readyState==="loading"?document.addEventListener("DOMContentLoaded",start,{once:true}):start();}
+if(typeof window!=="undefined"){const start=()=>{waitForShell();addEventListener("popstate",render);addEventListener("pageshow",render);addEventListener("tdg:rota",render);};document.readyState==="loading"?document.addEventListener("DOMContentLoaded",start,{once:true}):start();}

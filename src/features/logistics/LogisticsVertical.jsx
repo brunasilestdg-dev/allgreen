@@ -2082,7 +2082,7 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
             ))}
             <p className="tdg-custos-nota">{houveOverride ? "Usando custos ajustados só nesta simulação — a régua não muda." : "Em branco = usa a régua em vigor (valor cinza é o atual)."}</p>
           </fieldset>
-          <fieldset><legend>Dados usados no cálculo</legend><FieldInput name="dataQuality" value={inputs.dataQuality} onChange={changeInput} /><FieldInput name="occupancyPercent" value={inputs.occupancyPercent} onChange={changeInput} /></fieldset>
+          <details className="tdg-form-avancado"><summary>Dados usados no cálculo</summary><div><FieldInput name="dataQuality" value={inputs.dataQuality} onChange={changeInput} /><FieldInput name="occupancyPercent" value={inputs.occupancyPercent} onChange={changeInput} /></div></details>
         </form>
         <div
           className={`tdg-price-summary${situacao.nivel === NIVEIS.confirmada ? "" : " tdg-price-summary-provisorio"}`}

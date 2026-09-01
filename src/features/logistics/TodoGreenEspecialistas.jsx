@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Bot, Send, Sparkles } from "lucide-react";
 import { specialistData } from "../../domain/especialistas.js";
+import Markdown from "../../components/Markdown.jsx";
 import { NOMES_DOS_ESPECIALISTAS } from "./todoGreenAiSpecialists.js";
 
 // ===== Especialistas dentro da vertical =====
@@ -130,7 +131,7 @@ export default function TodoGreenEspecialistas({ authHeaders, setToast }) {
             {conversa.map((mensagem, indice) => (
               <article className={mensagem.de === "voce" ? "voce" : "especialista"} key={indice}>
                 <span>{mensagem.de === "voce" ? "Você" : selecionado}</span>
-                <div>{mensagem.texto}</div>
+                <div>{mensagem.de === "voce" ? mensagem.texto : <Markdown text={mensagem.texto} />}</div>
               </article>
             ))}
             {pensando && <p className="tdg-esp-vazio">{selecionado} está analisando...</p>}

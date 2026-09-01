@@ -1,4 +1,12 @@
 .tdg {
+  /* Padronização de marca: componentes herdados do Seu Funcionário usam os
+     tokens --primary/--primary2/--pink/--blue (teal). Dentro da vertical eles
+     passam a apontar para o verde To Do Green, recolorindo botões e realces
+     sem precisar tocar cada componente. */
+  --primary: #17624f;
+  --primary2: #2a9d78;
+  --pink: #17624f;
+  --blue: #0f4a3b;
   --tdg-bg: #f3f8f5;
   --tdg-card: #ffffff;
   --tdg-soft: #e8f5ef;
@@ -694,6 +702,13 @@
   justify-content: space-between;
   margin-bottom: 16px;
 }
+.tdg-section-head-acoes {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
 
 .tdg-section-head h2 {
   font-size: clamp(1.2rem, 2.3vw, 1.65rem);
@@ -874,6 +889,26 @@
   margin: 0;
   padding: 14px;
 }
+/* Grupo avançado recolhido: tira a parede de campos secundários do caminho,
+   mantendo o essencial à mostra. Ocupa a linha inteira do grid do formulário. */
+.tdg-form-avancado {
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  grid-column: 1 / -1;
+  padding: 10px 14px;
+}
+.tdg-form-avancado > summary {
+  color: var(--tdg-green);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+.tdg-form-avancado > div {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+}
 
 .tdg-form legend {
   color: var(--tdg-green);
@@ -925,12 +960,16 @@
   border: 1px solid transparent;
   border-radius: 10px;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
   display: grid;
   gap: 5px;
   padding: 13px;
   text-align: left;
 }
 
+.tdg-product-card:hover { border-color: var(--tdg-green); }
 .tdg-product-card.active { background: var(--tdg-green); color: #fff; }
 /* As siglas dos serviços (MM, LM, DED, TRF...) ficavam em lima sobre o verde
    claro do cartão: 1,8:1, praticamente invisível. */
@@ -1567,8 +1606,8 @@
 .tdg-erp-layout {
   align-items: start;
   display: grid;
-  gap: 16px;
-  grid-template-columns: 205px minmax(0, 1fr);
+  gap: 14px;
+  grid-template-columns: 176px minmax(0, 1fr);
   min-width: 0;
 }
 .tdg-erp-sidebar {
