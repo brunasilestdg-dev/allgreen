@@ -9,11 +9,10 @@ describe("roteador principal", () => {
     });
   });
 
-  it("separa portal do cliente, app do motorista, central de frota e vertical interna", () => {
+  it("separa cliente, TMS, motorista, central de frota e vertical interna", () => {
     expect(resolvePrimaryRoute("/portal-cliente/operacoes", true).kind).toBe("customer-portal");
-    // /portal-motorista é o APP do motorista (celular, minhas viagens);
-    // /motorista-frota é a central interna DE gestão de frota. São telas
-    // diferentes e a rota precisa distinguir.
+    expect(resolvePrimaryRoute("/portal-tms", true).kind).toBe("tms-portal");
+    expect(resolvePrimaryRoute("/portal-tms/roteirizacao", true).kind).toBe("tms-portal");
     expect(resolvePrimaryRoute("/portal-motorista/rotas", true).kind).toBe("driver-portal");
     expect(resolvePrimaryRoute("/central-motorista", true).kind).toBe("driver-portal");
     expect(resolvePrimaryRoute("/motorista-frota", true).kind).toBe("driver-fleet-portal");
@@ -27,8 +26,10 @@ describe("roteador principal", () => {
     expect(resolvePrimaryRoute("/portal-motorista", false).kind).toBe("driver-login");
   });
 
-  it("não deixa rota interna passar sem sessão", () => {
+  it("usa o login da To Do Green para TMS e rotas internas sem sessão", () => {
     expect(resolvePrimaryRoute("/todogreen/clientes", false).kind).toBe("todogreen-login");
+    expect(resolvePrimaryRoute("/portal-tms", false).kind).toBe("todogreen-login");
+    expect(resolvePrimaryRoute("/portal-tms/fiscal", false).kind).toBe("todogreen-login");
   });
 
   it("abre o convite individual da To Do Green sem reutilizar uma sessão", () => {

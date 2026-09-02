@@ -1,0 +1,33 @@
+services:
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: ["osrm-routed", "--algorithm", "mld", "/data/sudeste-latest.osrm"]
+    volumes:
+      - ./data:/data:ro
+    ports:
+      - "127.0.0.1:5000:5000"
+    restart: unless-stopped
+
+  vroom:
+    image: ghcr.io/vroom-project/vroom-docker:v1.15.0
+    environment:
+      VROOM_ROUTER: osrm
+    volumes:
+      - ./vroom-conf:/conf
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - osrm
+    restart: unless-stopped
+
+  routing-gateway:
+    image: nginx:alpine
+    environment:
+      ROUTING_TOKEN: ${ROUTING_TOKEN:?defina ROUTING_TOKEN no arquivo .env}
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+    ports:
+      - "127.0.0.1:3100:8080"
+    depends_on:
+      - vroom
+    restart: unless-stopped

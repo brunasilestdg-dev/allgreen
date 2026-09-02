@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 
 const LogisticsVertical = lazy(() => import("../features/logistics/LogisticsVertical.jsx"));
 const CustomerPortal = lazy(() => import("../features/logistics/CustomerPortal.jsx"));
+const TmsPortal = lazy(() => import("../features/logistics/TmsPortal.jsx"));
 const ClientActivationPage = lazy(() => import("../features/logistics/ClientActivationPage.jsx"));
 const TodoGreenAccessInvite = lazy(() => import("../features/logistics/TodoGreenAccessInvite.jsx"));
 const DriverFleetCenterPage = lazy(() => import("../features/logistics/pages/DriverFleetCenterPage.jsx"));
@@ -16,15 +17,17 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   const todoGreenInviteMatch = path.match(/^\/todogreen\/convite\/([^/]+)/);
   if (todoGreenInviteMatch) return { kind: "todogreen-access-invite", token: todoGreenInviteMatch[1] };
   if (!authenticated) {
-    // A raiz é a porta da To Do Green; cada público entra no seu próprio
-    // contexto e não volta ao produto genérico depois de se autenticar.
-    if (path === "/" || /^\/todogreen(?:\/|$)/.test(path)) return { kind: "todogreen-login" };
+    // A raiz é a porta da To Do Green; TMS e vertical usam a mesma identidade,
+    // mas cada portal preserva o contexto escolhido durante o login.
+    if (path === "/" || /^\/(?:todogreen|portal-tms)(?:\/|$)/.test(path))
+      return { kind: "todogreen-login" };
     if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-login" };
     if (/^\/(?:portal-motorista|central-motorista)(?:\/|$)/.test(path))
       return { kind: "driver-login" };
     return { kind: "login" };
   }
   if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-portal" };
+  if (/^\/portal-tms(?:\/|$)/.test(path)) return { kind: "tms-portal" };
   // O portal DO motorista (celular, minhas viagens) é outra coisa que a
   // central DE frota (gestão interna). Antes as quatro rotas caíam na tela de
   // gestão — e o "portal do motorista" mostrava as operações de todo mundo.
@@ -68,6 +71,12 @@ export default function PrimaryAppRouter({
     return (
       <Suspense fallback={<div className="inbox-loading">Abrindo seu portal...</div>}>
         <CustomerPortal />
+      </Suspense>
+    );
+  if (route.kind === "tms-portal")
+    return (
+      <Suspense fallback={<div className="inbox-loading">Abrindo Portal TMS...</div>}>
+        <TmsPortal />
       </Suspense>
     );
   if (route.kind === "driver-portal")
