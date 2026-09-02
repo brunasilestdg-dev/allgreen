@@ -124,6 +124,11 @@ const SalesFunnelPage = lazy(() => import("./pages/SalesFunnelPage.jsx"));
 const CreativeToolkit = lazy(() => import("../creative/CreativeToolkit.jsx"));
 const MediaStudio = lazy(() => import("../media/MediaStudio.jsx"));
 const CodeStudio = lazy(() => import("../code/CodeStudio.jsx"));
+// Análise de textos e Mapa de ideias moram no App.jsx como funções de módulo
+// (usam só props + helpers de módulo). Importamos por named export com lazy — o
+// App.jsx não importa a vertical estaticamente, então não há ciclo.
+const TextAnalyzer = lazy(() => import("../../App.jsx").then((m) => ({ default: m.Analyzer })));
+const MindMapStudio = lazy(() => import("../../App.jsx").then((m) => ({ default: m.MindMap })));
 // Contexto de negócio que o Estúdio usa para os exemplos e prompts saírem no
 // tom da To Do Green (transportadora elétrica), em vez do exemplo genérico.
 const negocioTDG = {
@@ -248,6 +253,8 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "estudio-criativo",
   "midia",
   "editor-codigo",
+  "analise-texto",
+  "mapa-ideias",
   "pipeline",
   "propostas",
   "contratos",
@@ -448,6 +455,24 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     permission: "marketing:manage",
     description: "Monta uma página, formulário ou cartão em HTML/CSS/JS e vê o resultado na hora, com download pronto para publicar.",
+  },
+  "analise-texto": {
+    title: "Análise de textos",
+    navLabel: "Análise de textos",
+    route: "/todogreen/analise-texto",
+    area: "estudio",
+    status: "functional",
+    permission: "marketing:manage",
+    description: "Cola um contrato, edital ou proposta (ou envia PDF/DOCX) e a IA resume, aponta riscos e responde perguntas — só com o que está no texto.",
+  },
+  "mapa-ideias": {
+    title: "Mapa de ideias",
+    navLabel: "Mapa de ideias",
+    route: "/todogreen/mapa-ideias",
+    area: "estudio",
+    status: "functional",
+    permission: "marketing:manage",
+    description: "Descreve um tema (rota nova, cliente, campanha) e a IA abre em ramos e ideias acionáveis, que viram tarefas.",
   },
   propostas: {
     title: "Propostas e contratos",
@@ -903,7 +928,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
-  { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo"] },
+  { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
   { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
@@ -3119,6 +3144,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "estudio-criativo" && <Suspense fallback={<section className="tdg-panel">Carregando o estúdio...</section>}><div className="tdg-page tdg-estudio"><CreativeToolkit business={negocioTDG} setToast={setToast} /></div></Suspense>}
       {page === "midia" && <Suspense fallback={<section className="tdg-panel">Carregando a mídia...</section>}><div className="tdg-page tdg-estudio"><MediaStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
       {page === "editor-codigo" && <Suspense fallback={<section className="tdg-panel">Carregando o editor...</section>}><div className="tdg-page tdg-estudio"><CodeStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
+      {page === "analise-texto" && <Suspense fallback={<section className="tdg-panel">Carregando a análise...</section>}><div className="tdg-page tdg-estudio"><TextAnalyzer db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
+      {page === "mapa-ideias" && <Suspense fallback={<section className="tdg-panel">Carregando o mapa...</section>}><div className="tdg-page tdg-estudio"><MindMapStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
       {page === "precificacao" && <PricingPanel key={`${produtoDaRota(path) || "nova"}:${new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"}`} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
       {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}

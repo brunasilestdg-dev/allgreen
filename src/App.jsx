@@ -7308,7 +7308,7 @@ const taskFromIdea = (title, ctx = {}) => ({
   createdAt: new Date().toISOString(),
 });
 
-function MindMap({ db, update, business, setToast, go }) {
+export function MindMap({ db, update, business, setToast, go }) {
   const [theme, setTheme] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -7679,7 +7679,7 @@ function AnalysisResultView({ r, q }) {
   );
 }
 
-function Analyzer({ db, update, business, setToast }) {
+export function Analyzer({ db, update, business, setToast }) {
   const [text, setText] = useState("");
   const [question, setQuestion] = useState("");
   const [sourceName, setSourceName] = useState("");
