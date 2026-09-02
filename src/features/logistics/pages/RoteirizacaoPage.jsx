@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BatteryCharging, Plug, Plus, Route, Shuffle, Sparkles, Trash2 } from "lucide-react";
+import { BatteryCharging, Coins, Plug, Plus, Route, Shuffle, Sparkles, Trash2 } from "lucide-react";
 import {
   aplicarOrdemDoMeio,
   normalizarCarregadores,
@@ -51,6 +51,9 @@ const formatarTempo = (minutos) => {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m} min`;
 };
 
+const formatarReais = (valor) =>
+  Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [paradas, setParadas] = useState(["", ""]);
   const [recargas, setRecargas] = useState(() => new Set());
@@ -59,6 +62,7 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [estado, setEstado] = useState({ fase: "parado" });
   const [sugestoes, setSugestoes] = useState({});
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
+  const [pedagios, setPedagios] = useState({ fase: "idle" });
 
   const containerRef = useRef(null);
   const mapaRef = useRef(null);
@@ -156,6 +160,7 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
 
   const tracar = async (lista) => {
     setEstado({ fase: "calculando" });
+    setPedagios({ fase: "idle" });
     const resultado = await tracarRota({ paradas: lista });
     if (resultado.ok) {
       setEstado({ fase: "pronto", resultado: { ...resultado, enderecos: lista } });
@@ -244,6 +249,34 @@ Regras:
       setToast?.("Ordem sugerida pela IA aplicada.");
     } catch (motivo) {
       setIaEstado({ fase: "erro", motivo: motivo.message });
+      setToast?.(motivo.message);
+    }
+  };
+
+  // #94: pedágios da rota via Rotas Brasil (API paga, token no cofre do
+  // backend). Usa as coordenadas já resolvidas na última rota. Sem token
+  // configurado, o backend responde 400 e a tela avisa — não trava nada.
+  const consultarPedagios = async () => {
+    const r = estado.resultado;
+    const pontos = (r?.paradas || [])
+      .map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
+      .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
+    if (pontos.length < 2) {
+      setToast?.("Trace a rota antes de consultar os pedágios.");
+      return;
+    }
+    setPedagios({ fase: "buscando" });
+    try {
+      const resposta = await fetch("/api/todogreen/pedagios", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify({ points: pontos, opcoes: { veiculo: "caminhao", eixo: 2 } }),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.error || "Pedágios indisponíveis agora.");
+      setPedagios({ fase: "ok", dados });
+    } catch (motivo) {
+      setPedagios({ fase: "erro", motivo: motivo.message });
       setToast?.(motivo.message);
     }
   };
@@ -373,6 +406,16 @@ Regras:
           >
             <Plug size={16} />{carregadores.fase === "buscando" ? "Buscando…" : carregadores.fase === "on" ? "Ocultar carregadores" : "Carregadores"}
           </button>
+          {estado.fase === "pronto" && (
+            <button
+              type="button"
+              className="tdg-action tdg-action-ghost"
+              onClick={consultarPedagios}
+              disabled={pedagios.fase === "buscando"}
+            >
+              <Coins size={16} />{pedagios.fase === "buscando" ? "Calculando…" : "Pedágios"}
+            </button>
+          )}
           <button type="submit" className="tdg-action" disabled={estado.fase === "calculando"}>
             <Route size={16} />{estado.fase === "calculando" ? "Traçando…" : "Traçar rota"}
           </button>
@@ -402,6 +445,34 @@ Regras:
           <Plug size={14} /> {carregadores.lista.length} carregador(es) no mapa · <b>{pesadosNoMapa}</b> servem pesado (DC rápido, ⚡ verde). Fonte: Open Charge Map.
         </p>
       )}
+
+      {pedagios.fase === "ok" && pedagios.dados && (
+        <div className="tdg-roteirizacao-pedagios">
+          <div className="tdg-roteirizacao-pedagios-total">
+            <Coins size={16} />
+            <strong>{formatarReais(pedagios.dados.valorPedagio)}</strong>
+            <span>
+              em pedágios · {pedagios.dados.quantidade} praça(s) para caminhão de 2 eixos
+              {pedagios.dados.valorCombustivel != null ? ` · combustível estimado ${formatarReais(pedagios.dados.valorCombustivel)}` : ""}
+            </span>
+          </div>
+          {pedagios.dados.pedagios.length > 0 ? (
+            <ul className="tdg-roteirizacao-pedagios-lista">
+              {pedagios.dados.pedagios.map((p, i) => (
+                <li key={`${p.praca}-${i}`}>
+                  <span className="tdg-roteirizacao-pedagio-praca">{p.praca || "Praça"}</span>
+                  <span className="tdg-roteirizacao-pedagio-via">{[p.rodovia, p.km ? `km ${p.km}` : "", p.concessionaria].filter(Boolean).join(" · ")}</span>
+                  <span className="tdg-roteirizacao-pedagio-valor">{formatarReais(p.valor)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="tdg-roteirizacao-pedagios-vazio">Nenhuma praça de pedágio nesta rota.</p>
+          )}
+          <small className="tdg-roteirizacao-fonte">Fonte: Rotas Brasil (tabela ANTT).</small>
+        </div>
+      )}
+      {pedagios.fase === "erro" && <p className="tdg-roteirizacao-erro">{pedagios.motivo}</p>}
 
       <div className="tdg-roteirizacao-mapa" ref={containerRef} style={{ minHeight: 360 }} aria-label="Mapa da rota" />
     </section>

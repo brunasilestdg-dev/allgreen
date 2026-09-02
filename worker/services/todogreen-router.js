@@ -36,7 +36,7 @@ import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
-import { consultarCepNormalizado } from "./todogreen-integration-gateway.js";
+import { consultarCepNormalizado, consultarPedagiosDaRota } from "./todogreen-integration-gateway.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -329,6 +329,24 @@ export async function routeTodoGreenApi(request, env, ctx) {
         return json(await consultarCepNormalizado(env, cep));
       } catch (erro) {
         return json({ error: erro.message || "CEP não encontrado." }, 400);
+      }
+    });
+  }
+
+  if (path === "/api/todogreen/pedagios") {
+    return guarded("To Do Green pedágios error", "Não foi possível consultar os pedágios.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      let corpo = {};
+      try {
+        corpo = await request.json();
+      } catch {
+        corpo = {};
+      }
+      try {
+        return json(await consultarPedagiosDaRota(env, corpo.points, corpo.opcoes || {}));
+      } catch (erro) {
+        return json({ error: erro.message || "Pedágios indisponíveis." }, 400);
       }
     });
   }

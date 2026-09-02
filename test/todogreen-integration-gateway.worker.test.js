@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   consultarCepNormalizado,
+  consultarPedagiosDaRota,
   normalizarEnderecoCep,
+  normalizarPedagios,
   probeTodoGreenExternalIntegration,
   runTodoGreenExternalIntegration,
   todoGreenExternalIntegrationCatalog,
@@ -130,5 +132,71 @@ describe("gateway seletivo de integrações da To Do Green", () => {
 
   it("rejeita CEP inválido antes de qualquer rede", async () => {
     await expect(consultarCepNormalizado({}, "123")).rejects.toThrow("CEP inválido");
+  });
+
+  it("mantém a Rotas Brasil desligada sem token e liga com o token", () => {
+    expect(todoGreenExternalIntegrationCatalog({}).routing.find((i) => i.id === "rotas-brasil"))
+      .toEqual(expect.objectContaining({ configured: false, requirement: "TODOGREEN_ROTASBRASIL_TOKEN" }));
+    expect(todoGreenExternalIntegrationCatalog({ TODOGREEN_ROTASBRASIL_TOKEN: "abc" }).routing.find((i) => i.id === "rotas-brasil")?.configured)
+      .toBe(true);
+  });
+
+  it("não consulta pedágios sem o token da Rotas Brasil", async () => {
+    await expect(
+      runTodoGreenExternalIntegration({}, "rotas-brasil", "tolls", {
+        points: [{ latitude: -23.55, longitude: -46.63 }, { latitude: -25.42, longitude: -49.27 }],
+      }),
+    ).rejects.toThrow(/TODOGREEN_ROTASBRASIL_TOKEN/);
+  });
+
+  it("normaliza a resposta da Rotas Brasil na melhor rota (pedágios + totais)", () => {
+    const resposta = {
+      rotas: [
+        {
+          via: "BR-376",
+          distancia: 117.41,
+          duracao: "1h34min",
+          valorPedagio: 25.4,
+          valorCombustivel: 161.09,
+          pedagios: [
+            { praca: "Witmarsum", concessionaria: "RODONORTE", rodovia: "BR-376", km: "573", valor: 13.8, distanciaOrigem: 47.46 },
+            { praca: "São Luiz Purunã", concessionaria: "RODONORTE", rodovia: "BR-277", km: "132", valor: 11.6, distanciaOrigem: 72.46 },
+          ],
+        },
+      ],
+    };
+    expect(normalizarPedagios(resposta)).toEqual({
+      pedagios: [
+        { praca: "Witmarsum", concessionaria: "RODONORTE", rodovia: "BR-376", km: "573", valor: 13.8, distanciaOrigem: 47.46 },
+        { praca: "São Luiz Purunã", concessionaria: "RODONORTE", rodovia: "BR-277", km: "132", valor: 11.6, distanciaOrigem: 72.46 },
+      ],
+      quantidade: 2,
+      valorPedagio: 25.4,
+      valorCombustivel: 161.09,
+      distanciaKm: 117.41,
+      duracao: "1h34min",
+      via: "BR-376",
+    });
+    expect(normalizarPedagios({ rotas: [] })).toBeNull();
+    expect(normalizarPedagios({})).toBeNull();
+  });
+
+  it("consulta pedágios com token, montando os pontos como longitude,latitude", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      rotas: [{ valorPedagio: 25.4, pedagios: [{ praca: "Witmarsum", rodovia: "BR-376", valor: 13.8 }] }],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resultado = await consultarPedagiosDaRota(
+      { TODOGREEN_ROTASBRASIL_TOKEN: "tok" },
+      [{ latitude: -23.5506507, longitude: -46.6333824 }, { latitude: -25.4295963, longitude: -49.2712724 }],
+      { veiculo: "caminhao", eixo: 2 },
+    );
+    expect(resultado.quantidade).toBe(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toMatch(/^https:\/\/rotasbrasil\.com\.br\/apiRotas\/coordenadas\//);
+    expect(url).toContain("pontos=-46.6333824%2C-23.5506507%3B-49.2712724%2C-25.4295963");
+    expect(url).toContain("veiculo=caminhao");
+    expect(url).toContain("token=tok");
   });
 });

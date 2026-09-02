@@ -204,6 +204,18 @@ export function todoGreenExternalIntegrationCatalog(env = {}) {
         detail: "Otimização de sequência de entregas, capacidade e janelas.",
         capabilities: ["optimize"],
       }),
+      item({
+        id: "rotas-brasil",
+        name: "Rotas Brasil",
+        category: "routing",
+        mode: "credentialed-public",
+        configured: Boolean(env.TODOGREEN_ROTASBRASIL_TOKEN),
+        detail: env.TODOGREEN_ROTASBRASIL_TOKEN
+          ? "Token configurado para pedágios, praças e frete mínimo ANTT da rota."
+          : "Conector pronto; falta TODOGREEN_ROTASBRASIL_TOKEN (token pago da Rotas Brasil).",
+        requirement: "TODOGREEN_ROTASBRASIL_TOKEN",
+        capabilities: ["tolls"],
+      }),
     ],
     localAi: [
       selfHosted(env, {
@@ -327,6 +339,13 @@ export async function probeTodoGreenExternalIntegration(env = {}, provider) {
       result = await probeUrl(base, {}, "VROOM");
       break;
     }
+    case "rotas-brasil":
+      result = await jsonFrom(
+        `https://rotasbrasil.com.br/apiRotas/coordenadas/?pontos=-46.6333824,-23.5506507;-49.2712724,-25.4295963&veiculo=caminhao&eixo=2&token=${encodeURIComponent(env.TODOGREEN_ROTASBRASIL_TOKEN)}`,
+        {},
+        "Rotas Brasil",
+      );
+      break;
     case "ollama": {
       const base = selfHostedBase(env, id);
       result = await jsonFrom(`${base}/api/tags`, {}, "Ollama");
@@ -532,6 +551,33 @@ export async function runTodoGreenExternalIntegration(env = {}, provider, action
     return (await jsonFrom(`${base}/${endpoint}/v1/driving/${coords}${suffix}`, {}, "OSRM")).data;
   }
 
+  if (id === "rotas-brasil") {
+    requireAction(op, ["tolls"]);
+    const points = Array.isArray(input.points) ? input.points.slice(0, 30) : [];
+    if (points.length < 2) throw new Error("Informe ao menos dois pontos.");
+    const pontos = points.map((point) => {
+      const latitude = finite(point?.latitude);
+      const longitude = finite(point?.longitude);
+      if (latitude === null || longitude === null) throw new Error("Coordenada inválida.");
+      return `${longitude},${latitude}`;
+    }).join(";");
+    const veiculo = ["auto", "caminhao", "onibus", "moto"].includes(text(input.veiculo, 20))
+      ? text(input.veiculo, 20)
+      : "caminhao";
+    const eixo = Math.min(10, Math.max(2, Math.trunc(finite(input.eixo, 2))));
+    const params = new URLSearchParams({
+      pontos,
+      veiculo,
+      eixo: String(eixo),
+      token: env.TODOGREEN_ROTASBRASIL_TOKEN,
+    });
+    const combustivel = finite(input.combustivel);
+    if (combustivel !== null && combustivel > 0) params.set("combustivel", String(combustivel));
+    const consumo = finite(input.consumo);
+    if (consumo !== null && consumo > 0) params.set("consumo", String(consumo));
+    return (await jsonFrom(`https://rotasbrasil.com.br/apiRotas/coordenadas/?${params}`, {}, "Rotas Brasil")).data;
+  }
+
   if (id === "vroom") {
     requireAction(op, ["optimize"]);
     const base = selfHostedBase(env, id);
@@ -621,4 +667,47 @@ export async function consultarCepNormalizado(env, cepBruto) {
   }
   if (ultimoErro) throw ultimoErro;
   throw new Error("CEP não encontrado.");
+}
+
+// ===== Pedágios da rota (Rotas Brasil) — #94 =====
+// A Rotas Brasil devolve `rotas[0].pedagios` (praça, concessionária, rodovia,
+// km, valor, distância da origem) + valorPedagio/valorCombustivel/distancia/
+// duracao. Reduzimos à melhor rota (a primeira) e a um formato enxuto para a
+// tela. Valores em número; string vazia/`null` quando falta, nunca 0 forjado.
+export function normalizarPedagios(resposta) {
+  const rota = Array.isArray(resposta?.rotas) ? resposta.rotas[0] : null;
+  if (!rota) return null;
+  const pedagios = (Array.isArray(rota.pedagios) ? rota.pedagios : [])
+    .map((p) => ({
+      praca: text(p?.praca, 120),
+      concessionaria: text(p?.concessionaria, 120),
+      rodovia: text(p?.rodovia, 40),
+      km: text(p?.km, 20),
+      valor: finite(p?.valor, 0),
+      distanciaOrigem: finite(p?.distanciaOrigem),
+    }))
+    .filter((p) => p.praca || p.rodovia);
+  const somaPedagios = pedagios.reduce((total, p) => total + (p.valor || 0), 0);
+  return {
+    pedagios,
+    quantidade: pedagios.length,
+    valorPedagio: finite(rota.valorPedagio, Number(somaPedagios.toFixed(2))),
+    valorCombustivel: finite(rota.valorCombustivel),
+    distanciaKm: finite(rota.distancia),
+    duracao: text(rota.duracao, 40),
+    via: text(rota.via, 300),
+  };
+}
+
+export async function consultarPedagiosDaRota(env, points, opcoes = {}) {
+  const dados = await runTodoGreenExternalIntegration(env, "rotas-brasil", "tolls", {
+    points,
+    veiculo: opcoes.veiculo,
+    eixo: opcoes.eixo,
+    combustivel: opcoes.combustivel,
+    consumo: opcoes.consumo,
+  });
+  const normalizado = normalizarPedagios(dados);
+  if (!normalizado) throw new Error("A Rotas Brasil não devolveu pedágios para esta rota.");
+  return normalizado;
 }
