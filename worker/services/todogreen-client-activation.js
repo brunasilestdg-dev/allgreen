@@ -77,6 +77,17 @@ async function loadSnapshot(env, access, clientId) {
                updated_at DESC LIMIT 1`,
   ).bind(TENANT_ID, access.ownerId, clientId).first();
 
+  // Go-live valida a tabela de preço de verdade: não basta o contrato ter um id
+  // de tabela — a tabela precisa EXISTIR, estar ATIVA e PERTENCER a este cliente
+  // (ou a este contrato). Um id solto, de tabela inativa, expirada ou de outro
+  // cliente não passa mais no go-live.
+  const priceTableRow = contractRow?.price_table_id
+    ? await env.DB.prepare(
+        `SELECT id,status,client_id,contract_id FROM todogreen_price_tables
+          WHERE tenant_id=? AND workspace_owner_id=? AND id=? AND archived_at IS NULL LIMIT 1`,
+      ).bind(TENANT_ID, access.ownerId, contractRow.price_table_id).first().catch(() => null)
+    : null;
+
   const [activation, costCenter, operation, portalUsers, assignments, tracker, scoreWeights, dashboard] = await Promise.all([
     env.DB.prepare(
       `SELECT * FROM todogreen_client_activation_state
@@ -135,6 +146,16 @@ async function loadSnapshot(env, access, clientId) {
     } : null,
     activeScoreWeights: scoreWeights?.version || "",
     dashboard: dashboard || null,
+    priceTable: {
+      id: contractRow?.price_table_id || "",
+      exists: Boolean(priceTableRow),
+      active: text(priceTableRow?.status, 20).toLowerCase() === "active",
+      belongsToClient: Boolean(
+        priceTableRow &&
+        (priceTableRow.client_id === clientId ||
+          (contractRow?.id && priceTableRow.contract_id === contractRow.id)),
+      ),
+    },
   };
   // Duas leituras da mesma conta, lado a lado e sem se misturar: `readiness`
   // diz se o sistema está configurado, `briefing` diz se a conta foi desenhada.

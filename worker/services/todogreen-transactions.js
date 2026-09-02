@@ -280,6 +280,14 @@ async function createOrder(env, access, user, body) {
   if (!contract) return json({ error: "Contrato ativo não encontrado neste espaço." }, 409);
   if (contract.approval_status !== "approved" || contract.signature_status !== "signed")
     return json({ error: "A ordem exige contrato aprovado e assinado." }, 409);
+  // A OS não nasce antes do go-live: a implantação do cliente precisa estar
+  // ativa. Sem isso, uma OS entraria com preço/tabela/operação ainda não
+  // validados pelo gate de implantação.
+  const implantacao = await env.DB.prepare(
+    "SELECT status FROM todogreen_client_activation_state WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? LIMIT 1",
+  ).bind(TENANT_ID, access.ownerId, clientId).first();
+  if (text(implantacao?.status, 30).toLowerCase() !== "active")
+    return json({ error: "A ordem de serviço exige a implantação do cliente ativa (go-live concluído)." }, 409);
 
   // Preço herdado do aceite: quando não vem digitado, o contrato (valor
   // negociado) manda; na falta dele, o preço da simulação que gerou o contrato.

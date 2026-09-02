@@ -38,6 +38,20 @@ async function seedOwnerAndApiKey(suffix, scopes) {
     now,
   ).run();
 
+  await env.DB.prepare(
+    `INSERT INTO todogreen_clients
+      (id,tenant_id,workspace_owner_id,name,status,portal_enabled,fields_json,revision,created_by,updated_by,created_at,updated_at)
+     VALUES (?,'todogreen',?,?,'ativo',0,'{}',1,?,?,?,?)`,
+  ).bind(clientId, ownerId, `Cliente API ${suffix}`, ownerId, ownerId, now, now).run();
+
+  // Implantação ativa (go-live): a criação de shipment pela API exige o cliente ativo.
+  await env.DB.prepare(
+    `INSERT INTO todogreen_client_activation_state
+      (client_id,tenant_id,workspace_owner_id,status,integration_status,tracking_required,esg_enabled,
+       activated_at,activated_by,revision,created_by,updated_by,created_at,updated_at)
+     VALUES (?,'todogreen',?,'active','ready',0,0,?,?,1,?,?,?,?)`,
+  ).bind(clientId, ownerId, now, ownerId, ownerId, ownerId, now, now).run();
+
   return { ownerId, clientId, keyId, token, now };
 }
 

@@ -338,6 +338,31 @@ describe("jornada cliente → caixa", () => {
     expect(operacaoResp.status).toBe(201);
     const operacao = (await operacaoResp.json()).registro;
 
+    // GATE (OS exige implantação ativa): antes do go-live, a OS é recusada.
+    const osAntesDoGoLive = await pedir("/api/todogreen/transactions/service-orders", {
+      method: "POST", token: dona.token,
+      body: { clientId, contractId: contrato.id, operationId: operacao.id, quantity: 1, unitPrice: 1000, chargeUnit: "mensal" },
+    });
+    expect(osAntesDoGoLive.status).toBe(409);
+    expect((await osAntesDoGoLive.json()).error).toMatch(/implanta/i);
+
+    // GATE (go-live valida a tabela de preço): tabela inativa reprova o gate.
+    const tabelaInativa = await pedir(`/api/todogreen/master-data/price-tables/${tabela.id}`, {
+      method: "PATCH", token: dona.token, body: { revision: tabela.revision, status: "inactive" },
+    });
+    expect(tabelaInativa.status).toBe(200);
+    const bloqueada = await pedir(`/api/todogreen/client-activation?clientId=${clientId}`, {
+      method: "POST", token: dona.token, body: { action: "prepare" },
+    });
+    const prontidaoBloqueada = (await bloqueada.json()).snapshot.readiness;
+    expect(prontidaoBloqueada.ready).toBe(false);
+    expect(prontidaoBloqueada.checks.find((c) => c.id === "priceTable")?.ready).toBe(false);
+    // Reativa a tabela para seguir o happy path.
+    const tabelaAtiva = await pedir(`/api/todogreen/master-data/price-tables/${tabela.id}`, {
+      method: "PATCH", token: dona.token, body: { revision: tabela.revision + 1, status: "active" },
+    });
+    expect(tabelaAtiva.status).toBe(200);
+
     // 12. Implantação. Prepare cria centro de custo e dashboard; configure
     // registra que integração/tracking não são requisitos deste projeto.
     const preparada = await pedir(`/api/todogreen/client-activation?clientId=${clientId}`, {
@@ -487,12 +512,11 @@ describe("jornada cliente → caixa", () => {
     expect(razao.invoice_status).toBe("paid");
   });
 
-  // Estes TODOs são intencionais: o happy path acima segue a ordem correta,
-  // mas hoje o servidor ainda não impede quem tenta contorná-la. Quando cada
-  // gate for fechado, transformar o TODO em teste de regressão executável.
+  // Gates FECHADOS e cobertos como regressão dentro do happy path acima:
+  //  - "OS não nasce sem implantação ativa": bloqueio 409 antes do go-live.
+  //  - "go-live valida a tabela de preço (real e ativa)": tabela inativa reprova.
+  // TODOs intencionais que ainda faltam fechar:
   it.todo("contrato não pode chegar a aprovado antes de o workflow jurídico obrigatório terminar");
   it.todo("contrato não pode receber assinatura signed sem evidência de assinatura vinculada");
-  it.todo("OS não pode nascer enquanto a implantação do cliente não estiver ativa");
-  it.todo("gate de implantação deve validar que priceTableId aponta para tabela real e ativa");
   it.todo("CT-e só pode aparecer como autorizado depois do retorno oficial da SEFAZ");
 });

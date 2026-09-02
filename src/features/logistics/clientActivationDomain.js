@@ -49,6 +49,7 @@ export function buildClientActivationReadiness(snapshot = {}, today = new Date()
   const contract = asObject(snapshot.contract);
   const activation = asObject(client.activation);
   const tracker = asObject(snapshot.trackerIntegration);
+  const priceTable = asObject(snapshot.priceTable);
   const contractReady = contractIsCurrent(contract, today);
   const trackerReady = ["ready", "active"].includes(asText(tracker.status).toLowerCase()) &&
     Boolean(tracker.lastSuccessAt || tracker.lastTestAt);
@@ -71,8 +72,17 @@ export function buildClientActivationReadiness(snapshot = {}, today = new Date()
     ),
     makeCheck(
       "priceTable",
-      contractReady && Boolean(contract.priceTableId),
-      contract.priceTableId ? `Tabela ${contract.priceTableId} vinculada ao contrato.` : "Vincule a tabela de preço ao contrato.",
+      contractReady && Boolean(contract.priceTableId) &&
+        priceTable.exists === true && priceTable.active === true && priceTable.belongsToClient === true,
+      !contract.priceTableId
+        ? "Vincule a tabela de preço ao contrato."
+        : !priceTable.exists
+          ? `A tabela de preço ${contract.priceTableId} do contrato não existe (ou foi arquivada).`
+          : !priceTable.active
+            ? `A tabela de preço ${contract.priceTableId} não está ativa.`
+            : !priceTable.belongsToClient
+              ? `A tabela de preço ${contract.priceTableId} não pertence a este cliente.`
+              : `Tabela ${contract.priceTableId} ativa e vinculada.`,
     ),
     makeCheck(
       "billing",

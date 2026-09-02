@@ -249,6 +249,13 @@ async function createShipment(request, env, credential) {
   const contract = await activeContract(env, credential, clientId, text(body.contractId, 120));
   if (!contract) return apiJson({ error: "contract_not_ready", message: "Não há contrato aprovado e assinado para este cliente." }, 409);
 
+  // Mesmo gate da criação interna: sem implantação ativa (go-live), não há OS.
+  const implantacao = await env.DB.prepare(
+    "SELECT status FROM todogreen_client_activation_state WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? LIMIT 1",
+  ).bind(TENANT_ID, credential.workspace_owner_id, clientId).first().catch(() => null);
+  if (text(implantacao?.status, 30).toLowerCase() !== "active")
+    return apiJson({ error: "activation_not_active", message: "A implantação do cliente precisa estar ativa (go-live) antes de criar shipments." }, 409);
+
   const origin = object(body.origin);
   const destination = object(body.destination);
   if (!Object.keys(origin).length || !Object.keys(destination).length)

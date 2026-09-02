@@ -30,6 +30,11 @@ beforeAll(async () => {
      fields_json,revision,created_by,updated_by,created_at,updated_at)
     VALUES ('txn-contract','todogreen','txn-user','txn-client','Cliente Transacional','proposal-x','Contrato','active','signed',
      'approved','same-day','table-a','{}','{}','{}','{}','{}',1,'txn-user','txn-user',?,?)`).bind(now,now).run();
+  // Implantação ativa (go-live): a OS exige o cliente ativo.
+  await env.DB.prepare(`INSERT INTO todogreen_client_activation_state
+    (client_id,tenant_id,workspace_owner_id,status,integration_status,tracking_required,esg_enabled,
+     activated_at,activated_by,revision,created_by,updated_by,created_at,updated_at)
+    VALUES ('txn-client','todogreen','txn-user','active','ready',0,0,?,'txn-user',1,'txn-user','txn-user',?,?)`).bind(now,now,now).run();
 });
 
 describe("espinha transacional", () => {
