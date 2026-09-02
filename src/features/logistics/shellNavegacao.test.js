@@ -49,9 +49,18 @@ describe("a trilha sai da mesma configuração do menu", () => {
   });
 
   it("uma tela administrativa mostra a área de administração", () => {
-    expect(trilhaDaPagina("acessos").map((p) => p.label)).toEqual([
+    expect(trilhaDaPagina("rasci").map((p) => p.label)).toEqual([
       "Visão geral",
       "Administração",
+      "RASCI",
+    ]);
+  });
+
+  it("uma ferramenta de Configurações é de topo, sem área lateral duplicada", () => {
+    // Integrações e Acessos vivem no menu Configurações, não repetidos na
+    // Administração: a trilha é só "Visão geral › <ferramenta>".
+    expect(trilhaDaPagina("acessos").map((p) => p.label)).toEqual([
+      "Visão geral",
       "Acessos",
     ]);
   });

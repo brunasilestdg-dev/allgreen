@@ -948,7 +948,9 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
   // A matriz RASCI é artefato de governança: mora só aqui, não repetida em cada
   // área nem no menu de Compliance (pedido da titular).
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "integracoes", "acessos", "sobre-o-negocio"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  // Integrações e "Usuários e acessos" vivem no menu Configurações (topo), o
+  // lar convencional das configurações — não repetimos aqui na lateral.
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
@@ -1051,7 +1053,12 @@ const podeAcessarFuncionalidade = (role, permissions, required) => {
 // primária, a tela do módulo (ou da ferramenta de administração). Menu e trilha
 // lendo a mesma fonte nunca discordam sobre onde a pessoa está.
 export const trilhaDaPagina = (page, secao = "") => {
-  const area = navigationFor(page, secao);
+  // Área REAL da página (sem o fallback de navigationFor para o primeiro grupo):
+  // ferramenta de Configurações (Integrações, Acessos) não pertence a um grupo
+  // lateral, então sua trilha é só "Visão geral › <ferramenta>", sem área falsa.
+  const area = page === "cadastros"
+    ? PRIMARY_NAVIGATION.find((item) => item.id === AREA_DO_CADASTRO[secao])
+    : PRIMARY_NAVIGATION.find((item) => item.pages.includes(page));
   const modulo = MODULE_IMPLEMENTATION[page];
   const ferramenta = MANAGEMENT_TOOLS.find((item) => item.id === page);
   const trilha = [{ label: "Visão geral", route: "/todogreen/dashboard" }];
