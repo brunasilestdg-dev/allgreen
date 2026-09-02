@@ -5,6 +5,7 @@ import AnexosContexto from "./AnexosContexto.jsx";
 import {
   ORDER_STATUSES,
   REQUEST_STATUSES,
+  previsaoDeCompra,
   totalDaLinha,
   totalDoPedido,
 } from "../purchaseDomain.js";
@@ -70,6 +71,7 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
   const [anexosAbertos, setAnexosAbertos] = useState(null);
   const [requisicoes, setRequisicoes] = useState([]);
   const [pedidos, setPedidos] = useState([]);
+  const [movimentos, setMovimentos] = useState([]);
   const [acesso, setAcesso] = useState({ podeComprar: false });
   const [ocupado, setOcupado] = useState("carregando");
   const [erro, setErro] = useState("");
@@ -101,6 +103,18 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
       setPedidos(pedidoResposta.registros || []);
       setAcesso({ podeComprar: Boolean(pedidoResposta.access?.podeComprar ?? true) });
       setOcupado("");
+      // Estoque para a previsão de compra: leitura segue o vínculo, então
+      // Compras consegue ler. Melhor esforço — se o papel não puder ou falhar,
+      // a previsão só não aparece; não derruba a tela de compras.
+      try {
+        const estoque = await fetch("/api/todogreen/stock/movimentos?limit=500", {
+          headers: { ...(authHeaders?.() || {}) },
+        });
+        const dados = await estoque.json().catch(() => ({}));
+        setMovimentos(estoque.ok ? dados.registros || [] : []);
+      } catch {
+        setMovimentos([]);
+      }
     } catch (motivo) {
       setErro(motivo.message);
       setOcupado("");
@@ -117,6 +131,8 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
       .reduce((soma, p) => soma + totalDoPedido(p, p.items || []).total, 0);
     return { aguardando, abertos, comprometido, requisicoes: requisicoes.length };
   }, [requisicoes, pedidos]);
+
+  const previsao = useMemo(() => previsaoDeCompra(itens, movimentos), [itens, movimentos]);
 
   const alterar = (campo, valor) => setForm((atual) => ({ ...atual, [campo]: valor }));
   const alterarLinha = (indice, campo, valor) => setForm((atual) => ({
@@ -328,6 +344,44 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
         <article className="tdg-metric"><span>Valor comprometido</span><strong>{dinheiro(indicadores.comprometido)}</strong><small>somente pedidos abertos</small></article>
         <article className="tdg-metric"><span>Requisições</span><strong>{indicadores.requisicoes}</strong><small>no total</small></article>
       </section>
+
+      {/* Previsão de compra: o que o estoque indica que precisa ser reposto,
+          com custo estimado pela referência do item, mais o que já está
+          comprometido em pedidos abertos. Serve à gestão para planejar antes
+          da ruptura. Só aparece quando há item abaixo do mínimo. */}
+      {previsao.itens > 0 && (
+        <section className="tdg-panel tdg-previsao-compra">
+          <div className="tdg-section-head">
+            <div>
+              <span className="tdg-kicker">SUPRIMENTOS · PREVISÃO</span>
+              <h3>Previsão de compra</h3>
+              <p className="tdg-fiscal-nota">Itens abaixo do estoque mínimo, com sugestão de quantidade e custo estimado pela referência do cadastro. É estimativa para planejar — o preço fechado vem do pedido.</p>
+            </div>
+            <div className="tdg-previsao-totais">
+              <div><span>A repor (estimado)</span><strong>{dinheiro(previsao.totalEstimado)}</strong></div>
+              <div><span>Já comprometido</span><strong>{dinheiro(indicadores.comprometido)}</strong></div>
+              <div className="tdg-previsao-total"><span>Previsão total</span><strong>{dinheiro(previsao.totalEstimado + indicadores.comprometido)}</strong></div>
+            </div>
+          </div>
+          <div className="tdg-table-wrap">
+            <table className="tdg-table">
+              <thead><tr><th>Item</th><th>Saldo</th><th>Mínimo</th><th>Sugerido</th><th>Custo unit.</th><th>Estimado</th></tr></thead>
+              <tbody>
+                {previsao.linhas.map((linha) => (
+                  <tr key={linha.id}>
+                    <td>{linha.nome}{linha.status === "sem_estoque" && <span className="tdg-tag-risco"> sem estoque</span>}</td>
+                    <td>{linha.saldo}{linha.unidade ? ` ${linha.unidade}` : ""}</td>
+                    <td>{linha.minimo}</td>
+                    <td><strong>{linha.sugerido}{linha.unidade ? ` ${linha.unidade}` : ""}</strong></td>
+                    <td>{linha.custoUnit ? dinheiro(linha.custoUnit) : "—"}</td>
+                    <td>{linha.custoEstimado ? dinheiro(linha.custoEstimado) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* Ação em janela própria: o formulário não empurra mais as tabelas
           da tela (rodada "nada corta a tela", 30/08). */}

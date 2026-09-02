@@ -3278,3 +3278,11 @@
   font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .tdg-planner-share-btn:hover { border-color: var(--tdg-primary, #15803d); color: var(--tdg-primary, #15803d); }
+
+/* v61 — previsão de compra (Suprimentos): totais + tabela de reposição */
+.tdg-previsao-totais { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; }
+.tdg-previsao-totais > div { display: flex; flex-direction: column; }
+.tdg-previsao-totais span { font-size: 0.72rem; color: var(--tdg-muted, #6b7280); text-transform: uppercase; letter-spacing: .04em; }
+.tdg-previsao-totais strong { font-size: 1.05rem; }
+.tdg-previsao-total strong { color: var(--tdg-primary, #15803d); }
+.tdg-tag-risco { font-size: 0.7rem; color: #b91c1c; font-weight: 700; }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aprovacaoAindaVale,
+  previsaoDeCompra,
   exigeAprovacao,
   linhasDoPedidoDaRequisicao,
   podeMudarStatusDaRequisicao,
@@ -423,5 +424,43 @@ describe("validação de cadastro", () => {
     expect(validateReceipt({ ...ok, invoiceKey: "1".repeat(43) })).toMatch(/44/);
     expect(validateReceipt({ ...ok, invoiceKey: "1".repeat(44) })).toBe("");
     expect(validateReceipt({ ...ok, invoiceKey: "" })).toBe("");
+  });
+});
+
+describe("previsaoDeCompra", () => {
+  const itens = [
+    { id: "i1", nome: "Pneu 295/80", estoqueMinimo: 10, custoReferencia: 1500 },
+    { id: "i2", nome: "Óleo lubrificante", estoqueMinimo: 20, custoReferencia: 50 },
+    { id: "i3", nome: "Filtro de ar", estoqueMinimo: 5, custoReferencia: 80 },
+  ];
+  // Saldos por movimento: i1=2 (baixo), i2=0 (sem estoque), i3=30 (normal).
+  const movimentos = [
+    { itemId: "i1", kind: "entrada", quantity: 2 },
+    { itemId: "i3", kind: "entrada", quantity: 30 },
+  ];
+
+  it("sugere reposição só para itens abaixo do mínimo, com custo estimado", () => {
+    const previsao = previsaoDeCompra(itens, movimentos);
+    expect(previsao.itens).toBe(2); // i1 e i2; i3 está normal
+    const ids = previsao.linhas.map((linha) => linha.id);
+    expect(ids).not.toContain("i3");
+
+    const pneu = previsao.linhas.find((linha) => linha.id === "i1");
+    // sugestão = 2*mínimo - saldo = 2*10 - 2 = 18; custo = 18 * 1500
+    expect(pneu.sugerido).toBe(18);
+    expect(pneu.custoEstimado).toBe(18 * 1500);
+
+    const oleo = previsao.linhas.find((linha) => linha.id === "i2");
+    // 2*20 - 0 = 40; custo = 40 * 50
+    expect(oleo.sugerido).toBe(40);
+    expect(oleo.custoEstimado).toBe(40 * 50);
+
+    // Total = maior custo primeiro; soma dos dois.
+    expect(previsao.linhas[0].id).toBe("i1");
+    expect(previsao.totalEstimado).toBe(18 * 1500 + 40 * 50);
+  });
+
+  it("devolve vazio quando não há itens nem movimentos", () => {
+    expect(previsaoDeCompra([], [])).toEqual({ linhas: [], itens: 0, totalEstimado: 0 });
   });
 });

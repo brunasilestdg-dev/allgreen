@@ -16,6 +16,7 @@
 // completa — está resolvida lá.
 
 import { procurementNumber } from "../../domain.js";
+import { situacaoDoEstoque } from "./stockDomain.js";
 
 const texto = (valor) => String(valor ?? "").trim();
 
@@ -376,4 +377,39 @@ export const validateReceipt = (recebimento = {}) => {
   // que só apareceria quando o XML não casasse, meses depois.
   if (chave && chave.length !== 44) return "A chave da nota fiscal tem 44 dígitos.";
   return "";
+};
+
+// ===== Previsão de compra =====
+//
+// O que precisa ser reposto agora e quanto isso deve custar, para a gestão
+// planejar a compra antes da ruptura. A sugestão de quantidade vem da mesma
+// saúde de estoque da tela de Estoque (dobro do mínimo menos o saldo); o custo
+// usa o custo de referência do cadastro do item — é estimativa, não preço
+// fechado. Puro: recebe itens e movimentos, devolve linhas e total.
+export const previsaoDeCompra = (itens = [], movimentos = []) => {
+  const custoRef = new Map(
+    (itens || []).map((item) => [texto(item.id), numero(item.custoReferencia)]),
+  );
+  const linhas = situacaoDoEstoque(itens, movimentos).rows
+    .filter((linha) => linha.status !== "normal" && linha.suggestedPurchase > 0)
+    .map((linha) => {
+      const custoUnit = custoRef.get(texto(linha.id)) || 0;
+      return {
+        id: linha.id,
+        nome: linha.name,
+        unidade: linha.unidade || "",
+        saldo: linha.stock,
+        minimo: linha.threshold,
+        sugerido: linha.suggestedPurchase,
+        custoUnit,
+        custoEstimado: linha.suggestedPurchase * custoUnit,
+        status: linha.status,
+      };
+    })
+    .sort((a, b) => b.custoEstimado - a.custoEstimado);
+  return {
+    linhas,
+    itens: linhas.length,
+    totalEstimado: linhas.reduce((soma, linha) => soma + linha.custoEstimado, 0),
+  };
 };
