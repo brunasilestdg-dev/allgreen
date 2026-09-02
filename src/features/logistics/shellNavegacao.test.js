@@ -37,12 +37,12 @@ describe("permissão da tela vem do config, não do menu", () => {
 
 describe("a trilha sai da mesma configuração do menu", () => {
   it("no painel a trilha é só a raiz", () => {
-    expect(trilhaDaPagina("dashboard").map((p) => p.label)).toEqual(["To Do Green"]);
+    expect(trilhaDaPagina("dashboard").map((p) => p.label)).toEqual(["Visão geral"]);
   });
 
   it("uma tela comercial mostra área e tela", () => {
     expect(trilhaDaPagina("precificacao").map((p) => p.label)).toEqual([
-      "To Do Green",
+      "Visão geral",
       "Comercial",
       "Precificação",
     ]);
@@ -50,7 +50,7 @@ describe("a trilha sai da mesma configuração do menu", () => {
 
   it("uma tela administrativa mostra a área de administração", () => {
     expect(trilhaDaPagina("acessos").map((p) => p.label)).toEqual([
-      "To Do Green",
+      "Visão geral",
       "Administração",
       "Acessos",
     ]);

@@ -419,11 +419,6 @@ export default function TodoGreenWorkspace({
   return (
     <section className="tdg-space">
       <header className="tdg-space-toolbar">
-        <div className="tdg-space-toolbar-title">
-          <span>TO DO GREEN</span>
-          <h2>Espaço corporativo</h2>
-          <p>Projetos, tarefas, visualizações, agentes e integrações em uma única navegação.</p>
-        </div>
         <nav className="tdg-space-tabs" aria-label="Jornadas principais do espaço de trabalho">
           {WORKSPACE_PRIMARY_TOOLS.map((item) => {
             const Icon = TOOL_ICONS[item.id] || BriefcaseBusiness;

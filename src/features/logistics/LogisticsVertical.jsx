@@ -344,7 +344,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     description: "Criação de painéis pessoais ou compartilhados com indicadores escolhidos por cada usuário.",
   },
   espaco: {
-    title: "Espaço de trabalho To Do Green",
+    title: "Espaço de trabalho",
     navLabel: "Visão geral",
     route: "/todogreen/espaco",
     area: "espaco-trabalho",
@@ -1054,7 +1054,7 @@ export const trilhaDaPagina = (page, secao = "") => {
   const area = navigationFor(page, secao);
   const modulo = MODULE_IMPLEMENTATION[page];
   const ferramenta = MANAGEMENT_TOOLS.find((item) => item.id === page);
-  const trilha = [{ label: "To Do Green", route: "/todogreen/dashboard" }];
+  const trilha = [{ label: "Visão geral", route: "/todogreen/dashboard" }];
   if (area && area.id !== "principal" && area.route)
     trilha.push({ label: area.label, route: area.route });
   const atual = modulo
@@ -2869,7 +2869,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
       <header className="tdg-shell-header">
         <div className="tdg-shell-location">
-          <span className="tdg-workspace-name">TO DO GREEN · WORKSPACE CORPORATIVO</span>
+          <span className="tdg-workspace-name">TO DO GREEN</span>
           <nav className="tdg-breadcrumb" aria-label="Trilha de navegação">
             {trilha.map((passo, indice) => {
               const ultimo = indice === trilha.length - 1;
