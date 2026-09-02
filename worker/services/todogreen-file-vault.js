@@ -30,6 +30,7 @@ const mapRow = (row) => ({
   id: row.id, clientId: row.client_id || "", workflowId: row.workflow_id || "", fileName: row.file_name,
   contentType: row.content_type, byteSize: row.byte_size, sha256: row.sha256, version: row.version,
   source: row.source, externalUrl: row.external_url || "", folderId: row.folder_id || "",
+  contextType: row.context_type || "", contextId: row.context_id || "",
   createdBy: row.created_by, createdAt: row.created_at,
 });
 
@@ -85,8 +86,14 @@ const quemPergunta = (access, email) => ({
 async function list(env, access, url, email) {
   if (!canRead(access)) return json({ error: "Seu acesso não permite consultar documentos internos." },403);
   const clientId=text(url.searchParams.get("client"),120);
+  const contextType=text(url.searchParams.get("contextType"),40);
+  const contextId=text(url.searchParams.get("contextId"),120);
   const params=[TENANT_ID,access.ownerId];
-  const filter=clientId ? "AND client_id=?" : ""; if(clientId) params.push(clientId);
+  const clauses=[];
+  if(clientId){ clauses.push("client_id=?"); params.push(clientId); }
+  // Anexos de uma requisição/processo: filtra pelo par de contexto (#99).
+  if(contextType && contextId){ clauses.push("context_type=? AND context_id=?"); params.push(contextType, contextId); }
+  const filter=clauses.length ? `AND ${clauses.join(" AND ")}` : "";
   const {results}=await env.DB.prepare(`SELECT * FROM todogreen_internal_files WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL ${filter} ORDER BY created_at DESC LIMIT 300`).bind(...params).all();
   const pastas = await pastasDoEspaco(env, access);
   const quem = quemPergunta(access, email);
@@ -110,8 +117,8 @@ async function createReference(env, access, user, body, email) {
     return json({error:"A pasta escolhida não existe aqui."},404);
   const id=crypto.randomUUID();
   const versionRow=await env.DB.prepare("SELECT MAX(version) AS v FROM todogreen_internal_files WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? AND file_name=?").bind(TENANT_ID,access.ownerId,clientId,fileName).first();
-  await env.DB.prepare(`INSERT INTO todogreen_internal_files (id,tenant_id,workspace_owner_id,client_id,workflow_id,file_name,content_type,byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at) VALUES (?,?,?,?,?,?, 'text/uri-list',0,'',?,'client_reference',?,?,?,?,NULL)`)
-    .bind(id,TENANT_ID,access.ownerId,clientId||null,text(body.workflowId,120)||null,fileName,Number(versionRow?.v||0)+1,url,folderId,user.id,now).run();
+  await env.DB.prepare(`INSERT INTO todogreen_internal_files (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,file_name,content_type,byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at) VALUES (?,?,?,?,?,?,?,?, 'text/uri-list',0,'',?,'client_reference',?,?,?,?,NULL)`)
+    .bind(id,TENANT_ID,access.ownerId,clientId||null,text(body.workflowId,120)||null,text(body.contextType,40)||null,text(body.contextId,120)||null,fileName,Number(versionRow?.v||0)+1,url,folderId,user.id,now).run();
   return json({file:mapRow(await env.DB.prepare("SELECT * FROM todogreen_internal_files WHERE id=?").bind(id).first())},201);
 }
 
@@ -122,14 +129,15 @@ async function upload(env, access, user, request, email) {
   if(file.size<=0) return json({error:"O arquivo está vazio."},400);
   if(file.size>MAX_FILE_BYTES) return json({error:"O arquivo passa de 10 MB. Para arquivos maiores, use referência externa."},413);
   const clientId=text(form.get("clientId"),120); const workflowId=text(form.get("workflowId"),120);
+  const contextType=text(form.get("contextType"),40); const contextId=text(form.get("contextId"),120);
   // Guardar numa pasta que a pessoa não vê a faria perder o próprio arquivo.
   const folderId=text(form.get("folderId"),120);
   if(folderId && !(await arquivoNaVista(env,access,email,{folder_id:folderId})))
     return json({error:"A pasta escolhida não existe aqui."},404);
   const bytes=new Uint8Array(await file.arrayBuffer()); const digest=await sha256(bytes); const now=new Date().toISOString(); const id=crypto.randomUUID();
   const versionRow=await env.DB.prepare("SELECT MAX(version) AS v FROM todogreen_internal_files WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? AND file_name=?").bind(TENANT_ID,access.ownerId,clientId,file.name).first();
-  const statements=[env.DB.prepare(`INSERT INTO todogreen_internal_files (id,tenant_id,workspace_owner_id,client_id,workflow_id,file_name,content_type,byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at) VALUES (?,?,?,?,?,?,?,?,?,?,'internal_upload','',?,?,?,NULL)`)
-    .bind(id,TENANT_ID,access.ownerId,clientId||null,workflowId||null,text(file.name,240),text(file.type,160)||"application/octet-stream",file.size,digest,Number(versionRow?.v||0)+1,folderId,user.id,now)];
+  const statements=[env.DB.prepare(`INSERT INTO todogreen_internal_files (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,file_name,content_type,byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'internal_upload','',?,?,?,NULL)`)
+    .bind(id,TENANT_ID,access.ownerId,clientId||null,workflowId||null,contextType||null,contextId||null,text(file.name,240),text(file.type,160)||"application/octet-stream",file.size,digest,Number(versionRow?.v||0)+1,folderId,user.id,now)];
   let index=0;
   for(let offset=0;offset<bytes.length;offset+=CHUNK_BYTES){ const chunk=bytes.subarray(offset,Math.min(offset+CHUNK_BYTES,bytes.length)); statements.push(env.DB.prepare("INSERT INTO todogreen_internal_file_chunks (file_id,chunk_index,content_base64) VALUES (?,?,?)").bind(id,index,bytesToBase64(chunk))); index+=1; }
   await env.DB.batch(statements);

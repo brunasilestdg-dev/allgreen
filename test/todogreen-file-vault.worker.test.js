@@ -182,3 +182,33 @@ describe("cofre com pastas", () => {
     expect(daOutra.folders.map((p) => p.id)).not.toContain(subShared);
   });
 });
+
+describe("cofre: anexos por contexto (#99)", () => {
+  const enviarComContexto = async (token, nome, contextType, contextId) => {
+    const form = new FormData();
+    form.append("file", new File([new TextEncoder().encode("conteudo")], nome, { type: "text/plain" }));
+    form.append("contextType", contextType);
+    form.append("contextId", contextId);
+    const r = await pedir("/api/todogreen/file-vault", { metodo: "POST", token, form });
+    return { status: r.status, corpo: await r.json() };
+  };
+
+  it("prende o anexo ao contexto e filtra pelo par contextType+contextId", async () => {
+    const reqA = `req-${crypto.randomUUID().slice(0, 8)}`;
+    const reqB = `req-${crypto.randomUUID().slice(0, 8)}`;
+
+    const a1 = await enviarComContexto(dela.token, "nota-a.txt", "purchase_request", reqA);
+    expect(a1.status).toBe(201);
+    expect(a1.corpo.file.contextType).toBe("purchase_request");
+    expect(a1.corpo.file.contextId).toBe(reqA);
+    await enviarComContexto(dela.token, "nota-b.txt", "purchase_request", reqB);
+
+    const listaA = await (
+      await pedir(`/api/todogreen/file-vault?contextType=purchase_request&contextId=${reqA}`, { token: dela.token })
+    ).json();
+    const nomesA = listaA.files.map((f) => f.fileName);
+    expect(nomesA).toContain("nota-a.txt");
+    // O anexo do outro contexto não vaza para a lista deste.
+    expect(nomesA).not.toContain("nota-b.txt");
+  });
+});

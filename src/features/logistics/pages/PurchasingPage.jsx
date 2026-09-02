@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ClipboardCheck, FileText, PackageCheck, RefreshCw } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ClipboardCheck, FileText, PackageCheck, Paperclip, RefreshCw } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import AnexosContexto from "./AnexosContexto.jsx";
 import {
   ORDER_STATUSES,
   REQUEST_STATUSES,
@@ -66,6 +67,7 @@ const proximaAprovacao = (registro) => registro?.campos?.purchaseApprovalFlow?.n
 const aprovacoesFeitas = (registro) => registro?.campos?.purchaseApprovalFlow?.approvals || [];
 
 export default function PurchasingPage({ authHeaders, setToast, registros }) {
+  const [anexosAbertos, setAnexosAbertos] = useState(null);
   const [requisicoes, setRequisicoes] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [acesso, setAcesso] = useState({ podeComprar: false });
@@ -385,7 +387,8 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
           <div className="tdg-table-wrap"><table className="tdg-table">
             <thead><tr><th>Documento</th><th>O quê</th><th>Área</th><th>Prioridade</th><th>Precisa em</th><th>Situação</th><th>Ações</th></tr></thead>
             <tbody>{requisicoes.map((requisicao) => (
-              <tr key={requisicao.id}>
+              <Fragment key={requisicao.id}>
+              <tr>
                 <td>{requisicao.numeroDocumento || "—"}</td><td>{requisicao.title}</td><td>{requisicao.campos?.area || "—"}</td><td>{requisicao.prioridade}</td><td>{dia(requisicao.precisaEm)}</td>
                 <td>
                   <span>{comRotulo(NOME_DO_STATUS_DA_REQUISICAO, requisicao.status)}</span>
@@ -404,8 +407,17 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
                   </>}
                   {requisicao.status === "devolvida" && <button type="button" onClick={() => reenviarRequisicao(requisicao)}>Reenviar a Suprimentos</button>}
                   {acesso.podeComprar && requisicao.status === "aprovada" && <button type="button" onClick={() => abrirPedido(requisicao)}>Gerar pedido</button>}
+                  <button type="button" onClick={() => setAnexosAbertos((a) => (a === requisicao.id ? null : requisicao.id))}><Paperclip size={13} /> Anexos</button>
                 </td>
               </tr>
+              {anexosAbertos === requisicao.id && (
+                <tr className="tdg-anexos-row">
+                  <td colSpan={7}>
+                    <AnexosContexto contextType="purchase_request" contextId={requisicao.id} titulo="Anexos da requisição" setToast={setToast} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}</tbody>
           </table></div>
         )}

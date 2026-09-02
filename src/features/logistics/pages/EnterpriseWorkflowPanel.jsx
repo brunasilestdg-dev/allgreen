@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Clock3, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { authHeaders } from "../../../session/armazenamento.js";
 import Modal from "../../../components/Modal.jsx";
+import AnexosContexto from "./AnexosContexto.jsx";
 import {
   alternarPonto,
   normalizarPontos,
@@ -177,6 +178,7 @@ function Card({ item, domain, reload, setToast }) {
       {item.status === "in_progress" && <button className="tdg-action" type="button" disabled={busy} onClick={() => updateStatus("done")}>Concluir</button>}
       {item.status === "blocked" && <button type="button" disabled={busy} onClick={() => updateStatus("in_progress")}>Desbloquear</button>}
     </div>
+    <AnexosContexto contextType="workflow" contextId={item.id} titulo={domain === "legal" ? "Contrato e documentos" : "Documentos"} setToast={setToast} />
     {item.status === "pending" && ressalvaAberta && (
       <div className="tdg-workflow-ressalva-form">
         <label>
