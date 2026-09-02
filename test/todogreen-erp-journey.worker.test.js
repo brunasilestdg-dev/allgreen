@@ -249,6 +249,15 @@ describe("jornada cliente → caixa", () => {
     expect(contrato.propostaId).toBe(proposta.id);
     expect(contrato.assinatura).toBe("pending");
 
+    // GATE (todo contrato passa pelo Jurídico): antes de qualquer validação
+    // jurídica, o contrato não pode ser promovido a aprovado nem assinado.
+    const semJuridicoAinda = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      method: "PATCH", token: dona.token,
+      body: { revision: contrato.revision, aprovacao: "approved" },
+    });
+    expect(semJuridicoAinda.status).toBe(409);
+    expect((await semJuridicoAinda.json()).error).toMatch(/jur[íi]dico/i);
+
     // 8. Jurídico. Processo sequencial: Jurídico e depois liderança.
     const juridicoResp = await pedir("/api/todogreen/enterprise-workflows", {
       method: "POST", token: dona.token,
@@ -513,10 +522,10 @@ describe("jornada cliente → caixa", () => {
   });
 
   // Gates FECHADOS e cobertos como regressão dentro do happy path acima:
+  //  - "contrato não chega a aprovado/assinado antes do Jurídico": 409 antes da validação.
   //  - "OS não nasce sem implantação ativa": bloqueio 409 antes do go-live.
   //  - "go-live valida a tabela de preço (real e ativa)": tabela inativa reprova.
   // TODOs intencionais que ainda faltam fechar:
-  it.todo("contrato não pode chegar a aprovado antes de o workflow jurídico obrigatório terminar");
   it.todo("contrato não pode receber assinatura signed sem evidência de assinatura vinculada");
   it.todo("CT-e só pode aparecer como autorizado depois do retorno oficial da SEFAZ");
 });

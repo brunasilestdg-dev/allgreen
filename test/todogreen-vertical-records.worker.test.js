@@ -428,6 +428,30 @@ describe("contrato nasce de proposta aceita", () => {
       corpo: { clientId: clienteId, propostaId: proposta.id, titulo: "Contrato ciclo", renovacao: "automatic" },
     })).json()).registro;
 
+    // Antes do Jurídico, a assinatura é recusada (gate: todo contrato passa
+    // pelo Jurídico).
+    const semJuridico = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14" },
+    });
+    expect(semJuridico.status).toBe(409);
+
+    // Validação jurídica concluída, amarrada ao contrato pelo contractId
+    // (semeada direto no banco: a segregação de funções do fluxo — quem abre
+    // não faz a 1ª aprovação — não é o alvo deste teste).
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_enterprise_workflows
+        (id,tenant_id,workspace_owner_id,domain,kind,title,description,client_id,owner_user_id,priority,
+         status,due_at,data_json,approval_json,recurrence_json,source_template_id,revision,created_by,updated_by,created_at,updated_at,archived_at)
+       VALUES (?,'todogreen',?,'legal','contrato','Revisão do ciclo','',?,?,'normal','approved',NULL,?,?,'{}','',1,?,?,?,?,NULL)`,
+    ).bind(
+      crypto.randomUUID(), gestora.id, clienteId, gestora.id,
+      JSON.stringify({ contractId: contrato.id, proposalId: proposta.id }),
+      JSON.stringify({ approvals: [{ stepId: "juridico", decision: "approved", decidedAt: agora }] }),
+      gestora.id, gestora.id, agora, agora,
+    ).run();
+
     const atualizado = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
       metodo: "PATCH", token: gestora.token,
       corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14", nota: "Assinado pelo cliente" },

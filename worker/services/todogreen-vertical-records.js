@@ -1493,6 +1493,40 @@ const bloqueioDeCompetencia = async (env, access, ...entradas) => {
   return "";
 };
 
+// Gate do Jurídico (regra da titular: todo contrato passa pelo Jurídico antes
+// de ser aprovado ou assinado). A validação jurídica vive em
+// todogreen_enterprise_workflows (domínio "legal"), amarrada ao contrato pelo
+// data_json.contractId (ou proposalId, quando o contrato ainda não existe no
+// momento da criação). "Concluído" = a etapa `juridico` recebeu decisão
+// aprovada ou aprovada com ressalva.
+const juridicoConcluido = async (env, access, { contractId = "", proposalId = "" }) => {
+  const cid = texto(contractId, 120);
+  const pid = texto(proposalId, 120);
+  if (!cid && !pid) return false;
+  const { results } = await env.DB
+    .prepare(
+      `SELECT data_json, approval_json FROM todogreen_enterprise_workflows
+        WHERE tenant_id=? AND workspace_owner_id=? AND domain='legal' AND archived_at IS NULL`,
+    )
+    .bind(TENANT_ID, access.ownerId)
+    .all()
+    .catch(() => ({ results: [] }));
+  for (const row of results || []) {
+    let data = {};
+    let approval = {};
+    try { data = JSON.parse(row.data_json || "{}"); } catch { data = {}; }
+    try { approval = JSON.parse(row.approval_json || "{}"); } catch { approval = {}; }
+    const refereEsteContrato =
+      (cid && texto(data.contractId, 120) === cid) ||
+      (pid && texto(data.proposalId, 120) === pid);
+    if (!refereEsteContrato) continue;
+    const aprovacoes = Array.isArray(approval.approvals) ? approval.approvals : [];
+    if (aprovacoes.some((a) => a.stepId === "juridico" && ["approved", "ressalva"].includes(a.decision)))
+      return true;
+  }
+  return false;
+};
+
 const criar = async (env, colecao, access, user, corpo, email = "") => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);
@@ -1530,6 +1564,12 @@ const criar = async (env, colecao, access, user, corpo, email = "") => {
         WHERE tenant_id=? AND workspace_owner_id=? AND proposal_id=? AND archived_at IS NULL`,
     ).bind(TENANT_ID, access.ownerId, propostaId).first();
     if (existente) return json({ error: "Esta proposta já possui contrato ativo." }, 409);
+    // Nasce aprovado/assinado? Só com o Jurídico concluído. Na criação, o
+    // contrato ainda não tem id, então amarramos pela proposta.
+    if (texto(corpo.aprovacao, 40) === "approved" || texto(corpo.assinatura, 40) === "signed") {
+      if (!(await juridicoConcluido(env, access, { proposalId: propostaId })))
+        return json({ error: "Este contrato precisa da validação do Jurídico concluída antes de ser aprovado ou assinado." }, 409);
+    }
     corpo = {
       ...corpo,
       cliente: corpo.cliente || proposta.client_name,
@@ -1618,6 +1658,20 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
   if (colecao === COLECOES.contracts && texto(corpo.aprovacao, 40)) {
     proximo.aprovadoPor = texto(corpo.aprovacao, 40) === "approved" ? user.id : "";
     proximo.aprovadoEm = texto(corpo.aprovacao, 40) === "approved" ? new Date().toISOString() : "";
+  }
+  if (colecao === COLECOES.contracts) {
+    // Gate do Jurídico só na TRANSIÇÃO para approved/signed (não a cada PATCH
+    // posterior de um contrato que já está nesse estado).
+    const vaiAprovar = texto(proximo.aprovacao, 40) === "approved" && texto(atual.approval_status, 40) !== "approved";
+    const vaiAssinar = texto(proximo.assinatura, 40) === "signed" && texto(atual.signature_status, 40) !== "signed";
+    if (vaiAprovar || vaiAssinar) {
+      const ok = await juridicoConcluido(env, access, {
+        contractId: id,
+        proposalId: texto(atual.proposal_id, 120),
+      });
+      if (!ok)
+        return json({ error: "Este contrato precisa da validação do Jurídico concluída antes de ser aprovado ou assinado." }, 409);
+    }
   }
   const erro = colecao.exigido(proximo);
   if (erro) return json({ error: erro }, 400);
