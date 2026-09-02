@@ -182,8 +182,6 @@ export async function handleCollab(request, env, user, url) {
         { error: "Esta pessoa já faz parte do seu espaço." },
         409,
       );
-    if (!emailEnabled(env))
-      return json({ error: "Envio de e-mail não está configurado." }, 503);
     const code = crypto.randomUUID();
     const token = randomHex(24);
     const now = new Date();
@@ -209,26 +207,28 @@ export async function handleCollab(request, env, user, url) {
         directManagerId,
       )
       .run();
+    // O convite vale pelo LINK, não pelo e-mail. Devolvemos o link para o
+    // admin copiar e enviar por onde quiser (WhatsApp, etc.) — assim o acesso
+    // nunca fica preso à entrega do e-mail (que pode cair no spam ou falhar).
+    // O e-mail, quando configurado, é só a conveniência de já mandar sozinho:
+    // se falhar, o convite continua de pé e o link segue na resposta.
     const link = `${url.origin}/convite/${token}`;
-    try {
-      await sendEmail(
-        env,
-        email,
-        `${actingOnBehalfOf.name} convidou você — Seu Funcionário`,
-        inviteEmailHtml(name, actingOnBehalfOf.name, role, link),
-      );
-    } catch (e) {
-      console.error("invite mail", e);
-      await env.DB.prepare("DELETE FROM invites WHERE code = ?")
-        .bind(code)
-        .run();
-      return json(
-        { error: "Não foi possível enviar o e-mail de convite agora." },
-        502,
-      );
+    let emailSent = false;
+    if (emailEnabled(env)) {
+      try {
+        await sendEmail(
+          env,
+          email,
+          `${actingOnBehalfOf.name} convidou você — Seu Funcionário`,
+          inviteEmailHtml(name, actingOnBehalfOf.name, role, link),
+        );
+        emailSent = true;
+      } catch (e) {
+        console.error("invite mail", e);
+      }
     }
     await logAudit(env, scopeOwnerId, user, "convite_criado", email, `papel: ${role}`);
-    return json({ id: code, expiresAt });
+    return json({ id: code, expiresAt, link, emailSent });
   }
   if (action === "resend") {
     const id = typeof body.id === "string" ? body.id : "";
@@ -240,8 +240,6 @@ export async function handleCollab(request, env, user, url) {
     if (!invite) return json({ error: "Convite não encontrado." }, 404);
     if (invite.status !== "enviado")
       return json({ error: "Este convite não pode ser reenviado." }, 400);
-    if (!emailEnabled(env))
-      return json({ error: "Envio de e-mail não está configurado." }, 503);
     const token = randomHex(24);
     const expiresAt = new Date(
       Date.now() + 7 * 24 * 60 * 60 * 1000,
@@ -251,20 +249,24 @@ export async function handleCollab(request, env, user, url) {
     )
       .bind(await sha256(token), expiresAt, id)
       .run();
+    // Gera um link novo (o token antigo deixa de valer) e o devolve para copiar.
     const link = `${url.origin}/convite/${token}`;
-    try {
-      await sendEmail(
-        env,
-        invite.email,
-        `${actingOnBehalfOf.name} convidou você — Seu Funcionário`,
-        inviteEmailHtml(invite.name, actingOnBehalfOf.name, invite.role, link),
-      );
-    } catch (e) {
-      console.error("resend invite mail", e);
-      return json({ error: "Não foi possível reenviar agora." }, 502);
+    let emailSent = false;
+    if (emailEnabled(env)) {
+      try {
+        await sendEmail(
+          env,
+          invite.email,
+          `${actingOnBehalfOf.name} convidou você — Seu Funcionário`,
+          inviteEmailHtml(invite.name, actingOnBehalfOf.name, invite.role, link),
+        );
+        emailSent = true;
+      } catch (e) {
+        console.error("resend invite mail", e);
+      }
     }
     await logAudit(env, scopeOwnerId, user, "convite_reenviado", invite.email, "");
-    return json({ ok: true, expiresAt });
+    return json({ ok: true, expiresAt, link, emailSent });
   }
   if (action === "cancel") {
     const id = typeof body.id === "string" ? body.id : "";

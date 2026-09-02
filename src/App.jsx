@@ -12074,6 +12074,9 @@ function Collaborators({ db, update, setToast }) {
   });
   const [form, setForm] = useState(blankInviteForm);
   const [sending, setSending] = useState(false);
+  // Link do último convite criado/reenviado, para o admin copiar e enviar por
+  // onde quiser — o acesso não depende do e-mail chegar.
+  const [inviteLink, setInviteLink] = useState(null);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -12158,9 +12161,15 @@ function Collaborators({ db, update, setToast }) {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Não foi possível enviar o convite.");
+      const alvo = form.email;
       setForm(blankInviteForm);
+      if (d.link) setInviteLink({ url: d.link, email: alvo, emailSent: d.emailSent });
       load();
-      setToast(`Convite enviado para ${form.email}`);
+      setToast(
+        d.emailSent
+          ? `Convite enviado para ${alvo}. O link também está aqui para copiar.`
+          : `Convite criado. Copie o link e envie para ${alvo}.`,
+      );
     } catch (e) {
       setToast(e.message);
     } finally {
@@ -12176,10 +12185,20 @@ function Collaborators({ db, update, setToast }) {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Não foi possível reenviar.");
+      if (d.link) setInviteLink({ url: d.link, email: "", emailSent: d.emailSent });
       load();
-      setToast("Convite reenviado");
+      setToast(d.emailSent ? "Convite reenviado. Link novo pronto para copiar." : "Link novo gerado — copie e envie.");
     } catch (e) {
       setToast(e.message);
+    }
+  };
+  const copiarLinkConvite = async () => {
+    if (!inviteLink?.url) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink.url);
+      setToast("Link do convite copiado.");
+    } catch {
+      setToast("Não consegui copiar automaticamente — selecione o link e copie.");
     }
   };
   const cancelInvite = async (id) => {
@@ -12334,9 +12353,10 @@ function Collaborators({ db, update, setToast }) {
             Convidar colaborador
           </h3>
           <p>
-            A pessoa recebe um e-mail com um link seguro para criar a própria
-            senha e ativar a conta. Todos os colaboradores ativos podem
-            utilizar todas as ferramentas da plataforma.
+            A pessoa recebe um link seguro para criar a própria senha e ativar
+            a conta. Enviamos por e-mail quando configurado, mas o link também
+            aparece aqui para você copiar e mandar por onde quiser — o acesso
+            nunca fica preso à entrega do e-mail.
           </p>
           <form className="invite-form" onSubmit={sendInvite}>
             <div className="form-grid">
@@ -12407,6 +12427,20 @@ function Collaborators({ db, update, setToast }) {
               {sending ? "Enviando..." : "Enviar convite"}
             </Button>
           </form>
+          {inviteLink && (
+            <div className="invite-link-box">
+              <small>
+                {inviteLink.emailSent
+                  ? `Convite enviado por e-mail${inviteLink.email ? ` para ${inviteLink.email}` : ""}. Este link também vale — copie e mande direto se preferir:`
+                  : `Copie este link e envie para a pessoa${inviteLink.email ? ` (${inviteLink.email})` : ""}. Ela abre e define a senha:`}
+              </small>
+              <div className="invite-link-row">
+                <input readOnly value={inviteLink.url} onFocus={(e) => e.target.select()} aria-label="Link do convite" />
+                <Button type="button" icon={Copy} onClick={copiarLinkConvite}>Copiar</Button>
+              </div>
+              <button type="button" className="invite-link-dismiss" onClick={() => setInviteLink(null)}>Fechar</button>
+            </div>
+          )}
           {pendingInvites.length > 0 && (
             <div className="member-list">
               <small className="member-title">Convites</small>

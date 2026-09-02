@@ -93,14 +93,20 @@ function req(path, { method = "GET", user, body } = {}) {
 }
 
 describe("convites de equipe com D1 local", () => {
-  it("recusa criar convite quando o envio de e-mail não está configurado", async () => {
+  it("cria o convite e devolve o link mesmo sem e-mail configurado (o admin copia e envia)", async () => {
     const owner = await createUser("invite-owner-1");
     const response = await req("/api/collab/invite", {
       method: "POST",
       user: owner,
       body: { name: "Nova Pessoa", email: "nova@example.com", role: "colaborador" },
     });
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    // O convite vale pelo link: sem e-mail configurado, o link vem na resposta
+    // para o admin repassar por onde quiser, e emailSent avisa que não foi enviado.
+    expect(body.link).toMatch(/\/convite\//);
+    expect(body.emailSent).toBe(false);
+    expect(typeof body.id).toBe("string");
   });
 
   it("retorna os dados públicos de um convite válido", async () => {

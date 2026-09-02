@@ -36,6 +36,44 @@
   display: grid;
   gap: 12px;
 }
+.invite-link-box {
+  margin-top: 14px;
+  padding: 13px;
+  border-radius: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--primary);
+  display: grid;
+  gap: 8px;
+}
+.invite-link-box > small {
+  color: var(--text2);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.invite-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.invite-link-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #d5dee6);
+  border-radius: 8px;
+  background: var(--surface1, #fff);
+}
+.invite-link-dismiss {
+  justify-self: start;
+  background: transparent;
+  border: 0;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 0;
+  text-decoration: underline;
+}
 .invite-box {
   margin-top: 14px;
   padding: 13px;
