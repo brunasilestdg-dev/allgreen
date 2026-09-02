@@ -96,11 +96,20 @@ function DomainFields({ domain, form, setForm }) {
   </>;
 }
 
+const DECISAO_ROTULO = { approved: "aprovado", rejected: "recusado", ressalva: "com ressalva" };
+
 function Card({ item, domain, reload, setToast }) {
   const [busy, setBusy] = useState(false);
-  const decide = async (decision) => {
+  const [ressalvaAberta, setRessalvaAberta] = useState(false);
+  const [ressalvaNota, setRessalvaNota] = useState("");
+  const decide = async (decision, note = "") => {
+    if (decision === "ressalva" && !note.trim()) { setToast?.("Descreva a ressalva antes de confirmar."); return; }
     setBusy(true);
-    try { await api(`/${item.id}/decision`, { method: "POST", body: JSON.stringify({ decision }) }); await reload(); }
+    try {
+      await api(`/${item.id}/decision`, { method: "POST", body: JSON.stringify({ decision, note }) });
+      setRessalvaAberta(false); setRessalvaNota("");
+      await reload();
+    }
     catch (error) { setToast?.(error.message); }
     finally { setBusy(false); }
   };
@@ -154,13 +163,32 @@ function Card({ item, domain, reload, setToast }) {
         </button>
       </div>
     )}
-    {item.approval?.plan?.length > 0 && <div className="tdg-workflow-approval"><ShieldCheck size={16} /><span><strong>{item.approval.complete ? "Aprovações concluídas" : `Próxima aprovação: ${item.approval.next?.label || "—"}`}</strong><small>{item.approval.approvals?.map((step) => `${step.label}: ${step.decision === "approved" ? "aprovado" : "recusado"}`).join(" · ") || "Nenhuma decisão registrada"}</small></span></div>}
+    {item.approval?.plan?.length > 0 && <div className="tdg-workflow-approval"><ShieldCheck size={16} /><span><strong>{item.approval.complete ? (item.approval.comRessalva ? "Aprovado com ressalva" : "Aprovações concluídas") : `Próxima aprovação: ${item.approval.next?.label || "—"}`}</strong><small>{item.approval.approvals?.map((step) => `${step.label}: ${DECISAO_ROTULO[step.decision] || step.decision}`).join(" · ") || "Nenhuma decisão registrada"}</small></span></div>}
+    {item.approval?.ressalvas?.length > 0 && (
+      <ul className="tdg-workflow-ressalvas">
+        {item.approval.ressalvas.map((r, i) => (
+          <li key={`${r.stepId}-${i}`}><strong>Ressalva de {r.label}:</strong> {r.note || "sem detalhe"}</li>
+        ))}
+      </ul>
+    )}
     <div className="tdg-page-actions">
-      {item.status === "pending" && <><button className="tdg-action" type="button" disabled={busy} onClick={() => decide("approve")}><Check size={15} />Aprovar etapa</button><button type="button" disabled={busy} onClick={() => decide("reject")}><X size={15} />Recusar</button></>}
+      {item.status === "pending" && !ressalvaAberta && <><button className="tdg-action" type="button" disabled={busy} onClick={() => decide("approve")}><Check size={15} />Aprovar etapa</button><button type="button" disabled={busy} onClick={() => setRessalvaAberta(true)}>Aprovar com ressalva</button><button type="button" disabled={busy} onClick={() => decide("reject")}><X size={15} />Reprovar</button></>}
       {item.status === "approved" && <button className="tdg-action" type="button" disabled={busy} onClick={() => updateStatus("in_progress")}>Iniciar execução</button>}
       {item.status === "in_progress" && <button className="tdg-action" type="button" disabled={busy} onClick={() => updateStatus("done")}>Concluir</button>}
       {item.status === "blocked" && <button type="button" disabled={busy} onClick={() => updateStatus("in_progress")}>Desbloquear</button>}
     </div>
+    {item.status === "pending" && ressalvaAberta && (
+      <div className="tdg-workflow-ressalva-form">
+        <label>
+          Ressalva (o que precisa ser observado ou ajustado)
+          <textarea value={ressalvaNota} onChange={(e) => setRessalvaNota(e.target.value)} rows={3} placeholder="Ex.: aprovado desde que a multa por rescisão caia para 2 mensalidades." autoFocus />
+        </label>
+        <div className="tdg-page-actions">
+          <button type="button" disabled={busy} onClick={() => { setRessalvaAberta(false); setRessalvaNota(""); }}>Cancelar</button>
+          <button className="tdg-action" type="button" disabled={busy || !ressalvaNota.trim()} onClick={() => decide("ressalva", ressalvaNota)}><Check size={15} />Confirmar ressalva</button>
+        </div>
+      </div>
+    )}
   </article>;
 }
 

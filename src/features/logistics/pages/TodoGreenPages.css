@@ -3089,3 +3089,39 @@
   font-size: 13px;
   color: var(--tdg-muted, #5a6f68);
 }
+
+/* ===== Jurídico: ressalva na aprovação (#100) ===== */
+.tdg-workflow-ressalvas {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #e6cf8f;
+  background: #fdf7e6;
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+}
+.tdg-workflow-ressalvas li {
+  color: #6b5410;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.tdg-workflow-ressalva-form {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+.tdg-workflow-ressalva-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tdg-muted, #5a6f68);
+}
+.tdg-workflow-ressalva-form textarea {
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 8px;
+  font: inherit;
+  padding: 8px 10px;
+  resize: vertical;
+}

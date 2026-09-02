@@ -53,9 +53,15 @@ const approvalPlan = (domain, data = {}) => {
 const normalizeApproval = (domain, data, current = {}) => {
   const plan = approvalPlan(domain, data);
   const approvals = arr(current.approvals).filter((item) => plan.some((step) => step.id === item.stepId));
-  const done = new Set(approvals.filter((item) => item.decision === "approved").map((item) => item.stepId));
+  // "ressalva" (aprovado com ressalva) satisfaz a etapa como uma aprovação —
+  // o fluxo anda — mas fica marcada, porque a área precisa saber que passou
+  // com uma observação a resolver (pedido do Jurídico: retornar com ressalva).
+  const done = new Set(
+    approvals.filter((item) => ["approved", "ressalva"].includes(item.decision)).map((item) => item.stepId),
+  );
   const next = plan.find((step) => !done.has(step.id)) || null;
-  return { plan, approvals, next, complete: plan.length === 0 || !next };
+  const ressalvas = approvals.filter((item) => item.decision === "ressalva");
+  return { plan, approvals, next, complete: plan.length === 0 || !next, ressalvas, comRessalva: ressalvas.length > 0 };
 };
 
 const mapRow = (row) => {
@@ -141,7 +147,11 @@ const decide = async (env, access, user, id, body) => {
   if (!allowed) return json({ error: `A próxima decisão é de ${next.label}.` }, 403);
   if (before.createdBy === user.id && current.plan.length > 1 && current.approvals.length === 0)
     return json({ error: "Quem abriu o processo não pode fazer a primeira aprovação do próprio pedido." }, 403);
-  const decision = body.decision === "reject" ? "rejected" : "approved";
+  const decision = body.decision === "reject" ? "rejected" : body.decision === "ressalva" ? "ressalva" : "approved";
+  // A ressalva sem o texto do que ressalvar não serve a ninguém: a área
+  // precisa saber o que ajustar. Exigimos a nota nesse caso.
+  if (decision === "ressalva" && !text(body.note, 2000))
+    return json({ error: "Descreva a ressalva: o que precisa ser observado ou ajustado." }, 400);
   const approvals = [...current.approvals, { stepId: next.id, label: next.label, permission: next.permission, decision, actorUserId: user.id, decidedAt: new Date().toISOString(), note: text(body.note,2000) }];
   const state = normalizeApproval(row.domain, { ...before.data, kind: row.kind }, { approvals });
   const status = decision === "rejected" ? "rejected" : state.complete ? "approved" : "pending";
