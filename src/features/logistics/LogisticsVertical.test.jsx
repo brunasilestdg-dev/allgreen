@@ -163,11 +163,12 @@ describe("LogisticsVertical", () => {
   it("renders the private hub for authorized To Do Green users", async () => {
     await renderarAutorizada();
     expect(screen.getByRole("heading", { name: "Principal", level: 1 }).hidden).toBe(false);
-    // Acordeão: 19 áreas (taxonomia da titular; Implantação mora no Workspace e
+    // Acordeão: 20 áreas (taxonomia da titular; Implantação mora no Workspace e
     // Planejamento voltou a ser área própria, separada de Operação e de
-    // Indicadores). Conta-se as ÁREAS, não um total frágil.
+    // Indicadores; "Estúdio" reúne as ferramentas trazidas do app geral).
+    // Conta-se as ÁREAS, não um total frágil.
     const navegacao = screen.getByRole("navigation", { name: "Navegação To Do Green" });
-    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(19);
+    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(20);
     expect(screen.getByText("Configurações")).toBeTruthy();
     // Sem "Sair" a sessão fica eterna no navegador: quem pega o mesmo
     // aparelho entra direto na conta de quem esqueceu de sair.

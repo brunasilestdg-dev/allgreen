@@ -118,6 +118,21 @@ const CentralRfqPage = lazy(() => import("./pages/CentralRfqPage.jsx"));
 const AvancosDaSemanaPage = lazy(() => import("./pages/AvancosDaSemanaPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
 const SalesFunnelPage = lazy(() => import("./pages/SalesFunnelPage.jsx"));
+// Ferramentas do app geral trazidas para dentro da vertical (Estúdio). Elas já
+// recebem db/update/setToast; passamos um contexto de negócio To Do Green para
+// os exemplos e prompts saírem no tom da transportadora.
+const CreativeToolkit = lazy(() => import("../creative/CreativeToolkit.jsx"));
+const MediaStudio = lazy(() => import("../media/MediaStudio.jsx"));
+const CodeStudio = lazy(() => import("../code/CodeStudio.jsx"));
+// Contexto de negócio que o Estúdio usa para os exemplos e prompts saírem no
+// tom da To Do Green (transportadora elétrica), em vez do exemplo genérico.
+const negocioTDG = {
+  id: "todogreen",
+  name: "To Do Green",
+  segment: "Transportadora rodoviária 100% elétrica (B2B)",
+  goal: "Transporte de carga com frota elétrica, foco em ESG e redução de CO2",
+  focusAreas: "logística, frota elétrica, ESG, transporte de cargas",
+};
 const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage.jsx"));
 const TripViabilityPage = lazy(() => import("./pages/TripViabilityPage.jsx"));
@@ -230,6 +245,9 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "contatos",
   "oportunidades",
   "funil",
+  "estudio-criativo",
+  "midia",
+  "editor-codigo",
   "pipeline",
   "propostas",
   "contratos",
@@ -403,6 +421,33 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     permission: "crm:manage",
     description: "Previsão ponderada do comercial: valor por etapa, taxa de fechamento, ticket e ciclo médios e forecast dos próximos meses.",
+  },
+  "estudio-criativo": {
+    title: "Estúdio criativo",
+    navLabel: "Estúdio criativo",
+    route: "/todogreen/estudio-criativo",
+    area: "estudio",
+    status: "functional",
+    permission: "marketing:manage",
+    description: "Gera logos e imagens com a IA disponível, com o contexto da To Do Green.",
+  },
+  midia: {
+    title: "Mídia",
+    navLabel: "Mídia",
+    route: "/todogreen/midia",
+    area: "estudio",
+    status: "functional",
+    permission: "marketing:manage",
+    description: "Edita foto, grava recado em áudio e guarda na biblioteca — tudo no aparelho, sem enviar arquivo para fora.",
+  },
+  "editor-codigo": {
+    title: "Editor de código",
+    navLabel: "Editor de código",
+    route: "/todogreen/editor-codigo",
+    area: "estudio",
+    status: "functional",
+    permission: "marketing:manage",
+    description: "Monta uma página, formulário ou cartão em HTML/CSS/JS e vê o resultado na hora, com download pronto para publicar.",
   },
   propostas: {
     title: "Propostas e contratos",
@@ -858,6 +903,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
+  { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo"] },
   { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
@@ -3070,6 +3116,9 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} financial={registros.financial} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} authHeaders={authHeaders} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "funil" && <Suspense fallback={<section className="tdg-panel">Carregando o funil...</section>}><SalesFunnelPage opportunities={verticalData.opportunities} onNavigate={navigate} setToast={setToast} /></Suspense>}
+      {page === "estudio-criativo" && <Suspense fallback={<section className="tdg-panel">Carregando o estúdio...</section>}><div className="tdg-page tdg-estudio"><CreativeToolkit business={negocioTDG} setToast={setToast} /></div></Suspense>}
+      {page === "midia" && <Suspense fallback={<section className="tdg-panel">Carregando a mídia...</section>}><div className="tdg-page tdg-estudio"><MediaStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
+      {page === "editor-codigo" && <Suspense fallback={<section className="tdg-panel">Carregando o editor...</section>}><div className="tdg-page tdg-estudio"><CodeStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
       {page === "precificacao" && <PricingPanel key={`${produtoDaRota(path) || "nova"}:${new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"}`} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
       {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}

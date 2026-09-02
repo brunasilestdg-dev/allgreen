@@ -3258,3 +3258,7 @@
   .tdg-funil-grid { grid-template-columns: 1fr; }
   .tdg-funil-etapas li { grid-template-columns: 100px minmax(0, 1fr) auto; }
 }
+
+/* ===== Estúdio: ferramentas do app geral montadas na vertical ===== */
+.tdg-estudio { display: block; }
+.tdg-estudio > * { max-width: 100%; }
