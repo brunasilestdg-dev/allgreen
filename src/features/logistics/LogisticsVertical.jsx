@@ -117,6 +117,7 @@ const SobreONegocioPage = lazy(() => import("./pages/SobreONegocioPage.jsx"));
 const CentralRfqPage = lazy(() => import("./pages/CentralRfqPage.jsx"));
 const AvancosDaSemanaPage = lazy(() => import("./pages/AvancosDaSemanaPage.jsx"));
 const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
+const SalesFunnelPage = lazy(() => import("./pages/SalesFunnelPage.jsx"));
 const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage.jsx"));
 const TripViabilityPage = lazy(() => import("./pages/TripViabilityPage.jsx"));
@@ -228,6 +229,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "clientes",
   "contatos",
   "oportunidades",
+  "funil",
   "pipeline",
   "propostas",
   "contratos",
@@ -392,6 +394,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     status: "functional",
     permission: "crm:manage",
     description: "Criação de oportunidades por produto logístico, estágio, valor estimado, probabilidade e prioridade.",
+  },
+  funil: {
+    title: "Funil de vendas",
+    navLabel: "Funil de vendas",
+    route: "/todogreen/funil",
+    area: "comercial",
+    status: "functional",
+    permission: "crm:manage",
+    description: "Previsão ponderada do comercial: valor por etapa, taxa de fechamento, ticket e ciclo médios e forecast dos próximos meses.",
   },
   propostas: {
     title: "Propostas e contratos",
@@ -847,7 +858,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
@@ -3058,6 +3069,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       )}
       {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} financial={registros.financial} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
       {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} authHeaders={authHeaders} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onNavigate={navigate} setToast={setToast} /></Suspense>}
+      {page === "funil" && <Suspense fallback={<section className="tdg-panel">Carregando o funil...</section>}><SalesFunnelPage opportunities={verticalData.opportunities} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
       {page === "precificacao" && <PricingPanel key={`${produtoDaRota(path) || "nova"}:${new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"}`} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
       {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}

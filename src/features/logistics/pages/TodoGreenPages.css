@@ -3190,3 +3190,71 @@
   padding: 2px;
 }
 .tdg-anexos-row > td { background: #f4faf7; }
+
+/* ===== Funil de vendas (vertical) ===== */
+.tdg-funil-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tdg-funil-metrics .tdg-metric {
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  display: grid;
+  gap: 4px;
+}
+.tdg-funil-metrics .tdg-metric > span { color: var(--tdg-muted, #5a6f68); font-size: 12.5px; }
+.tdg-funil-metrics .tdg-metric > strong { color: var(--tdg-ink, #17372e); font-size: 20px; }
+.tdg-funil-metrics .tdg-metric.ativa { border-color: #0b9f8f; background: #eef8f3; }
+.tdg-funil-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.tdg-funil-etapas { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.tdg-funil-etapas li {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.tdg-funil-etapa-nome { color: var(--tdg-ink, #17372e); font-size: 13px; font-weight: 650; }
+.tdg-funil-barra {
+  height: 12px;
+  border-radius: 999px;
+  background: #eef3f1;
+  overflow: hidden;
+}
+.tdg-funil-barra > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0b9f8f, #17624f);
+  min-width: 2px;
+}
+.tdg-funil-etapa-valor { color: var(--tdg-muted, #5a6f68); font-size: 12.5px; white-space: nowrap; }
+.tdg-funil-tabela th { text-align: right; }
+.tdg-funil-tabela th:first-child, .tdg-funil-tabela td:first-child { text-align: left; }
+.tdg-funil-tabela td { text-align: right; }
+.tdg-funil-nota { display: block; margin-top: 10px; color: var(--tdg-muted, #5a6f68); font-size: 12px; line-height: 1.4; }
+.tdg-funil-vazio {
+  margin-top: 14px;
+  border: 1px dashed var(--tdg-line, #dce7e2);
+  border-radius: 14px;
+  padding: 34px 20px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--tdg-muted, #5a6f68);
+}
+.tdg-funil-vazio > strong { color: var(--tdg-ink, #17372e); font-size: 16px; }
+.tdg-funil-vazio > p { max-width: 460px; margin: 0; font-size: 13px; }
+@media (max-width: 900px) {
+  .tdg-funil-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tdg-funil-grid { grid-template-columns: 1fr; }
+  .tdg-funil-etapas li { grid-template-columns: 100px minmax(0, 1fr) auto; }
+}
