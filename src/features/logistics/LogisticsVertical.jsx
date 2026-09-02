@@ -873,7 +873,7 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "administracao",
     status: "functional",
     permission: ["access:manage", "integration:manage", "audit:read"],
-    description: "Acessos, permissões, auditoria, integrações, configurações e governança do ambiente To Do Green.",
+    description: "Acessos, permissões, auditoria, configurações e governança do ambiente To Do Green.",
   },
   "central-rfq": {
     title: "Central de RFQ e RFI",
