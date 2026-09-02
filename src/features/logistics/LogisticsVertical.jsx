@@ -64,6 +64,7 @@ import {
   TODO_GREEN_TENANT,
   centralPricingEngine,
   createPricingScenarioSnapshot,
+  ehPerfilDesenvolvedor,
   esgTranslator,
   getProductPricingBlueprint,
   hasTodoGreenPermission,
@@ -2781,7 +2782,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   // esconde o botão, mas voltar no histórico, atualizar ou digitar a URL
   // chegam à tela sem passar por ele. A fonte é a mesma que o menu usa.
   const permissaoNecessaria = activeManagement ? activeManagement.permission : permissaoDaPagina(page);
-  const podeVerPagina = podeAcessarFuncionalidade(role, remoteAccess.permissions, permissaoNecessaria);
+  // A Central de Integrações é invisível para todos e só abre no perfil de
+  // desenvolvedor (pedido da titular). A checagem ignora "*" e owner/admin de
+  // propósito — daí `ehPerfilDesenvolvedor` e não a permissão comum da tela.
+  const ehDev = ehPerfilDesenvolvedor(role, remoteAccess.permissions);
+  const podeVerPagina = page === "integracoes"
+    ? ehDev
+    : podeAcessarFuncionalidade(role, remoteAccess.permissions, permissaoNecessaria);
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
     document.title = `${currentPage.title} | To Do Green`;
@@ -2910,7 +2917,11 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                 // no topo do menu lateral. Aqui ficam só as ferramentas de
                 // administração (integrações, usuários e acessos).
                 .filter((item) => item.id !== "projects")
-                .filter((item) => podeAcessarFuncionalidade(role, remoteAccess.permissions, item.permission))
+                // Integrações só aparece no menu para o perfil de desenvolvedor;
+                // os demais itens seguem a permissão comum.
+                .filter((item) => (item.id === "integracoes"
+                  ? ehDev
+                  : podeAcessarFuncionalidade(role, remoteAccess.permissions, item.permission)))
                 .map((item) => (
                   <button
                     type="button"
@@ -3095,6 +3106,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             setToast={setToast}
             onNavigate={navigate}
             authHeaders={authHeaders}
+            mostrarIntegracoes={ehDev}
             initialTool={page === "visualizacoes" ? "visoes" : page === "agentes-funcoes" ? "agentes" : workspaceToolFromPath(path)}
           />
         </Suspense>

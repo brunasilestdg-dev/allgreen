@@ -197,7 +197,7 @@ function NegocioTodoGreen({ onNavigate }) {
   );
 }
 
-function WorkspaceOverview({ summary, onOpenTool, onNavigate }) {
+function WorkspaceOverview({ summary, onOpenTool, onNavigate, mostrarIntegracoes = false }) {
   const metricCards = [
     ["Clientes", summary.clients, () => onNavigate("/todogreen/clientes")],
     ["Oportunidades abertas", summary.openOpportunities, () => onNavigate("/todogreen/oportunidades")],
@@ -288,11 +288,13 @@ function WorkspaceOverview({ summary, onOpenTool, onNavigate }) {
             <b>Contatos e e-mail</b>
             <small>Pessoas, canais e envio direto</small>
           </button>
-          <button type="button" onClick={() => onNavigate("/todogreen/integracoes")}>
-            <span className="tdg-space-descubra-ic"><Plug size={18} /></span>
-            <b>Conectar Claude / GPT</b>
-            <small>Sua própria chave de IA em Integrações</small>
-          </button>
+          {mostrarIntegracoes && (
+            <button type="button" onClick={() => onNavigate("/todogreen/integracoes")}>
+              <span className="tdg-space-descubra-ic"><Plug size={18} /></span>
+              <b>Conectar Claude / GPT</b>
+              <small>Sua própria chave de IA em Integrações</small>
+            </button>
+          )}
         </div>
       </section>
 
@@ -361,6 +363,10 @@ export default function TodoGreenWorkspace({
   setToast,
   onNavigate,
   authHeaders,
+  // A Central de Integrações é dev-only: a titular pediu a tela invisível para
+  // todos e visível só no perfil de desenvolvedor. Quando falso, o botão
+  // "Integrações" da barra e o atalho "Conectar Claude / GPT" nem aparecem.
+  mostrarIntegracoes = false,
   initialTool = "visao-geral",
 }) {
   const [tool, setTool] = useState(() => workspaceTool(initialTool));
@@ -428,9 +434,11 @@ export default function TodoGreenWorkspace({
               </button>
             );
           })}
-          <button type="button" onClick={() => onNavigate?.("/todogreen/integracoes")}>
-            <Plug size={16} /> Integrações
-          </button>
+          {mostrarIntegracoes && (
+            <button type="button" onClick={() => onNavigate?.("/todogreen/integracoes")}>
+              <Plug size={16} /> Integrações
+            </button>
+          )}
           <div className={`tdg-space-more${moreOpen ? " is-open" : ""}`} ref={moreRef}>
             <button
               type="button"
@@ -462,6 +470,7 @@ export default function TodoGreenWorkspace({
           summary={summary}
           onOpenTool={openTool}
           onNavigate={onNavigate}
+          mostrarIntegracoes={mostrarIntegracoes}
         />
       )}
       <Suspense fallback={<LoadingTool />}>
@@ -485,7 +494,7 @@ export default function TodoGreenWorkspace({
           )}
           {tool === "inteligencia" && <TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={onNavigate} authHeaders={authHeaders} setToast={setToast} />}
           {tool === "contatos" && <TodoGreenIntelligenceHub key="contatos" verticalData={verticalData} initialView="contacts" onNavigate={onNavigate} authHeaders={authHeaders} setToast={setToast} />}
-          {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} />}
+          {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} mostrarIntegracoes={mostrarIntegracoes} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}
           {tool === "tarefas" && (
             <TasksScreen

@@ -12,8 +12,33 @@ import {
   pricingDecisionSummary,
   hasTodoGreenPermission,
   verticalPermite,
+  ehPerfilDesenvolvedor,
+  TODO_GREEN_ROLES,
   summarizeTodoGreenDashboard,
 } from "./logisticsVerticalDomain.js";
+
+describe("perfil de desenvolvedor (Central de Integrações dev-only)", () => {
+  it("só o papel desenvolvedor ou uma permissão dev:access explícita abrem", () => {
+    expect(ehPerfilDesenvolvedor("desenvolvedor")).toBe(true);
+    expect(ehPerfilDesenvolvedor("vendedor", ["read", "dev:access"])).toBe(true);
+  });
+
+  it("NÃO herda do curinga * nem de owner/admin — a tela some para eles", () => {
+    // É a diferença deliberada em relação a verticalPermite: quem tem "*"
+    // passa em tudo, mas não vê a Central de Integrações. A titular quis a
+    // tela invisível até para a dona (owner).
+    expect(ehPerfilDesenvolvedor("owner")).toBe(false);
+    expect(ehPerfilDesenvolvedor("owner", ["*"])).toBe(false);
+    expect(ehPerfilDesenvolvedor("admin", ["*"])).toBe(false);
+    expect(ehPerfilDesenvolvedor("operacoes", ["read", "integration:manage"])).toBe(false);
+    expect(ehPerfilDesenvolvedor("vendedor")).toBe(false);
+    expect(ehPerfilDesenvolvedor("vendedor", [])).toBe(false);
+  });
+
+  it("registra o papel desenvolvedor como atribuível na vertical", () => {
+    expect(TODO_GREEN_ROLES).toContain("desenvolvedor");
+  });
+});
 
 describe("logistics vertical domain", () => {
   it("catalogs To Do Green modules and product-specific calculators", () => {

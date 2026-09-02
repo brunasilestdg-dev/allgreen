@@ -64,11 +64,20 @@ function Playbook({ onNavigate }) {
   </section>;
 }
 
-function Help({ onNavigate }) {
+function Help({ onNavigate, mostrarIntegracoes = false }) {
+  // Integrações é dev-only (pedido da titular): fora do perfil de desenvolvedor
+  // some o atalho e a dúvida sobre conectar IA, para não mandar ninguém a uma
+  // tela restrita.
+  const gruposAjuda = HELP_GROUPS
+    .map((grupo) => ({
+      ...grupo,
+      links: grupo.links.filter((link) => mostrarIntegracoes || link.route !== "/todogreen/integracoes"),
+    }))
+    .filter((grupo) => grupo.links.length > 0);
   return <section className="tdg-guide">
     <header className="tdg-intelligence-hero"><div><span className="tdg-kicker">CENTRAL DE AJUDA</span><h2>Encontre o que precisa sem treinamento</h2><p>Comece pela busca; abaixo, os atalhos por objetivo e as dúvidas mais comuns.</p></div><CircleHelp size={28} /></header>
     <button type="button" className="tdg-help-search tdg-help-search-hero" onClick={() => onNavigate?.("/todogreen/dashboard?ferramentas=1")}><Search size={16} />Buscar qualquer ferramenta ou rotina</button>
-    {HELP_GROUPS.map((grupo) => (
+    {gruposAjuda.map((grupo) => (
       <section className="tdg-help-group" key={grupo.label}>
         <h3>{grupo.label}</h3>
         <div className="tdg-help-grid">
@@ -79,7 +88,7 @@ function Help({ onNavigate }) {
     <section className="tdg-help-answers">
       <h3>Dúvidas comuns</h3>
       <details><summary>Onde vejo notícias, RFQs e portais de fornecedores?</summary><p>Em Espaço, abra Notícias e inteligência. Os itens vêm das pesquisas realizadas nas contas e sempre mantêm o link da fonte.</p></details>
-      <details><summary>Como conecto meu próprio Claude, ChatGPT ou Gemini?</summary><p>Em Configurações → Integrações, no painel de IA, cole a chave da sua conta. A chave fica criptografada no cofre do seu espaço e passa a atender as rotinas de IA do ERP.</p></details>
+      {mostrarIntegracoes && <details><summary>Como conecto meu próprio Claude, ChatGPT ou Gemini?</summary><p>Em Configurações → Integrações, no painel de IA, cole a chave da sua conta. A chave fica criptografada no cofre do seu espaço e passa a atender as rotinas de IA do ERP.</p></details>}
       <details><summary>Onde ficam os contatos?</summary><p>O Espaço mostra uma agenda rápida. O cadastro completo, mapa de relacionamento, histórico e atualização de contatos continuam em Clientes.</p></details>
       <details><summary>Onde acompanho implantações, tarefas e automações?</summary><p>A Central de implementação concentra implantações de clientes, projetos, tarefas, marcos e dependências. No Espaço, a aba Automações permite criar, ativar, pausar e acompanhar regras.</p></details>
       <details><summary>Como encontro uma rotina que não aparece no menu?</summary><p>Use Buscar ferramenta no topo da To Do Green. A busca inclui as rotinas do ERP sem lotar o menu principal.</p></details>
@@ -87,6 +96,8 @@ function Help({ onNavigate }) {
   </section>;
 }
 
-export default function TodoGreenGuides({ mode = "playbook", onNavigate }) {
-  return mode === "ajuda" ? <Help onNavigate={onNavigate} /> : <Playbook onNavigate={onNavigate} />;
+export default function TodoGreenGuides({ mode = "playbook", onNavigate, mostrarIntegracoes = false }) {
+  return mode === "ajuda"
+    ? <Help onNavigate={onNavigate} mostrarIntegracoes={mostrarIntegracoes} />
+    : <Playbook onNavigate={onNavigate} />;
 }

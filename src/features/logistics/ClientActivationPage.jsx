@@ -22,7 +22,9 @@ const CHECK_LINKS = {
   sla: ["Contrato", "/todogreen/propostas"],
   responsibles: ["Clientes", "/todogreen/clientes"],
   portal: ["Clientes", "/todogreen/clientes"],
-  integrations: ["Integrações", "/todogreen/integracoes"],
+  // A Central de Integrações virou dev-only; o status de integração do go-live
+  // é ajustado aqui mesmo, no painel "Integração e tracking" ao lado. Sem
+  // atalho para uma tela restrita.
   tracking: ["TMS Tracker", "/todogreen/rastreamento"],
   esg: ["Central ESG", "/todogreen/central-esg"],
   dashboard: ["Painéis", "/todogreen/dashboards"],

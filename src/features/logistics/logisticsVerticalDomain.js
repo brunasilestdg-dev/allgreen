@@ -49,6 +49,13 @@ export const TODO_GREEN_ROLES = [
   // vertical inteira — só o portal dele, que recorta as viagens pelo próprio
   // vínculo (driver:self). Registrar entrega e ocorrência da rua é driver:event.
   "motorista",
+  // Perfil técnico. É o ÚNICO papel que enxerga a Central de Integrações
+  // (cascata de IA, automações auto-hospedadas, chaves por ambiente). A titular
+  // pediu essa tela invisível para todos e visível só no perfil de dev — por
+  // isso a checagem é `ehPerfilDesenvolvedor`, que NÃO herda do curinga "*" nem
+  // de owner/admin. Fora essa tela, o dev acessa a vertical como admin para
+  // conseguir testar.
+  "desenvolvedor",
 ];
 
 // O administrador pode usar um perfil pronto ou montar um acesso funcional
@@ -64,6 +71,11 @@ export const TODO_GREEN_PERMISSION_CATALOG = Object.freeze([
       ["audit:read", "Consultar auditoria"],
       ["export:read", "Exportar dados e relatórios"],
       ["integration:manage", "Configurar integrações"],
+      // Marca o perfil de desenvolvedor. Só quem tem `dev:access` (ou o papel
+      // "desenvolvedor") enxerga a Central de Integrações — nem o curinga "*"
+      // abre essa tela. Dá para conceder num perfil sob medida sem trocar o
+      // papel da pessoa.
+      ["dev:access", "Perfil de desenvolvedor (telas técnicas)"],
     ],
   },
   {
@@ -173,6 +185,11 @@ export const TODO_GREEN_PERMISSIONS = {
   // de folha depende.
   rh: ["read", "hr:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   motorista: ["driver:self", "driver:event"],
+  // Desenvolvedor: acessa tudo (para testar) e carrega `dev:access`, o marcador
+  // que abre a Central de Integrações. Owner/admin também têm "*", mas NÃO têm
+  // `dev:access` nem o papel — por isso a tela some para eles, como a titular
+  // pediu, e aparece só aqui.
+  desenvolvedor: ["*", "dev:access"],
 };
 
 // A regra de permissão da vertical, uma só, usada pelo front e pelo worker.
@@ -195,6 +212,17 @@ export const verticalPermite = (role, permissions, permissao = "read") => {
 // sobre o perfil pronto; sem lista, mantemos a derivação pelo papel.
 export const hasTodoGreenPermission = (role, permission = "read", permissions = null) =>
   verticalPermite(role, permissions, permission);
+
+// A Central de Integrações (telas técnicas: cascata de IA, automações
+// auto-hospedadas, chaves por ambiente) é invisível para todos e visível só no
+// perfil de desenvolvedor — decisão da titular. Por isso esta checagem é
+// SEPARADA de `verticalPermite`: ela ignora de propósito o curinga "*" e o
+// atalho de owner/admin, senão a dona (owner) voltaria a ver a tela. Só o papel
+// "desenvolvedor" ou uma permissão explícita `dev:access` no vínculo abrem.
+export const ehPerfilDesenvolvedor = (role, permissions = null) => {
+  if (role === "desenvolvedor") return true;
+  return Array.isArray(permissions) && permissions.includes("dev:access");
+};
 
 export const TODO_GREEN_PRODUCTION_DATA_POLICY = Object.freeze({
   demoModeFlag: "todoGreenDemoMode",
