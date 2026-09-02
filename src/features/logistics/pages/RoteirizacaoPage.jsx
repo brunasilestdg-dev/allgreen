@@ -9,7 +9,11 @@ import {
   sugerirEnderecos,
   tracarRota,
 } from "../distanciaRodoviariaDomain.js";
+import { estimarTotalPedagios } from "../pedagiosDomain.js";
 import "./TodoGreenPages.css";
+
+const formatarReais = (valor) =>
+  Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 // #81/#89/#90/#91/#92/#95: roteirização com mapa (OpenStreetMap + Leaflet),
 // várias paradas, mapa preso ao Brasil, otimização da ordem (vizinho mais
@@ -51,9 +55,6 @@ const formatarTempo = (minutos) => {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m} min`;
 };
 
-const formatarReais = (valor) =>
-  Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
 export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [paradas, setParadas] = useState(["", ""]);
   const [recargas, setRecargas] = useState(() => new Set());
@@ -63,6 +64,7 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [sugestoes, setSugestoes] = useState({});
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
   const [pedagios, setPedagios] = useState({ fase: "idle" });
+  const [tarifaMedia, setTarifaMedia] = useState("");
 
   const containerRef = useRef(null);
   const mapaRef = useRef(null);
@@ -172,6 +174,32 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
     return null;
   };
 
+  // #94 (gratuito): praças de pedágio da rota pelos dados abertos da ANTT.
+  // Manda a geometria da rota (polyline já traçada) ao backend, que casa as
+  // praças ATIVAS por proximidade. A ANTT não fornece a tarifa; o total é
+  // estimado só quando a pessoa informa a tarifa média por praça do caminhão.
+  const consultarPedagios = async () => {
+    const linha = estado.resultado?.pontos;
+    if (!Array.isArray(linha) || linha.length < 2) {
+      setToast?.("Trace a rota antes de consultar os pedágios.");
+      return;
+    }
+    setPedagios({ fase: "buscando" });
+    try {
+      const resposta = await fetch("/api/todogreen/pedagios", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify({ polyline: linha }),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.error || "Pedágios indisponíveis agora.");
+      setPedagios({ fase: "ok", dados });
+    } catch (motivo) {
+      setPedagios({ fase: "erro", motivo: motivo.message });
+      setToast?.(motivo.message);
+    }
+  };
+
   const calcular = async (event) => {
     event.preventDefault();
     const validas = paradas.map((p) => p.trim()).filter((p) => p.length >= 3);
@@ -249,34 +277,6 @@ Regras:
       setToast?.("Ordem sugerida pela IA aplicada.");
     } catch (motivo) {
       setIaEstado({ fase: "erro", motivo: motivo.message });
-      setToast?.(motivo.message);
-    }
-  };
-
-  // #94: pedágios da rota via Rotas Brasil (API paga, token no cofre do
-  // backend). Usa as coordenadas já resolvidas na última rota. Sem token
-  // configurado, o backend responde 400 e a tela avisa — não trava nada.
-  const consultarPedagios = async () => {
-    const r = estado.resultado;
-    const pontos = (r?.paradas || [])
-      .map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
-      .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
-    if (pontos.length < 2) {
-      setToast?.("Trace a rota antes de consultar os pedágios.");
-      return;
-    }
-    setPedagios({ fase: "buscando" });
-    try {
-      const resposta = await fetch("/api/todogreen/pedagios", {
-        method: "POST",
-        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
-        body: JSON.stringify({ points: pontos, opcoes: { veiculo: "caminhao", eixo: 2 } }),
-      });
-      const dados = await resposta.json().catch(() => ({}));
-      if (!resposta.ok) throw new Error(dados.error || "Pedágios indisponíveis agora.");
-      setPedagios({ fase: "ok", dados });
-    } catch (motivo) {
-      setPedagios({ fase: "erro", motivo: motivo.message });
       setToast?.(motivo.message);
     }
   };
@@ -413,7 +413,7 @@ Regras:
               onClick={consultarPedagios}
               disabled={pedagios.fase === "buscando"}
             >
-              <Coins size={16} />{pedagios.fase === "buscando" ? "Calculando…" : "Pedágios"}
+              <Coins size={16} />{pedagios.fase === "buscando" ? "Buscando praças…" : "Pedágios"}
             </button>
           )}
           <button type="submit" className="tdg-action" disabled={estado.fase === "calculando"}>
@@ -450,26 +450,41 @@ Regras:
         <div className="tdg-roteirizacao-pedagios">
           <div className="tdg-roteirizacao-pedagios-total">
             <Coins size={16} />
-            <strong>{formatarReais(pedagios.dados.valorPedagio)}</strong>
-            <span>
-              em pedágios · {pedagios.dados.quantidade} praça(s) para caminhão de 2 eixos
-              {pedagios.dados.valorCombustivel != null ? ` · combustível estimado ${formatarReais(pedagios.dados.valorCombustivel)}` : ""}
-            </span>
+            <strong>{pedagios.dados.quantidade} praça(s) de pedágio</strong>
+            <span>na rota (concessões federais)</span>
           </div>
-          {pedagios.dados.pedagios.length > 0 ? (
-            <ul className="tdg-roteirizacao-pedagios-lista">
-              {pedagios.dados.pedagios.map((p, i) => (
-                <li key={`${p.praca}-${i}`}>
-                  <span className="tdg-roteirizacao-pedagio-praca">{p.praca || "Praça"}</span>
-                  <span className="tdg-roteirizacao-pedagio-via">{[p.rodovia, p.km ? `km ${p.km}` : "", p.concessionaria].filter(Boolean).join(" · ")}</span>
-                  <span className="tdg-roteirizacao-pedagio-valor">{formatarReais(p.valor)}</span>
-                </li>
-              ))}
-            </ul>
+          {pedagios.dados.quantidade > 0 ? (
+            <>
+              <ul className="tdg-roteirizacao-pedagios-lista">
+                {pedagios.dados.pracas.map((p, i) => (
+                  <li key={`${p.praca}-${i}`}>
+                    <span className="tdg-roteirizacao-pedagio-praca">{p.praca || "Praça"}</span>
+                    <span className="tdg-roteirizacao-pedagio-via">{[p.rodovia, p.km ? `km ${p.km}` : "", p.municipio && p.uf ? `${p.municipio}/${p.uf}` : p.uf, p.concessionaria].filter(Boolean).join(" · ")}</span>
+                  </li>
+                ))}
+              </ul>
+              <label className="tdg-roteirizacao-pedagios-tarifa">
+                <span>Tarifa média por praça do seu caminhão (R$) — a ANTT não fornece o valor</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.10"
+                  inputMode="decimal"
+                  value={tarifaMedia}
+                  onChange={(event) => setTarifaMedia(event.target.value)}
+                  placeholder="Ex.: 18,50"
+                />
+              </label>
+              {estimarTotalPedagios(pedagios.dados.quantidade, tarifaMedia) != null && (
+                <p className="tdg-roteirizacao-pedagios-estimativa">
+                  Estimativa: <strong>{formatarReais(estimarTotalPedagios(pedagios.dados.quantidade, tarifaMedia))}</strong> ({pedagios.dados.quantidade} × {formatarReais(Number(String(tarifaMedia).replace(",", ".")) || 0)})
+                </p>
+              )}
+            </>
           ) : (
-            <p className="tdg-roteirizacao-pedagios-vazio">Nenhuma praça de pedágio nesta rota.</p>
+            <p className="tdg-roteirizacao-pedagios-vazio">Nenhuma praça de concessão federal nesta rota.</p>
           )}
-          <small className="tdg-roteirizacao-fonte">Fonte: Rotas Brasil (tabela ANTT).</small>
+          <small className="tdg-roteirizacao-fonte">{pedagios.dados.fonte}. {pedagios.dados.cobertura}</small>
         </div>
       )}
       {pedagios.fase === "erro" && <p className="tdg-roteirizacao-erro">{pedagios.motivo}</p>}

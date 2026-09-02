@@ -36,7 +36,8 @@ import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
-import { consultarCepNormalizado, consultarPedagiosDaRota } from "./todogreen-integration-gateway.js";
+import { consultarCepNormalizado } from "./todogreen-integration-gateway.js";
+import { consultarPedagiosDaRota } from "./todogreen-pedagios.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -344,7 +345,7 @@ export async function routeTodoGreenApi(request, env, ctx) {
         corpo = {};
       }
       try {
-        return json(await consultarPedagiosDaRota(env, corpo.points, corpo.opcoes || {}));
+        return json(await consultarPedagiosDaRota(corpo.polyline));
       } catch (erro) {
         return json({ error: erro.message || "Pedágios indisponíveis." }, 400);
       }

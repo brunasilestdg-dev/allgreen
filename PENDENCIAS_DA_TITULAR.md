@@ -159,23 +159,6 @@ Não é mais necessário `wrangler secret put` para isso. As variáveis de ambie
 antigas (`SEARCH_API_KEY`, `SEARXNG_BASE_URL` no cofre) continuam funcionando
 como padrão para todos os espaços, mas a tela acima é o caminho recomendado.
 
-### D. Pedágios da rota na Roteirização (Rotas Brasil)
-
-A Roteirização já tem o botão **"Pedágios"** pronto (aparece depois de traçar a
-rota) e mostra praças, rodovias, valor de cada pedágio e o total para caminhão —
-usando a **API da Rotas Brasil** (`rotasbrasil.com.br`), que traz a tarifa da
-tabela ANTT. É uma **API paga** (cobra por consulta, crédito adquirido por
-e-mail com eles), então fica **pronta e desligada** até você cadastrar o token:
-
-1. Criar conta em `rotasbrasil.com.br`, solicitar créditos da API (por e-mail
-   com eles) e copiar o **token** do seu perfil.
-2. Cadastrar no cofre: `npx wrangler secret put TODOGREEN_ROTASBRASIL_TOKEN`.
-
-Sem o token, o botão avisa que a fonte de pedágios não está configurada — nada
-mais na Roteirização é afetado (mapa, rota, distância, tempo, carregadores e a
-sugestão de ordem por IA seguem funcionando). O token vai só para o cofre do
-Worker; nunca aparece no navegador nem no código.
-
 
 ## 🚫 O que não é possível construir, e por quê
 
