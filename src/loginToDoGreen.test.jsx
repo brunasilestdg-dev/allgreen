@@ -9,7 +9,7 @@ import App from "./App.jsx";
 // MutationObserver do body — gravar dispara mutação, que grava de novo:
 // laço infinito que congelava a aba sempre que o login aparecia sob
 // /todogreen. O módulo foi removido; este teste garante que a marca continua
-// aparecendo — e que a raiz continua sendo o Seu Funcionário.
+// aparecendo — e que a raiz é a porta de entrada da To Do Green.
 
 const irPara = (caminho) => window.history.pushState({}, "", caminho);
 
@@ -36,11 +36,14 @@ describe("tela de entrada por rota", () => {
     expect(screen.getByRole("button", { name: "Solicitar acesso" })).toBeTruthy();
   });
 
-  it("na raiz, o login continua do Seu Funcionário", async () => {
+  it("na raiz, o login é a porta de entrada da To Do Green", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) })));
     irPara("/");
     render(<App />);
-    expect(await screen.findByText(/Tenha o funcionário que sua empresa precisa/)).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: /Ambiente corporativo To Do Green/ })).toBeNull();
+    expect(await screen.findByRole("heading", { name: /Ambiente corporativo To Do Green/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Entre no ambiente To Do Green" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Equipe To Do Green" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Portal do Cliente" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Portal do Motorista" })).toBeTruthy();
   });
 });

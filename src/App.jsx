@@ -1092,6 +1092,18 @@ export { buildOrderReceita, buildLeadWonSideEffects, quoteTotal, orderFromQuote 
 
 function useDatabase() {
   const [db, setDb] = useState(loadInitialDb);
+  // O usuário salvo no navegador é só cache de interface; nunca é prova de
+  // sessão. Enquanto o Worker não valida o token, a vertical To Do Green não
+  // é renderizada.
+  const [sessionStatus, setSessionStatus] = useState(() => {
+    try {
+      return localStorage.getItem(AUTH_TOKEN_KEY) && db.user?.id
+        ? "checking"
+        : "anonymous";
+    } catch {
+      return "anonymous";
+    }
+  });
   const [workspaceConflict, setWorkspaceConflict] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState(null);
@@ -1114,8 +1126,12 @@ function useDatabase() {
     : "/api/workspace";
 
   useEffect(() => {
-    if (!userId || !localStorage.getItem(AUTH_TOKEN_KEY)) return;
+    if (!userId || !localStorage.getItem(AUTH_TOKEN_KEY)) {
+      setSessionStatus("anonymous");
+      return;
+    }
     let cancelled = false;
+    setSessionStatus("checking");
     fetch("/api/auth/session", { headers: authHeaders() })
       .then(async (response) => ({
         status: response.status,
@@ -1135,11 +1151,20 @@ function useDatabase() {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           localStorage.removeItem(ACTIVE_USER_KEY);
           setDb(cleanDb(null));
+          setSessionStatus("anonymous");
           return;
         }
-        if (ok && data.user) setDb((current) => ({ ...current, user: data.user }));
+        if (ok && data.user) {
+          setDb((current) => ({ ...current, user: data.user }));
+          setSessionStatus("authenticated");
+          return;
+        }
+        // Sem confirmação do servidor, a conta cacheada não abre o produto.
+        setSessionStatus("anonymous");
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setSessionStatus("anonymous");
+      });
     return () => {
       cancelled = true;
     };
@@ -1297,7 +1322,7 @@ function useDatabase() {
   }, [spaceKey, wsUrl]);
 
   useEffect(() => {
-    if (db.user?.id) {
+    if (db.user?.id && sessionStatus === "authenticated") {
       localStorage.setItem(ACTIVE_USER_KEY, db.user.id);
       localStorage.setItem(userStorageKey(db.user.id), JSON.stringify(db));
     }
@@ -1321,7 +1346,7 @@ function useDatabase() {
         .catch(() => {});
     }, 2500);
     return () => clearTimeout(syncTimer.current);
-  }, [db, userId, space, spaceKey, performSync]);
+  }, [db, userId, space, spaceKey, performSync, sessionStatus]);
 
   const retrySync = () => {
     syncChain.current = syncChain.current
@@ -1333,7 +1358,12 @@ function useDatabase() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(ACTIVE_USER_KEY);
     setDb(cleanDb(null));
+    setSessionStatus("anonymous");
   };
+  const markSessionAuthenticated = useCallback(
+    () => setSessionStatus("authenticated"),
+    [],
+  );
 
   const workspaceAction = async (action, taskId) => {
     clearTimeout(syncTimer.current);
@@ -1390,6 +1420,8 @@ function useDatabase() {
     retrySync,
     logoutFromExpiredSession,
     workspaceAction,
+    sessionStatus,
+    markSessionAuthenticated,
   ];
 }
 
@@ -1582,15 +1614,38 @@ function ModeOnboarding({ update }) {
   );
 }
 
-function Login({ update }) {
-  // Quem chega pela rota da To Do Green (ou acabou de sair dela) vê a tela
-  // de entrada com a identidade da transportadora, não a do Seu Funcionário.
+function Login({ update, onAuthenticated = () => {}, vertical = false, entryPortal = "" }) {
+  // A raiz é a porta de entrada da To Do Green. Cliente e motorista usam
+  // a mesma identidade, mas seguem para o próprio portal depois do login.
   const entradaToDoGreen =
-    typeof window !== "undefined" && /^\/todogreen(\/|$)/.test(window.location.pathname);
+    vertical ||
+    Boolean(entryPortal) ||
+    (typeof window !== "undefined" && /^\/todogreen(\/|$)/.test(window.location.pathname));
+  const destinoAposLogin =
+    entryPortal === "cliente"
+      ? "/portal-cliente"
+      : entryPortal === "motorista"
+        ? "/portal-motorista"
+        : entradaToDoGreen
+          ? "/todogreen"
+          : "";
+  const tituloDoAcesso =
+    entryPortal === "cliente"
+      ? "Entre no Portal do Cliente"
+      : entryPortal === "motorista"
+        ? "Entre no Portal do Motorista"
+        : "Entre no ambiente To Do Green";
   const [mode, setMode] = useState("login");
   useEffect(() => {
-    if (entradaToDoGreen) document.title = "To Do Green";
-  }, [entradaToDoGreen]);
+    if (entradaToDoGreen)
+      document.title =
+        entryPortal === "cliente"
+          ? "To Do Green | Portal do Cliente"
+          : entryPortal === "motorista"
+            ? "To Do Green | Portal do Motorista"
+            : "To Do Green";
+  }, [entradaToDoGreen, entryPortal]);
+
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1637,14 +1692,17 @@ function Login({ update }) {
         .then(({ ok, d }) => {
           if (!ok) throw new Error(d.error || "Falha no login com Google.");
           localStorage.setItem(AUTH_TOKEN_KEY, d.token);
+          if (destinoAposLogin) history.replaceState({}, "", destinoAposLogin);
+          onAuthenticated();
           update(() => {
             const session = startUserSession(d.user);
             return {
               ...session,
               preferences: {
                 ...session.preferences,
-                needsBusinessOnboardingCandidate:
-                  d.created === true || d.isNew === true,
+                needsBusinessOnboardingCandidate: destinoAposLogin
+                  ? false
+                  : d.created === true || d.isNew === true,
               },
             };
           });
@@ -1676,7 +1734,7 @@ function Login({ update }) {
     s.defer = true;
     s.onload = init;
     document.body.appendChild(s);
-  }, [googleId, update]);
+  }, [destinoAposLogin, googleId, onAuthenticated, update]);
   const [pending, setPending] = useState(null);
   const [code, setCode] = useState("");
   const changeMode = (next) => {
@@ -1686,13 +1744,17 @@ function Login({ update }) {
   };
   const enter = (data, newAccount = false) => {
     localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    // A identidade da porta de entrada define o destino. Não voltamos ao
+    // produto genérico depois de autenticar uma pessoa da To Do Green.
+    if (destinoAposLogin) history.replaceState({}, "", destinoAposLogin);
+    onAuthenticated();
     update(() => {
       const session = startUserSession(data.user);
       return {
         ...session,
         preferences: {
           ...session.preferences,
-          needsBusinessOnboardingCandidate: newAccount,
+          needsBusinessOnboardingCandidate: destinoAposLogin ? false : newAccount,
         },
       };
     });
@@ -2019,21 +2081,30 @@ function Login({ update }) {
           <span className="mobile-logo">
             {entradaToDoGreen ? <strong className="tdg-auth-marca">To Do Green</strong> : <Logo />}
           </span>
-          <div className="auth-perfis" role="group" aria-label="Como você quer entrar">
-            <button type="button" className="active" aria-pressed="true">
-              Acesso ao ERP
+          <div className="auth-perfis" role="group" aria-label="Escolha seu acesso">
+            <button
+              type="button"
+              className={!entryPortal ? "active" : ""}
+              aria-pressed={!entryPortal}
+              onClick={() => window.location.assign("/")}
+            >
+              Equipe To Do Green
             </button>
             <button
               type="button"
+              className={entryPortal === "cliente" ? "active" : ""}
+              aria-pressed={entryPortal === "cliente"}
               onClick={() => window.location.assign("/portal-cliente")}
             >
-              Sou Cliente
+              Portal do Cliente
             </button>
             <button
               type="button"
+              className={entryPortal === "motorista" ? "active" : ""}
+              aria-pressed={entryPortal === "motorista"}
               onClick={() => window.location.assign("/portal-motorista")}
             >
-              Sou Motorista
+              Portal do Motorista
             </button>
           </div>
           {!entradaToDoGreen && (
@@ -2064,7 +2135,7 @@ function Login({ update }) {
           <h2>
             {entradaToDoGreen
               ? mode === "login"
-                ? "Entre no ambiente To Do Green"
+                ? tituloDoAcesso
                 : "Crie sua conta autorizada"
               : mode === "login"
                 ? "Entre no seu espaço"
@@ -2174,7 +2245,7 @@ function Login({ update }) {
               </button>
             )}
           </div>
-          {entradaToDoGreen && !pedindoAcesso && pedidoStatus !== "enviado" && (
+          {entradaToDoGreen && !entryPortal && !pedindoAcesso && pedidoStatus !== "enviado" && (
             <div className="auth-invite-note">
               <p>
                 O acesso à To Do Green é liberado pela administração. Se ainda
@@ -2186,7 +2257,7 @@ function Login({ update }) {
               </button>
             </div>
           )}
-          {entradaToDoGreen && pedindoAcesso && pedidoStatus !== "enviado" && (
+          {entradaToDoGreen && !entryPortal && pedindoAcesso && pedidoStatus !== "enviado" && (
             <form className="tdg-auth-pedido" onSubmit={enviarPedidoDeAcesso}>
               <strong>Solicitar acesso à To Do Green</strong>
               <label>
@@ -2237,7 +2308,7 @@ function Login({ update }) {
               </div>
             </form>
           )}
-          {entradaToDoGreen && pedidoStatus === "enviado" && (
+          {entradaToDoGreen && !entryPortal && pedidoStatus === "enviado" && (
             <p className="auth-invite-note tdg-auth-pedido-ok">
               Pedido enviado. Um administrador da To Do Green vai avaliar e você
               receberá um convite por e-mail se for aprovado.
@@ -2276,7 +2347,7 @@ function enterSharedSpace(ownerId, ownerName) {
   location.reload();
 }
 
-function AcceptInvite({ db, update, token }) {
+function AcceptInvite({ db, update, token, onAuthenticated = () => {} }) {
   const [state, setState] = useState({ status: "loading" });
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2308,6 +2379,7 @@ function AcceptInvite({ db, update, token }) {
       if (!r.ok) throw new Error(d.error || "Não foi possível aceitar o convite.");
       if (d.token) {
         localStorage.setItem(AUTH_TOKEN_KEY, d.token);
+        onAuthenticated();
         update(() => startUserSession(d.user));
       }
       setAccepted({ ownerId: d.ownerId, ownerName: d.ownerName });
@@ -13845,6 +13917,8 @@ export default function App() {
       retrySync,
       logoutFromExpiredSession,
       workspaceAction,
+      sessionStatus,
+      markSessionAuthenticated,
     ] = useDatabase(),
     [page, setPage] = useState("inicio"),
     [collapsed, setCollapsed] = useState(!!savedUi.collapsed),
@@ -14090,7 +14164,14 @@ export default function App() {
       },
     }));
   }, [db, db.preferences.modeChosen, db.user, update]);
-  const primaryRoute = resolvePrimaryRoute(location.pathname, Boolean(db.user));
+  // A vertical To Do Green nunca confia no usuário guardado no navegador:
+  // só abre após o Worker confirmar o token atual. As demais telas mantêm a
+  // restauração local histórica enquanto a sessão é revalidada.
+  const isTodoGreenRoute = /^\/todogreen(?:\/|$)/.test(location.pathname);
+  const primaryRoute = resolvePrimaryRoute(
+    location.pathname,
+    sessionStatus === "authenticated" || (!isTodoGreenRoute && Boolean(db.user)),
+  );
   if (primaryRoute.kind !== "workspace")
     return (
       <PrimaryAppRouter
@@ -14099,6 +14180,7 @@ export default function App() {
         update={update}
         setToast={setToast}
         authHeaders={authHeaders}
+        onAuthenticated={markSessionAuthenticated}
         PublicSite={PublicSite}
         AcceptInvite={AcceptInvite}
         Login={Login}

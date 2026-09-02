@@ -32,6 +32,7 @@ import {
   Landmark,
   LogOut,
   ReceiptText,
+  RefreshCw,
   Route,
   Search,
   Settings,
@@ -2434,7 +2435,9 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível decidir o pedido.");
       setToast?.(decisao === "aprovar"
-        ? `Acesso aprovado para ${pedido.email}${payload.aguardandoCadastro ? " — o vínculo nasce no primeiro acesso dela." : "."}`
+        ? payload.invitationSent
+          ? `Acesso aprovado e convite enviado para ${pedido.email}.`
+          : payload.invitationError || `Acesso aprovado para ${pedido.email}.`
         : `Pedido de ${pedido.email} recusado.`);
       carregarPedidos();
       if (decisao === "aprovar") load();
@@ -2476,7 +2479,11 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível salvar o acesso.");
       setForm({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
-      setToast?.("E-mail autorizado na To Do Green");
+      setToast?.(
+        payload.invitationSent
+          ? `Acesso salvo e convite enviado para ${payload.email}.`
+          : payload.invitationError || "E-mail autorizado na To Do Green",
+      );
       load();
     } catch (error) {
       setToast?.(error.message);
@@ -2504,6 +2511,25 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       if (!response.ok) throw new Error(payload.error || "Não foi possível remover o acesso.");
       load();
       setToast?.("Acesso revogado e preservado na auditoria");
+    } catch (error) {
+      setToast?.(error.message);
+    }
+  };
+  const resend = async (email) => {
+    const headers = authHeaders?.() || {};
+    if (!headers.authorization || !canManage) return;
+    try {
+      const response = await fetch(
+        `/api/todogreen/access-list?owner=${encodeURIComponent(ownerId())}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...headers },
+          body: JSON.stringify({ action: "resend", email }),
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Não foi possível reenviar o convite.");
+      setToast?.(`Convite reenviado para ${email}.`);
     } catch (error) {
       setToast?.(error.message);
     }
@@ -2562,16 +2588,16 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
         );
       })()}
       <form className="tdg-access-form" onSubmit={save}>
-        <label><span>E-mail autorizado</span><input value={form.email} type="email" required placeholder="nome@empresa.com.br" onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
+        <label><span>E-mail da pessoa</span><input value={form.email} type="email" required placeholder="nome@empresa.com.br" onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><small>Ela receberá um convite para criar a própria senha.</small></label>
         <label><span>Perfil base</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{TODO_GREEN_ROLES.filter((item) => item !== "owner").map((item) => <option value={item} key={item}>{item.replace(/_/g, " ")}</option>)}</select></label>
         <label><span>Tipo de acesso</span><select value={form.customPermissions ? "custom" : "profile"} onChange={(event) => setForm((current) => ({ ...current, customPermissions: event.target.value === "custom", permissions: event.target.value === "custom" ? (TODO_GREEN_PERMISSIONS[current.role] || []).filter((item) => item !== "*") : [] }))}><option value="profile">Perfil pronto</option><option value="custom">Funcionalidades selecionadas</option></select></label>
         <label><span>Validade</span><input type="date" value={form.expiresAt} onChange={(event) => setForm((current) => ({ ...current, expiresAt: event.target.value }))} /><small>Vazio mantém o acesso sem expiração.</small></label>
         <label><span>Observação</span><input value={form.note} placeholder="Ex.: implantação, auditor externo" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label>
         {form.customPermissions && <div className="tdg-permission-editor"><div className="tdg-permission-editor-head"><strong>Funcionalidades liberadas</strong><button type="button" onClick={selecionarPerfilAtual}>Restaurar perfil base</button></div>{TODO_GREEN_PERMISSION_CATALOG.map((group) => <fieldset key={group.group}><legend>{group.group}</legend>{group.items.map(([permission, label]) => <label className="tdg-check-field" key={permission}><input type="checkbox" checked={form.permissions.includes(permission)} onChange={() => alternarPermissao(permission)} /><span>{label}</span></label>)}</fieldset>)}</div>}
-        <button className="tdg-action" type="submit" disabled={saving || (form.customPermissions && !form.permissions.includes("read"))}><Plus size={17} />{saving ? "Salvando..." : "Autorizar"}</button>
+        <button className="tdg-action" type="submit" disabled={saving || (form.customPermissions && !form.permissions.includes("read"))}><Plus size={17} />{saving ? "Enviando..." : "Autorizar e enviar convite"}</button>
       </form>
       {form.customPermissions && !form.permissions.includes("read") && <div className="tdg-alert"><AlertTriangle size={17} />Selecione “Acessar a vertical” para liberar a entrada.</div>}
-      <div className="tdg-access-list">{emails.length === 0 && <div className="tdg-empty-access"><ShieldCheck size={18} />Nenhum e-mail autorizado ainda.</div>}{emails.map((item) => { const expired = item.expiresAt && loadedAt > 0 && Date.parse(item.expiresAt) <= loadedAt; const active = item.status === "active" && !item.revokedAt && !expired; const defaults = TODO_GREEN_PERMISSIONS[item.role] || []; const customized = !defaults.includes("*") && JSON.stringify([...(item.permissions || [])].sort()) !== JSON.stringify([...defaults].sort()); return <div className="tdg-access-row" key={item.email}><span><strong>{item.email}</strong><small>{item.note || "sem observação"}{item.lastAccessAt ? ` · último acesso ${new Date(item.lastAccessAt).toLocaleString("pt-BR")}` : ""}</small></span><span>{item.role.replace(/_/g, " ")}<small>{customized ? `${item.permissions?.length || 0} funcionalidades` : "perfil pronto"}</small></span><span className={active ? "good" : ""}>{active ? item.expiresAt ? `ativo até ${new Date(item.expiresAt).toLocaleDateString("pt-BR")}` : "ativo" : item.revokedAt ? "revogado" : expired ? "expirado" : "inativo"}</span>{active && <button type="button" onClick={() => remove(item.email)} aria-label={`Revogar ${item.email}`}><Trash2 size={17} /></button>}</div>; })}</div>
+      <div className="tdg-access-list">{emails.length === 0 && <div className="tdg-empty-access"><ShieldCheck size={18} />Nenhum e-mail autorizado ainda.</div>}{emails.map((item) => { const expired = item.expiresAt && loadedAt > 0 && Date.parse(item.expiresAt) <= loadedAt; const active = item.status === "active" && !item.revokedAt && !expired; const defaults = TODO_GREEN_PERMISSIONS[item.role] || []; const customized = !defaults.includes("*") && JSON.stringify([...(item.permissions || [])].sort()) !== JSON.stringify([...defaults].sort()); return <div className="tdg-access-row" key={item.email}><span><strong>{item.email}</strong><small>{item.note || "sem observação"}{item.lastAccessAt ? ` · último acesso ${new Date(item.lastAccessAt).toLocaleString("pt-BR")}` : ""}</small></span><span>{item.role.replace(/_/g, " ")}<small>{customized ? `${item.permissions?.length || 0} funcionalidades` : "perfil pronto"}</small></span><span className={active ? "good" : ""}>{active ? item.expiresAt ? `ativo até ${new Date(item.expiresAt).toLocaleDateString("pt-BR")}` : "ativo" : item.revokedAt ? "revogado" : expired ? "expirado" : "inativo"}</span>{active && <><button type="button" onClick={() => resend(item.email)} aria-label={`Reenviar convite para ${item.email}`}><RefreshCw size={17} /></button><button type="button" onClick={() => remove(item.email)} aria-label={`Revogar ${item.email}`}><Trash2 size={17} /></button></>}</div>; })}</div>
     </section>
   );
 }

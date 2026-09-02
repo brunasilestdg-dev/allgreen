@@ -15,7 +15,7 @@ export const contaNova = (prefixo = "e2e") => ({
 
 // Cria a conta pela tela de cadastro e devolve já autenticada.
 export async function criarConta(page, conta = contaNova()) {
-  await page.goto("/");
+  await page.goto("/acesso-geral");
   await page.getByRole("tab", { name: "Criar conta" }).click();
   await page.getByLabel("Seu nome", { exact: true }).fill(conta.nome);
   await page.getByLabel("E-mail", { exact: true }).fill(conta.email);
@@ -26,7 +26,7 @@ export async function criarConta(page, conta = contaNova()) {
 }
 
 export async function entrar(page, conta) {
-  await page.goto("/");
+  await page.goto("/acesso-geral");
   await page.getByRole("tab", { name: "Entrar" }).click();
   await page.getByLabel("E-mail", { exact: true }).fill(conta.email);
   await page.getByLabel(/^Senha/).fill(conta.senha);
@@ -121,7 +121,6 @@ export async function habilitarTodoGreen(page, papel) {
   });
   // O React não fica sabendo de uma escrita feita por fora dele: sem recarregar,
   // a vertical continua invisível porque o estado da tela é o de antes.
-  await page.goto("/");
-  await esperarEntrar(page);
+  await page.goto("/todogreen/dashboard");
   return r;
 }

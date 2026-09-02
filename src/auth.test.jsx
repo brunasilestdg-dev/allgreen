@@ -35,7 +35,7 @@ describe("acesso à conta", () => {
     render(<App />);
 
     expect(
-      screen.getByRole("heading", { name: "Entre no seu espaço" }),
+      screen.getByRole("heading", { name: "Entre no ambiente To Do Green" }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("E-mail"), {
       target: { value: "BRUNA@example.com" },
@@ -45,24 +45,14 @@ describe("acesso à conta", () => {
     });
     fireEvent.submit(
       screen
-        .getByRole("heading", { name: "Entre no seu espaço" })
+        .getByRole("heading", { name: "Entre no ambiente To Do Green" })
         .closest(".auth-card")
         .querySelector("form"),
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Para administrar meu negócio",
-      }),
-    );
     await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: /Vamos fazer acontecer/ }),
-      ).toBeInTheDocument(),
+      expect(window.location.pathname).toBe("/todogreen"),
     );
-    expect(
-      screen.queryByRole("heading", { name: "Onde seu negócio está hoje?" }),
-    ).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/login",
       expect.objectContaining({ method: "POST" }),
@@ -72,7 +62,8 @@ describe("acesso à conta", () => {
     );
   });
 
-  it("permite alternar para criação de conta sem esconder o login", async () => {
+  it("permite alternar para criação de conta no acesso geral", async () => {
+    history.replaceState({}, "", "/acesso-geral");
     const fetchMock = vi.fn(() =>
       response({
         token: "new-session-token",

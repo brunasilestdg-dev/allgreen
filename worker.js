@@ -4484,6 +4484,16 @@ export default {
         return json({ error: "Não foi possível concluir a ação." }, 500);
       }
     }
+    // Convite individual: o token opaco do e-mail é a credencial desta única
+    // etapa. Ele não usa nem aceita a sessão de quem fez o convite.
+    if (url.pathname === "/api/todogreen/access-invite") {
+      try {
+        return await handleTodoGreenCore(request, env, null, url, { audit: logAudit });
+      } catch (error) {
+        console.error("To Do Green public invite error", error);
+        return json({ error: "Não foi possível abrir este convite." }, 500);
+      }
+    }
     const needsAuth =
       url.pathname === "/api/ai" ||
       url.pathname === "/api/plan" ||

@@ -97,7 +97,7 @@ describe("sincronização falha de forma visível, não silenciosa", () => {
       screen.getByRole("button", { name: "Entrar novamente" }),
     );
     expect(
-      await screen.findByRole("heading", { name: "Entre no seu espaço" }),
+      await screen.findByRole("heading", { name: "Entre no ambiente To Do Green" }),
     ).toBeInTheDocument();
     expect(localStorage.getItem("seu-funcionario-auth-token")).toBeNull();
   });
@@ -139,7 +139,7 @@ describe("sincronização falha de forma visível, não silenciosa", () => {
 
     // A tela continua sendo a do produto, não a de login — e o token some
     // apenas na resposta 401, não num 429.
-    expect(screen.queryByRole("heading", { name: "Entre no seu espaço" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Entre no ambiente To Do Green" })).not.toBeInTheDocument();
     expect(localStorage.getItem("seu-funcionario-auth-token")).toBe("token-expiry");
   });
 

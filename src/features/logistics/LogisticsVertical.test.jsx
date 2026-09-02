@@ -791,7 +791,7 @@ describe("LogisticsVertical", () => {
     await renderarAutorizada();
     await screen.findByText(/Nenhum e-mail autorizado ainda/);
 
-    fireEvent.change(screen.getByLabelText("E-mail autorizado"), { target: { value: "pesquisa@teste.com.br" } });
+    fireEvent.change(await screen.findByLabelText(/E-mail da pessoa/), { target: { value: "pesquisa@teste.com.br" } });
     fireEvent.change(screen.getByLabelText("Tipo de acesso"), { target: { value: "custom" } });
     fireEvent.click(screen.getByLabelText("Acessar a vertical"));
     fireEvent.click(screen.getByLabelText("Consultar notícias, RFQs e mercado"));

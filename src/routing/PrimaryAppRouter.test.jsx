@@ -21,8 +21,21 @@ describe("roteador principal", () => {
     expect(resolvePrimaryRoute("/todogreen/precificacao", true).kind).toBe("todogreen");
   });
 
+  it("usa a raiz como entrada da To Do Green e preserva o portal escolhido", () => {
+    expect(resolvePrimaryRoute("/", false).kind).toBe("todogreen-login");
+    expect(resolvePrimaryRoute("/portal-cliente", false).kind).toBe("customer-login");
+    expect(resolvePrimaryRoute("/portal-motorista", false).kind).toBe("driver-login");
+  });
+
   it("não deixa rota interna passar sem sessão", () => {
     expect(resolvePrimaryRoute("/todogreen/clientes", false).kind).toBe("todogreen-login");
+  });
+
+  it("abre o convite individual da To Do Green sem reutilizar uma sessão", () => {
+    expect(resolvePrimaryRoute("/todogreen/convite/token-opaco", false)).toEqual({
+      kind: "todogreen-access-invite",
+      token: "token-opaco",
+    });
   });
 
   it("entrega as demais rotas ao ambiente principal", () => {

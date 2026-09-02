@@ -16,6 +16,8 @@ import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { routeTodoGreenApi } from "./todogreen-router.js";
 import { handleTodoGreenMasterData } from "./todogreen-master-data.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
+import { emailEnabled } from "../mensageria/envio.js";
+import { enviarConviteDeAcessoTodoGreen, handleTodoGreenAccessInvite } from "./todogreen-access-invites.js";
 
 const response = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -264,6 +266,10 @@ async function handleTransactionsWithControls(request, env, access, user) {
 }
 
 export async function handleTodoGreenCore(request, env, user, url, dependencies = {}) {
+  // O convite é a única porta pública da vertical. O token opaco no link
+  // identifica o convite; nenhuma sessão de administrador é reutilizada.
+  if (url.pathname === "/api/todogreen/access-invite")
+    return handleTodoGreenAccessInvite(request, env, url);
   const requestedOwnerId = url.searchParams.get("owner");
   const { access, motivo } = await resolveCoreAccess(env, user, requestedOwnerId);
   // Espaço de outra conta → 404 (não confirmamos que existe); falta de vínculo → 403.
@@ -317,12 +323,37 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       const body = await request.json().catch(() => ({}));
       const normalized = email(body.email);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return response({ error:"Informe um e-mail válido." },400);
+
+      if (body.action === "resend") {
+        const existing = await env.DB.prepare(
+          `SELECT email,role,status,permissions_json FROM todogreen_access_emails
+             WHERE tenant_id=? AND workspace_owner_id=? AND email=?`,
+        ).bind(TODO_GREEN_TENANT.id, espacoDaConcessao(access), normalized).first();
+        if (!existing || existing.status !== "active")
+          return response({ error:"Só é possível reenviar convite para um acesso ativo." },404);
+        if (!emailEnabled(env))
+          return response({ error:"O envio de e-mail não está configurado. Configure o canal antes de convidar pessoas." },503);
+        try {
+          await enviarConviteDeAcessoTodoGreen({
+            env, access, user, email: normalized, role: existing.role,
+            permissions: parse(existing.permissions_json, []), origin: url.origin,
+          });
+          return response({ ok:true, email:normalized, invitationSent:true });
+        } catch (error) {
+          console.error("todogreen resend access invitation", error);
+          return response({ error:"O acesso existe, mas o convite não pôde ser enviado agora." },502);
+        }
+      }
+
       const role = TODO_GREEN_ROLES.includes(body.role) ? body.role : "auditor";
       const permitidas = new Set(TODO_GREEN_PERMISSION_KEYS);
       const permissions = Array.isArray(body.permissions)
         ? [...new Set(body.permissions.map((item) => String(item).slice(0,80)).filter((item) => permitidas.has(item)))].slice(0,60)
         : TODO_GREEN_PERMISSIONS[role] || ["read"];
       const now = new Date().toISOString();
+      const ativo = body.status !== "inactive";
+      // A autorização não depende do provedor de e-mail. Se o envio falhar,
+      // ela permanece válida e a interface recebe o motivo para reenvio depois.
       const expiresAt = String(body.expiresAt || "").trim().slice(0,40) || null;
       if (expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now()))
         return response({ error:"A validade do acesso precisa estar no futuro." },400);
@@ -344,7 +375,6 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       ).run();
       // O vínculo com o espaço da empresa é metade da concessão. Sem ele a
       // pessoa entra num espaço próprio vazio — ver o comentário do bloco.
-      const ativo = body.status !== "inactive";
       const conta = await contaPorEmail(env, normalized);
       if (ativo && conta?.id)
         await vincularAoEspaco(env, { access, userId: conta.id, email: normalized, role, permissions });
@@ -355,8 +385,23 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
         access,user,action:"authorized",resourceType:"access",resourceId:normalized,
         after:{ email:normalized, role, status:ativo ? "active" : "inactive", expiresAt, workspaceOwnerId: espacoDaConcessao(access) },
       });
+      let invitationSent = false;
+      let invitationError = "";
+      if (ativo && body.notify !== false) {
+        try {
+          await enviarConviteDeAcessoTodoGreen({
+            env, access, user, email: normalized, name: String(body.name || "").trim(),
+            role, permissions, origin: url.origin,
+          });
+          invitationSent = true;
+        } catch (error) {
+          console.error("todogreen access invitation", error);
+          invitationError = "O acesso foi salvo, mas o convite não pôde ser enviado agora.";
+        }
+      }
       return response({
         ok:true,email:normalized,role,status:ativo ? "active" : "inactive",permissions,expiresAt,
+        invitationSent, invitationError,
         // A tela precisa saber se a pessoa já tem conta: sem conta, o vínculo
         // com o espaço só nasce no primeiro acesso dela.
         vinculadoAoEspaco: Boolean(ativo && conta?.id),
@@ -433,6 +478,8 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       const role = TODO_GREEN_ROLES.includes(body.role) ? body.role : "auditor";
       const permissions = TODO_GREEN_PERMISSIONS[role] || ["read"];
       const alvo = email(pedido.email);
+      // Aprovar o pedido cria o acesso mesmo durante indisponibilidade do
+      // provedor de e-mail; o convite é tentado abaixo e seu resultado volta na resposta.
       await env.DB.prepare(
         `INSERT INTO todogreen_access_emails
          (id,tenant_id,email,role,status,permissions_json,note,expires_at,revoked_at,created_by,workspace_owner_id,created_at,updated_at)
@@ -459,7 +506,23 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
         access,user,action:"authorized",resourceType:"access-request",resourceId:alvo,
         after:{ email:alvo, role, status:"approved", workspaceOwnerId: espacoDaConcessao(access) },
       });
-      return response({ ok:true, status:"approved", role, email:alvo, aguardandoCadastro: Boolean(!conta?.id) });
+      let invitationSent = false;
+      let invitationError = "";
+      try {
+        await enviarConviteDeAcessoTodoGreen({
+          env, access, user, email: alvo, name: pedido.name || "",
+          role, permissions, origin: url.origin,
+        });
+        invitationSent = true;
+      } catch (error) {
+        console.error("todogreen approved request invitation", error);
+        invitationError = "O acesso foi aprovado, mas o convite não pôde ser enviado agora.";
+      }
+      return response({
+        ok:true, status:"approved", role, email:alvo,
+        aguardandoCadastro: Boolean(!conta?.id),
+        invitationSent, invitationError,
+      });
     }
     return response({ error:"Método não permitido." },405);
   }
