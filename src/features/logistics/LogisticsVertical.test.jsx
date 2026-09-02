@@ -257,7 +257,10 @@ describe("LogisticsVertical", () => {
   it("abre o To Do diretamente pela jornada do espaço de trabalho", async () => {
     window.history.pushState({}, "", "/todogreen/espaco?ferramenta=tarefas");
     await renderarAutorizada();
-    expect(await screen.findByRole("button", { name: "Nova tarefa" })).toBeTruthy();
+    // O "To Do" (tarefas) é uma ferramenta carregada por lazy; em runner lento
+    // do CI o carregamento passa do timeout padrão de 1s do findBy. Damos folga
+    // para o chunk montar antes de procurar o botão.
+    expect(await screen.findByRole("button", { name: "Nova tarefa" }, { timeout: 5000 })).toBeTruthy();
   });
 
   it("mantém notícias, contatos, ajuda e rotinas anteriores visíveis no espaço", async () => {

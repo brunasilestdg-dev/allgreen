@@ -223,9 +223,12 @@ export default function AiKeysPanel({ setToast, authHeaders }) {
 
       {dados && !dados.cofreDisponivel && (
         <p className="int-ia-erro">
-          O cofre de chaves ainda não foi configurado neste servidor
-          (<code>WORKSPACE_AI_VAULT_KEY</code>). Enquanto isso, nenhuma chave pode
-          ser guardada com segurança — e guardar sem segurança não é opção.
+          O cofre de chaves ainda não está ligado neste servidor — é um ajuste
+          único do administrador. Enquanto ele não estiver ligado, nenhuma chave
+          pode ser guardada com segurança (e guardar sem segurança não é opção).
+          A inteligência que já vem no app continua funcionando normalmente. Para
+          liberar a conexão da sua própria conta, o administrador precisa cadastrar
+          o segredo <code>WORKSPACE_AI_VAULT_KEY</code> no painel do servidor.
         </p>
       )}
 
