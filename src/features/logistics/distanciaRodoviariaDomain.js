@@ -351,3 +351,25 @@ export const resumoDaDistancia = (resultado) => {
     : `${resultado.kmTrecho} km`;
   return `${trecho} · ${tempo} de viagem por trecho, sem trânsito`;
 };
+
+// #93 — ordem sugerida pela IA. A IA recebe as paradas numeradas e as
+// restrições (janela, prioridade) e devolve a nova ordem das paradas DO MEIO
+// (origem e destino são fixos, como no otimizador geométrico). Aqui só
+// aplicamos se a resposta for uma permutação EXATA dos índices do meio — a IA
+// pode alucinar, repetir ou inventar índice, e nesse caso não mexemos em nada
+// (devolve null e a tela avisa), nunca perdendo ou duplicando uma parada.
+export function aplicarOrdemDoMeio(paradas, ordemDoMeio) {
+  const lista = Array.isArray(paradas) ? paradas : [];
+  const n = lista.length;
+  if (n <= 3) return null; // sem meio para reordenar
+  const meio = [];
+  for (let i = 1; i < n - 1; i += 1) meio.push(i);
+  const nova = (Array.isArray(ordemDoMeio) ? ordemDoMeio : [])
+    .map((x) => Number(x))
+    .filter((x) => Number.isInteger(x));
+  const esperado = new Set(meio);
+  const recebido = new Set(nova);
+  if (nova.length !== meio.length || recebido.size !== meio.length) return null;
+  for (const i of nova) if (!esperado.has(i)) return null;
+  return [lista[0], ...nova.map((i) => lista[i]), lista[n - 1]];
+}

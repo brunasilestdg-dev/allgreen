@@ -3017,6 +3017,25 @@
   cursor: pointer;
 }
 .tdg-roteirizacao-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.tdg-roteirizacao-restricoes { display: grid; gap: 5px; margin: 12px 0; }
+.tdg-roteirizacao-restricoes > span { font-size: 0.8rem; font-weight: 600; color: var(--tdg-muted, #5a6f68); }
+.tdg-roteirizacao-restricoes textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 9px 12px;
+  border: 1px solid #cfe2da;
+  border-radius: 10px;
+  font: inherit;
+  color: #17372e;
+}
+.tdg-roteirizacao-ia {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: #17372e;
+  font-weight: 600;
+}
 .tdg-mapa-pin span {
   display: grid;
   place-items: center;

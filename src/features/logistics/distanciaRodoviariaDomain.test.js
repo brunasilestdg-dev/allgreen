@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   MOTIVOS,
+  aplicarOrdemDoMeio,
   calcularDistancia,
   geocodificar,
   normalizarCarregadores,
@@ -338,5 +339,28 @@ describe("normalizarCarregadores (Open Charge Map → mapa)", () => {
   it("descarta POI sem coordenada e não quebra com lista vazia", () => {
     expect(normalizarCarregadores([{ AddressInfo: {} }])).toEqual([]);
     expect(normalizarCarregadores(null)).toEqual([]);
+  });
+});
+
+describe("aplicarOrdemDoMeio (ordem sugerida pela IA)", () => {
+  const paradas = ["Origem SP", "Cliente A", "Cliente B", "Cliente C", "Destino RJ"];
+
+  it("reordena o meio mantendo origem e destino", () => {
+    // meio são os índices 1,2,3; nova ordem 3,1,2
+    expect(aplicarOrdemDoMeio(paradas, [3, 1, 2])).toEqual([
+      "Origem SP", "Cliente C", "Cliente A", "Cliente B", "Destino RJ",
+    ]);
+  });
+
+  it("recusa (null) se a IA não devolve permutação exata do meio", () => {
+    expect(aplicarOrdemDoMeio(paradas, [1, 2])).toBeNull();       // faltou uma
+    expect(aplicarOrdemDoMeio(paradas, [1, 2, 2])).toBeNull();     // repetiu
+    expect(aplicarOrdemDoMeio(paradas, [0, 2, 3])).toBeNull();     // incluiu origem
+    expect(aplicarOrdemDoMeio(paradas, [1, 2, 9])).toBeNull();     // índice inventado
+  });
+
+  it("não reordena quando não há meio", () => {
+    expect(aplicarOrdemDoMeio(["A", "B"], [])).toBeNull();
+    expect(aplicarOrdemDoMeio(["A", "B", "C"], [1])).toBeNull();
   });
 });

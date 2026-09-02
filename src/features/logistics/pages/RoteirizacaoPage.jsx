@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BatteryCharging, Plug, Plus, Route, Shuffle, Trash2 } from "lucide-react";
+import { BatteryCharging, Plug, Plus, Route, Shuffle, Sparkles, Trash2 } from "lucide-react";
 import {
+  aplicarOrdemDoMeio,
   normalizarCarregadores,
   otimizarOrdemDeParadas,
   sugerirEnderecos,
@@ -53,6 +54,8 @@ const formatarTempo = (minutos) => {
 export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [paradas, setParadas] = useState(["", ""]);
   const [recargas, setRecargas] = useState(() => new Set());
+  const [restricoes, setRestricoes] = useState("");
+  const [iaEstado, setIaEstado] = useState({ fase: "idle" });
   const [estado, setEstado] = useState({ fase: "parado" });
   const [sugestoes, setSugestoes] = useState({});
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
@@ -192,6 +195,59 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
     setToast?.("Ordem das paradas otimizada.");
   };
 
+  // #93: a IA sugere a ordem das paradas do meio a partir de restrições em texto
+  // (janela de entrega, prioridade). Origem e destino ficam fixos, como no
+  // otimizador geométrico. A resposta da IA é validada por aplicarOrdemDoMeio:
+  // se não for uma permutação exata do meio, não mexemos em nada — a IA erra e a
+  // rota não perde nem duplica parada.
+  const sugerirComIA = async () => {
+    const validas = paradas.map((p) => p.trim()).filter((p) => p.length >= 3);
+    if (validas.length < 4) {
+      setToast?.("Para a IA reordenar, informe origem, destino e ao menos duas paradas no meio.");
+      return;
+    }
+    setIaEstado({ fase: "pensando" });
+    const meio = validas.slice(1, -1).map((p, i) => `${i + 1}. ${p}`).join("\n");
+    const prompt = `Você é um roteirizador de logística de uma transportadora rodoviária 100% elétrica no Brasil. A rota tem origem e destino FIXOS; você só decide a ordem de visita das paradas do meio.
+
+Origem: ${validas[0]}
+Destino: ${validas[validas.length - 1]}
+
+Paradas do meio (numeradas):
+${meio}
+
+Restrições do usuário: ${restricoes.trim() || "nenhuma além de reduzir distância e tempo"}
+
+Responda SOMENTE com um objeto JSON válido, sem comentários e sem cercas de código:
+{"ordem": [<números das paradas do meio na melhor sequência de visita>], "motivo": "uma frase curta em português"}
+
+Regras:
+- "ordem" deve conter TODOS os números das paradas do meio (de 1 a ${validas.length - 2}), cada um uma única vez, sem repetir nem inventar.
+- Respeite as restrições (janelas de entrega, prioridade); na falta delas, minimize distância e tempo. Não invente números, prazos ou pedágios.`;
+    try {
+      const resposta = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify({ prompt, specialist: "Estrategista" }),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.error || "A IA não respondeu agora.");
+      const bruto = String(dados.content || "").replace(/```json|```/g, "").trim();
+      const recorte = bruto.slice(bruto.indexOf("{"), bruto.lastIndexOf("}") + 1);
+      const obj = JSON.parse(recorte);
+      const nova = aplicarOrdemDoMeio(validas, (obj.ordem || []).map((n) => Number(n)));
+      if (!nova) throw new Error("A IA devolveu uma ordem inválida. Tente de novo ou ajuste as restrições.");
+      setParadas(nova);
+      setRecargas(new Set());
+      setIaEstado({ fase: "ok", motivo: String(obj.motivo || "").slice(0, 200) });
+      await tracar(nova);
+      setToast?.("Ordem sugerida pela IA aplicada.");
+    } catch (motivo) {
+      setIaEstado({ fase: "erro", motivo: motivo.message });
+      setToast?.(motivo.message);
+    }
+  };
+
   // #90: carregadores elétricos no mapa. Busca no Open Charge Map (pelo
   // gateway do backend, que guarda a chave) em volta do centro da rota, com
   // foco em pesados (DC de alta potência marcado em verde). Sem chave
@@ -281,6 +337,15 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
             </div>
           ))}
         </div>
+        <label className="tdg-roteirizacao-restricoes">
+          <span>Restrições para a IA (opcional)</span>
+          <textarea
+            value={restricoes}
+            onChange={(event) => setRestricoes(event.target.value)}
+            rows={2}
+            placeholder="Ex.: entregar Campinas antes das 12h; a parada de Sorocaba é prioridade; evitar centro de SP no horário de pico."
+          />
+        </label>
         <div className="tdg-roteirizacao-acoes">
           <button type="button" className="tdg-action tdg-action-ghost" onClick={adicionarParada}>
             <Plus size={16} /> Adicionar parada
@@ -288,6 +353,16 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
           {estado.fase === "pronto" && (
             <button type="button" className="tdg-action tdg-action-ghost" onClick={otimizar}>
               <Shuffle size={16} /> Otimizar ordem
+            </button>
+          )}
+          {paradas.filter((p) => p.trim().length >= 3).length >= 4 && (
+            <button
+              type="button"
+              className="tdg-action tdg-action-ghost"
+              onClick={sugerirComIA}
+              disabled={iaEstado.fase === "pensando"}
+            >
+              <Sparkles size={16} />{iaEstado.fase === "pensando" ? "Pensando…" : "Sugerir ordem (IA)"}
             </button>
           )}
           <button
@@ -304,6 +379,10 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
         </div>
       </form>
 
+      {iaEstado.fase === "ok" && iaEstado.motivo && (
+        <p className="tdg-roteirizacao-ia"><Sparkles size={14} /> {iaEstado.motivo}</p>
+      )}
+      {iaEstado.fase === "erro" && <p className="tdg-roteirizacao-erro">{iaEstado.motivo}</p>}
       {estado.fase === "erro" && <p className="tdg-roteirizacao-erro">{estado.motivo}</p>}
       {estado.fase === "pronto" && r && (
         <div className="tdg-roteirizacao-resumo">
