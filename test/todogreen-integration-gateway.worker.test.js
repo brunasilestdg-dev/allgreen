@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  consultarCepNormalizado,
+  normalizarEnderecoCep,
   probeTodoGreenExternalIntegration,
   runTodoGreenExternalIntegration,
   todoGreenExternalIntegrationCatalog,
@@ -96,5 +98,37 @@ describe("gateway seletivo de integrações da To Do Green", () => {
 
     const result = await probeTodoGreenExternalIntegration({}, "opencep");
     expect(result).toEqual(expect.objectContaining({ provider: "opencep", ok: true, configured: true }));
+  });
+
+  it("normaliza CEP dos vários provedores para o mesmo formato", () => {
+    // ViaCEP / OpenCEP
+    expect(normalizarEnderecoCep({ cep: "01001-000", logradouro: "Praça da Sé", bairro: "Sé", localidade: "São Paulo", uf: "sp" }, "01001000"))
+      .toEqual({ cep: "01001000", logradouro: "Praça da Sé", bairro: "Sé", cidade: "São Paulo", uf: "SP" });
+    // BrasilAPI (street/neighborhood/city/state)
+    expect(normalizarEnderecoCep({ street: "Praça da Sé", neighborhood: "Sé", city: "São Paulo", state: "SP" }, "01001000"))
+      .toEqual({ cep: "01001000", logradouro: "Praça da Sé", bairro: "Sé", cidade: "São Paulo", uf: "SP" });
+    // Não encontrado (ViaCEP devolve { erro: true } com 200) e vazio
+    expect(normalizarEnderecoCep({ erro: true }, "00000000")).toBeNull();
+    expect(normalizarEnderecoCep({}, "00000000")).toBeNull();
+  });
+
+  it("consulta CEP com fallback: pula o provedor que falha e usa o próximo", async () => {
+    const fetchMock = vi.fn(async (url) => {
+      const alvo = String(url);
+      if (alvo.includes("opencep.com")) throw new Error("timeout");
+      if (alvo.includes("viacep.com.br"))
+        return new Response(JSON.stringify({ logradouro: "Rua A", bairro: "Centro", localidade: "Curitiba", uf: "PR" }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      throw new Error("não deveria chegar na BrasilAPI");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const endereco = await consultarCepNormalizado({}, "80010-000");
+    expect(endereco).toEqual({ cep: "80010000", logradouro: "Rua A", bairro: "Centro", cidade: "Curitiba", uf: "PR" });
+  });
+
+  it("rejeita CEP inválido antes de qualquer rede", async () => {
+    await expect(consultarCepNormalizado({}, "123")).rejects.toThrow("CEP inválido");
   });
 });

@@ -36,6 +36,7 @@ import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
+import { consultarCepNormalizado } from "./todogreen-integration-gateway.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -316,6 +317,19 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenMcpConnections(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  if (path === "/api/todogreen/cep") {
+    return guarded("To Do Green CEP error", "Não foi possível consultar o CEP.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      const cep = new URL(request.url).searchParams.get("cep") || "";
+      try {
+        return json(await consultarCepNormalizado(env, cep));
+      } catch (erro) {
+        return json({ error: erro.message || "CEP não encontrado." }, 400);
+      }
     });
   }
 

@@ -95,6 +95,29 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
   };
   const change = (field, value) => setForm((now) => ({ ...now, [field]: value }));
   const [enviandoArquivo, setEnviandoArquivo] = useState("");
+  const [cepStatus, setCepStatus] = useState({});
+
+  // Autofill de endereço por CEP: consulta o backend (OpenCEP → ViaCEP →
+  // BrasilAPI, normalizado) e preenche o campo de endereço deste form, deixando
+  // só o número para a pessoa completar. `alvo` é o campo de endereço do form.
+  const buscarCep = async (field, alvo, valor) => {
+    const cep = String(valor || "").replace(/\D/g, "");
+    if (cep.length !== 8) {
+      setCepStatus((now) => ({ ...now, [field]: cep.length ? "CEP incompleto." : "" }));
+      return;
+    }
+    setCepStatus((now) => ({ ...now, [field]: "buscando" }));
+    try {
+      const dados = await api(`/api/todogreen/cep?cep=${cep}`);
+      const linha = [dados.logradouro, dados.bairro].filter(Boolean).join(", ");
+      const local = [dados.cidade, dados.uf].filter(Boolean).join("/");
+      const endereco = [linha, local].filter(Boolean).join(" — ");
+      setForm((now) => ({ ...now, [field]: cep, ...(alvo ? { [alvo]: endereco } : {}) }));
+      setCepStatus((now) => ({ ...now, [field]: "ok" }));
+    } catch (erro) {
+      setCepStatus((now) => ({ ...now, [field]: erro.message || "CEP não encontrado." }));
+    }
+  };
 
   // Upload de verdade: manda o arquivo (a planilha da tabela de preço, por ex.)
   // ao cofre interno e grava o caminho de download no campo. Antes só dava para
@@ -249,6 +272,24 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
                           />
                         </label>
                         {form.__arquivoNome && <span className="tdg-campo-arquivo-nome">{form.__arquivoNome}</span>}
+                      </div>
+                    ) : type === "cep" ? (
+                      // selectKey carrega o campo de endereço deste form que o
+                      // CEP preenche. Busca no blur e no Enter; não bloqueia nada.
+                      <div className="tdg-campo-cep">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={form[field] ?? ""}
+                          onChange={(event) => change(field, event.target.value)}
+                          onBlur={(event) => buscarCep(field, selectKey, event.target.value)}
+                          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); buscarCep(field, selectKey, event.target.value); } }}
+                          placeholder="00000-000"
+                          maxLength={9}
+                        />
+                        {cepStatus[field] === "buscando" && <small className="tdg-campo-cep-nota">Buscando endereço...</small>}
+                        {cepStatus[field] === "ok" && <small className="tdg-campo-cep-nota ok">Endereço preenchido — falta o número.</small>}
+                        {cepStatus[field] && !["buscando", "ok"].includes(cepStatus[field]) && <small className="tdg-campo-cep-nota erro">{cepStatus[field]}</small>}
                       </div>
                     ) : (
                       <input

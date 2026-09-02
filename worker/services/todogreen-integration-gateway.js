@@ -592,3 +592,33 @@ export async function runTodoGreenExternalIntegration(env = {}, provider, action
 
   throw new Error("Integração sem ação de negócio implementada.");
 }
+
+// ===== CEP normalizado (autofill de endereço nos cadastros) =====
+// Cada provedor devolve um formato diferente; aqui reduzimos a um só e caímos
+// de OpenCEP para ViaCEP para BrasilAPI quando um não responde. Sem chave: são
+// APIs públicas gratuitas, já `configured: true` no catálogo.
+export function normalizarEnderecoCep(dados, cep) {
+  if (!dados || dados.erro) return null;
+  const logradouro = text(dados.logradouro || dados.street || "", 200);
+  const bairro = text(dados.bairro || dados.neighborhood || "", 120);
+  const cidade = text(dados.localidade || dados.city || "", 120);
+  const uf = text(dados.uf || dados.state || "", 2).toUpperCase();
+  if (!logradouro && !cidade && !uf) return null;
+  return { cep, logradouro, bairro, cidade, uf };
+}
+
+export async function consultarCepNormalizado(env, cepBruto) {
+  const cep = requireCep(cepBruto);
+  let ultimoErro = null;
+  for (const provider of ["opencep", "viacep", "brasilapi"]) {
+    try {
+      const dados = await runTodoGreenExternalIntegration(env, provider, "cep", { cep });
+      const endereco = normalizarEnderecoCep(dados, cep);
+      if (endereco) return endereco;
+    } catch (erro) {
+      ultimoErro = erro;
+    }
+  }
+  if (ultimoErro) throw ultimoErro;
+  throw new Error("CEP não encontrado.");
+}

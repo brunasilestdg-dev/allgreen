@@ -3262,3 +3262,9 @@
 /* ===== Estúdio: ferramentas do app geral montadas na vertical ===== */
 .tdg-estudio { display: block; }
 .tdg-estudio > * { max-width: 100%; }
+
+/* v59 — campo de CEP com autofill de endereço nos cadastros */
+.tdg-campo-cep { display: flex; flex-direction: column; gap: 4px; }
+.tdg-campo-cep-nota { font-size: 0.78rem; color: var(--tdg-muted, #6b7280); }
+.tdg-campo-cep-nota.ok { color: #15803d; }
+.tdg-campo-cep-nota.erro { color: #b91c1c; }
