@@ -3268,3 +3268,13 @@
 .tdg-campo-cep-nota { font-size: 0.78rem; color: var(--tdg-muted, #6b7280); }
 .tdg-campo-cep-nota.ok { color: #15803d; }
 .tdg-campo-cep-nota.erro { color: #b91c1c; }
+
+/* v60 — botão de compartilhar plano com rótulo (não mais ícone mudo) */
+.tdg-planner-share-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--tdg-border, #d1d5db);
+  background: var(--tdg-surface, #fff); color: var(--tdg-ink, #111827);
+  font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.tdg-planner-share-btn:hover { border-color: var(--tdg-primary, #15803d); color: var(--tdg-primary, #15803d); }

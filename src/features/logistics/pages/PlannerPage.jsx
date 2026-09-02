@@ -70,6 +70,15 @@ const partilhaParaEnvio = (modo, members) => ({
   members: modo === "pessoas" ? members : [],
 });
 
+// Rótulo curto de quem vê o plano, para o botão de compartilhar não ser um
+// ícone mudo (a titular não achava onde escolher com quem compartilhar).
+const rotuloPartilha = (plano) => {
+  const modo = modoDoPlano(plano);
+  if (modo === "espaco") return "Todo o espaço";
+  if (modo === "pessoas") return `${(plano.members || []).length} pessoa${(plano.members || []).length === 1 ? "" : "s"}`;
+  return "Só eu";
+};
+
 const COR_PRIORIDADE = {
   urgente: "#b42318",
   alta: "#c4700b",
@@ -417,8 +426,9 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
                     })}
                   </div>
                   {souDono && (
-                    <button type="button" className="tdg-planner-icon" onClick={() => setPartilhaEmEdicao(planoAtivo)} title="Compartilhar plano">
-                      <Users size={15} />
+                    <button type="button" className="tdg-planner-share-btn" onClick={() => setPartilhaEmEdicao(planoAtivo)} title="Escolher com quem compartilhar este plano">
+                      {modoDoPlano(planoAtivo) === "privado" ? <Lock size={14} /> : <Users size={14} />}
+                      Compartilhar · {rotuloPartilha(planoAtivo)}
                     </button>
                   )}
                   {souDono && (

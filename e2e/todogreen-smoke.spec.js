@@ -4,7 +4,11 @@ import { contaNova, criarConta, habilitarTodoGreen } from "./apoio.js";
 const rotaDaJornada = async (page, rota) => {
   await page.goto(rota);
   await expect(page.locator("main.tdg")).toBeVisible();
-  await expect(page.locator("main.tdg h1")).toBeVisible();
+  // Algumas telas (ex.: implantação) têm o título do shell + um título próprio
+  // do componente lazy; a asserção quer só confirmar que a página carregou com
+  // um título visível, então pega o primeiro (evita violação de strict mode
+  // conforme a hora em que o chunk lazy monta o segundo h1).
+  await expect(page.locator("main.tdg h1").first()).toBeVisible();
 };
 
 test.describe("jornadas críticas da To Do Green", () => {
