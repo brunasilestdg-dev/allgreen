@@ -329,9 +329,10 @@
 .tdg-req-indicadores article.alerta { background: #fff1ee; border-color: #edb7ad; }
 .tdg-req-indicadores small, .tdg-req-indicadores span { color: var(--tdg-muted); font-size: 12px; }
 .tdg-req-indicadores strong { font-size: 1.5rem; }
-.tdg-req-filtros { display: flex; flex-wrap: wrap; gap: 8px; }
-.tdg-req-filtros button { background: #fff; border: 1px solid var(--tdg-line); border-radius: 999px; color: var(--tdg-muted); font: inherit; font-weight: 700; min-height: 40px; padding: 0 16px; }
-.tdg-req-filtros button.ativo { background: var(--tdg-soft); border-color: var(--tdg-green); color: var(--tdg-green); }
+/* Os filtros Pendentes/Atrasadas/Todas são um segmented control único, definido
+   mais abaixo (.tdg-req-filtros por volta da linha 2840). A regra antiga aqui
+   deixava cada botão como uma pílula solta (border-radius: 999px) e brigava com
+   o controle novo — removida para não sobrar botão "redondo" em cache. */
 .tdg-req-vazio { align-items: center; background: #f5f9f7; border: 1px dashed var(--tdg-line); border-radius: 16px; color: var(--tdg-muted); display: flex; gap: 9px; margin: 0; padding: 20px; }
 .tdg-req-lista { display: grid; gap: 12px; }
 .tdg-req-card { background: #fff; border: 1px solid var(--tdg-line); border-radius: 18px; overflow: hidden; }
@@ -2948,7 +2949,6 @@
   min-height: 40px;
 }
 
-.tdg-req-filtros button,
 .tdg-planner-cortes button,
 .tdg-crm-view-switch button,
 .tdg-view-switch button {
@@ -2961,7 +2961,6 @@
   border-radius: 10px;
 }
 
-.tdg-req-filtros button,
 .tdg-planner-cortes button {
   aspect-ratio: auto;
   height: auto;
