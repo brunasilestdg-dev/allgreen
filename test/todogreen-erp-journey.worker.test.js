@@ -292,9 +292,25 @@ describe("jornada cliente → caixa", () => {
     expect(juridico.status).toBe("approved");
     expect(juridico.approval.complete).toBe(true);
 
-    // 9. Fronteira conhecida: o ERP ainda recebe o status de assinatura no
-    // payload. Este teste só o registra DEPOIS do Jurídico para seguir a
-    // jornada desejada; os TODOs abaixo exigem que isso vire gate do servidor.
+    // GATE (assinatura exige evidência): com o Jurídico feito, mas sem o
+    // contrato assinado anexado ao fluxo jurídico, a assinatura é recusada.
+    const semDocumentoAssinado = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      method: "PATCH", token: dona.token,
+      body: { revision: contrato.revision, assinatura: "signed" },
+    });
+    expect(semDocumentoAssinado.status).toBe(409);
+    expect((await semDocumentoAssinado.json()).error).toMatch(/anexe/i);
+
+    // Contrato assinado anexado ao fluxo jurídico (cofre interno).
+    await env.DB.prepare(
+      `INSERT INTO todogreen_internal_files
+        (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,file_name,content_type,
+         byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at)
+       VALUES (?,'todogreen',?,?,?,'workflow',?,'contrato-assinado.pdf','application/pdf',2048,'hash',1,'internal_upload','','',?,?,NULL)`,
+    ).bind(crypto.randomUUID(), dona.id, clientId, juridico.id, juridico.id, dona.id, new Date().toISOString()).run();
+
+    // 9. Com Jurídico concluído e documento assinado anexado, o contrato é
+    // promovido a aprovado e assinado.
     const contratoFinalResp = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
       method: "PATCH", token: dona.token,
       body: {
@@ -523,9 +539,9 @@ describe("jornada cliente → caixa", () => {
 
   // Gates FECHADOS e cobertos como regressão dentro do happy path acima:
   //  - "contrato não chega a aprovado/assinado antes do Jurídico": 409 antes da validação.
+  //  - "assinatura signed exige o documento assinado anexado ao fluxo jurídico": 409 sem anexo.
   //  - "OS não nasce sem implantação ativa": bloqueio 409 antes do go-live.
   //  - "go-live valida a tabela de preço (real e ativa)": tabela inativa reprova.
-  // TODOs intencionais que ainda faltam fechar:
-  it.todo("contrato não pode receber assinatura signed sem evidência de assinatura vinculada");
+  // TODO intencional que ainda falta fechar:
   it.todo("CT-e só pode aparecer como autorizado depois do retorno oficial da SEFAZ");
 });

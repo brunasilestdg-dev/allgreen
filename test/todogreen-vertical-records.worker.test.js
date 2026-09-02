@@ -440,17 +440,33 @@ describe("contrato nasce de proposta aceita", () => {
     // (semeada direto no banco: a segregação de funções do fluxo — quem abre
     // não faz a 1ª aprovação — não é o alvo deste teste).
     const agora = new Date().toISOString();
+    const workflowId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO todogreen_enterprise_workflows
         (id,tenant_id,workspace_owner_id,domain,kind,title,description,client_id,owner_user_id,priority,
          status,due_at,data_json,approval_json,recurrence_json,source_template_id,revision,created_by,updated_by,created_at,updated_at,archived_at)
        VALUES (?,'todogreen',?,'legal','contrato','Revisão do ciclo','',?,?,'normal','approved',NULL,?,?,'{}','',1,?,?,?,?,NULL)`,
     ).bind(
-      crypto.randomUUID(), gestora.id, clienteId, gestora.id,
+      workflowId, gestora.id, clienteId, gestora.id,
       JSON.stringify({ contractId: contrato.id, proposalId: proposta.id }),
       JSON.stringify({ approvals: [{ stepId: "juridico", decision: "approved", decidedAt: agora }] }),
       gestora.id, gestora.id, agora, agora,
     ).run();
+
+    // Com Jurídico, mas sem o documento assinado anexado, a assinatura ainda é recusada.
+    const semDocumento = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14" },
+    });
+    expect(semDocumento.status).toBe(409);
+
+    // Contrato assinado anexado ao fluxo jurídico (cofre interno).
+    await env.DB.prepare(
+      `INSERT INTO todogreen_internal_files
+        (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,file_name,content_type,
+         byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at)
+       VALUES (?,'todogreen',?,?,?,'workflow',?,'contrato-assinado.pdf','application/pdf',1024,'hash',1,'internal_upload','','',?,?,NULL)`,
+    ).bind(crypto.randomUUID(), gestora.id, clienteId, workflowId, workflowId, gestora.id, agora).run();
 
     const atualizado = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
       metodo: "PATCH", token: gestora.token,

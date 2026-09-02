@@ -1527,6 +1527,44 @@ const juridicoConcluido = async (env, access, { contractId = "", proposalId = ""
   return false;
 };
 
+// Gate da assinatura: não se marca um contrato como assinado sem a evidência
+// do documento assinado. O documento é anexado ao fluxo jurídico do contrato
+// (EnterpriseWorkflowPanel → "Contrato e documentos", cofre interno com
+// context_type='workflow'). Aqui exigimos ao menos um anexo num fluxo legal
+// amarrado a este contrato.
+const documentoDeAssinaturaVinculado = async (env, access, { contractId = "", proposalId = "" }) => {
+  const cid = texto(contractId, 120);
+  const pid = texto(proposalId, 120);
+  if (!cid && !pid) return false;
+  const { results } = await env.DB
+    .prepare(
+      `SELECT id, data_json FROM todogreen_enterprise_workflows
+        WHERE tenant_id=? AND workspace_owner_id=? AND domain='legal' AND archived_at IS NULL`,
+    )
+    .bind(TENANT_ID, access.ownerId)
+    .all()
+    .catch(() => ({ results: [] }));
+  const ids = [];
+  for (const row of results || []) {
+    let data = {};
+    try { data = JSON.parse(row.data_json || "{}"); } catch { data = {}; }
+    if ((cid && texto(data.contractId, 120) === cid) || (pid && texto(data.proposalId, 120) === pid))
+      ids.push(row.id);
+  }
+  if (!ids.length) return false;
+  const marcadores = ids.map(() => "?").join(",");
+  const anexo = await env.DB
+    .prepare(
+      `SELECT id FROM todogreen_internal_files
+        WHERE tenant_id=? AND workspace_owner_id=? AND context_type='workflow'
+          AND context_id IN (${marcadores}) AND archived_at IS NULL LIMIT 1`,
+    )
+    .bind(TENANT_ID, access.ownerId, ...ids)
+    .first()
+    .catch(() => null);
+  return Boolean(anexo);
+};
+
 const criar = async (env, colecao, access, user, corpo, email = "") => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);
@@ -1569,6 +1607,10 @@ const criar = async (env, colecao, access, user, corpo, email = "") => {
     if (texto(corpo.aprovacao, 40) === "approved" || texto(corpo.assinatura, 40) === "signed") {
       if (!(await juridicoConcluido(env, access, { proposalId: propostaId })))
         return json({ error: "Este contrato precisa da validação do Jurídico concluída antes de ser aprovado ou assinado." }, 409);
+    }
+    if (texto(corpo.assinatura, 40) === "signed") {
+      if (!(await documentoDeAssinaturaVinculado(env, access, { proposalId: propostaId })))
+        return json({ error: "Anexe o contrato assinado ao fluxo jurídico antes de marcar a assinatura como concluída." }, 409);
     }
     corpo = {
       ...corpo,
@@ -1671,6 +1713,14 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
       });
       if (!ok)
         return json({ error: "Este contrato precisa da validação do Jurídico concluída antes de ser aprovado ou assinado." }, 409);
+    }
+    if (vaiAssinar) {
+      const temDoc = await documentoDeAssinaturaVinculado(env, access, {
+        contractId: id,
+        proposalId: texto(atual.proposal_id, 120),
+      });
+      if (!temDoc)
+        return json({ error: "Anexe o contrato assinado ao fluxo jurídico antes de marcar a assinatura como concluída." }, 409);
     }
   }
   const erro = colecao.exigido(proximo);
