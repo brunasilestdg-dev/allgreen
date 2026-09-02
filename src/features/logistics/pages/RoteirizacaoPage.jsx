@@ -4,7 +4,6 @@ import "leaflet/dist/leaflet.css";
 import { BatteryCharging, Coins, Plug, Plus, Route, Shuffle, Sparkles, Trash2 } from "lucide-react";
 import {
   aplicarOrdemDoMeio,
-  normalizarCarregadores,
   otimizarOrdemDeParadas,
   sugerirEnderecos,
   tracarRota,
@@ -71,6 +70,10 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const camadaRef = useRef(null);
   const camadaCarregadoresRef = useRef(null);
   const timerSugestaoRef = useRef(null);
+  // Endereço (texto exato) → coordenada já resolvida pela sugestão escolhida.
+  // Com isso a rota usa o ponto exato do endereço completo, sem depender de o
+  // Nominatim reencontrar o texto livre — resolve o "só cidade x cidade".
+  const coordsResolvidasRef = useRef({});
 
   useEffect(() => {
     if (mapaRef.current || !containerRef.current) return undefined;
@@ -98,10 +101,14 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
 
   const alterarParada = (indice, valor) => {
     setParadas((atual) => atual.map((p, i) => (i === indice ? valor : p)));
+    const termo = valor.trim();
+    // Se o valor bate com uma sugestão (a pessoa escolheu no autopreenchimento),
+    // guarda a coordenada exata dela para a rota usar o endereço completo.
+    const escolhida = (sugestoes[indice] || []).find((s) => s.rotulo === valor);
+    if (escolhida) coordsResolvidasRef.current[termo] = [escolhida.latitude, escolhida.longitude];
     // #95/#96: sugestão de endereço com atraso (o Nominatim público aceita
     // ~1 consulta/s; debounce evita disparar a cada tecla).
     clearTimeout(timerSugestaoRef.current);
-    const termo = valor.trim();
     if (termo.length < 3) {
       setSugestoes((atual) => ({ ...atual, [indice]: [] }));
       return;
@@ -163,7 +170,13 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const tracar = async (lista) => {
     setEstado({ fase: "calculando" });
     setPedagios({ fase: "idle" });
-    const resultado = await tracarRota({ paradas: lista });
+    // Cada parada leva a coordenada exata quando veio do autopreenchimento;
+    // senão o backend geocodifica o texto (agora tolerando endereço completo).
+    const comCoords = lista.map((endereco) => ({
+      endereco,
+      coord: coordsResolvidasRef.current[String(endereco).trim()] || null,
+    }));
+    const resultado = await tracarRota({ paradas: comCoords });
     if (resultado.ok) {
       setEstado({ fase: "pronto", resultado: { ...resultado, enderecos: lista } });
       desenhar(resultado);
@@ -296,13 +309,11 @@ Regras:
     const centro = mapa.getCenter();
     setCarregadores({ fase: "buscando", lista: [] });
     try {
-      const resposta = await fetch("/api/todogreen/integrations", {
+      const resposta = await fetch("/api/todogreen/carregadores", {
         method: "POST",
         headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
         body: JSON.stringify({
-          provider: "open-charge-map",
-          action: "nearby",
-          input: { latitude: centro.lat, longitude: centro.lng, distanceKm: RAIO_CARREGADORES_KM, limit: 60 },
+          latitude: centro.lat, longitude: centro.lng, distanceKm: RAIO_CARREGADORES_KM, limit: 60,
         }),
       });
       const dados = await resposta.json().catch(() => ({}));
@@ -311,9 +322,9 @@ Regras:
         setToast?.(dados.error || "Não foi possível buscar carregadores agora.");
         return;
       }
-      const pontos = normalizarCarregadores(dados.result);
+      const pontos = Array.isArray(dados.pontos) ? dados.pontos : [];
       desenharCarregadores(pontos);
-      setCarregadores({ fase: "on", lista: pontos });
+      setCarregadores({ fase: "on", lista: pontos, fonte: dados.fonte || "OpenStreetMap" });
       setToast?.(pontos.length
         ? `${pontos.length} ponto(s) de recarga no raio de ${RAIO_CARREGADORES_KM} km.`
         : "Nenhum ponto de recarga encontrado nesse trecho.");
@@ -340,35 +351,44 @@ Regras:
 
       <form className="tdg-roteirizacao-form" onSubmit={calcular}>
         <div className="tdg-roteirizacao-paradas">
-          {paradas.map((valor, indice) => (
-            <div className="tdg-roteirizacao-parada" key={indice}>
-              <span className="tdg-roteirizacao-num" aria-hidden="true">{indice + 1}</span>
-              <label className="tdg-roteirizacao-campo">
-                <span>{indice === 0 ? "Origem" : indice === paradas.length - 1 ? "Destino" : `Parada ${indice}`}</span>
-                <input
-                  value={valor}
-                  list={`tdg-sug-${indice}`}
-                  autoComplete="off"
-                  onChange={(event) => alterarParada(indice, event.target.value)}
-                  placeholder={indice === 0 ? "Ex.: Santos SP" : "Ex.: Campinas SP"}
-                />
-                <datalist id={`tdg-sug-${indice}`}>
-                  {(sugestoes[indice] || []).map((s) => (
-                    <option key={s.rotulo} value={s.rotulo} />
-                  ))}
-                </datalist>
-              </label>
-              <label className={`tdg-roteirizacao-recarga${recargas.has(indice) ? " ativa" : ""}`} title="Marcar como parada de recarga (+1h30)">
-                <input type="checkbox" checked={recargas.has(indice)} onChange={() => alternarRecarga(indice)} />
-                <BatteryCharging size={16} />
-              </label>
-              {paradas.length > 2 && (
-                <button type="button" className="tdg-roteirizacao-remover" onClick={() => removerParada(indice)} aria-label={`Remover parada ${indice + 1}`}>
-                  <Trash2 size={16} />
+          {paradas.map((valor, indice) => {
+            const papel = indice === 0 ? "origem" : indice === paradas.length - 1 ? "destino" : "meio";
+            const recarga = recargas.has(indice);
+            return (
+              <div className={`tdg-roteirizacao-parada ${papel}`} key={indice}>
+                <span className="tdg-roteirizacao-num" aria-hidden="true">{indice + 1}</span>
+                <label className="tdg-roteirizacao-campo">
+                  <span>{papel === "origem" ? "Origem" : papel === "destino" ? "Destino" : `Parada ${indice}`}</span>
+                  <input
+                    value={valor}
+                    list={`tdg-sug-${indice}`}
+                    autoComplete="off"
+                    onChange={(event) => alterarParada(indice, event.target.value)}
+                    placeholder={indice === 0 ? "Ex.: Rua da Estação, 100, Santos SP" : "Ex.: Av. Brasil, 500, Campinas SP"}
+                  />
+                  <datalist id={`tdg-sug-${indice}`}>
+                    {(sugestoes[indice] || []).map((s) => (
+                      <option key={s.rotulo} value={s.rotulo} />
+                    ))}
+                  </datalist>
+                </label>
+                <button
+                  type="button"
+                  className={`tdg-roteirizacao-recarga${recarga ? " ativa" : ""}`}
+                  onClick={() => alternarRecarga(indice)}
+                  aria-pressed={recarga}
+                  title="Marcar esta parada como recarga (soma 1h30)"
+                >
+                  <BatteryCharging size={15} /> Recarga
                 </button>
-              )}
-            </div>
-          ))}
+                {paradas.length > 2 && (
+                  <button type="button" className="tdg-roteirizacao-remover" onClick={() => removerParada(indice)} aria-label={`Remover parada ${indice + 1}`}>
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
         <label className="tdg-roteirizacao-restricoes">
           <span>Restrições para a IA (opcional)</span>
@@ -442,7 +462,7 @@ Regras:
 
       {carregadores.fase === "on" && (
         <p className="tdg-roteirizacao-carregadores-info">
-          <Plug size={14} /> {carregadores.lista.length} carregador(es) no mapa · <b>{pesadosNoMapa}</b> servem pesado (DC rápido, ⚡ verde). Fonte: Open Charge Map.
+          <Plug size={14} /> {carregadores.lista.length} carregador(es) no mapa · <b>{pesadosNoMapa}</b> servem pesado (DC rápido, ⚡ verde). Fonte: {carregadores.fonte || "OpenStreetMap"}.
         </p>
       )}
 

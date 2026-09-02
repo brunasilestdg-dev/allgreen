@@ -65,8 +65,9 @@ test("roteirização mostra o mapa e desenha a rota com várias paradas", async 
   // E a polyline SVG existe dentro do mapa.
   expect(await page.locator(".tdg-roteirizacao-mapa path").count()).toBeGreaterThan(0);
 
-  // #91: marcar uma parada como recarga soma 1h30 ao total.
-  await page.locator(".tdg-roteirizacao-recarga input").nth(1).check();
+  // #91: marcar uma parada como recarga soma 1h30 ao total. O toggle é um
+  // botão rotulado "Recarga" (antes era um checkbox oculto).
+  await page.locator(".tdg-roteirizacao-recarga").nth(1).click();
   await expect(page.locator(".tdg-roteirizacao-resumo")).toContainText("recarga(s) de 1h30");
 
   // #92: otimizar a ordem reordena e mantém a rota (3 paradas seguem lá).
@@ -74,8 +75,9 @@ test("roteirização mostra o mapa e desenha a rota com várias paradas", async 
   await expect(page.locator(".tdg-roteirizacao-resumo")).toContainText("3 paradas");
 });
 
-// #90: carregadores elétricos no mapa (Open Charge Map via gateway). A chamada
-// ao backend é dublada para o teste não depender de chave nem de rede.
+// #90: carregadores elétricos no mapa. A busca agora é gratuita (OpenStreetMap
+// via backend, sem chave). A chamada ao backend é dublada para o teste ser
+// determinístico e não depender de rede — o formato já é o canônico do mapa.
 test("roteirização mostra carregadores elétricos com foco em pesados", async ({ page }) => {
   const pngVazio = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
@@ -83,18 +85,17 @@ test("roteirização mostra carregadores elétricos com foco em pesados", async 
   );
   await page.route(/tile\.openstreetmap\.org/, (rota) =>
     rota.fulfill({ status: 200, contentType: "image/png", body: pngVazio }));
-  // O gateway de integrações → dois pontos: um DC rápido (pesado) e um AC lento.
-  await page.route(/\/api\/todogreen\/integrations$/, (rota) => {
+  // Backend de carregadores → dois pontos: um DC rápido (pesado) e um AC lento.
+  await page.route(/\/api\/todogreen\/carregadores$/, (rota) => {
     if (rota.request().method() !== "POST") return rota.continue();
     return rota.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        provider: "open-charge-map",
-        action: "nearby",
-        result: [
-          { ID: 1, AddressInfo: { Title: "Eletroposto BR-116", Town: "Registro", Latitude: -20, Longitude: -47 }, Connections: [{ ConnectionTypeID: 33, PowerKW: 150 }] },
-          { ID: 2, AddressInfo: { Title: "AC lento", Town: "Bauru", Latitude: -19, Longitude: -46 }, Connections: [{ ConnectionTypeID: 25, PowerKW: 22 }] },
+        fonte: "OpenStreetMap",
+        pontos: [
+          { id: "1", nome: "Eletroposto BR-116", cidade: "Registro", coord: [-20, -47], potenciaKw: 150, tipos: ["CCS"], pesados: true },
+          { id: "2", nome: "AC lento", cidade: "Bauru", coord: [-19, -46], potenciaKw: 22, tipos: ["Type 2"], pesados: false },
         ],
       }),
     });

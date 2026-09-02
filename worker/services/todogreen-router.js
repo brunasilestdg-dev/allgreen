@@ -38,6 +38,7 @@ import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performan
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
 import { consultarCepNormalizado } from "./todogreen-integration-gateway.js";
 import { consultarPedagiosDaRota } from "./todogreen-pedagios.js";
+import { consultarCarregadores } from "./todogreen-carregadores.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -348,6 +349,24 @@ export async function routeTodoGreenApi(request, env, ctx) {
         return json(await consultarPedagiosDaRota(corpo.polyline));
       } catch (erro) {
         return json({ error: erro.message || "Pedágios indisponíveis." }, 400);
+      }
+    });
+  }
+
+  if (path === "/api/todogreen/carregadores") {
+    return guarded("To Do Green carregadores error", "Não foi possível buscar os carregadores.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      let corpo = {};
+      try {
+        corpo = await request.json();
+      } catch {
+        corpo = {};
+      }
+      try {
+        return json(await consultarCarregadores(env, corpo));
+      } catch (erro) {
+        return json({ error: erro.message || "Carregadores indisponíveis agora." }, 400);
       }
     });
   }

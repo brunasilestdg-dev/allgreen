@@ -5,6 +5,7 @@ import {
   calcularDistancia,
   geocodificar,
   normalizarCarregadores,
+  normalizarCarregadoresOSM,
   resumoDaDistancia,
   otimizarOrdemDeParadas,
   sugerirEnderecos,
@@ -362,5 +363,52 @@ describe("aplicarOrdemDoMeio (ordem sugerida pela IA)", () => {
   it("não reordena quando não há meio", () => {
     expect(aplicarOrdemDoMeio(["A", "B"], [])).toBeNull();
     expect(aplicarOrdemDoMeio(["A", "B", "C"], [1])).toBeNull();
+  });
+});
+
+describe("normalizarCarregadoresOSM (OpenStreetMap, sem chave)", () => {
+  it("normaliza nós de charging_station no mesmo formato do Open Charge Map", () => {
+    const elementos = [
+      // DC rápido por soquete CCS, sem potência declarada → pesados = true.
+      { id: 1, lat: -23.5, lon: -46.6, tags: { name: "Posto A", "socket:ccs": "2", "socket:type2": "2" } },
+      // Potência alta declarada → pesados = true, Type 2.
+      { id: 2, lat: -23.6, lon: -46.7, tags: { operator: "Rede B", "socket:type2": "1", "socket:type2:output": "150 kW", "addr:city": "Osasco" } },
+      // AC lento (Type 2, 22 kW) → pesados = false.
+      { id: 3, lat: -23.7, lon: -46.8, tags: { name: "Posto C", "socket:type2": "1", "charging_station:output": "22 kW" } },
+      // Sem coordenada → descartado.
+      { id: 4, tags: { name: "Sem coord" } },
+    ];
+    const pontos = normalizarCarregadoresOSM(elementos);
+    expect(pontos).toHaveLength(3);
+    expect(pontos[0]).toMatchObject({ id: "1", nome: "Posto A", coord: [-23.5, -46.6], pesados: true });
+    expect(pontos[0].tipos).toEqual(expect.arrayContaining(["CCS", "Type 2"]));
+    expect(pontos[1]).toMatchObject({ potenciaKw: 150, pesados: true, cidade: "Osasco" });
+    expect(pontos[2]).toMatchObject({ potenciaKw: 22, pesados: false });
+  });
+
+  it("aceita lista vazia / inválida sem quebrar", () => {
+    expect(normalizarCarregadoresOSM(null)).toEqual([]);
+    expect(normalizarCarregadoresOSM([{}])).toEqual([]);
+  });
+});
+
+describe("tracarRota com coordenada resolvida (endereço completo)", () => {
+  const ROTA_GEO = { distance: 80000, duration: 5400, geometry: { coordinates: [[-46.6, -23.5], [-47.0, -24.0]] } };
+  it("usa a coordenada da sugestão e não geocodifica o texto", async () => {
+    const fetcher = vi.fn(async (entrada) => {
+      const alvo = String(entrada?.href || entrada);
+      if (alvo.includes("nominatim")) throw new Error("não deveria geocodificar quando já há coordenada");
+      return resposta({ routes: [ROTA_GEO] });
+    });
+    const resultado = await tracarRota(
+      { paradas: [
+        { endereco: "Rua Aberaldo de Oliveira, Osasco", coord: [-23.5, -46.6] },
+        { endereco: "Carapicuíba", coord: [-24.0, -47.0] },
+      ] },
+      { fetcher },
+    );
+    expect(resultado.ok).toBe(true);
+    expect(fetcher.mock.calls.every(([u]) => !String(u).includes("nominatim"))).toBe(true);
+    expect(resultado.paradas[0].coord).toEqual([-23.5, -46.6]);
   });
 });

@@ -53,7 +53,10 @@ export async function geocodificar(endereco, { fetcher = fetch, sinal } = {}) {
   if (termo.length < 3) return null;
   const url = new URL(NOMINATIM);
   url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "1");
+  // Vários candidatos e pega o primeiro válido: um endereço de rua completo
+  // ("Rua Aberaldo de Oliveira, Osasco") muitas vezes não é o 1º resultado do
+  // texto livre; com limit=1 a rota falhava e só cidade x cidade funcionava.
+  url.searchParams.set("limit", "5");
   // A operação é brasileira. Restringir o país evita o caso clássico de
   // "Santos" virar Santos de Portugal e a rota sair com 9.000 km.
   url.searchParams.set("countrycodes", "br");
@@ -64,8 +67,8 @@ export async function geocodificar(endereco, { fetcher = fetch, sinal } = {}) {
   });
   if (!resposta.ok) throw new Error(`Nominatim indisponível (${resposta.status})`);
   const lista = await resposta.json();
-  const primeiro = Array.isArray(lista) ? lista[0] : null;
-  if (!primeiro?.lat || !primeiro?.lon) return null;
+  const primeiro = (Array.isArray(lista) ? lista : []).find((item) => item?.lat && item?.lon);
+  if (!primeiro) return null;
   return {
     latitude: Number(primeiro.lat),
     longitude: Number(primeiro.lon),
@@ -149,24 +152,42 @@ export async function tracarRota(
   { origem, destino, paradas } = {},
   { fetcher = fetch, sinal } = {},
 ) {
-  // Normaliza para uma lista de endereços, seja qual for a forma de entrada.
+  // Normaliza para uma lista de {endereco, coord?}. Cada parada pode ser uma
+  // string ou um objeto com a coordenada já resolvida pela sugestão escolhida —
+  // aí não geocodifica de novo, e o endereço completo entra sem depender de o
+  // Nominatim acertar o texto livre.
   const lista = (Array.isArray(paradas) ? paradas : [origem, destino])
-    .map((p) => texto(p))
-    .filter((p) => p.length > 0);
+    .map((p) => {
+      if (p && typeof p === "object") {
+        const endereco = texto(p.endereco || p.rotulo);
+        const coord = Array.isArray(p.coord) && p.coord.length === 2
+          ? [Number(p.coord[0]), Number(p.coord[1])]
+          : null;
+        return { endereco, coord: coord && coord.every(Number.isFinite) ? coord : null };
+      }
+      return { endereco: texto(p), coord: null };
+    })
+    .filter((p) => p.endereco.length > 0);
   if (lista.length < 2) return { ok: false, motivo: MOTIVOS.incompleto };
-  if (lista.some((p) => p.length < 3)) return { ok: false, motivo: MOTIVOS.curto };
+  if (lista.some((p) => p.endereco.length < 3)) return { ok: false, motivo: MOTIVOS.curto };
 
   try {
     // Sequencial, nunca em paralelo: o Nominatim público aceita ~1/s.
     const pontos = [];
     for (let i = 0; i < lista.length; i += 1) {
-      const ponto = await geocodificar(lista[i], { fetcher, sinal });
+      const item = lista[i];
+      let ponto;
+      if (item.coord) {
+        ponto = { latitude: item.coord[0], longitude: item.coord[1], rotulo: item.endereco };
+      } else {
+        ponto = await geocodificar(item.endereco, { fetcher, sinal });
+      }
       if (!ponto) {
         const motivo = i === 0
           ? MOTIVOS.origemNaoEncontrada
           : i === lista.length - 1
             ? MOTIVOS.destinoNaoEncontrado
-            : `Não encontrei a parada "${lista[i]}" no mapa. Tente incluir a cidade e o estado.`;
+            : `Não encontrei a parada "${item.endereco}" no mapa. Tente incluir a cidade e o estado.`;
         return { ok: false, motivo, paradaFalha: i };
       }
       pontos.push({ ...ponto, coord: [ponto.latitude, ponto.longitude] });
@@ -332,6 +353,53 @@ export function normalizarCarregadores(lista) {
         potenciaKw,
         tipos,
         pesados: potenciaKw !== null && potenciaKw >= 50,
+      };
+    })
+    .filter(Boolean);
+}
+
+// Sockets de corrente contínua (recarga rápida) no esquema de tags do OSM.
+// Presença de qualquer um marca a estação como "serve pesado" mesmo sem a
+// potência declarada — é a leitura conservadora para caminhão elétrico.
+const SOCKETS_DC_OSM = ["socket:ccs", "socket:chademo", "socket:type2_combo", "socket:tesla_supercharger", "socket:nacs"];
+
+/**
+ * Normaliza estações de recarga do OpenStreetMap (via Overpass, sem chave) no
+ * mesmo formato de `normalizarCarregadores` — para o mapa não saber de onde
+ * veio o dado. Fonte gratuita usada quando não há chave do Open Charge Map.
+ * Cada elemento é um node `amenity=charging_station` com `tags`.
+ */
+export function normalizarCarregadoresOSM(elementos) {
+  const nodes = Array.isArray(elementos) ? elementos : [];
+  return nodes
+    .map((node) => {
+      const lat = Number(node?.lat);
+      const lon = Number(node?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      const tags = node?.tags && typeof node.tags === "object" ? node.tags : {};
+      // Potência: procura um número em kW em qualquer tag de saída/potência.
+      let potenciaKw = null;
+      for (const [chave, valor] of Object.entries(tags)) {
+        if (!/output|maxpower|:power$|^power$/i.test(chave)) continue;
+        const m = String(valor).match(/([\d.,]+)\s*k?w/i);
+        if (!m) continue;
+        const kw = Number(m[1].replace(/\./g, "").replace(",", "."));
+        if (Number.isFinite(kw) && kw > 0 && (potenciaKw === null || kw > potenciaKw)) potenciaKw = kw;
+      }
+      const temDC = SOCKETS_DC_OSM.some((k) => tags[k] && String(tags[k]).toLowerCase() !== "no");
+      const tipos = [];
+      if (tags["socket:type2"] || tags["socket:type2_cable"]) tipos.push("Type 2");
+      if (tags["socket:ccs"] || tags["socket:type2_combo"]) tipos.push("CCS");
+      if (tags["socket:chademo"]) tipos.push("CHAdeMO");
+      if (tags["socket:tesla_supercharger"] || tags["socket:nacs"]) tipos.push("Tesla / NACS");
+      return {
+        id: String(node?.id ?? `${lat},${lon}`),
+        nome: texto(tags.name || tags.operator || "Ponto de recarga").slice(0, 120),
+        cidade: texto(tags["addr:city"] || "").slice(0, 80),
+        coord: [lat, lon],
+        potenciaKw,
+        tipos: [...new Set(tipos)],
+        pesados: (potenciaKw !== null && potenciaKw >= 50) || temDC,
       };
     })
     .filter(Boolean);
