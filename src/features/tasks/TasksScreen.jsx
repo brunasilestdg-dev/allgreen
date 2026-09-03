@@ -83,6 +83,7 @@ import {
   localTaskStructure,
   parseTaskStructure,
   prioritizeTaskBacklog,
+  proximaAcaoDaTarefa,
   taskCompletionGaps,
 } from "./taskAiDomain.js";
 import { taskUrgency } from "./taskUrgencia.js";
@@ -1155,23 +1156,26 @@ export default function Tasks({
         </div>
         {focusQueue.length ? (
           <div className="task-focus-list">
-            {focusQueue.map(({ task, reasons }, index) => (
+            {focusQueue.map((item, index) => (
               <button
                 type="button"
-                key={task.id}
-                aria-label={`Abrir tarefa prioritária: ${task.title}`}
-                onClick={() => openTask(task)}
+                key={item.task.id}
+                aria-label={`Abrir tarefa prioritária: ${item.task.title}`}
+                onClick={() => openTask(item.task)}
               >
                 <span>{index + 1}</span>
                 <span>
                   <strong
                     className="task-focus-title"
-                    data-title={task.title}
+                    data-title={item.task.title}
                     aria-hidden="true"
                   />
                   <small>
-                    {reasons.slice(0, 2).join(" · ") ||
+                    {item.reasons.slice(0, 2).join(" · ") ||
                       "próxima ação disponível"}
+                  </small>
+                  <small className="task-focus-action">
+                    → {proximaAcaoDaTarefa(item)}
                   </small>
                 </span>
                 <ChevronRight />

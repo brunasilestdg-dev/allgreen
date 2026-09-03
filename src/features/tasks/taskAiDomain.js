@@ -231,6 +231,25 @@ export function prioritizeTaskBacklog(tasks = [], { now = new Date().toISOString
     );
 }
 
+// A próxima ação sugerida de uma tarefa priorizada. `prioritizeTaskBacklog` já
+// diz POR QUE a tarefa pede atenção (reasons); esta função diz O QUE FAZER a
+// respeito — a primeira regra que casa, do mais destravante ao mais leve. Recebe
+// um item já analisado ({ task, blockers, days }) para não recalcular nada.
+export function proximaAcaoDaTarefa(item = {}) {
+  const task = item.task || {};
+  if ((item.blockers || []).length)
+    return `Destrave: conclua ${item.blockers.length} dependência(s) antes`;
+  if (item.days !== null && item.days !== undefined && item.days < 0)
+    return "Atrasada — reprograme o prazo ou conclua agora";
+  if (item.days === 0) return "Vence hoje — conclua ainda hoje";
+  if (!task.assignee && !(task.assignees || []).length) return "Defina um responsável";
+  const gaps = taskCompletionGaps(task);
+  if (gaps.length) return `Feche o que falta: ${gaps.join(" e ")}`;
+  if (!(task.acceptanceCriteria || []).length) return "Defina o critério de conclusão";
+  if (task.status !== "Em andamento") return "Comece esta tarefa";
+  return "Siga para o próximo passo";
+}
+
 export function buildDigitalTaskPrompt(
   task = {},
   { specialist = "Diretor", business = null, dependencies = [] } = {},

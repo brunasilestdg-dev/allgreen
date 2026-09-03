@@ -1713,6 +1713,11 @@ h3,
 .task-focus-list small {
   color: var(--muted);
 }
+/* A ação sugerida (o "o que fazer"), diferenciada do "por quê" acima. */
+.task-focus-list small.task-focus-action {
+  color: var(--brand, #17624f);
+  font-weight: 700;
+}
 @media (max-width: 820px) {
   .task-focus-list {
     grid-template-columns: minmax(0, 1fr);

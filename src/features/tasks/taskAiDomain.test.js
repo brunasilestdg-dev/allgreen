@@ -5,8 +5,36 @@ import {
   localTaskStructure,
   parseTaskStructure,
   prioritizeTaskBacklog,
+  proximaAcaoDaTarefa,
   taskCompletionGaps,
 } from "./taskAiDomain.js";
+
+describe("próxima ação sugerida da tarefa", () => {
+  it("destravar dependências vem antes de tudo", () => {
+    expect(proximaAcaoDaTarefa({ task: {}, blockers: [{ id: "x" }, { id: "y" }], days: -3 }))
+      .toBe("Destrave: conclua 2 dependência(s) antes");
+  });
+
+  it("atrasada e vence hoje têm ações próprias", () => {
+    expect(proximaAcaoDaTarefa({ task: { assignee: "Ana" }, blockers: [], days: -2 }))
+      .toMatch(/Atrasada/);
+    expect(proximaAcaoDaTarefa({ task: { assignee: "Ana" }, blockers: [], days: 0 }))
+      .toMatch(/Vence hoje/);
+  });
+
+  it("sem responsável, sugere definir um", () => {
+    expect(proximaAcaoDaTarefa({ task: { assignees: [] }, blockers: [], days: 5 }))
+      .toBe("Defina um responsável");
+  });
+
+  it("com dono e prazo folgado, aponta a lacuna de conclusão", () => {
+    expect(proximaAcaoDaTarefa({ task: { assignee: "Ana", acceptanceCriteria: [] }, blockers: [], days: 10 }))
+      .toBe("Defina o critério de conclusão");
+    // Sem lacunas (critério confirmado, sem etapas pendentes) e ainda não começou.
+    expect(proximaAcaoDaTarefa({ task: { assignee: "Ana", acceptanceCriteria: [{ done: true }], status: "A fazer" }, blockers: [], days: 10 }))
+      .toBe("Comece esta tarefa");
+  });
+});
 
 describe("inteligência de tarefas", () => {
   it("normaliza a estrutura JSON da IA sem aceitar campos fora do domínio", () => {
