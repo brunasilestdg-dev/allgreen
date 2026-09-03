@@ -230,6 +230,27 @@
 .tdg-pipeline-strip article strong { font-size: 12px; }
 .tdg-pipeline-strip article span,.tdg-pipeline-strip article small { color: var(--tdg-muted); font-size: 10.5px; }
 .tdg-pipeline-strip article.attention { border-color: color-mix(in srgb, #c4700b 45%, var(--tdg-line)); background: #fff8ef; }
+/* Leituras do forecast que já existiam no domínio e não apareciam:
+   concentração do pipeline, recorte por etapa e as 4 travas com nomes. */
+.tdg-forecast-concentracao { align-items: center; background: #f5f9f7; border: 1px solid var(--tdg-line); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 10px; padding: 12px 14px; }
+.tdg-forecast-concentracao.atencao { background: #fff8ef; border-color: color-mix(in srgb, #c4700b 45%, var(--tdg-line)); }
+.tdg-forecast-concentracao > div { flex: 1 1 240px; display: grid; gap: 2px; }
+.tdg-forecast-concentracao strong { font-size: 13px; }
+.tdg-forecast-concentracao ul { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.tdg-forecast-concentracao li { align-items: center; background: #fff; border: 1px solid var(--tdg-line); border-radius: 999px; display: inline-flex; font-size: 11px; gap: 6px; padding: 4px 10px; }
+.tdg-forecast-concentracao li b { color: var(--tdg-green); }
+.tdg-forecast-dimensao, .tdg-forecast-travas { margin-top: 10px; }
+.tdg-forecast-dimensao-linhas { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 6px; }
+.tdg-forecast-dimensao-linhas article { background: #f5f9f7; border: 1px solid var(--tdg-line); border-radius: 10px; display: grid; gap: 2px; padding: 10px; }
+.tdg-forecast-dimensao-linhas strong { font-size: 12px; }
+.tdg-forecast-dimensao-linhas small { color: var(--tdg-muted); font-size: 10.5px; }
+.tdg-forecast-dimensao-linhas b { color: var(--tdg-green); font-size: 11px; }
+.tdg-forecast-travas-lista { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 6px; }
+.tdg-forecast-travas-lista article { background: #fff8ef; border: 1px solid color-mix(in srgb, #c4700b 35%, var(--tdg-line)); border-radius: 10px; padding: 10px; }
+.tdg-forecast-travas-lista header { align-items: center; display: flex; justify-content: space-between; }
+.tdg-forecast-travas-lista header strong { font-size: 12px; }
+.tdg-forecast-travas-lista header b { background: #c4700b; border-radius: 999px; color: #fff; font-size: 11px; min-width: 20px; padding: 1px 7px; text-align: center; }
+.tdg-forecast-travas-lista p { color: var(--tdg-muted); font-size: 11px; margin: 5px 0 0; }
 .tdg-opp-toolbar { align-items: center; border: 1px solid var(--tdg-line); border-radius: 10px; display: flex; gap: 9px; padding-left: 11px; }
 .tdg-opp-toolbar input { border: 0; color: var(--tdg-text); flex: 1; font: inherit; min-height: 42px; outline: 0; }
 .tdg-opp-toolbar button { background: transparent; border: 0; border-left: 1px solid var(--tdg-line); color: var(--tdg-green); font-weight: 750; min-height: 42px; padding: 0 12px; }

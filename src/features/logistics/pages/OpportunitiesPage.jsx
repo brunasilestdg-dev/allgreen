@@ -28,7 +28,7 @@ import {
   subtituloDaOportunidade,
   tituloDaOportunidade,
 } from "../opportunityIntelligenceDomain.js";
-import { montarForecast, pendenciasDoForecast } from "../forecastDomain.js";
+import { forecastPor, montarForecast, pendenciasDoForecast, riscoDeConcentracao } from "../forecastDomain.js";
 import {
   OBJETIVOS_ELETRIFICACAO,
   avaliarJornadaEletrificacao,
@@ -668,7 +668,13 @@ export default function OpportunitiesPage({
       const mes = data.toISOString().slice(0, 7);
       return { mes, ...montarForecast({ oportunidades: registros, periodo: mes }) };
     });
-    return { meses, pendencias: pendenciasDoForecast({ oportunidades: registros }) };
+    return {
+      meses,
+      pendencias: pendenciasDoForecast({ oportunidades: registros }),
+      concentracao: riscoDeConcentracao({ oportunidades: registros }),
+      // O mesmo forecast recortado por etapa do funil: onde o commit está parado.
+      porEstagio: forecastPor("estagio", { oportunidades: registros }).filter((linha) => linha.pipeline > 0),
+    };
   }, [registros]);
   const analises = useMemo(
     () => new Map(registros.map((registro) => [registro.id, analisarOportunidade(registro)])),
@@ -787,8 +793,46 @@ export default function OpportunitiesPage({
 
       <section className="tdg-pipeline-strip" aria-label="Forecast comercial mensal">
         {forecast.meses.map((item) => <article key={item.mes}><strong>{new Date(`${item.mes}-01T00:00:00Z`).toLocaleDateString("pt-BR", { month: "short", year: "numeric", timeZone: "UTC" })}</strong><span>{item.quantidade} negócio(s)</span><small>{BRL.format(item.commit)} commit · {BRL.format(item.ponderado)} ponderado · {BRL.format(item.bestCase)} best case</small></article>)}
-        {forecast.pendencias.find((item) => item.id === "sem-data") && <article className="attention"><strong>Sem previsão</strong><span>{forecast.pendencias.find((item) => item.id === "sem-data").quantidade} negócio(s)</span><small>Fora do calendário até informar a data de fechamento</small></article>}
       </section>
+
+      {/* Risco de concentração: um forecast em que 3 negócios são metade do
+          aberto é aposta, não previsão. A distribuição mostra o que o número
+          agregado esconde. */}
+      <section className={`tdg-forecast-concentracao${forecast.concentracao.concentrado ? " atencao" : ""}`} aria-label="Concentração do pipeline">
+        <div><span className="tdg-kicker">CONCENTRAÇÃO DO PIPELINE</span><strong>{forecast.concentracao.leitura}</strong></div>
+        {forecast.concentracao.maiores.length > 0 && (
+          <ul>{forecast.concentracao.maiores.map((maior) => <li key={maior.nome}><span>{maior.nome}</span><b>{BRL.format(maior.valor)}</b></li>)}</ul>
+        )}
+      </section>
+
+      {forecast.porEstagio.length > 0 && (
+        <section className="tdg-forecast-dimensao" aria-label="Forecast por etapa do funil">
+          <span className="tdg-kicker">FORECAST POR ETAPA</span>
+          <div className="tdg-forecast-dimensao-linhas">
+            {forecast.porEstagio.map((linha) => (
+              <article key={linha.chave}>
+                <strong>{linha.chave}</strong>
+                <small>{linha.quantidade} negócio(s)</small>
+                <b>{BRL.format(linha.commit)} commit · {BRL.format(linha.ponderado)} ponderado</b>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {forecast.pendencias.length > 0 && (
+        <section className="tdg-forecast-travas" aria-label="O que trava o forecast">
+          <span className="tdg-kicker">O QUE TRAVA O FORECAST</span>
+          <div className="tdg-forecast-travas-lista">
+            {forecast.pendencias.map((trava) => (
+              <article key={trava.id}>
+                <header><strong>{trava.rotulo}</strong><b>{trava.quantidade}</b></header>
+                <p>{trava.contas.join(" · ")}{trava.restantes > 0 ? ` · +${trava.restantes}` : ""}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Ação em janela própria: o formulário não corta mais a página entre o
           forecast e o pipeline (pedido da titular, 30/08). Em erro o modal
