@@ -771,6 +771,7 @@ describe("a vertical inteira numa chamada só", () => {
       "opportunities",
       "parties",
       "proposals",
+      "quality",
       "rfq",
       "scenarios",
       "warehouses",
@@ -1381,5 +1382,72 @@ describe("pastas do cofre de documentos", () => {
   it("as pastas de um espaço não vazam para o outro", async () => {
     const doColega = await (await pedir("/api/todogreen/records/documentFolders", { token: colega.token })).json();
     expect(doColega.registros.map((item) => item.id)).not.toContain(privadaId);
+  });
+});
+
+describe("qualidade: não conformidades saem da página de orientação para dados reais", () => {
+  it("cria, lista, atualiza situação e recusa NC sem título", async () => {
+    const dona = await criarUsuario(`q-dona-${n}`, `q-dona-${n}@parceiro.com.br`);
+    await autorizar(dona);
+
+    const criada = await pedir("/api/todogreen/records/quality", {
+      metodo: "POST",
+      token: dona.token,
+      corpo: {
+        titulo: "Avaria na doca 3",
+        tipo: "avaria",
+        gravidade: "critica",
+        causaRaiz: "Empilhadeira sem manutenção",
+        planoAcao: "Revisar plano preventivo",
+        prazo: "2026-09-30",
+      },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+    expect(registro.titulo).toBe("Avaria na doca 3");
+    expect(registro.gravidade).toBe("critica");
+    expect(registro.situacao).toBe("aberta");
+    expect(registro.revision).toBe(1);
+
+    const lista = await pedir("/api/todogreen/records/quality", { token: dona.token });
+    expect((await lista.json()).registros.map((r) => r.titulo)).toContain("Avaria na doca 3");
+
+    const atualizada = await pedir(`/api/todogreen/records/quality/${registro.id}`, {
+      metodo: "PATCH",
+      token: dona.token,
+      corpo: { situacao: "em_acao", revision: 1 },
+    });
+    expect(atualizada.status).toBe(200);
+    expect((await atualizada.json()).registro.situacao).toBe("em_acao");
+
+    const semTitulo = await pedir("/api/todogreen/records/quality", {
+      metodo: "POST",
+      token: dona.token,
+      corpo: { gravidade: "alta" },
+    });
+    expect(semTitulo.status).toBe(400);
+  });
+
+  it("valores fora da lista caem no padrão em vez de gravar lixo", async () => {
+    const dona = await criarUsuario(`q-norm-${n}`, `q-norm-${n}@parceiro.com.br`);
+    await autorizar(dona);
+    const criada = await pedir("/api/todogreen/records/quality", {
+      metodo: "POST",
+      token: dona.token,
+      corpo: { titulo: "NC com valores estranhos", tipo: "foguete", gravidade: "apocaliptica", situacao: "inventada" },
+    });
+    const { registro } = await criada.json();
+    expect(registro.tipo).toBe("processo");
+    expect(registro.gravidade).toBe("media");
+    expect(registro.situacao).toBe("aberta");
+  });
+
+  it("quem só lê não cria não conformidade", async () => {
+    const criada = await pedir("/api/todogreen/records/quality", {
+      metodo: "POST",
+      token: auditor.token,
+      corpo: { titulo: "Auditor não deveria gravar" },
+    });
+    expect(criada.status).toBe(403);
   });
 });
