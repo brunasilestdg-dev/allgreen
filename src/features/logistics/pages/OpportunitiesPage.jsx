@@ -42,6 +42,15 @@ const BRL = new Intl.NumberFormat("pt-BR", {
 });
 const NUM = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
+// A titular pediu (03/09) que o quadro do pipeline mostre só o funil ativo e o
+// desfecho ganho. "Fechamento" e "Fechada perdida" saem DESTA visão — as
+// oportunidades nesses estágios continuam no sistema (filtro, forecast, lista),
+// só não ocupam coluna aqui. Não mexo em ESTAGIOS_OPORTUNIDADE: ele é a fonte
+// única do funil para o resto do app.
+const ESTAGIOS_NO_QUADRO = ESTAGIOS_OPORTUNIDADE.filter(
+  (estagio) => estagio !== "Fechamento" && estagio !== "Fechada perdida",
+);
+
 // Os campos que o motor precisa para responder alguma coisa. Ficam agrupados
 // por pergunta de negócio, não por tipo de dado — quem preenche é vendedor
 // saindo de reunião, não analista.
@@ -691,7 +700,7 @@ export default function OpportunitiesPage({
     [registros, scenarios],
   );
   const editando = registros.find((registro) => registro.id === editandoId) || null;
-  const etapas = useMemo(() => ESTAGIOS_OPORTUNIDADE.map((estagio) => {
+  const etapas = useMemo(() => ESTAGIOS_NO_QUADRO.map((estagio) => {
     const itens = registros.filter((registro) => registro.estagio === estagio);
     return {
       estagio,
@@ -937,10 +946,10 @@ export default function OpportunitiesPage({
 
       {visao === "kanban" && registros.length > 0 && (
         <>
-          <p className="tdg-opp-kb-resumo">{visiveis.length} oportunidade(s), cada uma na etapa em que está hoje. Clique no cartão para abrir.</p>
+          <p className="tdg-opp-kb-resumo">{visiveis.filter((registro) => ESTAGIOS_NO_QUADRO.includes(registro.estagio)).length} oportunidade(s), cada uma na etapa em que está hoje. Clique no cartão para abrir.</p>
           <div className="tdg-opp-kb-colunas" role="group" aria-label="Escolher quais etapas aparecem no kanban">
             <span>Etapas no quadro:</span>
-            {ESTAGIOS_OPORTUNIDADE.map((estagio) => (
+            {ESTAGIOS_NO_QUADRO.map((estagio) => (
               <button
                 type="button"
                 key={estagio}
@@ -957,10 +966,9 @@ export default function OpportunitiesPage({
               {etapas.map((coluna, indice) => {
                 if (colunasOcultas.has(coluna.estagio)) return null;
                 const itens = visiveis.filter((registro) => registro.estagio === coluna.estagio);
-                const perdida = coluna.estagio === "Fechada perdida";
                 return (
                   <section
-                    className={`tdg-opp-kb-col${perdida ? " perdida" : ""}`}
+                    className="tdg-opp-kb-col"
                     style={{ "--kb-tom": Math.min(indice, 5) }}
                     key={coluna.estagio}
                   >
