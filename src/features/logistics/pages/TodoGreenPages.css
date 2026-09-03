@@ -251,6 +251,16 @@
 .tdg-forecast-travas-lista header strong { font-size: 12px; }
 .tdg-forecast-travas-lista header b { background: #c4700b; border-radius: 999px; color: #fff; font-size: 11px; min-width: 20px; padding: 1px 7px; text-align: center; }
 .tdg-forecast-travas-lista p { color: var(--tdg-muted); font-size: 11px; margin: 5px 0 0; }
+/* Previsão de caixa semanal na Tesouraria (previsaoSemanalDeCaixa, já existia). */
+.tdg-caixa-semanas { display: grid; gap: 8px; grid-auto-columns: minmax(140px, 1fr); grid-auto-flow: column; overflow-x: auto; padding-bottom: 4px; }
+.tdg-caixa-semanas article { background: #f5f9f7; border: 1px solid var(--tdg-line); border-radius: 10px; display: grid; gap: 2px; padding: 10px; }
+.tdg-caixa-semanas article.negativo { background: #fdecea; border-color: color-mix(in srgb, #a5271a 40%, var(--tdg-line)); }
+.tdg-caixa-semanas strong { font-size: 12px; }
+.tdg-caixa-semanas .entra { color: #17624f; font-size: 11px; }
+.tdg-caixa-semanas .sai { color: #a5271a; font-size: 11px; }
+.tdg-caixa-semanas small { color: var(--tdg-muted); font-size: 10.5px; }
+.tdg-caixa-semanas b { font-size: 12px; }
+.tdg-caixa-semanas article.negativo b { color: #a5271a; }
 .tdg-opp-toolbar { align-items: center; border: 1px solid var(--tdg-line); border-radius: 10px; display: flex; gap: 9px; padding-left: 11px; }
 .tdg-opp-toolbar input { border: 0; color: var(--tdg-text); flex: 1; font: inherit; min-height: 42px; outline: 0; }
 .tdg-opp-toolbar button { background: transparent; border: 0; border-left: 1px solid var(--tdg-line); color: var(--tdg-green); font-weight: 750; min-height: 42px; padding: 0 12px; }

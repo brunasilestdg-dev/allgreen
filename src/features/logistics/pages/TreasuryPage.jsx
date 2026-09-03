@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Banknote, CheckCircle2, FileUp, Landmark, Link2, Lock, Plus, Unlock } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import { parseOfxTransactions } from "../../../domain/importacoes.js";
+import { previsaoSemanalDeCaixa } from "../contasPonteDomain.js";
 import "./TodoGreenPages.css";
 
 // ===== Tesouraria =====
@@ -26,6 +27,7 @@ const request = async (caminho, authHeaders, options = {}) => {
 
 const ABAS = [
   { id: "conciliacao", rotulo: "Extrato e conciliação" },
+  { id: "caixa", rotulo: "Previsão de caixa" },
   { id: "cobranca", rotulo: "Cobrança e aging" },
   { id: "fechamento", rotulo: "Fechamento" },
   { id: "resultado", rotulo: "Resultado" },
@@ -55,8 +57,14 @@ export default function TreasuryPage({ authHeaders, setToast }) {
   const [cobranca, setCobranca] = useState(null);
   const [periodos, setPeriodos] = useState([]);
   const [resultado, setResultado] = useState(null);
+  const [lancamentos, setLancamentos] = useState([]);
   const [formConta, setFormConta] = useState(null);
   const [ocupado, setOcupado] = useState(false);
+  // Previsão de caixa semanal: recebimentos menos pagamentos em aberto, semana
+  // a semana (motor billsDomain.cashFlowForecast, via ponte). Atrasados caem na
+  // primeira semana — o dinheiro ainda é esperado. Já existia no domínio e
+  // nunca era mostrado.
+  const previsao = useMemo(() => previsaoSemanalDeCaixa(lancamentos, { weeks: 8 }), [lancamentos]);
 
   const avisar = (mensagem, tom = "info") => (setToast ? setToast({ mensagem, tom }) : undefined);
 
@@ -81,6 +89,7 @@ export default function TreasuryPage({ authHeaders, setToast }) {
   useEffect(() => { carregarContas(); }, [carregarContas]);
   useEffect(() => { carregarLinhas(contaAtiva); }, [contaAtiva, carregarLinhas]);
   useEffect(() => {
+    if (aba === "caixa") request("/records/financial?limit=200", authHeaders).then((d) => setLancamentos(d.registros || [])).catch((m) => avisar(m.message, "erro"));
     if (aba === "cobranca") request("/treasury/cobranca", authHeaders).then(setCobranca).catch((m) => avisar(m.message, "erro"));
     if (aba === "fechamento") request("/treasury/periodos", authHeaders).then((d) => setPeriodos(d.registros || [])).catch((m) => avisar(m.message, "erro"));
     if (aba === "resultado") request("/treasury/resultado", authHeaders).then(setResultado).catch((m) => avisar(m.message, "erro"));
@@ -231,6 +240,26 @@ export default function TreasuryPage({ authHeaders, setToast }) {
           <button type="button" key={item.id} className={aba === item.id ? "active" : ""} onClick={() => setAba(item.id)}>{item.rotulo}</button>
         ))}
       </nav>
+
+      {aba === "caixa" && (
+        <div className="tdg-page-block">
+          <div className="tdg-section-head"><div><h3>Previsão de caixa — 8 semanas</h3><p>Recebimentos menos pagamentos em aberto, semana a semana. Atrasados caem na primeira semana — o dinheiro ainda é esperado.</p></div></div>
+          {!lancamentos.length && <div className="tdg-empty-access">Sem lançamentos em aberto no razão para projetar o caixa.</div>}
+          {lancamentos.length > 0 && (
+            <div className="tdg-caixa-semanas" aria-label="Previsão de caixa semanal">
+              {previsao.map((semana) => (
+                <article key={semana.start} className={semana.acumulado < 0 ? "negativo" : ""}>
+                  <strong>{new Date(`${semana.start}T00:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" })}</strong>
+                  <span className="entra">+{dinheiro(semana.entradas)}</span>
+                  <span className="sai">−{dinheiro(semana.saidas)}</span>
+                  <small>saldo {dinheiro(semana.resultado)}</small>
+                  <b>acum. {dinheiro(semana.acumulado)}</b>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {aba === "conciliacao" && (
         <div className="tdg-page-block">
