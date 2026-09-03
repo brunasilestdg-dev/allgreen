@@ -10,6 +10,7 @@ import {
   Trash2,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import {
@@ -18,9 +19,11 @@ import {
   agruparTarefas,
   minhasTarefas,
   normalizarBaldes,
+  prioridadesDoPlano,
   progressoNumerico,
   resumoDoCompartilhamento,
   resumoPlano,
+  sinaisDaTarefa,
   tarefaAtendeBusca,
 } from "../plannerDomain.js";
 import "./TodoGreenPages.css";
@@ -306,6 +309,9 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
     [tarefasFiltradas, corte, planoAtivo],
   );
   const resumo = useMemo(() => resumoPlano(tarefas), [tarefas]);
+  // A fila do "faça agora" do plano ativo: o que pede ação hoje, ranqueado pela
+  // urgência derivada dos dados (prazo, prioridade, responsável) — não digitada.
+  const prioridades = useMemo(() => prioridadesDoPlano(tarefas, { hoje: hoje() }), [tarefas]);
   const minhasFiltradas = useMemo(
     () => minhasTarefas(minhas, currentUserId, { incluirConcluidas: true }),
     [minhas, currentUserId],
@@ -439,6 +445,34 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
                 </div>
               </div>
 
+              {prioridades.length > 0 && (
+                <div className="tdg-planner-focus">
+                  <div className="tdg-planner-focus-head">
+                    <Zap size={15} />
+                    <strong>Faça agora</strong>
+                    <span>O que este plano precisa que você resolva primeiro</span>
+                  </div>
+                  <ul className="tdg-planner-focus-list">
+                    {prioridades.map(({ tarefa, sinais }) => (
+                      <li key={tarefa.id}>
+                        <button type="button" onClick={() => setTarefaEmEdicao(tarefa)}>
+                          <span className="tdg-planner-focus-prio" style={{ background: COR_PRIORIDADE[tarefa.priority] }} />
+                          <span className="tdg-planner-focus-title">{tarefa.title}</span>
+                          <span className="tdg-planner-focus-sinais">
+                            {sinais.map((s) => (
+                              <em key={s.tipo} className={`tdg-planner-sinal ${s.severidade}`}>{s.rotulo}</em>
+                            ))}
+                          </span>
+                          {tarefa.assigneeLabel
+                            ? <span className="tdg-planner-focus-quem">{tarefa.assigneeLabel}</span>
+                            : <span className="tdg-planner-focus-quem sem">sem responsável</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="tdg-planner-board">
                 {colunas.map((coluna) => (
                   <div className="tdg-planner-col" key={coluna.chave}>
@@ -466,6 +500,10 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
                             <span className="tdg-planner-bar-track"><span style={{ width: `${progressoNumerico(t)}%` }} /></span>
                           </div>
                           <div className="tdg-planner-card-meta">
+                            {(() => {
+                              const topo = sinaisDaTarefa(t, { hoje: hoje() })[0];
+                              return topo ? <span className={`tdg-planner-sinal ${topo.severidade}`}>{topo.rotulo}</span> : null;
+                            })()}
                             <span className="tdg-planner-tag" style={{ color: COR_PRIORIDADE[t.priority] }}>{LABEL_PRIORIDADE[t.priority]}</span>
                             {t.dueDate && <span className={`tdg-planner-tag${t.dueDate < hoje() && t.progress !== "concluida" ? " atrasada" : ""}`}><CalendarClock size={12} /> {t.dueDate}</span>}
                             {Array.isArray(t.checklist) && t.checklist.length > 0 && (

@@ -1539,6 +1539,42 @@
   display: inline-flex; font-size: 11px; font-weight: 700; gap: 4px; padding: 3px 7px;
 }
 .tdg-planner-tag.atrasada { background: #fff1ee; color: #a23b2d; }
+/* Sinais dinâmicos (Faça agora + chips do cartão): risco = vermelho, atenção =
+   âmbar. O rótulo já vem pronto do domínio (plannerDomain.sinaisDaTarefa). */
+.tdg-planner-sinal {
+  align-items: center; border-radius: 7px; display: inline-flex; font-size: 11px;
+  font-weight: 800; gap: 4px; padding: 3px 8px; white-space: nowrap;
+}
+.tdg-planner-sinal.risco { background: #fdecea; color: #a5271a; }
+.tdg-planner-sinal.atencao { background: #fef4e2; color: #92600c; }
+.tdg-planner-focus {
+  background: linear-gradient(180deg, #f2fbf7, #ffffff);
+  border: 1px solid #cfe6da; border-radius: 16px; margin: 0 0 14px; padding: 14px 16px;
+}
+.tdg-planner-focus-head {
+  align-items: center; color: var(--tdg-green); display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+}
+.tdg-planner-focus-head strong { font-size: 15px; }
+.tdg-planner-focus-head span { color: var(--tdg-muted); font-size: 12px; font-weight: 600; }
+.tdg-planner-focus-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.tdg-planner-focus-list > li > button {
+  align-items: center; background: #fff; border: 1px solid var(--tdg-line); border-radius: 12px;
+  color: inherit; cursor: pointer; display: flex; font: inherit; gap: 10px; padding: 9px 12px;
+  text-align: left; width: 100%;
+}
+.tdg-planner-focus-list > li > button:hover { border-color: var(--tdg-green); }
+.tdg-planner-focus-prio { border-radius: 999px; flex: 0 0 auto; height: 10px; width: 10px; }
+.tdg-planner-focus-title { flex: 1 1 auto; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-planner-focus-sinais { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.tdg-planner-focus-quem {
+  background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); flex: 0 0 auto;
+  font-size: 11px; font-weight: 700; padding: 3px 9px;
+}
+.tdg-planner-focus-quem.sem { background: #fef4e2; color: #92600c; }
+@media (max-width: 640px) {
+  .tdg-planner-focus-list > li > button { flex-wrap: wrap; }
+  .tdg-planner-focus-title { flex-basis: 100%; white-space: normal; }
+}
 .tdg-planner-assignee {
   background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); font-size: 11px;
   font-weight: 750; margin-left: auto; padding: 3px 9px;

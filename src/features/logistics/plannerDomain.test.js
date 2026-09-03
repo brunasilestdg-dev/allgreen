@@ -12,13 +12,76 @@ import {
   ordenarTarefas,
   podeEditarPlano,
   podeVerPlano,
+  prioridadesDoPlano,
   progressoNumerico,
   resumoDoCompartilhamento,
+  resumoInteligente,
   resumoPlano,
+  sinaisDaTarefa,
   tarefaAtendeBusca,
+  urgenciaDaTarefa,
   validarPlano,
   validarTarefa,
 } from "./plannerDomain.js";
+
+describe("camada inteligente do Planner", () => {
+  const HOJE = "2026-09-03";
+
+  it("sinaliza atraso com o número de dias e severidade de risco", () => {
+    const sinais = sinaisDaTarefa({ dueDate: "2026-08-31", progress: "em_andamento" }, { hoje: HOJE });
+    expect(sinais[0]).toMatchObject({ tipo: "atrasada", severidade: "risco", rotulo: "Atrasada 3 dias" });
+  });
+
+  it("distingue vence hoje de vence em breve", () => {
+    // Com responsável definido, isolamos o sinal de prazo.
+    expect(sinaisDaTarefa({ dueDate: HOJE, assigneeUserId: "u1" }, { hoje: HOJE })[0].tipo).toBe("vence_hoje");
+    expect(sinaisDaTarefa({ dueDate: "2026-09-04", assigneeUserId: "u1" }, { hoje: HOJE })[0]).toMatchObject({ tipo: "vence_breve", rotulo: "Vence em 1 dia" });
+    // 3 dias à frente já não é "em breve" (janela de 2 dias) — e com dono, nenhum sinal.
+    expect(sinaisDaTarefa({ dueDate: "2026-09-06", assigneeUserId: "u1" }, { hoje: HOJE })).toHaveLength(0);
+  });
+
+  it("tarefa concluída não gera sinal — saiu da fila", () => {
+    expect(sinaisDaTarefa({ dueDate: "2026-08-01", progress: "concluida" }, { hoje: HOJE })).toEqual([]);
+  });
+
+  it("aponta urgente parada e sem responsável", () => {
+    const sinais = sinaisDaTarefa({ priority: "urgente", progress: "nao_iniciada" }, { hoje: HOJE });
+    expect(sinais.map((s) => s.tipo)).toEqual(expect.arrayContaining(["urgente_parada", "sem_responsavel"]));
+  });
+
+  it("urgência: atrasada supera no prazo; concluída fica de fora (−1)", () => {
+    const atrasada = urgenciaDaTarefa({ dueDate: "2026-08-20", priority: "media" }, { hoje: HOJE });
+    const noPrazo = urgenciaDaTarefa({ dueDate: "2026-09-30", priority: "media" }, { hoje: HOJE });
+    expect(atrasada).toBeGreaterThan(noPrazo);
+    expect(urgenciaDaTarefa({ progress: "concluida" }, { hoje: HOJE })).toBe(-1);
+  });
+
+  it("fila de prioridades ordena por urgência, só o que pede ação e respeita o limite", () => {
+    const tarefas = [
+      { id: "a", dueDate: "2026-08-25", priority: "alta", assigneeUserId: "u1" }, // atrasada
+      { id: "b", dueDate: HOJE, priority: "media", assigneeUserId: "u1" }, // vence hoje
+      { id: "c", dueDate: "2026-12-01", priority: "baixa", assigneeUserId: "u1" }, // tranquila → fora
+      { id: "d", dueDate: "2026-08-10", priority: "urgente", progress: "concluida", assigneeUserId: "u1" }, // concluída → fora
+    ];
+    const fila = prioridadesDoPlano(tarefas, { hoje: HOJE, limite: 5 });
+    expect(fila.map((f) => f.tarefa.id)).toEqual(["a", "b"]);
+    expect(fila[0].motivo).toMatch(/Atrasada/);
+    expect(prioridadesDoPlano(tarefas, { hoje: HOJE, limite: 1 })).toHaveLength(1);
+    // recorte por pessoa
+    expect(prioridadesDoPlano(tarefas, { hoje: HOJE, userId: "u2" })).toEqual([]);
+  });
+
+  it("resumo inteligente conta cada tipo de sinal e o total em risco", () => {
+    const tarefas = [
+      { id: "a", dueDate: "2026-08-25", assigneeUserId: "u1" }, // atrasada
+      { id: "b", dueDate: HOJE, assigneeUserId: "u1" }, // vence hoje
+      { id: "c", dueDate: "2026-09-30" }, // sem responsável
+      { id: "d", dueDate: "2026-09-30", progress: "concluida" }, // fora
+    ];
+    const r = resumoInteligente(tarefas, { hoje: HOJE });
+    expect(r).toMatchObject({ atrasadas: 1, venceHoje: 1, semResponsavel: 1, emRisco: 3 });
+  });
+});
 
 describe("normalização de enums", () => {
   it("visibilidade desconhecida vira privado — o padrão seguro", () => {

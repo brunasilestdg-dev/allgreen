@@ -1,3 +1,5 @@
+import { diasEntre } from "./workManagementDomain.js";
+
 // ===== Planner (estilo Microsoft Planner) =====
 //
 // Um plano tem baldes (buckets) e tarefas. Cada tarefa tem responsável, prazo,
@@ -252,6 +254,103 @@ export const resumoPlano = (tarefas) => {
     naoIniciadas: total - concluidas - emAndamento,
     progressoMedio: media,
     atrasadas,
+  };
+};
+
+// ===== Camada inteligente do Planner =====
+//
+// O quadro já ordena e conta; o que faltava era o Planner DIZER, olhando os
+// dados, o que precisa de atenção agora e por quê — sem ninguém digitar um
+// status. Tudo aqui é derivado (prazo, prioridade, responsável, progresso),
+// puro e reaproveita `diasEntre` em vez de recalcular data à mão.
+
+const dueDe = (tarefa) => texto(tarefa?.dueDate || tarefa?.due_date);
+const concluida = (tarefa) =>
+  normalizarProgresso(tarefa?.progress || tarefa?.progresso) === "concluida";
+const responsavelDe = (tarefa) => texto(tarefa?.assigneeUserId || tarefa?.assignee_user_id);
+const dataDeHoje = (hoje) => texto(hoje) || new Date().toISOString().slice(0, 10);
+
+// Sinais dinâmicos de uma tarefa, do mais grave ao mais leve. Uma tarefa
+// concluída não tem sinal — ela saiu da fila. Cada sinal já traz o rótulo
+// pronto para a tela e a severidade para a cor (risco > atenção).
+export const sinaisDaTarefa = (tarefa, { hoje } = {}) => {
+  if (!tarefa || concluida(tarefa)) return [];
+  const ref = dataDeHoje(hoje);
+  const sinais = [];
+  const prazo = dueDe(tarefa);
+  if (prazo) {
+    const atraso = diasEntre(prazo, ref); // positivo = já passou do prazo
+    if (atraso > 0)
+      sinais.push({ tipo: "atrasada", severidade: "risco", rotulo: `Atrasada ${atraso} dia${atraso > 1 ? "s" : ""}` });
+    else if (atraso === 0)
+      sinais.push({ tipo: "vence_hoje", severidade: "atencao", rotulo: "Vence hoje" });
+    else if (-atraso <= 2)
+      sinais.push({ tipo: "vence_breve", severidade: "atencao", rotulo: `Vence em ${-atraso} dia${-atraso > 1 ? "s" : ""}` });
+  }
+  const prioridade = normalizarPrioridade(tarefa.priority || tarefa.prioridade);
+  const progresso = normalizarProgresso(tarefa.progress || tarefa.progresso);
+  if (prioridade === "urgente" && progresso === "nao_iniciada")
+    sinais.push({ tipo: "urgente_parada", severidade: "risco", rotulo: "Urgente e não iniciada" });
+  if (!responsavelDe(tarefa))
+    sinais.push({ tipo: "sem_responsavel", severidade: "atencao", rotulo: "Sem responsável" });
+  const ordem = { risco: 0, atencao: 1, info: 2 };
+  return sinais.sort((a, b) => (ordem[a.severidade] ?? 3) - (ordem[b.severidade] ?? 3));
+};
+
+// Nota de urgência (quanto maior, mais pede ação agora). Serve só para ORDENAR
+// a fila de prioridades — não é status nem se grava. Concluída fica fora (−1).
+export const urgenciaDaTarefa = (tarefa, { hoje } = {}) => {
+  if (!tarefa || concluida(tarefa)) return -1;
+  const ref = dataDeHoje(hoje);
+  const rank = RANK_PRIORIDADE[normalizarPrioridade(tarefa.priority || tarefa.prioridade)] ?? 2;
+  let nota = [30, 18, 8, 2][rank] ?? 8;
+  const prazo = dueDe(tarefa);
+  if (prazo) {
+    const atraso = diasEntre(prazo, ref);
+    if (atraso > 0) nota += 50 + Math.min(20, atraso);
+    else if (atraso === 0) nota += 40;
+    else if (-atraso <= 2) nota += 25;
+  }
+  if (normalizarProgresso(tarefa.progress || tarefa.progresso) === "em_andamento") nota += 5;
+  if (!responsavelDe(tarefa)) nota += 6;
+  return nota;
+};
+
+// A fila do "faça agora": as tarefas não concluídas que têm algum sinal (prazo
+// apertado, urgente parada, sem dono), ordenadas pela urgência, cada uma já com
+// seus sinais e o motivo principal escolhido. `userId` opcional recorta para as
+// tarefas de uma pessoa; `limite` corta a lista para a tela não virar mural.
+export const prioridadesDoPlano = (tarefas, { hoje, userId = "", limite = 6 } = {}) => {
+  const ref = dataDeHoje(hoje);
+  const alvo = texto(userId);
+  return lista(tarefas)
+    .filter((t) => !concluida(t))
+    .filter((t) => !alvo || responsavelDe(t) === alvo)
+    .map((tarefa) => ({
+      tarefa,
+      urgencia: urgenciaDaTarefa(tarefa, { hoje: ref }),
+      sinais: sinaisDaTarefa(tarefa, { hoje: ref }),
+    }))
+    .filter((item) => item.sinais.length > 0)
+    .sort((a, b) => b.urgencia - a.urgencia)
+    .slice(0, Math.max(0, Number(limite) || 0))
+    .map((item) => ({ ...item, motivo: item.sinais[0]?.rotulo || "" }));
+};
+
+// Contadores do resumo inteligente do plano: o que está atrasado, o que vence
+// hoje, o que vence em breve, o que está sem responsável e quantas tarefas
+// pedem atenção no total. Complementa `resumoPlano`, que conta só o volume.
+export const resumoInteligente = (tarefas, { hoje } = {}) => {
+  const ref = dataDeHoje(hoje);
+  const abertas = lista(tarefas).filter((t) => !concluida(t));
+  const sinaisPorTarefa = abertas.map((t) => sinaisDaTarefa(t, { hoje: ref }));
+  const conta = (tipo) => sinaisPorTarefa.filter((s) => s.some((x) => x.tipo === tipo)).length;
+  return {
+    atrasadas: conta("atrasada"),
+    venceHoje: conta("vence_hoje"),
+    venceEmBreve: conta("vence_breve"),
+    semResponsavel: conta("sem_responsavel"),
+    emRisco: sinaisPorTarefa.filter((s) => s.length > 0).length,
   };
 };
 
