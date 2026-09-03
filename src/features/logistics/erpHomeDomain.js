@@ -18,7 +18,7 @@ export const ERP_SHORTCUTS = Object.freeze([
   { id: "operations", label: "Operações", route: "/todogreen/operacoes", area: "operations" },
   { id: "incidents", label: "Ocorrências", route: "/todogreen/ocorrencias", area: "incidents" },
   { id: "driver-fleet-management", label: "Gestão operacional de frota", route: "/todogreen/motorista-frota", area: "operations" },
-  { id: "tracking", label: "Rastreamento", route: "/todogreen/rastreamento", area: "operations" },
+  { id: "tracking", label: "TMS Tracker", route: "/todogreen/rastreamento", area: "operations" },
   { id: "stock", label: "Estoque", route: "/todogreen/estoque", area: "supply" },
   { id: "purchasing", label: "Compras", route: "/todogreen/compras", area: "supply" },
   { id: "billing", label: "Faturamento", route: "/todogreen/faturamento", area: "finance" },

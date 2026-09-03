@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Settings2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, MapPinned, Settings2, X } from "lucide-react";
 import { buildTodoGreenDecisionCenter } from "./decisionCenterDomain.js";
 import { cenariosAbaixoDoPiso, resumoDeMargem } from "./marginDomain.js";
 import { operacoesCriticas } from "./operationsEfficiencyDomain.js";
@@ -112,6 +112,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
       </div>
       <div className="tdg-home-identity">
         <span>{comRotulo(ROLE_LABEL, role)}</span>
+        <button type="button" onClick={() => onNavigate?.("/todogreen/rastreamento")}><MapPinned size={16} />Abrir TMS Tracker</button>
         <button type="button" onClick={() => { setDraft(profile); setEditing(true); }}><Settings2 size={16} />Configurar meu início</button>
       </div>
     </header>
