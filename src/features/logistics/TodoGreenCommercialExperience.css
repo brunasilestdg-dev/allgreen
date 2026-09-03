@@ -1,0 +1,774 @@
+/*
+ * Experiência comercial To Do Green
+ * Camada transversal para acesso, CRM, pipeline, planner e criação de tarefas.
+ * Mantém os componentes e dados canônicos; melhora leitura, foco e resposta.
+ */
+
+:root {
+  --tdg-x-ink: #092f31;
+  --tdg-x-ink-soft: #315255;
+  --tdg-x-deep: #063f3d;
+  --tdg-x-brand: #07988b;
+  --tdg-x-brand-strong: #08786f;
+  --tdg-x-mint: #53d7bf;
+  --tdg-x-wash: #edf7f4;
+  --tdg-x-line: #cfe2dc;
+  --tdg-x-paper: #fff;
+  --tdg-x-shadow: 0 18px 42px rgba(7, 55, 53, .09);
+}
+
+/* Todo botão da vertical parte do design system, nunca do navegador */
+:where(.tdg, .auth-shell:has(.tdg-auth-marca)) button {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  max-width: 100%;
+  padding: 8px 13px;
+  border: 1px solid #abcac3;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--tdg-x-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    color .15s ease,
+    background-color .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease,
+    transform .15s ease;
+}
+
+:where(.tdg, .auth-shell:has(.tdg-auth-marca)) button:hover:not(:disabled) {
+  border-color: #5fae9f;
+  background: #edf8f5;
+  color: var(--tdg-x-deep);
+}
+
+:where(.tdg, .auth-shell:has(.tdg-auth-marca)) button:active:not(:disabled) {
+  transform: translateY(1px);
+  background: #e0f2ed;
+}
+
+:where(.tdg, .auth-shell:has(.tdg-auth-marca)) button:focus-visible {
+  outline: 3px solid rgba(7, 152, 139, .24);
+  outline-offset: 2px;
+  border-color: var(--tdg-x-brand);
+  box-shadow: 0 0 0 1px #fff;
+}
+
+:where(.tdg, .auth-shell:has(.tdg-auth-marca)) button:disabled,
+:where(.tdg, .auth-shell:has(.tdg-auth-marca)) button[aria-disabled="true"] {
+  opacity: .48;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+}
+
+:where(.tdg, .auth-shell:has(.tdg-auth-marca)) button svg {
+  flex: 0 0 auto;
+  width: 1.05em;
+  height: 1.05em;
+  stroke-width: 2;
+}
+
+.tdg :is(.tdg-action, .btn-primary, button[type="submit"]),
+.auth-shell:has(.tdg-auth-marca) :is(.button.full, button[type="submit"]) {
+  border-color: var(--tdg-x-deep);
+  background: var(--tdg-x-deep);
+  color: #fff;
+}
+
+.tdg :is(.tdg-action, .btn-primary, button[type="submit"]):hover:not(:disabled),
+.auth-shell:has(.tdg-auth-marca) :is(.button.full, button[type="submit"]):hover:not(:disabled) {
+  border-color: var(--tdg-x-brand-strong);
+  background: var(--tdg-x-brand-strong);
+  color: #fff;
+}
+
+.tdg :is(.icon-button, [class*="-icon"], [aria-label]):not([class*="action"]),
+.auth-shell:has(.tdg-auth-marca) button[aria-label] {
+  min-width: 38px;
+}
+
+.tdg :is(.danger, [class*="danger"], [class*="delete"], [class*="remove"]) {
+  border-color: #e9b9b9;
+  background: #fff7f7;
+  color: #9f2e2e;
+}
+
+.tdg :is(.danger, [class*="danger"], [class*="delete"], [class*="remove"]):hover:not(:disabled) {
+  border-color: #d98f8f;
+  background: #fdeaea;
+  color: #842020;
+}
+
+/* Acesso: produto operacional, não landing page vazia */
+.auth-shell:has(.tdg-auth-marca) {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.14fr) minmax(440px, .86fr);
+  background: #edf7f4;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-art {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  height: 100dvh;
+  overflow: hidden;
+  padding: clamp(32px, 4.5vw, 72px);
+  background:
+    linear-gradient(122deg, rgba(4, 47, 48, .97), rgba(5, 82, 78, .88)),
+    radial-gradient(circle at 85% 86%, rgba(83, 215, 191, .28), transparent 32%);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-art::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  opacity: .34;
+  background-image:
+    linear-gradient(rgba(111, 227, 207, .16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(111, 227, 207, .16) 1px, transparent 1px);
+  background-size: 52px 52px;
+  -webkit-mask-image: linear-gradient(145deg, transparent 10%, #000 76%);
+  mask-image: linear-gradient(145deg, transparent 10%, #000 76%);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-art::after {
+  content: "45 mi de entregas   •   98,5% no prazo   •   operação 100% elétrica";
+  position: absolute;
+  top: auto;
+  height: auto;
+  left: clamp(32px, 4.5vw, 72px);
+  right: clamp(32px, 4.5vw, 72px);
+  bottom: clamp(28px, 5vw, 64px);
+  padding-top: 18px;
+  border-top: 1px solid rgba(162, 239, 225, .3);
+  color: #d7f8f1;
+  font-size: clamp(12px, 1vw, 15px);
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-art > div:not(.auth-chips) {
+  max-width: 700px;
+  margin-top: auto;
+  margin-bottom: 150px;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-art h1 {
+  max-width: 680px;
+  font-size: clamp(42px, 5vw, 72px);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-art h1 em {
+  display: block;
+  color: var(--tdg-x-mint);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-art p {
+  max-width: 570px;
+  font-size: clamp(16px, 1.35vw, 20px);
+  line-height: 1.55;
+  color: rgba(242, 255, 252, .82);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-chips {
+  position: absolute;
+  left: clamp(32px, 4.5vw, 72px);
+  bottom: clamp(82px, 9vw, 128px);
+  display: flex;
+  gap: 10px;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-chips span {
+  min-width: 118px;
+  padding: 11px 14px;
+  border: 1px solid rgba(170, 237, 224, .26);
+  border-radius: 12px;
+  background: rgba(5, 54, 53, .52);
+  backdrop-filter: blur(10px);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-form {
+  align-items: center;
+  min-width: 0;
+  height: 100dvh;
+  overflow: hidden;
+  padding: clamp(20px, 4vw, 56px);
+  background: linear-gradient(135deg, #f3faf8, #eaf5f2);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-card {
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: clamp(24px, 3vw, 38px);
+  border: 1px solid #c7dfd9;
+  border-radius: 24px;
+  box-shadow: var(--tdg-x-shadow);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-perfis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 6px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 14px;
+  background: #f1f7f5;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-perfis button {
+  min-height: 48px;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-perfis button.active {
+  background: var(--tdg-x-deep);
+  color: #fff;
+  box-shadow: 0 7px 16px rgba(6, 63, 61, .18);
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-card h2 {
+  margin-bottom: 6px;
+  font-size: clamp(27px, 2.4vw, 38px);
+  line-height: 1.08;
+  letter-spacing: -.035em;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-card form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-card .field {
+  gap: 6px;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-card input {
+  min-height: 48px;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.auth-shell:has(.tdg-auth-marca) .auth-card .button.full {
+  min-height: 50px;
+  border-radius: 11px;
+  background: var(--tdg-x-deep);
+}
+
+/* Superfície comercial */
+.tdg-page:is(.tdg-clients-page, .tdg-opp-page, .tdg-performance-page, .tdg-funil, .tdg-planner, .tdg-workviews) {
+  --tdg-card-radius: 14px;
+}
+
+.tdg-page-title {
+  position: relative;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--tdg-x-line);
+}
+
+.tdg-page-title h1 {
+  letter-spacing: -.035em;
+}
+
+.tdg-page-title p {
+  max-width: 760px;
+  color: var(--tdg-x-ink-soft);
+}
+
+.tdg-page-actions {
+  align-self: center;
+}
+
+.tdg-action {
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.tdg-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(7, 120, 111, .17);
+}
+
+.tdg-crm-metrics,
+.tdg-opp-resumo,
+.tdg-performance-summary,
+.tdg-funil-metrics,
+.tdg-planner-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
+  gap: 10px;
+}
+
+.tdg-crm-metrics > *,
+.tdg-opp-resumo > *,
+.tdg-performance-summary > *,
+.tdg-funil-metrics > *,
+.tdg-planner-metrics > .tdg-metric {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 13px;
+  background: linear-gradient(145deg, #fff, #f7fbfa);
+  box-shadow: none;
+}
+
+.tdg-crm-metric-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 112px;
+  padding: 15px 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tdg-crm-metric-card > svg {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--tdg-x-brand-strong);
+}
+
+.tdg-crm-metric-card > span {
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 650;
+  color: var(--tdg-x-ink-soft);
+}
+
+.tdg-crm-metric-card > strong {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: clamp(24px, 2vw, 31px);
+  line-height: 1;
+  color: var(--tdg-x-ink);
+}
+
+.tdg-crm-metric-card > small {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  color: #52706f;
+}
+
+.tdg-crm-metric-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #78bcae;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(7, 55, 53, .1);
+}
+
+.tdg-crm-metric-card[aria-pressed="true"] {
+  border-color: var(--tdg-x-brand);
+  background: #e7f7f3;
+  box-shadow: inset 0 0 0 1px var(--tdg-x-brand);
+}
+
+.tdg-crm-metrics > *::after,
+.tdg-opp-resumo > *::after,
+.tdg-performance-summary > *::after,
+.tdg-funil-metrics > *::after,
+.tdg-planner-metrics > .tdg-metric::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tdg-x-brand), var(--tdg-x-mint));
+}
+
+.tdg-crm-toolbar,
+.tdg-opp-toolbar,
+.tdg-planner-head {
+  position: sticky;
+  z-index: 8;
+  top: 0;
+  padding: 12px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 8px 24px rgba(7, 55, 53, .06);
+  backdrop-filter: blur(10px);
+}
+
+.tdg-crm-view-switch,
+.tdg-view-switch,
+.tdg-planner-cortes,
+.tdg-workviews-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 11px;
+  background: var(--tdg-x-wash);
+}
+
+.tdg-crm-view-switch button,
+.tdg-view-switch button,
+.tdg-planner-cortes button,
+.tdg-workviews-switch button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+}
+
+.tdg-crm-view-switch button[data-active="true"],
+.tdg-view-switch button[data-active="true"],
+.tdg-planner-cortes button[data-ativo="true"],
+.tdg-workviews-switch button[data-active="true"] {
+  background: #fff;
+  color: var(--tdg-x-deep);
+  box-shadow: 0 3px 10px rgba(8, 54, 52, .1);
+}
+
+/* CRM: cards com leitura imediata e movimento claro */
+.tdg-crm-card-grid {
+  gap: 12px;
+}
+
+.tdg-crm-card-grid > article,
+.tdg-crm-kanban-card,
+.tdg-opp-kb-card,
+.tdg-opp-card {
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(7, 55, 53, .045);
+  transition: transform .17s ease, border-color .17s ease, box-shadow .17s ease;
+}
+
+.tdg-crm-card-grid > article:hover,
+.tdg-crm-kanban-card:hover,
+.tdg-opp-kb-card:hover,
+.tdg-opp-card:hover {
+  transform: translateY(-2px);
+  border-color: #8fc9bd;
+  box-shadow: 0 12px 28px rgba(7, 55, 53, .1);
+}
+
+.tdg-crm-kanban,
+.tdg-opp-kanban,
+.tdg-planner-board {
+  scrollbar-color: #91beb5 transparent;
+  scrollbar-width: thin;
+}
+
+.tdg-crm-kanban-column,
+.tdg-opp-kb-col,
+.tdg-planner-col {
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 15px;
+  background: #f3f8f6;
+}
+
+.tdg-crm-kanban-column > header,
+.tdg-opp-kb-col > header,
+.tdg-planner-col > header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: #f3f8f6;
+}
+
+.tdg-crm-detail-hero {
+  border: 0;
+  border-radius: 18px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 20%, rgba(83, 215, 191, .26), transparent 29%),
+    linear-gradient(120deg, #063f3d, #0a615b);
+  box-shadow: var(--tdg-x-shadow);
+}
+
+.tdg-crm-detail-hero :is(h1, h2, h3, strong) {
+  color: #fff;
+}
+
+.tdg-crm-detail-hero :is(p, small, span) {
+  color: rgba(240, 255, 251, .8);
+}
+
+.tdg-crm-account-tabs {
+  position: sticky;
+  z-index: 7;
+  top: 0;
+  overflow-x: auto;
+  padding: 5px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+/* Planner: quadro vivo e prioridade visível sem carnaval */
+.tdg-planner-focus {
+  border: 1px solid #b9ded6;
+  border-left: 4px solid var(--tdg-x-brand);
+  border-radius: 14px;
+  background: linear-gradient(110deg, #effaf7, #fff);
+}
+
+.tdg-planner-focus-list button {
+  transition: background .15s ease, transform .15s ease;
+}
+
+.tdg-planner-focus-list button:hover {
+  background: #e6f5f1;
+  transform: translateX(2px);
+}
+
+.tdg-planner-card {
+  border: 1px solid #d5e4e0;
+  border-radius: 12px;
+  box-shadow: 0 3px 11px rgba(7, 55, 53, .045);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.tdg-planner-card:hover {
+  transform: translateY(-2px);
+  border-color: #8fc9bd;
+  box-shadow: 0 9px 22px rgba(7, 55, 53, .1);
+}
+
+.tdg-planner-quick input {
+  border: 1px dashed #a8cec5;
+  background: rgba(255, 255, 255, .72);
+}
+
+.tdg-planner-quick input:focus {
+  border-style: solid;
+  border-color: var(--tdg-x-brand);
+  background: #fff;
+}
+
+.tdg-planner-form {
+  display: grid;
+  gap: 16px;
+}
+
+.tdg-planner-form label {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tdg-planner-taskform .tdg-planner-grid3 {
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 13px;
+  background: #f7fbfa;
+}
+
+.tdg-planner-checklist {
+  padding: 15px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 13px;
+  background: #fbfdfc;
+}
+
+/* To-do universal: corrige o modal quebrado visto dentro da vertical */
+.modal-body:has(.task-ai-actions) {
+  width: min(920px, calc(100vw - 32px));
+  max-height: min(88dvh, 900px);
+  overflow-y: auto;
+  padding: 0;
+}
+
+.modal-body:has(.task-ai-actions) > form {
+  display: grid;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.modal-body:has(.task-ai-actions) .task-ai-actions {
+  position: sticky;
+  z-index: 6;
+  top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 20px;
+  margin: 0 -20px;
+  border-bottom: 1px solid var(--tdg-x-line);
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(10px);
+}
+
+.modal-body:has(.task-ai-actions) .form-grid {
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 13px;
+  background: #f7fbfa;
+}
+
+.modal-body:has(.task-ai-actions) .field {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.modal-body:has(.task-ai-actions) :is(input, select, textarea) {
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+}
+
+.modal-body:has(.task-ai-actions) input[type="checkbox"] {
+  width: 20px;
+  min-height: 20px;
+  accent-color: var(--tdg-x-brand);
+}
+
+.modal-body:has(.task-ai-actions) .notify-row,
+.modal-body:has(.task-ai-actions) .cost-check {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 12px;
+  background: #f8fbfa;
+}
+
+.modal-body:has(.task-ai-actions) .deadline-calc-wrap {
+  padding: 14px;
+  border: 1px solid #b9ded6;
+  border-radius: 13px;
+  background: var(--tdg-x-wash);
+}
+
+.modal-body:has(.task-ai-actions) .subtask-editor,
+.modal-body:has(.task-ai-actions) .checkbox-list {
+  padding: 14px;
+  border: 1px solid var(--tdg-x-line);
+  border-radius: 13px;
+}
+
+/* Feedback visual sem distração */
+@media (prefers-reduced-motion: no-preference) {
+  .tdg-planner-card,
+  .tdg-crm-kanban-card,
+  .tdg-opp-kb-card {
+    animation: tdg-card-in .24s ease both;
+  }
+
+  @keyframes tdg-card-in {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media (max-width: 980px) {
+  .auth-shell:has(.tdg-auth-marca) {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    background: linear-gradient(150deg, #073f3e 0 210px, #eef7f4 210px);
+  }
+
+  .auth-shell:has(.tdg-auth-marca) .auth-art {
+    height: 210px;
+    min-height: 210px;
+    padding: 24px;
+    background: transparent;
+  }
+
+  .auth-shell:has(.tdg-auth-marca) .auth-art > div:not(.auth-chips),
+  .auth-shell:has(.tdg-auth-marca) .auth-chips,
+  .auth-shell:has(.tdg-auth-marca) .auth-art::after {
+    display: none;
+  }
+
+  .auth-shell:has(.tdg-auth-marca) .auth-form {
+    height: auto;
+    min-height: calc(100dvh - 115px);
+    overflow: visible;
+    margin-top: -90px;
+    padding: 16px;
+    background: transparent;
+  }
+
+  .auth-shell:has(.tdg-auth-marca) .auth-card {
+    max-height: none;
+    padding: 22px;
+    border-radius: 20px;
+  }
+
+  .tdg-crm-toolbar,
+  .tdg-opp-toolbar,
+  .tdg-planner-head {
+    position: static;
+  }
+
+  .tdg-planner-board {
+    grid-auto-columns: minmax(278px, 86vw);
+  }
+}
+
+@media (max-width: 600px) {
+  .auth-shell:has(.tdg-auth-marca) .auth-art {
+    min-height: 156px;
+  }
+
+  .auth-shell:has(.tdg-auth-marca) .auth-form {
+    margin-top: -58px;
+  }
+
+  .auth-shell:has(.tdg-auth-marca) .auth-perfis {
+    overflow-x: auto;
+    grid-template-columns: repeat(3, minmax(118px, 1fr));
+  }
+
+  .auth-shell:has(.tdg-auth-marca) .auth-card h2 {
+    font-size: 28px;
+  }
+
+  .tdg-crm-metrics,
+  .tdg-opp-resumo,
+  .tdg-performance-summary,
+  .tdg-funil-metrics,
+  .tdg-planner-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tdg-planner-taskform .tdg-planner-grid3,
+  .modal-body:has(.task-ai-actions) .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modal-body:has(.task-ai-actions) {
+    width: calc(100vw - 16px);
+    max-height: 94dvh;
+  }
+
+  .modal-body:has(.task-ai-actions) > form {
+    padding-inline: 14px;
+  }
+
+  .modal-body:has(.task-ai-actions) .task-ai-actions {
+    margin-inline: -14px;
+    padding-inline: 14px;
+  }
+}
