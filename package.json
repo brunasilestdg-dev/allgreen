@@ -25,6 +25,8 @@
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",
     "@vitejs/plugin-react": "^6.0.3",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "docx": "^9.7.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
@@ -36,7 +38,9 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-leaflet": "^5.0.0",
     "read-excel-file": "^6.0.1",
+    "signature_pad": "^5.1.4",
     "vite": "^8.1.4"
   },
   "devDependencies": {

@@ -99,12 +99,19 @@ beforeAll(async () => {
      VALUES ('todogreen', 'todogreen', 'To Do Green', 'logistica', 'active', '{}', ?, ?)`,
   ).bind(agora, agora).run();
 
+  // todogreen_pricing_parameters.created_by referencia users(id) desde a
+  // migração 0086 (isolamento por workspace) — precisa existir de verdade.
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO users (id, name, email, password_hash, password_salt, created_at)
+     VALUES ('dd-seed', 'Seed', 'seed@parceiro.com.br', 'h', 's', ?)`,
+  ).bind(agora).run();
+
   // Régua vigente: piso de 18%. É contra ela que o desvio é medido.
   await env.DB.prepare(
     `INSERT OR REPLACE INTO todogreen_pricing_parameters
        (version, tenant_id, parameters_json, change_summary, justification, responsible,
         effective_from, effective_to, status, created_by, created_at)
-     VALUES ('dd-v1', 'todogreen', ?, '', '', 'teste', ?, NULL, 'active', 'seed', ?)`,
+     VALUES ('dd-v1', 'todogreen', ?, '', '', 'teste', ?, NULL, 'active', 'dd-seed', ?)`,
   )
     .bind(JSON.stringify({ minimumMarginPercent: 18, targetMarginPercent: 26 }), agora, agora)
     .run();

@@ -69,19 +69,26 @@ const pedir = async (caminho, authHeaders, opcoes = {}) => {
   return corpo;
 };
 
-export function useVerticalRecords(authHeaders, { ativo = true } = {}) {
+const COLECOES_CRITICAS = [
+  'opportunities', 'proposals', 'contracts', 'operations', 'financial',
+];
+
+export function useVerticalRecords(authHeaders, { ativo = true, colecoes = null } = {}) {
   const [dados, setDados] = useState(VAZIO);
   const [carregando, setCarregando] = useState(ativo);
   const [erro, setErro] = useState("");
 
-  const recarregar = useCallback(async () => {
-    if (!ativo) return;
-    setCarregando(true);
+  const carregarColecoes = useCallback(async (colecaoEspecifica = null) => {
+    const alvo = colecaoEspecifica
+      ? [colecaoEspecifica]
+      : (colecoes || COLECOES_CRITICAS);
+
     try {
       const corpo = await pedir("", authHeaders, { includeTotals: true });
       const completo = { ...VAZIO, ...corpo };
-      const colecoes = Object.keys(VAZIO);
-      await Promise.all(colecoes.map(async (colecao) => {
+
+      await Promise.all(alvo.map(async (colecao) => {
+        if (!VAZIO[colecao]) return;
         const total = Number(corpo.totals?.[colecao] || completo[colecao]?.length || 0);
         let offset = completo[colecao]?.length || 0;
         while (offset < total) {
@@ -92,18 +99,22 @@ export function useVerticalRecords(authHeaders, { ativo = true } = {}) {
           offset += items.length;
         }
       }));
-      setDados(Object.fromEntries(Object.keys(VAZIO).map((key) => [key, completo[key] || []])));
+      setDados(completo);
       setErro("");
     } catch (razao) {
-      // Lista vazia com o motivo à vista, e nunca dado velho fingindo ser
-      // atual: um painel que continua mostrando o número de antes durante uma
-      // falha é pior do que um painel que admite não saber.
-      setDados(VAZIO);
       setErro(razao.message);
+    }
+  }, [authHeaders, colecoes]);
+
+  const recarregar = useCallback(async () => {
+    if (!ativo) return;
+    setCarregando(true);
+    try {
+      await carregarColecoes();
     } finally {
       setCarregando(false);
     }
-  }, [ativo, authHeaders]);
+  }, [ativo, carregarColecoes]);
 
   useEffect(() => {
     recarregar();
@@ -214,9 +225,15 @@ export function useVerticalRecords(authHeaders, { ativo = true } = {}) {
     [authHeaders],
   );
 
+  const carregarAoNecessario = useCallback(
+    (colecao) => carregarColecoes(colecao),
+    [carregarColecoes],
+  );
+
   return {
     dados, carregando, erro, recarregar, criar, atualizar, arquivar,
     registrarPagamento, estornarPagamento, registrarEventoOperacao, listarSubrecurso,
+    carregarAoNecessario,
   };
 }
 

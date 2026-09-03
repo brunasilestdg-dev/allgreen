@@ -2008,6 +2008,15 @@
 .tdg-manual-perm { background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); flex: 0 0 auto; font-size: .62rem; font-weight: 800; padding: 3px 8px; }
 .tdg-manual-modulo p { color: var(--tdg-muted); font-size: .74rem; line-height: 1.3; margin: 0; }
 .tdg-manual-modulo button { align-self: start; background: transparent; border: 0; color: var(--tdg-green); cursor: pointer; font: inherit; font-size: .74rem; font-weight: 750; margin-top: auto; padding: 4px 0 0; }
+.tdg-manual-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.tdg-manual-guia-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--tdg-green); border-radius: 6px; font-size: .74rem; font-weight: 700; color: var(--tdg-green); background: transparent; cursor: pointer; transition: all 0.2s; }
+.tdg-manual-guia-btn:hover { background: rgba(52, 183, 143, 0.1); border-color: var(--tdg-green); }
+.tdg-manual-guia { margin-top: 12px; padding: 12px; background: rgba(52, 183, 143, 0.05); border-left: 3px solid var(--tdg-green); border-radius: 4px; }
+.tdg-manual-guia h4 { color: var(--tdg-ink); font-size: .84rem; font-weight: 700; margin: 0 0 10px; }
+.tdg-manual-passos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.tdg-manual-passos li { display: flex; flex-direction: column; gap: 4px; font-size: .74rem; color: var(--tdg-muted); }
+.tdg-manual-passos li strong { color: var(--tdg-ink); font-weight: 700; font-size: .78rem; }
+.tdg-manual-passos li p { margin: 0; line-height: 1.3; }
 @media (max-width: 760px) { .tdg-area-referencias { grid-template-columns: 1fr; } }
 
 /* ===== Distância pelo mapa =====

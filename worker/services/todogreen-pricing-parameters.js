@@ -113,6 +113,17 @@ export async function handleTodoGreenPricingParameters(request, env) {
   const { user, access } = porta;
 
   if (request.method === "GET") {
+    // Validação: quem pode simular ou gerenciar preço lê os parâmetros — e o
+    // auditor também, sempre, por papel: ele "enxerga tudo e não altera
+    // nada" (é a regra em todo o resto da vertical), mesmo com a lista de
+    // permissões explícita vazia.
+    const podeLer = access.role === "owner" || access.role === "admin" || access.role === "auditor"
+      || access.permissions.includes("*")
+      || access.permissions.includes("pricing:simulate")
+      || access.permissions.includes("pricing:manage");
+    if (!podeLer)
+      return response({ error: "Você não tem permissão para consultar parâmetros de preço." }, 403);
+
     const url = new URL(request.url);
     const [atual, perfis, historicoNovo] = await Promise.all([
       reguaEmVigor(env, access.ownerId),

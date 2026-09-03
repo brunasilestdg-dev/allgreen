@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   Activity,
   AlertTriangle,
@@ -23,14 +25,25 @@ import {
 } from "lucide-react";
 import {
   createTmsApiKey,
+  createTmsShipmentManual,
+  listTmsFleetPositions,
+  listTmsManualClients,
+  listTmsManualContracts,
   loadTmsPortalData,
+  registerTmsPodManual,
   revokeTmsApiKey,
+  scanTmsTrackId,
 } from "./tmsPortalData.js";
 import "./TmsPortal.css";
 import "./TmsApiManager.css";
+// Reaproveita o estilo do pino (divIcon) e do container do mapa já validados
+// no RoteirizacaoPage — mesma técnica, mesma folha.
+import "./pages/TodoGreenPages.css";
 
 const SECTIONS = [
   { id: "controle", label: "Torre de controle", icon: Gauge },
+  { id: "mapa", label: "Mapa de frota", icon: MapPinned },
+  { id: "bipagem", label: "Bipagem", icon: ScanLine },
   { id: "cargas", label: "Cargas e pedidos", icon: PackageSearch },
   { id: "fracionada", label: "Carga fracionada", icon: Boxes },
   { id: "roteirizacao", label: "Roteirização", icon: Route },
@@ -75,20 +88,216 @@ function Metric({ label, value, detail, alert = false }) {
 
 const Empty = ({ children }) => <div className="tms-empty">{children}</div>;
 
-function OrdersTable({ rows = [] }) {
+// Caixa do Brasil, com folga, para o mapa não sair do país — mesmo limite do
+// RoteirizacaoPage.jsx. Marcadores são círculos numerados via divIcon (não
+// ícone-imagem do Leaflet, que quebra no bundle do Vite).
+const LIMITES_BRASIL = [[-34.9, -74.2], [5.6, -33.7]];
+const CORES_STATUS_VEICULO = {
+  available: "#0b9f8f", "in-operation": "#2563eb", maintenance: "#d97706",
+  reserved: "#7c3aed", blocked: "#dc2626", inactive: "#6b7280",
+};
+
+const pinoVeiculo = (veiculo) => L.marker([veiculo.lat, veiculo.lng], {
+  icon: L.divIcon({
+    className: "tdg-mapa-pin",
+    html: `<span style="background:${CORES_STATUS_VEICULO[veiculo.status] || "#6b7280"}">${veiculo.prefixo || veiculo.placa || "?"}</span>`,
+    iconSize: [30, 26],
+    iconAnchor: [15, 13],
+  }),
+}).bindPopup(
+  `<strong>${veiculo.prefixo} — ${veiculo.placa}</strong><br>${veiculo.motorista || "Sem motorista vinculado"}<br><small>${veiculo.atualizadoEm ? new Date(veiculo.atualizadoEm).toLocaleString("pt-BR") : "Sem horário"}</small>`,
+);
+
+function FleetMap() {
+  const [veiculos, setVeiculos] = useState([]);
+  const [error, setError] = useState("");
+  const containerRef = useRef(null);
+  const mapaRef = useRef(null);
+  const camadaRef = useRef(null);
+
+  const carregar = useCallback(() => {
+    listTmsFleetPositions()
+      .then((result) => { setVeiculos(result?.veiculos || []); setError(""); })
+      .catch((reason) => setError(reason?.message || "Não foi possível carregar as posições da frota."));
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  useEffect(() => {
+    if (mapaRef.current || !containerRef.current) return undefined;
+    const mapa = L.map(containerRef.current, { scrollWheelZoom: true, maxBounds: LIMITES_BRASIL, maxBoundsViscosity: 0.9 })
+      .setView([-15.78, -47.93], 4);
+    mapa.setMinZoom(4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapa);
+    mapaRef.current = mapa;
+    const recalc = () => mapa.invalidateSize();
+    requestAnimationFrame(recalc);
+    const observer = new ResizeObserver(recalc);
+    observer.observe(containerRef.current);
+    return () => { observer.disconnect(); mapa.remove(); mapaRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa) return;
+    if (camadaRef.current) camadaRef.current.remove();
+    const camada = L.layerGroup(veiculos.map(pinoVeiculo)).addTo(mapa);
+    camadaRef.current = camada;
+  }, [veiculos]);
+
+  return (
+    <section className="tms-panel">
+      <div className="tms-panel-head">
+        <div><span>Posição em tempo real</span><h2>Mapa de frota</h2></div>
+        <button type="button" className="tms-api-mini-button" onClick={carregar}><RefreshCw size={14} /> Atualizar</button>
+      </div>
+      {error ? <p className="tms-api-inline-error">{error}</p> : null}
+      {!veiculos.length && !error ? <Empty>Nenhum veículo com posição recente. A posição vem do rastreador — sincronize a frota primeiro.</Empty> : null}
+      <div ref={containerRef} className="tdg-roteirizacao-mapa" aria-label="Mapa de frota" />
+    </section>
+  );
+}
+
+const ENTREGUE_OU_CANCELADA = new Set(["completed", "concluida", "delivered", "entregue", "cancelled", "canceled", "cancelado"]);
+
+// Rótulos em português dos tipos de evento relevantes pra bipagem (o núcleo
+// aceita mais tipos — CREATED/CANCELLED não fazem sentido bipados numa
+// esteira, ficam só na API/tela de detalhe).
+const TIPOS_EVENTO_BIPAGEM = [
+  { valor: "PICKED_UP", rotulo: "Coleta" },
+  { valor: "ARRIVED_AT_HUB", rotulo: "Chegou no hub" },
+  { valor: "DEPARTED_FROM_HUB", rotulo: "Saiu do hub" },
+  { valor: "IN_TRANSIT", rotulo: "Em trânsito" },
+  { valor: "REACHED_DESTINATION", rotulo: "Chegou no destino" },
+  { valor: "DELIVERY_ATTEMPT", rotulo: "Tentativa de entrega" },
+  { valor: "DELIVERED", rotulo: "Entregue" },
+  { valor: "EXCEPTION", rotulo: "Ocorrência" },
+];
+
+// Bipagem: um leitor físico de código de barras é, pro navegador, só um
+// teclado que digita muito rápido e aperta Enter — não precisa de driver nem
+// integração nenhuma, só um campo de texto com foco esperando o Enter. A
+// câmera do celular é a mesma ideia, só que o "Enter" vem do ZXing decodando
+// o quadro do vídeo. Os dois caem na mesma função de confirmar.
+function ScanSection() {
+  const [eventType, setEventType] = useState("PICKED_UP");
+  const [codigo, setCodigo] = useState("");
+  const [historico, setHistorico] = useState([]);
+  const [enviando, setEnviando] = useState(false);
+  const [usandoCamera, setUsandoCamera] = useState(false);
+  const [erroCamera, setErroCamera] = useState("");
+  const inputRef = useRef(null);
+  const videoRef = useRef(null);
+  const controlesRef = useRef(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, [usandoCamera]);
+
+  const confirmarCodigo = useCallback(async (trackId) => {
+    const valor = String(trackId || "").trim();
+    if (!valor || enviando) return;
+    setEnviando(true);
+    try {
+      const resultado = await scanTmsTrackId({ trackId: valor, eventType });
+      setHistorico((atual) => [{
+        ok: true, trackId: valor, quando: new Date(),
+        mensagem: `${resultado.pacote?.descricao || resultado.pacote?.trackId} — OS ${resultado.pedido?.numero}`,
+      }, ...atual].slice(0, 30));
+    } catch (reason) {
+      setHistorico((atual) => [{ ok: false, trackId: valor, quando: new Date(), mensagem: reason?.message || "Falha ao bipar." }, ...atual].slice(0, 30));
+    } finally {
+      setEnviando(false);
+      setCodigo("");
+      inputRef.current?.focus();
+    }
+  }, [eventType, enviando]);
+
+  const aoTeclar = (event) => {
+    if (event.key === "Enter") { event.preventDefault(); confirmarCodigo(codigo); }
+  };
+
+  useEffect(() => {
+    if (!usandoCamera) return undefined;
+    let cancelado = false;
+    import("@zxing/browser").then(({ BrowserMultiFormatReader }) => {
+      if (cancelado || !videoRef.current) return;
+      const leitor = new BrowserMultiFormatReader();
+      leitor.decodeFromVideoDevice(undefined, videoRef.current, (resultado) => {
+        if (resultado) confirmarCodigo(resultado.getText());
+      }).then((controles) => { controlesRef.current = controles; })
+        .catch((erro) => setErroCamera(erro?.message || "Não foi possível abrir a câmera."));
+    });
+    return () => { cancelado = true; controlesRef.current?.stop(); controlesRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usandoCamera]);
+
+  return (
+    <section className="tms-panel">
+      <div className="tms-panel-head"><div><span>Leitura de volume</span><h2>Bipagem</h2></div></div>
+      <div className="tms-api-card">
+        <p>Escolha o evento uma vez e bipe os volumes em sequência — leitor físico (USB/Bluetooth), câmera do celular ou digite o Track ID à mão.</p>
+        <div className="tms-api-form">
+          <label>
+            <span>Evento desta leva</span>
+            <select className="tms-api-input" value={eventType} onChange={(event) => setEventType(event.target.value)}>
+              {TIPOS_EVENTO_BIPAGEM.map((item) => <option key={item.valor} value={item.valor}>{item.rotulo}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Track ID</span>
+            <input
+              ref={inputRef} className="tms-api-input" value={codigo} disabled={enviando}
+              onChange={(event) => setCodigo(event.target.value)} onKeyDown={aoTeclar}
+              placeholder="Bipe com o leitor ou digite e pressione Enter" autoFocus
+            />
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="tms-api-mini-button" onClick={() => setUsandoCamera((atual) => !atual)}>
+              {usandoCamera ? "Fechar câmera" : "Usar câmera do celular"}
+            </button>
+          </div>
+          {usandoCamera ? (
+            <div>
+              {erroCamera ? <p className="tms-api-inline-error">{erroCamera}</p> : null}
+              <video ref={videoRef} style={{ width: "100%", maxWidth: 420, borderRadius: 8 }} muted playsInline />
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <div className="tms-api-card">
+        <h3>Últimas leituras</h3>
+        {!historico.length ? <Empty>Nenhuma leitura ainda.</Empty> : (
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+            {historico.map((item, indice) => (
+              <li key={`${item.trackId}-${indice}`} style={{ color: item.ok ? "var(--tms-accent, #0b9f8f)" : "#dc2626", fontSize: 13 }}>
+                <strong>{item.trackId}</strong> — {item.mensagem} <small>{item.quando.toLocaleTimeString("pt-BR")}</small>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OrdersTable({ rows = [], onRegistrarPod }) {
   if (!rows.length) return <Empty>Nenhuma ordem de serviço registrada.</Empty>;
   return (
     <div className="tms-table-wrap">
       <table className="tms-table">
-        <thead><tr><th>OS</th><th>Origem</th><th>Destino</th><th>Quantidade</th><th>Valor</th><th>Status</th></tr></thead>
+        <thead><tr><th>OS</th><th>Origem</th><th>Destino</th><th>Quantidade</th><th>Valor</th><th>Status</th>{onRegistrarPod ? <th /> : null}</tr></thead>
         <tbody>{rows.map((row) => (
           <tr key={row.id}>
             <td><strong>{row.number || row.id}</strong></td>
-            <td>{row.origin?.city || row.origin?.cidade || row.origin?.name || "—"}</td>
-            <td>{row.destination?.city || row.destination?.cidade || row.destination?.name || "—"}</td>
+            <td>{row.origin?.city || row.origin?.cidade || row.origin?.name || row.origin?.address || "—"}</td>
+            <td>{row.destination?.city || row.destination?.cidade || row.destination?.name || row.destination?.address || "—"}</td>
             <td>{number.format(row.quantity || 0)} {row.chargeUnit || ""}</td>
             <td>{money.format(row.netAmount || 0)}</td>
             <td><StatusPill value={row.status} /></td>
+            {onRegistrarPod ? (
+              <td>{!ENTREGUE_OU_CANCELADA.has(String(row.status || "").toLowerCase()) ? (
+                <button type="button" className="tms-api-mini-button" onClick={() => onRegistrarPod(row)}>Registrar entrega</button>
+              ) : null}</td>
+            ) : null}
           </tr>
         ))}</tbody>
       </table>
@@ -303,6 +512,200 @@ function FractionalCargo() {
   );
 }
 
+// Cadastro manual — a mesma regra de negócio da API pública, só que direto
+// pela sessão de quem está no painel: precisa de cliente com contrato
+// aprovado e assinado (é o próprio contrato que dá o preço), origem e
+// destino. Sem isso, abrir uma OS obrigava a gerar chave de API e chamar por
+// fora do ERP.
+function NewOrderForm({ onReload }) {
+  const [clientes, setClientes] = useState([]);
+  const [contratos, setContratos] = useState([]);
+  const [clientId, setClientId] = useState("");
+  const [contractId, setContractId] = useState("");
+  const [origem, setOrigem] = useState("");
+  const [destino, setDestino] = useState("");
+  const [quantidade, setQuantidade] = useState(1);
+  const [observacoes, setObservacoes] = useState("");
+  const [carregandoContratos, setCarregandoContratos] = useState(false);
+  const [criado, setCriado] = useState(null);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    listTmsManualClients()
+      .then((result) => setClientes(result?.clientes || []))
+      .catch(() => setClientes([]));
+  }, []);
+
+  useEffect(() => {
+    setContractId("");
+    setContratos([]);
+    if (!clientId) return;
+    setCarregandoContratos(true);
+    listTmsManualContracts(clientId)
+      .then((result) => setContratos(result?.contratos || []))
+      .catch(() => setContratos([]))
+      .finally(() => setCarregandoContratos(false));
+  }, [clientId]);
+
+  const criar = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setCriado(null);
+    try {
+      const registro = await createTmsShipmentManual({
+        clientId,
+        contractId,
+        origin: { address: origem },
+        destination: { address: destino },
+        quantity: Number(quantidade) || 1,
+        notes: observacoes,
+      });
+      setCriado(registro);
+      setOrigem("");
+      setDestino("");
+      setQuantidade(1);
+      setObservacoes("");
+      await onReload();
+    } catch (reason) {
+      setError(reason?.message || "Não foi possível criar a carga.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="tms-api-card">
+      <h3>Nova carga manual</h3>
+      <p>Mesma regra da API pública: o cliente precisa de um contrato aprovado e assinado — é ele que dá o preço da OS.</p>
+      <form className="tms-api-form" onSubmit={criar}>
+        <label>
+          <span>Cliente</span>
+          <select className="tms-api-input" value={clientId} onChange={(event) => setClientId(event.target.value)} required>
+            <option value="">Selecione</option>
+            {clientes.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Contrato {carregandoContratos ? "(carregando...)" : ""}</span>
+          <select className="tms-api-input" value={contractId} onChange={(event) => setContractId(event.target.value)} required disabled={!clientId || carregandoContratos}>
+            <option value="">Selecione</option>
+            {contratos.map((item) => <option key={item.id} value={item.id}>{item.titulo} — {money.format(item.valorMensal || 0)}</option>)}
+          </select>
+          {clientId && !carregandoContratos && !contratos.length ? <small className="tms-api-inline-error">Este cliente não tem contrato aprovado e assinado.</small> : null}
+        </label>
+        <label>
+          <span>Origem</span>
+          <input className="tms-api-input" value={origem} onChange={(event) => setOrigem(event.target.value)} placeholder="Endereço ou referência de coleta" required />
+        </label>
+        <label>
+          <span>Destino</span>
+          <input className="tms-api-input" value={destino} onChange={(event) => setDestino(event.target.value)} placeholder="Endereço ou referência de entrega" required />
+        </label>
+        <label>
+          <span>Quantidade</span>
+          <input className="tms-api-input" type="number" min="1" value={quantidade} onChange={(event) => setQuantidade(event.target.value)} />
+        </label>
+        <label>
+          <span>Observações, opcional</span>
+          <input className="tms-api-input" value={observacoes} onChange={(event) => setObservacoes(event.target.value)} />
+        </label>
+        {error ? <p className="tms-api-inline-error">{error}</p> : null}
+        {criado ? <p style={{ color: "var(--tms-accent, #0b9f8f)", fontWeight: 700 }}>OS {criado.shipmentNumber} criada.</p> : null}
+        <button className="tms-api-submit" type="submit" disabled={saving || !contractId}>{saving ? "Criando..." : "Criar carga"}</button>
+      </form>
+    </div>
+  );
+}
+
+// Captura de POD com assinatura na hora — o canvas gera um PNG pequeno
+// (data URI), que cabe direto no campo document_url existente sem precisar
+// de armazenamento de arquivo (S3/R2) que este projeto não tem configurado.
+function PodCaptureForm({ pedido, onClose, onReload }) {
+  const canvasRef = useRef(null);
+  const padRef = useRef(null);
+  const [recipientName, setRecipientName] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let SignaturePad;
+    let cancelado = false;
+    import("signature_pad").then((mod) => {
+      if (cancelado || !canvasRef.current) return;
+      SignaturePad = mod.default;
+      const canvas = canvasRef.current;
+      const proporcao = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = canvas.offsetWidth * proporcao;
+      canvas.height = canvas.offsetHeight * proporcao;
+      canvas.getContext("2d").scale(proporcao, proporcao);
+      padRef.current = new SignaturePad(canvas, { backgroundColor: "rgb(255,255,255)" });
+    });
+    return () => { cancelado = true; padRef.current?.off(); };
+  }, []);
+
+  const limpar = () => padRef.current?.clear();
+
+  const registrar = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const assinatura = padRef.current && !padRef.current.isEmpty() ? padRef.current.toDataURL("image/png") : "";
+      await registerTmsPodManual(pedido.id, { recipientName, documentUrl: assinatura });
+      await onReload();
+      onClose();
+    } catch (reason) {
+      setError(reason?.message || "Não foi possível registrar a entrega.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="tms-api-card">
+      <h3>Registrar entrega — {pedido.number || pedido.id}</h3>
+      <p>Nome de quem recebeu e a assinatura na tela. Ao salvar, a OS fecha e entra na régua de faturamento.</p>
+      <form className="tms-api-form" onSubmit={registrar}>
+        <label>
+          <span>Recebido por</span>
+          <input className="tms-api-input" value={recipientName} onChange={(event) => setRecipientName(event.target.value)} placeholder="Nome de quem assinou" required />
+        </label>
+        <div>
+          <span style={{ display: "block", marginBottom: 6, color: "var(--tms-muted)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em" }}>Assinatura</span>
+          <canvas ref={canvasRef} aria-label="Área para assinar com o dedo ou mouse" style={{ width: "100%", height: 160, border: "1px solid var(--tms-line, #dce7e2)", borderRadius: 8, touchAction: "none" }} />
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="tms-api-mini-button" onClick={limpar}>Limpar assinatura</button>
+        </div>
+        {error ? <p className="tms-api-inline-error">{error}</p> : null}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="tms-api-submit" type="submit" disabled={saving}>{saving ? "Registrando..." : "Confirmar entrega"}</button>
+          <button type="button" className="tms-api-mini-button" onClick={onClose}>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// Seção "cargas": cadastro manual + lista + registro de entrega, com o
+// controle de qual OS está com o modal de POD aberto.
+function CargasSection({ data, onReload }) {
+  const [pedidoParaPod, setPedidoParaPod] = useState(null);
+  return (
+    <div className="tms-stack">
+      <section className="tms-panel"><div className="tms-panel-head"><div><span>Cadastro</span><h2>Nova carga</h2></div></div><NewOrderForm onReload={onReload} /></section>
+      {pedidoParaPod ? (
+        <section className="tms-panel">
+          <PodCaptureForm pedido={pedidoParaPod} onClose={() => setPedidoParaPod(null)} onReload={onReload} />
+        </section>
+      ) : null}
+      <section className="tms-panel"><div className="tms-panel-head"><div><span>Entrada operacional</span><h2>Cargas e ordens de serviço</h2></div></div><OrdersTable rows={data?.recent?.orders} onRegistrarPod={setPedidoParaPod} /></section>
+    </div>
+  );
+}
+
 const SCOPE_LABELS = {
   "shipments:read": "Consultar cargas",
   "shipments:write": "Criar cargas",
@@ -504,7 +907,9 @@ export default function TmsPortal() {
   const active = useMemo(() => SECTIONS.find((item) => item.id === section) || SECTIONS[0], [section]);
   let content;
   if (section === "controle") content = <ControlTower data={data} onSection={navigate} />;
-  if (section === "cargas") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Entrada operacional</span><h2>Cargas e ordens de serviço</h2></div></div><OrdersTable rows={data?.recent?.orders} /></section>;
+  if (section === "mapa") content = <FleetMap />;
+  if (section === "bipagem") content = <ScanSection />;
+  if (section === "cargas") content = <CargasSection data={data} onReload={load} />;
   if (section === "fracionada") content = <FractionalCargo />;
   if (section === "roteirizacao") content = <ElectricRouting rows={data?.recent?.operations} />;
   if (section === "viagens") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Execução</span><h2>Viagens e movimentações</h2></div></div><OperationsTable rows={data?.recent?.operations} /></section>;

@@ -36,6 +36,8 @@ import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
+import { handleTodoGreenDispatch } from "./todogreen-dispatch.js";
+import { handleTodoGreenTmsManual } from "./todogreen-tms-manual.js";
 import { consultarCepNormalizado } from "./todogreen-integration-gateway.js";
 import { consultarPedagiosDaRota } from "./todogreen-pedagios.js";
 import { consultarCarregadores } from "./todogreen-carregadores.js";
@@ -116,15 +118,46 @@ export async function routeTodoGreenApi(request, env, ctx) {
     });
   }
 
-  if (path.startsWith("/api/todogreen/portal"))
-    return guarded("To Do Green customer portal error", "Não foi possível abrir o portal do cliente.",
-      () => handleTodoGreenCustomerPortal(request, env));
-  if (path.startsWith("/api/todogreen/work-center"))
-    return guarded("To Do Green work center error", "Não foi possível sincronizar a Central de Trabalho.",
-      () => handleTodoGreenWorkCenter(request, env, ctx));
-  if (path.startsWith("/api/todogreen/pricing-parameters"))
-    return guarded("To Do Green pricing parameters error", "Não foi possível carregar os parâmetros comerciais.",
-      () => handleTodoGreenPricingParameters(request, env));
+  // Portal do cliente: sessão de um CLIENTE (via e-mail vinculado em
+  // todogreen_client_users), não de um funcionário da To Do Green — por isso
+  // não passa pelo choke point de motorista, que só faz sentido para papéis
+  // internos (exigirAcessoTodoGreen barra quem não está autenticado; o
+  // handler resolve por dentro se o e-mail está de fato vinculado a um
+  // cliente ativo). Aplicar internalReadAccess aqui bloqueava o cliente de
+  // ver a própria conta (SEG-01 aplicado à rota errada).
+  if (path.startsWith("/api/todogreen/portal")) {
+    return guarded("To Do Green customer portal error", "Não foi possível abrir o portal do cliente.", () =>
+      handleTodoGreenCustomerPortal(request, env),
+    );
+  }
+  if (path.startsWith("/api/todogreen/work-center")) {
+    return guarded("To Do Green work center error", "Não foi possível sincronizar a Central de Trabalho.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenWorkCenter(request, env, ctx);
+    });
+  }
+  if (path.startsWith("/api/todogreen/pricing-parameters")) {
+    return guarded("To Do Green pricing parameters error", "Não foi possível carregar os parâmetros comerciais.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPricingParameters(request, env);
+    });
+  }
+  if (path.startsWith("/api/todogreen/tms-manual")) {
+    return guarded("To Do Green TMS manual error", "Não foi possível processar o cadastro manual do TMS.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenTmsManual(request, env, resolved.access, resolved.user);
+    });
+  }
+  if (path.startsWith("/api/todogreen/dispatch")) {
+    return guarded("To Do Green dispatch error", "Não foi possível processar o despacho.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenDispatch(request, env, resolved.access, resolved.user);
+    });
+  }
   if (path.startsWith("/api/todogreen/pricing-performance")) {
     return guarded("To Do Green pricing performance error", "Não foi possível comparar preço e operação.", async () => {
       const resolved = await internalReadAccess(request, env);
@@ -132,12 +165,20 @@ export async function routeTodoGreenApi(request, env, ctx) {
       return handleTodoGreenPricingPerformance(request, env, resolved.access, resolved.user);
     });
   }
-  if (path.startsWith("/api/todogreen/dashboards"))
-    return guarded("To Do Green dashboards error", "Não foi possível carregar os painéis.",
-      () => handleTodoGreenDashboards(request, env));
-  if (path.startsWith("/api/todogreen/esg"))
-    return guarded("To Do Green ESG error", "Não foi possível processar o cálculo ambiental.",
-      () => handleTodoGreenEsg(request, env));
+  if (path.startsWith("/api/todogreen/dashboards")) {
+    return guarded("To Do Green dashboards error", "Não foi possível carregar os painéis.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenDashboards(request, env);
+    });
+  }
+  if (path.startsWith("/api/todogreen/esg")) {
+    return guarded("To Do Green ESG error", "Não foi possível processar o cálculo ambiental.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenEsg(request, env);
+    });
+  }
   if (path.startsWith("/api/todogreen/tracker/")) {
     const readiness = await guarded(
       "To Do Green Tracker readiness error",

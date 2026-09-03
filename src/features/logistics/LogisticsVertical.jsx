@@ -325,6 +325,20 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "espaco",
   "visualizacoes",
   "agentes-funcoes",
+  // CAT-01: Sincronizar 13 módulos que faltavam em IMPLEMENTED
+  "remuneracao",
+  "benchmark",
+  "central-rfq",
+  "sobre-o-negocio",
+  "orcamento",
+  "centros-custo",
+  "pacotes",
+  "tarefas",
+  "avancos",
+  "documentos",
+  "aprovacoes",
+  "notificacoes",
+  "inbox",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -2789,6 +2803,12 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const podeVerPagina = page === "integracoes"
     ? ehDev
     : podeAcessarFuncionalidade(role, remoteAccess.permissions, permissaoNecessaria);
+  // Lazy-load WorkCenterV2 somente quando necessário (ARQ-01 otimização)
+  useEffect(() => {
+    if (isWorkCenter && podeVerPagina) {
+      import("./LogisticsVerticalWorkCenterV2.js").catch((err) => console.error("Falha ao carregar Work Center:", err));
+    }
+  }, [isWorkCenter, podeVerPagina]);
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
     document.title = `${currentPage.title} | To Do Green`;

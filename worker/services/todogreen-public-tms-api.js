@@ -26,6 +26,20 @@ const num = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 const object = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : {};
+const routeCoordinate = (point, primary, fallback) => {
+  const parsed = Number(point?.[primary] ?? point?.[fallback]);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+const routeText = (point) => text(
+  point.name || point.address || [point.city, point.state].filter(Boolean).join(" / "),
+  240,
+);
+const routeCoordinates = (origin, destination) => ({
+  pickupLat: routeCoordinate(origin, "lat", "latitude"),
+  pickupLng: routeCoordinate(origin, "lng", "longitude"),
+  deliveryLat: routeCoordinate(destination, "lat", "latitude"),
+  deliveryLng: routeCoordinate(destination, "lng", "longitude"),
+});
 const parse = (value, fallback = {}) => {
   try { return value ? JSON.parse(value) : fallback; } catch { return fallback; }
 };
@@ -130,15 +144,17 @@ const podView = (row) => ({
   longitude: row.longitude,
 });
 
-async function findShipment(env, credential, identifier) {
-  const clientFilter = credential.client_id ? "AND client_id=?" : "";
+async function findShipmentByOwner(env, workspaceOwnerId, identifier, clientId = "") {
+  const clientFilter = clientId ? "AND client_id=?" : "";
   return env.DB.prepare(
     `SELECT * FROM todogreen_service_orders
       WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
         AND (id=? OR number=?) ${clientFilter}
       LIMIT 1`,
-  ).bind(TENANT_ID, credential.workspace_owner_id, identifier, identifier, ...(credential.client_id ? [credential.client_id] : [])).first();
+  ).bind(TENANT_ID, workspaceOwnerId, identifier, identifier, ...(clientId ? [clientId] : [])).first();
 }
+const findShipment = (env, credential, identifier) =>
+  findShipmentByOwner(env, credential.workspace_owner_id, identifier, credential.client_id || "");
 
 async function idempotentResult(request, env, credential) {
   const key = text(request.headers.get("idempotency-key"), 160);
@@ -165,8 +181,8 @@ async function rememberIdempotency(env, credential, request, requestKey, status,
   ).run();
 }
 
-async function activeContract(env, credential, clientId, requestedContractId = "") {
-  const params = [TENANT_ID, credential.workspace_owner_id, clientId];
+async function activeContract(env, workspaceOwnerId, clientId, requestedContractId = "") {
+  const params = [TENANT_ID, workspaceOwnerId, clientId];
   const requested = requestedContractId ? "AND id=?" : "";
   if (requestedContractId) params.push(requestedContractId);
   return env.DB.prepare(
@@ -233,6 +249,134 @@ async function shipmentDetail(env, credential, identifier) {
   }));
 }
 
+// Núcleo de criação de shipment/OS — reusado pela API pública (chave, escopo
+// por credencial) e pelo cadastro manual dentro do Portal TMS (sessão
+// interna). As duas portas de entrada convergem para a mesma regra de
+// negócio: sem isso, "criado pela tela" e "criado pela API" divergiam no que
+// era permitido, e a diferença só aparecia quando alguém reclamava.
+async function criarPedidoTms(env, { workspaceOwnerId, clientId: clientIdSolicitado, createdBy, body }) {
+  const clientId = text(clientIdSolicitado || body.clientId, 120);
+  if (!clientId) return { error: { status: 400, payload: { error: "client_required", message: "Informe o cliente." } } };
+
+  const contract = await activeContract(env, workspaceOwnerId, clientId, text(body.contractId, 120));
+  if (!contract) return { error: { status: 409, payload: { error: "contract_not_ready", message: "Não há contrato aprovado e assinado para este cliente." } } };
+
+  // Mesmo gate da criação interna: sem implantação ativa (go-live), não há OS.
+  const implantacao = await env.DB.prepare(
+    "SELECT status FROM todogreen_client_activation_state WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? LIMIT 1",
+  ).bind(TENANT_ID, workspaceOwnerId, clientId).first().catch(() => null);
+  if (text(implantacao?.status, 30).toLowerCase() !== "active")
+    return { error: { status: 409, payload: { error: "activation_not_active", message: "A implantação do cliente precisa estar ativa (go-live) antes de criar shipments." } } };
+
+  const origin = object(body.origin);
+  const destination = object(body.destination);
+  if (!Object.keys(origin).length || !Object.keys(destination).length)
+    return { error: { status: 400, payload: { error: "route_required", message: "Origem e destino são obrigatórios." } } };
+
+  const packages = Array.isArray(body.packages) ? body.packages.slice(0, 1000) : [];
+  const quantity = Math.max(1, num(body.quantity) || packages.reduce((sum, item) => sum + Math.max(1, num(item?.quantity)), 0) || 1);
+  const price = apiContractPrice(contract, quantity);
+  if (!(price.unitPrice > 0))
+    return { error: { status: 409, payload: { error: "contract_without_price", message: "O contrato está aprovado, mas não possui valor negociado para gerar a ordem." } } };
+
+  const route = routeCoordinates(origin, destination);
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const operationId = crypto.randomUUID();
+  const requestedAt = text(body.requestedAt, 40) || now;
+  const scheduledStartAt = text(body.scheduledStartAt, 40) || null;
+  const scheduledEndAt = text(body.scheduledEndAt, 40) || null;
+  const serviceId = text(body.serviceId || contract.service_id, 120);
+  const priceTableId = text(body.priceTableId || contract.price_table_id, 120);
+  const chargeUnit = text(body.chargeUnit, 30) || (packages.length ? "volume" : "delivery");
+  const prefixoNumero = text(body.numberPrefix, 20) || "OS-API";
+  const number = `${prefixoNumero}-${now.slice(0, 10).replaceAll("-", "")}-${shortId().slice(0, 6)}`;
+  const fields = {
+    source: text(body.source, 40) || "external_tms_api",
+    externalReference: text(body.externalReference, 160),
+    serviceType: text(body.serviceType, 80),
+    notes: text(body.notes, 1000),
+    metadata: object(body.metadata),
+    precoOrigem: "contrato_api",
+    precoModo: price.pricingMode,
+    operationId,
+  };
+  const operationFields = {
+    source: fields.source,
+    shipmentId: id,
+    shipmentNumber: number,
+    externalReference: fields.externalReference,
+    serviceType: fields.serviceType,
+    notes: fields.notes,
+    pacotes: quantity,
+    chargeUnit,
+    metadata: fields.metadata,
+  };
+
+  const statements = [
+    env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+        (id,tenant_id,client_id,workspace_owner_id,contract_id,product_id,reference,status,
+         service_date,origin,destination,fields_json,incident_count,distance_km,revision,
+         created_by,updated_by,created_at,updated_at,archived_at,driver_id,pickup_lat,
+         pickup_lng,delivery_lat,delivery_lng)
+       VALUES (?,?,?,?,?,?,?,'planejada',?,?,?,?,0,0,1,?,?,?,?,NULL,'',?,?,?,?)`,
+    ).bind(
+      operationId, TENANT_ID, clientId, workspaceOwnerId, contract.id, serviceId, number,
+      requestedAt.slice(0, 10), routeText(origin), routeText(destination), JSON.stringify(operationFields),
+      createdBy, createdBy, now, now, route.pickupLat, route.pickupLng, route.deliveryLat, route.deliveryLng,
+    ),
+    env.DB.prepare(
+      `INSERT INTO todogreen_service_orders
+        (id,tenant_id,workspace_owner_id,number,client_id,contract_id,operation_id,service_id,
+         price_table_id,status,requested_at,scheduled_start_at,scheduled_end_at,origin_json,
+         destination_json,quantity,charge_unit,unit_price,gross_amount,discount_amount,tax_amount,
+         net_amount,sla_json,fields_json,revision,created_by,updated_by,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,'released',?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
+    ).bind(
+      id, TENANT_ID, workspaceOwnerId, number, clientId, contract.id, operationId,
+      serviceId, priceTableId, requestedAt, scheduledStartAt, scheduledEndAt,
+      JSON.stringify(origin), JSON.stringify(destination), quantity, chargeUnit,
+      price.unitPrice, price.grossAmount, 0, 0, price.grossAmount,
+      contract.sla_json || "{}", JSON.stringify(fields), createdBy, createdBy, now, now,
+    ),
+  ];
+
+  for (const input of packages) {
+    const trackId = text(input?.trackId, 120) || `TDG-${shortId()}`;
+    const dimensions = object(input?.dimensionsCm);
+    statements.push(env.DB.prepare(
+      `INSERT INTO todogreen_tms_packages
+        (id,tenant_id,workspace_owner_id,service_order_id,client_id,track_id,sku,barcode,description,
+         quantity,weight_kg,length_cm,width_cm,height_cm,declared_value,invoice_number,invoice_key,
+         handling_unit,status,fields_json,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'created',?,?,?)`,
+    ).bind(
+      crypto.randomUUID(), TENANT_ID, workspaceOwnerId, id, clientId, trackId,
+      text(input?.sku, 120), text(input?.barcode, 160), text(input?.description, 300),
+      Math.max(1, num(input?.quantity) || 1), Math.max(0, num(input?.weightKg)),
+      Math.max(0, num(dimensions.length)), Math.max(0, num(dimensions.width)), Math.max(0, num(dimensions.height)),
+      Math.max(0, num(input?.declaredValue)), text(input?.invoiceNumber, 80), text(input?.invoiceKey, 80),
+      text(input?.handlingUnit, 40) || "volume", JSON.stringify(object(input?.metadata)), now, now,
+    ));
+  }
+
+  try {
+    await env.DB.batch(statements);
+  } catch (error) {
+    if (String(error?.message || error).toLowerCase().includes("unique"))
+      return { error: { status: 409, payload: { error: "duplicate_track_id", message: "Um dos Track IDs já existe neste TMS." } } };
+    throw error;
+  }
+  const row = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
+  const payload = shipmentView(row, {
+    packages: packages.length ? (await env.DB.prepare("SELECT * FROM todogreen_tms_packages WHERE service_order_id=? ORDER BY created_at").bind(id).all()).results.map(packageView) : [],
+  });
+  return { payload, status: 201 };
+}
+
+export { criarPedidoTms, activeContract, registrarPod, findShipmentByOwner, registrarTracking, EVENT_TYPES };
+
 async function createShipment(request, env, credential) {
   if (!keyCanWrite(credential, "shipments:write")) return scopeError("shipments:write");
   const idem = await idempotentResult(request, env, credential);
@@ -246,89 +390,16 @@ async function createShipment(request, env, credential) {
   if (credential.client_id && body.clientId && text(body.clientId, 120) !== credential.client_id)
     return apiJson({ error: "client_scope_violation", message: "Esta chave só pode criar shipments para o cliente vinculado." }, 403);
 
-  const contract = await activeContract(env, credential, clientId, text(body.contractId, 120));
-  if (!contract) return apiJson({ error: "contract_not_ready", message: "Não há contrato aprovado e assinado para este cliente." }, 409);
-
-  // Mesmo gate da criação interna: sem implantação ativa (go-live), não há OS.
-  const implantacao = await env.DB.prepare(
-    "SELECT status FROM todogreen_client_activation_state WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? LIMIT 1",
-  ).bind(TENANT_ID, credential.workspace_owner_id, clientId).first().catch(() => null);
-  if (text(implantacao?.status, 30).toLowerCase() !== "active")
-    return apiJson({ error: "activation_not_active", message: "A implantação do cliente precisa estar ativa (go-live) antes de criar shipments." }, 409);
-
-  const origin = object(body.origin);
-  const destination = object(body.destination);
-  if (!Object.keys(origin).length || !Object.keys(destination).length)
-    return apiJson({ error: "route_required", message: "Origin e destination são obrigatórios." }, 400);
-
-  const packages = Array.isArray(body.packages) ? body.packages.slice(0, 1000) : [];
-  const quantity = Math.max(1, num(body.quantity) || packages.reduce((sum, item) => sum + Math.max(1, num(item?.quantity)), 0) || 1);
-  const price = apiContractPrice(contract, quantity);
-  if (!(price.unitPrice > 0))
-    return apiJson({ error: "contract_without_price", message: "O contrato está aprovado, mas não possui valor negociado para gerar a ordem." }, 409);
-
-  const now = new Date().toISOString();
-  const id = crypto.randomUUID();
-  const number = `OS-API-${now.slice(0, 10).replaceAll("-", "")}-${shortId().slice(0, 6)}`;
-  const fields = {
-    source: "external_tms_api",
-    externalReference: text(body.externalReference, 160),
-    serviceType: text(body.serviceType, 80),
-    notes: text(body.notes, 1000),
-    metadata: object(body.metadata),
-    precoOrigem: "contrato_api",
-    precoModo: price.pricingMode,
-  };
-
-  const statements = [env.DB.prepare(
-    `INSERT INTO todogreen_service_orders
-      (id,tenant_id,workspace_owner_id,number,client_id,contract_id,operation_id,service_id,
-       price_table_id,status,requested_at,scheduled_start_at,scheduled_end_at,origin_json,
-       destination_json,quantity,charge_unit,unit_price,gross_amount,discount_amount,tax_amount,
-       net_amount,sla_json,fields_json,revision,created_by,updated_by,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,'released',?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
-  ).bind(
-    id, TENANT_ID, credential.workspace_owner_id, number, clientId, contract.id, "",
-    text(body.serviceId || contract.service_id, 120), text(body.priceTableId || contract.price_table_id, 120),
-    text(body.requestedAt, 40) || now, text(body.scheduledStartAt, 40) || null,
-    text(body.scheduledEndAt, 40) || null, JSON.stringify(origin), JSON.stringify(destination),
-    quantity, text(body.chargeUnit, 30) || (packages.length ? "volume" : "delivery"),
-    price.unitPrice, price.grossAmount, 0, 0, price.grossAmount,
-    contract.sla_json || "{}", JSON.stringify(fields), `api:${credential.id}`, `api:${credential.id}`, now, now,
-  )];
-
-  for (const input of packages) {
-    const trackId = text(input?.trackId, 120) || `TDG-${shortId()}`;
-    const dimensions = object(input?.dimensionsCm);
-    statements.push(env.DB.prepare(
-      `INSERT INTO todogreen_tms_packages
-        (id,tenant_id,workspace_owner_id,service_order_id,client_id,track_id,sku,barcode,description,
-         quantity,weight_kg,length_cm,width_cm,height_cm,declared_value,invoice_number,invoice_key,
-         handling_unit,status,fields_json,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'created',?,?,?)`,
-    ).bind(
-      crypto.randomUUID(), TENANT_ID, credential.workspace_owner_id, id, clientId, trackId,
-      text(input?.sku, 120), text(input?.barcode, 160), text(input?.description, 300),
-      Math.max(1, num(input?.quantity) || 1), Math.max(0, num(input?.weightKg)),
-      Math.max(0, num(dimensions.length)), Math.max(0, num(dimensions.width)), Math.max(0, num(dimensions.height)),
-      Math.max(0, num(input?.declaredValue)), text(input?.invoiceNumber, 80), text(input?.invoiceKey, 80),
-      text(input?.handlingUnit, 40) || "volume", JSON.stringify(object(input?.metadata)), now, now,
-    ));
-  }
-
-  try {
-    await env.DB.batch(statements);
-  } catch (error) {
-    if (String(error?.message || error).toLowerCase().includes("unique"))
-      return apiJson({ error: "duplicate_track_id", message: "Um dos Track IDs já existe neste TMS." }, 409);
-    throw error;
-  }
-  const row = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
-  const payload = shipmentView(row, {
-    packages: packages.length ? (await env.DB.prepare("SELECT * FROM todogreen_tms_packages WHERE service_order_id=? ORDER BY created_at").bind(id).all()).results.map(packageView) : [],
+  const resultado = await criarPedidoTms(env, {
+    workspaceOwnerId: credential.workspace_owner_id,
+    clientId,
+    createdBy: `api:${credential.id}`,
+    body,
   });
-  await rememberIdempotency(env, credential, request, idem.key, 201, payload);
-  return apiJson(payload, 201);
+  if (resultado.error) return apiJson(resultado.error.payload, resultado.error.status);
+
+  await rememberIdempotency(env, credential, request, idem.key, 201, resultado.payload);
+  return apiJson(resultado.payload, 201);
 }
 
 const EVENT_TYPES = new Set([
@@ -336,6 +407,47 @@ const EVENT_TYPES = new Set([
   "ARRIVED_AT_HUB", "DEPARTED_FROM_HUB", "REACHED_DESTINATION", "DELIVERED",
   "DELIVERY_ATTEMPT", "EXCEPTION", "CANCELLED",
 ]);
+
+// Núcleo do evento de rastreamento — reusado pela API pública e pela
+// bipagem manual (leitor físico ou câmera do celular) no Portal TMS.
+async function registrarTracking(env, { workspaceOwnerId, shipment, source, createdBy, body, externalEventId = "" }) {
+  const eventType = text(body.eventType, 40).toUpperCase();
+  if (!EVENT_TYPES.has(eventType)) return { error: { status: 400, payload: { error: "invalid_event", message: "eventType inválido." } } };
+  const now = new Date().toISOString();
+  const occurredAt = text(body.occurredAt, 40) || now;
+  if (!Number.isFinite(Date.parse(occurredAt))) return { error: { status: 400, payload: { error: "invalid_date", message: "occurredAt inválido." } } };
+  const lat = Number(body.latitude);
+  const lng = Number(body.longitude);
+  const eventId = crypto.randomUUID();
+  const nextStatus = eventType === "CANCELLED" ? "cancelled"
+    : eventType === "CREATED" ? shipment.status
+      : "in_progress";
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO todogreen_tms_tracking_events
+          (id,tenant_id,workspace_owner_id,service_order_id,client_id,event_type,status,location,city,state,
+           latitude,longitude,notes,occurred_at,source,external_event_id,created_by,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ).bind(
+        eventId, TENANT_ID, workspaceOwnerId, shipment.id, shipment.client_id, eventType,
+        nextStatus, text(body.location, 240), text(body.city, 100), text(body.state, 2).toUpperCase(),
+        Number.isFinite(lat) ? lat : null, Number.isFinite(lng) ? lng : null, text(body.notes, 1000),
+        occurredAt, source, externalEventId, createdBy, now,
+      ),
+      env.DB.prepare(
+        `UPDATE todogreen_service_orders SET status=?,revision=revision+1,updated_by=?,updated_at=?
+          WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND status NOT IN ('completed','cancelled')`,
+      ).bind(nextStatus, createdBy, now, shipment.id, TENANT_ID, workspaceOwnerId),
+    ]);
+  } catch (error) {
+    if (externalEventId && String(error?.message || error).toLowerCase().includes("unique"))
+      return { error: { status: 409, payload: { error: "duplicate_external_event", message: "externalEventId já registrado." } } };
+    throw error;
+  }
+  const row = await env.DB.prepare("SELECT * FROM todogreen_tms_tracking_events WHERE id=?").bind(eventId).first();
+  return { payload: { event: trackingView(row), shipmentStatus: nextStatus, requiresPodToComplete: eventType === "DELIVERED" }, status: 201 };
+}
 
 async function addTracking(request, env, credential, identifier) {
   if (!keyCanWrite(credential, "tracking:write")) return scopeError("tracking:write");
@@ -346,45 +458,15 @@ async function addTracking(request, env, credential, identifier) {
   if (!shipment) return apiJson({ error: "not_found", message: "Shipment não encontrado." }, 404);
   const body = await request.json().catch(() => null);
   if (!body) return apiJson({ error: "invalid_json", message: "Corpo JSON inválido." }, 400);
-  const eventType = text(body.eventType, 40).toUpperCase();
-  if (!EVENT_TYPES.has(eventType)) return apiJson({ error: "invalid_event", message: "eventType inválido." }, 400);
-  const now = new Date().toISOString();
-  const occurredAt = text(body.occurredAt, 40) || now;
-  if (!Number.isFinite(Date.parse(occurredAt))) return apiJson({ error: "invalid_date", message: "occurredAt inválido." }, 400);
-  const lat = Number(body.latitude);
-  const lng = Number(body.longitude);
-  const eventId = crypto.randomUUID();
-  const nextStatus = eventType === "CANCELLED" ? "cancelled"
-    : eventType === "CREATED" ? shipment.status
-      : "in_progress";
-  const externalEventId = text(body.externalEventId, 160);
-  try {
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO todogreen_tms_tracking_events
-          (id,tenant_id,workspace_owner_id,service_order_id,client_id,event_type,status,location,city,state,
-           latitude,longitude,notes,occurred_at,source,external_event_id,created_by,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      ).bind(
-        eventId, TENANT_ID, credential.workspace_owner_id, shipment.id, shipment.client_id, eventType,
-        nextStatus, text(body.location, 240), text(body.city, 100), text(body.state, 2).toUpperCase(),
-        Number.isFinite(lat) ? lat : null, Number.isFinite(lng) ? lng : null, text(body.notes, 1000),
-        occurredAt, "external_api", externalEventId, `api:${credential.id}`, now,
-      ),
-      env.DB.prepare(
-        `UPDATE todogreen_service_orders SET status=?,revision=revision+1,updated_by=?,updated_at=?
-          WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND status NOT IN ('completed','cancelled')`,
-      ).bind(nextStatus, `api:${credential.id}`, now, shipment.id, TENANT_ID, credential.workspace_owner_id),
-    ]);
-  } catch (error) {
-    if (externalEventId && String(error?.message || error).toLowerCase().includes("unique"))
-      return apiJson({ error: "duplicate_external_event", message: "externalEventId já registrado." }, 409);
-    throw error;
-  }
-  const row = await env.DB.prepare("SELECT * FROM todogreen_tms_tracking_events WHERE id=?").bind(eventId).first();
-  const payload = { event: trackingView(row), shipmentStatus: nextStatus, requiresPodToComplete: eventType === "DELIVERED" };
-  await rememberIdempotency(env, credential, request, idem.key, 201, payload);
-  return apiJson(payload, 201);
+
+  const resultado = await registrarTracking(env, {
+    workspaceOwnerId: credential.workspace_owner_id, shipment, source: "external_api",
+    createdBy: `api:${credential.id}`, body, externalEventId: text(body.externalEventId, 160),
+  });
+  if (resultado.error) return apiJson(resultado.error.payload, resultado.error.status);
+
+  await rememberIdempotency(env, credential, request, idem.key, 201, resultado.payload);
+  return apiJson(resultado.payload, 201);
 }
 
 async function listTracking(env, credential, identifier) {
@@ -398,19 +480,17 @@ async function listTracking(env, credential, identifier) {
   return apiJson({ data: (rows.results || []).map(trackingView) });
 }
 
-async function addPod(request, env, credential, identifier) {
-  if (!keyCanWrite(credential, "pod:write")) return scopeError("pod:write");
-  const idem = await idempotentResult(request, env, credential);
-  if (idem.error) return idem.error;
-  if (idem.response) return idem.response;
-  const shipment = await findShipment(env, credential, identifier);
-  if (!shipment) return apiJson({ error: "not_found", message: "Shipment não encontrado." }, 404);
-  const body = await request.json().catch(() => null);
-  if (!body) return apiJson({ error: "invalid_json", message: "Corpo JSON inválido." }, 400);
+// Núcleo do registro de POD — comprovante de entrega (nome de quem recebeu,
+// e opcionalmente uma imagem/assinatura como data URI ou link). Reusado pela
+// API pública e pelo registro manual no Portal TMS. `documentUrl` aceita um
+// `data:image/...;base64,...` (assinatura capturada na hora) ou um link de
+// verdade — os dois cabem no mesmo campo, sem coluna nova.
+async function registrarPod(env, { workspaceOwnerId, shipment, createdBy, body }) {
   const recipientName = text(body.recipientName, 200);
-  const documentUrl = text(body.documentUrl, 800);
+  const documentUrl = text(body.documentUrl, 200_000);
   if (!recipientName && !documentUrl)
-    return apiJson({ error: "pod_required", message: "Informe recipientName ou documentUrl." }, 400);
+    return { error: { status: 400, payload: { error: "pod_required", message: "Informe quem recebeu ou uma assinatura/foto." } } };
+
   const now = new Date().toISOString();
   const occurredAt = text(body.occurredAt, 40) || now;
   const lat = Number(body.latitude);
@@ -423,32 +503,47 @@ async function addPod(request, env, credential, identifier) {
        document_url,document_hash,latitude,longitude,fields_json,created_by,created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(
-    podId, TENANT_ID, credential.workspace_owner_id, shipment.id, text(body.deliveryId, 120),
+    podId, TENANT_ID, workspaceOwnerId, shipment.id, text(body.deliveryId, 120),
     text(body.kind, 30) || "delivery", occurredAt, recipientName, documentUrl, text(body.documentHash, 200),
     Number.isFinite(lat) ? lat : null, Number.isFinite(lng) ? lng : null,
-    JSON.stringify(object(body.metadata)), `api:${credential.id}`, now,
+    JSON.stringify(object(body.metadata)), createdBy, now,
   )];
   if (complete && !["completed", "cancelled"].includes(shipment.status)) {
     statements.push(env.DB.prepare(
       `UPDATE todogreen_service_orders SET status='completed',completed_at=?,revision=revision+1,updated_by=?,updated_at=?
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND status NOT IN ('completed','cancelled')`,
-    ).bind(occurredAt, `api:${credential.id}`, now, shipment.id, TENANT_ID, credential.workspace_owner_id));
+    ).bind(occurredAt, createdBy, now, shipment.id, TENANT_ID, workspaceOwnerId));
     statements.push(env.DB.prepare(
       `INSERT OR IGNORE INTO todogreen_billing_items
         (id,tenant_id,workspace_owner_id,service_order_id,client_id,contract_id,status,amount,
          competence_date,created_by,updated_by,created_at,updated_at)
        VALUES (?,?,?,?,?,?,'eligible',?,?,?,?,?,?)`,
     ).bind(
-      crypto.randomUUID(), TENANT_ID, credential.workspace_owner_id, shipment.id, shipment.client_id,
+      crypto.randomUUID(), TENANT_ID, workspaceOwnerId, shipment.id, shipment.client_id,
       shipment.contract_id, shipment.net_amount, occurredAt.slice(0, 10),
-      `api:${credential.id}`, `api:${credential.id}`, now, now,
+      createdBy, createdBy, now, now,
     ));
   }
   await env.DB.batch(statements);
   const row = await env.DB.prepare("SELECT * FROM todogreen_proofs_of_delivery WHERE id=?").bind(podId).first();
-  const payload = { pod: podView(row), shipmentStatus: complete ? "completed" : shipment.status, billingEligible: complete };
-  await rememberIdempotency(env, credential, request, idem.key, 201, payload);
-  return apiJson(payload, 201);
+  return { payload: { pod: podView(row), shipmentStatus: complete ? "completed" : shipment.status, billingEligible: complete }, status: 201 };
+}
+
+async function addPod(request, env, credential, identifier) {
+  if (!keyCanWrite(credential, "pod:write")) return scopeError("pod:write");
+  const idem = await idempotentResult(request, env, credential);
+  if (idem.error) return idem.error;
+  if (idem.response) return idem.response;
+  const shipment = await findShipment(env, credential, identifier);
+  if (!shipment) return apiJson({ error: "not_found", message: "Shipment não encontrado." }, 404);
+  const body = await request.json().catch(() => null);
+  if (!body) return apiJson({ error: "invalid_json", message: "Corpo JSON inválido." }, 400);
+
+  const resultado = await registrarPod(env, { workspaceOwnerId: credential.workspace_owner_id, shipment, createdBy: `api:${credential.id}`, body });
+  if (resultado.error) return apiJson(resultado.error.payload, resultado.error.status);
+
+  await rememberIdempotency(env, credential, request, idem.key, 201, resultado.payload);
+  return apiJson(resultado.payload, 201);
 }
 
 async function listPods(env, credential, identifier) {

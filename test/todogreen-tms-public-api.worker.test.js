@@ -117,8 +117,8 @@ describe("To Do Green TMS API externa", () => {
       clientId: seeded.clientId,
       externalReference: `EXT-${suffix}`,
       serviceType: "same_day",
-      origin: { name: "CD Barueri", city: "Barueri", state: "SP" },
-      destination: { name: "Cliente", city: "São Paulo", state: "SP" },
+      origin: { name: "CD Barueri", city: "Barueri", state: "SP", latitude: -23.5108, longitude: -46.8766 },
+      destination: { name: "Cliente", city: "São Paulo", state: "SP", lat: -23.5505, lng: -46.6333 },
       packages: [
         {
           trackId: `TRACK-${suffix}`,
@@ -157,6 +157,23 @@ describe("To Do Green TMS API externa", () => {
       "SELECT COUNT(*) AS total FROM todogreen_service_orders WHERE workspace_owner_id=? AND client_id=?",
     ).bind(seeded.ownerId, seeded.clientId).first();
     expect(Number(orderCount.total)).toBe(1);
+
+    const operacao = await env.DB.prepare(
+      `SELECT so.operation_id, op.reference, op.client_id, op.contract_id, op.pickup_lat, op.pickup_lng,
+              op.delivery_lat, op.delivery_lng, op.fields_json
+         FROM todogreen_service_orders so
+         JOIN todogreen_client_operations op ON op.id = so.operation_id
+        WHERE so.id = ?`,
+    ).bind(created.body.id).first();
+    expect(operacao.operation_id).toBeTruthy();
+    expect(operacao.reference).toBe(created.body.shipmentNumber);
+    expect(operacao.client_id).toBe(seeded.clientId);
+    expect(operacao.contract_id).toBe(contractId);
+    expect(Number(operacao.pickup_lat)).toBeCloseTo(-23.5108);
+    expect(Number(operacao.pickup_lng)).toBeCloseTo(-46.8766);
+    expect(Number(operacao.delivery_lat)).toBeCloseTo(-23.5505);
+    expect(Number(operacao.delivery_lng)).toBeCloseTo(-46.6333);
+    expect(JSON.parse(operacao.fields_json).shipmentId).toBe(created.body.id);
 
     const tracked = await json(await call(`/api/tms/v1/shipments/${created.body.id}/tracking`, {
       method: "POST",

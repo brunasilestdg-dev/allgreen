@@ -31,6 +31,22 @@ export const listTmsApiKeys = () => fetchJson("/api/todogreen/tms-api-keys");
 export const createTmsApiKey = (input) => fetchJson("/api/todogreen/tms-api-keys", { method: "POST", body: input });
 export const revokeTmsApiKey = (id) => fetchJson(`/api/todogreen/tms-api-keys/${encodeURIComponent(id)}`, { method: "DELETE" });
 
+// Cadastro manual de carga/pedido — a mesma regra de negócio da API pública
+// (/api/tms/v1/shipments), só que pela sessão de quem está no painel, sem
+// precisar de chave.
+export const listTmsManualClients = () => fetchJson("/api/todogreen/tms-manual/clients");
+export const listTmsManualContracts = (clientId) =>
+  fetchJson(`/api/todogreen/tms-manual/contracts?clientId=${encodeURIComponent(clientId)}`);
+export const createTmsShipmentManual = (input) =>
+  fetchJson("/api/todogreen/tms-manual/shipments", { method: "POST", body: input });
+export const listTmsFleetPositions = () => fetchJson("/api/todogreen/tms-manual/positions");
+export const registerTmsPodManual = (shipmentId, input) =>
+  fetchJson(`/api/todogreen/tms-manual/shipments/${encodeURIComponent(shipmentId)}/pod`, { method: "POST", body: input });
+
+// Bipagem: leitor físico (digita o código + Enter, como um teclado), câmera
+// do celular ou digitação manual — os três chamam esta mesma função.
+export const scanTmsTrackId = (input) => fetchJson("/api/todogreen/tms-manual/scan", { method: "POST", body: input });
+
 const openStatus = (status) => ![
   "completed", "concluida", "delivered", "entregue", "cancelled", "canceled", "cancelado",
 ].includes(String(status || "").toLowerCase());
