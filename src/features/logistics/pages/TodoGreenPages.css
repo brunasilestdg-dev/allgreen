@@ -691,6 +691,11 @@
 .tdg-crm-card-grid header b { align-items: center; background: var(--tdg-soft); border-radius: 50%; color: var(--tdg-green); display: inline-flex; flex: 0 0 auto; height: 36px; justify-content: center; width: 36px; }
 .tdg-crm-card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .tdg-crm-card-tags em { background: #f1f6f3; border-radius: 999px; color: #52675f; font-size: 9.5px; font-style: normal; font-weight: 750; padding: 5px 7px; }
+/* O alerta principal da conta — o PORQUÊ de ela pedir atenção, na própria
+   lista. Crítico em vermelho, atenção em âmbar; o resto do chip herda o pill. */
+.tdg-crm-card-tags em.tdg-crm-card-alerta { align-items: center; display: inline-flex; gap: 3px; }
+.tdg-crm-card-tags em.tdg-crm-card-alerta.critical { background: #fdecea; color: #a5271a; }
+.tdg-crm-card-tags em.tdg-crm-card-alerta.attention { background: #fef4e2; color: #92600c; }
 .tdg-crm-card-grid dl { border-block: 1px solid #e5ece8; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0; padding: 10px 0; }
 .tdg-crm-card-grid dl div { display: grid; gap: 2px; padding: 0 8px; }
 .tdg-crm-card-grid dl div + div { border-left: 1px solid #e5ece8; }

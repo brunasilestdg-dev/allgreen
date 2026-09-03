@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   accountHealth,
+  alertaPrincipal,
+  alertasOrdenados,
   calculateAccountScore,
   calculateRelationshipCoverage,
   buildCrmCommandCenter,
@@ -14,6 +16,20 @@ import {
   recommendNextCommercialAction,
   TODO_GREEN_RELATIONSHIP_ROLES,
 } from "./todoGreenCrmDomain.js";
+
+describe("alerta principal da conta (o porquê no cartão)", () => {
+  it("ordena por severidade e elege o mais grave como crítico", () => {
+    const summary = { alerts: ["Mapa de decisores incompleto", "Próxima ação atrasada", "Dados insuficientes para decisão"] };
+    expect(alertasOrdenados(summary)[0]).toBe("Próxima ação atrasada");
+    expect(alertaPrincipal(summary)).toEqual({ rotulo: "Próxima ação atrasada", severidade: "critical" });
+  });
+
+  it("alerta não crítico vira atenção, conta saudável não tem alerta", () => {
+    expect(alertaPrincipal({ alerts: ["Sem próxima ação definida"] })).toEqual({ rotulo: "Sem próxima ação definida", severidade: "attention" });
+    expect(alertaPrincipal({ alerts: [] })).toBeNull();
+    expect(alertaPrincipal({})).toBeNull();
+  });
+});
 
 describe("To Do Green enterprise CRM", () => {
   it("normalizes an enterprise account without inventing commercial data", () => {

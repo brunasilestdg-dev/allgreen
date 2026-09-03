@@ -350,6 +350,39 @@ export const recommendNextCommercialAction = ({ account = {}, contacts = [], opp
   return account.nextAction;
 };
 
+// Gravidade dos alertas de uma conta, do mais urgente ao menos. A lista do CRM
+// mostra o alerta principal em cada cartão — o PORQUÊ da conta pedir atenção,
+// não só a cor. `accountHealth.alerts` empilha na ordem em que detecta; aqui a
+// ordem é por severidade, uma só, para o cartão e um eventual relatório
+// concordarem sobre qual mostrar primeiro.
+const GRAVIDADE_DO_ALERTA = [
+  "Próxima ação atrasada",
+  "Risco comercial elevado",
+  "Sem próxima ação definida",
+  "Mapa de decisores incompleto",
+  "Dados insuficientes para decisão",
+  "Sem oportunidade de expansão registrada",
+];
+
+export const alertasOrdenados = (summary = {}) => {
+  const alerts = Array.isArray(summary.alerts) ? summary.alerts : [];
+  const rank = (a) => {
+    const i = GRAVIDADE_DO_ALERTA.indexOf(a);
+    return i === -1 ? GRAVIDADE_DO_ALERTA.length : i;
+  };
+  return [...alerts].sort((a, b) => rank(a) - rank(b));
+};
+
+// O alerta principal de uma conta (o mais grave), ou "" quando a conta está
+// saudável. Traz junto a severidade para a cor do chip: crítico quando é ação
+// atrasada ou risco elevado, senão atenção.
+export const alertaPrincipal = (summary = {}) => {
+  const [topo] = alertasOrdenados(summary);
+  if (!topo) return null;
+  const critico = topo === "Próxima ação atrasada" || topo === "Risco comercial elevado";
+  return { rotulo: topo, severidade: critico ? "critical" : "attention" };
+};
+
 export const crmAccountSummary = (account = {}, contacts = [], opportunities = []) => {
   const health = accountHealth(account, contacts, opportunities);
   return {
