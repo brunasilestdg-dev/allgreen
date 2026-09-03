@@ -55,3 +55,14 @@ describe("indicadores acionáveis do CRM", () => {
     expect(clientsSource).toContain('setViewMode("cards")');
   });
 });
+
+
+describe("geometria dos botões do menu", () => {
+  it("preserva alinhamento à esquerda, largura e seta compacta do acordeão", () => {
+    expect(css).toContain(".tdg .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child");
+    expect(css).toContain("justify-content: flex-start");
+    expect(css).toContain(".tdg .tdg-erp-sidebar .tdg-nav-area-itens button");
+    expect(css).toContain(".tdg .tdg-erp-sidebar .tdg-nav-area-seta");
+    expect(css).toMatch(/flex:\s*0 0 28px/);
+  });
+});

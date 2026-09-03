@@ -113,6 +113,63 @@
   color: #842020;
 }
 
+/* O menu tem botões de navegação próprios: preservar a geometria do acordeão. */
+.tdg .tdg-erp-sidebar button {
+  max-width: 100%;
+  box-shadow: none;
+  transform: none;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-seta {
+  display: inline-flex;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens button {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 31px;
+  padding: 6px 9px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-switch button {
+  min-height: 32px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-switch button.active {
+  background: var(--tdg-card, #fff);
+}
+
+.tdg .tdg-erp-sidebar button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
 /* Acesso: produto operacional, não landing page vazia */
 .auth-shell:has(.tdg-auth-marca) {
   width: 100%;
