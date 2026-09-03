@@ -1626,15 +1626,19 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       ? "/portal-cliente"
       : entryPortal === "motorista"
         ? "/portal-motorista"
-        : entradaToDoGreen
-          ? "/todogreen"
-          : "";
+        : entryPortal === "tms"
+          ? "/portal-tms"
+          : entradaToDoGreen
+            ? "/todogreen"
+            : "";
   const tituloDoAcesso =
     entryPortal === "cliente"
       ? "Entre no Portal do Cliente"
       : entryPortal === "motorista"
         ? "Entre no Portal do Motorista"
-        : "Entre no ambiente To Do Green";
+        : entryPortal === "tms"
+          ? "Entre no Portal TMS"
+          : "Entre no ambiente To Do Green";
   const [mode, setMode] = useState("login");
   useEffect(() => {
     if (entradaToDoGreen)
@@ -1643,7 +1647,9 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
           ? "To Do Green | Portal do Cliente"
           : entryPortal === "motorista"
             ? "To Do Green | Portal do Motorista"
-            : "To Do Green";
+            : entryPortal === "tms"
+              ? "To Do Green | Portal TMS"
+              : "To Do Green";
   }, [entradaToDoGreen, entryPortal]);
 
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -2105,6 +2111,14 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
               onClick={() => window.location.assign("/portal-motorista")}
             >
               Portal do Motorista
+            </button>
+            <button
+              type="button"
+              className={entryPortal === "tms" ? "active" : ""}
+              aria-pressed={entryPortal === "tms"}
+              onClick={() => window.location.assign("/portal-tms")}
+            >
+              Portal TMS
             </button>
           </div>
           {!entradaToDoGreen && (

@@ -19,7 +19,8 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   if (!authenticated) {
     // A raiz é a porta da To Do Green; TMS e vertical usam a mesma identidade,
     // mas cada portal preserva o contexto escolhido durante o login.
-    if (path === "/" || /^\/(?:todogreen|portal-tms)(?:\/|$)/.test(path))
+    if (/^\/portal-tms(?:\/|$)/.test(path)) return { kind: "tms-login" };
+    if (path === "/" || /^\/todogreen(?:\/|$)/.test(path))
       return { kind: "todogreen-login" };
     if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-login" };
     if (/^\/(?:portal-motorista|central-motorista)(?:\/|$)/.test(path))
@@ -57,6 +58,8 @@ export default function PrimaryAppRouter({
     return <AcceptInvite db={db} update={update} token={route.token} onAuthenticated={onAuthenticated} />;
   if (route.kind === "login") return <Login update={update} onAuthenticated={onAuthenticated} />;
   if (route.kind === "todogreen-login") return <Login update={update} vertical onAuthenticated={onAuthenticated} />;
+  if (route.kind === "tms-login")
+    return <Login update={update} entryPortal="tms" onAuthenticated={onAuthenticated} />;
   if (route.kind === "customer-login")
     return <Login update={update} entryPortal="cliente" onAuthenticated={onAuthenticated} />;
   if (route.kind === "driver-login")

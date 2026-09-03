@@ -246,7 +246,21 @@
 .tdg-forecast-dimensao-linhas small { color: var(--tdg-muted); font-size: 10.5px; }
 .tdg-forecast-dimensao-linhas b { color: var(--tdg-green); font-size: 11px; }
 .tdg-forecast-travas-lista { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 6px; }
-.tdg-forecast-travas-lista article { background: #fff8ef; border: 1px solid color-mix(in srgb, #c4700b 35%, var(--tdg-line)); border-radius: 10px; padding: 10px; }
+.tdg-forecast-travas-lista .tdg-forecast-trava-card {
+  background: #fff8ef; border: 1px solid color-mix(in srgb, #c4700b 35%, var(--tdg-line));
+  border-radius: 10px; cursor: pointer; display: block; font: inherit; padding: 10px;
+  text-align: left; width: 100%;
+}
+.tdg-forecast-travas-lista .tdg-forecast-trava-card:hover { background: #ffefd6; border-color: #c4700b; }
+.tdg-opp-pendencia-filtro {
+  align-items: center; background: #fff8ef; border: 1px solid color-mix(in srgb, #c4700b 35%, var(--tdg-line));
+  border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 10px; padding: 8px 12px;
+}
+.tdg-opp-pendencia-filtro span { color: var(--tdg-ink); font-size: 12px; }
+.tdg-opp-pendencia-filtro button {
+  background: transparent; border: 1px solid #c4700b; border-radius: 999px; color: #c4700b;
+  cursor: pointer; font-size: 12px; font-weight: 600; padding: 4px 12px; white-space: nowrap;
+}
 .tdg-forecast-travas-lista header { align-items: center; display: flex; justify-content: space-between; }
 .tdg-forecast-travas-lista header strong { font-size: 12px; }
 .tdg-forecast-travas-lista header b { background: #c4700b; border-radius: 999px; color: #fff; font-size: 11px; min-width: 20px; padding: 1px 7px; text-align: center; }
@@ -657,6 +671,13 @@
 .tdg-crm-intelligence > div:first-of-type { border-top: 0; }
 .tdg-crm-intelligence span, .tdg-crm-intelligence small { color: var(--tdg-muted); font-size: 10.5px; }
 .tdg-crm-intelligence strong { color: #1e493c; font-size: 12px; line-height: 1.45; }
+/* "Próxima tarefa sugerida" agora é clicável: vira tarefa no clique, mesma
+   ação do banner. Herda o visual das linhas irmãs e ganha realce no hover. */
+.tdg-crm-intelligence > .tdg-crm-intel-task {
+  background: transparent; border: 0; border-top: 1px solid #dbe8e1; cursor: pointer;
+  display: grid; font: inherit; gap: 3px; padding: 9px 6px; text-align: left; width: 100%;
+}
+.tdg-crm-intelligence > .tdg-crm-intel-task:hover { background: #e3efe8; }
 .tdg-crm-web-intelligence { background: #fff; border: 1px solid #bcd5c9 !important; display: grid; gap: 10px; }
 .tdg-crm-web-intelligence > header { align-items: center; display: flex; justify-content: space-between; }
 .tdg-crm-web-intelligence > header div { display: grid; gap: 2px; }
@@ -1523,11 +1544,34 @@
 
 .tdg-planner-head { display: grid; gap: 12px; margin-bottom: 14px; }
 .tdg-planner-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+/* Botão que recolhe/expande os painéis de análise (pedido da titular: tela
+   limpa por padrão, análise a um clique). Discreto, alinhado à direita. */
+.tdg-analise-toggle { display: flex; justify-content: flex-end; margin: 2px 0 10px; }
+.tdg-analise-toggle button {
+  background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 999px;
+  color: var(--tdg-muted); cursor: pointer; font-size: 12px; font-weight: 600;
+  min-height: 32px; padding: 5px 14px;
+}
+.tdg-analise-toggle button:hover { color: var(--tdg-ink); border-color: var(--tdg-ink); }
+.tdg-planner-radar { display: flex; flex-wrap: wrap; gap: 8px; }
+.tdg-planner-radar-sinal {
+  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line);
+  border-radius: 999px; color: var(--tdg-muted); display: inline-flex; font-size: 12px;
+  font-weight: 600; gap: 6px; padding: 4px 11px;
+}
+.tdg-planner-radar-sinal.urgente { background: #fde7e3; border-color: #f4b7ab; color: #b02a12; }
+.tdg-planner-radar-sinal.total { background: transparent; color: var(--tdg-ink); }
 .tdg-planner-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
 .tdg-planner-search {
   background: #fff; border: 1px solid var(--tdg-line); border-radius: 10px; color: var(--tdg-ink);
   flex: 1; min-height: 40px; min-width: 180px; padding: 9px 12px;
 }
+.tdg-planner-analise-btn {
+  background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 10px;
+  color: var(--tdg-muted); cursor: pointer; font-size: 13px; font-weight: 600;
+  min-height: 40px; padding: 0 14px;
+}
+.tdg-planner-analise-btn:hover { color: var(--tdg-ink); border-color: var(--tdg-ink); }
 .tdg-planner-cortes { display: inline-flex; background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 10px; overflow: hidden; }
 .tdg-planner-cortes button {
   align-items: center; background: transparent; border: 0; color: var(--tdg-muted); cursor: pointer;

@@ -27,6 +27,17 @@
   font-weight: 800;
   cursor: pointer;
 }
+/* O texto do botão herdava um verde escuro do tema To Do Green e ficava
+   ilegível sobre o fundo verde. Trava o rótulo e o ícone em branco, com
+   especificidade acima de qualquer regra de tema, e não deixa quebrar linha. */
+.me-dropzone .me-upload,
+.me-dropzone .me-upload span,
+.me-dropzone .me-upload svg {
+  color: #fff;
+}
+.me-dropzone .me-upload span {
+  white-space: nowrap;
+}
 .me-upload input {
   display: none;
 }

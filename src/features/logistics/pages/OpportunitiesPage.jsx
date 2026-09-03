@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Calculator,
@@ -637,6 +637,26 @@ export default function OpportunitiesPage({
   }, [authHeaders]);
   const [filtroEstagio, setFiltroEstagio] = useState("todas");
   const [busca, setBusca] = useState("");
+  // Clicar num cartão de "O que trava o forecast" filtra o pipeline exatamente
+  // para aquelas oportunidades (não manda para tarefa nenhuma). { rotulo, ids:Set }
+  const [filtroPendencia, setFiltroPendencia] = useState(null);
+  const abrirPendencia = (trava) => {
+    setFiltroPendencia({ rotulo: trava.rotulo, ids: new Set(trava.ids || []) });
+    setFiltroEstagio("todas");
+    setBusca("");
+    trocarVisao("lista");
+  };
+  // A análise do forecast (concentração, por etapa, travas, projeção mensal) fica
+  // recolhida por padrão — pedido da titular (03/09): tela limpa, e um botão traz
+  // a leitura quando ela quiser. A escolha fica gravada por navegador.
+  const [analiseAberta, setAnaliseAberta] = useState(() => {
+    try { return localStorage.getItem("todogreen-opp-analise") === "1"; } catch { return false; }
+  });
+  const alternarAnalise = () => setAnaliseAberta((v) => {
+    const proximo = !v;
+    try { localStorage.setItem("todogreen-opp-analise", proximo ? "1" : "0"); } catch { /* ok */ }
+    return proximo;
+  });
   const [visao, setVisao] = useState(() => {
     // O kanban simplificado é a visão pedida pela titular como padrão do
     // pipeline; a lista continua a um clique e a escolha fica gravada.
@@ -657,11 +677,23 @@ export default function OpportunitiesPage({
     });
   };
 
+  // A conta vinda pela URL (?client=) pré-preenche o formulário UMA vez, quando
+  // ela aparece na lista carregada. Sem a trava, todo refetch de `clients`
+  // reaplicava a conta da URL e sobrescrevia a que a pessoa acabou de escolher —
+  // dava a impressão de que "não salva o cliente".
+  const clienteDaUrlAplicado = useRef(false);
   useEffect(() => {
+    if (clienteDaUrlAplicado.current) return;
     const clientId = new URLSearchParams(window.location.search).get("client") || "";
+    if (!clientId) {
+      clienteDaUrlAplicado.current = true;
+      return;
+    }
     const client = clients.find((item) => item.id === clientId);
-    if (client)
+    if (client) {
       setForm((current) => ({ ...current, clientId: client.id, cliente: client.name }));
+      clienteDaUrlAplicado.current = true;
+    }
   }, [clients]);
 
   const registros = useMemo(
@@ -711,8 +743,9 @@ export default function OpportunitiesPage({
   const visiveis = useMemo(() => registros.filter((registro) => {
     const stageMatches = filtroEstagio === "todas" || registro.estagio === filtroEstagio;
     const queryMatches = `${tituloDaOportunidade(registro)} ${registro.cliente} ${registro.nextStep || ""} ${registro.source || ""}`.toLowerCase().includes(busca.toLowerCase());
-    return stageMatches && queryMatches;
-  }), [busca, filtroEstagio, registros]);
+    const pendenciaMatches = !filtroPendencia || filtroPendencia.ids.has(registro.id);
+    return stageMatches && queryMatches && pendenciaMatches;
+  }), [busca, filtroEstagio, filtroPendencia, registros]);
 
   const campo = (key) => (event) =>
     setForm((atual) => ({ ...atual, [key]: event.target.value }));
@@ -800,6 +833,13 @@ export default function OpportunitiesPage({
         </article>
       </div>
 
+      <div className="tdg-analise-toggle">
+        <button type="button" aria-expanded={analiseAberta} onClick={alternarAnalise}>
+          {analiseAberta ? "Ocultar análise do forecast" : "Ver análise do forecast"}
+        </button>
+      </div>
+
+      {analiseAberta && (<>
       <section className="tdg-pipeline-strip" aria-label="Forecast comercial mensal">
         {forecast.meses.map((item) => <article key={item.mes}><strong>{new Date(`${item.mes}-01T00:00:00Z`).toLocaleDateString("pt-BR", { month: "short", year: "numeric", timeZone: "UTC" })}</strong><span>{item.quantidade} negócio(s)</span><small>{BRL.format(item.commit)} commit · {BRL.format(item.ponderado)} ponderado · {BRL.format(item.bestCase)} best case</small></article>)}
       </section>
@@ -834,14 +874,15 @@ export default function OpportunitiesPage({
           <span className="tdg-kicker">O QUE TRAVA O FORECAST</span>
           <div className="tdg-forecast-travas-lista">
             {forecast.pendencias.map((trava) => (
-              <article key={trava.id}>
+              <button type="button" className="tdg-forecast-trava-card" key={trava.id} onClick={() => abrirPendencia(trava)} title="Ver estas oportunidades na lista">
                 <header><strong>{trava.rotulo}</strong><b>{trava.quantidade}</b></header>
                 <p>{trava.contas.join(" · ")}{trava.restantes > 0 ? ` · +${trava.restantes}` : ""}</p>
-              </article>
+              </button>
             ))}
           </div>
         </section>
       )}
+      </>)}
 
       {/* Ação em janela própria: o formulário não corta mais a página entre o
           forecast e o pipeline (pedido da titular, 30/08). Em erro o modal
@@ -930,6 +971,12 @@ export default function OpportunitiesPage({
         <button type="button" className={filtroEstagio === "todas" ? "active" : ""} onClick={() => setFiltroEstagio("todas")}><strong>Pipeline completo</strong><span>{registros.length} negócio(s)</span><small>{BRL.format(resumo.valorTotal)}</small></button>
         {etapas.map((item) => <button type="button" className={filtroEstagio === item.estagio ? "active" : ""} onClick={() => setFiltroEstagio(item.estagio)} key={item.estagio}><strong>{item.estagio}</strong><span>{item.quantidade} negócio(s)</span><small>{BRL.format(item.valor)}</small></button>)}
       </section>
+      {filtroPendencia && (
+        <div className="tdg-opp-pendencia-filtro" role="status">
+          <span>Filtrando: <strong>{filtroPendencia.rotulo}</strong> · {visiveis.length} oportunidade(s)</span>
+          <button type="button" onClick={() => setFiltroPendencia(null)}>Limpar filtro</button>
+        </div>
+      )}
       <div className="tdg-opp-toolbar"><Search size={17} /><input aria-label="Buscar oportunidades" placeholder="Buscar por conta, próximo passo ou origem" value={busca} onChange={(event) => setBusca(event.target.value)} />{filtroEstagio !== "todas" && <button type="button" onClick={() => setFiltroEstagio("todas")}>Limpar etapa</button>}
         <div className="tdg-view-switch" role="tablist" aria-label="Visão das oportunidades">
           <button type="button" role="tab" aria-selected={visao === "lista"} className={visao === "lista" ? "active" : ""} onClick={() => trocarVisao("lista")}>Lista</button>

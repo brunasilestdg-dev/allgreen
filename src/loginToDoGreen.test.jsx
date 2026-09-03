@@ -45,5 +45,6 @@ describe("tela de entrada por rota", () => {
     expect(screen.getByRole("button", { name: "Equipe To Do Green" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Portal do Cliente" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Portal do Motorista" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Portal TMS" })).toBeTruthy();
   });
 });

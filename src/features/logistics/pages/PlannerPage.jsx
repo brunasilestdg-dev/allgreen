@@ -22,6 +22,7 @@ import {
   prioridadesDoPlano,
   progressoNumerico,
   resumoDoCompartilhamento,
+  resumoInteligente,
   resumoPlano,
   sinaisDaTarefa,
   tarefaAtendeBusca,
@@ -118,6 +119,16 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
   const [pessoas, setPessoas] = useState([]);
   const [corte, setCorte] = useState("balde");
   const [busca, setBusca] = useState("");
+  // Radar e "Faça agora" ficam recolhidos por padrão (pedido da titular, 03/09:
+  // tela limpa). Um botão traz a análise; a escolha fica gravada por navegador.
+  const [analiseAberta, setAnaliseAberta] = useState(() => {
+    try { return window.localStorage.getItem("todogreen-planner-analise") === "1"; } catch { return false; }
+  });
+  const alternarAnalise = () => setAnaliseAberta((v) => {
+    const proximo = !v;
+    try { window.localStorage.setItem("todogreen-planner-analise", proximo ? "1" : "0"); } catch { /* ok */ }
+    return proximo;
+  });
   const [ocupado, setOcupado] = useState("carregando");
   const [erro, setErro] = useState("");
   const [semAcesso, setSemAcesso] = useState(false);
@@ -309,6 +320,10 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
     [tarefasFiltradas, corte, planoAtivo],
   );
   const resumo = useMemo(() => resumoPlano(tarefas), [tarefas]);
+  // Radar do plano: contagem agregada dos sinais que pedem ação e que a faixa de
+  // métricas não mostra (vence hoje, vence em breve, sem responsável, em risco).
+  // Só aparece o que for maior que zero — plano tranquilo não vira ruído.
+  const radar = useMemo(() => resumoInteligente(tarefas, { hoje: hoje() }), [tarefas]);
   // A fila do "faça agora" do plano ativo: o que pede ação hoje, ranqueado pela
   // urgência derivada dos dados (prazo, prioridade, responsável) — não digitada.
   const prioridades = useMemo(() => prioridadesDoPlano(tarefas, { hoje: hoje() }), [tarefas]);
@@ -413,6 +428,14 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
                   <div className="tdg-metric"><strong>{resumo.atrasadas(hoje())}</strong><span>Atrasadas</span></div>
                   <div className="tdg-metric"><strong>{resumo.progressoMedio}%</strong><span>Progresso</span></div>
                 </div>
+                {analiseAberta && radar.emRisco > 0 && (
+                  <div className="tdg-planner-radar" role="status" aria-label="Sinais que pedem ação no plano">
+                    {radar.venceHoje > 0 && <span className="tdg-planner-radar-sinal urgente">{radar.venceHoje} vence(m) hoje</span>}
+                    {radar.venceEmBreve > 0 && <span className="tdg-planner-radar-sinal">{radar.venceEmBreve} vence(m) em breve</span>}
+                    {radar.semResponsavel > 0 && <span className="tdg-planner-radar-sinal">{radar.semResponsavel} sem responsável</span>}
+                    <span className="tdg-planner-radar-sinal total">{radar.emRisco} em risco no total</span>
+                  </div>
+                )}
                 <div className="tdg-planner-controls">
                   <input
                     type="search"
@@ -431,6 +454,9 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
                       );
                     })}
                   </div>
+                  <button type="button" className="tdg-planner-analise-btn" aria-expanded={analiseAberta} onClick={alternarAnalise} title="Mostrar ou esconder o radar e o 'Faça agora'">
+                    {analiseAberta ? "Ocultar análise" : "Ver análise"}
+                  </button>
                   {souDono && (
                     <button type="button" className="tdg-planner-share-btn" onClick={() => setPartilhaEmEdicao(planoAtivo)} title="Escolher com quem compartilhar este plano">
                       {modoDoPlano(planoAtivo) === "privado" ? <Lock size={14} /> : <Users size={14} />}
@@ -445,7 +471,7 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
                 </div>
               </div>
 
-              {prioridades.length > 0 && (
+              {analiseAberta && prioridades.length > 0 && (
                 <div className="tdg-planner-focus">
                   <div className="tdg-planner-focus-head">
                     <Zap size={15} />

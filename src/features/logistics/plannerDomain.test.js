@@ -81,6 +81,15 @@ describe("camada inteligente do Planner", () => {
     const r = resumoInteligente(tarefas, { hoje: HOJE });
     expect(r).toMatchObject({ atrasadas: 1, venceHoje: 1, semResponsavel: 1, emRisco: 3 });
   });
+
+  it("plano tranquilo zera todos os sinais — é o que faz o radar sumir da tela", () => {
+    const tarefas = [
+      { id: "a", dueDate: "2026-12-31", assigneeUserId: "u1" }, // longe, com dono
+      { id: "b", progress: "concluida" }, // concluída, fora
+    ];
+    const r = resumoInteligente(tarefas, { hoje: HOJE });
+    expect(r).toEqual({ atrasadas: 0, venceHoje: 0, venceEmBreve: 0, semResponsavel: 0, emRisco: 0 });
+  });
 });
 
 describe("normalização de enums", () => {

@@ -24,12 +24,14 @@ describe("roteador principal", () => {
     expect(resolvePrimaryRoute("/", false).kind).toBe("todogreen-login");
     expect(resolvePrimaryRoute("/portal-cliente", false).kind).toBe("customer-login");
     expect(resolvePrimaryRoute("/portal-motorista", false).kind).toBe("driver-login");
+    // O TMS tem a própria entrada no login (aba "Portal TMS"), como cliente e
+    // motorista — para quem entra pelo TMS voltar ao TMS depois de autenticar.
+    expect(resolvePrimaryRoute("/portal-tms", false).kind).toBe("tms-login");
   });
 
-  it("usa o login da To Do Green para TMS e rotas internas sem sessão", () => {
+  it("usa o login da To Do Green para as rotas internas sem sessão", () => {
     expect(resolvePrimaryRoute("/todogreen/clientes", false).kind).toBe("todogreen-login");
-    expect(resolvePrimaryRoute("/portal-tms", false).kind).toBe("todogreen-login");
-    expect(resolvePrimaryRoute("/portal-tms/fiscal", false).kind).toBe("todogreen-login");
+    expect(resolvePrimaryRoute("/portal-tms/fiscal", false).kind).toBe("tms-login");
   });
 
   it("abre o convite individual da To Do Green sem reutilizar uma sessão", () => {

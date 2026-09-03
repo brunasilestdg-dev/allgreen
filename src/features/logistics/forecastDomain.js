@@ -174,12 +174,15 @@ export function pendenciasDoForecast({ oportunidades = [], diasParados = 21, hoj
     return Number.isFinite(marca) ? Math.floor((Date.parse(hoje) - marca) / 86400000) : null;
   };
 
+  const oid = (item) => item.id || item.opportunityId || "";
   return [
-    { id: "sem-data", rotulo: "Sem data prevista de fechamento", contas: abertas.filter((item) => !mes(dataDeFechamento(item))).map(nome) },
-    { id: "sem-probabilidade", rotulo: "Sem probabilidade informada", contas: abertas.filter((item) => !numero(item.probabilidade)).map(nome) },
-    { id: "sem-proximo-passo", rotulo: "Sem próximo passo definido", contas: abertas.filter((item) => !texto(item.proximoPasso || item.nextStep)).map(nome) },
-    { id: "parada", rotulo: `Sem movimento há mais de ${diasParados} dias`, contas: abertas.filter((item) => { const dias = idade(item); return dias !== null && dias > diasParados; }).map(nome) },
+    { id: "sem-data", rotulo: "Sem data prevista de fechamento", itens: abertas.filter((item) => !mes(dataDeFechamento(item))) },
+    { id: "sem-probabilidade", rotulo: "Sem probabilidade informada", itens: abertas.filter((item) => !numero(item.probabilidade)) },
+    { id: "sem-proximo-passo", rotulo: "Sem próximo passo definido", itens: abertas.filter((item) => !texto(item.proximoPasso || item.nextStep)) },
+    { id: "parada", rotulo: `Sem movimento há mais de ${diasParados} dias`, itens: abertas.filter((item) => { const dias = idade(item); return dias !== null && dias > diasParados; }) },
   ]
-    .filter((item) => item.contas.length)
-    .map((item) => ({ ...item, quantidade: item.contas.length, contas: item.contas.slice(0, 6), restantes: Math.max(0, item.contas.length - 6) }));
+    .filter((item) => item.itens.length)
+    // `ids` alimenta o clique no cartão (leva ao filtro exato dessas oportunidades);
+    // `contas` continua sendo os até 6 nomes mostrados no cartão.
+    .map((item) => ({ id: item.id, rotulo: item.rotulo, quantidade: item.itens.length, ids: item.itens.map(oid).filter(Boolean), contas: item.itens.map(nome).slice(0, 6), restantes: Math.max(0, item.itens.length - 6) }));
 }
