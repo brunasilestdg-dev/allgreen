@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -39,6 +39,12 @@ import "./TmsApiManager.css";
 // no RoteirizacaoPage — mesma técnica, mesma folha.
 import "./pages/TodoGreenPages.css";
 
+// Roteirização dinâmica de verdade: a mesma tela que já otimiza a ordem das
+// paradas, calcula recarga, pedágio e carregadores no ERP, agora dentro do
+// portal TMS (antes aqui só havia painel de vitrine). Lazy para não pesar o
+// bundle de quem abre o TMS só para ver a torre de controle.
+const RoteirizacaoDinamica = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
+
 const SECTIONS = [
   { id: "controle", label: "Torre de controle", icon: Gauge },
   { id: "mapa", label: "Mapa de frota", icon: MapPinned },
@@ -75,9 +81,21 @@ function StatusPill({ value }) {
   return <span className={`tms-status ${tone}`}>{labelStatus(value)}</span>;
 }
 
-function Metric({ label, value, detail, alert = false }) {
+function Metric({ label, value, detail, alert = false, onClick, acao }) {
+  const classe = `tms-metric ${alert && Number(value) > 0 ? "is-alert" : ""}${onClick ? " is-acao" : ""}`;
+  // Central de ação: o indicador não é só número, é a porta pra resolver. Quando
+  // tem para onde levar, vira botão que navega direto pra seção que trata a fila.
+  if (onClick) {
+    return (
+      <button type="button" className={classe} onClick={onClick}>
+        <span>{label}</span>
+        <strong>{value ?? 0}</strong>
+        <small>{acao || detail}</small>
+      </button>
+    );
+  }
   return (
-    <article className={`tms-metric ${alert && Number(value) > 0 ? "is-alert" : ""}`}>
+    <article className={classe}>
       <span>{label}</span>
       <strong>{value ?? 0}</strong>
       <small>{detail}</small>
@@ -416,13 +434,13 @@ function ControlTower({ data, onSection }) {
   return (
     <>
       <div className="tms-metrics">
-        <Metric label="OS abertas" value={indicators.ordersOpen} detail="pedidos ainda em execução" />
-        <Metric label="Em trânsito" value={indicators.operationsInTransit} detail="movimentações sem conclusão" />
-        <Metric label="TMS sem vínculo" value={indicators.unlinkedExternalDocs} detail="documentos para tratar" alert />
-        <Metric label="Faturar" value={indicators.billingPending} detail="itens elegíveis" />
-        <Metric label="CT-e pendente" value={indicators.ctePending} detail="ainda não autorizado" alert />
-        <Metric label="MDF-e pendente" value={indicators.mdfePending} detail="ainda não autorizado" alert />
-        <Metric label="CIOT pendente" value={indicators.ciotPending} detail="ainda não emitido" alert />
+        <Metric label="OS abertas" value={indicators.ordersOpen} detail="pedidos ainda em execução" acao="Abrir cargas e pedidos →" onClick={() => onSection("cargas")} />
+        <Metric label="Em trânsito" value={indicators.operationsInTransit} detail="movimentações sem conclusão" acao="Acompanhar viagens →" onClick={() => onSection("viagens")} />
+        <Metric label="TMS sem vínculo" value={indicators.unlinkedExternalDocs} detail="documentos para tratar" alert acao="Tratar em cargas e pedidos →" onClick={() => onSection("cargas")} />
+        <Metric label="Faturar" value={indicators.billingPending} detail="itens elegíveis" acao="Ir para faturamento →" onClick={() => onSection("faturamento")} />
+        <Metric label="CT-e pendente" value={indicators.ctePending} detail="ainda não autorizado" alert acao="Emitir no fiscal →" onClick={() => onSection("fiscal")} />
+        <Metric label="MDF-e pendente" value={indicators.mdfePending} detail="ainda não autorizado" alert acao="Emitir no fiscal →" onClick={() => onSection("fiscal")} />
+        <Metric label="CIOT pendente" value={indicators.ciotPending} detail="ainda não emitido" alert acao="Emitir no fiscal →" onClick={() => onSection("fiscal")} />
       </div>
 
       <section className="tms-panel">
@@ -457,53 +475,27 @@ function ControlTower({ data, onSection }) {
   );
 }
 
-function ElectricRouting({ rows = [] }) {
+// Roteirização do TMS: hero elétrico enxuto + o otimizador real embutido. A
+// tela abaixo é a mesma do ERP (múltiplas paradas, "Otimizar ordem", recarga
+// 1h30, pedágios, carregadores para pesados) — deixou de ser vitrine e virou
+// ferramenta de trabalho dentro do portal.
+function ElectricRouting({ setToast }) {
   return (
-    <>
+    <div className="tms-stack">
       <section className="tms-panel tms-route-hero tms-electric-hero">
         <BatteryCharging size={30} />
         <div>
-          <span>ROTEIRIZAÇÃO ELÉTRICA NATIVA</span>
-          <h2>A rota entende bateria, carga e carregador</h2>
-          <p>O planejamento cruza autonomia real, peso transportado, reserva mínima, conector, potência, acesso para pesados e impacto total da recarga no SLA.</p>
+          <span>ROTEIRIZAÇÃO ELÉTRICA DINÂMICA</span>
+          <h2>Planeje a rota entendendo bateria, carga e carregador</h2>
+          <p>Adicione as paradas abaixo, otimize a ordem para tirar o zigue-zague, marque as recargas (soma 1h30 cada), veja pedágios e carregadores com foco em pesados. Autonomia, reserva e conector entram na conta.</p>
         </div>
-        <span className="tms-electric-live"><Zap size={14} /> API ativa</span>
+        <span className="tms-electric-live"><Zap size={14} /> Otimização ativa</span>
       </section>
 
-      <div className="tms-electric-grid">
-        <section className="tms-electric-card">
-          <span>01 · Veículo</span>
-          <strong>Perfil energético por modelo</strong>
-          <p>Bateria, SOC, consumo, carga útil, Type 2/CCS2/CHAdeMO, potência AC/DC e reserva operacional.</p>
-        </section>
-        <section className="tms-electric-card">
-          <span>02 · Eletroposto</span>
-          <strong>Compatibilidade antes da distância</strong>
-          <p>Elimina ponto offline, fechado, incompatível, sem acesso autorizado ou sem manobra para caminhão/carreta.</p>
-        </section>
-        <section className="tms-electric-card">
-          <span>03 · Decisão</span>
-          <strong>Menor impacto na operação</strong>
-          <p>Compara desvio, tempo de carga, potência aceita pelo veículo e confiabilidade. O mais perto nem sempre vence.</p>
-        </section>
-      </div>
-
-      <section className="tms-panel">
-        <div className="tms-panel-head">
-          <div><span>API externa</span><h2>Planejamento de recarga disponível</h2></div>
-          <code className="tms-electric-endpoint">POST /api/tms/v1/routes/electric-plan</code>
-        </div>
-        <div className="tms-electric-result">
-          <BatteryCharging size={24} />
-          <div>
-            <strong>Resposta operacional, não só mapa</strong>
-            <p>Retorna rota viável sem carga, recarga recomendada com minutos adicionados, ou motivo exato da inviabilidade.</p>
-          </div>
-        </div>
-      </section>
-
-      <OperationsTable rows={rows} />
-    </>
+      <Suspense fallback={<div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Abrindo roteirização...</span></div>}>
+        <RoteirizacaoDinamica setToast={setToast} />
+      </Suspense>
+    </div>
   );
 }
 
@@ -889,6 +881,14 @@ export default function TmsPortal() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState("");
+
+  // Toast enxuto para a roteirização (que fala por setToast): some sozinho.
+  useEffect(() => {
+    if (!toast) return undefined;
+    const id = setTimeout(() => setToast(""), 4200);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -922,7 +922,7 @@ export default function TmsPortal() {
   if (section === "bipagem") content = <ScanSection />;
   if (section === "cargas") content = <CargasSection data={data} onReload={load} />;
   if (section === "fracionada") content = <FractionalCargo />;
-  if (section === "roteirizacao") content = <ElectricRouting rows={data?.recent?.operations} />;
+  if (section === "roteirizacao") content = <ElectricRouting setToast={setToast} />;
   if (section === "viagens") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Execução</span><h2>Viagens e movimentações</h2></div></div><OperationsTable rows={data?.recent?.operations} /></section>;
   if (section === "fiscal") content = <div className="tms-stack"><section className="tms-panel"><div className="tms-panel-head"><div><span>Documentos fiscais</span><h2>CT-e e MDF-e</h2></div></div><FiscalTable rows={data?.recent?.fiscal} /></section><section className="tms-panel"><div className="tms-panel-head"><div><span>ANTT</span><h2>CIOT</h2></div></div><CiotTable rows={data?.recent?.ciots} /></section></div>;
   if (section === "faturamento") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Receita operacional</span><h2>Faturamento</h2></div></div><div className="tms-billing-highlight"><CircleDollarSign size={30} /><div><strong>{data?.indicators?.billingPending || 0} item(ns) elegível(is)</strong><p>A OS concluída com POD entra na régua de faturamento já existente na Vertical. O TMS mantém o vínculo entre execução, documento fiscal e cobrança.</p></div></div></section>;
@@ -948,6 +948,7 @@ export default function TmsPortal() {
         {error ? <div className="tms-error" role="alert"><AlertTriangle size={18} /><span>{error}</span></div> : null}
         {loading && !data ? <div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Carregando torre de controle...</span></div> : content}
       </main>
+      {toast ? <div className="tms-toast" role="status">{toast}</div> : null}
     </div>
   );
 }

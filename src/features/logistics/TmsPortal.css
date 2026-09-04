@@ -13,6 +13,23 @@
   font-family: inherit;
 }
 
+.tms-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 1200;
+  max-width: min(560px, 92vw);
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: var(--tms-ink, #14211d);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+}
+
 .tms-sidebar {
   min-height: 100vh;
   position: sticky;
@@ -242,6 +259,41 @@
 .tms-metric.is-alert {
   border-color: #e5cfad;
   background: #fffaf1;
+}
+
+/* Central de ação: o indicador que leva a algum lugar é um botão. Sinaliza que
+   é clicável (cursor, seta na legenda) e reage ao passar o mouse. */
+.tms-metric.is-acao {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+
+.tms-metric.is-acao small {
+  color: var(--tms-accent, #0b9f8f);
+  font-weight: 700;
+}
+
+.tms-metric.is-acao.is-alert small {
+  color: #b26a11;
+}
+
+.tms-metric.is-acao:hover {
+  border-color: var(--tms-accent, #0b9f8f);
+  box-shadow: 0 4px 14px rgba(11, 159, 143, .14);
+  transform: translateY(-1px);
+}
+
+.tms-metric.is-acao.is-alert:hover {
+  border-color: #d99534;
+  box-shadow: 0 4px 14px rgba(217, 149, 52, .16);
+}
+
+.tms-metric.is-acao:focus-visible {
+  outline: 2px solid var(--tms-accent, #0b9f8f);
+  outline-offset: 2px;
 }
 
 .tms-panel {
