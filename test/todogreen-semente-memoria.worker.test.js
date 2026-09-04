@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import worker from "../worker-entry.js";
+import { carregarMemoriaDoCliente } from "../worker/services/todogreen-semente.js";
 
 // Memória conversacional do Plantû (0091): a conversa persiste, mas é PRIVADA
 // de quem perguntou. Estes testes existem para impedir de voltar:
@@ -40,12 +41,12 @@ async function autorizar(usuario) {
   ).bind(crypto.randomUUID(), usuario.email, JSON.stringify(["*"]), usuario.id, agora, agora).run();
 }
 
-async function semearMensagem(ownerId, userId, role, content) {
+async function semearMensagem(ownerId, userId, role, content, clientId = null) {
   await env.DB.prepare(
     `INSERT INTO todogreen_ai_messages
        (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
-     VALUES (?, 'todogreen', ?, ?, 'plantu', ?, ?, NULL, ?, NULL)`,
-  ).bind(crypto.randomUUID(), ownerId, userId, role, content, new Date().toISOString()).run();
+     VALUES (?, 'todogreen', ?, ?, 'plantu', ?, ?, ?, ?, NULL)`,
+  ).bind(crypto.randomUUID(), ownerId, userId, role, content, clientId, new Date().toISOString()).run();
 }
 
 const pedir = (token, corpo) =>
@@ -117,5 +118,82 @@ describe("memória conversacional do Plantû", () => {
     // O voto continua NULL na visão do Bruno — ele nunca tocou nela.
     const linha = await env.DB.prepare("SELECT rating FROM todogreen_ai_messages WHERE id = 'resp-ana-voto'").first();
     expect(linha.rating).toBe(1);
+  });
+});
+
+// Memória por cliente (fase 2b): com uma conta aberta, o Plantû retoma o que já
+// se conversou sobre ELA — mas essa memória é privada de quem perguntou e
+// escopada à conta certa. Estes testes impedem de voltar: memória de uma conta
+// vazando para outra, e memória de uma pessoa vazando para outra do mesmo espaço.
+describe("memória por cliente do Plantû", () => {
+  beforeAll(async () => {
+    await semearMensagem(ana.id, ana.id, "user", "Como está a conta Acme?", "acme");
+    await semearMensagem(ana.id, ana.id, "assistant", "A Acme tem 2 oportunidades abertas.", "acme");
+    await semearMensagem(ana.id, ana.id, "user", "E a Beta?", "beta");
+    await semearMensagem(ana.id, ana.id, "assistant", "A Beta está fria.", "beta");
+  });
+
+  it("retoma só a conversa DESTA conta, em ordem, com papéis corretos", async () => {
+    const memoria = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "acme");
+    expect(memoria.map((m) => m.de)).toEqual(["Pessoa", "Plantû"]);
+    expect(memoria.map((m) => m.texto)).toEqual(["Como está a conta Acme?", "A Acme tem 2 oportunidades abertas."]);
+  });
+
+  it("não mistura a memória de outra conta", async () => {
+    const memoria = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "acme");
+    expect(memoria.some((m) => m.texto.includes("Beta"))).toBe(false);
+  });
+
+  it("é privada de quem perguntou: outra pessoa do espaço não vê a conta da Ana", async () => {
+    const memoria = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: bruno.id }, "acme");
+    expect(memoria).toEqual([]);
+  });
+
+  it("sem conta em foco (id vazio), não retorna nada", async () => {
+    expect(await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "")).toEqual([]);
+  });
+
+  it("não traz turnos arquivados desta conta", async () => {
+    await env.DB.prepare(
+      `INSERT INTO todogreen_ai_messages
+         (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
+       VALUES (?, 'todogreen', ?, ?, 'plantu', 'assistant', 'Turno arquivado da Acme.', 'acme', ?, ?)`,
+    ).bind(crypto.randomUUID(), ana.id, ana.id, new Date().toISOString(), new Date().toISOString()).run();
+    const memoria = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "acme");
+    expect(memoria.some((m) => m.texto.includes("arquivado"))).toBe(false);
+  });
+
+  it("não cruza espaços: memória gravada em outro workspace_owner não entra", async () => {
+    // Conversa do Bruno, no espaço DELE, sobre uma conta de mesmo id "acme".
+    await semearMensagem(bruno.id, bruno.id, "assistant", "Acme vista do espaço do Bruno.", "acme");
+    // A Ana, no espaço dela, não enxerga nada disso.
+    const memoria = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "acme");
+    expect(memoria.some((m) => m.texto.includes("Bruno"))).toBe(false);
+  });
+
+  it("respeita o teto de turnos mais recentes (LIMIT)", async () => {
+    for (let i = 0; i < 20; i += 1) {
+      await semearMensagem(ana.id, ana.id, i % 2 === 0 ? "user" : "assistant", `Turno ${i} da conta cheia`, "conta-cheia");
+    }
+    const memoria = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "conta-cheia");
+    expect(memoria.length).toBeLessThanOrEqual(16);
+    expect(memoria.length).toBeGreaterThan(0);
+  });
+
+  it("turno montado com dado RESTRITO no contexto só volta para quem tem finance:manage", async () => {
+    // Resposta gravada quando o restrito estava no contexto (restricted_context=1).
+    await env.DB.prepare(
+      `INSERT INTO todogreen_ai_messages
+         (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at, restricted_context)
+       VALUES (?, 'todogreen', ?, ?, 'plantu', 'assistant', 'A conta bancária da To Do Green é X.', 'conta-restrita', ?, NULL, 1)`,
+    ).bind(crypto.randomUUID(), ana.id, ana.id, new Date().toISOString()).run();
+
+    // Sem finance:manage (podeVerRestrito=false): a lembrança some.
+    const semAcesso = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "conta-restrita", false);
+    expect(semAcesso).toEqual([]);
+
+    // Com finance:manage: volta normalmente.
+    const comAcesso = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "conta-restrita", true);
+    expect(comAcesso.some((m) => m.texto.includes("conta bancária"))).toBe(true);
   });
 });

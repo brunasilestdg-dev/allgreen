@@ -811,14 +811,47 @@ const carregarHistoricoDoPlantu = async (env, access, user) => {
   }));
 };
 
-const gravarTurnoDoPlantu = async (env, access, user, { pergunta, resposta, clienteId }) => {
+// Memória por cliente: quando a pessoa abre uma conta e pergunta, o Plantû
+// lembra o que ELA já conversou com ele sobre ESSA conta em sessões passadas —
+// não só o fio da conversa aberta agora. Mesmo escopo do histórico: tenant +
+// espaço + a própria pessoa (privado de quem perguntou) + esta conta. Só
+// leitura, melhor-esforço — nunca derruba a resposta.
+const LIMITE_MEMORIA_CLIENTE = 16;
+
+export const carregarMemoriaDoCliente = async (env, access, user, clienteId, podeVerRestrito = false) => {
+  const id = clean(clienteId, 60);
+  if (!id) return [];
+  // Quem não tem finance:manage não recebe de volta turnos montados com dado
+  // restrito no contexto — a lembrança não pode furar a guarda do dossiê.
+  const veRestrito = podeVerRestrito ? 1 : 0;
+  const { results } = await env.DB.prepare(
+    `SELECT role, content, created_at FROM todogreen_ai_messages
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND user_id = ? AND assistente = ?
+        AND client_id = ? AND archived_at IS NULL
+        AND (restricted_context = 0 OR ? = 1)
+      ORDER BY created_at DESC, rowid DESC
+      LIMIT ?`,
+  ).bind(TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, id, veRestrito, LIMITE_MEMORIA_CLIENTE)
+    .all().catch(() => ({ results: [] }));
+  // Cronológico (a query pega os mais recentes; invertemos).
+  return (results || []).reverse().map((row) => ({
+    de: row.role === "user" ? "Pessoa" : "Plantû",
+    texto: row.content,
+    em: row.created_at,
+  }));
+};
+
+const gravarTurnoDoPlantu = async (env, access, user, { pergunta, resposta, clienteId, restritoNoContexto }) => {
   const agora = new Date().toISOString();
   const idResposta = crypto.randomUUID();
+  // Marca o turno se os fatos restritos do dossiê estavam no contexto: assim a
+  // memória por cliente pode escondê-lo de quem hoje não tem finance:manage.
+  const restrito = restritoNoContexto ? 1 : 0;
   const linha = (id, role, content) => env.DB.prepare(
     `INSERT INTO todogreen_ai_messages
-       (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-  ).bind(id, TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, role, content, clienteId || null, agora);
+       (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at, restricted_context)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+  ).bind(id, TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, role, content, clienteId || null, agora, restrito);
   try {
     await env.DB.batch([
       linha(crypto.randomUUID(), "user", clean(pergunta, 2000)),
@@ -913,6 +946,24 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   // cliente quer dizer aquela empresa, e obrigar a pessoa a repetir o nome é
   // fazer o produto esquecer o que está na frente dele.
   const emFoco = linhas.find((linha) => linha.id === clean(body.clienteId, 60)) || null;
+  // Mesma guarda do dossiê: quem tem finance:manage vê o restrito. Vale para o
+  // que entra no prompt AGORA e para a memória por cliente (que não pode
+  // reexpor pela lembrança o que a guarda esconde).
+  const podeVerRestrito = podeNaVertical(access, "finance:manage");
+  // Memória por cliente: com uma conta aberta, retoma o que já se conversou
+  // sobre ELA antes (privado desta pessoa). Só entra quando há conta em foco.
+  // Tira o que já está em "CONVERSA ATÉ AQUI" (a sessão viva chega em
+  // body.historico) para o mesmo diálogo não aparecer duas vezes no prompt.
+  const chaveDeTurno = (texto) => clean(texto, 8000).slice(0, 200);
+  const turnosVivos = new Set(
+    (Array.isArray(body.historico) ? body.historico : [])
+      .filter((item) => typeof item?.content === "string")
+      .map((item) => chaveDeTurno(item.content)),
+  );
+  const memoriaConta = emFoco
+    ? (await carregarMemoriaDoCliente(env, access, user, emFoco.id, podeVerRestrito))
+      .filter((m) => !turnosVivos.has(chaveDeTurno(m.texto)))
+    : [];
   const envIa = await envComChavesDoEspaco(env, access.ownerId);
   const envBusca = await envComChavesDeBuscaDoEspaco(envIa, access.ownerId);
   if (!configuredAiProviders(envIa).some((provider) => provider.configured))
@@ -923,7 +974,7 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     // Quem tem `finance:manage` (ou é dona/admin) vê o que está marcado como
     // restrito — conta bancária, documento de pessoa. Os outros nem sabem que
     // existe: o fato não entra no prompt, então não há o que vazar na resposta.
-    incluirRestrito: podeNaVertical(access, "finance:manage"),
+    incluirRestrito: podeVerRestrito,
   });
   const cabecalho = [
     `Pessoa atendida: ${clean(user?.name, 120) || email || "usuária da To Do Green"}.`,
@@ -937,6 +988,9 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     dossie,
     "",
     `ÍNDICE DA CARTEIRA (resumo; use as ferramentas para o detalhe):\n${JSON.stringify(indice.slice(0, 200), null, 1)}`,
+    memoriaConta.length
+      ? `\nMEMÓRIA DESTA CONTA (o que você já conversou com esta pessoa sobre ${emFoco.name} em outras ocasiões; use como contexto e confirme o que pode ter mudado):\n${memoriaConta.map((m) => `${m.de}: ${clean(m.texto, 800)}`).join("\n")}`
+      : "",
     historico.length ? `\nCONVERSA ATÉ AQUI:\n${historico.join("\n")}` : "",
     `\nPERGUNTA: ${pergunta}`,
   ].join("\n");
@@ -987,7 +1041,12 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   const resposta = decisao.resposta || "Não consegui formular uma resposta com os dados desta carteira.";
   // Guarda o turno para a conversa sobreviver ao reload (melhor-esforço) e
   // devolve o id da resposta para a tela poder avaliá-la.
-  const mensagemId = await gravarTurnoDoPlantu(env, access, user, { pergunta, resposta, clienteId: clean(body.clienteId, 60) });
+  // Etiqueta o turno com a conta VALIDADA (emFoco, que casou com a carteira da
+  // pessoa) — não com o clienteId cru do corpo. Assim a memória por cliente não
+  // fica marcada com uma conta que não é da carteira.
+  const mensagemId = await gravarTurnoDoPlantu(env, access, user, {
+    pergunta, resposta, clienteId: emFoco?.id || null, restritoNoContexto: podeVerRestrito,
+  });
 
   return response({
     resposta,
