@@ -96,31 +96,59 @@ const CORES_STATUS_VEICULO = {
   reserved: "#7c3aed", blocked: "#dc2626", inactive: "#6b7280",
 };
 
-const pinoVeiculo = (veiculo) => L.marker([veiculo.lat, veiculo.lng], {
-  icon: L.divIcon({
-    className: "tdg-mapa-pin",
-    html: `<span style="background:${CORES_STATUS_VEICULO[veiculo.status] || "#6b7280"}">${veiculo.prefixo || veiculo.placa || "?"}</span>`,
-    iconSize: [30, 26],
-    iconAnchor: [15, 13],
-  }),
-}).bindPopup(
-  `<strong>${veiculo.prefixo} — ${veiculo.placa}</strong><br>${veiculo.motorista || "Sem motorista vinculado"}<br><small>${veiculo.atualizadoEm ? new Date(veiculo.atualizadoEm).toLocaleString("pt-BR") : "Sem horário"}</small>`,
-);
+// Idade da posição: há quanto tempo foi a última leitura do rastreador. Acima de
+// 15 min a posição é "velha" (rastreador sem enviar) — a operação precisa saber
+// que o ponto no mapa pode não ser onde o veículo está agora.
+const POSICAO_VELHA_MIN = 15;
+const idadeDaPosicao = (atualizadoEm, agora = Date.now()) => {
+  const t = atualizadoEm ? Date.parse(atualizadoEm) : NaN;
+  if (!Number.isFinite(t)) return { texto: "sem sinal", velha: true, semSinal: true };
+  const min = Math.max(0, Math.round((agora - t) / 60000));
+  const velha = min > POSICAO_VELHA_MIN;
+  if (min < 1) return { texto: "agora", velha: false };
+  if (min < 60) return { texto: `há ${min} min`, velha };
+  const h = Math.floor(min / 60);
+  if (h < 24) return { texto: `há ${h} h`, velha: true };
+  return { texto: `há ${Math.floor(h / 24)} d`, velha: true };
+};
+
+const pinoVeiculo = (veiculo, agora = Date.now()) => {
+  const idade = idadeDaPosicao(veiculo.atualizadoEm, agora);
+  return L.marker([veiculo.lat, veiculo.lng], {
+    icon: L.divIcon({
+      className: `tdg-mapa-pin${idade.velha ? " velha" : ""}`,
+      html: `<span style="background:${CORES_STATUS_VEICULO[veiculo.status] || "#6b7280"}">${veiculo.prefixo || veiculo.placa || "?"}</span>`,
+      iconSize: [30, 26],
+      iconAnchor: [15, 13],
+    }),
+  }).bindPopup(
+    `<strong>${veiculo.prefixo} — ${veiculo.placa}</strong><br>${veiculo.motorista || "Sem motorista vinculado"}<br><small>Posição ${idade.texto}${veiculo.atualizadoEm ? ` · ${new Date(veiculo.atualizadoEm).toLocaleString("pt-BR")}` : ""}</small>`,
+  );
+};
 
 function FleetMap() {
   const [veiculos, setVeiculos] = useState([]);
   const [error, setError] = useState("");
+  const [agora, setAgora] = useState(() => Date.now());
   const containerRef = useRef(null);
   const mapaRef = useRef(null);
   const camadaRef = useRef(null);
 
   const carregar = useCallback(() => {
     listTmsFleetPositions()
-      .then((result) => { setVeiculos(result?.veiculos || []); setError(""); })
+      .then((result) => { setVeiculos(result?.veiculos || []); setError(""); setAgora(Date.now()); })
       .catch((reason) => setError(reason?.message || "Não foi possível carregar as posições da frota."));
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Atualização automática: a posição vem do rastreador e envelhece sozinha. A
+  // cada 45s recarrega as posições e reavalia a idade (o mapa não fica mostrando
+  // um ponto de 1h atrás como se fosse agora).
+  useEffect(() => {
+    const id = setInterval(() => { carregar(); }, 45000);
+    return () => clearInterval(id);
+  }, [carregar]);
 
   useEffect(() => {
     if (mapaRef.current || !containerRef.current) return undefined;
@@ -140,9 +168,14 @@ function FleetMap() {
     const mapa = mapaRef.current;
     if (!mapa) return;
     if (camadaRef.current) camadaRef.current.remove();
-    const camada = L.layerGroup(veiculos.map(pinoVeiculo)).addTo(mapa);
+    const camada = L.layerGroup(veiculos.map((v) => pinoVeiculo(v, agora))).addTo(mapa);
     camadaRef.current = camada;
-  }, [veiculos]);
+  }, [veiculos, agora]);
+
+  const frota = veiculos
+    .map((v) => ({ ...v, idade: idadeDaPosicao(v.atualizadoEm, agora) }))
+    .sort((a, b) => Number(b.idade.velha) - Number(a.idade.velha));
+  const velhas = frota.filter((v) => v.idade.velha).length;
 
   return (
     <section className="tms-panel">
@@ -152,6 +185,19 @@ function FleetMap() {
       </div>
       {error ? <p className="tms-api-inline-error">{error}</p> : null}
       {!veiculos.length && !error ? <Empty>Nenhum veículo com posição recente. A posição vem do rastreador — sincronize a frota primeiro.</Empty> : null}
+      {frota.length > 0 && (
+        <div className="tms-frota-idade" aria-label="Idade da última posição por veículo">
+          <p className="tms-frota-idade-resumo">Atualiza sozinho a cada 45s · {velhas > 0 ? `${velhas} com posição velha (> ${POSICAO_VELHA_MIN} min)` : "todas as posições recentes"}</p>
+          <div className="tms-frota-idade-chips">
+            {frota.map((v) => (
+              <span key={v.id || v.placa || v.prefixo} className={`tms-frota-chip${v.idade.velha ? " velha" : ""}`} title={v.motorista || "Sem motorista vinculado"}>
+                <strong>{v.prefixo || v.placa || "?"}</strong>
+                <em>{v.idade.texto}</em>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <div ref={containerRef} className="tdg-roteirizacao-mapa" aria-label="Mapa de frota" />
     </section>
   );

@@ -709,3 +709,18 @@
   .tms-electric-live { display: none; }
   .tms-electric-endpoint { display: none; }
 }
+
+/* Idade da posição da frota (telemetria real): chips por veículo com o tempo
+   desde a última leitura do rastreador; "velha" (> 15 min) fica em vermelho, e
+   o pino no mapa ganha um anel de alerta. */
+.tms-frota-idade { display: grid; gap: 8px; margin: 0 0 12px; }
+.tms-frota-idade-resumo { color: var(--tms-muted, #5a6b64); font-size: 12px; margin: 0; }
+.tms-frota-idade-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tms-frota-chip {
+  align-items: baseline; background: #eef6f2; border: 1px solid #cfe2da; border-radius: 999px;
+  color: #17372e; display: inline-flex; font-size: 12px; gap: 7px; padding: 4px 12px;
+}
+.tms-frota-chip em { color: #4b675c; font-style: normal; }
+.tms-frota-chip.velha { background: #fdecea; border-color: #f4b7ab; color: #b02a12; }
+.tms-frota-chip.velha em { color: #b02a12; }
+.tdg-mapa-pin.velha span { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.55); }
