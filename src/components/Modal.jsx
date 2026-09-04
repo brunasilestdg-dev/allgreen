@@ -4,14 +4,33 @@ import { X } from "lucide-react";
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Pilha de modais abertos. Com modais aninhados (um modal aberto de dentro de
+// outro), só o do TOPO responde a Escape e ao trap de Tab — senão um único
+// Escape fecha os dois de uma vez (perdendo edições não salvas do de baixo) e o
+// trap do externo rouba o foco dos campos do interno. Para um modal só, ele é
+// sempre o topo, então o comportamento não muda.
+const modalStack = [];
+
 export default function Modal({ title, children, onClose, wide = false }) {
   const modalRef = useRef(null);
   const triggerRef = useRef(
     typeof document !== "undefined" ? document.activeElement : null,
   );
+  const idRef = useRef({});
 
   useEffect(() => {
+    const token = idRef.current;
+    modalStack.push(token);
+    return () => {
+      const i = modalStack.indexOf(token);
+      if (i !== -1) modalStack.splice(i, 1);
+    };
+  }, []);
+
+  useEffect(() => {
+    const noTopo = () => modalStack[modalStack.length - 1] === idRef.current;
     const handleKeyDown = (event) => {
+      if (!noTopo()) return;
       if (event.key === "Escape") {
         onClose();
         return;

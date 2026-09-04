@@ -112,23 +112,69 @@ const base64UrlFromText = (text) => {
   return btoa(binary);
 };
 
-const buildRawEmail = ({ to, subject, body }) => {
+// Bytes de um arquivo → base64 padrão (para a parte de anexo do MIME). Em
+// blocos para não montar a string byte a byte num PDF de MB.
+export const base64FromBytes = (bytes) => {
+  let binary = "";
+  const bloco = 0x8000;
+  for (let i = 0; i < bytes.length; i += bloco) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + bloco));
+  }
+  return btoa(binary);
+};
+
+const buildRawEmail = ({ to, subject, body, attachments = [] }) => {
+  // Higieniza o destinatário contra injeção de cabeçalho (CR/LF viram
+  // "Bcc:", "To:" extras no envelope). O assunto já é seguro por vir em
+  // =?UTF-8?B?...?= (base64); o nome do anexo é higienizado abaixo.
+  const safeTo = String(to || "").replace(/[\r\n]+/g, " ").trim();
   const encodedSubject = `=?UTF-8?B?${base64UrlFromText(subject || "")}?=`;
-  const message = [
-    `To: ${to}`,
-    `Subject: ${encodedSubject}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "MIME-Version: 1.0",
-    "",
-    body || "",
-  ].join("\r\n");
+  let message;
+  if (attachments.length) {
+    // Com anexo: multipart/mixed — uma parte de texto e uma parte por arquivo.
+    const boundary = `tdg_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+    const partes = [
+      `To: ${safeTo}`,
+      `Subject: ${encodedSubject}`,
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "",
+      body || "",
+    ];
+    for (const anexo of attachments) {
+      const nome = String(anexo.filename || "anexo").replace(/["\r\n]/g, "");
+      partes.push(
+        `--${boundary}`,
+        `Content-Type: ${anexo.mimeType || "application/octet-stream"}; name="${nome}"`,
+        "Content-Transfer-Encoding: base64",
+        `Content-Disposition: attachment; filename="${nome}"`,
+        "",
+        // base64 quebrado em linhas de 76 (padrão MIME).
+        (String(anexo.base64 || "").match(/.{1,76}/g) || []).join("\r\n"),
+      );
+    }
+    partes.push(`--${boundary}--`);
+    message = partes.join("\r\n");
+  } else {
+    message = [
+      `To: ${safeTo}`,
+      `Subject: ${encodedSubject}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "MIME-Version: 1.0",
+      "",
+      body || "",
+    ].join("\r\n");
+  }
   return base64UrlFromText(message)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 };
 
-export const sendGmailReal = async (clientId, { to, subject, body }) => {
+export const sendGmailReal = async (clientId, { to, subject, body, attachments = [] }) => {
   const token = await requestGoogleAccessToken(
     clientId,
     "https://www.googleapis.com/auth/gmail.send",
@@ -141,7 +187,7 @@ export const sendGmailReal = async (clientId, { to, subject, body }) => {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ raw: buildRawEmail({ to, subject, body }) }),
+      body: JSON.stringify({ raw: buildRawEmail({ to, subject, body, attachments }) }),
     },
   );
   if (!res.ok) {

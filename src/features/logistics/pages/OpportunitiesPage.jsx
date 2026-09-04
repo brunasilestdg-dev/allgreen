@@ -8,6 +8,7 @@ import {
   CircleDashed,
   Leaf,
   LockKeyhole,
+  Mail,
   Plus,
   Save,
   Search,
@@ -19,6 +20,7 @@ import Modal from "../../../components/Modal.jsx";
 import ComentariosPanel from "./ComentariosPanel.jsx";
 import InteracoesPanel from "./InteracoesPanel.jsx";
 import ImportarPipelineModal from "./ImportarPipelineModal.jsx";
+import EnviarApresentacao from "../EnviarApresentacao.jsx";
 import { interacoesVisiveis } from "../interacoesDomain.js";
 import TopScrollRow from "./TopScrollRow.jsx";
 import {
@@ -146,7 +148,8 @@ function CampoEstudo({ form, campo, rotulo, tipo = "text", onChange, opcoes }) {
   );
 }
 
-function EstudoEletrificacaoModal({ registro, onClose, onSave, onDelete, setToast, comments = [], onComment, interactions = [], onInteraction, pessoas = [], onCreateTask, currentUserId }) {
+function EstudoEletrificacaoModal({ registro, conta, onClose, onSave, onDelete, setToast, comments = [], onComment, interactions = [], onInteraction, pessoas = [], onCreateTask, currentUserId }) {
+  const [enviarApresentacao, setEnviarApresentacao] = useState(false);
   // Regra da titular (30/08): comentário feito AQUI fica só nesta
   // oportunidade; comentário feito na conta aparece em todas as
   // oportunidades dela — por isso a lista junta os dois, rotulando a origem.
@@ -318,6 +321,9 @@ function EstudoEletrificacaoModal({ registro, onClose, onSave, onDelete, setToas
 
         <footer className="tdg-estudo-actions">
           {onDelete && <button className="tdg-danger-action" type="button" onClick={excluir} disabled={salvando || excluindo}><Trash2 size={16} />{excluindo ? "Excluindo..." : "Excluir oportunidade"}</button>}
+          <button type="button" onClick={() => setEnviarApresentacao(true)} disabled={salvando || excluindo}>
+            <Mail size={16} /> Enviar apresentação
+          </button>
           <button type="button" onClick={onClose} disabled={excluindo}>Cancelar</button>
           <button className="tdg-action" type="submit" disabled={salvando}>
             <Save size={16} />
@@ -359,6 +365,27 @@ function EstudoEletrificacaoModal({ registro, onClose, onSave, onDelete, setToas
             setToast?.("Comentário registrado nesta oportunidade.");
           }}
           setToast={setToast}
+        />
+      )}
+      {enviarApresentacao && (
+        <EnviarApresentacao
+          conta={conta}
+          onRegistrar={async (interacao) => {
+            if (!onInteraction) return;
+            await onInteraction({ ...interacao, clientId: registro.clientId || "", opportunityId: registro.id });
+          }}
+          onMoverEstagio={async () => {
+            const atual = ESTAGIOS_OPORTUNIDADE.indexOf(registro.estagio);
+            const alvo = ESTAGIOS_OPORTUNIDADE.indexOf("Apresentação");
+            // Só avança do começo do funil — nunca puxa de volta uma negociação
+            // que já passou de Apresentação. Devolve se moveu, para o aviso ser
+            // honesto.
+            if (atual >= 0 && atual >= alvo) return false;
+            await onSave?.({ estagio: "Apresentação", revision: registro.revision });
+            return true;
+          }}
+          setToast={setToast}
+          onClose={() => setEnviarApresentacao(false)}
         />
       )}
     </Modal>
@@ -1102,6 +1129,7 @@ export default function OpportunitiesPage({
       {editando && (
         <EstudoEletrificacaoModal
           registro={editando}
+          conta={clients.find((c) => c.id === editando.clientId) || null}
           onClose={() => setEditandoId(null)}
           onSave={(alteracoes) => onUpdate?.(editando.id, alteracoes)}
           onDelete={onDelete}
