@@ -383,32 +383,70 @@ h3,
 .mobile-logo {
   display: none;
 }
+/* Eram 3 colunas para 3 perfis; com o Portal TMS o 4º caía sozinho numa
+   segunda linha e o quadro ficava torto. 2x2 fecha os quadrantes. */
 .auth-perfis {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-bottom: 14px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .auth-perfis button {
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 11px;
-  padding: 11px 8px;
+  border-radius: 12px;
+  padding: 14px 12px;
   font-weight: 750;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   color: var(--muted);
   cursor: pointer;
+  min-height: 52px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .auth-perfis button:hover,
 .auth-perfis button:focus-visible {
   border-color: var(--primary);
   color: var(--primary);
+  background: var(--surface2);
   outline: none;
 }
 .auth-perfis button.active {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
+  box-shadow: 0 8px 20px -10px var(--primary);
+}
+/* Rodapé de marca: LinkedIn + site fecham o bloco de acesso da To Do Green. */
+.auth-social {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.auth-social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.auth-social a:hover,
+.auth-social a:focus-visible {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--surface2);
+  outline: none;
+}
+.auth-social svg {
+  width: 16px;
+  height: 16px;
 }
 .auth-tabs {
   display: grid;

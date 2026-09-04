@@ -30,7 +30,7 @@
   padding: 8px 13px;
   border: 1px solid #abcac3;
   border-radius: 10px;
-  background: #fff;
+  background: var(--tdg-card);
   color: var(--tdg-x-ink);
   font: inherit;
   font-size: 13px;
@@ -162,7 +162,7 @@
 }
 
 .tdg .tdg-erp-sidebar .tdg-nav-switch button.active {
-  background: var(--tdg-card, #fff);
+  background: var(--tdg-card, var(--tdg-card));
 }
 
 .tdg .tdg-erp-sidebar button:hover:not(:disabled) {
@@ -285,12 +285,14 @@
 
 .auth-shell:has(.tdg-auth-marca) .auth-perfis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
+  /* Eram 3 portais (3 colunas); com o Portal TMS o 4º caía sozinho. 2x2 fecha
+     os quadrantes de forma equilibrada. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   padding: 6px;
   border: 1px solid var(--tdg-x-line);
   border-radius: 14px;
-  background: #f1f7f5;
+  background: var(--tdg-x-wash);
 }
 
 .auth-shell:has(.tdg-auth-marca) .auth-perfis button {
@@ -326,7 +328,7 @@
 .auth-shell:has(.tdg-auth-marca) .auth-card input {
   min-height: 48px;
   border-radius: 11px;
-  background: #fff;
+  background: var(--tdg-card);
 }
 
 .auth-shell:has(.tdg-auth-marca) .auth-card .button.full {
@@ -388,7 +390,7 @@
   overflow: hidden;
   border: 1px solid var(--tdg-x-line);
   border-radius: 13px;
-  background: linear-gradient(145deg, #fff, #f7fbfa);
+  background: linear-gradient(145deg, var(--tdg-card), #f7fbfa);
   box-shadow: none;
 }
 
@@ -434,7 +436,7 @@
 .tdg-crm-metric-card:hover:not(:disabled) {
   transform: translateY(-2px);
   border-color: #78bcae;
-  background: #fff;
+  background: var(--tdg-card);
   box-shadow: 0 10px 24px rgba(7, 55, 53, .1);
 }
 
@@ -495,7 +497,7 @@
 .tdg-view-switch button[data-active="true"],
 .tdg-planner-cortes button[data-ativo="true"],
 .tdg-workviews-switch button[data-active="true"] {
-  background: #fff;
+  background: var(--tdg-card);
   color: var(--tdg-x-deep);
   box-shadow: 0 3px 10px rgba(8, 54, 52, .1);
 }
@@ -511,7 +513,7 @@
 .tdg-opp-card {
   border: 1px solid var(--tdg-x-line);
   border-radius: 14px;
-  background: #fff;
+  background: var(--tdg-card);
   box-shadow: 0 5px 16px rgba(7, 55, 53, .045);
   transition: transform .17s ease, border-color .17s ease, box-shadow .17s ease;
 }
@@ -575,7 +577,7 @@
   padding: 5px;
   border: 1px solid var(--tdg-x-line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--tdg-card);
 }
 
 /* Planner: quadro vivo e prioridade visível sem carnaval */
@@ -583,7 +585,7 @@
   border: 1px solid #b9ded6;
   border-left: 4px solid var(--tdg-x-brand);
   border-radius: 14px;
-  background: linear-gradient(110deg, #effaf7, #fff);
+  background: linear-gradient(110deg, #effaf7, var(--tdg-card));
 }
 
 .tdg-planner-focus-list button {
@@ -616,7 +618,7 @@
 .tdg-planner-quick input:focus {
   border-style: solid;
   border-color: var(--tdg-x-brand);
-  background: #fff;
+  background: var(--tdg-card);
 }
 
 .tdg-planner-form {
@@ -640,7 +642,7 @@
   padding: 15px;
   border: 1px solid var(--tdg-x-line);
   border-radius: 13px;
-  background: #fbfdfc;
+  background: var(--tdg-card);
 }
 
 /* To-do universal: corrige o modal quebrado visto dentro da vertical */
@@ -794,8 +796,7 @@
   }
 
   .auth-shell:has(.tdg-auth-marca) .auth-perfis {
-    overflow-x: auto;
-    grid-template-columns: repeat(3, minmax(118px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .auth-shell:has(.tdg-auth-marca) .auth-card h2 {
@@ -828,4 +829,20 @@
     margin-inline: -14px;
     padding-inline: 14px;
   }
+}
+
+/* Modo escuro dos tokens da experiência comercial (CRM/pipeline/planner). */
+:root[data-theme="dark"] {
+  --tdg-x-ink: #eafff7;
+  --tdg-x-ink-soft: #b9d4cc;
+  /* --deep e --brand são usados como FUNDO de botões/selos com texto branco:
+     têm de continuar escuros no dark, senão vira branco-sobre-claro. */
+  --tdg-x-deep: #0c3d3a;
+  --tdg-x-brand: #0b8073;
+  --tdg-x-brand-strong: #0c6a61;
+  --tdg-x-mint: #53d7bf;
+  --tdg-x-wash: #12302c;
+  --tdg-x-line: #274c47;
+  --tdg-x-paper: #12302a;
+  --tdg-x-shadow: 0 18px 42px rgba(0, 0, 0, 0.4);
 }

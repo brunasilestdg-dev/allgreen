@@ -51,6 +51,8 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
+  Moon,
+  Sun,
 } from "lucide-react";
 import {
   LOGISTICS_PRODUCTS,
@@ -2931,6 +2933,24 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           </span>
           <button className="tdg-shell-search" type="button" onClick={() => navigate("/todogreen/dashboard?ferramentas=1")}>
             <Search size={15} />Buscar ferramenta
+          </button>
+          <button
+            className="tdg-shell-theme"
+            type="button"
+            title={db?.preferences?.theme === "dark" ? "Tema claro" : "Tema escuro"}
+            aria-label={db?.preferences?.theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
+            aria-pressed={db?.preferences?.theme === "dark"}
+            onClick={() =>
+              update((d) => ({
+                ...d,
+                preferences: {
+                  ...d.preferences,
+                  theme: d.preferences?.theme === "dark" ? "light" : "dark",
+                },
+              }))
+            }
+          >
+            {db?.preferences?.theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
           </button>
           <details className="tdg-management-menu">
             <summary>Configurações</summary>

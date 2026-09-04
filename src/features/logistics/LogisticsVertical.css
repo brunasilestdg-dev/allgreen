@@ -224,6 +224,24 @@
   border-color: var(--tdg-green);
   outline: none;
 }
+.tdg-shell-theme {
+  align-items: center;
+  background: var(--tdg-soft);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--tdg-green);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 8px;
+}
+.tdg-shell-theme:hover,
+.tdg-shell-theme:focus-visible {
+  border-color: var(--tdg-green);
+  outline: none;
+}
 
 /* De quem é a sessão aberta — em aparelho compartilhado isso evita usar a
    conta de outra pessoa sem perceber. */
@@ -2529,4 +2547,34 @@
   .tdg-module-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ===== Modo escuro do vertical To Do Green =====
+   A titular pediu o modo escuro acessível dentro da vertical. Como quase toda
+   cor estrutural passa pelos tokens --tdg-* (fundos, texto, linhas, verde da
+   marca), basta remapear os tokens quando data-theme="dark" — o par
+   fundo/texto vira escuro/claro junto, garantindo legibilidade. Os realces
+   semânticos (selos de status) ficam sobre seus próprios fundos claros e
+   seguem legíveis. */
+:root[data-theme="dark"] .tdg {
+  --primary: #3fbf9a;
+  --primary2: #5fe0c2;
+  --pink: #3fbf9a;
+  --blue: #57c9a6;
+  --tdg-bg: #0a1f1b;
+  --tdg-card: #12302a;
+  --tdg-soft: #17403a;
+  --tdg-ink: #eafff7;
+  --tdg-muted: #a6c3b9;
+  --tdg-line: #274c43;
+  --tdg-line-strong: #35695b;
+  --tdg-green: #4bc9a2;
+  --tdg-lime: #9fe870;
+  --tdg-lime-texto: #bfe56b;
+  --tdg-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  color: var(--tdg-ink);
+  background:
+    radial-gradient(circle at 8% -8%, rgba(75, 201, 162, 0.16), transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(23, 98, 79, 0.22), transparent 28%),
+    linear-gradient(180deg, #07201b 0%, #05130f 100%);
 }

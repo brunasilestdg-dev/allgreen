@@ -344,6 +344,23 @@ import {
   FolderTree,
 } from "lucide-react";
 
+// Favicon próprio da To Do Green (folha lima sobre verde da marca): dentro da
+// vertical e dos portais a aba tem de mostrar a marca, não o mascote rosa do
+// Seu Funcionário. SVG inline p/ não depender de um arquivo de logo no repo.
+const TDG_FAVICON =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#0e5c46'/><path d='M22.8 8.2C13 8 8.7 13.7 9.4 20.9c3.3.3 5-.7 5-.7-.9-2.5.2-5.3 2.3-6.8-1.3 1.7-1.7 3.6-1.4 5.5 5-.2 8.4-4.4 7.5-10.7z' fill='#9fe870'/></svg>",
+  );
+const DEFAULT_FAVICON = "/icone-192.png?v=7";
+function setFavicon(href) {
+  if (typeof document === "undefined") return;
+  for (const rel of ["icon", "apple-touch-icon"]) {
+    const el = document.querySelector(`link[rel="${rel}"]`);
+    if (el && el.getAttribute("href") !== href) el.setAttribute("href", href);
+  }
+}
+
 const Procurement = lazy(
   () => import("./features/procurement/Procurement.jsx"),
 );
@@ -2121,6 +2138,28 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
               Portal TMS
             </button>
           </div>
+          {entradaToDoGreen && (
+            <div className="auth-social" aria-label="To Do Green nas redes">
+              <a
+                href="https://br.linkedin.com/company/todogreen"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                  <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0z" />
+                </svg>
+                LinkedIn
+              </a>
+              <a
+                href="https://www.todogreen.com.br"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <Globe2 aria-hidden="true" />
+                Site oficial
+              </a>
+            </div>
+          )}
           {!entradaToDoGreen && (
             <div className="auth-tabs" role="tablist" aria-label="Acesso">
               <button
@@ -14118,6 +14157,18 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = db.preferences.theme;
   }, [db.preferences.theme]);
+  // No universo To Do Green (login, vertical e portais) a aba mostra a marca
+  // da To Do Green; fora dele, o ícone padrão do Seu Funcionário.
+  useEffect(() => {
+    const p = location.pathname || "/";
+    const authed =
+      sessionStatus === "authenticated" ||
+      (!/^\/todogreen(?:\/|$)/.test(p) && Boolean(db.user));
+    const isTodoGreenView =
+      /^\/(?:todogreen|portal-tms|portal-cliente|portal-motorista|central-motorista|central-frota|motorista-frota)(?:\/|$)/.test(p) ||
+      (!authed && p === "/");
+    setFavicon(isTodoGreenView ? TDG_FAVICON : DEFAULT_FAVICON);
+  }, [location.pathname, sessionStatus, db.user]);
   useEffect(() => {
     if (!db.user?.id) return;
     const key = `sf-session-event:${db.user.id}:${db.spaceKey || "own"}:${today()}`;
