@@ -281,12 +281,13 @@ function ExternalIntelligence({ report, researching, error, onResearch, watch, o
   </section>;
 }
 
-function ClientTaskModal({ client, suggestion, currentUserId, onClose, onCreate }) {
+function ClientTaskModal({ client, suggestion, currentUserId, pessoas = [], onClose, onCreate }) {
   const [form, setForm] = useState({
     title: suggestion || `Próxima ação comercial · ${client.name}`,
     description: `Conta vinculada: ${client.name}`,
     priority: "Alta",
     due: "",
+    assigneeId: currentUserId || "",
   });
   const [saving, setSaving] = useState(false);
   const save = async (event) => {
@@ -295,7 +296,10 @@ function ClientTaskModal({ client, suggestion, currentUserId, onClose, onCreate 
       await onCreate?.({
         id: crypto.randomUUID(), title: form.title.trim(), description: form.description.trim(),
         priority: form.priority, status: "A fazer", due: form.due, area: "Comercial",
-        assigneeType: "real", assignee: "", assigneeId: currentUserId || "", project: "",
+        assigneeType: "real",
+        assignee: pessoas.find((pessoa) => pessoa.id === form.assigneeId)?.name || "",
+        assigneeId: form.assigneeId,
+        project: "",
         isMission: false, distribution: "atribuida", difficulty: "Simples", slots: "1",
         points: "", reward: "", approvalMode: "imediata", allowWithdrawal: true,
         assignees: [], interested: [], missionStatus: "", deliveries: [], attachments: [],
@@ -312,7 +316,11 @@ function ClientTaskModal({ client, suggestion, currentUserId, onClose, onCreate 
     <form className="tdg-crm-task-form" onSubmit={save}>
       <label><span>Tarefa</span><input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
       <label><span>Orientação</span><textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-      <div><label><span>Prioridade</span><select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}><option>Alta</option><option>Média</option><option>Baixa</option></select></label><label><span>Prazo</span><input type="date" value={form.due} onChange={(event) => setForm({ ...form, due: event.target.value })} /></label></div>
+      <div>
+        <label><span>Responsável</span><select required value={form.assigneeId} onChange={(event) => setForm({ ...form, assigneeId: event.target.value })}><option value="">Selecione um usuário</option>{pessoas.map((pessoa) => <option value={pessoa.id} key={pessoa.id}>{pessoa.name}{pessoa.email ? ` · ${pessoa.email}` : ""}</option>)}</select></label>
+        <label><span>Prioridade</span><select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}><option>Alta</option><option>Média</option><option>Baixa</option></select></label>
+        <label><span>Prazo</span><input type="date" value={form.due} onChange={(event) => setForm({ ...form, due: event.target.value })} /></label>
+      </div>
       <footer><button type="button" onClick={onClose}>Cancelar</button><button className="tdg-action" type="submit" disabled={saving}>{saving ? "Criando..." : "Criar tarefa"}</button></footer>
     </form>
   </Modal>;
@@ -654,8 +662,9 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, currentUserId, onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, currentUserId, espacoId = "", onClientContextChange }) {
   const [clients, setClients] = useState([]);
+  const [pessoas, setPessoas] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -683,10 +692,13 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   const [selectedId, setSelectedId] = useState(clientIdFromLocation);
   const [editingId, setEditingId] = useState("");
   const [taskClientId, setTaskClientId] = useState("");
+  const [deletingClientId, setDeletingClientId] = useState("");
+  const [completingSuggestion, setCompletingSuggestion] = useState(false);
   const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
   const [detailTab, setDetailTab] = useState("summary");
   const [accountInteractions, setAccountInteractions] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [interactionFormRequest, setInteractionFormRequest] = useState(0);
   const [researching, setResearching] = useState(false);
   const [researchError, setResearchError] = useState("");
   const [researchReports, setResearchReports] = useState({});
@@ -715,6 +727,20 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!espacoId) return undefined;
+    let ativo = true;
+    fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
+      .then((resposta) => (resposta.ok ? resposta.json() : null))
+      .then((corpo) => {
+        if (!ativo || !corpo) return;
+        const candidatos = [corpo.owner, ...(corpo.members || []).filter((membro) => membro.status === "ativo")];
+        setPessoas(candidatos.filter((pessoa, indice, lista) =>
+          pessoa?.id && pessoa?.name && lista.findIndex((item) => item?.id === pessoa.id) === indice));
+      })
+      .catch(() => setPessoas([]));
+    return () => { ativo = false; };
+  }, [authHeaders, espacoId]);
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const sync = () => { setSelectedId(clientIdFromLocation()); setPortalPreviewOpen(false); };
@@ -824,7 +850,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   );
   const selectedSummary = selectedAccount ? crmAccountSummary(selectedAccount, selectedAccount.contacts, crmOpportunities) : null;
   const selectedIntelligence = selected && selectedAccount
-    ? assessAccount({ ...selected, crm: { ...(selected.crm || {}), contacts: selectedAccount.contacts } })
+    ? assessAccount({ ...selected, crm: { ...(selected.crm || {}), contacts: selectedAccount.contacts } }, selectedOpportunities)
     : null;
   const selectedStrategy = selectedAccount
     ? buildAccountIntelligence({
@@ -992,6 +1018,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       ...(selected.crm?.completedSuggestedActions || []),
       selectedIntelligence.nextTaskKey,
     ])];
+    setCompletingSuggestion(true);
     try {
       await api(`clients/${encodeURIComponent(selected.id)}`, authHeaders, {
         method: "PATCH",
@@ -1000,10 +1027,15 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
           crm: { ...selected.crm, completedSuggestedActions: completed },
         }),
       });
-      setToast?.("Ação concluída. A IA selecionou o próximo passo da conta.");
+      setClients((atuais) => atuais.map((cliente) => cliente.id === selected.id
+        ? { ...cliente, crm: { ...(cliente.crm || {}), completedSuggestedActions: completed } }
+        : cliente));
+      setToast?.("Ação marcada como concluída. A próxima foi recalculada.");
       await load();
     } catch (reason) {
       setError(reason.message);
+    } finally {
+      setCompletingSuggestion(false);
     }
   };
 
@@ -1014,6 +1046,21 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       setClientForm({ nome: "", documento: "", segmento: "", tier: "Enterprise", stage: "Mapeamento" });
       setShowCreate(false); setToast?.("Cliente cadastrado no CRM."); await load();
     } catch (reason) { setError(reason.message); }
+  };
+  const deleteClient = async (client) => {
+    if (!access.podeGerenciar) return;
+    if (!window.confirm(`Excluir o cliente "${client.name}"? A exclusão só será permitida se não houver oportunidades, contratos ou operações ativas vinculadas.`)) return;
+    setDeletingClientId(client.id);
+    try {
+      await api(`clients/${encodeURIComponent(client.id)}`, authHeaders, { method: "DELETE" });
+      setClients((atuais) => atuais.filter((item) => item.id !== client.id));
+      setSelectedId("");
+      setToast?.(`Cliente "${client.name}" excluído.`);
+    } catch (reason) {
+      setToast?.(reason.message);
+    } finally {
+      setDeletingClientId("");
+    }
   };
   const saveClient = async (client, payload) => {
     try {
@@ -1206,7 +1253,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
 
     {selected && selectedSummary && <div className="tdg-crm-detail">
       <button className="tdg-crm-back" type="button" onClick={closeClient}><ArrowLeft size={16} />Voltar para a carteira</button>
-      <header className="tdg-crm-detail-hero"><div><span>{selected.crm?.tier || "Enterprise"}{selected.crm?.temperature ? ` · ${selected.crm.temperature}` : ""}</span><h2>{selected.name}</h2><p>{selected.segment || "Segmento não informado"} · {selected.crm?.stage || "Mapeamento"}{selected.document ? ` · ${selected.document}` : ""}</p><small>{selected.crm?.source ? `Origem: ${selected.crm.source}` : "Conta da carteira To Do Green"}</small></div><div className="tdg-crm-detail-actions">{access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={15} />Editar</button>}<button type="button" onClick={() => setTaskClientId(selected.id)}><ListPlus size={15} />Adicionar tarefa</button><button type="button" onClick={() => researchSelected("company")} disabled={researching}><Globe2 size={15} />Pesquisar empresa</button><button type="button" onClick={() => researchSelected("contacts")} disabled={researching}><UserSearch size={15} />Atualizar contatos</button><button type="button" onClick={() => setPortalPreviewOpen(true)}><Eye size={15} />Ver como cliente</button><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Pipeline <ArrowRight size={15} /></button></div></header>
+      <header className="tdg-crm-detail-hero"><div><span>{selected.crm?.tier || "Enterprise"}{selected.crm?.temperature ? ` · ${selected.crm.temperature}` : ""}</span><h2>{selected.name}</h2><p>{selected.segment || "Segmento não informado"} · {selected.crm?.stage || "Mapeamento"}{selected.document ? ` · ${selected.document}` : ""}</p><small>{selected.crm?.source ? `Origem: ${selected.crm.source}` : "Conta da carteira To Do Green"}</small></div><div className="tdg-crm-detail-actions">{access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={15} />Editar</button>}{access.podeEditar && onInteraction && <button type="button" className="tdg-action" onClick={() => { setDetailTab("activity"); setInteractionFormRequest((valor) => valor + 1); }}><MessageCircle size={15} />Registrar contato/follow-up</button>}<button type="button" onClick={() => setTaskClientId(selected.id)}><ListPlus size={15} />Adicionar tarefa</button><button type="button" onClick={() => researchSelected("company")} disabled={researching}><Globe2 size={15} />Pesquisar empresa</button><button type="button" onClick={() => researchSelected("contacts")} disabled={researching}><UserSearch size={15} />Atualizar contatos</button><button type="button" onClick={() => setPortalPreviewOpen(true)}><Eye size={15} />Ver como cliente</button><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Pipeline <ArrowRight size={15} /></button>{access.podeGerenciar && <button type="button" className="tdg-danger-action" onClick={() => deleteClient(selected)} disabled={deletingClientId === selected.id}><Trash2 size={15} />{deletingClientId === selected.id ? "Excluindo..." : "Excluir cliente"}</button>}</div></header>
       <nav className="tdg-crm-account-tabs" aria-label="Visões da conta">
         {[
           ["summary", "Resumo"],
@@ -1233,7 +1280,8 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
           setToast?.("Avaliação da conta salva — a saúde já reflete as novas notas.");
         }}
       />
-      <section className="tdg-crm-next"><Target size={17} /><div><small>PRÓXIMA MELHOR AÇÃO</small><strong>{selectedIntelligence.nextTask}</strong></div><button type="button" onClick={() => setTaskClientId(selected.id)}>Transformar em tarefa</button><button type="button" onClick={completeSuggestedAction} disabled={!selectedIntelligence.nextTaskCanComplete}>Marcar feita e ver próxima</button></section>
+      {selectedAccount.contacts.length === 0 && <section className="tdg-crm-contact-cta"><Users size={18} /><div><strong>Nenhum contato comercial cadastrado</strong><span>Cadastre pessoas do cliente, como Compras, Logística, ESG, influenciadores e decisores.</span></div><button type="button" className="tdg-action" onClick={() => { setDetailTab("relationship"); setQuickContactOpen(true); }}><UserPlus size={14} />Adicionar contato comercial</button></section>}
+      <section className="tdg-crm-next"><Target size={17} /><div><small>PRÓXIMA MELHOR AÇÃO · DADOS DO CRM</small><strong>{selectedIntelligence.nextTask}</strong></div><button type="button" onClick={() => { setDetailTab("relationship"); setQuickContactOpen(true); }}><UserPlus size={14} />Adicionar contato comercial</button><button type="button" onClick={() => setTaskClientId(selected.id)}>Transformar em tarefa</button><button type="button" onClick={completeSuggestedAction} disabled={!selectedIntelligence.nextTaskCanComplete || completingSuggestion}>{completingSuggestion ? "Atualizando..." : "Marcar feita e ver próxima"}</button></section>
       {portalPreviewOpen && <ClientPortalPreview client={selected} authHeaders={authHeaders} open onClose={() => setPortalPreviewOpen(false)} />}
       <div className={`tdg-crm-detail-grid tdg-account-tab-${detailTab}`}><main>
         {comercial && <section className="tdg-crm-detail-section tdg-account-panel tdg-account-comercial">
@@ -1285,14 +1333,14 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         <div className="tdg-account-panel tdg-account-relationship"><RelationshipMap contatos={selectedAccount.contacts} conta={selected.name} /></div>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-relationship">
           <header>
-            <strong>Contatos do cliente</strong>
+            <strong>Contatos comerciais do cliente</strong>
             <small>{selectedAccount.contacts.length} contato(s)</small>
-            {access.podeEditar && <button type="button" onClick={() => setQuickContactOpen(true)}><UserPlus size={13} />Adicionar contato</button>}
+            {access.podeEditar && <button type="button" onClick={() => setQuickContactOpen(true)}><UserPlus size={13} />Adicionar contato comercial</button>}
           </header>
           {/* Contato em janela própria: o formulário não empurra a lista de
               contatos que a pessoa está olhando. */}
           {quickContactOpen && (
-            <Modal title={`Adicionar contato · ${selected.name}`} onClose={() => setQuickContactOpen(false)}>
+            <Modal title={`Adicionar contato comercial · ${selected.name}`} onClose={() => setQuickContactOpen(false)}>
             <form className="tdg-crm-contact-form tdg-crm-quick-contact tdg-form-em-modal" onSubmit={saveQuickContact}>
               <input aria-label="Nome do novo contato" placeholder="Nome" value={quickContact.name} onChange={(event) => setQuickContact({ ...quickContact, name: event.target.value })} />
               <input aria-label="Cargo do novo contato" placeholder="Cargo" value={quickContact.title} onChange={(event) => setQuickContact({ ...quickContact, title: event.target.value })} />
@@ -1323,6 +1371,32 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
             escopo="conta"
             aviso="Interação registrada na conta aparece em todas as oportunidades dela. O que for específico de uma negociação, registre dentro da oportunidade."
             podeRegistrar={Boolean(access.podeEditar && onInteraction)}
+            abrirRegistro={interactionFormRequest}
+            pessoas={pessoas}
+            oportunidades={selectedOpportunities}
+            onCriarTarefa={async (proximoPasso) => createTask({
+              id: crypto.randomUUID(),
+              title: proximoPasso.title,
+              description: `Follow-up da conta: ${selected.name}`,
+              priority: "Alta",
+              status: "A fazer",
+              due: proximoPasso.due || "",
+              area: "Comercial",
+              assigneeType: "real",
+              assignee: proximoPasso.assignee,
+              assigneeId: proximoPasso.assigneeId,
+              project: "",
+              isMission: false,
+              distribution: "atribuida",
+              visibility: "privado",
+              recurrence: { frequency: "none" },
+              ownerId: currentUserId || null,
+              clientId: selected.id,
+              clientName: selected.name,
+              source: "todogreen-crm-followup",
+              businessId: "todogreen",
+              createdAt: new Date().toISOString(),
+            })}
             onRegistrar={async (interacao) => {
               await onInteraction({ ...interacao, clientId: selected.id });
               setToast?.("Interação registrada na conta — visível em todas as oportunidades dela.");
@@ -1348,7 +1422,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         <section className="tdg-crm-alerts tdg-account-panel tdg-account-summary tdg-account-strategy"><strong><AlertTriangle size={15} />Health comercial</strong>{selectedStrategy.commercialHealth.map((alert) => <span key={alert}>{alert}</span>)}</section>
         {selectedSummary.alerts.length > 0 && <section className="tdg-crm-alerts tdg-account-panel tdg-account-intelligence"><strong><AlertTriangle size={15} />Pontos de atenção</strong>{selectedSummary.alerts.map((alert) => <span key={alert}>{alert}</span>)}</section>}
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-opportunities"><header><strong>Oportunidades</strong><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Abrir pipeline <ArrowRight size={13} /></button></header>{selectedOpportunities.length === 0 ? <p>Nenhuma oportunidade ligada a esta conta.</p> : <div className="tdg-crm-opps">{selectedOpportunities.slice(0, 6).map((opp) => <article key={opp.id}><span><strong>{opp.stage}</strong><small>{opp.nextStep || "Próximo passo não definido"}</small></span><b>{BRL.format(opp.value || 0)}</b></article>)}</div>}</section>
-        <section className="tdg-crm-detail-section tdg-account-panel tdg-account-summary"><header><strong>Responsáveis</strong></header><div className="tdg-client-sellers">{(selected.vendedores || []).length === 0 && <small>Sem responsável comercial</small>}{(selected.vendedores || []).map((seller) => <span key={seller.email}>{seller.email}{access.podeGerenciar && <button type="button" aria-label={`Remover ${seller.email}`} onClick={() => unassign(selected.id, seller.email)}><X size={12} /></button>}</span>)}</div>{access.podeGerenciar && <form className="tdg-crm-assign" onSubmit={assign}><input required type="email" aria-label="E-mail do vendedor" placeholder="vendedor@empresa.com" value={assignment.clientId === selected.id ? assignment.sellerEmail : ""} onChange={(e) => setAssignment({ clientId: selected.id, sellerEmail: e.target.value, note: "" })} /><button type="submit"><UserPlus size={14} />Atribuir</button></form>}</section>
+        <section className="tdg-crm-detail-section tdg-account-panel tdg-account-summary"><header><strong>Responsáveis internos To Do Green</strong><small>Usuários da equipe responsáveis por esta conta</small></header><div className="tdg-client-sellers">{(selected.vendedores || []).length === 0 && <small>Sem responsável comercial</small>}{(selected.vendedores || []).map((seller) => <span key={seller.email}>{seller.email}{access.podeGerenciar && <button type="button" aria-label={`Remover ${seller.email}`} onClick={() => unassign(selected.id, seller.email)}><X size={12} /></button>}</span>)}</div>{access.podeGerenciar && <form className="tdg-crm-assign" onSubmit={assign}><select required aria-label="Responsável comercial" value={assignment.clientId === selected.id ? assignment.sellerEmail : ""} onChange={(e) => setAssignment({ clientId: selected.id, sellerEmail: e.target.value, note: "" })}><option value="">Selecione um usuário cadastrado</option>{pessoas.filter((pessoa) => pessoa.email).map((pessoa) => <option key={pessoa.id} value={pessoa.email}>{pessoa.name} · {pessoa.email}</option>)}</select><button type="submit"><UserPlus size={14} />Atribuir</button></form>}</section>
         <section className="tdg-crm-detail-section tdg-account-panel tdg-account-summary tdg-account-intelligence"><header><strong>Dados da conta</strong><small>Cadastro e preenchimento público</small></header><dl className="tdg-crm-account-data">
           <div><dt>ID da conta</dt><dd><code>{selected.accountCode || selected.id}</code><small>Código estável para busca, metas, importações e integrações</small></dd></div>
           <div><dt>Portal do cliente</dt><dd><PortalAccessPanel client={selected} canManage={access.podeGerenciar} authHeaders={authHeaders} setToast={setToast} onToggle={() => saveClient(selected, { revision: selected.revision, portalEnabled: !selected.portalEnabled })} /></dd></div>
@@ -1365,6 +1439,6 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       </aside></div>
     </div>}
     {editingId && <AccountEditor client={clients.find((item) => item.id === editingId)} onClose={() => setEditingId("")} onSave={(payload) => saveClient(clients.find((item) => item.id === editingId), payload)} />}
-    {taskClientId && <ClientTaskModal client={clients.find((item) => item.id === taskClientId)} suggestion={selectedIntelligence?.nextTask} currentUserId={currentUserId} onClose={() => setTaskClientId("")} onCreate={createTask} />}
+    {taskClientId && <ClientTaskModal client={clients.find((item) => item.id === taskClientId)} suggestion={selectedIntelligence?.nextTask} currentUserId={currentUserId} pessoas={pessoas} onClose={() => setTaskClientId("")} onCreate={createTask} />}
   </section>;
 }

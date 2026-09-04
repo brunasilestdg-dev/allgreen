@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarClock, NotebookPen, Plus } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import {
@@ -36,6 +36,8 @@ const FORM_VAZIO = () => ({
   resultado: "",
   proximoPasso: "",
   proximoPassoEm: "",
+  responsavelId: "",
+  opportunityId: "",
 });
 
 export default function InteracoesPanel({
@@ -44,11 +46,19 @@ export default function InteracoesPanel({
   aviso,
   podeRegistrar = true,
   onRegistrar,
+  onCriarTarefa,
+  pessoas = [],
+  oportunidades = [],
+  abrirRegistro = 0,
   setToast,
 }) {
   const [aberta, setAberta] = useState(false);
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (abrirRegistro > 0) setAberta(true);
+  }, [abrirRegistro]);
 
   const campo = (chave, valor) => setForm((atual) => ({ ...atual, [chave]: valor }));
   const dias = diasSemContato(interacoes);
@@ -60,6 +70,14 @@ export default function InteracoesPanel({
     setSalvando(true);
     try {
       await onRegistrar({ ...form, assunto: form.assunto.trim(), ata: form.ata.trim() });
+      if (form.proximoPasso.trim() && form.responsavelId && onCriarTarefa) {
+        await onCriarTarefa({
+          title: form.proximoPasso.trim(),
+          due: form.proximoPassoEm,
+          assigneeId: form.responsavelId,
+          assignee: pessoas.find((pessoa) => pessoa.id === form.responsavelId)?.name || "",
+        });
+      }
       setForm(FORM_VAZIO());
       setAberta(false);
     } catch (erro) {
@@ -137,6 +155,15 @@ export default function InteracoesPanel({
               <span>Quando aconteceu</span>
               <input type="date" required value={form.ocorridaEm} onChange={(e) => campo("ocorridaEm", e.target.value)} />
             </label>
+            {escopo === "conta" && oportunidades.length > 0 && (
+              <label>
+                <span>Oportunidade relacionada</span>
+                <select value={form.opportunityId} onChange={(e) => campo("opportunityId", e.target.value)}>
+                  <option value="">Interação geral da conta</option>
+                  {oportunidades.map((oportunidade) => <option key={oportunidade.id} value={oportunidade.id}>{oportunidade.titulo || oportunidade.title || oportunidade.nome || oportunidade.id}</option>)}
+                </select>
+              </label>
+            )}
             <label>
               <span>Assunto</span>
               <input required value={form.assunto} onChange={(e) => campo("assunto", e.target.value)} placeholder="Ex.: Agenda com o time de logística" maxLength={200} />
@@ -162,6 +189,14 @@ export default function InteracoesPanel({
             <label>
               <span>Data do próximo passo</span>
               <input type="date" value={form.proximoPassoEm} onChange={(e) => campo("proximoPassoEm", e.target.value)} />
+            </label>
+            <label>
+              <span>Responsável pelo follow-up</span>
+              <select value={form.responsavelId} onChange={(e) => campo("responsavelId", e.target.value)} disabled={!form.proximoPasso}>
+                <option value="">Sem criar tarefa</option>
+                {pessoas.map((pessoa) => <option value={pessoa.id} key={pessoa.id}>{pessoa.name}{pessoa.email ? ` · ${pessoa.email}` : ""}</option>)}
+              </select>
+              <small>Ao escolher alguém, o próximo passo também entra na To-do.</small>
             </label>
             <div className="tdg-form-actions">
               <button type="button" onClick={() => setAberta(false)}>Cancelar</button>

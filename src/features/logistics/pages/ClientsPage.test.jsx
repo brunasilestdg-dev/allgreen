@@ -49,7 +49,7 @@ describe("página de clientes", () => {
     expect(screen.getByRole("button", { name: "Resumo" })).toHaveClass("active");
     expect(screen.getByText(/Receita anual da To Do Green ainda não informada/)).toBeInTheDocument();
     expect(screen.queryByText(/^Gasto logístico anual do cliente não informado/)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Mapear ao menos um contato de Procurement/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Validar rota/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Marcar feita e ver próxima" })).toBeEnabled();
     expect(screen.getByText("Reunião com compras")).toBeInTheDocument();
 
@@ -209,7 +209,7 @@ describe("página de clientes", () => {
       clientId: "client-1", tipo: "tentativa", assunto: "Liguei, sem retorno", ocorridaEm: "2026-08-30",
     })));
     // Sem opportunityId: é interação da conta, aparece em todas as dela.
-    expect(onInteraction.mock.calls[0][0].opportunityId).toBeUndefined();
+    expect(onInteraction.mock.calls[0][0].opportunityId).toBe("");
   });
 
   it("mostra a régua da saúde e salva as notas no próprio painel", async () => {
@@ -385,7 +385,7 @@ describe("página de clientes", () => {
     expect(await screen.findAllByText(/Pedir a Marina a indicação/i)).not.toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Marcar feita e ver próxima" }));
 
-    expect(await screen.findAllByText(/Confirmar o decisor econômico/i)).not.toHaveLength(0);
+    expect(await screen.findAllByText(/Não há próxima ação confiável/i)).not.toHaveLength(0);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     const patchRequest = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(patchRequest.crm.completedSuggestedActions).toContain("request-procurement-referral");

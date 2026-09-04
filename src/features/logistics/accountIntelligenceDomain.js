@@ -5,7 +5,7 @@ const PROCUREMENT = ["procurement", "compras", "suprimentos", "sourcing", "suppl
 const LOGISTICS = ["logística", "logistica", "transporte", "transportes", "frete", "freight", "distribution", "distribuição", "carrier", "supply chain", "last mile", "middle mile"];
 const DECISION_ROLES = ["patrocinador", "decisor econômico", "compras"];
 
-export function assessAccount(account = {}) {
+export function assessAccount(account = {}, opportunities = []) {
   const contacts = account.crm?.contacts || [];
   const hasCurrentDecisionEvidence = (contact) => contact.active !== false && contact.employmentStatus !== "former" &&
     (!contact.employmentCheckedAt || contact.currentEmploymentVerified === true);
@@ -21,35 +21,54 @@ export function assessAccount(account = {}) {
 
   const namedContact = activeContacts.find((contact) => contact.name)?.name || "o contato cadastrado";
   const completed = new Set(Array.isArray(account.crm?.completedSuggestedActions) ? account.crm.completedSuggestedActions : []);
+  const stage = lower(account.crm?.stage);
+  const openOpportunities = opportunities.filter((item) => {
+    const belongs = !account.id || item.clientId === account.id || item.accountId === account.id;
+    const opportunityStage = lower(item.stage || item.estagio);
+    return belongs && !["ganho", "perdido", "fechada ganha", "fechada perdida", "cliente ativo"].includes(opportunityStage);
+  });
+  const opportunityWithNextStep = openOpportunities.find((item) => lower(item.nextStep || item.proximoPasso));
+  const staleOpportunity = openOpportunities.find((item) => {
+    const age = item.updatedAt ? Math.floor((Date.now() - Date.parse(item.updatedAt)) / 86400000) : null;
+    return age !== null && age >= 21;
+  });
   const candidates = [];
-  if (!activeContacts.length) candidates.push({
-    key: "map-first-contact",
-    title: "Mapear ao menos um contato de Procurement de Logística e Transportes no Brasil.",
-  });
-  if (activeContacts.length && !procurementContacts.length) candidates.push({
-    key: "request-procurement-referral",
-    title: `Pedir a ${namedContact} a indicação de quem decide sobre contratação de transportes e logística no Brasil.`,
-  });
-  if (procurementContacts.length && !logisticsProcurementContacts.length) candidates.push({
-    key: "validate-logistics-scope",
-    title: `Confirmar com ${procurementContacts[0].name} se sua atuação inclui fretes, transportes ou logística no Brasil.`,
-  });
-  if (activeContacts.length && !decisionContacts.length) candidates.push({
-    key: "confirm-economic-decision",
-    title: "Confirmar o decisor econômico e o patrocinador interno antes da abordagem comercial.",
-  });
-  if (logisticsProcurementContacts.length && !account.crm?.nextAction) candidates.push({
-    key: "schedule-procurement-approach",
-    title: `Agendar uma abordagem com ${logisticsProcurementContacts[0].name} e registrar objetivo e prazo.`,
-  });
+
+  // Primeiro respeita o que a equipe já registrou. A recomendação não substitui
+  // uma ação real por um texto genérico.
   if (account.crm?.nextAction) candidates.push({
     key: `crm-next-action:${lower(account.crm.nextAction).slice(0, 80)}`,
     title: account.crm.nextAction,
   });
-  const pending = candidates.find((item) => !completed.has(item.key)) || {
-    key: "review-commercial-plan",
-    title: "Revisar o estágio da conta e definir uma nova ação comercial com responsável e prazo.",
-  };
+  if (opportunityWithNextStep) candidates.push({
+    key: `opportunity-next-step:${opportunityWithNextStep.id}`,
+    title: `${opportunityWithNextStep.nextStep || opportunityWithNextStep.proximoPasso} · ${opportunityWithNextStep.titulo || opportunityWithNextStep.title || "oportunidade aberta"}`,
+  });
+  if (staleOpportunity) candidates.push({
+    key: `resume-stalled-opportunity:${staleOpportunity.id}`,
+    title: `Retomar ${staleOpportunity.titulo || staleOpportunity.title || "a oportunidade parada"} e registrar o retorno do cliente.`,
+  });
+  if (!activeContacts.length) candidates.push({
+    key: "map-first-contact",
+    title: `Cadastrar um contato real de Logística ou Procurement da conta ${account.name || ""}.`.trim(),
+  });
+  if (activeContacts.length && !procurementContacts.length) candidates.push({
+    key: "request-procurement-referral",
+    title: `Pedir a ${namedContact} a indicação de quem responde por fretes e contratação de transportes.`,
+  });
+  if (procurementContacts.length && !logisticsProcurementContacts.length) candidates.push({
+    key: "validate-logistics-scope",
+    title: `Confirmar com ${procurementContacts[0].name} se sua atuação inclui fretes e contratação de transportes.`,
+  });
+  if (logisticsProcurementContacts.length && !decisionContacts.length) candidates.push({
+    key: "confirm-economic-decision",
+    title: `Confirmar com ${logisticsProcurementContacts[0].name} quem é o decisor econômico que aprova preço e contrato.`,
+  });
+  if (!openOpportunities.length && ["diagnóstico", "construção de solução", "proposta", "negociação"].includes(stage)) candidates.push({
+    key: "register-real-opportunity",
+    title: "Registrar a oportunidade em negociação com escopo, valor, etapa e próximo passo.",
+  });
+  const pending = candidates.find((item) => !completed.has(item.key)) || null;
 
   return {
     esgRelevance: esgMatches.length ? "Alta" : profile ? "A validar" : "Sem dados suficientes",
@@ -61,9 +80,9 @@ export function assessAccount(account = {}) {
     strongestContacts: [...decisionContacts, ...procurementContacts].filter((item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 3),
     staleContacts,
     noChannel,
-    nextTask: pending.title,
-    nextTaskKey: pending.key,
-    nextTaskCanComplete: !completed.has(pending.key),
+    nextTask: pending?.title || "Não há próxima ação confiável. Atualize o estágio, a oportunidade ou o último contato.",
+    nextTaskKey: pending?.key || "",
+    nextTaskCanComplete: Boolean(pending),
   };
 }
 

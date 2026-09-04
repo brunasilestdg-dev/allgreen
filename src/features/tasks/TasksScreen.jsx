@@ -88,6 +88,10 @@ import {
 } from "./taskAiDomain.js";
 import { taskUrgency } from "./taskUrgencia.js";
 import {
+  patchPlannerDaTarefa,
+  tarefaVinculadaAoPlanner,
+} from "../logistics/plannerIntegrationDomain.js";
+import {
   createGoogleCalendarEventReal,
   googleCalendarUrl,
 } from "../../integrations/google.js";
@@ -735,6 +739,18 @@ export default function Tasks({
           : [item, ...d.tasks],
       };
     });
+    if (editingTask && tarefaVinculadaAoPlanner(editingTask)) {
+      syncTaskToPlanner(editingTask, {
+        title: form.title.trim(),
+        description: form.description || "",
+        status: form.status,
+        priority: form.priority,
+        startDate: form.startDate || "",
+        due: form.due || "",
+        assigneeId: form.assigneeId || "",
+        assignee: form.assignee || "",
+      });
+    }
     const wantsNotify =
       form.assigneeType !== "digital" &&
       form.notify &&
@@ -767,15 +783,40 @@ export default function Tasks({
       setToast(editing ? "Tarefa atualizada" : "Tarefa criada");
     }
   };
-  const changeTask = (id, changes) =>
+  const syncTaskToPlanner = (task, changes) => {
+    if (!tarefaVinculadaAoPlanner(task)) return;
+    fetch(
+      `/api/todogreen/planner/planos/${encodeURIComponent(task.plannerPlanId)}/tarefas/${encodeURIComponent(task.plannerTaskId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify(patchPlannerDaTarefa(task, changes)),
+      },
+    )
+      .then(async (resposta) => {
+        const corpo = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(corpo.error || "A To-do foi salva, mas o Planner não sincronizou.");
+        update((atual) => ({
+          ...atual,
+          tasks: atual.tasks.map((item) => (
+            item.id === task.id ? { ...item, plannerRevision: corpo.revision } : item
+          )),
+        }));
+      })
+      .catch((erro) => setToast(erro.message));
+  };
+  const changeTask = (id, changes) => {
+    const task = db.tasks.find((item) => item.id === id);
     update((d) => ({
       ...d,
-      tasks: d.tasks.map((task) =>
-        task.id === id
-          ? { ...task, ...changes, updatedAt: new Date().toISOString() }
-          : task,
+      tasks: d.tasks.map((item) =>
+        item.id === id
+          ? { ...item, ...changes, updatedAt: new Date().toISOString() }
+          : item,
       ),
     }));
+    if (task) syncTaskToPlanner(task, changes);
+  };
   const blockingTasks = (task) =>
     (task.dependsOn || [])
       .map((depId) => db.tasks.find((x) => x.id === depId))

@@ -3,6 +3,7 @@ import {
   CalendarClock,
   Check,
   LayoutGrid,
+  Link2,
   ListChecks,
   Lock,
   Plus,
@@ -106,9 +107,20 @@ const tarefaVazia = (bucketId = "") => ({
   dueDate: "",
   checklist: [],
   labels: [],
+  campos: { clientId: "", opportunityId: "" },
 });
 
-export default function PlannerPage({ authHeaders, setToast, currentUserId, role, espacoId = "" }) {
+export default function PlannerPage({
+  authHeaders,
+  setToast,
+  currentUserId,
+  role,
+  espacoId = "",
+  clientes = [],
+  oportunidades = [],
+  onNavigate,
+  onSyncTask,
+}) {
   const [planos, setPlanos] = useState([]);
   const [planoAtivoId, setPlanoAtivoId] = useState("");
   const [tarefas, setTarefas] = useState([]);
@@ -264,10 +276,11 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
     const titulo = (rascunhoRapido[bucketId] || "").trim();
     if (!titulo || !planoAtivo) return;
     try {
-      await request(`/planos/${planoAtivo.id}/tarefas`, authHeaders, {
+      const criada = await request(`/planos/${planoAtivo.id}/tarefas`, authHeaders, {
         method: "POST",
         body: JSON.stringify({ title: titulo, bucketId }),
       });
+      onSyncTask?.(criada, planoAtivo);
       setRascunhoRapido((r) => ({ ...r, [bucketId]: "" }));
       await carregarTarefas(planoAtivo.id);
     } catch (motivo) {
@@ -279,11 +292,10 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
     if (!planoAtivo) return;
     const corpo = JSON.stringify(tarefa);
     try {
-      if (tarefa.id) {
-        await request(`/planos/${planoAtivo.id}/tarefas/${tarefa.id}`, authHeaders, { method: "PATCH", body: corpo });
-      } else {
-        await request(`/planos/${planoAtivo.id}/tarefas`, authHeaders, { method: "POST", body: corpo });
-      }
+      const salva = tarefa.id
+        ? await request(`/planos/${planoAtivo.id}/tarefas/${tarefa.id}`, authHeaders, { method: "PATCH", body: corpo })
+        : await request(`/planos/${planoAtivo.id}/tarefas`, authHeaders, { method: "POST", body: corpo });
+      onSyncTask?.(salva, planoAtivo);
       setTarefaEmEdicao(null);
       await carregarTarefas(planoAtivo.id);
       if (vendoMinhas) await carregarMinhas();
@@ -536,6 +548,24 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
                               <span className="tdg-planner-tag"><ListChecks size={12} /> {t.checklist.filter((i) => i.feito).length}/{t.checklist.length}</span>
                             )}
                             {t.assigneeLabel && <span className="tdg-planner-assignee">{t.assigneeLabel}</span>}
+                            {t.campos?.clientId && (
+                              <button
+                                type="button"
+                                className="tdg-planner-context"
+                                onClick={(e) => { e.stopPropagation(); onNavigate?.(`/todogreen/clientes?client=${encodeURIComponent(t.campos.clientId)}`); }}
+                              >
+                                <Link2 size={11} /> {clientes.find((cliente) => cliente.id === t.campos.clientId)?.name || "Cliente"}
+                              </button>
+                            )}
+                            {t.campos?.opportunityId && (
+                              <button
+                                type="button"
+                                className="tdg-planner-context"
+                                onClick={(e) => { e.stopPropagation(); onNavigate?.(`/todogreen/oportunidades?opportunity=${encodeURIComponent(t.campos.opportunityId)}`); }}
+                              >
+                                <Link2 size={11} /> Oportunidade
+                              </button>
+                            )}
                           </div>
                         </article>
                       ))}
@@ -601,6 +631,8 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
           tarefa={tarefaEmEdicao}
           baldes={normalizarBaldes(planoAtivo?.buckets || [])}
           pessoas={pessoas}
+          clientes={clientes}
+          oportunidades={oportunidades}
           onFechar={() => setTarefaEmEdicao(null)}
           onSalvar={salvarTarefa}
           onArquivar={arquivarTarefa}
@@ -620,8 +652,15 @@ export default function PlannerPage({ authHeaders, setToast, currentUserId, role
   );
 }
 
-function TarefaModal({ tarefa, baldes, pessoas = [], onFechar, onSalvar, onArquivar }) {
-  const [form, setForm] = useState({ ...tarefaVazia(baldes[0]?.id), ...tarefa });
+function TarefaModal({ tarefa, baldes, pessoas = [], clientes = [], oportunidades = [], onFechar, onSalvar, onArquivar }) {
+  const [form, setForm] = useState({
+    ...tarefaVazia(baldes[0]?.id),
+    ...tarefa,
+    campos: { ...tarefaVazia().campos, ...(tarefa.campos || {}) },
+  });
+  const oportunidadesDoCliente = oportunidades.filter(
+    (oportunidade) => !form.campos.clientId || oportunidade.clientId === form.campos.clientId,
+  );
   const set = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
 
   // Escolher uma pessoa da lista grava o vínculo de verdade (assigneeUserId) —
@@ -696,6 +735,43 @@ function TarefaModal({ tarefa, baldes, pessoas = [], onFechar, onSalvar, onArqui
             <input type="date" value={form.dueDate || ""} onChange={set("dueDate")} />
           </label>
         </div>
+        <fieldset className="tdg-planner-business-context">
+          <legend><Link2 size={14} /> Contexto comercial opcional</legend>
+          <p>Use apenas quando a tarefa estiver ligada ao CRM. Projetos de marketing, operação e outras áreas continuam independentes.</p>
+          <div className="tdg-planner-grid3">
+            <label>
+              Cliente
+              <select
+                value={form.campos.clientId}
+                onChange={(e) => setForm((atual) => ({
+                  ...atual,
+                  campos: { clientId: e.target.value, opportunityId: "" },
+                }))}
+              >
+                <option value="">Sem vínculo com cliente</option>
+                {clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Oportunidade
+              <select
+                value={form.campos.opportunityId}
+                disabled={!form.campos.clientId}
+                onChange={(e) => setForm((atual) => ({
+                  ...atual,
+                  campos: { ...atual.campos, opportunityId: e.target.value },
+                }))}
+              >
+                <option value="">Sem vínculo com oportunidade</option>
+                {oportunidadesDoCliente.map((oportunidade) => (
+                  <option key={oportunidade.id} value={oportunidade.id}>
+                    {oportunidade.titulo || oportunidade.title || oportunidade.nome || oportunidade.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </fieldset>
         <label>
           Notas
           <textarea rows={3} value={form.notes} onChange={set("notes")} maxLength={4000} />

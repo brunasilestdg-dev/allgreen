@@ -305,6 +305,32 @@ const colunasTarefa = (corpo, plano) => {
 // só o vínculo por id exige vínculo real. "Gente do espaço" são as duas
 // portas que existem: membro do espaço do app (memberships, a lista que o
 // /api/collab sugere na tela) ou vínculo direto na vertical (tenant_users).
+const vinculosComerciaisValidados = async (env, access, campos) => {
+  const recebidos = objeto(campos);
+  const clientId = texto(recebidos.clientId, 120);
+  const opportunityId = texto(recebidos.opportunityId, 120);
+  if (!clientId && !opportunityId) return { ...recebidos, clientId: "", opportunityId: "" };
+
+  const cliente = clientId
+    ? await env.DB.prepare(
+      `SELECT id FROM todogreen_clients
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+    ).bind(clientId, TENANT_ID, access.ownerId).first()
+    : null;
+  if (clientId && !cliente) throw Object.assign(new Error("Cliente vinculado não encontrado."), { status: 400 });
+
+  const oportunidade = opportunityId
+    ? await env.DB.prepare(
+      `SELECT id, client_id FROM todogreen_opportunities
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+    ).bind(opportunityId, TENANT_ID, access.ownerId).first()
+    : null;
+  if (opportunityId && (!oportunidade || !clientId || oportunidade.client_id !== clientId))
+    throw Object.assign(new Error("A oportunidade não pertence ao cliente selecionado."), { status: 400 });
+
+  return { ...recebidos, clientId, opportunityId };
+};
+
 const responsavelValidado = async (env, access, assigneeUserId) => {
   const id = texto(assigneeUserId, 120);
   if (!id) return "";
@@ -330,8 +356,18 @@ const criarTarefa = async (env, access, planId, corpo) => {
   });
   if (erros.length) return json({ error: "Tarefa com pendências.", erros }, 400);
 
+  let camposValidados;
+  try {
+    camposValidados = await vinculosComerciaisValidados(env, access, corpo.campos);
+  } catch (erro) {
+    return json({ error: erro.message }, erro.status || 400);
+  }
   const dados = colunasTarefa(
-    { ...corpo, assigneeUserId: await responsavelValidado(env, access, corpo.assigneeUserId) },
+    {
+      ...corpo,
+      campos: camposValidados,
+      assigneeUserId: await responsavelValidado(env, access, corpo.assigneeUserId),
+    },
     plano,
   );
   const id = crypto.randomUUID();
@@ -367,6 +403,11 @@ const atualizarTarefa = async (env, access, planId, taskId, corpo) => {
 
   const mesclado = { ...tarefaDaLinha(atual), ...corpo };
   mesclado.assigneeUserId = await responsavelValidado(env, access, mesclado.assigneeUserId);
+  try {
+    mesclado.campos = await vinculosComerciaisValidados(env, access, mesclado.campos);
+  } catch (erro) {
+    return json({ error: erro.message }, erro.status || 400);
+  }
   const dados = colunasTarefa(mesclado, plano);
   const sets = Object.keys(dados).map((k) => `${k} = ?`).join(", ");
   await env.DB.prepare(

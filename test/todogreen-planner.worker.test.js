@@ -330,3 +330,39 @@ describe("plano compartilhado com pessoas específicas", () => {
     expect((await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, { token: bia.token })).status).toBe(404);
   });
 });
+
+
+describe("Planner universal com contexto comercial opcional", () => {
+  it("cria projeto de marketing sem exigir cliente ou oportunidade", async () => {
+    const plano = await (await pedir("/api/todogreen/planner/planos", {
+      metodo: "POST",
+      token: ana.token,
+      corpo: { name: "Campanha de marca", visibility: "private" },
+    })).json();
+    const resposta = await pedir(`/api/todogreen/planner/planos/${plano.id}/tarefas`, {
+      metodo: "POST",
+      token: ana.token,
+      corpo: { title: "Criar conceito da campanha", campos: {} },
+    });
+    expect(resposta.status).toBe(201);
+    expect((await resposta.json()).campos).toMatchObject({ clientId: "", opportunityId: "" });
+  });
+
+  it("recusa vínculo com cliente inexistente", async () => {
+    const plano = await (await pedir("/api/todogreen/planner/planos", {
+      metodo: "POST",
+      token: ana.token,
+      corpo: { name: "Comercial com vínculo", visibility: "private" },
+    })).json();
+    const resposta = await pedir(`/api/todogreen/planner/planos/${plano.id}/tarefas`, {
+      metodo: "POST",
+      token: ana.token,
+      corpo: {
+        title: "Ação comercial",
+        campos: { clientId: "cliente-que-nao-existe", opportunityId: "" },
+      },
+    });
+    expect(resposta.status).toBe(400);
+    expect((await resposta.json()).error).toMatch(/Cliente vinculado não encontrado/);
+  });
+});

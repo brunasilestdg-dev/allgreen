@@ -1653,6 +1653,49 @@ export async function handleTodoGreenClients(request, env, access, user) {
     });
   }
 
+  if (request.method === "DELETE" && clientIdDaRota) {
+    if (!podeGerenciar)
+      return response({ error: "Somente uma pessoa autorizada pode excluir clientes." }, 403);
+    const cliente = await env.DB.prepare(
+      "SELECT id, name FROM todogreen_clients WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ? AND archived_at IS NULL",
+    ).bind(TENANT_ID, access.ownerId, clientIdDaRota).first();
+    if (!cliente) return response({ error: "Cliente não encontrado." }, 404);
+
+    const [oportunidades, contratos, operacoes] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) AS total FROM todogreen_opportunities WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ? AND archived_at IS NULL").bind(TENANT_ID, access.ownerId, clientIdDaRota).first(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM todogreen_contracts WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ? AND archived_at IS NULL").bind(TENANT_ID, access.ownerId, clientIdDaRota).first(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM todogreen_client_operations WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ?").bind(TENANT_ID, access.ownerId, clientIdDaRota).first(),
+    ]);
+    const vinculos = {
+      oportunidades: Number(oportunidades?.total || 0),
+      contratos: Number(contratos?.total || 0),
+      operacoes: Number(operacoes?.total || 0),
+    };
+    if (Object.values(vinculos).some((total) => total > 0)) {
+      const detalhes = [
+        vinculos.oportunidades ? `${vinculos.oportunidades} oportunidade(s)` : "",
+        vinculos.contratos ? `${vinculos.contratos} contrato(s)` : "",
+        vinculos.operacoes ? `${vinculos.operacoes} operação(ões)` : "",
+      ].filter(Boolean).join(", ");
+      return response({
+        error: `Não é possível excluir "${cliente.name}": existem ${detalhes} vinculados. Exclua ou mova esses registros antes de tentar novamente.`,
+        vinculos,
+      }, 409);
+    }
+
+    const { meta } = await env.DB.prepare(
+      `UPDATE todogreen_clients
+          SET archived_at = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ? AND archived_at IS NULL`,
+    ).bind(agora, user.id, agora, TENANT_ID, access.ownerId, clientIdDaRota).run();
+    if (!meta?.changes) return response({ error: "Cliente não encontrado." }, 404);
+    await registrarAuditoriaTodoGreen(env, {
+      access, user, action: "archived", resourceType: "client", resourceId: clientIdDaRota,
+      clientId: clientIdDaRota, before: { name: cliente.name }, after: { archivedAt: agora },
+    });
+    return response({ ok: true, id: clientIdDaRota });
+  }
+
   if (request.method === "PATCH" && clientIdDaRota) {
     const body = await request.json().catch(() => ({}));
     const atual = await env.DB.prepare(
