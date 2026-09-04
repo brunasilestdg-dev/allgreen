@@ -150,6 +150,25 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
     [authHeaders],
   );
 
+  // Na PRIMEIRA vez que a Semente abre, traz a conversa guardada (0091) para
+  // retomar de onde parou em vez de começar do zero a cada reload. Só ao abrir
+  // (nunca antes: fechada, ela não fala com o servidor), uma vez, e sem pisar
+  // numa conversa já em tela. Melhor-esforço: se falhar, segue com a tela vazia.
+  const historicoHidratado = useRef(false);
+  useEffect(() => {
+    if (!aberta || historicoHidratado.current) return;
+    historicoHidratado.current = true;
+    chamar({ historicoPersistido: true })
+      .then((dados) => {
+        const guardadas = Array.isArray(dados?.mensagens) ? dados.mensagens : [];
+        if (!guardadas.length) return;
+        setMensagens((atual) => (atual.length
+          ? atual
+          : guardadas.map((m) => ({ id: `hist-${proximoId()}`, de: m.de, texto: m.texto }))));
+      })
+      .catch(() => {});
+  }, [aberta, chamar]);
+
   const perguntar = useCallback(
     async (texto) => {
       const { valido, corpo } = corpoDaPergunta({

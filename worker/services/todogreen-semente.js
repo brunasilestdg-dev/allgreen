@@ -781,6 +781,51 @@ export async function dossieDoEspaco(env, access, user) {
   }));
 }
 
+// ===== Memória conversacional (0091) =====
+//
+// A conversa do Plantû deixa de morrer no reload: cada turno vira duas linhas
+// (pergunta + resposta) em todogreen_ai_messages, escopadas por espaço e por
+// pessoa. Tudo aqui é MELHOR-ESFORÇO: gravar/ler o histórico nunca pode
+// derrubar a resposta em si.
+const CHAVE_ASSISTENTE = "plantu";
+const LIMITE_HISTORICO = 40;
+
+const carregarHistoricoDoPlantu = async (env, access, user) => {
+  const { results } = await env.DB.prepare(
+    `SELECT role, content, client_id, created_at FROM todogreen_ai_messages
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND user_id = ? AND assistente = ?
+        AND archived_at IS NULL
+      ORDER BY created_at DESC, rowid DESC
+      LIMIT ?`,
+  ).bind(TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, LIMITE_HISTORICO)
+    .all().catch(() => ({ results: [] }));
+  // Volta em ordem cronológica (a query pega os mais recentes; invertemos).
+  return (results || []).reverse().map((row) => ({
+    de: row.role === "user" ? "voce" : "semente",
+    texto: row.content,
+    clienteId: row.client_id || "",
+    em: row.created_at,
+  }));
+};
+
+const gravarTurnoDoPlantu = async (env, access, user, { pergunta, resposta, clienteId }) => {
+  const agora = new Date().toISOString();
+  const linha = (role, content) => env.DB.prepare(
+    `INSERT INTO todogreen_ai_messages
+       (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+  ).bind(crypto.randomUUID(), TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, role, content, clienteId || null, agora);
+  try {
+    await env.DB.batch([
+      linha("user", clean(pergunta, 2000)),
+      linha("assistant", clean(resposta, 8000)),
+    ]);
+  } catch (erro) {
+    // Persistir a conversa é secundário: nunca falhar a resposta por causa disso.
+    console.error("Plantû: não consegui gravar o histórico da conversa", erro);
+  }
+};
+
 // ===== A porta =====
 
 export async function handleTodoGreenSemente(request, env, access, user) {
@@ -805,6 +850,12 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     ).bind(TENANT_ID, access.ownerId, new Date().toISOString().slice(0, 10), email, user.id)
       .all().then((r) => (r.results || []).map((item) => ({ titulo: item.title })));
     return response(montarPauta({ indice: montarIndice(linhas), tarefasVencidas: vencidas }));
+  }
+
+  // Hidratação: ao abrir, a tela pede a conversa guardada para não começar do
+  // zero. Só leitura, sem modelo.
+  if (body.historicoPersistido) {
+    return response({ mensagens: await carregarHistoricoDoPlantu(env, access, user) });
   }
 
   // Caminho da execução: a pessoa já leu a proposta e clicou. Nenhum modelo é
@@ -899,8 +950,12 @@ export async function handleTodoGreenSemente(request, env, access, user) {
 
   decisao = await garantirRespostaEmPortugues(envIa, decisao);
 
+  const resposta = decisao.resposta || "Não consegui formular uma resposta com os dados desta carteira.";
+  // Guarda o turno para a conversa sobreviver ao reload (melhor-esforço).
+  await gravarTurnoDoPlantu(env, access, user, { pergunta, resposta, clienteId: clean(body.clienteId, 60) });
+
   return response({
-    resposta: decisao.resposta || "Não consegui formular uma resposta com os dados desta carteira.",
+    resposta,
     consultou,
     proposta: decisao.acao || null,
     carteira: indice.length,
