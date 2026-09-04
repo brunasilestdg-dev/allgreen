@@ -10,7 +10,6 @@ import {
   CircleDollarSign,
   Copy,
   FileCheck2,
-  FileText,
   Gauge,
   KeyRound,
   MapPinned,
@@ -366,28 +365,6 @@ function CiotTable({ rows = [] }) {
   );
 }
 
-function Readiness({ data }) {
-  const items = [
-    ["Roteirização", data?.routing, Route],
-    ["API TMS", data?.api, Cable],
-    ["Faturamento", data?.billing, CircleDollarSign],
-    ["CT-e", data?.cte, FileText],
-    ["MDF-e", data?.mdfe, FileText],
-    ["CIOT", data?.ciot, FileCheck2],
-  ];
-  return (
-    <div className="tms-readiness">
-      {items.map(([label, ready, Icon]) => (
-        <div key={label} className={ready ? "ready" : "pending"}>
-          <Icon size={17} />
-          <span>{label}</span>
-          <strong>{ready ? "Disponível" : "Construir/configurar"}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ControlTower({ data, onSection }) {
   const indicators = data?.indicators || {};
   return (
@@ -421,14 +398,6 @@ function ControlTower({ data, onSection }) {
             </div>
           ))}
         </div>
-      </section>
-
-      <section className="tms-panel">
-        <div className="tms-panel-head">
-          <div><span>Prontidão</span><h2>Capacidades do TMS</h2></div>
-          <button type="button" className="tms-link" onClick={() => onSection("integracoes")}>Ver integrações</button>
-        </div>
-        <Readiness data={data?.readiness} />
       </section>
 
       <section className="tms-panel">
@@ -503,10 +472,6 @@ function FractionalCargo() {
           <div><ScanLine size={20} /><span><strong>Cross-docking e leitura</strong><small>Entrada, triagem, transferência, desconsolidação e saída por evento.</small></span></div>
           <div><Route size={20} /><span><strong>Última milha</strong><small>Após a desconsolidação, os volumes entram na roteirização local e seguem até o POD.</small></span></div>
         </div>
-      </section>
-      <section className="tms-panel">
-        <div className="tms-panel-head"><div><span>Núcleo nativo</span><h2>Próxima construção</h2></div></div>
-        <p className="tms-copy">A camada visual já está separada. O próximo bloco é criar consolidação, viagem, trecho, hub e leitura como entidades próprias. Os volumes/Track IDs já fazem parte do núcleo da API externa.</p>
       </section>
     </div>
   );
