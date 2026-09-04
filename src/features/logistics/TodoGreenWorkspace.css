@@ -1001,3 +1001,13 @@
 @media (max-width: 640px) {
   .tdg-contact-compose-grid { grid-template-columns: 1fr; }
 }
+
+/* Notícias: bloco da carteira em destaque acima do mercado amplo. */
+.tdg-intelligence-portfolio-top { display: grid; gap: 8px; }
+.tdg-intelligence-portfolio-top h3 {
+  color: var(--tdg-green, #17624f);
+  font-size: .82rem;
+  font-weight: 850;
+  letter-spacing: .02em;
+  margin: 6px 0 2px;
+}

@@ -186,6 +186,7 @@ export const buildTodoGreenWorkspaceIntelligence = ({ clients = [] } = {}) => {
   const news = [];
   const rfqs = [];
   const supplierLinks = [];
+  const decisors = [];
 
   list(clients).forEach((client) => {
     list(client.crm?.contacts).filter(trustedContact).forEach((contact) => {
@@ -206,6 +207,22 @@ export const buildTodoGreenWorkspaceIntelligence = ({ clients = [] } = {}) => {
     );
     rfqs.push(...sourcedItems(client, report, "openRfqs", "rfq"));
     supplierLinks.push(...sourcedItems(client, report, "supplierLinks", "supplier"));
+    // Decisores já achados na pesquisa POR CONTA (procurementPeople): a aba
+    // "LinkedIn e decisores" do hub ficava vazia porque só a busca com empresa
+    // digitada os populava. Aqui reaproveitamos o que a carteira já pesquisou.
+    decisors.push(
+      ...list(report.procurementPeople).map((pessoa) => ({
+        kind: "decisors",
+        clientId: client.id,
+        clientName: client.name || client.company || "Conta sem nome",
+        company: client.name || client.company || "",
+        title: pessoa.name || pessoa.title || "",
+        url: pessoa.url || "",
+        snippet: pessoa.snippet || "",
+        provider: pessoa.provider || "",
+        checkedAt: report.checkedAt || client.updatedAt || "",
+      })),
+    );
   });
 
   const byMostRecent = (a, b) => String(b.checkedAt || "").localeCompare(String(a.checkedAt || ""));
@@ -214,6 +231,7 @@ export const buildTodoGreenWorkspaceIntelligence = ({ clients = [] } = {}) => {
     news: uniqueSources(news).sort(byMostRecent),
     rfqs: uniqueSources(rfqs).sort(byMostRecent),
     supplierLinks: uniqueSources(supplierLinks).sort(byMostRecent),
+    decisors: uniqueSources(decisors).sort(byMostRecent),
   };
 };
 

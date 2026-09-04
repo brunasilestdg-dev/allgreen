@@ -414,7 +414,7 @@ export default function TodoGreenIntelligenceHub({
     ["campaigns", "Campanhas", "workflow"],
     ["radar", "RFQs / RFIs", "ao vivo"],
     ["news", "Notícias", decorados.filter((item) => item.kind === "news").length],
-    ["decisors", "LinkedIn e decisores", decorados.filter((item) => item.kind === "decisors").length],
+    ["decisors", "LinkedIn e decisores", decorados.filter((item) => item.kind === "decisors").length + (intelligence.decisors?.length || 0)],
   ];
 
   const research = async () => {
@@ -458,7 +458,20 @@ export default function TodoGreenIntelligenceHub({
     }
   };
 
-  const doTipo = decorados.filter((item) => item.kind === (view === "decisors" ? "decisors" : "news"));
+  const mercadoDoTipo = decorados.filter((item) => item.kind === (view === "decisors" ? "decisors" : "news"));
+  // A aba de decisores reaproveita quem a carteira já pesquisou (procurement de
+  // cada conta), somado ao que a busca de mercado trouxe — deduplicado por URL.
+  const doTipo = view === "decisors"
+    ? (() => {
+        const vistos = new Set();
+        return [...(intelligence.decisors || []), ...mercadoDoTipo].filter((item) => {
+          const chave = String(item.url || "").trim().replace(/[?#].*$/, "").replace(/\/$/, "");
+          if (!chave || vistos.has(chave)) return false;
+          vistos.add(chave);
+          return true;
+        });
+      })()
+    : mercadoDoTipo;
   const visible = view === "news" && temaAtivo !== "todas"
     ? doTipo.filter((item) => item.tema === temaAtivo)
     : doTipo;
@@ -508,8 +521,17 @@ export default function TodoGreenIntelligenceHub({
           Última pesquisa: {new Date(lastRun.createdAt).toLocaleString("pt-BR")} · {lastRun.resultCount} resultado(s)
         </small>
       )}
+      {/* Notícias: a carteira vem PRIMEIRO (pedido da titular) — sinais já
+          vinculados aos clientes, e só depois o mercado amplo. */}
+      {view === "news" && portfolioSources.length > 0 && (
+        <div className="tdg-intelligence-portfolio-top">
+          <h3>Da sua carteira ({portfolioSources.length})</h3>
+          <SourceList items={portfolioSources} empty={view} onNavigate={onNavigate} />
+          <h3>Mercado amplo</h3>
+        </div>
+      )}
       {showSearchHeader && <MarketSourceList items={visible} loading={loading} onStatus={updateStatus} />}
-      {portfolioSources.length > 0 && (
+      {view !== "news" && portfolioSources.length > 0 && (
         <details className="tdg-intelligence-portfolio">
           <summary>Sinais já vinculados à carteira ({portfolioSources.length})</summary>
           <SourceList items={portfolioSources} empty={view} onNavigate={onNavigate} />
