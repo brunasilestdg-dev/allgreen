@@ -276,6 +276,35 @@
   padding: 6px 9px;
 }
 
+/* Voto 👍/👎 na resposta do Plantû: discreto, aparece na própria bolha. */
+.semente-avaliar {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.semente-avaliar button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid #d7e3dd;
+  border-radius: 7px;
+  color: #7c8a84;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px 7px;
+}
+
+.semente-avaliar button:hover {
+  border-color: var(--tdg-green, #17624f);
+  color: var(--tdg-green, #17624f);
+}
+
+.semente-avaliar button.ativo {
+  background: var(--tdg-green, #17624f);
+  border-color: var(--tdg-green, #17624f);
+  color: #fff;
+}
+
 .semente-aviso {
   background: #fff5e4;
   border-radius: 9px;

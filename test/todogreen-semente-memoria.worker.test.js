@@ -48,16 +48,18 @@ async function semearMensagem(ownerId, userId, role, content) {
   ).bind(crypto.randomUUID(), ownerId, userId, role, content, new Date().toISOString()).run();
 }
 
-const pedirHistorico = (token) =>
+const pedir = (token, corpo) =>
   worker.fetch(
     new Request("https://app.test/api/todogreen/semente", {
       method: "POST",
       headers: { "cf-connecting-ip": nextIp(), authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ historicoPersistido: true }),
+      body: JSON.stringify(corpo),
     }),
     env,
     { waitUntil() {}, passThroughOnException() {} },
   );
+
+const pedirHistorico = (token) => pedir(token, { historicoPersistido: true });
 
 let ana;
 let bruno;
@@ -93,5 +95,27 @@ describe("memória conversacional do Plantû", () => {
     expect(resposta.status).toBe(200);
     const { mensagens } = await resposta.json();
     expect(mensagens).toEqual([]);
+  });
+
+  it("avaliação (👍/👎) é da própria pessoa: ninguém vota na resposta de outra", async () => {
+    // Uma resposta do assistente da Ana, com id conhecido.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_ai_messages
+         (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
+       VALUES ('resp-ana-voto', 'todogreen', ?, ?, 'plantu', 'assistant', 'Resposta avaliável.', NULL, ?, NULL)`,
+    ).bind(ana.id, ana.id, new Date().toISOString()).run();
+
+    // Bruno tenta avaliar a resposta da Ana → 404 (para ele, não existe).
+    const brunoTenta = await pedir(bruno.token, { avaliar: { mensagemId: "resp-ana-voto", nota: 1 } });
+    expect(brunoTenta.status).toBe(404);
+
+    // Ana avalia a própria resposta → grava.
+    const anaVota = await pedir(ana.token, { avaliar: { mensagemId: "resp-ana-voto", nota: 1 } });
+    expect(anaVota.status).toBe(200);
+    expect((await anaVota.json()).avaliacao).toBe(1);
+
+    // O voto continua NULL na visão do Bruno — ele nunca tocou nela.
+    const linha = await env.DB.prepare("SELECT rating FROM todogreen_ai_messages WHERE id = 'resp-ana-voto'").first();
+    expect(linha.rating).toBe(1);
   });
 });

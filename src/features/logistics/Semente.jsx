@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Send, X } from "lucide-react";
+import { Check, Send, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import SementeAvatar from "./SementeAvatar.jsx";
 import {
   HABILIDADES,
@@ -164,7 +164,13 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
         if (!guardadas.length) return;
         setMensagens((atual) => (atual.length
           ? atual
-          : guardadas.map((m) => ({ id: `hist-${proximoId()}`, de: m.de, texto: m.texto }))));
+          : guardadas.map((m) => ({
+            id: `hist-${proximoId()}`,
+            de: m.de,
+            texto: m.texto,
+            mensagemId: m.id || null,
+            avaliacao: m.avaliacao ?? null,
+          }))));
       })
       .catch(() => {});
   }, [aberta, chamar]);
@@ -191,6 +197,8 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
             texto: dados.resposta,
             consultou: dados.consultou || null,
             proposta: dados.proposta || null,
+            mensagemId: dados.mensagemId || null,
+            avaliacao: null,
           },
         ]);
       } catch (erro) {
@@ -203,6 +211,24 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
       }
     },
     [chamar, clienteId, mensagens, pagina, pensando],
+  );
+
+  // Avaliação 👍/👎 de uma resposta. Otimista: reflete o voto na hora; clicar
+  // no mesmo tira o voto; se o servidor recusar, volta ao anterior.
+  const avaliar = useCallback(
+    async (mensagemId, nota) => {
+      const alvo = mensagens.find((m) => m.mensagemId === mensagemId);
+      if (!alvo) return;
+      const nova = alvo.avaliacao === nota ? null : nota;
+      const anterior = alvo.avaliacao ?? null;
+      setMensagens((atual) => atual.map((m) => (m.mensagemId === mensagemId ? { ...m, avaliacao: nova } : m)));
+      try {
+        await chamar({ avaliar: { mensagemId, nota: nova === null ? 0 : nova } });
+      } catch {
+        setMensagens((atual) => atual.map((m) => (m.mensagemId === mensagemId ? { ...m, avaliacao: anterior } : m)));
+      }
+    },
+    [chamar, mensagens],
   );
 
   const executar = useCallback(
@@ -305,6 +331,26 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
             )}
             {item.feito && <small className="semente-feito">{item.feito}</small>}
             {item.falhaDaAcao && <small className="semente-aviso">{item.falhaDaAcao}</small>}
+            {item.de === "semente" && !item.falhou && item.mensagemId && (
+              <div className="semente-avaliar" role="group" aria-label="Esta resposta ajudou?">
+                <button
+                  type="button"
+                  className={item.avaliacao === 1 ? "ativo" : ""}
+                  onClick={() => avaliar(item.mensagemId, 1)}
+                  aria-pressed={item.avaliacao === 1}
+                  aria-label="Ajudou"
+                  title="Ajudou"
+                ><ThumbsUp size={13} /></button>
+                <button
+                  type="button"
+                  className={item.avaliacao === -1 ? "ativo" : ""}
+                  onClick={() => avaliar(item.mensagemId, -1)}
+                  aria-pressed={item.avaliacao === -1}
+                  aria-label="Não ajudou"
+                  title="Não ajudou"
+                ><ThumbsDown size={13} /></button>
+              </div>
+            )}
           </div>
         ))}
 

@@ -792,7 +792,7 @@ const LIMITE_HISTORICO = 40;
 
 const carregarHistoricoDoPlantu = async (env, access, user) => {
   const { results } = await env.DB.prepare(
-    `SELECT role, content, client_id, created_at FROM todogreen_ai_messages
+    `SELECT id, role, content, client_id, created_at, rating FROM todogreen_ai_messages
       WHERE tenant_id = ? AND workspace_owner_id = ? AND user_id = ? AND assistente = ?
         AND archived_at IS NULL
       ORDER BY created_at DESC, rowid DESC
@@ -801,29 +801,53 @@ const carregarHistoricoDoPlantu = async (env, access, user) => {
     .all().catch(() => ({ results: [] }));
   // Volta em ordem cronológica (a query pega os mais recentes; invertemos).
   return (results || []).reverse().map((row) => ({
+    id: row.role === "assistant" ? row.id : undefined,
     de: row.role === "user" ? "voce" : "semente",
     texto: row.content,
     clienteId: row.client_id || "",
     em: row.created_at,
+    // Voto só faz sentido na resposta do assistente.
+    avaliacao: row.role === "assistant" ? (row.rating ?? null) : undefined,
   }));
 };
 
 const gravarTurnoDoPlantu = async (env, access, user, { pergunta, resposta, clienteId }) => {
   const agora = new Date().toISOString();
-  const linha = (role, content) => env.DB.prepare(
+  const idResposta = crypto.randomUUID();
+  const linha = (id, role, content) => env.DB.prepare(
     `INSERT INTO todogreen_ai_messages
        (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-  ).bind(crypto.randomUUID(), TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, role, content, clienteId || null, agora);
+  ).bind(id, TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, role, content, clienteId || null, agora);
   try {
     await env.DB.batch([
-      linha("user", clean(pergunta, 2000)),
-      linha("assistant", clean(resposta, 8000)),
+      linha(crypto.randomUUID(), "user", clean(pergunta, 2000)),
+      linha(idResposta, "assistant", clean(resposta, 8000)),
     ]);
+    // Devolve o id da resposta para a tela poder avaliá-la (👍/👎).
+    return idResposta;
   } catch (erro) {
     // Persistir a conversa é secundário: nunca falhar a resposta por causa disso.
     console.error("Plantû: não consegui gravar o histórico da conversa", erro);
+    return null;
   }
+};
+
+// Avaliação de uma resposta (👍/👎), escopada ao dono e à pessoa: ninguém
+// avalia a mensagem de outro. nota: 1 (útil), -1 (não ajudou), 0/null limpa.
+const avaliarRespostaDoPlantu = async (env, access, user, { mensagemId, nota }) => {
+  const id = clean(mensagemId, 60);
+  if (!id) return { erro: "Informe qual resposta avaliar.", status: 400 };
+  const valor = nota === 1 || nota === -1 ? nota : null;
+  const r = await env.DB.prepare(
+    `UPDATE todogreen_ai_messages SET rating = ?
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND user_id = ?
+        AND assistente = ? AND role = 'assistant' AND archived_at IS NULL`,
+  ).bind(valor, id, TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE)
+    .run().catch(() => null);
+  // 404 e não 403: a mensagem de outra pessoa "não existe" para esta.
+  if (!r || (r.meta && r.meta.changes === 0)) return { erro: "Resposta não encontrada.", status: 404 };
+  return { ok: true, avaliacao: valor };
 };
 
 // ===== A porta =====
@@ -856,6 +880,16 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   // zero. Só leitura, sem modelo.
   if (body.historicoPersistido) {
     return response({ mensagens: await carregarHistoricoDoPlantu(env, access, user) });
+  }
+
+  // Avaliação (👍/👎) de uma resposta: só grava o voto, sem modelo.
+  if (body.avaliar) {
+    const r = await avaliarRespostaDoPlantu(env, access, user, {
+      mensagemId: body.avaliar.mensagemId,
+      nota: Number(body.avaliar.nota),
+    });
+    if (r.erro) return response({ error: r.erro }, r.status || 400);
+    return response({ avaliacao: r.avaliacao });
   }
 
   // Caminho da execução: a pessoa já leu a proposta e clicou. Nenhum modelo é
@@ -951,11 +985,13 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   decisao = await garantirRespostaEmPortugues(envIa, decisao);
 
   const resposta = decisao.resposta || "Não consegui formular uma resposta com os dados desta carteira.";
-  // Guarda o turno para a conversa sobreviver ao reload (melhor-esforço).
-  await gravarTurnoDoPlantu(env, access, user, { pergunta, resposta, clienteId: clean(body.clienteId, 60) });
+  // Guarda o turno para a conversa sobreviver ao reload (melhor-esforço) e
+  // devolve o id da resposta para a tela poder avaliá-la.
+  const mensagemId = await gravarTurnoDoPlantu(env, access, user, { pergunta, resposta, clienteId: clean(body.clienteId, 60) });
 
   return response({
     resposta,
+    mensagemId,
     consultou,
     proposta: decisao.acao || null,
     carteira: indice.length,
