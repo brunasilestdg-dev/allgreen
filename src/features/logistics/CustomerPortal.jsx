@@ -118,7 +118,22 @@ function SemDados({ titulo, texto }) {
   );
 }
 
-function Inicio({ resumo }) {
+// Uma seção da home, por persona: quem cuida de logística, de ESG e de
+// financeiro encontra o seu recorte sem caçar entre indicadores misturados.
+// Cada seção leva à aba completa daquele assunto.
+function PersonaSecao({ icone: Icone, titulo, descricao, irRotulo, aoIr, children }) {
+  return (
+    <section className="cp-persona">
+      <header className="cp-persona-cabecalho">
+        <div className="cp-persona-titulo"><Icone size={18} /><div><h2>{titulo}</h2><p>{descricao}</p></div></div>
+        {aoIr && <button type="button" className="cp-persona-link" onClick={aoIr}>{irRotulo} →</button>}
+      </header>
+      <div className="cp-indicadores">{children}</div>
+    </section>
+  );
+}
+
+function Inicio({ resumo, financeiro, onIr }) {
   if (!resumo) return null;
   if (resumo.semDados)
     return (
@@ -129,9 +144,35 @@ function Inicio({ resumo }) {
     );
 
   const { operacoes, ambiental, greenScore } = resumo;
+  const temFinanceiro = financeiro && financeiro.totais;
   return (
-    <>
-      <div className="cp-indicadores">
+    <div className="cp-personas">
+      <PersonaSecao
+        icone={Route}
+        titulo="Logística"
+        descricao="Suas operações e entregas no período."
+        irRotulo="Ver operações"
+        aoIr={onIr ? () => onIr("operacoes") : undefined}
+      >
+        <Indicador
+          rotulo="Operações"
+          valor={inteiro.format(operacoes?.total || 0)}
+          detalhe={`${inteiro.format(operacoes?.entregas || 0)} entregas`}
+        />
+        <Indicador
+          rotulo="Distância"
+          valor={`${inteiro.format(operacoes?.distanciaKm || 0)} km`}
+          detalhe={`ocupação média ${numero.format(operacoes?.ocupacaoMedia || 0)}%`}
+        />
+      </PersonaSecao>
+
+      <PersonaSecao
+        icone={Leaf}
+        titulo="ESG e impacto ambiental"
+        descricao="O que sua operação elétrica evitou emitir."
+        irRotulo="Ver impacto"
+        aoIr={onIr ? () => onIr("esg") : undefined}
+      >
         <Indicador
           rotulo="Green Score"
           valor={greenScore ? numero.format(greenScore.valor ?? greenScore.score) : "—"}
@@ -149,24 +190,37 @@ function Inicio({ resumo }) {
           valor={`${inteiro.format(ambiental?.dieselEvitadoL || 0)} L`}
           detalhe={`${ambiental?.calculos || 0} cálculo(s) auditável(is)`}
         />
-        <Indicador
-          rotulo="Operações"
-          valor={inteiro.format(operacoes?.total || 0)}
-          detalhe={`${inteiro.format(operacoes?.entregas || 0)} entregas`}
-        />
-        <Indicador
-          rotulo="Distância"
-          valor={`${inteiro.format(operacoes?.distanciaKm || 0)} km`}
-          detalhe={`ocupação média ${numero.format(operacoes?.ocupacaoMedia || 0)}%`}
-        />
-      </div>
+      </PersonaSecao>
       {ambiental?.qualidadeDados > 0 && ambiental.qualidadeDados < 70 ? (
         <div className="cp-alerta">
           <AlertTriangle size={18} />
           <span>A qualidade dos dados está em {numero.format(ambiental.qualidadeDados)}%. Os números servem para acompanhar tendência, mas exigem cautela para uso regulatório.</span>
         </div>
       ) : null}
-    </>
+
+      {temFinanceiro ? (
+        <PersonaSecao
+          icone={Banknote}
+          titulo="Financeiro"
+          descricao="O que está em aberto e o que já foi quitado."
+          irRotulo="Ver faturas"
+          aoIr={onIr ? () => onIr("financeiro") : undefined}
+        >
+          <Indicador
+            rotulo="Em aberto"
+            valor={BRL_PORTAL.format(financeiro.totais.emAberto || 0)}
+            detalhe="soma dos títulos não quitados"
+            tom={financeiro.totais.emAberto ? "alerta" : "positivo"}
+          />
+          <Indicador
+            rotulo="Quitado"
+            valor={BRL_PORTAL.format(financeiro.totais.quitado || 0)}
+            detalhe="histórico liquidado"
+            tom="positivo"
+          />
+        </PersonaSecao>
+      ) : null}
+    </div>
   );
 }
 
@@ -442,6 +496,7 @@ function Solicitacoes({ podeAbrir, setAviso }) {
 export default function CustomerPortal() {
   const [sessao, setSessao] = useState(null);
   const [resumo, setResumo] = useState(null);
+  const [financeiro, setFinanceiro] = useState(null);
   const [evidencias, setEvidencias] = useState([]);
   const [carregandoEvidencias, setCarregandoEvidencias] = useState(false);
   const [aba, setAba] = useState("inicio");
@@ -455,6 +510,15 @@ export default function CustomerPortal() {
       .then(([dadosSessao, dadosResumo]) => { if (ativo) { setSessao(dadosSessao); setResumo(dadosResumo.resumo); } })
       .catch((erro) => { if (ativo) setErroFatal(erro.message); })
       .finally(() => { if (ativo) setPronto(true); });
+    return () => { ativo = false; };
+  }, []);
+
+  // Financeiro é secundário e depende de permissão (portal:document:download):
+  // busca à parte, sem travar o portal. Sem acesso, o bloco Financeiro da home
+  // simplesmente não aparece.
+  useEffect(() => {
+    let ativo = true;
+    pedir("financeiro").then((dados) => { if (ativo) setFinanceiro(dados); }).catch(() => {});
     return () => { ativo = false; };
   }, []);
 
@@ -511,7 +575,7 @@ export default function CustomerPortal() {
       <nav className="cp-menu" aria-label="Navegação do portal">{menu.map((item) => { const Icone = ICONES[item.id] || Home; return <button key={item.id} type="button" className={aba === item.id ? "ativo" : ""} onClick={() => setAba(item.id)} aria-current={aba === item.id ? "page" : undefined}><Icone size={17} /><span>{item.label}</span></button>; })}</nav>
       {aviso && <div className="cp-alerta cp-alerta-acao" role="alert"><AlertTriangle size={18} /><span>{aviso}</span><button type="button" onClick={() => setAviso("")} aria-label="Fechar aviso">×</button></div>}
       <section className="cp-conteudo">
-        {aba === "inicio" && <Inicio resumo={resumo} />}
+        {aba === "inicio" && <Inicio resumo={resumo} financeiro={financeiro} onIr={setAba} />}
         {aba === "operacoes" && <Operacoes pedir={pedir} enviar={enviar} setAviso={setAviso} />}
         {aba === "green-score" && <GreenScoreDetalhado resumo={resumo} />}
         {aba === "esg" && <ImpactoAmbiental resumo={resumo} />}
