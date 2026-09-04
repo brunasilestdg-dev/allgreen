@@ -153,6 +153,7 @@ const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
 const RoteirizacaoPage = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
 const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
 const QualityPage = lazy(() => import("./pages/QualityPage.jsx"));
+const LegalPage = lazy(() => import("./pages/LegalPage.jsx"));
 const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
 const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
 const EnterpriseAreaPage = lazy(() => import("./pages/EnterpriseAreaPage.jsx"));
@@ -3227,7 +3228,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} interactions={verticalData.interactions} onComment={(registro) => criar("comments", registro)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><QualityPage registros={registros.quality} clients={clientes} operations={registros.operations} criar={criar} atualizar={atualizar} setToast={setToast} /></Suspense>}
       {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando inteligência de mercado...</section>}><TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={navigate} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><EnterpriseAreaPage area="legal" onNavigate={navigate} /></Suspense>}
+      {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><LegalPage registros={registros.legal} clients={clientes} criar={criar} atualizar={atualizar} setToast={setToast} /></Suspense>}
       {page === "indicadores" && <Suspense fallback={<section className="tdg-panel">Carregando indicadores...</section>}><EnterpriseAreaPage area="indicators" onNavigate={navigate} /></Suspense>}
       {page === "administracao" && <Suspense fallback={<section className="tdg-panel">Carregando administração...</section>}><EnterpriseAreaPage area="admin" onNavigate={navigate} /></Suspense>}
       {page === "relatorios" && <Suspense fallback={<section className="tdg-panel">Carregando relatórios...</section>}><ReportsPage dashboard={dashboard} data={verticalData} authHeaders={authHeaders} setToast={setToast} /></Suspense>}

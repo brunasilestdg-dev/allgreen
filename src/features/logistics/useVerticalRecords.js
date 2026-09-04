@@ -50,6 +50,8 @@ const VAZIO = Object.freeze({
   rfq: [],
   // Não conformidades de Qualidade — coleção da vertical como as demais.
   quality: [],
+  // Documentos jurídicos (minutas, contratos, aditivos) — idem.
+  legal: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {

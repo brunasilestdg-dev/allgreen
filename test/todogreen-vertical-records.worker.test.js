@@ -767,6 +767,7 @@ describe("a vertical inteira numa chamada só", () => {
       "habilitacaoKits",
       "interactions",
       "items",
+      "legal",
       "operations",
       "opportunities",
       "parties",
@@ -1444,6 +1445,74 @@ describe("qualidade: não conformidades saem da página de orientação para dad
 
   it("quem só lê não cria não conformidade", async () => {
     const criada = await pedir("/api/todogreen/records/quality", {
+      metodo: "POST",
+      token: auditor.token,
+      corpo: { titulo: "Auditor não deveria gravar" },
+    });
+    expect(criada.status).toBe(403);
+  });
+});
+
+describe("jurídico: minutas e contratos saem da página de orientação para dados reais", () => {
+  it("cria, lista, atualiza situação e recusa documento sem título", async () => {
+    const dona = await criarUsuario(`j-dona-${n}`, `j-dona-${n}@parceiro.com.br`);
+    await autorizar(dona);
+
+    const criada = await pedir("/api/todogreen/records/legal", {
+      metodo: "POST",
+      token: dona.token,
+      corpo: {
+        titulo: "Contrato de operação · Rede Alfa",
+        tipo: "contrato",
+        risco: "alto",
+        contraparte: "Rede Alfa Ltda",
+        inicioVigencia: "2026-09-01",
+        fimVigencia: "2027-09-01",
+        observacoes: "Cláusula de reajuste em discussão.",
+      },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+    expect(registro.titulo).toBe("Contrato de operação · Rede Alfa");
+    expect(registro.risco).toBe("alto");
+    expect(registro.situacao).toBe("rascunho");
+    expect(registro.revision).toBe(1);
+
+    const lista = await pedir("/api/todogreen/records/legal", { token: dona.token });
+    expect((await lista.json()).registros.map((r) => r.titulo)).toContain("Contrato de operação · Rede Alfa");
+
+    const atualizada = await pedir(`/api/todogreen/records/legal/${registro.id}`, {
+      metodo: "PATCH",
+      token: dona.token,
+      corpo: { situacao: "em_analise", revision: 1 },
+    });
+    expect(atualizada.status).toBe(200);
+    expect((await atualizada.json()).registro.situacao).toBe("em_analise");
+
+    const semTitulo = await pedir("/api/todogreen/records/legal", {
+      metodo: "POST",
+      token: dona.token,
+      corpo: { tipo: "minuta" },
+    });
+    expect(semTitulo.status).toBe(400);
+  });
+
+  it("valores fora da lista caem no padrão em vez de gravar lixo", async () => {
+    const dona = await criarUsuario(`j-norm-${n}`, `j-norm-${n}@parceiro.com.br`);
+    await autorizar(dona);
+    const criada = await pedir("/api/todogreen/records/legal", {
+      metodo: "POST",
+      token: dona.token,
+      corpo: { titulo: "Documento estranho", tipo: "foguete", risco: "catastrofico", situacao: "inventada" },
+    });
+    const { registro } = await criada.json();
+    expect(registro.tipo).toBe("minuta");
+    expect(registro.risco).toBe("medio");
+    expect(registro.situacao).toBe("rascunho");
+  });
+
+  it("quem só lê não cria documento jurídico", async () => {
+    const criada = await pedir("/api/todogreen/records/legal", {
       metodo: "POST",
       token: auditor.token,
       corpo: { titulo: "Auditor não deveria gravar" },
