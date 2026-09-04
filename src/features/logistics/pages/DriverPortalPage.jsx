@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, MapPin, PackageCheck, Truck } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
@@ -26,13 +26,27 @@ const pedir = async (caminho, options = {}) => {
   });
   const dados = await resposta.json().catch(() => ({}));
   if (!resposta.ok) {
-    // Rejeição do servidor (viagem não é sua, dado faltando): não adianta
-    // repetir — é erro de verdade, marcado para NÃO entrar na fila offline.
     const erro = new Error(dados.error || "Não foi possível concluir.");
-    erro.rejeitadoPeloServidor = true;
+    // Só o 4xx é rejeição DEFINITIVA (viagem não é sua, dado faltando): repetir
+    // não resolveria, então NÃO entra na fila offline. O 5xx é falha TRANSITÓRIA
+    // do servidor (503 sem banco, 500 momentâneo) — tratado como falha de rede:
+    // fica na fila e é retentado. Antes, qualquer não-2xx descartava a entrega.
+    if (resposta.status >= 400 && resposta.status < 500) erro.rejeitadoPeloServidor = true;
     throw erro;
   }
   return dados;
+};
+
+// Chave única por registro, estável entre reenvios: é o id da linha na fila e
+// vai no payload como idempotencyKey, para o servidor deduplicar um reenvio
+// (resposta perdida depois do commit) em vez de duplicar evento/notificação.
+const novaChave = () => {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  } catch {
+    /* segue para o fallback */
+  }
+  return `k-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
 };
 
 // Fila offline: na estrada o sinal cai. Quando o envio falha por REDE (fetch
@@ -83,27 +97,50 @@ export default function DriverPortalPage() {
   const [dados, setDados] = useState({ recebedor: "", comprovanteUrl: "", descricao: "" });
   const [ocupado, setOcupado] = useState(false);
   const [pendentesFila, setPendentesFila] = useState(() => lerFila().length);
+  // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
+  // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
+  // dreno por vez.
+  const escoandoRef = useRef(false);
 
   // Envia (ou reenvia) o que está na fila offline. Cada item que o servidor
-  // aceita sai da fila; o que falha por rede de novo fica para a próxima.
+  // aceita (ou rejeita em definitivo) sai da fila; o que falha por rede/5xx fica
+  // para a próxima. Ao final, RELÊ a fila e remove só os ids processados — assim
+  // um evento enfileirado DURANTE o dreno não é apagado por um snapshot velho.
   const escoarFila = useCallback(async () => {
+    if (escoandoRef.current) return { enviados: 0 };
     let fila = lerFila();
     if (!fila.length) return { enviados: 0 };
-    let enviados = 0;
-    const restantes = [];
-    for (const item of fila) {
-      try {
-        await pedir(`/viagens/${item.viagemId}/evento`, { method: "POST", body: JSON.stringify(item.payload) });
-        enviados += 1;
-      } catch (motivo) {
-        // Rejeição do servidor: descarta (não vai passar nunca). Falha de rede:
-        // guarda para tentar de novo quando o sinal voltar.
-        if (!motivo.rejeitadoPeloServidor) restantes.push(item);
-      }
+    // Itens gravados pela versão anterior não têm id. Atribui um e persiste AGORA
+    // (síncrono, antes de qualquer await, então nenhum enfileiramento se mistura),
+    // para o dreno conseguir removê-los individualmente ao final pela mesma chave.
+    if (fila.some((item) => !item.id)) {
+      fila = fila.map((item) => (item.id ? item : { ...item, id: novaChave() }));
+      gravarFila(fila);
     }
-    gravarFila(restantes);
-    setPendentesFila(restantes.length);
-    return { enviados };
+    escoandoRef.current = true;
+    try {
+      let enviados = 0;
+      const processados = new Set();
+      for (const item of fila) {
+        try {
+          await pedir(`/viagens/${item.viagemId}/evento`, { method: "POST", body: JSON.stringify(item.payload) });
+          processados.add(item.id);
+          enviados += 1;
+        } catch (motivo) {
+          // Rejeição definitiva do servidor (4xx): sai da fila (não vai passar
+          // nunca). Falha de rede ou 5xx transitório: fica para tentar de novo.
+          if (motivo.rejeitadoPeloServidor) processados.add(item.id);
+        }
+      }
+      // Relê a fila atual (pode ter crescido durante os awaits) e tira só o que
+      // foi processado — em vez de sobrescrever com o snapshot inicial.
+      const atual = lerFila().filter((item) => !processados.has(item.id));
+      gravarFila(atual);
+      setPendentesFila(atual.length);
+      return { enviados };
+    } finally {
+      escoandoRef.current = false;
+    }
   }, []);
 
   const carregar = useCallback(async () => {
@@ -134,12 +171,18 @@ export default function DriverPortalPage() {
     if (!formulario) return;
     setOcupado(true);
     const gps = await posicaoAtual();
+    const chave = novaChave();
     const payload = {
       tipo: formulario.tipo,
       descricao: dados.descricao,
       recebedor: dados.recebedor,
       comprovanteUrl: dados.comprovanteUrl,
       local: gps ? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}` : "",
+      // Momento REAL do gesto: sem isto, um evento que espera horas na fila é
+      // carimbado com a hora do sync (o servidor usa corpo.ocorridoEm quando vem).
+      ocorridoEm: new Date().toISOString(),
+      // Chave de idempotência estável entre reenvios (o servidor deduplica).
+      idempotencyKey: chave,
       ...(gps || {}),
     };
     try {
@@ -150,12 +193,13 @@ export default function DriverPortalPage() {
       await carregar();
     } catch (motivo) {
       if (motivo.rejeitadoPeloServidor) {
-        // O servidor recusou (dado faltando, viagem não é sua): mostra o motivo.
+        // O servidor recusou em definitivo (4xx): mostra o motivo, não enfileira.
         setAviso(motivo.message);
       } else {
-        // Falha de rede: guarda no celular e segue. Não perde a entrega.
+        // Falha de rede ou 5xx transitório: guarda no celular e segue. O id da
+        // linha é a própria chave de idempotência — mesmo reenvio, mesma chave.
         const fila = lerFila();
-        fila.push({ viagemId: formulario.viagem.id, referencia: formulario.viagem.referencia, tipo: formulario.tipo, payload, criadoEm: new Date().toISOString() });
+        fila.push({ id: chave, viagemId: formulario.viagem.id, referencia: formulario.viagem.referencia, tipo: formulario.tipo, payload, criadoEm: payload.ocorridoEm });
         gravarFila(fila);
         setPendentesFila(fila.length);
         setFormulario(null);

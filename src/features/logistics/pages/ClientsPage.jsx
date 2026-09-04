@@ -693,6 +693,11 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   const [editingId, setEditingId] = useState("");
   const [taskClientId, setTaskClientId] = useState("");
   const [deletingClientId, setDeletingClientId] = useState("");
+  // Valor de temperatura sendo salvo pelo seletor inline: enquanto salva, o
+  // <select> mostra este valor (otimista) e fica desabilitado — senão ele
+  // reverte ao valor antigo durante o PATCH+recarga e uma segunda troca com a
+  // revisão velha tomaria 409, perdendo a escolha.
+  const [salvandoTemperatura, setSalvandoTemperatura] = useState(null);
   const [completingSuggestion, setCompletingSuggestion] = useState(false);
   const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
   const [detailTab, setDetailTab] = useState("summary");
@@ -1068,6 +1073,18 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       setToast?.("Visão 360º atualizada."); await load();
     } catch (reason) { setError(reason.message); throw reason; }
   };
+  // Salva a temperatura pelo seletor inline sem a corrida de revisão: mostra o
+  // valor otimista e trava o seletor até o PATCH+recarga concluírem.
+  const salvarTemperatura = async (client, valor) => {
+    setSalvandoTemperatura(valor);
+    try {
+      await saveClient(client, { revision: client.revision, crm: { ...(client.crm || {}), temperature: valor } });
+    } catch {
+      /* saveClient já mostra o erro; libera o seletor no finally */
+    } finally {
+      setSalvandoTemperatura(null);
+    }
+  };
   const saveQuickContact = async (event) => {
     event.preventDefault();
     if (!selected) return;
@@ -1253,7 +1270,22 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
 
     {selected && selectedSummary && <div className="tdg-crm-detail">
       <button className="tdg-crm-back" type="button" onClick={closeClient}><ArrowLeft size={16} />Voltar para a carteira</button>
-      <header className="tdg-crm-detail-hero"><div><span>{selected.crm?.tier || "Enterprise"}{selected.crm?.temperature ? ` · ${selected.crm.temperature}` : ""}</span><h2>{selected.name}</h2><p>{selected.segment || "Segmento não informado"} · {selected.crm?.stage || "Mapeamento"}{selected.document ? ` · ${selected.document}` : ""}</p><small>{selected.crm?.source ? `Origem: ${selected.crm.source}` : "Conta da carteira To Do Green"}</small></div><div className="tdg-crm-detail-actions">{access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={15} />Editar</button>}{access.podeEditar && onInteraction && <button type="button" className="tdg-action" onClick={() => { setDetailTab("activity"); setInteractionFormRequest((valor) => valor + 1); }}><MessageCircle size={15} />Registrar contato/follow-up</button>}<button type="button" onClick={() => setTaskClientId(selected.id)}><ListPlus size={15} />Adicionar tarefa</button><button type="button" onClick={() => researchSelected("company")} disabled={researching}><Globe2 size={15} />Pesquisar empresa</button><button type="button" onClick={() => researchSelected("contacts")} disabled={researching}><UserSearch size={15} />Atualizar contatos</button><button type="button" onClick={() => setPortalPreviewOpen(true)}><Eye size={15} />Ver como cliente</button><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Pipeline <ArrowRight size={15} /></button>{access.podeGerenciar && <button type="button" className="tdg-danger-action" onClick={() => deleteClient(selected)} disabled={deletingClientId === selected.id}><Trash2 size={15} />{deletingClientId === selected.id ? "Excluindo..." : "Excluir cliente"}</button>}</div></header>
+      <header className="tdg-crm-detail-hero"><div><span>{selected.crm?.tier || "Enterprise"}{selected.crm?.temperature ? ` · ${selected.crm.temperature}` : ""}</span><h2>{selected.name}</h2><p>{selected.segment || "Segmento não informado"} · {selected.crm?.stage || "Mapeamento"}{selected.document ? ` · ${selected.document}` : ""}</p><small>{selected.crm?.source ? `Origem: ${selected.crm.source}` : "Conta da carteira To Do Green"}</small></div><div className="tdg-crm-detail-actions">{access.podeEditar && (
+        // Seletor de temperatura direto no detalhe da conta: frio/morno/quente
+        // sem precisar abrir o editor 360º (onde ele estava escondido). Salva na
+        // hora, na mesma régua de revisão do resto do CRM.
+        <label className="tdg-crm-temp-inline" title="Temperatura do lead">
+          <span>Temperatura</span>
+          <select
+            value={salvandoTemperatura !== null ? salvandoTemperatura : (selected.crm?.temperature || "")}
+            disabled={salvandoTemperatura !== null}
+            onChange={(evento) => salvarTemperatura(selected, evento.target.value)}
+          >
+            <option value="">Não classificada</option>
+            {TODO_GREEN_ACCOUNT_TEMPERATURES.map((item) => <option key={item}>{item}</option>)}
+          </select>
+        </label>
+      )}{access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={15} />Editar</button>}{access.podeEditar && onInteraction && <button type="button" className="tdg-action" onClick={() => { setDetailTab("activity"); setInteractionFormRequest((valor) => valor + 1); }}><MessageCircle size={15} />Registrar contato/follow-up</button>}<button type="button" onClick={() => setTaskClientId(selected.id)}><ListPlus size={15} />Adicionar tarefa</button><button type="button" onClick={() => researchSelected("company")} disabled={researching}><Globe2 size={15} />Pesquisar empresa</button><button type="button" onClick={() => researchSelected("contacts")} disabled={researching}><UserSearch size={15} />Atualizar contatos</button><button type="button" onClick={() => setPortalPreviewOpen(true)}><Eye size={15} />Ver como cliente</button><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Pipeline <ArrowRight size={15} /></button>{access.podeGerenciar && <button type="button" className="tdg-danger-action" onClick={() => deleteClient(selected)} disabled={deletingClientId === selected.id}><Trash2 size={15} />{deletingClientId === selected.id ? "Excluindo..." : "Excluir cliente"}</button>}</div></header>
       <nav className="tdg-crm-account-tabs" aria-label="Visões da conta">
         {[
           ["summary", "Resumo"],

@@ -23,6 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  authHeaders,
   createTmsApiKey,
   createTmsShipmentManual,
   listTmsFleetPositions,
@@ -493,7 +494,9 @@ function ElectricRouting({ setToast }) {
       </section>
 
       <Suspense fallback={<div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Abrindo roteirização...</span></div>}>
-        <RoteirizacaoDinamica setToast={setToast} />
+        {/* authHeaders é obrigatório: sem ele, Pedágios/Carregadores/IA chamam a
+            API sem token e tomam 401 ("sessão expirada" falso). */}
+        <RoteirizacaoDinamica setToast={setToast} authHeaders={authHeaders} />
       </Suspense>
     </div>
   );
@@ -881,14 +884,16 @@ export default function TmsPortal() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState("");
-
-  // Toast enxuto para a roteirização (que fala por setToast): some sozinho.
+  // Toast enxuto para a roteirização (que fala por setToast). Carrega um nonce
+  // para o timer reiniciar mesmo quando a MESMA mensagem é mostrada de novo
+  // (senão o React descarta o re-render e o toast some antes da hora).
+  const [toast, setToast] = useState({ msg: "", n: 0 });
+  const mostrarToast = useCallback((msg) => setToast((atual) => ({ msg: msg || "", n: atual.n + 1 })), []);
   useEffect(() => {
-    if (!toast) return undefined;
-    const id = setTimeout(() => setToast(""), 4200);
+    if (!toast.msg) return undefined;
+    const id = setTimeout(() => setToast((atual) => ({ ...atual, msg: "" })), 4200);
     return () => clearTimeout(id);
-  }, [toast]);
+  }, [toast.n, toast.msg]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -922,7 +927,7 @@ export default function TmsPortal() {
   if (section === "bipagem") content = <ScanSection />;
   if (section === "cargas") content = <CargasSection data={data} onReload={load} />;
   if (section === "fracionada") content = <FractionalCargo />;
-  if (section === "roteirizacao") content = <ElectricRouting setToast={setToast} />;
+  if (section === "roteirizacao") content = <ElectricRouting setToast={mostrarToast} />;
   if (section === "viagens") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Execução</span><h2>Viagens e movimentações</h2></div></div><OperationsTable rows={data?.recent?.operations} /></section>;
   if (section === "fiscal") content = <div className="tms-stack"><section className="tms-panel"><div className="tms-panel-head"><div><span>Documentos fiscais</span><h2>CT-e e MDF-e</h2></div></div><FiscalTable rows={data?.recent?.fiscal} /></section><section className="tms-panel"><div className="tms-panel-head"><div><span>ANTT</span><h2>CIOT</h2></div></div><CiotTable rows={data?.recent?.ciots} /></section></div>;
   if (section === "faturamento") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Receita operacional</span><h2>Faturamento</h2></div></div><div className="tms-billing-highlight"><CircleDollarSign size={30} /><div><strong>{data?.indicators?.billingPending || 0} item(ns) elegível(is)</strong><p>A OS concluída com POD entra na régua de faturamento já existente na Vertical. O TMS mantém o vínculo entre execução, documento fiscal e cobrança.</p></div></div></section>;
@@ -948,7 +953,7 @@ export default function TmsPortal() {
         {error ? <div className="tms-error" role="alert"><AlertTriangle size={18} /><span>{error}</span></div> : null}
         {loading && !data ? <div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Carregando torre de controle...</span></div> : content}
       </main>
-      {toast ? <div className="tms-toast" role="status">{toast}</div> : null}
+      {toast.msg ? <div className="tms-toast" role="status">{toast.msg}</div> : null}
     </div>
   );
 }

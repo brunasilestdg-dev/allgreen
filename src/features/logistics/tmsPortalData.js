@@ -7,6 +7,10 @@ const headers = () => {
   }
 };
 
+// Mesmo cabeçalho de autenticação, exportado para telas embutidas no portal
+// (a RoteirizacaoPage precisa dele para Pedágios/Carregadores/IA não tomarem 401).
+export const authHeaders = headers;
+
 async function fetchJson(path, { optional = false, method = "GET", body } = {}) {
   const response = await fetch(path, {
     method,

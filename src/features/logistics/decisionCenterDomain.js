@@ -132,8 +132,10 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
       tone: "attention",
       title: `${countLabel(overdueTasks.length, "tarefa prioritária atrasada", "tarefas prioritárias atrasadas")}`,
       detail: "Replaneje o prazo ou conclua o próximo passo.",
-      action: "Abrir projetos",
-      route: "/todogreen/central-trabalho",
+      action: "Abrir tarefas",
+      // A ferramenta de tarefas do Espaço, não /central-trabalho (que abre a
+      // Central de Implantação vazia por cima da página).
+      route: "/todogreen/espaco?ferramenta=tarefas",
     },
   ].filter(Boolean);
 

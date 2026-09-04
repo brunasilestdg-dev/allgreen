@@ -64,8 +64,10 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     : [...operationalRisks, ...alerts].filter((alert) => alertsForArea([alert], area.id).length);
   const queue = [
     ...myTasks.slice(0, 5).map((task) => ({
+      // Abre a ferramenta de tarefas do Espaço, não /central-trabalho — esse
+      // alias é sequestrado pela Central de Implantação e abria uma tela vazia.
       id: `task-${task.id}`, tone: "task", title: task.title || "Tarefa sem título",
-      detail: `${task.status || "Pendente"} · ${dueLabel(task)}`, action: "Abrir tarefa", route: "/todogreen/central-trabalho",
+      detail: `${task.status || "Pendente"} · ${dueLabel(task)}`, action: "Abrir tarefa", route: "/todogreen/espaco?ferramenta=tarefas",
     })),
     ...contextualAlerts.slice(0, Math.max(0, 6 - myTasks.length)).map((alert) => ({
       id: `alert-${alert.id}`, tone: alert.tone, title: alert.title, detail: alert.detail, action: alert.action, route: alert.route,
