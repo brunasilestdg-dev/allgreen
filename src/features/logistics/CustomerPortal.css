@@ -151,6 +151,17 @@
   color: #6f5515;
 }
 
+/* Fatura vencida: o cliente precisa ver o atraso de relance. */
+.cp-titulo-vencido {
+  border-left: 3px solid #c0392b;
+  background: #fdf3f2;
+}
+
+.cp-titulo-vencido small {
+  color: #a5342a;
+  font-weight: 600;
+}
+
 .cp-vazio {
   display: grid;
   justify-items: center;

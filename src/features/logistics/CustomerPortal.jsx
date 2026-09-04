@@ -70,10 +70,14 @@ export const escolherEmpresa = (id) => {
 };
 
 const comEmpresa = (caminho) => {
+  // Tolera caminho já prefixado: passar "/api/todogreen/portal/financeiro" aqui
+  // duplicava o prefixo e o endpoint respondia 404 (a aba Faturas não carregava).
+  // Normaliza para relativo para que a duplicação não volte por outro caminho.
+  const limpo = String(caminho).replace(/^\/?(api\/todogreen\/portal\/)+/, "");
   const empresa = empresaEscolhida();
-  if (!empresa) return `/api/todogreen/portal/${caminho}`;
-  const separador = caminho.includes("?") ? "&" : "?";
-  return `/api/todogreen/portal/${caminho}${separador}empresa=${encodeURIComponent(empresa)}`;
+  if (!empresa) return `/api/todogreen/portal/${limpo}`;
+  const separador = limpo.includes("?") ? "&" : "?";
+  return `/api/todogreen/portal/${limpo}${separador}empresa=${encodeURIComponent(empresa)}`;
 };
 
 const pedir = async (caminho) => {
@@ -227,13 +231,15 @@ const BRL_PORTAL = new Intl.NumberFormat("pt-BR", { style: "currency", currency:
 function Faturas({ setAviso }) {
   const [dados, setDados] = useState(null);
   useEffect(() => {
-    pedir("/api/todogreen/portal/financeiro")
+    // `pedir` já prefixa /api/todogreen/portal/ — passar o caminho absoluto
+    // duplicava o prefixo e o endpoint respondia 404 (a aba nunca carregava).
+    pedir("financeiro")
       .then(setDados)
       .catch((motivo) => setAviso?.(motivo.message));
   }, [setAviso]);
   const baixarXml = async (titulo) => {
     try {
-      const resposta = await fetch(comEmpresa(`/api/todogreen/portal/financeiro/${titulo.id}/xml`), { headers: authHeaders() });
+      const resposta = await fetch(comEmpresa(`financeiro/${titulo.id}/xml`), { headers: authHeaders() });
       if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({})))?.error || "Documento indisponível.");
       const blob = await resposta.blob();
       const url = URL.createObjectURL(blob);
@@ -245,6 +251,20 @@ function Faturas({ setAviso }) {
     } catch (motivo) { setAviso?.(motivo.message); }
   };
   const titulos = dados?.titulos || [];
+  // O back-end não vira o status para "vencida" sozinho por data — então aqui,
+  // se o título ainda está em aberto e a data de vencimento já passou, o cliente
+  // vê "vencida" (e há quantos dias), em vez de um "em aberto" que esconde o atraso.
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const situacaoDoTitulo = (titulo) => {
+    if (titulo.status === "settled") return { rotulo: "quitada", atrasada: false };
+    if (titulo.status === "partial") return { rotulo: "parcialmente paga", atrasada: false };
+    const venc = titulo.venceEm ? new Date(`${String(titulo.venceEm).slice(0, 10)}T00:00:00`) : null;
+    if (titulo.status === "overdue" || (venc && !Number.isNaN(venc.getTime()) && venc < hoje)) {
+      const dias = venc && !Number.isNaN(venc.getTime()) ? Math.floor((hoje - venc) / 86400000) : 0;
+      return { rotulo: dias > 0 ? `vencida há ${dias} dia${dias > 1 ? "s" : ""}` : "vencida", atrasada: true };
+    }
+    return { rotulo: "em aberto", atrasada: false };
+  };
   return (
     <div className="cp-bloco">
       <header><h2>Faturas</h2><p>O que está em aberto, o que vence quando e a 2ª via do documento fiscal.</p></header>
@@ -254,11 +274,13 @@ function Faturas({ setAviso }) {
       </div>
       {!titulos.length && <p className="cp-vazio">Nenhuma fatura por aqui ainda.</p>}
       <ul className="cp-lista">
-        {titulos.map((titulo) => (
-          <li key={titulo.id}>
+        {titulos.map((titulo) => {
+          const sit = situacaoDoTitulo(titulo);
+          return (
+          <li key={titulo.id} className={sit.atrasada ? "cp-titulo-vencido" : undefined}>
             <div>
               <strong>{titulo.numero}</strong>
-              <small>emitida em {titulo.emitidoEm || "—"} · vence em {titulo.venceEm || "—"} · {titulo.status === "settled" ? "quitada" : titulo.status === "partial" ? "parcialmente paga" : titulo.status === "overdue" ? "vencida" : "em aberto"}</small>
+              <small>emitida em {titulo.emitidoEm || "—"} · vence em {titulo.venceEm || "—"} · {sit.rotulo}</small>
             </div>
             <div>
               <strong>{BRL_PORTAL.format(titulo.emAberto)}</strong>
@@ -268,7 +290,8 @@ function Faturas({ setAviso }) {
               <button type="button" onClick={() => baixarXml(titulo)}><Download size={15} /> XML {titulo.documento.tipo?.toUpperCase()}</button>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
     </div>
   );
