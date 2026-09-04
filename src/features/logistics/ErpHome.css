@@ -59,3 +59,32 @@
 .tdg-home-config footer > button:not(.tdg-action) { background: transparent; border: 1px solid var(--tdg-line); border-radius: 8px; cursor: pointer; min-height: 40px; padding: 8px 13px; }
 @media (max-width: 900px) { .tdg-home-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .tdg-home-grid { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .tdg-home-welcome { align-items: stretch; flex-direction: column; } .tdg-home-identity { align-items: stretch; justify-items: stretch; } .tdg-home-metrics, .tdg-home-config-shortcuts { grid-template-columns: 1fr; } .tdg-home-queue > button { grid-template-columns: auto minmax(0,1fr); } .tdg-home-queue > button > b { grid-column: 2; } }
+
+/* Portal TMS: link real para a rota de topo /portal-tms (fora de /todogreen). */
+.tdg-home-portais { margin-top: 14px; }
+.tdg-home-portal-link {
+  align-items: center;
+  background: #f6faf7;
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  color: var(--tdg-ink);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 13px 14px;
+  text-decoration: none;
+}
+.tdg-home-portal-link:hover { border-color: var(--tdg-green); }
+.tdg-home-portal-icon {
+  align-items: center;
+  background: var(--tdg-soft);
+  border-radius: 8px;
+  color: var(--tdg-green);
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+.tdg-home-portal-link strong { display: block; font-size: .9rem; }
+.tdg-home-portal-link small { color: var(--tdg-muted); font-size: .74rem; }
+.tdg-home-portal-link > svg { color: var(--tdg-green); flex: 0 0 auto; }

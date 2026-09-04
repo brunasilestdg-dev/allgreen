@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, MapPinned, Settings2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, MapPinned, Settings2, Truck, X } from "lucide-react";
 import { buildTodoGreenDecisionCenter } from "./decisionCenterDomain.js";
 import { cenariosAbaixoDoPiso, resumoDeMargem } from "./marginDomain.js";
 import { operacoesCriticas } from "./operationsEfficiencyDomain.js";
@@ -139,6 +139,19 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
       <header><div><span>ACESSO RÁPIDO</span><h3>Ferramentas da minha rotina</h3></div><small>{shortcuts.length} atalho(s)</small></header>
       <div>{shortcuts.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>{item.label}<ArrowRight size={14} /></button>)}</div>
     </section>}
+
+    {/* O Portal TMS (/portal-tms) é um portal próprio, fora das rotas
+        /todogreen — antes só dava para chegar nele digitando a URL. Como é
+        outro topo de rota, o acesso é por link real, não pela navegação
+        interna da vertical. */}
+    <section className="tdg-home-section tdg-home-portais">
+      <header><div><span>PORTAIS</span><h3>Portal TMS</h3></div></header>
+      <a className="tdg-home-portal-link" href="/portal-tms">
+        <span className="tdg-home-portal-icon"><Truck size={18} /></span>
+        <span><strong>Abrir Portal TMS</strong><small>Controle, roteirização, despacho, fiscal e auditoria de transporte</small></span>
+        <ArrowRight size={16} />
+      </a>
+    </section>
 
     {editing && <div className="tdg-home-config-backdrop" role="presentation">
       <section className="tdg-home-config" role="dialog" aria-modal="true" aria-labelledby="tdg-home-config-title">
