@@ -1940,6 +1940,27 @@ const listarEventosOperacao = async (env, access, user, operationId) => {
 // houve ocorrência) — duas implementações produziriam dois delivered_at e
 // dois PODs diferentes. Quem chama já validou o alcance (carteira interna ou
 // vínculo do motorista); aqui só se aplica.
+// Devolve, no formato que aplicarEventoOperacional retorna, o evento já gravado
+// com esta chave de idempotência — ou null se não existe. É como um reenvio da
+// fila offline recebe de volta o que já foi registrado, sem duplicar.
+const eventoPelaChave = async (env, ownerId, operationId, idempotencyKey) => {
+  const linha = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_operation_events
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND operation_id = ? AND idempotency_key = ?`,
+  ).bind(TENANT_ID, ownerId, operationId, idempotencyKey).first();
+  if (!linha) return null;
+  const atualizada = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_operations WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(operationId, TENANT_ID, ownerId).first();
+  return {
+    evento: {
+      id: linha.id, tipo: linha.kind, titulo: linha.titulo, descricao: linha.descricao,
+      local: linha.local, ocorridoEm: linha.ocorrido_em, registradoPor: linha.registrado_por, criadoEm: linha.created_at,
+    },
+    tipo: linha.kind, titulo: linha.titulo, descricao: linha.descricao, atualizada, duplicada: true,
+  };
+};
+
 export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId, corpo, origem = "" }) => {
   const tipos = new Set(["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"]);
   const tipo = tipos.has(texto(corpo.tipo, 40)) ? texto(corpo.tipo, 40) : "transito";
@@ -1947,6 +1968,15 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   const descricao = texto(corpo.descricao, 3000);
   if (!titulo && !descricao) return { erro: "Informe o título ou a descrição do evento." };
   const operationId = operacao.id;
+  // Idempotência (#132): a fila offline do motorista reenvia com uma chave
+  // estável por gesto. Se essa chave já entrou nesta operação, devolvemos o
+  // evento que já existe — sem gravar de novo, sem POD duplicado, sem notificar
+  // o cliente outra vez. O índice único (0094) fecha a corrida de dois reenvios.
+  const idempotencyKey = texto(corpo.idempotencyKey, 100) || null;
+  if (idempotencyKey) {
+    const repetido = await eventoPelaChave(env, ownerId, operationId, idempotencyKey);
+    if (repetido) return repetido;
+  }
   const ocorridoEm = texto(corpo.ocorridoEm, 40) || new Date().toISOString();
   const agora = new Date().toISOString();
   const eventoId = crypto.randomUUID();
@@ -1967,11 +1997,11 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
     env.DB.prepare(
       `INSERT INTO todogreen_client_operation_events
          (id,tenant_id,operation_id,client_id,workspace_owner_id,kind,titulo,descricao,local,
-          ocorrido_em,registrado_por,created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          ocorrido_em,registrado_por,created_at,idempotency_key)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(
       eventoId, TENANT_ID, operationId, operacao.client_id, ownerId, tipo, titulo,
-      descricao, texto(corpo.local, 300), ocorridoEm, userId, agora,
+      descricao, texto(corpo.local, 300), ocorridoEm, userId, agora, idempotencyKey,
     ),
     env.DB.prepare(
       `UPDATE todogreen_client_operations
@@ -2007,7 +2037,18 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
       TENANT_ID, ownerId, operationId,
     ));
   }
-  await env.DB.batch(instrucoes);
+  try {
+    await env.DB.batch(instrucoes);
+  } catch (erro) {
+    // Corrida: dois reenvios com a mesma chave chegaram juntos e o outro gravou
+    // primeiro. O índice único (0094) barra o segundo — aqui devolvemos o que já
+    // ficou, em vez de estourar um erro numa entrega que na verdade foi gravada.
+    if (idempotencyKey) {
+      const repetido = await eventoPelaChave(env, ownerId, operationId, idempotencyKey);
+      if (repetido) return repetido;
+    }
+    throw erro;
+  }
   const atualizada = await env.DB.prepare(
     `SELECT * FROM todogreen_client_operations
       WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,

@@ -145,7 +145,12 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
       origem: url.origin,
     });
     if (resultado.erro) return json({ error: resultado.erro }, 400);
-    return json({ evento: resultado.evento, viagem: viagemDaLinha(resultado.atualizada) }, 201);
+    // Reenvio da fila offline com a mesma chave: devolve o que já ficou (200),
+    // não um segundo "criado" (201). Ou seja: a entrega não se perde e não dobra.
+    return json(
+      { evento: resultado.evento, viagem: viagemDaLinha(resultado.atualizada), duplicada: resultado.duplicada || false },
+      resultado.duplicada ? 200 : 201,
+    );
   }
 
   return json({ error: "Rota do portal do motorista não encontrada." }, 404);

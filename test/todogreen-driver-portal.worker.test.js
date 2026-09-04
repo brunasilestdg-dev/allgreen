@@ -189,3 +189,43 @@ describe("a entrega da rua fecha o ciclo", () => {
     expect(linha.incident_count).toBe(1);
   });
 });
+
+// #132 — a fila offline reenvia com uma chave estável por gesto. O reenvio não
+// pode gravar o mesmo evento duas vezes (nem notificar o cliente de novo).
+describe("idempotência da fila offline do motorista", () => {
+  const contarEventos = (opId, chave) =>
+    env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_client_operation_events WHERE operation_id = ? AND idempotency_key = ?",
+    ).bind(opId, chave).first().then((r) => r.n);
+
+  it("reenvio com a mesma chave devolve o evento já gravado (200) e não duplica", async () => {
+    const corpo = { tipo: "chegada", descricao: "Cheguei na loja", idempotencyKey: "idem-m1-A" };
+    const primeira = await pedir("/api/todogreen/driver-portal/viagens/op-m1/evento", {
+      method: "POST", token: maria.token, body: corpo,
+    });
+    expect(primeira.status).toBe(201);
+    const idPrimeira = (await primeira.json()).evento.id;
+
+    const reenvio = await pedir("/api/todogreen/driver-portal/viagens/op-m1/evento", {
+      method: "POST", token: maria.token, body: corpo,
+    });
+    expect(reenvio.status).toBe(200);
+    const dados = await reenvio.json();
+    expect(dados.duplicada).toBe(true);
+    // Devolve exatamente o mesmo evento — não um novo.
+    expect(dados.evento.id).toBe(idPrimeira);
+
+    expect(await contarEventos("op-m1", "idem-m1-A")).toBe(1);
+  });
+
+  it("chave diferente é um gesto diferente e grava normalmente", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/viagens/op-m1/evento", {
+      method: "POST", token: maria.token,
+      body: { tipo: "ocorrencia", descricao: "Portão fechado", idempotencyKey: "idem-m1-B" },
+    });
+    expect(r.status).toBe(201);
+    expect(await contarEventos("op-m1", "idem-m1-B")).toBe(1);
+    // A chave A continua com um único evento — a B não a tocou.
+    expect(await contarEventos("op-m1", "idem-m1-A")).toBe(1);
+  });
+});
