@@ -5,7 +5,7 @@ const SERVICE_VERSION =
 // e baixar a nova. Mudar o número do cache faz o `activate` apagar tudo o que
 // não é este cache — cura o caso de telas que "não fazem nada" porque o JS em
 // cache aponta para pedaços que já não existem.
-const CACHE = `seu-funcionario-v87-${SERVICE_VERSION}`;
+const CACHE = `seu-funcionario-v88-${SERVICE_VERSION}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 

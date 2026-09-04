@@ -25,8 +25,39 @@ const pedir = async (caminho, options = {}) => {
     headers: { "content-type": "application/json", ...authHeaders(), ...(options.headers || {}) },
   });
   const dados = await resposta.json().catch(() => ({}));
-  if (!resposta.ok) throw new Error(dados.error || "Não foi possível concluir.");
+  if (!resposta.ok) {
+    // Rejeição do servidor (viagem não é sua, dado faltando): não adianta
+    // repetir — é erro de verdade, marcado para NÃO entrar na fila offline.
+    const erro = new Error(dados.error || "Não foi possível concluir.");
+    erro.rejeitadoPeloServidor = true;
+    throw erro;
+  }
   return dados;
+};
+
+// Fila offline: na estrada o sinal cai. Quando o envio falha por REDE (fetch
+// estoura antes de o servidor responder), o registro fica guardado no próprio
+// celular e é reenviado sozinho — ao voltar o sinal, ao reabrir o app ou ao
+// tocar em "Reenviar". Erro do servidor (400/404) não entra na fila: repetir
+// não resolveria.
+const CHAVE_FILA = "tdg-motorista-fila-eventos";
+
+const lerFila = () => {
+  try {
+    const bruto = localStorage.getItem(CHAVE_FILA);
+    const lista = bruto ? JSON.parse(bruto) : [];
+    return Array.isArray(lista) ? lista : [];
+  } catch {
+    return [];
+  }
+};
+
+const gravarFila = (lista) => {
+  try {
+    localStorage.setItem(CHAVE_FILA, JSON.stringify(lista));
+  } catch {
+    // Sem espaço/sem storage: melhor perder a persistência do que travar o app.
+  }
 };
 
 // GPS é melhor esforço: sem permissão ou sem sinal, o evento sai sem
@@ -51,42 +82,86 @@ export default function DriverPortalPage() {
   const [formulario, setFormulario] = useState(null); // { viagem, tipo }
   const [dados, setDados] = useState({ recebedor: "", comprovanteUrl: "", descricao: "" });
   const [ocupado, setOcupado] = useState(false);
+  const [pendentesFila, setPendentesFila] = useState(() => lerFila().length);
+
+  // Envia (ou reenvia) o que está na fila offline. Cada item que o servidor
+  // aceita sai da fila; o que falha por rede de novo fica para a próxima.
+  const escoarFila = useCallback(async () => {
+    let fila = lerFila();
+    if (!fila.length) return { enviados: 0 };
+    let enviados = 0;
+    const restantes = [];
+    for (const item of fila) {
+      try {
+        await pedir(`/viagens/${item.viagemId}/evento`, { method: "POST", body: JSON.stringify(item.payload) });
+        enviados += 1;
+      } catch (motivo) {
+        // Rejeição do servidor: descarta (não vai passar nunca). Falha de rede:
+        // guarda para tentar de novo quando o sinal voltar.
+        if (!motivo.rejeitadoPeloServidor) restantes.push(item);
+      }
+    }
+    gravarFila(restantes);
+    setPendentesFila(restantes.length);
+    return { enviados };
+  }, []);
 
   const carregar = useCallback(async () => {
     try {
       const s = await pedir("/sessao");
       setSessao(s);
-      if (s.vinculado) setViagens((await pedir("/viagens")).viagens || []);
+      if (s.vinculado) {
+        const resultado = await escoarFila().catch(() => ({ enviados: 0 }));
+        if (resultado.enviados > 0) setAviso(`${resultado.enviados} registro(s) guardado(s) foram enviados agora.`);
+        setViagens((await pedir("/viagens")).viagens || []);
+      }
       setErro("");
     } catch (motivo) {
       setErro(motivo.message);
     }
-  }, []);
+  }, [escoarFila]);
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Voltou o sinal: escoa a fila sem esperar o motorista reabrir o app.
+  useEffect(() => {
+    const aoVoltar = () => { escoarFila().then((r) => { if (r.enviados > 0) carregar(); }).catch(() => {}); };
+    window.addEventListener("online", aoVoltar);
+    return () => window.removeEventListener("online", aoVoltar);
+  }, [escoarFila, carregar]);
 
   const registrar = async (event) => {
     event.preventDefault();
     if (!formulario) return;
     setOcupado(true);
+    const gps = await posicaoAtual();
+    const payload = {
+      tipo: formulario.tipo,
+      descricao: dados.descricao,
+      recebedor: dados.recebedor,
+      comprovanteUrl: dados.comprovanteUrl,
+      local: gps ? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}` : "",
+      ...(gps || {}),
+    };
     try {
-      const gps = await posicaoAtual();
-      await pedir(`/viagens/${formulario.viagem.id}/evento`, {
-        method: "POST",
-        body: JSON.stringify({
-          tipo: formulario.tipo,
-          descricao: dados.descricao,
-          recebedor: dados.recebedor,
-          comprovanteUrl: dados.comprovanteUrl,
-          local: gps ? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}` : "",
-          ...(gps || {}),
-        }),
-      });
+      await pedir(`/viagens/${formulario.viagem.id}/evento`, { method: "POST", body: JSON.stringify(payload) });
       setAviso(formulario.tipo === "entrega" ? "Entrega registrada com comprovante. Boa estrada!" : "Registrado.");
       setFormulario(null);
       setDados({ recebedor: "", comprovanteUrl: "", descricao: "" });
       await carregar();
     } catch (motivo) {
-      setAviso(motivo.message);
+      if (motivo.rejeitadoPeloServidor) {
+        // O servidor recusou (dado faltando, viagem não é sua): mostra o motivo.
+        setAviso(motivo.message);
+      } else {
+        // Falha de rede: guarda no celular e segue. Não perde a entrega.
+        const fila = lerFila();
+        fila.push({ viagemId: formulario.viagem.id, referencia: formulario.viagem.referencia, tipo: formulario.tipo, payload, criadoEm: new Date().toISOString() });
+        gravarFila(fila);
+        setPendentesFila(fila.length);
+        setFormulario(null);
+        setDados({ recebedor: "", comprovanteUrl: "", descricao: "" });
+        setAviso("Sem sinal agora — registro guardado no celular. Envia sozinho quando a internet voltar.");
+      }
     } finally {
       setOcupado(false);
     }
@@ -119,6 +194,13 @@ export default function DriverPortalPage() {
       )}
       {aviso && (
         <div className="tdg-driver-cartao ok" role="status"><CheckCircle2 size={18} /><p>{aviso}</p><button type="button" onClick={() => setAviso("")} aria-label="Fechar aviso">×</button></div>
+      )}
+      {pendentesFila > 0 && (
+        <div className="tdg-driver-cartao aviso" role="status">
+          <AlertTriangle size={18} />
+          <p>{pendentesFila} registro(s) aguardando sinal. Enviam sozinhos quando a internet voltar.</p>
+          <button type="button" onClick={() => escoarFila().then((r) => { if (r.enviados > 0) carregar(); })} aria-label="Reenviar agora">Reenviar</button>
+        </div>
       )}
 
       {pendentes.map((viagem) => (
