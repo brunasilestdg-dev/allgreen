@@ -146,7 +146,7 @@ function CampoEstudo({ form, campo, rotulo, tipo = "text", onChange, opcoes }) {
   );
 }
 
-function EstudoEletrificacaoModal({ registro, onClose, onSave, onDelete, setToast, comments = [], onComment, interactions = [], onInteraction }) {
+function EstudoEletrificacaoModal({ registro, onClose, onSave, onDelete, setToast, comments = [], onComment, interactions = [], onInteraction, pessoas = [], onCreateTask, currentUserId }) {
   // Regra da titular (30/08): comentário feito AQUI fica só nesta
   // oportunidade; comentário feito na conta aparece em todas as
   // oportunidades dela — por isso a lista junta os dois, rotulando a origem.
@@ -329,6 +329,18 @@ function EstudoEletrificacaoModal({ registro, onClose, onSave, onDelete, setToas
         <InteracoesPanel
           interacoes={interacoesVisiveis({ interacoes: interactions, clientId: registro.clientId || "", opportunityId: registro.id })}
           escopo="oportunidade"
+          pessoas={pessoas}
+          onCriarTarefa={onCreateTask ? async (passo) => onCreateTask({
+            id: crypto.randomUUID(), title: passo.title, due: passo.due || "",
+            description: `Follow-up da oportunidade: ${tituloDaOportunidade(registro)}`,
+            priority: "Alta", status: "A fazer", area: "Comercial",
+            assigneeType: "real", assignee: passo.assignee, assigneeId: passo.assigneeId,
+            project: "", isMission: false, distribution: "atribuida", visibility: "privado",
+            recurrence: { frequency: "none" }, ownerId: currentUserId || null,
+            clientId: registro.clientId || "", clientName: registro.cliente || registro.client || "",
+            opportunityId: registro.id, source: "todogreen-crm-followup", businessId: "todogreen",
+            createdAt: new Date().toISOString(),
+          }) : undefined}
           aviso="Reunião, ligação, visita e tentativa de contato desta negociação. O que for da conta inteira, registre na conta — aparece aqui marcado como interação da conta."
           onRegistrar={async (interacao) => {
             await onInteraction({ ...interacao, clientId: registro.clientId || "", opportunityId: registro.id });
@@ -622,6 +634,9 @@ export default function OpportunitiesPage({
   interactions = [],
   onInteraction,
   authHeaders,
+  espacoId = "",
+  currentUserId,
+  onCreateTask,
   onCreate,
   onUpdate,
   onDelete,
@@ -629,6 +644,20 @@ export default function OpportunitiesPage({
   setToast,
 }) {
   const [form, setForm] = useState(FORM_VAZIO);
+  const [pessoas, setPessoas] = useState([]);
+  useEffect(() => {
+    if (!espacoId) return undefined;
+    let ativo = true;
+    fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!ativo || !data) return;
+        const membros = [data.owner, ...(data.members || []).filter((m) => m.status === "ativo")];
+        setPessoas(membros.filter((p, i, lista) => p?.id && p?.name && lista.findIndex((m) => m?.id === p.id) === i));
+      })
+      .catch(() => { if (ativo) setPessoas([]); });
+    return () => { ativo = false; };
+  }, [authHeaders, espacoId]);
   const [tabelasDePreco, setTabelasDePreco] = useState([]);
   const [abertaId, setAbertaId] = useState(null);
   const [salvando, setSalvando] = useState(false);
@@ -1081,6 +1110,9 @@ export default function OpportunitiesPage({
           onComment={onComment}
           interactions={interactions}
           onInteraction={onInteraction}
+          pessoas={pessoas}
+          onCreateTask={onCreateTask}
+          currentUserId={currentUserId}
         />
       )}
       <ImportarPipelineModal

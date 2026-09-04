@@ -1376,6 +1376,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
             oportunidades={selectedOpportunities}
             onCriarTarefa={async (proximoPasso) => createTask({
               id: crypto.randomUUID(),
+              opportunityId: proximoPasso.opportunityId || "",
               title: proximoPasso.title,
               description: `Follow-up da conta: ${selected.name}`,
               priority: "Alta",
@@ -1399,7 +1400,8 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
             })}
             onRegistrar={async (interacao) => {
               await onInteraction({ ...interacao, clientId: selected.id });
-              setToast?.("Interação registrada na conta — visível em todas as oportunidades dela.");
+              setToast?.(interacao.opportunityId ? "Interação registrada na oportunidade selecionada." : "Interação registrada na conta e disponível nas oportunidades dela.");
+              await load();
             }}
             setToast={setToast}
           />

@@ -55,6 +55,8 @@ export default function InteracoesPanel({
   const [aberta, setAberta] = useState(false);
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
+  const [interacaoSalva, setInteracaoSalva] = useState(false);
+  const [erroRegistro, setErroRegistro] = useState("");
 
   useEffect(() => {
     if (abrirRegistro > 0) setAberta(true);
@@ -67,23 +69,36 @@ export default function InteracoesPanel({
   const registrar = async (evento) => {
     evento.preventDefault();
     if (!onRegistrar) return;
+    if (salvando) return;
     setSalvando(true);
+    setErroRegistro("");
+    let contatoSalvo = interacaoSalva;
     try {
-      await onRegistrar({ ...form, assunto: form.assunto.trim(), ata: form.ata.trim() });
+      if (!contatoSalvo) {
+        await onRegistrar({ ...form, assunto: form.assunto.trim(), ata: form.ata.trim() });
+        contatoSalvo = true;
+        setInteracaoSalva(true);
+      }
       if (form.proximoPasso.trim() && form.responsavelId && onCriarTarefa) {
         await onCriarTarefa({
+          opportunityId: form.opportunityId,
           title: form.proximoPasso.trim(),
           due: form.proximoPassoEm,
           assigneeId: form.responsavelId,
           assignee: pessoas.find((pessoa) => pessoa.id === form.responsavelId)?.name || "",
         });
       }
+      setInteracaoSalva(false);
       setForm(FORM_VAZIO());
       setAberta(false);
     } catch (erro) {
       // A janela fica aberta com o texto digitado: perder uma ata inteira por
       // um erro de rede seria pior do que o erro.
-      setToast?.(erro?.message || "Não foi possível registrar a interação.");
+      const mensagem = contatoSalvo
+        ? "Contato salvo. Não foi possível criar a tarefa. Tente novamente sem duplicar o contato."
+        : erro?.message || "Não foi possível registrar a interação.";
+      setErroRegistro(mensagem);
+      setToast?.(mensagem);
     } finally {
       setSalvando(false);
     }
@@ -143,22 +158,23 @@ export default function InteracoesPanel({
       </ol>
 
       {aberta && (
-        <Modal title={escopo === "oportunidade" ? "Registrar interação da oportunidade" : "Registrar interação da conta"} onClose={() => setAberta(false)} wide>
+        <Modal title={escopo === "oportunidade" ? "Registrar interação da oportunidade" : "Registrar interação da conta"} onClose={() => { if (!salvando) setAberta(false); }} wide>
           <form className="tdg-access-form tdg-enterprise-form tdg-form-em-modal" onSubmit={registrar}>
+            {erroRegistro && <p role="alert" className="full">{erroRegistro}</p>}
             <label>
               <span>Tipo</span>
-              <select value={form.tipo} onChange={(e) => campo("tipo", e.target.value)}>
+              <select disabled={salvando || interacaoSalva} value={form.tipo} onChange={(e) => campo("tipo", e.target.value)}>
                 {TIPOS_DE_INTERACAO.map((tipo) => <option value={tipo.id} key={tipo.id}>{tipo.rotulo}</option>)}
               </select>
             </label>
             <label>
               <span>Quando aconteceu</span>
-              <input type="date" required value={form.ocorridaEm} onChange={(e) => campo("ocorridaEm", e.target.value)} />
+              <input disabled={salvando || interacaoSalva} type="date" required value={form.ocorridaEm} onChange={(e) => campo("ocorridaEm", e.target.value)} />
             </label>
             {escopo === "conta" && oportunidades.length > 0 && (
               <label>
                 <span>Oportunidade relacionada</span>
-                <select value={form.opportunityId} onChange={(e) => campo("opportunityId", e.target.value)}>
+                <select disabled={salvando || interacaoSalva} value={form.opportunityId} onChange={(e) => campo("opportunityId", e.target.value)}>
                   <option value="">Interação geral da conta</option>
                   {oportunidades.map((oportunidade) => <option key={oportunidade.id} value={oportunidade.id}>{oportunidade.titulo || oportunidade.title || oportunidade.nome || oportunidade.id}</option>)}
                 </select>
@@ -166,42 +182,42 @@ export default function InteracoesPanel({
             )}
             <label>
               <span>Assunto</span>
-              <input required value={form.assunto} onChange={(e) => campo("assunto", e.target.value)} placeholder="Ex.: Agenda com o time de logística" maxLength={200} />
+              <input disabled={salvando || interacaoSalva} required value={form.assunto} onChange={(e) => campo("assunto", e.target.value)} placeholder="Ex.: Agenda com o time de logística" maxLength={200} />
             </label>
             <label>
               <span>Quem participou</span>
-              <input value={form.participantes} onChange={(e) => campo("participantes", e.target.value)} placeholder="Nomes de quem esteve na conversa" maxLength={500} />
+              <input disabled={salvando || interacaoSalva} value={form.participantes} onChange={(e) => campo("participantes", e.target.value)} placeholder="Nomes de quem esteve na conversa" maxLength={500} />
             </label>
             <label className="full">
               <span>Ata / o que foi tratado</span>
-              <textarea rows={5} value={form.ata} onChange={(e) => campo("ata", e.target.value)} placeholder="O que o cliente pediu, o que ficou combinado, objeções, prazos." maxLength={8000} />
+              <textarea disabled={salvando || interacaoSalva} rows={5} value={form.ata} onChange={(e) => campo("ata", e.target.value)} placeholder="O que o cliente pediu, o que ficou combinado, objeções, prazos." maxLength={8000} />
             </label>
             <label>
               <span>Resultado</span>
-              <select value={form.resultado} onChange={(e) => campo("resultado", e.target.value)}>
+              <select disabled={salvando || interacaoSalva} value={form.resultado} onChange={(e) => campo("resultado", e.target.value)}>
                 {RESULTADOS_DA_INTERACAO.map((item) => <option value={item.id} key={item.id || "vazio"}>{item.rotulo}</option>)}
               </select>
             </label>
             <label>
               <span>Próximo passo</span>
-              <input value={form.proximoPasso} onChange={(e) => campo("proximoPasso", e.target.value)} placeholder="Ex.: Enviar minuta revisada" maxLength={500} />
+              <input disabled={salvando || interacaoSalva} value={form.proximoPasso} onChange={(e) => campo("proximoPasso", e.target.value)} placeholder="Ex.: Enviar minuta revisada" maxLength={500} />
             </label>
             <label>
               <span>Data do próximo passo</span>
-              <input type="date" value={form.proximoPassoEm} onChange={(e) => campo("proximoPassoEm", e.target.value)} />
+              <input disabled={salvando || interacaoSalva} type="date" value={form.proximoPassoEm} onChange={(e) => campo("proximoPassoEm", e.target.value)} />
             </label>
             <label>
               <span>Responsável pelo follow-up</span>
-              <select value={form.responsavelId} onChange={(e) => campo("responsavelId", e.target.value)} disabled={!form.proximoPasso}>
+              <select aria-label="Responsável pelo follow-up" value={form.responsavelId} onChange={(e) => campo("responsavelId", e.target.value)} disabled={salvando || interacaoSalva || !form.proximoPasso.trim() || !onCriarTarefa || !pessoas.length}>
                 <option value="">Sem criar tarefa</option>
                 {pessoas.map((pessoa) => <option value={pessoa.id} key={pessoa.id}>{pessoa.name}{pessoa.email ? ` · ${pessoa.email}` : ""}</option>)}
               </select>
-              <small>Ao escolher alguém, o próximo passo também entra na To-do.</small>
+              <small>{!onCriarTarefa ? "O próximo passo será registrado no histórico, sem criar tarefa." : !pessoas.length ? "Nenhum usuário disponível para atribuir uma tarefa." : "Ao escolher alguém, o próximo passo também entra na To-do."}</small>
             </label>
             <div className="tdg-form-actions">
-              <button type="button" onClick={() => setAberta(false)}>Cancelar</button>
+              <button type="button" disabled={salvando} onClick={() => setAberta(false)}>{interacaoSalva ? "Fechar e tentar depois" : "Cancelar"}</button>
               <button className="tdg-action" type="submit" disabled={salvando}>
-                <Plus size={16} />{salvando ? "Registrando..." : "Salvar interação"}
+                <Plus size={16} />{salvando ? "Salvando..." : interacaoSalva ? "Tentar criar tarefa novamente" : "Salvar interação"}
               </button>
             </div>
           </form>

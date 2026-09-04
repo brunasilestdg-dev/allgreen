@@ -298,3 +298,27 @@ describe("página de oportunidades", () => {
     expect(screen.getByText(/Nenhuma oportunidade registrada ainda/)).toBeInTheDocument();
   });
 });
+
+it("seleciona usuário cadastrado e cria follow-up vinculado à oportunidade", async () => {
+  const fetchAnterior = globalThis.fetch;
+  globalThis.fetch = vi.fn(async (url) => new Response(JSON.stringify(String(url).startsWith("/api/collab")
+    ? { owner: { id: "u1", name: "Ana", email: "ana@example.com" }, members: [] }
+    : { records: [] }), { status: 200 }));
+  try {
+    const onInteraction = vi.fn().mockResolvedValue({});
+    const onCreateTask = vi.fn().mockResolvedValue({});
+    render(<OpportunitiesPage opportunities={[{ ...mapeada, clientId: "cli1" }]} espacoId="workspace1" currentUserId="u1" onInteraction={onInteraction} onCreateTask={onCreateTask} />);
+    abrir("Distribuidora Norte");
+    fireEvent.click(screen.getByRole("button", { name: /Atualizar estudo/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Registrar interação" }));
+    fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Reunião comercial" } });
+    fireEvent.change(screen.getByLabelText("Próximo passo"), { target: { value: "Enviar minuta" } });
+    await screen.findByRole("option", { name: "Ana · ana@example.com" });
+    fireEvent.change(screen.getByLabelText("Responsável pelo follow-up"), { target: { value: "u1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar interação" }));
+    await waitFor(() => expect(onCreateTask).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Enviar minuta", assigneeId: "u1", assignee: "Ana", clientId: "cli1", opportunityId: "opp-1",
+    })));
+    expect(onInteraction).toHaveBeenCalledWith(expect.objectContaining({ clientId: "cli1", opportunityId: "opp-1" }));
+  } finally { globalThis.fetch = fetchAnterior; }
+});
