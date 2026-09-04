@@ -5,7 +5,7 @@ const PROCUREMENT = ["procurement", "compras", "suprimentos", "sourcing", "suppl
 const LOGISTICS = ["logística", "logistica", "transporte", "transportes", "frete", "freight", "distribution", "distribuição", "carrier", "supply chain", "last mile", "middle mile"];
 const DECISION_ROLES = ["patrocinador", "decisor econômico", "compras"];
 
-export function assessAccount(account = {}, opportunities = []) {
+export function assessAccount(account = {}, opportunities = [], interactions = []) {
   const contacts = account.crm?.contacts || [];
   const hasCurrentDecisionEvidence = (contact) => contact.active !== false && contact.employmentStatus !== "former" &&
     (!contact.employmentCheckedAt || contact.currentEmploymentVerified === true);
@@ -27,12 +27,23 @@ export function assessAccount(account = {}, opportunities = []) {
     const opportunityStage = lower(item.stage || item.estagio);
     return belongs && !["ganho", "perdido", "fechada ganha", "fechada perdida", "cliente ativo"].includes(opportunityStage);
   });
-  const opportunityWithNextStep = openOpportunities.find((item) => lower(item.nextStep || item.proximoPasso));
-  const staleOpportunity = openOpportunities.find((item) => {
+  const opportunitiesWithNextStep = openOpportunities.filter((item) => lower(item.nextStep || item.proximoPasso));
+  const staleOpportunities = openOpportunities.filter((item) => {
     const age = item.updatedAt ? Math.floor((Date.now() - Date.parse(item.updatedAt)) / 86400000) : null;
     return age !== null && age >= 21;
   });
   const candidates = [];
+
+  // Follow-ups da conta são evidência explícita. Conversas específicas de
+  // outra oportunidade não devem aparecer como recomendação geral da conta.
+  const followups = interactions.filter((item) =>
+    account.id && item.clientId === account.id && !item.opportunityId &&
+    item.id && lower(item.proximoPasso),
+  ).sort((a, b) => String(b.ocorridaEm || "").localeCompare(String(a.ocorridaEm || "")));
+  for (const interaction of followups) candidates.push({
+    key: `interaction-next-step:${interaction.id}`,
+    title: interaction.proximoPasso.trim(),
+  });
 
   // Primeiro respeita o que a equipe já registrou. A recomendação não substitui
   // uma ação real por um texto genérico.
@@ -40,11 +51,11 @@ export function assessAccount(account = {}, opportunities = []) {
     key: `crm-next-action:${lower(account.crm.nextAction).slice(0, 80)}`,
     title: account.crm.nextAction,
   });
-  if (opportunityWithNextStep) candidates.push({
+  for (const opportunityWithNextStep of opportunitiesWithNextStep) candidates.push({
     key: `opportunity-next-step:${opportunityWithNextStep.id}`,
     title: `${opportunityWithNextStep.nextStep || opportunityWithNextStep.proximoPasso} · ${opportunityWithNextStep.titulo || opportunityWithNextStep.title || "oportunidade aberta"}`,
   });
-  if (staleOpportunity) candidates.push({
+  for (const staleOpportunity of staleOpportunities) candidates.push({
     key: `resume-stalled-opportunity:${staleOpportunity.id}`,
     title: `Retomar ${staleOpportunity.titulo || staleOpportunity.title || "a oportunidade parada"} e registrar o retorno do cliente.`,
   });

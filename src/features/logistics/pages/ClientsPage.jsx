@@ -850,7 +850,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   );
   const selectedSummary = selectedAccount ? crmAccountSummary(selectedAccount, selectedAccount.contacts, crmOpportunities) : null;
   const selectedIntelligence = selected && selectedAccount
-    ? assessAccount({ ...selected, crm: { ...(selected.crm || {}), contacts: selectedAccount.contacts } }, selectedOpportunities)
+    ? assessAccount({ ...selected, crm: { ...(selected.crm || {}), contacts: selectedAccount.contacts } }, selectedOpportunities, interactions)
     : null;
   const selectedStrategy = selectedAccount
     ? buildAccountIntelligence({

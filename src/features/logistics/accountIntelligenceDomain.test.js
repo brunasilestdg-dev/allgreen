@@ -58,3 +58,29 @@ describe("inteligência e canais da conta", () => {
     expect(outlookComposeUrl("fevasco@amazon.com", "Amazon")).toContain("fevasco%40amazon.com");
   });
 });
+
+describe("próximas ações com histórico e várias oportunidades", () => {
+  it("prioriza o follow-up registrado sem misturar contas ou conversas específicas", () => {
+    const account = { id: "cli1", crm: { nextAction: "Ação antiga" } };
+    const interactions = [
+      { id: "i1", clientId: "cli1", proximoPasso: "Enviar a minuta combinada", ocorridaEm: "2026-09-01" },
+      { id: "i2", clientId: "cli2", proximoPasso: "Outra conta", ocorridaEm: "2026-09-03" },
+      { id: "i3", clientId: "cli1", opportunityId: "opp1", proximoPasso: "Conversa específica", ocorridaEm: "2026-09-04" },
+    ];
+    const result = assessAccount(account, [], interactions);
+    expect(result.nextTask).toBe("Enviar a minuta combinada");
+    expect(result.nextTaskKey).toBe("interaction-next-step:i1");
+    expect(assessAccount({ ...account, crm: { ...account.crm, completedSuggestedActions: [result.nextTaskKey] } }, [], interactions).nextTask).toBe("Ação antiga");
+  });
+
+  it("avança para a segunda oportunidade em vez de abandonar os próximos passos reais", () => {
+    const account = { id: "cli1", crm: { completedSuggestedActions: ["opportunity-next-step:opp1"] } };
+    const result = assessAccount(account, [
+      { id: "opp1", clientId: "cli1", nextStep: "Enviar proposta", estagio: "Proposta" },
+      { id: "opp2", clientId: "cli1", nextStep: "Agendar visita técnica", estagio: "Diagnóstico" },
+      { id: "opp3", clientId: "cli1", nextStep: "Não sugerir negócio perdido", estagio: "Fechada perdida" },
+    ]);
+    expect(result.nextTaskKey).toBe("opportunity-next-step:opp2");
+    expect(result.nextTask).toContain("Agendar visita técnica");
+  });
+});
