@@ -132,6 +132,29 @@ export default function PlannerPage({
   const [pessoas, setPessoas] = useState([]);
   const [corte, setCorte] = useState("balde");
   const [busca, setBusca] = useState("");
+  // Filtro de status por chips (pedido da titular: "só quero ver a fazer e em
+  // andamento"). Multi-seleção — nada de um único status por vez, nada de
+  // combo que não deixa buscar. Começa com todos marcados: plano inteiro à
+  // vista até ela escolher esconder algum. A escolha fica por navegador.
+  const [statusFiltro, setStatusFiltro] = useState(() => {
+    try {
+      const salvo = window.localStorage.getItem("todogreen-planner-status");
+      if (salvo) {
+        const ids = JSON.parse(salvo).filter((id) => PLANNER_PROGRESS.some((p) => p.id === id));
+        if (ids.length) return new Set(ids);
+      }
+    } catch { /* usa o padrão */ }
+    return new Set(PLANNER_PROGRESS.map((p) => p.id));
+  });
+  const alternarStatus = (id) => setStatusFiltro((atual) => {
+    const proximo = new Set(atual);
+    if (proximo.has(id)) proximo.delete(id); else proximo.add(id);
+    // Nunca deixar tudo desmarcado — isso esconderia o plano inteiro e pareceria
+    // um bug. Desmarcar o último volta a marcar todos.
+    const efetivo = proximo.size ? proximo : new Set(PLANNER_PROGRESS.map((p) => p.id));
+    try { window.localStorage.setItem("todogreen-planner-status", JSON.stringify([...efetivo])); } catch { /* ok */ }
+    return efetivo;
+  });
   // Radar e "Faça agora" ficam recolhidos por padrão (pedido da titular, 03/09:
   // tela limpa). Um botão traz a análise; a escolha fica gravada por navegador.
   const [analiseAberta, setAnaliseAberta] = useState(() => {
@@ -342,8 +365,8 @@ export default function PlannerPage({
   };
 
   const tarefasFiltradas = useMemo(
-    () => tarefas.filter((t) => tarefaAtendeBusca(t, busca)),
-    [tarefas, busca],
+    () => tarefas.filter((t) => tarefaAtendeBusca(t, busca) && statusFiltro.has(t.progress)),
+    [tarefas, busca, statusFiltro],
   );
   const colunas = useMemo(
     () => agruparTarefas(tarefasFiltradas, corte, { baldes: planoAtivo?.buckets || [] }),
@@ -480,6 +503,25 @@ export default function PlannerPage({
                       return (
                         <button key={c.id} type="button" data-ativo={corte === c.id} onClick={() => setCorte(c.id)} title={`Agrupar por ${c.label.toLowerCase()}`}>
                           <Icone size={14} /> {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="tdg-planner-status-filtro" role="group" aria-label="Filtrar por status">
+                    {PLANNER_PROGRESS.map((p) => {
+                      const marcado = statusFiltro.has(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="tdg-planner-status-chip"
+                          data-status={p.id}
+                          data-ativo={marcado}
+                          aria-pressed={marcado}
+                          onClick={() => alternarStatus(p.id)}
+                          title={marcado ? `Esconder “${p.label}”` : `Mostrar “${p.label}”`}
+                        >
+                          {marcado ? <Check size={13} /> : null} {p.label}
                         </button>
                       );
                     })}

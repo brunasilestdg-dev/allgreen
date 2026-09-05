@@ -1795,6 +1795,40 @@
   background: var(--tdg-green);
   outline: none;
 }
+/* "Início": atalho de casa sempre visível no topo do menu. Cartão claro com
+   ícone, distinto da entrada escura de "Projetos e tarefas" logo abaixo. */
+.tdg-home-entry {
+  align-items: center;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  color: var(--tdg-ink, #143229);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+}
+.tdg-home-entry > svg { color: var(--tdg-green, #1b7a5a); flex: none; }
+.tdg-home-entry span { display: grid; gap: 2px; min-width: 0; }
+.tdg-home-entry strong { font-size: .86rem; }
+.tdg-home-entry small { color: var(--tdg-muted, #52645c); font-size: .69rem; line-height: 1.25; }
+.tdg-home-entry.active,
+.tdg-home-entry:hover,
+.tdg-home-entry:focus-visible {
+  background: var(--tdg-green, #1b7a5a);
+  border-color: var(--tdg-green, #1b7a5a);
+  color: #fff;
+  outline: none;
+}
+.tdg-home-entry.active > svg,
+.tdg-home-entry:hover > svg,
+.tdg-home-entry:focus-visible > svg { color: #fff; }
+.tdg-home-entry.active small,
+.tdg-home-entry:hover small,
+.tdg-home-entry:focus-visible small { color: #cfe5d9; }
 .tdg-nav-switch {
   background: #f6faf7;
   border: 1px solid var(--tdg-line);

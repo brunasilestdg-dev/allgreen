@@ -1579,6 +1579,19 @@
   display: inline-flex; font: inherit; font-weight: 750; gap: 6px; padding: 9px 12px;
 }
 .tdg-planner-cortes button[data-ativo="true"] { background: var(--tdg-soft); color: var(--tdg-green); }
+/* Filtro de status por chips: multi-seleção, cada chip liga/desliga um status.
+   Marcado = pílula verde com check; desmarcado = contorno apagado. */
+.tdg-planner-status-filtro { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.tdg-planner-status-chip {
+  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line);
+  border-radius: 999px; color: var(--tdg-muted); cursor: pointer; display: inline-flex;
+  font: inherit; font-size: .8rem; font-weight: 700; gap: 5px; padding: 7px 12px;
+}
+.tdg-planner-status-chip[data-ativo="true"] {
+  background: var(--tdg-soft); border-color: var(--tdg-green); color: var(--tdg-green);
+}
+.tdg-planner-status-chip[data-ativo="false"] { opacity: .72; text-decoration: line-through; }
+.tdg-planner-status-chip:hover { border-color: var(--tdg-green); }
 .tdg-planner-icon {
   align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 9px;
   color: var(--tdg-muted); cursor: pointer; display: inline-flex; justify-content: center; min-height: 38px; min-width: 38px;

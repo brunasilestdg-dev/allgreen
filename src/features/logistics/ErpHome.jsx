@@ -108,6 +108,31 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     distance: ["Quilometragem", `${NUM.format(dashboard.quilometragem || 0)} km`, "monitorada"],
   };
 
+  // Cada indicador leva ao lugar onde a pessoa age sobre ele (pedido da titular:
+  // "quero poder clicar nessa pipeline"). Sem rota, o cartão continua estático.
+  const rotaDoIndicador = {
+    pipeline: "/todogreen/funil",
+    forecast: "/todogreen/funil",
+    opportunities: "/todogreen/oportunidades",
+    margin: "/todogreen/precificacao",
+    scenarios: "/todogreen/precificacao",
+    approvals: "/todogreen/deal-desk",
+    products: "/todogreen/produtos",
+    clients: "/todogreen/clientes",
+    tasks: "/todogreen/espaco?ferramenta=tarefas",
+    goals: "/todogreen/metas",
+    revenue: "/todogreen/faturamento",
+    billing: "/todogreen/faturamento",
+    cost: "/todogreen/custos",
+    trips: "/todogreen/operacoes",
+    operations: "/todogreen/operacoes",
+    occupancy: "/todogreen/operacoes",
+    deliveries: "/todogreen/operacoes",
+    distance: "/todogreen/rastreamento",
+    impact: "/todogreen/central-esg",
+    greenScore: "/todogreen/central-esg",
+  };
+
   const visible = (id) => profile.widgetIds.includes(id);
   const shortcuts = profile.shortcutIds.map((id) => ERP_SHORTCUTS.find((item) => item.id === id)).filter(Boolean);
   const save = () => {
@@ -135,7 +160,12 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     {visible("metrics") && <div className="tdg-home-metrics" aria-label={`Indicadores de ${area.label}`}>
       {area.metrics.map((id) => {
         const metric = metrics[id];
-        return metric ? <article key={id}><span>{metric[0]}</span><strong>{metric[1]}</strong><small>{metric[2]}</small></article> : null;
+        if (!metric) return null;
+        const rota = rotaDoIndicador[id];
+        const conteudo = <><span>{metric[0]}</span><strong>{metric[1]}</strong><small>{metric[2]}</small></>;
+        return rota
+          ? <button type="button" className="tdg-home-metric-link" onClick={() => onNavigate?.(rota)} key={id} title={`Abrir ${metric[0]}`}>{conteudo}</button>
+          : <article key={id}>{conteudo}</article>;
       })}
     </div>}
 

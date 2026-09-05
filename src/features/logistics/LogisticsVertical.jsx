@@ -20,6 +20,7 @@ import {
   GitBranch,
   Handshake,
   History,
+  House,
   Inbox,
   Languages,
   Leaf,
@@ -185,6 +186,7 @@ const iconMap = {
   GitBranch,
   Handshake,
   History,
+  House,
   Inbox,
   Languages,
   Leaf,
@@ -3016,6 +3018,18 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               <PanelLeftClose size={16} />
             </button>
           </div>
+          {/* "Início": a titular sentiu falta de um botão de casa sempre à mão.
+              "Principal" existe como área no meio da lista, mas de dentro de uma
+              tela funda não havia o gesto óbvio de voltar ao painel. Este atalho
+              fixo no topo leva sempre ao dashboard do ERP. */}
+          <button
+            type="button"
+            className={`tdg-home-entry ${page === "dashboard" ? "active" : ""}`}
+            onClick={() => navigate("/todogreen/dashboard")}
+          >
+            <House size={18} />
+            <span><strong>Início</strong><small>Painel, indicadores e atalhos do ERP</small></span>
+          </button>
           <button
             type="button"
             className={`tdg-work-entry ${isWorkCenter ? "active" : ""}`}
