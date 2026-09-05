@@ -2877,13 +2877,15 @@ export default function Tasks({
                             })
                           }
                         />
-                        {t.title} ({t.status})
+                        {t.title}{t.project ? ` · ${t.project}` : ""} ({t.status})
                       </label>
                     ))}
                 </div>
                 <small>
                   Esta tarefa fica bloqueada para concluir, entregar ou assumir
                   enquanto as tarefas marcadas acima não estiverem concluídas.
+                  O nome do projeto/cliente aparece ao lado para você não
+                  confundir a "Precificação" de um cliente com a de outro.
                 </small>
               </div>
             )}
