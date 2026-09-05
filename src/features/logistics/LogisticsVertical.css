@@ -936,7 +936,7 @@
 }
 
 .tdg label { display: grid; gap: 6px; }
-.tdg label span { color: #334942; font-size: 12px; font-weight: 760; }
+.tdg label span { color: var(--tdg-ink); font-size: 12px; font-weight: 760; }
 
 .tdg input,
 .tdg select,
@@ -2384,7 +2384,7 @@
 }
 
 .tdg-shell-location p {
-  color: #48655a;
+  color: var(--tdg-muted);
   font-size: 0.9rem;
   max-width: 940px;
 }
@@ -2591,4 +2591,53 @@
     radial-gradient(circle at 8% -8%, rgba(75, 201, 162, 0.16), transparent 30%),
     radial-gradient(circle at 88% 0%, rgba(23, 98, 79, 0.22), transparent 28%),
     linear-gradient(180deg, #07201b 0%, #05130f 100%);
+}
+
+/* Legibilidade no modo escuro — rodada 1.
+   Muitos textos internos de metas, CRM, performance e tracker foram fixados
+   em verde/ink escuro pensando só no fundo claro. Como o CARD desses blocos
+   usa token (que escurece no dark), o texto escuro somia sobre fundo escuro —
+   é a "função ilegível". Aqui, SÓ no escuro, devolvemos a cor via token (que
+   já inverte claro/escuro). Os selos com fundo claro próprio não entram nesta
+   lista, então mantêm a cor. */
+:root[data-theme="dark"] .tdg :is(
+  .tdg-goal-card,
+  .tdg-goal-summary strong,
+  .tdg-goal-values span,
+  .tdg-goal-detail h3,
+  .tdg-goal-detail h4,
+  .tdg-goal-meta dd,
+  .tdg-goal-placeholder strong,
+  .tdg-goal-empty-state strong,
+  .tdg-goal-detail-actions button,
+  .tdg-performance-table strong,
+  .tdg-crm-intelligence strong,
+  .tdg-crm-research-next strong,
+  .tdg-crm-research-enrichment strong
+) {
+  color: var(--tdg-ink);
+}
+
+:root[data-theme="dark"] .tdg :is(
+  .tdg-performance-table > .head,
+  .tdg-goal-meta dt
+) {
+  color: var(--tdg-muted);
+}
+
+:root[data-theme="dark"] .tdg :is(
+  .tdg-goal-history summary,
+  .tdg-goal-drawer header span,
+  .tdg-performance-summary svg,
+  .tdg-crm-research-group li a,
+  .tdg-crm-research-identity a,
+  .tdg-crm-research-identity b,
+  .tdg-crm-health-breakdown summary,
+  .tdg-crm-health-breakdown li b,
+  .tdg-crm-account-data dd a,
+  .tdg-tracker-checklist > div.ready,
+  .tdg-via-veredito.aceitar p,
+  .tdg-via-veredito.aceitar small
+) {
+  color: var(--tdg-green);
 }
