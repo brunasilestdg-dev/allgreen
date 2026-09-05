@@ -349,6 +349,12 @@ Regras:
         </div>
       </header>
 
+      {/* Workspace de duas colunas ao estilo Circuit/Linx: controles e paradas
+          à esquerda, o mapa como herói à direita (grande e fixo enquanto se
+          rola a lista). No celular, empilha — mapa primeiro. */}
+      <div className="tdg-rot-workspace">
+        <div className="tdg-rot-esquerda">
+
       <form className="tdg-roteirizacao-form" onSubmit={calcular}>
         <div className="tdg-roteirizacao-paradas">
           {paradas.map((valor, indice) => {
@@ -509,7 +515,11 @@ Regras:
       )}
       {pedagios.fase === "erro" && <p className="tdg-roteirizacao-erro">{pedagios.motivo}</p>}
 
-      <div className="tdg-roteirizacao-mapa" ref={containerRef} style={{ minHeight: 360 }} aria-label="Mapa da rota" />
+        </div>
+        <div className="tdg-rot-mapa-col">
+          <div className="tdg-roteirizacao-mapa" ref={containerRef} aria-label="Mapa da rota" />
+        </div>
+      </div>
     </section>
   );
 }

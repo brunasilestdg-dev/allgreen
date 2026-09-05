@@ -3322,6 +3322,18 @@
 }
 .tdg-roteirizacao-mapa .leaflet-container { height: 100%; width: 100%; font: inherit; }
 
+/* Workspace de duas colunas (Circuit/Linx): controles à esquerda, mapa herói
+   à direita, fixo enquanto se rola a lista de paradas. */
+.tdg-rot-workspace { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+.tdg-rot-esquerda { display: grid; gap: 12px; min-width: 0; }
+.tdg-rot-mapa-col { min-width: 0; position: sticky; top: 12px; }
+.tdg-rot-mapa-col .tdg-roteirizacao-mapa { height: clamp(440px, 74vh, 800px); margin: 0; }
+@media (max-width: 900px) {
+  .tdg-rot-workspace { grid-template-columns: 1fr; }
+  .tdg-rot-mapa-col { order: -1; position: static; } /* no celular, mapa primeiro */
+  .tdg-rot-mapa-col .tdg-roteirizacao-mapa { height: clamp(320px, 46vh, 480px); }
+}
+
 /* #91: marcar parada como recarga (+1h30). */
 .tdg-roteirizacao-recarga {
   flex: 0 0 auto;
