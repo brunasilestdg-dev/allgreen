@@ -261,3 +261,54 @@ describe("correção assistida do Plantû", () => {
     expect(alvo.pergunta).toBe("Qual o prazo da rota X?");
   });
 });
+
+// #128 fase 2 — painel de qualidade agregado do Todô.
+async function criarVinculo(usuario, papel, permissoes) {
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO todogreen_access_emails
+       (id, tenant_id, email, role, status, permissions_json, note, created_by, created_at, updated_at)
+     VALUES (?, 'todogreen', ?, ?, 'active', ?, '', ?, ?, ?)
+     ON CONFLICT(tenant_id, workspace_owner_id, email) DO UPDATE SET role = excluded.role,
+       permissions_json = excluded.permissions_json, status = 'active'`,
+  ).bind(crypto.randomUUID(), usuario.email, papel, JSON.stringify(permissoes), usuario.id, agora, agora).run();
+}
+
+async function semearAvaliada(ownerId, userId, content, { rating = null, correction = null } = {}) {
+  await env.DB.prepare(
+    `INSERT INTO todogreen_ai_messages
+       (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at, rating, correction)
+     VALUES (?, 'todogreen', ?, ?, 'plantu', 'assistant', ?, NULL, ?, NULL, ?, ?)`,
+  ).bind(crypto.randomUUID(), ownerId, userId, content, new Date().toISOString(), rating, correction).run();
+}
+
+describe("avaliação agregada do Todô (#128)", () => {
+  it("soma 👍/👎/corrigidas do espaço e monta a taxa; correção traz a pergunta", async () => {
+    const carla = await criarUsuario("aval-carla", "carla@aval.test");
+    await autorizar(carla); // admin
+    await semearAvaliada(carla.id, carla.id, "Resposta boa 1", { rating: 1 });
+    await semearAvaliada(carla.id, carla.id, "Resposta boa 2", { rating: 1 });
+    await semearAvaliada(carla.id, carla.id, "Resposta ruim", { rating: -1 });
+    await semearMensagem(carla.id, carla.id, "user", "Qual a rota certa?");
+    await semearAvaliada(carla.id, carla.id, "Resposta corrigida", { rating: -1, correction: "A rota certa é a B." });
+
+    const resposta = await pedir(carla.token, { avaliacao: true });
+    expect(resposta.status).toBe(200);
+    const dados = await resposta.json();
+    expect(dados.total).toBe(4);
+    expect(dados.uteis).toBe(2);
+    expect(dados.naoUteis).toBe(2);
+    expect(dados.corrigidas).toBe(1);
+    expect(dados.taxaUtil).toBe(50);
+    const alvo = dados.correcoesRecentes.find((c) => c.correcao === "A rota certa é a B.");
+    expect(alvo).toBeTruthy();
+    expect(alvo.pergunta).toBe("Qual a rota certa?");
+  });
+
+  it("quem não é gestão (sem audit:read) recebe 403", async () => {
+    const dino = await criarUsuario("aval-dino", "dino@aval.test");
+    await criarVinculo(dino, "vendedor", ["read"]);
+    const resposta = await pedir(dino.token, { avaliacao: true });
+    expect(resposta.status).toBe(403);
+  });
+});

@@ -2300,6 +2300,36 @@
   gap: 12px;
   margin: 16px 0;
 }
+
+/* #128: painel de qualidade do Todô (avaliação agregada). */
+.tdg-avaliacao-todo {
+  margin: 16px 0;
+  padding: 16px 18px;
+  border: 1px solid var(--tdg-border, #e3e8e5);
+  border-radius: 14px;
+  background: var(--tdg-surface, var(--tdg-card));
+  display: grid;
+  gap: 14px;
+}
+.tdg-avaliacao-todo > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.tdg-avaliacao-todo h3 { margin: 3px 0 0; font-size: 1.02rem; }
+.tdg-avaliacao-leitura { margin: 0; font-size: .86rem; padding: 6px 12px; border-radius: 999px; font-weight: 600; }
+.tdg-avaliacao-leitura.tom-neutro { background: #eef3f1; color: #45564f; }
+.tdg-avaliacao-leitura.tom-bom { background: #e6f4ea; color: #22683f; }
+.tdg-avaliacao-leitura.tom-atencao { background: #fdf1dc; color: #8a5a12; }
+.tdg-avaliacao-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.tdg-avaliacao-numeros article { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--tdg-line, #e3e8e5); border-radius: 10px; background: var(--tdg-soft, #f6faf8); }
+.tdg-avaliacao-numeros small { display: inline-flex; align-items: center; gap: 4px; color: var(--tdg-muted, #5b6b64); font-size: .72rem; font-weight: 700; }
+.tdg-avaliacao-numeros strong { font-size: 1.4rem; letter-spacing: -.02em; color: var(--tdg-ink); }
+.tdg-avaliacao-numeros span { color: var(--tdg-muted, #5b6b64); font-size: .68rem; }
+.tdg-avaliacao-numeros article.util strong { color: #22683f; }
+.tdg-avaliacao-numeros article.nao-util strong { color: #a5342a; }
+.tdg-avaliacao-correcoes > strong { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--tdg-ink); }
+.tdg-avaliacao-correcoes ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.tdg-avaliacao-correcoes li { display: grid; gap: 3px; padding: 9px 11px; border-left: 3px solid #9fd4a8; background: var(--tdg-soft, #f6faf8); border-radius: 0 9px 9px 0; }
+.tdg-avaliacao-pergunta { color: var(--tdg-muted, #5b6b64); font-size: .8rem; font-style: italic; }
+.tdg-avaliacao-correcao { color: var(--tdg-ink); font-size: .86rem; }
+.tdg-avaliacao-correcoes li small { color: var(--tdg-muted, #8a9992); font-size: .7rem; }
 .tdg-sobre-resumo article {
   background: var(--tdg-surface, var(--tdg-card));
   border: 1px solid var(--tdg-border, #e3e8e5);

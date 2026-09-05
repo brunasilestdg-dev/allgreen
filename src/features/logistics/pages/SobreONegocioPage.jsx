@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { BookOpen, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import AvaliacaoTodoPanel from "../AvaliacaoTodoPanel.jsx";
 import {
   CATEGORIAS_DO_NEGOCIO,
   SIGILOS,
@@ -156,6 +157,10 @@ export default function SobreONegocioPage({
           <span>caracteres por pergunta</span>
         </article>
       </div>
+
+      {/* #128: painel de qualidade do Todô (👍/👎, corrigidas, correções
+          recentes). Ele mesmo se esconde para quem não é gestão. */}
+      <AvaliacaoTodoPanel />
 
       <div className="tdg-sobre-filtros" role="group" aria-label="Filtrar por categoria">
         <button type="button" className={categoria === "todas" ? "ativo" : ""} onClick={() => setCategoria("todas")}>

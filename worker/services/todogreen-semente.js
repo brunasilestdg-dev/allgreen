@@ -965,6 +965,64 @@ export const carregarCorrecoesDoPlantu = async (env, access, user, podeVerRestri
   return (results || []).map((row) => ({ pergunta: row.pergunta || "", respondi: row.respondi, correcao: row.correcao }));
 };
 
+// Avaliação agregada do Todô (#128, fase 2): a gestão vê onde ele ajuda e onde
+// é corrigido. Diferente do resto da memória (que é privada de quem perguntou),
+// aqui a leitura é do ESPAÇO inteiro — é uma visão de qualidade para admins —,
+// então não filtra por user_id. Sinal já capturado em rating/correction; aqui
+// só se soma. Correção recente traz a pergunta que a gerou, como no bloco que
+// realimenta o modelo.
+const LIMITE_CORRECOES_PAINEL = 20;
+
+export const avaliacaoDoPlantu = async (env, access) => {
+  const contagem = await env.DB.prepare(
+    `SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS uteis,
+        SUM(CASE WHEN rating = -1 THEN 1 ELSE 0 END) AS naoUteis,
+        SUM(CASE WHEN correction IS NOT NULL AND correction <> '' THEN 1 ELSE 0 END) AS corrigidas
+       FROM todogreen_ai_messages
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND assistente = ?
+        AND role = 'assistant' AND archived_at IS NULL`,
+  ).bind(TENANT_ID, access.ownerId, CHAVE_ASSISTENTE).first().catch(() => null);
+
+  const { results } = await env.DB.prepare(
+    `SELECT a.content AS respondi, a.correction AS correcao, a.created_at AS em,
+        (SELECT u.content FROM todogreen_ai_messages u
+          WHERE u.tenant_id = a.tenant_id AND u.workspace_owner_id = a.workspace_owner_id
+            AND u.user_id = a.user_id AND u.assistente = a.assistente
+            AND u.role = 'user' AND u.rowid < a.rowid AND u.archived_at IS NULL
+          ORDER BY u.rowid DESC LIMIT 1) AS pergunta
+       FROM todogreen_ai_messages a
+      WHERE a.tenant_id = ? AND a.workspace_owner_id = ? AND a.assistente = ?
+        AND a.role = 'assistant' AND a.correction IS NOT NULL AND a.correction <> ''
+        AND a.archived_at IS NULL
+      ORDER BY a.created_at DESC, a.rowid DESC
+      LIMIT ?`,
+  ).bind(TENANT_ID, access.ownerId, CHAVE_ASSISTENTE, LIMITE_CORRECOES_PAINEL)
+    .all().catch(() => ({ results: [] }));
+
+  const total = Number(contagem?.total || 0);
+  const uteis = Number(contagem?.uteis || 0);
+  const naoUteis = Number(contagem?.naoUteis || 0);
+  const avaliadas = uteis + naoUteis;
+  return {
+    total,
+    uteis,
+    naoUteis,
+    corrigidas: Number(contagem?.corrigidas || 0),
+    avaliadas,
+    // Taxa de aprovação entre as que RECEBERAM voto (sem voto não conta contra
+    // nem a favor). null quando ninguém votou ainda — não é 0%.
+    taxaUtil: avaliadas ? Math.round((uteis / avaliadas) * 100) : null,
+    correcoesRecentes: (results || []).map((row) => ({
+      pergunta: row.pergunta || "",
+      respondi: row.respondi || "",
+      correcao: row.correcao || "",
+      em: row.em || "",
+    })),
+  };
+};
+
 // ===== A porta =====
 
 export async function handleTodoGreenSemente(request, env, access, user) {
@@ -995,6 +1053,15 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   // zero. Só leitura, sem modelo.
   if (body.historicoPersistido) {
     return response({ mensagens: await carregarHistoricoDoPlantu(env, access, user) });
+  }
+
+  // Painel de qualidade do Todô (#128, fase 2): agregado do espaço — quantas
+  // respostas, 👍/👎, corrigidas e as correções recentes. Visão de gestão, então
+  // atrás de audit:read (owner/admin/auditor passam). Só leitura, sem modelo.
+  if (body.avaliacao) {
+    if (!podeNaVertical(access, "audit:read"))
+      return response({ error: "Só a gestão vê a avaliação do Todô." }, 403);
+    return response(await avaliacaoDoPlantu(env, access));
   }
 
   // Avaliação (👍/👎) de uma resposta: só grava o voto, sem modelo.

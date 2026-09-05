@@ -297,6 +297,16 @@ quantos resultados vieram.
   que escreve conhecimento no banco a partir de texto livre aprende também o que
   alguém plantar numa mensagem. Reensinar pela mesma `fact_key` corrige em vez
   de empilhar duas versões contraditórias que o modelo leria juntas.
+- **Avaliação do Todô é agregado, não fonte nova** (#128, fase 2): o sinal já
+  está capturado em `todogreen_ai_messages.rating` (0092) e `.correction`
+  (0095) — o painel de qualidade só SOMA. Endpoint `POST /api/todogreen/semente`
+  com `{ avaliacao: true }` → `avaliacaoDoPlantu(env, access)`: total, 👍, 👎,
+  corrigidas, taxa e correções recentes. Diferente do resto da memória (privada
+  de quem perguntou), esta leitura é do ESPAÇO inteiro — é visão de gestão —,
+  então NÃO filtra por `user_id` e fica atrás de `audit:read` (owner/admin/
+  auditor). Tela: `AvaliacaoTodoPanel.jsx` (dentro de "Sobre o negócio"), que se
+  esconde sozinho quando o servidor devolve 403; leitura humana pura e testada
+  em `avaliacaoTodoDomain.js`. Não criar tabela de feedback: o dado já existe.
 - **Central de RFQ e RFI: status é FÓRMULA, nunca coluna**: `habilitacaoDomain.js`
   (puro) + `pages/CentralRfqPage.jsx` + as coleções `habilitacao`,
   `habilitacaoKits` e `rfq` (migração `0083`). Nenhuma tabela guarda status: o
