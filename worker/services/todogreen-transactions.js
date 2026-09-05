@@ -1,6 +1,7 @@
 import { paginacao, podeNaVertical, TENANT_ID } from "./todogreen-access.js";
 import {
   canTransitionServiceOrder,
+  classificarEntregaAFaturar,
   precoUnitarioDaOs,
   serviceOrderAmounts,
   settlementState,
@@ -801,6 +802,70 @@ async function listBilling(env, access, url) {
   return json({ records: results || [] });
 }
 
+// ===== A ponte que faltava (#120): entrega com POD → fila de faturamento =====
+//
+// SÓ LEITURA. Lista as entregas já concluídas com comprovante (a operação tem
+// `delivered_at` e `proof_url`) que ainda NÃO viraram item de faturamento —
+// porque nenhuma OS concluída as levou à régua. É o elo manual e desconexo do
+// ciclo: o motorista entrega e registra o POD, mas o dinheiro só é sinalizado
+// quando alguém cria e conclui a OS do aceite. Sem esta lista, essa entrega
+// fica invisível ao Financeiro.
+//
+// Não move dinheiro nem cria OS: operação sem contrato/OS não tem valor
+// definido, e faturar um valor adivinhado é pior do que faturar à mão. O painel
+// só torna a lacuna VISÍVEL e diz o próximo passo manual (concluir/gerar a OS).
+async function listDeliveredAwaitingBilling(env, access, url) {
+  // Expõe cliente, entrega e comprovante — restrito a quem trabalha a fila de
+  // faturamento ou a operação. Sem permissão, lista vazia (o painel some), não
+  // erro, para não poluir a tela de quem não é do setor.
+  if (!allowedAny(access, ["finance:manage", "operations:manage", "operation:manage", "planning:manage", "audit:read"]))
+    return json({ records: [] });
+  const { limit, offset } = paginacao(url);
+  const { results } = await env.DB.prepare(
+    `SELECT o.id, o.reference, o.client_id, o.delivered_at, o.service_date,
+            o.vehicle_plate, o.driver_name, o.contract_id,
+            cl.name AS client_name,
+            s.id AS service_order_id, s.number AS service_order_number, s.status AS service_order_status
+       FROM todogreen_client_operations o
+       LEFT JOIN todogreen_clients cl
+         ON cl.id = o.client_id AND cl.tenant_id = o.tenant_id AND cl.workspace_owner_id = o.workspace_owner_id
+       LEFT JOIN todogreen_service_orders s
+         ON s.id = (
+           SELECT s2.id FROM todogreen_service_orders s2
+            WHERE s2.operation_id = o.id AND s2.tenant_id = o.tenant_id
+              AND s2.workspace_owner_id = o.workspace_owner_id AND s2.archived_at IS NULL
+            ORDER BY s2.created_at LIMIT 1
+         )
+      WHERE o.tenant_id = ? AND o.workspace_owner_id = ? AND o.archived_at IS NULL
+        AND o.delivered_at IS NOT NULL AND o.delivered_at <> ''
+        AND o.proof_url IS NOT NULL AND o.proof_url <> ''
+        AND NOT EXISTS (
+          SELECT 1 FROM todogreen_service_orders s3
+            JOIN todogreen_billing_items b3 ON b3.service_order_id = s3.id
+           WHERE s3.operation_id = o.id AND s3.tenant_id = o.tenant_id
+             AND s3.workspace_owner_id = o.workspace_owner_id
+             AND b3.tenant_id = o.tenant_id AND b3.workspace_owner_id = o.workspace_owner_id
+        )
+      ORDER BY o.delivered_at DESC LIMIT ? OFFSET ?`,
+  ).bind(TENANT_ID, access.ownerId, limit, offset).all();
+  const records = (results || []).map((row) => ({
+    id: row.id,
+    reference: row.reference || "",
+    clientId: row.client_id || "",
+    clientName: row.client_name || "",
+    deliveredAt: row.delivered_at || "",
+    serviceDate: row.service_date || "",
+    vehiclePlate: row.vehicle_plate || "",
+    driverName: row.driver_name || "",
+    contractId: row.contract_id || "",
+    serviceOrderId: row.service_order_id || "",
+    serviceOrderNumber: row.service_order_number || "",
+    serviceOrderStatus: row.service_order_status || "",
+    ...classificarEntregaAFaturar({ serviceOrderId: row.service_order_id }),
+  }));
+  return json({ records });
+}
+
 async function checkBilling(env, access, user, id, body) {
   if (!allowed(access, "finance:manage")) return json({ error: "Sem permissão financeira." }, 403);
   const next = body.approved === false ? "blocked" : "checked";
@@ -995,6 +1060,7 @@ export async function handleTodoGreenTransactions(request, env, access, user) {
   if (resource === "ciot" && request.method === "POST" && !id) return createCiot(env, access, user, body);
   if (resource === "ciot" && request.method === "POST" && id && action === "submit") return submitCiot(env, access, user, id, body);
   if (resource === "ciot" && request.method === "POST" && id && action === "issue") return issueCiot(env, access, user, id, body);
+  if (resource === "entregas-a-faturar" && request.method === "GET" && !id) return listDeliveredAwaitingBilling(env, access, url);
   if (resource === "billing-items" && request.method === "GET") return listBilling(env, access, url);
   if (resource === "billing-items" && request.method === "POST" && id && action === "check") return checkBilling(env, access, user, id, body);
   if (resource === "billing-runs" && request.method === "POST" && !id) return closeBilling(env, access, user, body);

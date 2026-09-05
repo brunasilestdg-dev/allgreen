@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransitionServiceOrder,
+  classificarEntregaAFaturar,
   precoDaSimulacao,
   precoUnitarioDaOs,
   serviceOrderAmounts,
@@ -63,6 +64,23 @@ describe("aceite → OS: herança de preço", () => {
 
   it("sem nenhuma fonte, não inventa preço", () => {
     expect(precoUnitarioDaOs({ unitPrice: 0, contractValue: 0, simulacaoResult: {} })).toEqual({ preco: null, origem: "ausente", modo: "unidade" });
+  });
+
+  it("entrega com POD e sem OS pede a geração da ordem, não fatura sozinha", () => {
+    const r = classificarEntregaAFaturar({ serviceOrderId: "" });
+    expect(r.estado).toBe("sem_os");
+    expect(r.proximoPasso).toMatch(/ordem de serviço/i);
+  });
+
+  it("entrega com POD e OS ainda aberta pede a conclusão da OS", () => {
+    const r = classificarEntregaAFaturar({ serviceOrderId: "os-1", serviceOrderStatus: "in_progress" });
+    expect(r.estado).toBe("os_pendente");
+    expect(r.proximoPasso).toMatch(/conclua a os/i);
+  });
+
+  it("aceita as chaves snake_case vindas direto da linha do banco", () => {
+    expect(classificarEntregaAFaturar({ service_order_id: "os-9" }).estado).toBe("os_pendente");
+    expect(classificarEntregaAFaturar({}).estado).toBe("sem_os");
   });
 
   it("OS mensal não multiplica o valor fechado pela quantidade de viagens", () => {

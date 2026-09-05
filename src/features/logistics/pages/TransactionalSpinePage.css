@@ -29,5 +29,18 @@
 .tdg-txn-allocation-head span.balanced { color: var(--tdg-green); }
 .tdg-txn-allocation { align-items: end; background: #f8fbf9; border: 1px solid var(--tdg-line); border-radius: 14px; display: grid; gap: 9px; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 12px; }
 .tdg-txn-form-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* Ponte POD → faturamento (#120): lista de trabalho, não fila de cobrança.
+   Tom âmbar (pendência, não erro) para separar do que já está no Financeiro. */
+.tdg-derivado { background: #fffaf0; border: 1px solid #f0dcae; border-radius: 14px; display: grid; gap: 10px; padding: 13px; }
+.tdg-derivado-head { align-items: start; display: flex; gap: 10px; justify-content: space-between; }
+.tdg-derivado-head > div { display: grid; gap: 3px; }
+.tdg-derivado-head strong { color: #8a5d00; }
+.tdg-derivado-head small { color: var(--tdg-muted); }
+.tdg-derivado-count { background: #f6e2b6; border-radius: 999px; color: #8a5d00; font-weight: 800; min-width: 26px; padding: 4px 9px; text-align: center; }
+.tdg-derivado-row { grid-template-columns: minmax(180px, 1.6fr) auto minmax(200px, 1.4fr); }
+.tdg-derivado-tag { background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); font-size: .72rem; font-weight: 800; padding: 7px 9px; white-space: nowrap; }
+.tdg-derivado-tag.sem_os { background: #fff0ed; color: #a93626; }
+.tdg-derivado-passo { color: var(--tdg-muted); }
+@media (max-width: 920px) { .tdg-derivado-row { grid-template-columns: minmax(0, 1fr) auto; } .tdg-derivado-passo { grid-column: 1 / -1; } }
 @media (max-width: 920px) { .tdg-txn-form, .tdg-txn-allocation, .tdg-txn-readiness { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tdg-txn-row { grid-template-columns: minmax(0, 1fr) auto; } }
 @media (max-width: 620px) { .tdg-txn-form, .tdg-txn-allocation, .tdg-txn-row, .tdg-txn-readiness { grid-template-columns: 1fr; } .tdg-txn-form-actions, .tdg-txn-close { align-items: stretch; flex-direction: column; } }

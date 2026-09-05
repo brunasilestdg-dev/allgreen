@@ -474,7 +474,7 @@ input[readonly] {
 }
 .profile-status { display: grid; gap: 12px; grid-template-columns: 90px 1fr; }
 .profile-status-emoji { text-align: center; }
-@media (max-width: 520px) { .profile-status { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .profile-status { grid-template-columns: minmax(0, 1fr); } }
 .settings-overview-profile h2 {
   margin: 6px 0 4px;
   color: #fff;

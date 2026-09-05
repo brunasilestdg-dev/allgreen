@@ -95,6 +95,35 @@ export function validateAllocation(total, allocations = [], tolerance = 0.01) {
   return { valid: true, allocated };
 }
 
+// ===== A ponte que faltava: entrega com POD → faturamento =====
+//
+// O motorista entrega, registra o comprovante (POD) e a operação é carimbada
+// `delivered_at`/`proof_url`. Daí para a frente o ciclo é MANUAL e desconexo:
+// alguém precisa ter criado a OS do aceite e concluí-la para o item entrar na
+// fila de faturamento. Sem isso, a entrega com comprovante fica invisível ao
+// Financeiro — o dinheiro nunca é sinalizado.
+//
+// Esta função é a LEITURA da lacuna, não a correção automática. Ela só nomeia
+// em que estado a entrega parou e qual é o próximo passo manual. Não decide
+// preço nem cria OS: faturar um valor adivinhado é pior do que faturar à mão
+// (operação sem contrato/OS vinculada não tem valor definido). O painel que a
+// usa é uma lista de trabalho, não um gatilho de cobrança.
+export function classificarEntregaAFaturar(row = {}) {
+  const temOs = Boolean(row.serviceOrderId || row.service_order_id);
+  if (!temOs) {
+    return {
+      estado: "sem_os",
+      proximoPasso:
+        "Gere a ordem de serviço do aceite (aba Aceite e ordens de serviço) para levar esta entrega ao faturamento.",
+    };
+  }
+  return {
+    estado: "os_pendente",
+    proximoPasso:
+      "Conclua a OS vinculada (aba Aceite e ordens de serviço) — o comprovante já está registrado e destrava o faturamento.",
+  };
+}
+
 export function settlementState(openAmount, amount) {
   const open = Math.max(0, number(openAmount));
   const paid = Math.max(0, number(amount));

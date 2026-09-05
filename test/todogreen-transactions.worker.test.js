@@ -306,6 +306,44 @@ describe("evento de entrega fecha o ciclo da operação", () => {
     expect(lista).toHaveLength(1);
     expect(lista[0].recipientName).toBe("Portaria");
   });
+
+  it("a entrega com POD, mas com OS ainda não concluída, aparece na ponte de faturamento (#120)", async () => {
+    // txn-op foi entregue com comprovante no teste anterior; a OS vinculada
+    // segue em 'draft' (sem item de faturamento). A ponte precisa mostrá-la.
+    const resposta = await request("/api/todogreen/transactions/entregas-a-faturar");
+    expect(resposta.status).toBe(200);
+    const registros = (await resposta.json()).records;
+    const entrega = registros.find((item) => item.id === "txn-op");
+    expect(entrega).toBeTruthy();
+    expect(entrega.estado).toBe("os_pendente");
+    expect(entrega.serviceOrderStatus).toBe("draft");
+    expect(entrega.clientName).toBe("Cliente Transacional");
+    expect(entrega.proximoPasso).toMatch(/conclua a os/i);
+  });
+
+  it("não lista entrega sem comprovante nem operação sem entrega", async () => {
+    const agora = new Date().toISOString();
+    // Entregue, porém SEM comprovante: não é faturável ainda, não aparece.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, status,
+          delivered_at, proof_url, fields_json, created_by, updated_by, created_at, updated_at)
+       VALUES ('txn-op-sem-pod','todogreen','txn-client','txn-user','OP-SEM-POD','em_andamento',
+               ?,'','{}','txn-user','txn-user',?,?)`,
+    ).bind(agora, agora, agora).run();
+    // Nem entregue: também fora da ponte.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, status,
+          fields_json, created_by, updated_by, created_at, updated_at)
+       VALUES ('txn-op-aberta','todogreen','txn-client','txn-user','OP-ABERTA','em_andamento',
+               '{}','txn-user','txn-user',?,?)`,
+    ).bind(agora, agora).run();
+    const registros = (await (await request("/api/todogreen/transactions/entregas-a-faturar")).json()).records;
+    const ids = registros.map((item) => item.id);
+    expect(ids).not.toContain("txn-op-sem-pod");
+    expect(ids).not.toContain("txn-op-aberta");
+  });
 });
 
 describe("aceite → OS: a ordem herda o preço", () => {
