@@ -19,11 +19,38 @@ import WidgetChart from "./pages/DashboardCharts.jsx";
 // Os gráficos do painel da home: puro SVG (CSP-safe), alimentados pelos mesmos
 // dados da vertical. Dão o "dashboard" e o dinamismo que faltavam — um número
 // solto não conta a tendência; a linha e a rosca sim.
-const PAINEL_HOME = [
-  { metric: "receita", type: "line", titulo: "Receita por mês", subtitulo: "evolução realizada" },
-  { metric: "pipeline", type: "donut", titulo: "Pipeline por estágio", subtitulo: "oportunidades abertas" },
-  { metric: "operacoes", type: "bar", titulo: "Operações por mês", subtitulo: "entregas registradas" },
-];
+// Cada área tem seu próprio painel de gráficos (pedido da titular: "as áreas
+// devem ter seus dashboards com gráficos" + "gosto de gráficos dinâmicos,
+// barras, pizza"). Os gráficos usam só os indicadores com série/distribuição
+// naturais (receita, custo, margem, pipeline, propostas, operações, clientes);
+// área sem painel próprio cai no panorama geral acima.
+const GRAFICOS = {
+  receita: { metric: "receita", type: "line", titulo: "Receita por mês", subtitulo: "evolução realizada" },
+  custo: { metric: "custo", type: "line", titulo: "Custos por mês", subtitulo: "vinculados às operações" },
+  margem: { metric: "margem", type: "line", titulo: "Margem por mês", subtitulo: "receita menos custo" },
+  pipeline: { metric: "pipeline", type: "donut", titulo: "Pipeline por estágio", subtitulo: "oportunidades abertas" },
+  propostas: { metric: "propostas", type: "donut", titulo: "Propostas por situação", subtitulo: "carteira comercial" },
+  operacoes: { metric: "operacoes", type: "bar", titulo: "Operações por mês", subtitulo: "entregas registradas" },
+  clientes: { metric: "clientes", type: "bar", titulo: "Clientes ativos por mês", subtitulo: "com movimento no razão" },
+};
+const PAINEL_POR_AREA = {
+  commercial: ["pipeline", "propostas", "clientes"],
+  products: ["pipeline", "margem", "propostas"],
+  planning: ["operacoes", "pipeline", "custo"],
+  operations: ["operacoes", "custo", "clientes"],
+  incidents: ["operacoes", "custo"],
+  supply: ["custo", "operacoes"],
+  finance: ["receita", "custo", "margem"],
+  marketing: ["pipeline", "clientes", "propostas"],
+  esg: ["operacoes", "clientes"],
+  hr: ["operacoes", "custo"],
+  management: ["receita", "pipeline", "operacoes"],
+  indicators: ["receita", "pipeline", "operacoes"],
+};
+const painelDaArea = (areaId) =>
+  (PAINEL_POR_AREA[areaId] || ["receita", "pipeline", "operacoes"])
+    .map((chave) => GRAFICOS[chave])
+    .filter(Boolean);
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const NUM = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -173,9 +200,9 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
         dinamismo que faltavam — a home tinha só números soltos. Só aparece com
         dado operacional; cada gráfico já mostra "sem dados" sozinho se faltar. */}
     {hasOperationalData && <section className="tdg-home-section tdg-home-painel-sec">
-      <header><div><span>PANORAMA</span><h3>Painel visual</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/dashboards")}>Painéis completos<ArrowRight size={14} /></button></header>
+      <header><div><span>PANORAMA · {area.label.toUpperCase()}</span><h3>Painel visual da área</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/dashboards")}>Painéis completos<ArrowRight size={14} /></button></header>
       <div className="tdg-home-painel">
-        {PAINEL_HOME.map((g) => (
+        {painelDaArea(area.id).map((g) => (
           <article className="tdg-home-painel-card" key={g.metric}>
             <div className="tdg-home-painel-cab"><strong>{g.titulo}</strong><small>{g.subtitulo}</small></div>
             <WidgetChart widget={{ metric: g.metric, type: g.type }} data={data} />
