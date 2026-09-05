@@ -133,6 +133,9 @@ export default function DriverPortalPage() {
   // menu, não tem nada"). Hoje = viagens do dia; Entregas = histórico com POD;
   // Perfil = motorista, CNH e a fila offline.
   const [secao, setSecao] = useState("hoje");
+  // CNH subida pelo próprio motorista (fica disponível à operação).
+  const [enviandoCnh, setEnviandoCnh] = useState(false);
+  const cnhInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
   // dreno por vez.
@@ -215,6 +218,36 @@ export default function DriverPortalPage() {
       setAviso(motivo.message || "Não consegui usar essa foto. Tente de novo.");
     } finally {
       setCapturandoFoto(false);
+    }
+  };
+
+  // CNH: o motorista tira a foto (reduzida, um pouco maior que o canhoto para o
+  // texto ficar legível) e/ou confirma a validade. Vai direto ao servidor —
+  // documento não entra na fila offline de entregas.
+  const enviarCnhFoto = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setEnviandoCnh(true);
+    try {
+      const base64 = await reduzirImagem(file, 1600, 0.72);
+      await pedir("/cnh", { method: "POST", body: JSON.stringify({ imagemBase64: base64 }) });
+      setAviso("CNH enviada. A operação já pode ver.");
+      await carregar();
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui enviar a CNH agora.");
+    } finally {
+      setEnviandoCnh(false);
+    }
+  };
+  const salvarValidadeCnh = async (valor) => {
+    if (!valor) return;
+    try {
+      await pedir("/cnh", { method: "POST", body: JSON.stringify({ validade: valor }) });
+      setAviso("Validade da CNH atualizada.");
+      await carregar();
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui salvar a validade.");
     }
   };
 
@@ -383,10 +416,26 @@ export default function DriverPortalPage() {
           </article>
           <article className="tdg-driver-cartao">
             <div className="tdg-driver-info-linha"><CreditCard size={16} /><span>CNH</span><b>{sessao.motorista.cnhCategoria || "—"}</b></div>
-            <div className="tdg-driver-info-linha"><Clock size={16} /><span>Validade</span><b>{sessao.motorista.cnhValidade ? String(sessao.motorista.cnhValidade).slice(0, 10).split("-").reverse().join("/") : "—"}</b></div>
+            <label className="tdg-driver-cnh-validade">
+              <span><Clock size={14} aria-hidden="true" /> Validade da CNH</span>
+              <input
+                type="date"
+                defaultValue={sessao.motorista.cnhValidade ? String(sessao.motorista.cnhValidade).slice(0, 10) : ""}
+                onChange={(e) => salvarValidadeCnh(e.target.value)}
+              />
+            </label>
             {sessao.motorista.cnhAlerta
               ? <small className="tdg-driver-cnh-alerta">{sessao.motorista.cnhAlerta}</small>
               : <small>CNH em dia.</small>}
+            <div className="tdg-driver-cnh-foto">
+              {sessao.motorista.cnhImagemUrl
+                ? <img src={sessao.motorista.cnhImagemUrl} alt="Foto da sua CNH" />
+                : <div className="tdg-driver-cnh-vazia"><CreditCard size={26} /><small>Envie a foto da sua CNH — a operação precisa dela.</small></div>}
+              <input ref={cnhInputRef} type="file" accept="image/*" capture="environment" hidden onChange={enviarCnhFoto} />
+              <button type="button" className="tdg-captura-btn" onClick={() => cnhInputRef.current?.click()} disabled={enviandoCnh}>
+                <Camera size={16} /> {enviandoCnh ? "Enviando…" : sessao.motorista.cnhImagemUrl ? "Refazer foto da CNH" : "Enviar foto da CNH"}
+              </button>
+            </div>
           </article>
           <article className="tdg-driver-cartao">
             <div className="tdg-driver-info-linha"><Truck size={16} /><span>Viagens no total</span><b>{viagens.length}</b></div>

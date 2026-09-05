@@ -99,6 +99,8 @@ const CONFIG = {
     map:(r)=>({ ...common(r), employeeId:r.employee_id, partyId:r.party_id, driverCode:r.driver_code, fullName:r.full_name, document:r.document,
       employmentType:r.employment_type, phone:r.phone, email:r.email, operationalUnitId:r.operational_unit_id, baseName:r.base_name,
       availabilityStatus:r.availability_status, cnhNumber:r.cnh_number, cnhCategory:r.cnh_category, cnhExpiresAt:r.cnh_expires_at||"",
+      // Foto da CNH que o motorista subiu pelo app (disponível à operação).
+      cnhImageUrl:r.cnh_image_url||"", cnhSelfUpdatedAt:r.cnh_self_updated_at||"",
       moppExpiresAt:r.mopp_expires_at||"", rntrc:r.rntrc, status:r.status, userEmail:r.user_email||"", fields:parse(r.fields_json,{}) }),
     encode:(b,c={})=>({ employee_id:text(value(b,c,"employeeId","employee_id"),120), party_id:text(value(b,c,"partyId","party_id"),120),
       driver_code:text(value(b,c,"driverCode","driver_code"),60).toUpperCase(), full_name:text(value(b,c,"fullName","full_name"),240), document:digits(value(b,c,"document","document"),14),

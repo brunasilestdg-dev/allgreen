@@ -1685,7 +1685,20 @@
 .tdg-planner-radio strong { color: var(--tdg-ink); }
 .tdg-planner-checklist { border-top: 1px solid var(--tdg-line); padding-top: 10px; }
 .tdg-planner-checkrow { align-items: center; display: flex; gap: 8px; margin-top: 7px; }
-.tdg-planner-checkrow input[type="checkbox"] { width: auto; }
+/* O modal é portalado para fora do .tdg — então NÃO herda o estilo de `.tdg
+   input` (largura/altura). Sem isto, o campo de texto colapsava e sumia,
+   sobrando só o checkbox gigante centralizado. A linha agora se basta. */
+.tdg-planner-checkrow input[type="checkbox"] {
+  flex: 0 0 auto; width: 18px; height: 18px; min-height: 0; margin: 0;
+  accent-color: var(--tdg-green, #17624f); cursor: pointer;
+}
+.tdg-planner-checkrow input[type="text"] {
+  flex: 1 1 auto; min-width: 0; min-height: 40px; width: auto;
+  border: 1px solid var(--tdg-line, #d7e4de); border-radius: 8px;
+  background: var(--tdg-card, #fff); color: var(--tdg-ink, #10241f);
+  font: inherit; padding: 8px 11px;
+}
+.tdg-planner-checkrow input[type="text"]:focus { border-color: var(--tdg-green, #17624f); outline: none; }
 .tdg-planner-taskactions { margin-top: 6px; }
 .tdg-planner-taskactions .tdg-planner-danger {
   align-items: center; background: var(--tdg-card); border: 1px solid #e0c9c4; border-radius: 12px;
@@ -1877,6 +1890,13 @@
 .tdg-driver-info-linha svg { color: #3d8a6f; }
 .tdg-driver-info-linha b { font-weight: 800; }
 .tdg-driver-cnh-alerta { color: #a05e03; font-weight: 700; }
+.tdg-driver-cnh-validade { display: grid; gap: 4px; }
+.tdg-driver-cnh-validade > span { align-items: center; color: #173d31; display: flex; font-size: .8rem; font-weight: 700; gap: 5px; }
+.tdg-driver-cnh-validade input { border: 1px solid #b9d3c5; border-radius: 9px; font-size: 1rem; min-height: 44px; padding: 8px 12px; }
+.tdg-driver-cnh-foto { display: grid; gap: 8px; margin-top: 4px; }
+.tdg-driver-cnh-foto img { border: 1px solid #d5e5de; border-radius: 10px; max-height: 220px; object-fit: contain; width: 100%; }
+.tdg-driver-cnh-vazia { align-items: center; background: #f4f8f6; border: 1px dashed #b9d3c5; border-radius: 10px; color: #6d8377; display: grid; gap: 6px; justify-items: center; padding: 20px 12px; text-align: center; }
+.tdg-driver-cnh-vazia svg { color: #8fbfa8; }
 .tdg-driver-reenviar {
   background: #0b9f8f; border: 0; border-radius: 10px; color: #fff; cursor: pointer;
   font-size: .9rem; font-weight: 700; margin-top: 4px; min-height: 44px; width: 100%;

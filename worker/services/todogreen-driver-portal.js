@@ -95,9 +95,48 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
           : diasCnh <= 30
             ? `Sua CNH vence em ${diasCnh} dia(s). Agende a renovação.`
             : "",
+        // Imagem da CNH que o motorista subiu (fica disponível à operação).
+        cnhImagemUrl: motorista.cnh_image_url || "",
         disponibilidade: motorista.availability_status || "",
       },
     });
+  }
+
+  // O motorista sobe a foto da CNH e confirma a validade pelo próprio app; a
+  // operação passa a ver a imagem e a data (mesmo campo cnh_expires_at do
+  // cadastro). Só a própria CNH — o recorte é o vínculo do motorista.
+  if (request.method === "POST" && recurso === "cnh") {
+    if (!motorista) return json({ error: "Seu e-mail não está ligado a um cadastro de motorista." }, 403);
+    const corpo = await request.json().catch(() => ({}));
+    const dataUrl = texto(corpo.imagemBase64, 12_000_000);
+    const validade = texto(corpo.validade, 10);
+    if (!dataUrl && !validade)
+      return json({ error: "Envie a foto da CNH ou informe a validade." }, 400);
+    let url = motorista.cnh_image_url || "";
+    if (dataUrl) {
+      try {
+        const { armazenarImagemBase64 } = await import("./todogreen-file-store.js");
+        const guardado = await armazenarImagemBase64(env, {
+          ownerId: access.ownerId,
+          contextType: "driver_cnh",
+          contextId: motorista.id,
+          dataUrl,
+          createdBy: user.id,
+          prefixoNome: "cnh",
+        });
+        url = guardado.url;
+      } catch (erro) {
+        return json({ error: String(erro?.message || "Não consegui guardar a foto da CNH.") }, 400);
+      }
+    }
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `UPDATE todogreen_drivers
+        SET cnh_image_url = ?, cnh_expires_at = COALESCE(NULLIF(?, ''), cnh_expires_at),
+            cnh_self_updated_at = ?, updated_at = ?
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+    ).bind(url, validade, agora, agora, motorista.id, TENANT_ID, access.ownerId).run();
+    return json({ ok: true, cnhImagemUrl: url });
   }
 
   if (!motorista)
