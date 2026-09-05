@@ -560,6 +560,10 @@
 .tdg-esp-grade > button strong { color: #17372e; }
 .tdg-esp-grade > button small { color: #5b7069; line-height: 1.4; }
 .tdg-esp-grade > button.da-casa { background: #f4faf7; border-color: #bad5ca; }
+/* O selo "da casa" é absoluto no topo direito; sem reservar espaço, o título
+   longo passava por baixo dele. O padding no título faz o texto quebrar antes
+   do selo. */
+.tdg-esp-grade > button.da-casa strong { padding-right: 74px; }
 .tdg-esp-grade > button em { background: #17624f; border-radius: 999px; color: #fff; font-size: 10px; font-style: normal; font-weight: 800; letter-spacing: .04em; padding: 2px 9px; position: absolute; right: 10px; top: 10px; text-transform: uppercase; }
 .tdg-esp-vazio { color: #667e75; margin: 8px 2px; }
 .tdg-esp-chat { background: #fff; border: 1px solid var(--tdg-line, #dce7e2); border-radius: 13px; display: grid; gap: 0; }

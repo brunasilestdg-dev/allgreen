@@ -736,17 +736,37 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   };
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    if (!espacoId) return undefined;
     let ativo = true;
-    fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
+    // Duas portas de "gente do espaço" — as MESMAS que o servidor aceita como
+    // responsável: colaboradores do app (memberships, via /api/collab) E
+    // vínculos diretos da vertical (tenant_users, via /planner/pessoas). Antes
+    // só a primeira era listada — quem foi cadastrado na vertical existia e era
+    // aceito, mas não aparecia para atribuir. Unimos as duas por id.
+    const juntar = (listas) => {
+      const unicos = [];
+      const vistos = new Set();
+      for (const pessoa of listas.flat()) {
+        if (pessoa?.id && pessoa?.name && !vistos.has(pessoa.id)) {
+          vistos.add(pessoa.id);
+          unicos.push({ id: pessoa.id, name: pessoa.name, email: pessoa.email || "" });
+        }
+      }
+      return unicos;
+    };
+    const daVertical = fetch("/api/todogreen/planner/pessoas", { headers: authHeaders?.() || {} })
       .then((resposta) => (resposta.ok ? resposta.json() : null))
-      .then((corpo) => {
-        if (!ativo || !corpo) return;
-        const candidatos = [corpo.owner, ...(corpo.members || []).filter((membro) => membro.status === "ativo")];
-        setPessoas(candidatos.filter((pessoa, indice, lista) =>
-          pessoa?.id && pessoa?.name && lista.findIndex((item) => item?.id === pessoa.id) === indice));
-      })
-      .catch(() => setPessoas([]));
+      .then((corpo) => corpo?.registros || [])
+      .catch(() => []);
+    const doCollab = espacoId
+      ? fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
+        .then((resposta) => (resposta.ok ? resposta.json() : null))
+        .then((corpo) => (corpo ? [corpo.owner, ...(corpo.members || []).filter((m) => m.status === "ativo")] : []))
+        .catch(() => [])
+      : Promise.resolve([]);
+    Promise.all([daVertical, doCollab]).then(([vertical, collab]) => {
+      if (!ativo) return;
+      setPessoas(juntar([vertical, collab]));
+    });
     return () => { ativo = false; };
   }, [authHeaders, espacoId]);
   useEffect(() => {
