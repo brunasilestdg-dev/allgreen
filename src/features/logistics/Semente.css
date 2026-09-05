@@ -305,6 +305,67 @@
   color: #fff;
 }
 
+.semente-corrigir-abrir {
+  background: transparent;
+  border: none;
+  color: #7c8a84;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 4px 6px;
+  text-decoration: underline;
+}
+
+.semente-corrigir-abrir:hover {
+  color: var(--tdg-green, #17624f);
+}
+
+.semente-corrigida {
+  align-items: center;
+  color: var(--tdg-green, #17624f);
+  display: inline-flex;
+  font-size: 0.72rem;
+  gap: 3px;
+}
+
+.semente-corrigir {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.semente-corrigir textarea {
+  border: 1px solid #d7e3dd;
+  border-radius: 8px;
+  font: inherit;
+  padding: 8px;
+  resize: vertical;
+  width: 100%;
+}
+
+.semente-corrigir-acoes {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.semente-corrigir-acoes button {
+  border: 1px solid #d7e3dd;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 6px 12px;
+}
+
+.semente-corrigir-acoes button.principal {
+  background: var(--tdg-green, #17624f);
+  border-color: var(--tdg-green, #17624f);
+  color: #fff;
+}
+
+.semente-corrigir-acoes button.principal:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .semente-aviso {
   background: #fff5e4;
   border-radius: 9px;

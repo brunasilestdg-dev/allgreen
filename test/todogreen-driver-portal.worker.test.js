@@ -229,3 +229,100 @@ describe("idempotência da fila offline do motorista", () => {
     expect(await contarEventos("op-m1", "idem-m1-A")).toBe(1);
   });
 });
+
+// #120b — a entrega carrega FOTO do canhoto e ASSINATURA capturadas no celular,
+// como imagem reduzida (data URL). O servidor guarda no cofre e o comprovante
+// passa a apontar para o download do cofre — não mais um link colado.
+describe("POD do motorista: foto e assinatura capturadas", () => {
+  // 1x1 GIF transparente — imagem mínima válida.
+  const IMG = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+  beforeAll(async () => {
+    const agora = new Date().toISOString();
+    // Viagem nova (não entregue) do João + OS amarrada, para provar o POD.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id,tenant_id,client_id,workspace_owner_id,reference,status,service_date,origin,destination,
+          driver_id,fields_json,created_by,updated_by,created_at,updated_at)
+       VALUES ('op-cap','todogreen','dp-cli','dp-dono','ROTA-CAP','active','2026-08-27','CD Osasco','Loja Sul','drv-joao',
+          '{}','dp-dono','dp-dono',?,?)`,
+    ).bind(agora, agora).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_service_orders
+         (id,tenant_id,workspace_owner_id,number,client_id,contract_id,operation_id,service_id,price_table_id,
+          status,requested_at,origin_json,destination_json,quantity,charge_unit,unit_price,gross_amount,
+          discount_amount,tax_amount,net_amount,sla_json,fields_json,revision,created_by,updated_by,created_at,updated_at)
+       VALUES ('os-cap','todogreen','dp-dono','OS-CAP','dp-cli','dp-contrato','op-cap','','',
+          'in_progress',?,'{}','{}',1,'viagem',100,100,0,0,100,'{}','{}',1,'dp-dono','dp-dono',?,?)`,
+    ).bind(agora, agora, agora).run();
+  });
+
+  it("guarda foto e assinatura no cofre e aponta o comprovante para o download", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/viagens/op-cap/evento", {
+      method: "POST", token: joao.token,
+      body: {
+        tipo: "entrega", recebedor: "Dona Rosa",
+        comprovanteBase64: IMG, assinaturaBase64: IMG,
+        latitude: -23.6, longitude: -46.7, idempotencyKey: "cap-1",
+      },
+    });
+    expect(r.status).toBe(201);
+    const dados = await r.json();
+    expect(dados.viagem.comprovanteRegistrado).toBe(true);
+
+    // A operação aponta para o cofre — foto e assinatura em arquivos distintos.
+    const op = await env.DB.prepare(
+      "SELECT proof_url, signature_url FROM todogreen_client_operations WHERE id='op-cap'",
+    ).first();
+    expect(op.proof_url).toMatch(/^\/api\/todogreen\/file-vault\/[^/]+\/download$/);
+    expect(op.signature_url).toMatch(/^\/api\/todogreen\/file-vault\/[^/]+\/download$/);
+    expect(op.proof_url).not.toBe(op.signature_url);
+
+    // Os bytes foram mesmo guardados, escopados à operação (contexto).
+    const arquivos = await env.DB.prepare(
+      "SELECT context_type, context_id, content_type FROM todogreen_internal_files WHERE context_id='op-cap' ORDER BY created_at",
+    ).all();
+    expect(arquivos.results.length).toBe(2);
+    expect(arquivos.results.every((a) => a.context_type === "operation_proof")).toBe(true);
+    expect(arquivos.results.every((a) => a.content_type === "image/gif")).toBe(true);
+
+    // O POD do faturamento nasce com foto e assinatura.
+    const pod = await env.DB.prepare(
+      "SELECT document_url, signature_url, recipient_name FROM todogreen_proofs_of_delivery WHERE service_order_id='os-cap'",
+    ).first();
+    expect(pod.recipient_name).toBe("Dona Rosa");
+    expect(pod.document_url).toBe(op.proof_url);
+    expect(pod.signature_url).toBe(op.signature_url);
+  });
+
+  it("reenvio com a mesma chave NÃO guarda a imagem de novo (dedup antes de gravar)", async () => {
+    const reenvio = await pedir("/api/todogreen/driver-portal/viagens/op-cap/evento", {
+      method: "POST", token: joao.token,
+      body: { tipo: "entrega", recebedor: "Dona Rosa", comprovanteBase64: IMG, assinaturaBase64: IMG, idempotencyKey: "cap-1" },
+    });
+    expect(reenvio.status).toBe(200);
+    // Continua com só os dois arquivos do primeiro envio — o reenvio não dobrou.
+    const arquivos = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_internal_files WHERE context_id='op-cap'",
+    ).first();
+    expect(arquivos.n).toBe(2);
+  });
+
+  it("recusa (400) uma entrega com 'imagem' que não é imagem", async () => {
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id,tenant_id,client_id,workspace_owner_id,reference,status,service_date,origin,destination,
+          driver_id,fields_json,created_by,updated_by,created_at,updated_at)
+       VALUES ('op-cap2','todogreen','dp-cli','dp-dono','ROTA-CAP2','active','2026-08-27','A','B','drv-joao',
+          '{}','dp-dono','dp-dono',?,?)`,
+    ).bind(new Date().toISOString(), new Date().toISOString()).run();
+    const r = await pedir("/api/todogreen/driver-portal/viagens/op-cap2/evento", {
+      method: "POST", token: joao.token,
+      body: { tipo: "entrega", recebedor: "X", comprovanteBase64: "data:application/pdf;base64,JVBERi0=" },
+    });
+    expect(r.status).toBe(400);
+    // Não entregou pela metade: sem comprovante gravado.
+    const op = await env.DB.prepare("SELECT delivered_at FROM todogreen_client_operations WHERE id='op-cap2'").first();
+    expect(op.delivered_at).toBeFalsy();
+  });
+});

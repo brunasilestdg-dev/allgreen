@@ -883,6 +883,53 @@ const avaliarRespostaDoPlantu = async (env, access, user, { mensagemId, nota }) 
   return { ok: true, avaliacao: valor };
 };
 
+// Correção assistida: a pessoa escreve qual era a resposta certa. Guarda a
+// correção na própria resposta (e marca 👎, porque corrigir é dizer que não
+// serviu). Escopo do dono e da pessoa — ninguém corrige a resposta de outra.
+const corrigirRespostaDoPlantu = async (env, access, user, { mensagemId, texto }) => {
+  const id = clean(mensagemId, 60);
+  const correcao = clean(texto, 2000);
+  if (!id) return { erro: "Informe qual resposta corrigir.", status: 400 };
+  if (!correcao) return { erro: "Escreva qual era a resposta certa.", status: 400 };
+  const r = await env.DB.prepare(
+    `UPDATE todogreen_ai_messages SET correction = ?, rating = -1
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND user_id = ?
+        AND assistente = ? AND role = 'assistant' AND archived_at IS NULL`,
+  ).bind(correcao, id, TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE)
+    .run().catch(() => null);
+  if (!r || (r.meta && r.meta.changes === 0)) return { erro: "Resposta não encontrada.", status: 404 };
+  return { ok: true, correcao };
+};
+
+// As últimas correções que a pessoa ensinou — para o Plantû não repetir o erro.
+// Mesmo escopo do histórico + a guarda de restrito: uma correção sobre uma
+// resposta com dado restrito no contexto só volta para quem tem finance:manage.
+const LIMITE_CORRECOES = 12;
+
+export const carregarCorrecoesDoPlantu = async (env, access, user, podeVerRestrito = false) => {
+  const veRestrito = podeVerRestrito ? 1 : 0;
+  // Traz também a PERGUNTA que gerou a resposta corrigida (a mensagem 'user'
+  // imediatamente anterior, mesmo turno) — sem ela o modelo sabe o certo mas não
+  // sabe QUANDO aplicar. A subconsulta pega o maior rowid de 'user' abaixo do da
+  // resposta, dentro do mesmo escopo.
+  const { results } = await env.DB.prepare(
+    `SELECT a.content AS respondi, a.correction AS correcao,
+        (SELECT u.content FROM todogreen_ai_messages u
+          WHERE u.tenant_id = a.tenant_id AND u.workspace_owner_id = a.workspace_owner_id
+            AND u.user_id = a.user_id AND u.assistente = a.assistente
+            AND u.role = 'user' AND u.rowid < a.rowid
+          ORDER BY u.rowid DESC LIMIT 1) AS pergunta
+       FROM todogreen_ai_messages a
+      WHERE a.tenant_id = ? AND a.workspace_owner_id = ? AND a.user_id = ? AND a.assistente = ?
+        AND a.correction IS NOT NULL AND a.correction <> '' AND a.archived_at IS NULL
+        AND (a.restricted_context = 0 OR ? = 1)
+      ORDER BY a.created_at DESC, a.rowid DESC
+      LIMIT ?`,
+  ).bind(TENANT_ID, access.ownerId, user.id, CHAVE_ASSISTENTE, veRestrito, LIMITE_CORRECOES)
+    .all().catch(() => ({ results: [] }));
+  return (results || []).map((row) => ({ pergunta: row.pergunta || "", respondi: row.respondi, correcao: row.correcao }));
+};
+
 // ===== A porta =====
 
 export async function handleTodoGreenSemente(request, env, access, user) {
@@ -925,6 +972,17 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     return response({ avaliacao: r.avaliacao });
   }
 
+  // Correção assistida: a pessoa ensina qual era a resposta certa. Só grava, sem
+  // modelo — a correção volta como contexto nas próximas perguntas.
+  if (body.corrigir) {
+    const r = await corrigirRespostaDoPlantu(env, access, user, {
+      mensagemId: body.corrigir.mensagemId,
+      texto: body.corrigir.texto,
+    });
+    if (r.erro) return response({ error: r.erro }, r.status || 400);
+    return response({ corrigida: true });
+  }
+
   // Caminho da execução: a pessoa já leu a proposta e clicou. Nenhum modelo é
   // consultado aqui — o texto que gerou a proposta não decide mais nada.
   if (body.executar) {
@@ -964,6 +1022,8 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     ? (await carregarMemoriaDoCliente(env, access, user, emFoco.id, podeVerRestrito))
       .filter((m) => !turnosVivos.has(chaveDeTurno(m.texto)))
     : [];
+  // Correção assistida: o que a pessoa já corrigiu volta como aprendizado.
+  const correcoes = await carregarCorrecoesDoPlantu(env, access, user, podeVerRestrito);
   const envIa = await envComChavesDoEspaco(env, access.ownerId);
   const envBusca = await envComChavesDeBuscaDoEspaco(envIa, access.ownerId);
   if (!configuredAiProviders(envIa).some((provider) => provider.configured))
@@ -988,6 +1048,9 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     dossie,
     "",
     `ÍNDICE DA CARTEIRA (resumo; use as ferramentas para o detalhe):\n${JSON.stringify(indice.slice(0, 200), null, 1)}`,
+    correcoes.length
+      ? `\nCORREÇÕES QUE VOCÊ JÁ RECEBEU DESTA PESSOA (o certo é a correção; quando a pergunta for parecida, siga a correção e não repita o erro):\n${correcoes.map((c) => `• ${c.pergunta ? `Perguntaram: "${clean(c.pergunta, 200)}" · ` : ""}Você respondeu: "${clean(c.respondi, 300)}" → O certo: "${clean(c.correcao, 600)}"`).join("\n")}`
+      : "",
     memoriaConta.length
       ? `\nMEMÓRIA DESTA CONTA (o que você já conversou com esta pessoa sobre ${emFoco.name} em outras ocasiões; use como contexto e confirme o que pode ter mudado):\n${memoriaConta.map((m) => `${m.de}: ${clean(m.texto, 800)}`).join("\n")}`
       : "",

@@ -72,6 +72,9 @@ import {
   doCatalogo as doCatalogoDeHabilitacao,
   etapaDoRfqValida,
 } from "../../src/features/logistics/habilitacaoDomain.js";
+// POD do motorista (#120b): a foto/assinatura chega como data URL reduzido e é
+// guardada no cofre; a URL de download entra no comprovante da entrega.
+import { armazenarImagemBase64, descartarArquivos } from "./todogreen-file-store.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -1985,13 +1988,45 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   // guarda o comprovante que o portal do cliente baixa e registra o POD que a
   // régua de faturamento exige (trigger da 0062). Antes, o evento era só uma
   // linha na timeline — a operação nunca "entregava" e a OS nunca faturava.
-  const comprovanteUrl = tipo === "entrega" ? texto(corpo.comprovanteUrl, 800) : "";
   const recebedor = tipo === "entrega" ? texto(corpo.recebedor, 200) : "";
+  // Comprovante e assinatura da entrega: ou já vêm como URL (retrocompatível:
+  // link colado, upload prévio), ou vêm como data URL de imagem capturada no
+  // celular (câmera do canhoto, assinatura na tela — #120b). Nesse caso a imagem
+  // é guardada no cofre AQUI e vira a URL de download. Só na entrega.
+  let comprovanteUrl = tipo === "entrega" ? texto(corpo.comprovanteUrl, 800) : "";
+  let comprovanteHash = tipo === "entrega" ? texto(corpo.comprovanteHash, 200) : "";
+  let assinaturaUrl = tipo === "entrega" ? texto(corpo.assinaturaUrl, 800) : "";
+  let assinaturaHash = tipo === "entrega" ? texto(corpo.assinaturaHash, 200) : "";
+  // Ids das imagens guardadas no cofre — para limpar se o evento não entrar.
+  const arquivosGuardados = [];
+  if (tipo === "entrega") {
+    try {
+      if (!comprovanteUrl && corpo.comprovanteBase64) {
+        const g = await armazenarImagemBase64(env, {
+          ownerId, clientId: operacao.client_id, contextId: operationId,
+          dataUrl: corpo.comprovanteBase64, createdBy: userId, prefixoNome: "comprovante",
+        });
+        comprovanteUrl = g.url; comprovanteHash = g.hash; arquivosGuardados.push(g.id);
+      }
+      if (!assinaturaUrl && corpo.assinaturaBase64) {
+        const g = await armazenarImagemBase64(env, {
+          ownerId, clientId: operacao.client_id, contextId: operationId,
+          dataUrl: corpo.assinaturaBase64, createdBy: userId, prefixoNome: "assinatura",
+        });
+        assinaturaUrl = g.url; assinaturaHash = g.hash; arquivosGuardados.push(g.id);
+      }
+    } catch (erroImagem) {
+      // Imagem inválida ou grande demais: recusa clara (vira 400 no chamador),
+      // não grava a entrega pela metade. O front sempre reduz e valida a imagem
+      // antes de mandar — isto é a defesa do servidor.
+      return { erro: erroImagem?.message || "Comprovante inválido." };
+    }
+  }
   const atualizacaoEntrega = tipo === "entrega"
-    ? `, delivered_at = COALESCE(delivered_at, ?)${comprovanteUrl ? ", proof_url = ?, proof_hash = ?" : ""}`
+    ? `, delivered_at = COALESCE(delivered_at, ?)${comprovanteUrl ? ", proof_url = ?, proof_hash = ?" : ""}${assinaturaUrl ? ", signature_url = ?, signature_hash = ?" : ""}`
     : "";
   const paramsEntrega = tipo === "entrega"
-    ? [ocorridoEm, ...(comprovanteUrl ? [comprovanteUrl, texto(corpo.comprovanteHash, 200)] : [])]
+    ? [ocorridoEm, ...(comprovanteUrl ? [comprovanteUrl, comprovanteHash] : []), ...(assinaturaUrl ? [assinaturaUrl, assinaturaHash] : [])]
     : [];
   const instrucoes = [
     env.DB.prepare(
@@ -2019,9 +2054,9 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
       `INSERT INTO todogreen_proofs_of_delivery
          (id, tenant_id, workspace_owner_id, service_order_id, kind, occurred_at,
           recipient_name, document_url, document_hash, latitude, longitude,
-          fields_json, created_by, created_at)
+          signature_url, signature_hash, fields_json, created_by, created_at)
        SELECT lower(hex(randomblob(16))), os.tenant_id, os.workspace_owner_id, os.id, 'delivery', ?,
-              ?, ?, ?, ?, ?, json_object('operationId', ?, 'eventId', ?), ?, ?
+              ?, ?, ?, ?, ?, ?, ?, json_object('operationId', ?, 'eventId', ?), ?, ?
          FROM todogreen_service_orders os
         WHERE os.tenant_id = ? AND os.workspace_owner_id = ? AND os.operation_id = ?
           AND os.archived_at IS NULL
@@ -2031,8 +2066,9 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
                AND p.service_order_id = os.id
           )`,
     ).bind(
-      ocorridoEm, recebedor, comprovanteUrl, texto(corpo.comprovanteHash, 200),
+      ocorridoEm, recebedor, comprovanteUrl, comprovanteHash,
       Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null,
+      assinaturaUrl || null, assinaturaHash || null,
       operationId, eventoId, userId, agora,
       TENANT_ID, ownerId, operationId,
     ));
@@ -2040,6 +2076,10 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   try {
     await env.DB.batch(instrucoes);
   } catch (erro) {
+    // O evento não entrou: as imagens guardadas antes dele ficariam órfãs no
+    // cofre (sem proof_url/signature_url apontando para elas). Limpa-as. Vale
+    // tanto para a corrida do idempotente quanto para qualquer falha do batch.
+    if (arquivosGuardados.length) await descartarArquivos(env, ownerId, arquivosGuardados).catch(() => {});
     // Corrida: dois reenvios com a mesma chave chegaram juntos e o outro gravou
     // primeiro. O índice único (0094) barra o segundo — aqui devolvemos o que já
     // ficou, em vez de estourar um erro numa entrega que na verdade foi gravada.

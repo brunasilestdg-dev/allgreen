@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, MapPin, PackageCheck, Truck } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, MapPin, PackageCheck, Truck } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
+import PadAssinatura from "../PadAssinatura.jsx";
+import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
 // ===== Portal do Motorista =====
 //
@@ -66,11 +68,16 @@ const lerFila = () => {
   }
 };
 
+// Devolve se REALMENTE gravou. Com foto+assinatura na fila, o limite do
+// localStorage (~5 MB) fica perto — e engolir o QuotaExceededError em silêncio
+// faria o app dizer "guardado" enquanto a entrega se perde. Quem enfileira
+// precisa saber que não coube.
 const gravarFila = (lista) => {
   try {
     localStorage.setItem(CHAVE_FILA, JSON.stringify(lista));
+    return true;
   } catch {
-    // Sem espaço/sem storage: melhor perder a persistência do que travar o app.
+    return false;
   }
 };
 
@@ -86,6 +93,29 @@ const posicaoAtual = () =>
     );
   });
 
+// Reduz a foto do canhoto ANTES de enviar: a câmera do celular gera arquivos de
+// vários MB, que não caberiam na fila offline (localStorage) nem valeria a pena
+// trafegar na estrada. Desenha num canvas no tamanho reduzido e devolve um JPEG
+// data URL pequeno. Falha (imagem ilegível) rejeita — o motorista tenta de novo.
+const reduzirImagem = (file, maxLado = LADO_MAXIMO_PADRAO, qualidade = 0.6) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const { largura, altura } = dimensoesReduzidas(img.naturalWidth, img.naturalHeight, maxLado);
+      if (!largura || !altura) return reject(new Error("Não consegui ler a imagem."));
+      const canvas = document.createElement("canvas");
+      canvas.width = largura;
+      canvas.height = altura;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, largura, altura);
+      resolve(canvas.toDataURL("image/jpeg", qualidade));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Não consegui ler a imagem.")); };
+    img.src = url;
+  });
+
 const ROTULO_SITUACAO = { active: "em andamento", em_andamento: "em andamento", concluida: "concluída" };
 
 export default function DriverPortalPage() {
@@ -94,8 +124,10 @@ export default function DriverPortalPage() {
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
   const [formulario, setFormulario] = useState(null); // { viagem, tipo }
-  const [dados, setDados] = useState({ recebedor: "", comprovanteUrl: "", descricao: "" });
+  const [dados, setDados] = useState({ recebedor: "", comprovanteUrl: "", descricao: "", fotoBase64: "", assinaturaBase64: "" });
   const [ocupado, setOcupado] = useState(false);
+  const [capturandoFoto, setCapturandoFoto] = useState(false);
+  const fotoInputRef = useRef(null);
   const [pendentesFila, setPendentesFila] = useState(() => lerFila().length);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
@@ -166,6 +198,25 @@ export default function DriverPortalPage() {
     return () => window.removeEventListener("online", aoVoltar);
   }, [escoarFila, carregar]);
 
+  const aoEscolherFoto = async (event) => {
+    const file = event.target.files?.[0];
+    // Limpa o input para o mesmo arquivo poder ser escolhido de novo depois.
+    event.target.value = "";
+    if (!file) return;
+    setCapturandoFoto(true);
+    try {
+      const base64 = await reduzirImagem(file);
+      setDados((v) => ({ ...v, fotoBase64: base64 }));
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui usar essa foto. Tente de novo.");
+    } finally {
+      setCapturandoFoto(false);
+    }
+  };
+
+  const zerarFormulario = () =>
+    setDados({ recebedor: "", comprovanteUrl: "", descricao: "", fotoBase64: "", assinaturaBase64: "" });
+
   const registrar = async (event) => {
     event.preventDefault();
     if (!formulario) return;
@@ -177,6 +228,11 @@ export default function DriverPortalPage() {
       descricao: dados.descricao,
       recebedor: dados.recebedor,
       comprovanteUrl: dados.comprovanteUrl,
+      // Foto do canhoto e assinatura como imagem reduzida (data URL): o servidor
+      // guarda no cofre e devolve a URL do comprovante. Vão só quando existem —
+      // e viajam na fila offline como o resto do registro.
+      ...(dados.fotoBase64 ? { comprovanteBase64: dados.fotoBase64 } : {}),
+      ...(dados.assinaturaBase64 ? { assinaturaBase64: dados.assinaturaBase64 } : {}),
       local: gps ? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}` : "",
       // Momento REAL do gesto: sem isto, um evento que espera horas na fila é
       // carimbado com a hora do sync (o servidor usa corpo.ocorridoEm quando vem).
@@ -189,7 +245,7 @@ export default function DriverPortalPage() {
       await pedir(`/viagens/${formulario.viagem.id}/evento`, { method: "POST", body: JSON.stringify(payload) });
       setAviso(formulario.tipo === "entrega" ? "Entrega registrada com comprovante. Boa estrada!" : "Registrado.");
       setFormulario(null);
-      setDados({ recebedor: "", comprovanteUrl: "", descricao: "" });
+      zerarFormulario();
       await carregar();
     } catch (motivo) {
       if (motivo.rejeitadoPeloServidor) {
@@ -200,11 +256,17 @@ export default function DriverPortalPage() {
         // linha é a própria chave de idempotência — mesmo reenvio, mesma chave.
         const fila = lerFila();
         fila.push({ id: chave, viagemId: formulario.viagem.id, referencia: formulario.viagem.referencia, tipo: formulario.tipo, payload, criadoEm: payload.ocorridoEm });
-        gravarFila(fila);
-        setPendentesFila(fila.length);
-        setFormulario(null);
-        setDados({ recebedor: "", comprovanteUrl: "", descricao: "" });
-        setAviso("Sem sinal agora — registro guardado no celular. Envia sozinho quando a internet voltar.");
+        if (gravarFila(fila)) {
+          setPendentesFila(lerFila().length);
+          setFormulario(null);
+          zerarFormulario();
+          setAviso("Sem sinal agora — registro guardado no celular (com foto e assinatura). Envia sozinho quando a internet voltar.");
+        } else {
+          // Não coube no celular (fila cheia de fotos): NÃO diz que guardou.
+          // Mantém o formulário aberto para o motorista tentar de novo ou
+          // remover a foto (que é o que mais ocupa espaço).
+          setAviso("Sem sinal e a memória do celular está cheia — esta entrega não foi guardada. Tente em área com sinal, ou remova a foto para ocupar menos espaço.");
+        }
       }
     } finally {
       setOcupado(false);
@@ -275,7 +337,27 @@ export default function DriverPortalPage() {
             {formulario.tipo === "entrega" && (
               <>
                 <label><span>Quem recebeu</span><input required value={dados.recebedor} onChange={(e) => setDados((v) => ({ ...v, recebedor: e.target.value }))} placeholder="Nome de quem recebeu" /></label>
-                <label><span>Foto do canhoto (link)</span><input value={dados.comprovanteUrl} onChange={(e) => setDados((v) => ({ ...v, comprovanteUrl: e.target.value }))} placeholder="Cole o link da foto (opcional)" /></label>
+                <div className="tdg-driver-captura">
+                  <span>Foto do canhoto</span>
+                  <input ref={fotoInputRef} type="file" accept="image/*" capture="environment" hidden onChange={aoEscolherFoto} />
+                  <button type="button" className="tdg-captura-btn" onClick={() => fotoInputRef.current?.click()} disabled={capturandoFoto}>
+                    <Camera size={16} /> {capturandoFoto ? "Processando…" : dados.fotoBase64 ? "Refazer foto" : "Tirar foto"}
+                  </button>
+                  {dados.fotoBase64 && (
+                    <div className="tdg-captura-previa">
+                      <img src={dados.fotoBase64} alt="Prévia do canhoto" />
+                      <button type="button" onClick={() => setDados((v) => ({ ...v, fotoBase64: "" }))}>Remover</button>
+                    </div>
+                  )}
+                </div>
+                <div className="tdg-driver-captura">
+                  <span>Assinatura de quem recebeu</span>
+                  <PadAssinatura onChange={(d) => setDados((v) => ({ ...v, assinaturaBase64: d }))} />
+                </div>
+                <details className="tdg-driver-linkfallback">
+                  <summary>ou colar um link da foto</summary>
+                  <input value={dados.comprovanteUrl} onChange={(e) => setDados((v) => ({ ...v, comprovanteUrl: e.target.value }))} placeholder="https://…" />
+                </details>
               </>
             )}
             {formulario.tipo === "ocorrencia" && (

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import worker from "../worker-entry.js";
-import { carregarMemoriaDoCliente } from "../worker/services/todogreen-semente.js";
+import { carregarMemoriaDoCliente, carregarCorrecoesDoPlantu } from "../worker/services/todogreen-semente.js";
 
 // Memória conversacional do Plantû (0091): a conversa persiste, mas é PRIVADA
 // de quem perguntou. Estes testes existem para impedir de voltar:
@@ -195,5 +195,69 @@ describe("memória por cliente do Plantû", () => {
     // Com finance:manage: volta normalmente.
     const comAcesso = await carregarMemoriaDoCliente(env, { ownerId: ana.id }, { id: ana.id }, "conta-restrita", true);
     expect(comAcesso.some((m) => m.texto.includes("conta bancária"))).toBe(true);
+  });
+});
+
+// Correção assistida (fase 2b): a pessoa ensina qual era a resposta certa; fica
+// guardado (privado dela) e volta como aprendizado. Ninguém corrige a resposta
+// de outra pessoa.
+describe("correção assistida do Plantû", () => {
+  it("grava a correção da própria resposta e marca 👎; a de outra pessoa dá 404", async () => {
+    await env.DB.prepare(
+      `INSERT INTO todogreen_ai_messages
+         (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
+       VALUES ('resp-corrigir', 'todogreen', ?, ?, 'plantu', 'assistant', 'Resposta errada.', NULL, ?, NULL)`,
+    ).bind(ana.id, ana.id, new Date().toISOString()).run();
+
+    // Bruno não corrige a resposta da Ana → 404.
+    const brunoTenta = await pedir(bruno.token, { corrigir: { mensagemId: "resp-corrigir", texto: "O certo era Y." } });
+    expect(brunoTenta.status).toBe(404);
+
+    // Ana corrige a própria → grava e vira 👎.
+    const anaCorrige = await pedir(ana.token, { corrigir: { mensagemId: "resp-corrigir", texto: "O certo era 42 rotas." } });
+    expect(anaCorrige.status).toBe(200);
+    const linha = await env.DB.prepare("SELECT correction, rating FROM todogreen_ai_messages WHERE id = 'resp-corrigir'").first();
+    expect(linha.correction).toBe("O certo era 42 rotas.");
+    expect(linha.rating).toBe(-1);
+  });
+
+  it("as correções voltam como aprendizado só para quem as ensinou", async () => {
+    const daAna = await carregarCorrecoesDoPlantu(env, { ownerId: ana.id }, { id: ana.id }, false);
+    expect(daAna.some((c) => c.correcao === "O certo era 42 rotas.")).toBe(true);
+    // Bruno, no mesmo espaço, não vê a correção da Ana.
+    const doBruno = await carregarCorrecoesDoPlantu(env, { ownerId: ana.id }, { id: bruno.id }, false);
+    expect(doBruno.some((c) => c.correcao === "O certo era 42 rotas.")).toBe(false);
+  });
+
+  it("correção sobre resposta com dado restrito só volta para quem tem finance:manage", async () => {
+    await env.DB.prepare(
+      `INSERT INTO todogreen_ai_messages
+         (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at, restricted_context, correction)
+       VALUES ('resp-corr-restr', 'todogreen', ?, ?, 'plantu', 'assistant', 'Resposta com número sensível.', NULL, ?, NULL, 1, 'O certo era outro valor sigiloso.')`,
+    ).bind(ana.id, ana.id, new Date().toISOString()).run();
+
+    const semAcesso = await carregarCorrecoesDoPlantu(env, { ownerId: ana.id }, { id: ana.id }, false);
+    expect(semAcesso.some((c) => c.correcao.includes("sigiloso"))).toBe(false);
+    const comAcesso = await carregarCorrecoesDoPlantu(env, { ownerId: ana.id }, { id: ana.id }, true);
+    expect(comAcesso.some((c) => c.correcao.includes("sigiloso"))).toBe(true);
+  });
+
+  it("traz a pergunta que gerou a resposta corrigida (o modelo aprende QUANDO aplicar)", async () => {
+    // Turno completo: pergunta (rowid menor) e a resposta corrigida logo depois.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_ai_messages
+         (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at)
+       VALUES ('q-prazo', 'todogreen', ?, ?, 'plantu', 'user', 'Qual o prazo da rota X?', NULL, ?, NULL)`,
+    ).bind(ana.id, ana.id, new Date().toISOString()).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_ai_messages
+         (id, tenant_id, workspace_owner_id, user_id, assistente, role, content, client_id, created_at, archived_at, correction)
+       VALUES ('a-prazo', 'todogreen', ?, ?, 'plantu', 'assistant', 'Prazo de 5 dias.', NULL, ?, NULL, 'O prazo certo é 3 dias.')`,
+    ).bind(ana.id, ana.id, new Date().toISOString()).run();
+
+    const correcoes = await carregarCorrecoesDoPlantu(env, { ownerId: ana.id }, { id: ana.id }, false);
+    const alvo = correcoes.find((c) => c.correcao === "O prazo certo é 3 dias.");
+    expect(alvo).toBeTruthy();
+    expect(alvo.pergunta).toBe("Qual o prazo da rota X?");
   });
 });

@@ -1,31 +1,19 @@
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { arquivosVisiveis, pastasVisiveis } from "../../src/features/logistics/pastasDomain.js";
+// O "escreve bytes → devolve id/hash" (chunking, sha256, base64) mora no
+// file-store, compartilhado com o POD do motorista (#120b). Aqui fica a
+// permissão, a pasta e a versão — o que é do cofre.
+import { MAX_FILE_BYTES, base64ToBytes, armazenarArquivoInterno } from "./todogreen-file-store.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" },
 });
 const text = (value, max = 1000) => String(value ?? "").trim().slice(0, max);
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const CHUNK_BYTES = 320 * 1024;
 
 const canRead = (access) => ["owner","admin"].includes(access.role) || ["evidence:manage","proposal:manage","deal:review","deal:approve","audit:read"].some((p) => podeNaVertical(access,p));
 const canWrite = (access) => ["owner","admin"].includes(access.role) || ["evidence:manage","proposal:manage","deal:review"].some((p) => podeNaVertical(access,p));
 
-const sha256 = async (bytes) => {
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2,"0")).join("");
-};
-const bytesToBase64 = (bytes) => {
-  let binary = "";
-  for (let i=0;i<bytes.length;i+=0x8000) binary += String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
-  return btoa(binary);
-};
-const base64ToBytes = (base64) => {
-  const binary=atob(base64); const bytes=new Uint8Array(binary.length);
-  for (let i=0;i<binary.length;i+=1) bytes[i]=binary.charCodeAt(i);
-  return bytes;
-};
 const mapRow = (row) => ({
   id: row.id, clientId: row.client_id || "", workflowId: row.workflow_id || "", fileName: row.file_name,
   contentType: row.content_type, byteSize: row.byte_size, sha256: row.sha256, version: row.version,
@@ -134,14 +122,15 @@ async function upload(env, access, user, request, email) {
   const folderId=text(form.get("folderId"),120);
   if(folderId && !(await arquivoNaVista(env,access,email,{folder_id:folderId})))
     return json({error:"A pasta escolhida não existe aqui."},404);
-  const bytes=new Uint8Array(await file.arrayBuffer()); const digest=await sha256(bytes); const now=new Date().toISOString(); const id=crypto.randomUUID();
+  const bytes=new Uint8Array(await file.arrayBuffer());
   const versionRow=await env.DB.prepare("SELECT MAX(version) AS v FROM todogreen_internal_files WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? AND file_name=?").bind(TENANT_ID,access.ownerId,clientId,file.name).first();
-  const statements=[env.DB.prepare(`INSERT INTO todogreen_internal_files (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,file_name,content_type,byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'internal_upload','',?,?,?,NULL)`)
-    .bind(id,TENANT_ID,access.ownerId,clientId||null,workflowId||null,contextType||null,contextId||null,text(file.name,240),text(file.type,160)||"application/octet-stream",file.size,digest,Number(versionRow?.v||0)+1,folderId,user.id,now)];
-  let index=0;
-  for(let offset=0;offset<bytes.length;offset+=CHUNK_BYTES){ const chunk=bytes.subarray(offset,Math.min(offset+CHUNK_BYTES,bytes.length)); statements.push(env.DB.prepare("INSERT INTO todogreen_internal_file_chunks (file_id,chunk_index,content_base64) VALUES (?,?,?)").bind(id,index,bytesToBase64(chunk))); index+=1; }
-  await env.DB.batch(statements);
-  return json({file:mapRow(await env.DB.prepare("SELECT * FROM todogreen_internal_files WHERE id=?").bind(id).first())},201);
+  const guardado=await armazenarArquivoInterno(env,{
+    ownerId:access.ownerId, clientId:clientId||null, workflowId:workflowId||null,
+    contextType:contextType||null, contextId:contextId||null, folderId:folderId||null,
+    fileName:text(file.name,240), contentType:text(file.type,160)||"application/octet-stream",
+    bytes, version:Number(versionRow?.v||0)+1, createdBy:user.id,
+  });
+  return json({file:mapRow(await env.DB.prepare("SELECT * FROM todogreen_internal_files WHERE id=?").bind(guardado.id).first())},201);
 }
 
 async function download(env, access, id, email) {

@@ -231,6 +231,30 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
     [chamar, mensagens],
   );
 
+  // Correção assistida: depois de um 👎, a pessoa escreve qual era a resposta
+  // certa. Fica guardado e volta como aprendizado nas próximas perguntas.
+  const [corrigindoId, setCorrigindoId] = useState(null);
+  const [textoCorrecao, setTextoCorrecao] = useState("");
+  const [salvandoCorrecao, setSalvandoCorrecao] = useState(false);
+  const corrigir = useCallback(
+    async (mensagemId) => {
+      const texto = textoCorrecao.trim();
+      if (!texto || salvandoCorrecao) return;
+      setSalvandoCorrecao(true);
+      try {
+        await chamar({ corrigir: { mensagemId, texto } });
+        setMensagens((atual) => atual.map((m) => (m.mensagemId === mensagemId ? { ...m, corrigida: true, avaliacao: -1 } : m)));
+        setCorrigindoId(null);
+        setTextoCorrecao("");
+      } catch {
+        /* mantém o texto para a pessoa tentar de novo */
+      } finally {
+        setSalvandoCorrecao(false);
+      }
+    },
+    [chamar, textoCorrecao, salvandoCorrecao],
+  );
+
   const executar = useCallback(
     async (mensagemId, proposta) => {
       setExecutando(mensagemId);
@@ -349,6 +373,21 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
                   aria-label="Não ajudou"
                   title="Não ajudou"
                 ><ThumbsDown size={13} /></button>
+                {item.corrigida
+                  ? <small className="semente-corrigida"><Check size={12} /> correção registrada</small>
+                  : <button type="button" className="semente-corrigir-abrir"
+                      onClick={() => { setCorrigindoId(corrigindoId === item.mensagemId ? null : item.mensagemId); setTextoCorrecao(""); }}
+                      title="Ensinar a resposta certa">Corrigir</button>}
+              </div>
+            )}
+            {item.mensagemId && corrigindoId === item.mensagemId && !item.corrigida && (
+              <div className="semente-corrigir">
+                <textarea value={textoCorrecao} onChange={(e) => setTextoCorrecao(e.target.value)} rows={2}
+                  placeholder="Qual era a resposta certa? O Plantû aprende com isso e não repete o erro." maxLength={2000} />
+                <div className="semente-corrigir-acoes">
+                  <button type="button" onClick={() => { setCorrigindoId(null); setTextoCorrecao(""); }}>Cancelar</button>
+                  <button type="button" className="principal" disabled={salvandoCorrecao || !textoCorrecao.trim()} onClick={() => corrigir(item.mensagemId)}>{salvandoCorrecao ? "Salvando..." : "Salvar correção"}</button>
+                </div>
               </div>
             )}
           </div>

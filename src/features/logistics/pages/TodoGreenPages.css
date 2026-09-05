@@ -1817,6 +1817,30 @@
 .tdg-driver-historico summary { cursor: pointer; font-weight: 700; padding: 6px 2px; }
 .tdg-driver-historico { display: grid; gap: 8px; }
 
+/* ── POD do motorista: foto do canhoto + assinatura (#120b) ───────────── */
+.tdg-driver-captura { display: grid; gap: 6px; }
+.tdg-driver-captura > span { font-size: .78rem; font-weight: 700; }
+.tdg-captura-btn {
+  align-items: center; background: #eefaf2; border: 1px solid #a9d9b8; border-radius: 9px;
+  color: #0b6f52; cursor: pointer; display: inline-flex; font-size: .95rem; font-weight: 700;
+  gap: 6px; justify-content: center; min-height: 46px; padding: 8px 12px;
+}
+.tdg-captura-btn:disabled { cursor: progress; opacity: .65; }
+.tdg-captura-previa { align-items: flex-start; display: flex; gap: 10px; }
+.tdg-captura-previa img {
+  border: 1px solid #b9d3c5; border-radius: 9px; max-height: 120px; object-fit: cover; width: auto;
+}
+.tdg-captura-previa button { background: none; border: 0; color: #b23b3b; cursor: pointer; font-size: .82rem; padding: 4px 0; }
+.tdg-driver-assinatura { display: grid; gap: 6px; }
+.tdg-driver-assinatura canvas {
+  background: #fff; border: 1px dashed #8fbfa6; border-radius: 9px; touch-action: none; width: 100%;
+}
+.tdg-driver-assinatura button { background: none; border: 0; color: #6d8377; cursor: pointer; font-size: .82rem; justify-self: start; padding: 2px 0; }
+.tdg-driver-linkfallback summary { color: #6d8377; cursor: pointer; font-size: .82rem; padding: 4px 0; }
+.tdg-driver-linkfallback input {
+  border: 1px solid #b9d3c5; border-radius: 9px; font-size: 1rem; margin-top: 6px; min-height: 46px; padding: 8px 12px; width: 100%;
+}
+
 /* ── Matriz RASCI (aba única de responsabilidades) ────────────────────── */
 .tdg-rasci-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 12px; }
 .tdg-rasci-legend span { align-items: baseline; color: var(--tdg-ink); display: flex; font-size: .85rem; gap: 5px; }
