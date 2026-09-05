@@ -105,6 +105,25 @@ describe("solicitar acesso e a fila de aprovação", () => {
     expect(Array.isArray(corpo.requests)).toBe(true);
   });
 
+  it("gestor (liderança) também lê e aprova — mesmo sem access:manage no vínculo antigo", async () => {
+    // Simula um vínculo de liderança criado ANTES do access:manage: o papel
+    // sozinho já libera a fila (pedido da titular: "adms ou gestores aprovam").
+    const lider = await criarUsuario("acr-lider", "acr-lider@parceiro.com.br");
+    await autorizar(lider, "lideranca_comercial", ["read", "crm:manage"]);
+    const ok = await pedir("/api/todogreen/access-requests", { token: lider.token });
+    expect(ok.status).toBe(200);
+
+    const email = `lider-aprova-${crypto.randomUUID()}@empresa.com.br`.toLowerCase();
+    await pedir("/api/todogreen/solicitar-acesso", { metodo: "POST", corpo: { nome: "Pela Liderança", email } });
+    const fila = await (await pedir("/api/todogreen/access-requests", { token: lider.token })).json();
+    const pedido = fila.requests.find((item) => item.email === email);
+    expect(pedido).toBeTruthy();
+    const aprovar = await pedir("/api/todogreen/access-requests", {
+      metodo: "POST", token: lider.token, corpo: { id: pedido.id, decisao: "aprovar", role: "vendedor" },
+    });
+    expect(aprovar.status).toBe(200);
+  });
+
   it("aprovar concede acesso de verdade e trava o segundo julgamento", async () => {
     const email = `aprova-${crypto.randomUUID()}@empresa.com.br`.toLowerCase();
     await pedir("/api/todogreen/solicitar-acesso", { metodo: "POST", corpo: { nome: "Aprovada", email } });

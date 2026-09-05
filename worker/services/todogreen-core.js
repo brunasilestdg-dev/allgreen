@@ -39,8 +39,12 @@ async function resolveCoreAccess(env, user, ownerId) {
   return { access: { ...access, source: access.viaAdministradorGlobal ? "env" : "vinculo" }, motivo: null };
 }
 
+// Gestores (liderança) aprovam pedidos de acesso ao lado de owner/admin
+// (pedido da titular: "adms ou gestores podem aprová-los"). Pelo papel, para
+// não depender do snapshot de permissões gravado em vínculos antigos; a
+// permissão `access:manage` na liderança mantém o front alinhado.
 const canManage = (access) =>
-  ["owner", "admin"].includes(access?.role)
+  ["owner", "admin", "lideranca_comercial"].includes(access?.role)
   || access?.permissions?.includes("*")
   || podeNaVertical(access, "access:manage");
 const canAny = (access, permissions = []) => canManage(access) || permissions.some((permission) => podeNaVertical(access, permission));

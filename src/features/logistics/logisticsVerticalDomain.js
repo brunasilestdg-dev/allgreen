@@ -166,7 +166,11 @@ export const TODO_GREEN_PERMISSIONS = {
   // todo mundo do espaço, inclusive dentro de proposta — por isso ela fica com
   // quem já responde por discurso institucional, e não com todo papel que
   // conversa com o assistente.
-  lideranca_comercial: ["read", "business:teach", "compliance:manage", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
+  // `access:manage` dá à liderança (gestores) o direito de aprovar pedidos de
+  // acesso na fila de aprovação, ao lado de owner/admin (pedido da titular:
+  // "adms ou gestores podem aprová-los"). É só a fila de acesso — não abre o
+  // resto da administração.
+  lideranca_comercial: ["read", "access:manage", "business:teach", "compliance:manage", "crm:manage", "clients:manage", "clients:assign", "proposal:create", "proposal:manage", "deal:approve", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:create", "goal:update", "goal:checkin", "goal:approve", "goal:close", "goal:manage-team", "goal:export", "planner:manage", "work:manage"],
   vendedor: ["read", "crm:manage", "proposal:create", "proposal:manage", "pricing:simulate", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   pricing: ["read", "pricing:simulate", "pricing:manage", "deal:review", "market:read", "market:research", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   produtos: ["read", "product:manage", "pricing:simulate", "pricing:manage", "deal:review", "goal:read", "goal:checkin", "goal:validate", "planner:manage", "work:manage"],
