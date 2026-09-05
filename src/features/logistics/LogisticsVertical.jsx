@@ -792,9 +792,9 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
   marketing: {
     title: "Inteligência de mercado",
-    navLabel: "Mercado",
+    navLabel: "Notícias e inteligência",
     route: "/todogreen/marketing",
-    area: "marketing",
+    area: "commercial",
     status: "functional",
     permission: "market:read",
     description: "Pesquisa de notícias, RFQs e possíveis decisores no mercado inteiro, com fonte e classificação.",
@@ -949,12 +949,11 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "rastreamento", "roteirizacao"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
-  { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
   // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
   // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
   // como atalho para a ferramenta do Espaço.
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Notícias e inteligência", "/todogreen/espaco?ferramenta=inteligencia"], ["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "marketing", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
