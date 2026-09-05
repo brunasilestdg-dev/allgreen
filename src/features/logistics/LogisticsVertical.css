@@ -966,6 +966,20 @@
 
 .tdg-check-field input { min-height: auto; width: auto; }
 
+/* Checkbox e radio nunca herdam o min-height:40px / width:100% dos campos de
+   texto — senão viram quadrados gigantes na lista de tarefas, no Planner e em
+   toda seleção em massa. Aqui ficam no tamanho certo, com a marca verde. */
+.tdg input[type="checkbox"],
+.tdg input[type="radio"] {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  padding: 0;
+  accent-color: var(--tdg-green);
+  cursor: pointer;
+}
+
 .tdg-product-strip {
   display: grid;
   gap: 10px;

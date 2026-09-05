@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import { SegmentedControl, Tabs } from "../../../design-system/index.js";
 import TopScrollRow from "./TopScrollRow.jsx";
 import ComentariosPanel from "./ComentariosPanel.jsx";
 import InteracoesPanel from "./InteracoesPanel.jsx";
@@ -1276,31 +1277,35 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         // Seletor de temperatura direto no detalhe da conta: frio/morno/quente
         // sem precisar abrir o editor 360º (onde ele estava escondido). Salva na
         // hora, na mesma régua de revisão do resto do CRM.
-        <label className="tdg-crm-temp-inline" title="Temperatura do lead">
+        <div className="tdg-crm-temp-inline" title="Temperatura do lead">
           <span>Temperatura</span>
-          <select
-            value={salvandoTemperatura !== null ? salvandoTemperatura : (selected.crm?.temperature || "")}
+          <SegmentedControl
+            ariaLabel="Temperatura do lead"
+            size="sm"
             disabled={salvandoTemperatura !== null}
-            onChange={(evento) => salvarTemperatura(selected, evento.target.value)}
-          >
-            <option value="">Não classificada</option>
-            {TODO_GREEN_ACCOUNT_TEMPERATURES.map((item) => <option key={item}>{item}</option>)}
-          </select>
-        </label>
+            value={salvandoTemperatura !== null ? salvandoTemperatura : (selected.crm?.temperature || "")}
+            onChange={(valor) => salvarTemperatura(selected, valor)}
+            options={[{ value: "", label: "Sem" }, ...TODO_GREEN_ACCOUNT_TEMPERATURES.map((item) => ({ value: item, label: item }))]}
+          />
+        </div>
       )}{access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={15} />Editar</button>}{access.podeEditar && onInteraction && <button type="button" className="tdg-action" onClick={() => { setDetailTab("activity"); setInteractionFormRequest((valor) => valor + 1); }}><MessageCircle size={15} />Registrar contato/follow-up</button>}<button type="button" onClick={() => setTaskClientId(selected.id)}><ListPlus size={15} />Adicionar tarefa</button><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Pipeline <ArrowRight size={15} /></button><details className="tdg-crm-more-actions"><summary>Mais ações</summary><div><button type="button" onClick={() => researchSelected("company")} disabled={researching}><Globe2 size={15} />Pesquisar empresa</button><button type="button" onClick={() => researchSelected("contacts")} disabled={researching}><UserSearch size={15} />Atualizar contatos</button><button type="button" onClick={() => setPortalPreviewOpen(true)}><Eye size={15} />Ver como cliente</button>{access.podeGerenciar && <button type="button" className="tdg-danger-action" onClick={() => deleteClient(selected)} disabled={deletingClientId === selected.id}><Trash2 size={15} />{deletingClientId === selected.id ? "Excluindo..." : "Excluir cliente"}</button>}</div></details></div></header>
-      <nav className="tdg-crm-account-tabs" aria-label="Visões da conta">
-        {[
-          ["summary", "Resumo"],
-          ["comercial", "Comercial"],
-          ["operacao", "Operação e financeiro"],
-          ["relationship", "Relacionamento"],
-          ["opportunities", "Oportunidades"],
-          ["strategy", "Estratégia"],
-          ["activity", "Conversas realizadas"],
-          ["next", "Próximos passos"],
-          ["intelligence", "Inteligência"],
-        ].map(([id, label]) => <button type="button" className={detailTab === id ? "active" : ""} aria-current={detailTab === id ? "page" : undefined} onClick={() => openDetailTab(id)} key={id}>{label}</button>)}
-      </nav>
+      <Tabs
+        ariaLabel="Visões da conta"
+        className="tdg-crm-account-tabs-ds"
+        value={detailTab}
+        onChange={openDetailTab}
+        tabs={[
+          { value: "summary", label: "Resumo" },
+          { value: "comercial", label: "Comercial" },
+          { value: "operacao", label: "Operação e financeiro" },
+          { value: "relationship", label: "Relacionamento" },
+          { value: "opportunities", label: "Oportunidades" },
+          { value: "strategy", label: "Estratégia" },
+          { value: "activity", label: "Conversas realizadas" },
+          { value: "next", label: "Próximos passos" },
+          { value: "intelligence", label: "Inteligência" },
+        ]}
+      />
       <div className="tdg-crm-detail-metrics"><article><small>Saúde da conta</small><strong>{selectedSummary.score}</strong><span>{selectedSummary.attention === "healthy" ? "Saudável" : selectedSummary.attention === "critical" ? "Crítica" : "Atenção"}</span></article><article><small>Receita atual</small><strong>{selectedStrategy.shareOfWallet.status === "missing-our-revenue" || selectedAccount.ourAnnualRevenue === "" || selectedAccount.ourAnnualRevenue === undefined ? "Não informada" : BRL.format(selectedStrategy.shareOfWallet.ourRevenue)}</strong><span>receita anual To Do Green</span></article><article><small>Potencial anual</small><strong>{selectedStrategy.potential.annual ? BRL.format(selectedStrategy.potential.annual) : "Não calculado"}</strong><span>sem estimativa quando falta base</span></article><article><small>Share of Wallet</small><strong>{selectedStrategy.shareOfWallet.percentage === null ? "Não calculado" : `${selectedStrategy.shareOfWallet.percentage.toLocaleString("pt-BR")}%`}</strong><span>participação no gasto logístico</span></article><article><small>Cobertura de decisores</small><strong>{selectedSummary.coverage}%</strong><span>{selectedAccount.contacts.length} contato(s)</span></article><article><small>Pipeline da conta</small><strong>{BRL.format(selectedSummary.pipeline || 0)}</strong><span>{selectedSummary.openOpportunities || 0} oportunidade(s)</span></article></div>
       <SaudeDaContaPanel
         conta={selected}

@@ -45,19 +45,19 @@ describe("página de clientes", () => {
     expect(screen.getAllByText("TDG-000001").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Pesquisar empresa/ }).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /Ver como cliente/ })).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Visões da conta" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Resumo" })).toHaveClass("active");
+    expect(screen.getByRole("tablist", { name: "Visões da conta" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Resumo" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/Receita anual da To Do Green ainda não informada/)).toBeInTheDocument();
     expect(screen.queryByText(/^Gasto logístico anual do cliente não informado/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/Validar rota/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Marcar feita e ver próxima" })).toBeEnabled();
     expect(screen.getByText("Reunião com compras")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Oportunidades" }));
-    expect(screen.getByRole("button", { name: "Oportunidades" })).toHaveClass("active");
+    fireEvent.click(screen.getByRole("tab", { name: "Oportunidades" }));
+    expect(screen.getByRole("tab", { name: "Oportunidades" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("White Space")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Conversas realizadas" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Conversas realizadas" }));
     expect(await screen.findByText("Nenhuma mensagem ou reunião registrada")).toBeInTheDocument();
   });
 
@@ -166,7 +166,7 @@ describe("página de clientes", () => {
       comments={[{ id: "c1", clientId: "client-1", opportunityId: "", comentario: "Conta estratégica para o Q4.", autorEmail: "bruna@todogreen.com", criadoEm: "2026-08-29T09:00:00Z" }]}
     />);
     fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Conversas realizadas" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Conversas realizadas" }));
 
     expect(screen.getByText("Conta estratégica para o Q4.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Escreva um comentário desta conta"), { target: { value: "Piloto em SP fechado" } });
@@ -193,7 +193,7 @@ describe("página de clientes", () => {
       ]}
     />);
     fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Conversas realizadas" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Conversas realizadas" }));
 
     // Na conta só entra o que é da conta: a interação da oportunidade fica nela.
     expect(screen.getByText("Kick-off da malha")).toBeInTheDocument();
@@ -291,8 +291,8 @@ describe("página de clientes", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
     expect(await screen.findByRole("heading", { name: "Rede Alfa" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Operação e financeiro" }));
-    expect(screen.getByRole("button", { name: "Operação e financeiro" })).toHaveClass("active");
+    fireEvent.click(screen.getByRole("tab", { name: "Operação e financeiro" }));
+    expect(screen.getByRole("tab", { name: "Operação e financeiro" })).toHaveAttribute("aria-selected", "true");
 
     // O painel dedicado lê a mesma fonte das telas de Operação e Financeiro.
     const painel = screen.getByText("Operação e financeiro ao vivo").closest("section");

@@ -171,6 +171,8 @@
 .ds-seg__opt:hover { color: var(--ds-ink); }
 .ds-seg__opt.is-active { background: var(--ds-surface); box-shadow: var(--ds-shadow-sm); color: var(--ds-brand); }
 .ds-seg__opt:focus-visible { box-shadow: var(--ds-focus-ring); outline: none; }
+.ds-seg.is-disabled { opacity: .6; }
+.ds-seg__opt:disabled { cursor: progress; }
 
 /* ---------- Tabs (item 23/25) ---------- */
 .ds-tabs { border-bottom: 1px solid var(--ds-line); display: flex; flex-wrap: wrap; gap: var(--ds-space-1); }

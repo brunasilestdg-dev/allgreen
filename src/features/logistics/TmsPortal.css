@@ -325,12 +325,45 @@
 }
 
 .tms-flow-step {
+  display: block;
   position: relative;
   min-width: 0;
   padding: 12px 9px;
   border: 1px solid #e5eae7;
   border-radius: 10px;
   background: #fafcfb;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.tms-flow-step:hover {
+  border-color: var(--tms-green);
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(7, 55, 53, .08);
+  transform: translateY(-1px);
+}
+
+.tms-flow-step:focus-visible {
+  outline: 3px solid rgba(7, 152, 139, .28);
+  outline-offset: 2px;
+}
+
+.tms-flow-go {
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  color: var(--tms-muted);
+  opacity: 0;
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.tms-flow-step:hover .tms-flow-go {
+  opacity: 1;
+  color: var(--tms-green);
+  transform: translateX(2px);
 }
 
 .tms-flow-icon {

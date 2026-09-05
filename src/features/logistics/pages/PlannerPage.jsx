@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import { RadioCards } from "../../../design-system/index.js";
 import {
   PLANNER_PRIORITIES,
   PLANNER_PROGRESS,
@@ -822,27 +823,17 @@ function PartilhaCampos({ modo, members, pessoas, currentUserId, onChange }) {
   return (
     <fieldset className="tdg-planner-visibility">
       <legend>Compartilhamento</legend>
-      {MODOS_DE_PARTILHA.map((m) => (
-        <label
-          key={m.id}
-          className="tdg-planner-radio"
-          data-ativo={modo === m.id}
-          htmlFor={`tdg-planner-partilha-${m.id}`}
-          aria-label={`${m.label}. ${m.ajuda}`}
-        >
-          <input
-            id={`tdg-planner-partilha-${m.id}`}
-            type="radio"
-            name="partilha"
-            checked={modo === m.id}
-            onChange={() => onChange({ modo: m.id })}
-          />
-          <span className="tdg-planner-radio-copy" aria-hidden="true">
-            <span>{m.id === "privado" ? <Lock size={14} /> : <Users size={14} />} <strong>{m.label}</strong></span>
-            <small>{m.ajuda}</small>
-          </span>
-        </label>
-      ))}
+      <RadioCards
+        name="partilha"
+        value={modo}
+        onChange={(valor) => onChange({ modo: valor })}
+        options={MODOS_DE_PARTILHA.map((m) => ({
+          value: m.id,
+          label: m.label,
+          description: m.ajuda,
+          icon: m.id === "privado" ? Lock : Users,
+        }))}
+      />
       {modo === "pessoas" && (
         <div className="tdg-planner-membros">
           <label>

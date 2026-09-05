@@ -6,9 +6,9 @@
 // na tela e a troca é frequente.
 //
 // options: [{ value, label, icon? }]
-export function SegmentedControl({ options = [], value, onChange, size = "md", ariaLabel, className = "" }) {
+export function SegmentedControl({ options = [], value, onChange, size = "md", ariaLabel, disabled = false, className = "" }) {
   return (
-    <div className={`ds-seg ds-seg--${size} ${className}`.trim()} role="radiogroup" aria-label={ariaLabel}>
+    <div className={`ds-seg ds-seg--${size}${disabled ? " is-disabled" : ""} ${className}`.trim()} role="radiogroup" aria-label={ariaLabel}>
       {options.map((o) => {
         const Icon = o.icon;
         const marcado = value === o.value;
@@ -18,6 +18,7 @@ export function SegmentedControl({ options = [], value, onChange, size = "md", a
             type="button"
             role="radio"
             aria-checked={marcado}
+            disabled={disabled}
             className={`ds-seg__opt${marcado ? " is-active" : ""}`}
             onClick={() => onChange?.(o.value)}
           >

@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   BatteryCharging,
   Boxes,
   Cable,
@@ -448,19 +449,26 @@ function ControlTower({ data, onSection }) {
         <div className="tms-panel-head"><div><span>Esteira operacional</span><h2>First, middle e last mile em uma só execução</h2></div></div>
         <div className="tms-flow">
           {[
-            ["Pedido", "Portal, arquivo ou API", ScanLine],
-            ["First mile", "Coleta e chegada à base", MapPinned],
-            ["Consolidação", "Agrupamento para transferência", Boxes],
-            ["Middle mile", "Transferência entre bases", Waypoints],
-            ["Desconsolidação", "Separação para distribuição", Boxes],
-            ["Last mile", "Roteiro, entrega e POD", Truck],
-            ["Fiscal", "CT-e, MDF-e e CIOT", FileCheck2],
-            ["Faturamento", "Cobrança após execução", CircleDollarSign],
-          ].map(([title, detail, Icon]) => (
-            <div className="tms-flow-step" key={title}>
+            ["Pedido", "Portal, arquivo ou API", ScanLine, "cargas"],
+            ["First mile", "Coleta e chegada à base", MapPinned, "viagens"],
+            ["Consolidação", "Agrupamento para transferência", Boxes, "fracionada"],
+            ["Middle mile", "Transferência entre bases", Waypoints, "viagens"],
+            ["Desconsolidação", "Separação para distribuição", Boxes, "fracionada"],
+            ["Last mile", "Roteiro, entrega e POD", Truck, "roteirizacao"],
+            ["Fiscal", "CT-e, MDF-e e CIOT", FileCheck2, "fiscal"],
+            ["Faturamento", "Cobrança após execução", CircleDollarSign, "faturamento"],
+          ].map(([title, detail, Icon, destino]) => (
+            <button
+              type="button"
+              className="tms-flow-step"
+              key={title}
+              onClick={() => onSection(destino)}
+              title={`Abrir ${title}`}
+            >
               <div className="tms-flow-icon"><Icon size={19} /></div>
               <div><strong>{title}</strong><small>{detail}</small></div>
-            </div>
+              <ArrowRight size={15} className="tms-flow-go" aria-hidden="true" />
+            </button>
           ))}
         </div>
       </section>
