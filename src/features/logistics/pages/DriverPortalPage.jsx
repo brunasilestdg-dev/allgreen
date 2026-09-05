@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Camera, CheckCircle2, MapPin, PackageCheck, Truck } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Clock, CreditCard, Home, MapPin, PackageCheck, Truck, User } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
@@ -129,6 +129,10 @@ export default function DriverPortalPage() {
   const [capturandoFoto, setCapturandoFoto] = useState(false);
   const fotoInputRef = useRef(null);
   const [pendentesFila, setPendentesFila] = useState(() => lerFila().length);
+  // Seção ativa do app: deixou de ser uma tela só (queixa da titular: "não tem
+  // menu, não tem nada"). Hoje = viagens do dia; Entregas = histórico com POD;
+  // Perfil = motorista, CNH e a fila offline.
+  const [secao, setSecao] = useState("hoje");
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
   // dreno por vez.
@@ -283,18 +287,29 @@ export default function DriverPortalPage() {
 
   const pendentes = viagens.filter((viagem) => !viagem.entregueEm);
   const feitas = viagens.filter((viagem) => viagem.entregueEm);
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const entreguesHoje = feitas.filter((v) => String(v.entregueEm).slice(0, 10) === hojeISO).length;
+  const ocorrenciasTotal = viagens.reduce((soma, v) => soma + (Number(v.ocorrencias) || 0), 0);
+  const primeiroNome = String(sessao.motorista.nome || "").split(" ")[0];
+
+  const abas = [
+    { id: "hoje", rotulo: "Hoje", icone: Home },
+    { id: "entregas", rotulo: "Entregas", icone: PackageCheck },
+    { id: "perfil", rotulo: "Perfil", icone: User },
+  ];
 
   return (
     <main className="tdg-driver-app">
       <header className="tdg-driver-topo">
         <div>
           <span>TO DO GREEN · MOTORISTA</span>
-          <h1>Olá, {String(sessao.motorista.nome || "").split(" ")[0]}</h1>
+          <h1>Olá, {primeiroNome}</h1>
           <p>{pendentes.length ? `${pendentes.length} viagem(ns) com você` : "Nenhuma viagem pendente"}</p>
         </div>
         <Truck size={28} />
       </header>
 
+      {/* Avisos importantes acompanham o motorista em qualquer aba. */}
       {sessao.motorista.cnhAlerta && (
         <div className="tdg-driver-cartao aviso"><AlertTriangle size={18} /><p>{sessao.motorista.cnhAlerta}</p></div>
       )}
@@ -309,21 +324,79 @@ export default function DriverPortalPage() {
         </div>
       )}
 
-      {pendentes.map((viagem) => (
-        <article className="tdg-driver-cartao" key={viagem.id}>
-          <div className="tdg-driver-rota">
-            <strong>{viagem.referencia || "Viagem"}</strong>
-            <span><MapPin size={14} /> {viagem.origem || "origem"} → {viagem.destino || "destino"}</span>
-            <small>{viagem.dataServico || ""} · placa {viagem.placa || "—"} · {comRotulo(ROTULO_SITUACAO, viagem.situacao)}</small>
+      {/* ===== HOJE: resumo da jornada + viagens pendentes com ação ===== */}
+      {secao === "hoje" && (
+        <>
+          <div className="tdg-driver-jornada">
+            <article><strong>{pendentes.length}</strong><span>a fazer</span></article>
+            <article className="ok"><strong>{entreguesHoje}</strong><span>hoje</span></article>
+            <article className={ocorrenciasTotal ? "alerta" : ""}><strong>{ocorrenciasTotal}</strong><span>ocorrências</span></article>
           </div>
-          <div className="tdg-driver-acoes">
-            <button type="button" onClick={() => { setFormulario({ viagem, tipo: "chegada" }); setAviso(""); }}>Cheguei</button>
-            <button type="button" className="principal" onClick={() => { setFormulario({ viagem, tipo: "entrega" }); setAviso(""); }}><PackageCheck size={17} /> Entreguei</button>
-            <button type="button" className="alerta" onClick={() => { setFormulario({ viagem, tipo: "ocorrencia" }); setAviso(""); }}>Ocorrência</button>
-          </div>
-        </article>
-      ))}
-      {!pendentes.length && <div className="tdg-driver-cartao"><p>Tudo entregue. 🎉</p></div>}
+
+          {pendentes.map((viagem) => (
+            <article className="tdg-driver-cartao" key={viagem.id}>
+              <div className="tdg-driver-rota">
+                <strong>{viagem.referencia || "Viagem"}</strong>
+                <span><MapPin size={14} /> {viagem.origem || "origem"} → {viagem.destino || "destino"}</span>
+                <small>{viagem.dataServico || ""} · placa {viagem.placa || "—"} · {comRotulo(ROTULO_SITUACAO, viagem.situacao)}</small>
+              </div>
+              <div className="tdg-driver-acoes">
+                <button type="button" onClick={() => { setFormulario({ viagem, tipo: "chegada" }); setAviso(""); }}>Cheguei</button>
+                <button type="button" className="principal" onClick={() => { setFormulario({ viagem, tipo: "entrega" }); setAviso(""); }}><PackageCheck size={17} /> Entreguei</button>
+                <button type="button" className="alerta" onClick={() => { setFormulario({ viagem, tipo: "ocorrencia" }); setAviso(""); }}>Ocorrência</button>
+              </div>
+            </article>
+          ))}
+          {!pendentes.length && <div className="tdg-driver-cartao tdg-driver-vazio"><PackageCheck size={30} /><p>Tudo entregue. 🎉</p><small>Nada pendente com você agora.</small></div>}
+        </>
+      )}
+
+      {/* ===== ENTREGAS: histórico com POD ===== */}
+      {secao === "entregas" && (
+        <>
+          <div className="tdg-driver-secao-titulo"><PackageCheck size={18} /><h2>Entregas concluídas</h2></div>
+          {feitas.length === 0 && <div className="tdg-driver-cartao tdg-driver-vazio"><PackageCheck size={30} /><p>Nenhuma entrega ainda.</p><small>As entregas que você concluir aparecem aqui, com o comprovante.</small></div>}
+          {feitas.map((viagem) => (
+            <article className="tdg-driver-cartao" key={viagem.id}>
+              <div className="tdg-driver-rota">
+                <strong>{viagem.referencia || "Viagem"}</strong>
+                <span><MapPin size={14} /> {viagem.origem || "origem"} → {viagem.destino || "destino"}</span>
+                <small>entregue em {String(viagem.entregueEm).slice(0, 16).replace("T", " ")} · placa {viagem.placa || "—"}</small>
+              </div>
+              <span className={`tdg-driver-pod ${viagem.comprovanteRegistrado ? "ok" : "falta"}`}>
+                {viagem.comprovanteRegistrado ? <><CheckCircle2 size={14} /> comprovante ok</> : <><AlertTriangle size={14} /> sem comprovante</>}
+              </span>
+            </article>
+          ))}
+        </>
+      )}
+
+      {/* ===== PERFIL: motorista, CNH, disponibilidade e fila offline ===== */}
+      {secao === "perfil" && (
+        <>
+          <article className="tdg-driver-cartao tdg-driver-perfil">
+            <div className="tdg-driver-avatar"><User size={26} /></div>
+            <div>
+              <strong>{sessao.motorista.nome || "Motorista"}</strong>
+              <small>{sessao.motorista.disponibilidade ? `Situação: ${sessao.motorista.disponibilidade}` : "Motorista To Do Green"}</small>
+            </div>
+          </article>
+          <article className="tdg-driver-cartao">
+            <div className="tdg-driver-info-linha"><CreditCard size={16} /><span>CNH</span><b>{sessao.motorista.cnhCategoria || "—"}</b></div>
+            <div className="tdg-driver-info-linha"><Clock size={16} /><span>Validade</span><b>{sessao.motorista.cnhValidade ? String(sessao.motorista.cnhValidade).slice(0, 10).split("-").reverse().join("/") : "—"}</b></div>
+            {sessao.motorista.cnhAlerta
+              ? <small className="tdg-driver-cnh-alerta">{sessao.motorista.cnhAlerta}</small>
+              : <small>CNH em dia.</small>}
+          </article>
+          <article className="tdg-driver-cartao">
+            <div className="tdg-driver-info-linha"><Truck size={16} /><span>Viagens no total</span><b>{viagens.length}</b></div>
+            <div className="tdg-driver-info-linha"><PackageCheck size={16} /><span>Entregues</span><b>{feitas.length}</b></div>
+            <div className="tdg-driver-info-linha"><AlertTriangle size={16} /><span>Aguardando sinal</span><b>{pendentesFila}</b></div>
+            {pendentesFila > 0 && <button type="button" className="tdg-driver-reenviar" onClick={() => escoarFila().then((r) => { if (r.enviados > 0) carregar(); })}>Reenviar registros guardados</button>}
+          </article>
+          <p className="tdg-driver-rodape-nota">Seus registros de rua (cheguei, entreguei, ocorrência) geram o comprovante que libera o faturamento. Sem sinal, ficam guardados no celular e enviam sozinhos.</p>
+        </>
+      )}
 
       {/* Confirmação em janela própria: o botão fica no card da viagem, mas o
           formulário nascia no fim da página — com várias viagens, fora da tela. */}
@@ -375,19 +448,30 @@ export default function DriverPortalPage() {
         </Modal>
       )}
 
-      {feitas.length > 0 && (
-        <details className="tdg-driver-historico">
-          <summary>Entregues ({feitas.length})</summary>
-          {feitas.map((viagem) => (
-            <article className="tdg-driver-cartao" key={viagem.id}>
-              <div className="tdg-driver-rota">
-                <strong>{viagem.referencia}</strong>
-                <small>entregue em {String(viagem.entregueEm).slice(0, 16).replace("T", " ")} {viagem.comprovanteRegistrado ? "· comprovante ok" : ""}</small>
-              </div>
-            </article>
-          ))}
-        </details>
-      )}
+      {/* Navegação inferior fixa — o "menu" que faltava. Fica sempre à mão,
+          padrão de app no celular. O badge mostra quantas viagens esperam. */}
+      <nav className="tdg-driver-nav" aria-label="Seções do app do motorista">
+        {abas.map((aba) => {
+          const Icone = aba.icone;
+          const ativa = secao === aba.id;
+          const badge = aba.id === "hoje" ? pendentes.length : aba.id === "entregas" ? feitas.length : 0;
+          return (
+            <button
+              key={aba.id}
+              type="button"
+              className={ativa ? "is-active" : ""}
+              aria-current={ativa ? "page" : undefined}
+              onClick={() => setSecao(aba.id)}
+            >
+              <span className="tdg-driver-nav-icone">
+                <Icone size={22} />
+                {badge > 0 && <b>{badge > 9 ? "9+" : badge}</b>}
+              </span>
+              {aba.rotulo}
+            </button>
+          );
+        })}
+      </nav>
     </main>
   );
 }

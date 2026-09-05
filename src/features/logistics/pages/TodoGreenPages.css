@@ -1841,6 +1841,69 @@
   border: 1px solid #b9d3c5; border-radius: 9px; font-size: 1rem; margin-top: 6px; min-height: 46px; padding: 8px 12px; width: 100%;
 }
 
+/* ── App do motorista: multi-seção + nav inferior ─────────────────────── */
+/* Espaço no rodapé para a barra fixa não cobrir o último card. */
+.tdg-driver-app { padding-bottom: 84px; }
+
+/* Resumo da jornada (Hoje): três números grandes, leitura de relance. */
+.tdg-driver-jornada { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); }
+.tdg-driver-jornada article {
+  background: var(--tdg-card); border: 1px solid #d8e6dd; border-radius: 12px;
+  display: grid; gap: 2px; padding: 12px 8px; text-align: center;
+}
+.tdg-driver-jornada article.ok { background: #eefaf2; border-color: #a9d9b8; }
+.tdg-driver-jornada article.alerta { background: #fff7ec; border-color: #ecc790; }
+.tdg-driver-jornada strong { color: #173d31; font-size: 1.7rem; line-height: 1; }
+.tdg-driver-jornada span { color: #6d8377; font-size: .72rem; font-weight: 700; }
+
+.tdg-driver-secao-titulo { align-items: center; color: #173d31; display: flex; gap: 7px; padding: 2px; }
+.tdg-driver-secao-titulo h2 { font-size: 1rem; margin: 0; }
+
+.tdg-driver-vazio { justify-items: center; padding: 28px 14px; text-align: center; }
+.tdg-driver-vazio svg { color: #8fbfa8; }
+.tdg-driver-vazio p { font-weight: 700; margin: 0; }
+.tdg-driver-vazio small { color: #6d8377; }
+
+.tdg-driver-pod { align-items: center; border-radius: 999px; display: inline-flex; font-size: .78rem; font-weight: 700; gap: 4px; justify-self: start; padding: 3px 10px; }
+.tdg-driver-pod.ok { background: #eefaf2; color: #17734f; }
+.tdg-driver-pod.falta { background: #fff7ec; color: #8a5b13; }
+
+.tdg-driver-perfil { align-items: center; grid-template-columns: auto 1fr; }
+.tdg-driver-perfil strong { display: block; font-size: 1.05rem; }
+.tdg-driver-perfil small { color: #6d8377; }
+.tdg-driver-avatar { align-items: center; background: #173d31; border-radius: 50%; color: #fff; display: flex; height: 52px; justify-content: center; width: 52px; }
+
+.tdg-driver-info-linha { align-items: center; color: #173d31; display: grid; font-size: .9rem; gap: 8px; grid-template-columns: auto 1fr auto; }
+.tdg-driver-info-linha svg { color: #3d8a6f; }
+.tdg-driver-info-linha b { font-weight: 800; }
+.tdg-driver-cnh-alerta { color: #a05e03; font-weight: 700; }
+.tdg-driver-reenviar {
+  background: #0b9f8f; border: 0; border-radius: 10px; color: #fff; cursor: pointer;
+  font-size: .9rem; font-weight: 700; margin-top: 4px; min-height: 44px; width: 100%;
+}
+.tdg-driver-rodape-nota { color: #6d8377; font-size: .8rem; line-height: 1.5; margin: 2px 4px; }
+
+.tdg-driver-nav {
+  background: var(--tdg-card); border-top: 1px solid #d3e3db;
+  bottom: 0; box-shadow: 0 -4px 16px rgba(20, 45, 36, .08);
+  display: grid; gap: 2px; grid-template-columns: repeat(3, 1fr);
+  left: 50%; margin: 0 auto; max-width: 560px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  position: fixed; transform: translateX(-50%); width: 100%; z-index: 40;
+}
+.tdg-driver-nav button {
+  align-items: center; background: none; border: 0; border-radius: 10px; color: #6d8377;
+  cursor: pointer; display: flex; flex-direction: column; font-size: .72rem; font-weight: 700;
+  gap: 3px; padding: 7px 4px;
+}
+.tdg-driver-nav button.is-active { color: #0b9f8f; }
+.tdg-driver-nav button.is-active .tdg-driver-nav-icone { background: #e4f6ef; }
+.tdg-driver-nav-icone { align-items: center; border-radius: 10px; display: flex; justify-content: center; padding: 4px 14px; position: relative; }
+.tdg-driver-nav-icone b {
+  align-items: center; background: #e5484d; border-radius: 999px; color: #fff; display: flex;
+  font-size: .62rem; height: 16px; justify-content: center; min-width: 16px; padding: 0 3px;
+  position: absolute; right: 2px; top: -3px;
+}
+
 /* ── Matriz RASCI (aba única de responsabilidades) ────────────────────── */
 .tdg-rasci-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 12px; }
 .tdg-rasci-legend span { align-items: baseline; color: var(--tdg-ink); display: flex; font-size: .85rem; gap: 5px; }
