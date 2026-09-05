@@ -346,6 +346,69 @@ describe("evento de entrega fecha o ciclo da operação", () => {
   });
 });
 
+describe("gerar OS faturável da entrega derivada (#120 escrita)", () => {
+  it("com contrato ativo, marca podeGerar e cria OS concluída + item elegível", async () => {
+    const agora = new Date().toISOString();
+    // Contrato com valor negociado por unidade, para o preço herdar dele.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_contracts
+        (id,tenant_id,workspace_owner_id,client_id,client_name,proposal_id,title,status,signature_status,
+         approval_status,service_id,price_table_id,monthly_value,sla_json,commercial_terms_json,taxes_json,
+         billing_rules_json,fields_json,revision,created_by,updated_by,created_at,updated_at)
+       VALUES ('txn-contract-gerar','todogreen','txn-user','txn-client','Cliente Transacional','prop-g','Contrato Gerar','active','signed',
+        'approved','same-day','table-a',250,'{}','{}','{}','{}','{"pricingMode":"por_unidade"}',1,'txn-user','txn-user',?,?)`,
+    ).bind(agora, agora).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, contract_id, status,
+          delivered_at, proof_url, fields_json, created_by, updated_by, created_at, updated_at)
+       VALUES ('txn-op-gerar','todogreen','txn-client','txn-user','OP-GERAR','txn-contract-gerar','em_andamento',
+               ?, 'https://exemplo.test/pod-gerar.jpg', '{"deliveries":4}','txn-user','txn-user',?,?)`,
+    ).bind(agora, agora, agora).run();
+
+    const antes = (await (await request("/api/todogreen/transactions/entregas-a-faturar")).json()).records;
+    const linha = antes.find((item) => item.id === "txn-op-gerar");
+    expect(linha).toBeTruthy();
+    expect(linha.estado).toBe("sem_os");
+    expect(linha.podeGerar).toBe(true);
+    expect(linha.quantidadeSugerida).toBe(4);
+
+    const gerada = await request("/api/todogreen/transactions/entregas-a-faturar/txn-op-gerar/gerar-os", "POST", { quantity: 4 });
+    expect(gerada.status).toBe(201);
+    const corpo = await gerada.json();
+    expect(corpo.serviceOrderNumber).toMatch(/^OS-/);
+    // Preço herdado do contrato (monthly_value era 0 no fixture → cai na
+    // simulação/valor do contrato). O item entrou como elegível.
+    const fila = (await (await request("/api/todogreen/transactions/billing-items?status=eligible")).json()).records;
+    expect(fila.some((item) => item.service_order_number === corpo.serviceOrderNumber)).toBe(true);
+
+    // Já não aparece na ponte (tem item de faturamento agora).
+    const depois = (await (await request("/api/todogreen/transactions/entregas-a-faturar")).json()).records;
+    expect(depois.some((item) => item.id === "txn-op-gerar")).toBe(false);
+
+    // Idempotência: repetir recusa, não duplica.
+    const repetida = await request("/api/todogreen/transactions/entregas-a-faturar/txn-op-gerar/gerar-os", "POST", { quantity: 4 });
+    expect(repetida.status).toBe(409);
+  });
+
+  it("sem contrato ativo, não marca podeGerar e recusa a geração", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, status,
+          delivered_at, proof_url, fields_json, created_by, updated_by, created_at, updated_at)
+       VALUES ('txn-op-semcontrato','todogreen','txn-client','txn-user','OP-SEM-CONTRATO','em_andamento',
+               ?, 'https://exemplo.test/pod-sc.jpg', '{}','txn-user','txn-user',?,?)`,
+    ).bind(agora, agora, agora).run();
+    const linha = (await (await request("/api/todogreen/transactions/entregas-a-faturar")).json()).records
+      .find((item) => item.id === "txn-op-semcontrato");
+    expect(linha.podeGerar).toBe(false);
+    const recusa = await request("/api/todogreen/transactions/entregas-a-faturar/txn-op-semcontrato/gerar-os", "POST", { quantity: 1 });
+    expect(recusa.status).toBe(409);
+    expect((await recusa.json()).error).toMatch(/contrato ativo/i);
+  });
+});
+
 describe("aceite → OS: a ordem herda o preço", () => {
   beforeAll(async () => {
     const now = new Date().toISOString();

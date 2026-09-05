@@ -88,6 +88,7 @@ import {
 } from "./taskAiDomain.js";
 import { taskUrgency } from "./taskUrgencia.js";
 import {
+  listaDependenciasComRotulo,
   patchPlannerDaTarefa,
   tarefaVinculadaAoPlanner,
 } from "../logistics/plannerIntegrationDomain.js";
@@ -2866,25 +2867,25 @@ export default function Tasks({
               <div className="field">
                 <span>Depende de</span>
                 <div className="checkbox-list">
-                  {db.tasks
-                    .filter((t) => t.id !== editing)
-                    .map((t) => (
-                      <label key={t.id} className="cost-check">
-                        <input
-                          type="checkbox"
-                          checked={(form.dependsOn || []).includes(t.id)}
-                          onChange={() =>
-                            setForm({
-                              ...form,
-                              dependsOn: (form.dependsOn || []).includes(t.id)
-                                ? form.dependsOn.filter((id) => id !== t.id)
-                                : [...(form.dependsOn || []), t.id],
-                            })
-                          }
-                        />
-                        {t.title}{t.project ? ` · ${t.project}` : ""} ({t.status})
-                      </label>
-                    ))}
+                  {listaDependenciasComRotulo(
+                    db.tasks.filter((t) => t.id !== editing),
+                  ).map((opcao) => (
+                    <label key={opcao.id} className="cost-check">
+                      <input
+                        type="checkbox"
+                        checked={(form.dependsOn || []).includes(opcao.id)}
+                        onChange={() =>
+                          setForm({
+                            ...form,
+                            dependsOn: (form.dependsOn || []).includes(opcao.id)
+                              ? form.dependsOn.filter((id) => id !== opcao.id)
+                              : [...(form.dependsOn || []), opcao.id],
+                          })
+                        }
+                      />
+                      {opcao.rotulo}
+                    </label>
+                  ))}
                 </div>
                 <small>
                   Esta tarefa fica bloqueada para concluir, entregar ou assumir

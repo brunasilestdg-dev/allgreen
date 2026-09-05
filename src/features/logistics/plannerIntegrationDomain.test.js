@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   contextoComercialDaTarefa,
+  listaDependenciasComRotulo,
   patchPlannerDaTarefa,
+  rotuloBaseDependencia,
   tarefaPlannerParaTodo,
   tarefaVinculadaAoPlanner,
 } from "./plannerIntegrationDomain.js";
@@ -57,5 +59,48 @@ describe("integração universal do Planner", () => {
       dueDate: "2026-09-10",
       campos: { clientId: "cli-1", opportunityId: "opp-1" },
     });
+  });
+});
+
+describe("rótulo da dependência sem confundir clientes (#142)", () => {
+  it("carrega o nome do cliente para o rótulo humano, não só o nome do plano", () => {
+    const todo = tarefaPlannerParaTodo(
+      { id: "t1", title: "Precificação", campos: { clientId: "cli-dhl" } },
+      { id: "plan-1", name: "To do List" },
+      {},
+      { clientLabel: "DHL" },
+    );
+    expect(todo.project).toBe("To do List");
+    expect(todo.clientLabel).toBe("DHL");
+    expect(rotuloBaseDependencia(todo)).toBe("Precificação · DHL");
+  });
+
+  it("distingue duas 'Precificação' pelo cliente", () => {
+    const opcoes = listaDependenciasComRotulo([
+      { id: "a", title: "Precificação", clientLabel: "DHL", status: "Concluído" },
+      { id: "b", title: "Precificação", clientLabel: "Vivara", status: "A fazer" },
+    ]);
+    expect(opcoes.map((o) => o.rotulo)).toEqual([
+      "Precificação · DHL (Concluído)",
+      "Precificação · Vivara (A fazer)",
+    ]);
+  });
+
+  it("quando o cliente não está resolvido, o sufixo do id garante rótulos distintos", () => {
+    const opcoes = listaDependenciasComRotulo([
+      { id: "planner-aaaa1111", title: "Precificação", status: "Concluído" },
+      { id: "planner-bbbb2222", title: "Precificação", status: "Concluído" },
+    ]);
+    const rotulos = opcoes.map((o) => o.rotulo);
+    expect(rotulos[0]).not.toBe(rotulos[1]);
+    expect(rotulos[0]).toContain("#1111");
+    expect(rotulos[1]).toContain("#2222");
+  });
+
+  it("rótulo único não recebe sufixo de id", () => {
+    const opcoes = listaDependenciasComRotulo([
+      { id: "x", title: "Precificação", clientLabel: "DHL", status: "Concluído" },
+    ]);
+    expect(opcoes[0].rotulo).toBe("Precificação · DHL (Concluído)");
   });
 });

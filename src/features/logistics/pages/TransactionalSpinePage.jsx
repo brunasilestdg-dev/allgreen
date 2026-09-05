@@ -92,9 +92,12 @@ function Billing({ authHeaders, clients, setToast }) {
   // Entregas com POD que ainda não chegaram à fila (#120): a ponte manual entre
   // "entreguei com comprovante" e "a régua de faturamento enxerga". Só leitura.
   const [pendentes, setPendentes] = useState([]);
+  const [gerarPara, setGerarPara] = useState(null); const [qtd, setQtd] = useState(""); const [gerando, setGerando] = useState(false);
   const load = useCallback(async () => { try { const [parts, entregas] = await Promise.all([Promise.all(["eligible", "checked", "blocked"].map((status) => request(`billing-items?status=${status}`, authHeaders))), request("entregas-a-faturar", authHeaders).catch(() => ({ records: [] }))]); setRecords(parts.flatMap((item) => item.records || [])); setPendentes(entregas.records || []); } catch (error) { setToast?.(error.message); } }, [authHeaders, setToast]);
   useEffect(() => { load(); }, [load]);
   const check = async (item, approved) => { try { await request(`billing-items/${item.id}/check`, authHeaders, { method: "POST", body: JSON.stringify({ approved, reason: approved ? "" : "Bloqueado na conferência", revision: item.revision }) }); await load(); } catch (error) { setToast?.(error.message); } };
+  const abrirGerar = (item) => { setGerarPara(item); setQtd(String(item.quantidadeSugerida || 1)); };
+  const gerar = async (event) => { event.preventDefault(); setGerando(true); try { const r = await request(`entregas-a-faturar/${gerarPara.id}/gerar-os`, authHeaders, { method: "POST", body: JSON.stringify({ quantity: Number(qtd) }) }); setToast?.(`OS ${r.serviceOrderNumber} gerada e liberada para faturamento (${BRL.format(r.amount || 0)})`); setGerarPara(null); await load(); } catch (error) { setToast?.(error.message); } finally { setGerando(false); } };
   const close = async () => { try { const result = await request("billing-runs", authHeaders, { method: "POST", body: JSON.stringify({ itemIds: selected, dueDate, competenceDate: today(), documentType }) }); setToast?.(`${result.documentType.toUpperCase()} emitido: ${result.invoiceNumber} · título ${result.titleNumber}`); setSelected([]); await load(); } catch (error) { setToast?.(error.message); } };
   const checked = records.filter((item) => item.status === "checked");
   return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">OPERAÇÃO → CT-E → TÍTULO</span><h2>Fila de faturamento</h2><p>Somente OS concluída entra no Financeiro. A conferência fiscal fecha CT-e/documento, faturamento e conta a receber.</p></div><strong>{records.length} item(ns)</strong></div>
@@ -103,9 +106,19 @@ function Billing({ authHeaders, clients, setToast }) {
       <div className="tdg-txn-list">{pendentes.map((item) => <article className="tdg-txn-row tdg-derivado-row" key={item.id}>
         <span><strong>{item.reference || "Operação"}</strong><small>{item.clientName || clientName(clients, item.clientId)}{item.deliveredAt ? ` · entregue ${item.deliveredAt.slice(0, 10)}` : ""}{item.driverName ? ` · ${item.driverName}` : ""}</small></span>
         <span className={`tdg-derivado-tag ${item.estado}`}>{item.estado === "sem_os" ? "Sem OS" : `OS ${comRotulo(statusLabel, item.serviceOrderStatus)}`}{item.serviceOrderNumber ? ` · ${item.serviceOrderNumber}` : ""}</span>
-        <small className="tdg-derivado-passo">{item.proximoPasso}</small>
+        {item.podeGerar
+          ? <button type="button" className="tdg-action" onClick={() => abrirGerar(item)}><ReceiptText size={15} />Gerar OS faturável</button>
+          : <small className="tdg-derivado-passo">{item.proximoPasso}</small>}
       </article>)}</div>
     </div>}
+    {gerarPara && <Modal title="Gerar OS faturável da entrega" onClose={() => setGerarPara(null)}>
+      <form className="tdg-txn-close tdg-form-em-modal" onSubmit={gerar}>
+        <div><strong>{gerarPara.reference || "Operação"}</strong><small>{gerarPara.clientName || clientName(clients, gerarPara.clientId)} · entrega com comprovante registrado</small></div>
+        <label><span>Quantidade entregue</span><input required type="number" min="0.01" step="0.01" value={qtd} onChange={(e) => setQtd(e.target.value)} /><small>O preço é herdado do contrato ativo (ou da simulação que o gerou) — não se digita aqui.</small></label>
+        <p className="tdg-derivado-nota">A OS nasce concluída com o comprovante da entrega e entra na fila como <strong>elegível</strong>. Nenhum valor é cobrado até você conferir e fechar o faturamento.</p>
+        <div className="tdg-form-actions"><button type="button" onClick={() => setGerarPara(null)}>Cancelar</button><button className="tdg-action" disabled={gerando}><ReceiptText size={17} />{gerando ? "Gerando..." : "Gerar OS e liberar"}</button></div>
+      </form>
+    </Modal>}
     {checked.length > 0 && <div className="tdg-txn-close"><label><span>Documento fiscal</span><select value={documentType} onChange={(e) => setDocumentType(e.target.value)}><option value="cte">CT-e</option><option value="nfse">NFS-e</option><option value="nfe">NF-e</option></select></label><label><span>Vencimento do título</span><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></label><button className="tdg-action" type="button" disabled={!selected.length} onClick={close}><ReceiptText size={17} />Emitir e fechar {selected.length} item(ns)</button></div>}
       <div className="tdg-txn-list">{!records.length && <Empty>Nenhuma OS concluída aguardando faturamento.</Empty>}{records.map((item) => <article className="tdg-txn-row" key={item.id}>{item.status === "checked" && <input aria-label={`Selecionar ${item.service_order_number}`} type="checkbox" checked={selected.includes(item.id)} onChange={(e) => setSelected((list) => e.target.checked ? [...list, item.id] : list.filter((id) => id !== item.id))} />}<span><strong>{item.service_order_number}</strong><small>{clientName(clients, item.client_id)} · competência {item.competence_date}</small></span><span><small>Faturável</small><strong>{BRL.format(item.amount || 0)}</strong></span><Status value={item.status} />{item.status !== "checked" && <span className="tdg-txn-actions"><button type="button" onClick={() => check(item, true)}>Conferir fiscal</button><button type="button" onClick={() => check(item, false)}>Bloquear</button></span>}</article>)}</div>
   </section>;

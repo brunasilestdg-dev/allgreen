@@ -824,8 +824,16 @@ async function listDeliveredAwaitingBilling(env, access, url) {
   const { results } = await env.DB.prepare(
     `SELECT o.id, o.reference, o.client_id, o.delivered_at, o.service_date,
             o.vehicle_plate, o.driver_name, o.contract_id,
+            json_extract(o.fields_json, '$.deliveries') AS deliveries,
+            json_extract(o.fields_json, '$.trips') AS trips,
             cl.name AS client_name,
-            s.id AS service_order_id, s.number AS service_order_number, s.status AS service_order_status
+            s.id AS service_order_id, s.number AS service_order_number, s.status AS service_order_status,
+            (SELECT 1 FROM todogreen_contracts c
+               WHERE c.id = o.contract_id AND c.tenant_id = o.tenant_id
+                 AND c.workspace_owner_id = o.workspace_owner_id AND c.archived_at IS NULL
+                 AND c.status NOT IN ('cancelled','draft')
+                 AND c.approval_status = 'approved' AND c.signature_status = 'signed'
+               LIMIT 1) AS contrato_ok
        FROM todogreen_client_operations o
        LEFT JOIN todogreen_clients cl
          ON cl.id = o.client_id AND cl.tenant_id = o.tenant_id AND cl.workspace_owner_id = o.workspace_owner_id
@@ -848,22 +856,138 @@ async function listDeliveredAwaitingBilling(env, access, url) {
         )
       ORDER BY o.delivered_at DESC LIMIT ? OFFSET ?`,
   ).bind(TENANT_ID, access.ownerId, limit, offset).all();
-  const records = (results || []).map((row) => ({
-    id: row.id,
-    reference: row.reference || "",
-    clientId: row.client_id || "",
-    clientName: row.client_name || "",
-    deliveredAt: row.delivered_at || "",
-    serviceDate: row.service_date || "",
-    vehiclePlate: row.vehicle_plate || "",
-    driverName: row.driver_name || "",
-    contractId: row.contract_id || "",
-    serviceOrderId: row.service_order_id || "",
-    serviceOrderNumber: row.service_order_number || "",
-    serviceOrderStatus: row.service_order_status || "",
-    ...classificarEntregaAFaturar({ serviceOrderId: row.service_order_id }),
-  }));
+  const records = (results || []).map((row) => {
+    const classificacao = classificarEntregaAFaturar({ serviceOrderId: row.service_order_id });
+    const semOs = classificacao.estado === "sem_os";
+    const contratoAtivo = Boolean(row.contrato_ok);
+    const sugestao = Math.max(0, num(row.deliveries) || num(row.trips) || 0);
+    return {
+      id: row.id,
+      reference: row.reference || "",
+      clientId: row.client_id || "",
+      clientName: row.client_name || "",
+      deliveredAt: row.delivered_at || "",
+      serviceDate: row.service_date || "",
+      vehiclePlate: row.vehicle_plate || "",
+      driverName: row.driver_name || "",
+      contractId: row.contract_id || "",
+      serviceOrderId: row.service_order_id || "",
+      serviceOrderNumber: row.service_order_number || "",
+      serviceOrderStatus: row.service_order_status || "",
+      // Só há botão de gerar quando falta a OS E existe contrato ativo — a
+      // condição que a titular fixou: preço herdado, nunca adivinhado.
+      contratoAtivo,
+      podeGerar: semOs && contratoAtivo,
+      quantidadeSugerida: sugestao || 1,
+      ...classificacao,
+    };
+  });
   return json({ records });
+}
+
+// A metade de ESCRITA da ponte (#120), sob a decisão da titular: o botão só age
+// quando há CONTRATO ATIVO na operação — o preço herda dele (contrato →
+// simulação), nunca adivinhado. Gera a OS já concluída (a entrega aconteceu),
+// copia o comprovante da operação como POD da OS e cria o item ELEGÍVEL. Nada
+// de dinheiro se move sozinho depois disto: conferir e fechar seguem manuais e
+// com alçada financeira, e o razão só é tocado quando o título nasce.
+async function gerarOsFaturavel(env, access, user, operationId, body) {
+  if (!allowedAny(access, ["planning:manage", "product:manage", "finance:manage"]))
+    return json({ error: "Sem permissão para gerar a OS faturável desta entrega." }, 403);
+  const op = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_operations WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(operationId, TENANT_ID, access.ownerId).first();
+  if (!op) return json({ error: "Operação não encontrada." }, 404);
+  if (!op.delivered_at || !op.proof_url)
+    return json({ error: "A entrega precisa estar concluída e com comprovante (POD) antes de virar OS faturável." }, 409);
+  // Idempotência: se a operação já tem OS com item de faturamento, não duplica.
+  const jaFaturavel = await env.DB.prepare(
+    `SELECT b.id FROM todogreen_billing_items b
+       JOIN todogreen_service_orders s ON s.id=b.service_order_id
+      WHERE s.operation_id=? AND s.tenant_id=? AND s.workspace_owner_id=?
+        AND b.tenant_id=? AND b.workspace_owner_id=? LIMIT 1`,
+  ).bind(operationId, TENANT_ID, access.ownerId, TENANT_ID, access.ownerId).first();
+  if (jaFaturavel) return json({ error: "Esta entrega já tem item na fila de faturamento." }, 409);
+  // Contrato ativo é a condição da titular. Sem ele, não gera — não se fatura
+  // um valor que não veio de lugar nenhum.
+  const contract = op.contract_id ? await contractInScope(env, access.ownerId, op.contract_id, op.client_id) : null;
+  if (!contract)
+    return json({ error: "A operação não tem contrato ativo vinculado. Gere a OS pela aba Aceite e ordens de serviço, informando o preço." }, 409);
+  if (contract.approval_status !== "approved" || contract.signature_status !== "signed")
+    return json({ error: "O contrato da operação precisa estar aprovado e assinado." }, 409);
+  const implantacao = await env.DB.prepare(
+    "SELECT status FROM todogreen_client_activation_state WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? LIMIT 1",
+  ).bind(TENANT_ID, access.ownerId, op.client_id).first();
+  if (text(implantacao?.status, 30).toLowerCase() !== "active")
+    return json({ error: "A OS exige a implantação do cliente ativa (go-live concluído)." }, 409);
+  // Preço herdado do contrato (ou da simulação que o gerou). Nunca digitado aqui.
+  let simulacaoResult = null;
+  if (contract.scenario_id) {
+    const cenario = await env.DB.prepare(
+      "SELECT result_json FROM pricing_scenarios WHERE id=? AND tenant_id=? AND workspace_owner_id=?",
+    ).bind(contract.scenario_id, TENANT_ID, access.ownerId).first().catch(() => null);
+    simulacaoResult = cenario ? parseJson(cenario.result_json) : null;
+  }
+  const contractFields = parseJson(contract.fields_json) || {};
+  const { preco: precoHerdado, origem: origemPreco, modo: modoPreco } = precoUnitarioDaOs({
+    contractValue: contract.monthly_value, contractPricingMode: contractFields.pricingMode, simulacaoResult,
+  });
+  if (precoHerdado == null)
+    return json({ error: "O contrato não tem valor negociado nem simulação com preço. Informe o preço na aba Aceite e ordens de serviço." }, 409);
+  // Quantidade é o único número que não se herda — vem confirmada pelo operador.
+  const quantity = Math.max(0, num(body.quantity));
+  if (!quantity) return json({ error: "Informe a quantidade entregue." }, 400);
+  const amounts = serviceOrderAmounts({ quantity, unitPrice: precoHerdado, mode: modoPreco });
+  const now = new Date().toISOString();
+  const osId = crypto.randomUUID();
+  const number = await reserveNumber(env, access.ownerId, "ordem_servico", "OS-", now);
+  const completedAt = text(op.delivered_at, 40) || now;
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO todogreen_service_orders
+          (id,tenant_id,workspace_owner_id,number,client_id,contract_id,operation_id,service_id,
+           price_table_id,status,requested_at,completed_at,quantity,charge_unit,unit_price,gross_amount,
+           discount_amount,tax_amount,net_amount,sla_json,fields_json,revision,created_by,updated_by,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,'completed',?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
+      ).bind(
+        osId, TENANT_ID, access.ownerId, number, op.client_id, contract.id, operationId,
+        text(contract.service_id, 120), text(contract.price_table_id, 120), completedAt, completedAt,
+        quantity, text(body.chargeUnit, 30) || "entrega", amounts.unitPrice, amounts.grossAmount,
+        amounts.discountAmount, amounts.taxAmount, amounts.netAmount, contract.sla_json || "{}",
+        JSON.stringify({ precoOrigem: origemPreco, precoModo: modoPreco, origem: "entrega-derivada", operationId }),
+        user.id, user.id, now, now,
+      ),
+      env.DB.prepare(
+        `INSERT INTO todogreen_proofs_of_delivery
+          (id,tenant_id,workspace_owner_id,service_order_id,kind,occurred_at,recipient_name,
+           document_url,document_hash,latitude,longitude,fields_json,created_by,created_at)
+         VALUES (?,?,?,?,'delivery',?,?,?,?,?,?,?,?,?)`,
+      ).bind(
+        crypto.randomUUID(), TENANT_ID, access.ownerId, osId, completedAt, "",
+        text(op.proof_url, 2000), text(op.proof_hash, 200),
+        Number.isFinite(op.last_position_lat) ? op.last_position_lat : null,
+        Number.isFinite(op.last_position_lng) ? op.last_position_lng : null,
+        JSON.stringify({ operationId, origem: "entrega-derivada" }), user.id, now,
+      ),
+      env.DB.prepare(
+        `INSERT INTO todogreen_billing_items
+          (id,tenant_id,workspace_owner_id,service_order_id,client_id,contract_id,status,amount,
+           competence_date,created_by,updated_by,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,'eligible',?,?,?,?,?,?)`,
+      ).bind(
+        crypto.randomUUID(), TENANT_ID, access.ownerId, osId, op.client_id, contract.id,
+        amounts.netAmount, completedAt.slice(0, 10), user.id, user.id, now, now,
+      ),
+    ]);
+  } catch (error) {
+    if (String(error?.message || error).includes("POD_REQUIRED"))
+      return json({ error: "O comprovante da operação não pôde ser vinculado à OS.", code: "pod_required" }, 409);
+    if (String(error?.message || error).includes("UNIQUE"))
+      return json({ error: "Esta entrega já foi levada ao faturamento por outra pessoa." }, 409);
+    throw error;
+  }
+  return json({ ok: true, serviceOrderNumber: number, amount: amounts.netAmount, precoOrigem: origemPreco }, 201);
 }
 
 async function checkBilling(env, access, user, id, body) {
@@ -1061,6 +1185,7 @@ export async function handleTodoGreenTransactions(request, env, access, user) {
   if (resource === "ciot" && request.method === "POST" && id && action === "submit") return submitCiot(env, access, user, id, body);
   if (resource === "ciot" && request.method === "POST" && id && action === "issue") return issueCiot(env, access, user, id, body);
   if (resource === "entregas-a-faturar" && request.method === "GET" && !id) return listDeliveredAwaitingBilling(env, access, url);
+  if (resource === "entregas-a-faturar" && request.method === "POST" && id && action === "gerar-os") return gerarOsFaturavel(env, access, user, id, body);
   if (resource === "billing-items" && request.method === "GET") return listBilling(env, access, url);
   if (resource === "billing-items" && request.method === "POST" && id && action === "check") return checkBilling(env, access, user, id, body);
   if (resource === "billing-runs" && request.method === "POST" && !id) return closeBilling(env, access, user, body);

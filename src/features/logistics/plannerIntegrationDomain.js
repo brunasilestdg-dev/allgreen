@@ -23,7 +23,7 @@ export const contextoComercialDaTarefa = (tarefa = {}) => ({
   opportunityId: String(tarefa.campos?.opportunityId || ""),
 });
 
-export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}) => {
+export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {}) => {
   const contexto = contextoComercialDaTarefa(tarefa);
   return {
     ...existente,
@@ -44,9 +44,44 @@ export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}) => {
     plannerRevision: tarefa.revision,
     clientId: contexto.clientId,
     opportunityId: contexto.opportunityId,
+    // O nome do cliente viaja com a tarefa espelhada (#142): o "Projeto" é o
+    // nome do PLANO ("To do List"), que não distingue a "Precificação" da DHL da
+    // da Vivara. Sem este rótulo, duas dependências ficam idênticas na tela.
+    clientLabel: String(rotulos.clientLabel || existente.clientLabel || "").trim(),
     updatedAt: tarefa.atualizadoEm || new Date().toISOString(),
     createdAt: existente.createdAt || tarefa.criadoEm || new Date().toISOString(),
   };
+};
+
+// ===== Rótulo da lista "Depende de" (#142) =====
+//
+// O bug: duas "Precificação (Concluído)" — uma da DHL, outra da Vivara —
+// apareciam idênticas, e marcar a dependência errada atribuía a tarefa ao
+// cliente errado. O distintivo é o cliente (rótulo humano), com o projeto como
+// reserva. E quando ainda assim dois rótulos coincidem (tarefa antiga sem
+// cliente resolvido), um sufixo curto e estável do id garante que NUNCA fiquem
+// visualmente iguais — o operador sempre consegue separar uma da outra.
+const distintivoDaTarefa = (tarefa = {}) =>
+  String(tarefa.clientLabel || tarefa.project || "").trim();
+
+export const rotuloBaseDependencia = (tarefa = {}) => {
+  const distintivo = distintivoDaTarefa(tarefa);
+  return `${tarefa.title || "Tarefa sem título"}${distintivo ? ` · ${distintivo}` : ""}`;
+};
+
+export const listaDependenciasComRotulo = (tarefas = []) => {
+  const contagem = new Map();
+  for (const tarefa of tarefas) {
+    const base = rotuloBaseDependencia(tarefa);
+    contagem.set(base, (contagem.get(base) || 0) + 1);
+  }
+  return tarefas.map((tarefa) => {
+    const base = rotuloBaseDependencia(tarefa);
+    const ambiguo = (contagem.get(base) || 0) > 1;
+    const sufixoId = ambiguo && tarefa.id ? ` #${String(tarefa.id).slice(-4)}` : "";
+    const status = tarefa.status ? ` (${tarefa.status})` : "";
+    return { id: tarefa.id, rotulo: `${base}${sufixoId}${status}` };
+  });
 };
 
 export const patchPlannerDaTarefa = (tarefa, alteracoes = {}) => {

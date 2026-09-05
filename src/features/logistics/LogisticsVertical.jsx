@@ -101,7 +101,7 @@ import ErpHome from "./ErpHome.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
 import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
-import { tarefaPlannerParaTodo } from "./plannerIntegrationDomain.js";
+import { contextoComercialDaTarefa, tarefaPlannerParaTodo } from "./plannerIntegrationDomain.js";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
 const PricingParametersPanel = lazy(() => import("./PricingParametersPanel.jsx"));
@@ -3332,7 +3332,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         onSyncTask={(tarefa, plano) => update?.((current) => {
           const tarefas = current.tasks || [];
           const existente = tarefas.find((item) => item.plannerTaskId === tarefa.id);
-          const sincronizada = tarefaPlannerParaTodo(tarefa, plano, existente);
+          // Resolve o nome do cliente para o rótulo humano da dependência (#142):
+          // sem ele, duas "Precificação" (DHL e Vivara) ficam idênticas na lista.
+          const { clientId } = contextoComercialDaTarefa(tarefa);
+          const cliente = clientes.find((item) => item.id === clientId);
+          const sincronizada = tarefaPlannerParaTodo(tarefa, plano, existente, {
+            clientLabel: cliente?.name || cliente?.nome || "",
+          });
           return {
             ...current,
             tasks: existente
