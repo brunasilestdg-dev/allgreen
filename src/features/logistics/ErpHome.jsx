@@ -14,6 +14,16 @@ import {
 } from "./erpHomeDomain.js";
 import "./ErpHome.css";
 import { comRotulo } from "./rotulosDomain.js";
+import WidgetChart from "./pages/DashboardCharts.jsx";
+
+// Os gráficos do painel da home: puro SVG (CSP-safe), alimentados pelos mesmos
+// dados da vertical. Dão o "dashboard" e o dinamismo que faltavam — um número
+// solto não conta a tendência; a linha e a rosca sim.
+const PAINEL_HOME = [
+  { metric: "receita", type: "line", titulo: "Receita por mês", subtitulo: "evolução realizada" },
+  { metric: "pipeline", type: "donut", titulo: "Pipeline por estágio", subtitulo: "oportunidades abertas" },
+  { metric: "operacoes", type: "bar", titulo: "Operações por mês", subtitulo: "entregas registradas" },
+];
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const NUM = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -128,6 +138,21 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
         return metric ? <article key={id}><span>{metric[0]}</span><strong>{metric[1]}</strong><small>{metric[2]}</small></article> : null;
       })}
     </div>}
+
+    {/* Painel visual: gráficos ao vivo dos mesmos dados. É o "dashboard" e o
+        dinamismo que faltavam — a home tinha só números soltos. Só aparece com
+        dado operacional; cada gráfico já mostra "sem dados" sozinho se faltar. */}
+    {hasOperationalData && <section className="tdg-home-section tdg-home-painel-sec">
+      <header><div><span>PANORAMA</span><h3>Painel visual</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/dashboards")}>Painéis completos<ArrowRight size={14} /></button></header>
+      <div className="tdg-home-painel">
+        {PAINEL_HOME.map((g) => (
+          <article className="tdg-home-painel-card" key={g.metric}>
+            <div className="tdg-home-painel-cab"><strong>{g.titulo}</strong><small>{g.subtitulo}</small></div>
+            <WidgetChart widget={{ metric: g.metric, type: g.type }} data={data} />
+          </article>
+        ))}
+      </div>
+    </section>}
 
     <div className="tdg-home-grid">
       {visible("queue") && <section className="tdg-home-section tdg-home-queue">

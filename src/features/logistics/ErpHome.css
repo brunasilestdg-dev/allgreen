@@ -41,6 +41,15 @@
 .tdg-home-queue strong { font-size: .84rem; }
 .tdg-home-queue small { color: var(--tdg-muted); font-size: .73rem; line-height: 1.35; }
 .tdg-home-queue > button > b { align-items: center; color: var(--tdg-green); display: inline-flex; font-size: .71rem; gap: 5px; white-space: nowrap; }
+
+/* Painel visual da home: três gráficos ao vivo (SVG puro). */
+.tdg-home-painel-sec > header button { align-items: center; background: var(--tdg-soft); border: 0; border-radius: 8px; color: var(--tdg-green); cursor: pointer; display: inline-flex; font-size: .72rem; font-weight: 700; gap: 5px; padding: 6px 11px; white-space: nowrap; }
+.tdg-home-painel { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 6px; }
+.tdg-home-painel-card { background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 10px; min-width: 0; padding: 12px; }
+.tdg-home-painel-cab { display: grid; gap: 1px; margin-bottom: 8px; }
+.tdg-home-painel-cab strong { color: var(--tdg-ink); font-size: .82rem; }
+.tdg-home-painel-cab small { color: var(--tdg-muted); font-size: .68rem; }
+@media (max-width: 760px) { .tdg-home-painel { grid-template-columns: 1fr; } }
 .tdg-home-empty { align-items: center; color: var(--tdg-green); display: flex; gap: 10px; padding: 18px 2px 10px; }
 .tdg-home-empty span { display: grid; gap: 3px; }
 .tdg-home-empty small { color: var(--tdg-muted); }
