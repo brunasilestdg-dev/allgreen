@@ -148,9 +148,44 @@ export const catalogoTextual = () =>
 // responde texto puro. Nada disso pode virar erro na cara de quem perguntou:
 // texto solto é tratado como resposta, que é o que ele quis dizer.
 
+// Alguns modelos da cadeia emitem a chamada de ferramenta no formato XML
+// (<tool_call>ferramenta<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>)
+// em vez do JSON que pedimos. Sem tratar, esse XML cru vazava como resposta na
+// tela. Aqui reconhecemos o formato e o convertemos para o mesmo {ferramenta,
+// ...params} do JSON — a execução segue igual.
+export function lerToolCallXml(texto) {
+  const bruto = String(texto || "");
+  const bloco = bruto.match(/<tool_call>([\s\S]*?)<\/tool_call>/i);
+  if (!bloco) return null;
+  const dentro = bloco[1];
+  // Nome da ferramenta: o texto antes do primeiro <arg_key> (ou o bloco todo).
+  const nome = clean(dentro.split(/<arg_key>/i)[0], 40).trim();
+  if (!FERRAMENTAS[nome]) return null;
+  const params = {};
+  const paresRe = /<arg_key>([\s\S]*?)<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/gi;
+  let par;
+  while ((par = paresRe.exec(dentro)) !== null) {
+    const chave = clean(par[1], 40).trim();
+    if (chave) params[chave] = clean(par[2], 200).trim();
+  }
+  return { ferramenta: nome, ...params };
+}
+
+// Remove qualquer resíduo de marcação de tool call do texto exibido — rede de
+// segurança para o XML nunca aparecer para a pessoa, mesmo que não vire uma
+// consulta válida.
+const semMarcacaoDeFerramenta = (texto) =>
+  String(texto || "")
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+    .replace(/<\/?(?:tool_call|arg_key|arg_value)>/gi, "")
+    .trim();
+
 export function lerDecisao(texto) {
   const bruto = String(texto || "").trim();
   if (!bruto) return { resposta: "", consultar: null, acao: null };
+  // Formato XML de tool call tem prioridade: se veio, é uma consulta.
+  const xml = lerToolCallXml(bruto);
+  if (xml) return { resposta: semMarcacaoDeFerramenta(bruto), consultar: xml, acao: null };
   const semCerca = bruto.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
   const inicio = semCerca.indexOf("{");
   if (inicio >= 0) {

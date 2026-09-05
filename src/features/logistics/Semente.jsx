@@ -28,6 +28,7 @@ import "./Semente.css";
 // escrita — e o dado do cliente é que paga.
 
 const CHAVE_ABERTA = "todogreen:semente:aberta";
+const CHAVE_OCULTA = "todogreen:semente:oculta";
 
 let contador = 0;
 const proximoId = () => (contador += 1);
@@ -99,6 +100,16 @@ function MensagemSemente({ texto, classe }) {
 
 export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
   const [aberta, setAberta] = useState(false);
+  // Esconder o Todô (pedido da titular: "poder esconder esse botão"). Fica
+  // guardado por navegador; escondido, sobra um ponto discreto para trazer de
+  // volta — o assistente continua existindo, só sai da frente.
+  const [oculta, setOculta] = useState(() => {
+    try { return localStorage.getItem(CHAVE_OCULTA) === "1"; } catch { return false; }
+  });
+  const ocultar = useCallback((valor) => {
+    setOculta(valor);
+    try { localStorage.setItem(CHAVE_OCULTA, valor ? "1" : "0"); } catch { /* ok */ }
+  }, []);
   const [pergunta, setPergunta] = useState("");
   const [mensagens, setMensagens] = useState([]);
   const [pensando, setPensando] = useState(false);
@@ -285,17 +296,42 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
     return () => { ativo = false; };
   }, [aberta, chamar, pauta]);
 
-  if (!aberta) {
+  // Escondido: só um ponto discreto para reabrir. Continua existindo.
+  if (oculta && !aberta) {
     return (
       <button
         type="button"
-        className="semente-launcher"
-        onClick={() => alternar(true)}
-        aria-label={`Abrir ${SEMENTE.nome}, ${SEMENTE.assinatura}`}
+        className="semente-launcher semente-launcher--min"
+        onClick={() => ocultar(false)}
+        aria-label={`Mostrar ${SEMENTE.nome}`}
+        title={`Mostrar ${SEMENTE.nome}`}
       >
-        <SementeAvatar estado="calma" tamanho={28} />
-        <span>{SEMENTE.nome}</span>
+        <SementeAvatar estado="calma" tamanho={18} />
       </button>
+    );
+  }
+  if (!aberta) {
+    return (
+      <div className="semente-launcher-wrap">
+        <button
+          type="button"
+          className="semente-launcher"
+          onClick={() => alternar(true)}
+          aria-label={`Abrir ${SEMENTE.nome}, ${SEMENTE.assinatura}`}
+        >
+          <SementeAvatar estado="calma" tamanho={28} />
+          <span>{SEMENTE.nome}</span>
+        </button>
+        <button
+          type="button"
+          className="semente-launcher-ocultar"
+          onClick={() => ocultar(true)}
+          aria-label={`Esconder ${SEMENTE.nome}`}
+          title={`Esconder ${SEMENTE.nome}`}
+        >
+          <X size={13} />
+        </button>
+      </div>
     );
   }
 

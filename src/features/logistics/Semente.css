@@ -36,6 +36,36 @@
 .semente-launcher:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(16, 36, 31, 0.24); }
 .semente-launcher:focus-visible { outline: 3px solid var(--tdg-lime, #92c83e); outline-offset: 3px; }
 
+/* Launcher com botão de esconder ao lado. O wrap assume a posição fixa; o
+   launcher volta a ser estático dentro dele. */
+.semente-launcher-wrap {
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  position: fixed;
+  right: 18px;
+  z-index: 60;
+}
+.semente-launcher-wrap .semente-launcher { position: static; bottom: auto; right: auto; }
+.semente-launcher-ocultar {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #cfe2da;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(16, 36, 31, 0.2);
+  color: #5b7069;
+  cursor: pointer;
+  display: inline-flex;
+  height: 21px;
+  justify-content: center;
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  width: 21px;
+}
+.semente-launcher-ocultar:hover { color: #17372e; border-color: #9cbcb0; }
+/* Escondido: só um ponto verde discreto para reabrir. */
+.semente-launcher--min { border-radius: 50%; opacity: .82; padding: 8px; }
+.semente-launcher--min:hover { opacity: 1; }
+
 /* ===== Avatar =====
  *
  * O robô da marca: cabeça branca, viseira escura, olhos verdes que brilham,
@@ -440,7 +470,7 @@
 /* Em telas estreitas o painel encosta nas bordas em vez de sobrar meio dedo
  * de cada lado, e a altura cede espaço para o teclado virtual. */
 @media (max-width: 520px) {
-  .semente-launcher, .semente { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); right: 12px; }
+  .semente-launcher, .semente-launcher-wrap, .semente { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); right: 12px; }
   .semente { left: 12px; max-height: min(70vh, calc(100vh - 100px)); width: auto; }
 }
 
