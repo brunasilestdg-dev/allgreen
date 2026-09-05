@@ -941,7 +941,11 @@
 .tdg input,
 .tdg select,
 .tdg textarea {
-  background: #fff;
+  /* Fundo por TOKEN, não branco fixo: no modo escuro o texto usa --tdg-ink
+     (que fica claro) — sobre um branco fixo, ficava claro-sobre-branco,
+     ilegível (a Bruna bateu nisso no campo de endereço do roteirizador).
+     Com o token, o fundo escurece junto e o par volta a contrastar. */
+  background: var(--tdg-card);
   border: 1px solid var(--tdg-line);
   border-radius: 8px;
   color: var(--tdg-ink);
