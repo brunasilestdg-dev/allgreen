@@ -108,7 +108,10 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
       // Abre a ferramenta de tarefas do Espaço, não /central-trabalho — esse
       // alias é sequestrado pela Central de Implantação e abria uma tela vazia.
       id: `task-${task.id}`, tone: "task", title: task.title || "Tarefa sem título",
-      detail: `${task.status || "Pendente"} · ${dueLabel(task)}`, action: "Abrir tarefa", route: "/todogreen/espaco?ferramenta=tarefas",
+      // Abre a tarefa ESPECÍFICA no quadro (?task=<id>), não o quadro em geral —
+      // clicar "minha tarefa" tem de cair nela, não numa lista para caçar.
+      detail: `${task.status || "Pendente"} · ${dueLabel(task)}`, action: "Abrir tarefa",
+      route: `/todogreen/espaco?ferramenta=tarefas&task=${encodeURIComponent(task.id)}`,
     })),
     ...contextualAlerts.slice(0, Math.max(0, 6 - myTasks.length)).map((alert) => ({
       id: `alert-${alert.id}`, tone: alert.tone, title: alert.title, detail: alert.detail, action: alert.action, route: alert.route,

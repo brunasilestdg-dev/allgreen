@@ -134,8 +134,11 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
       detail: "Replaneje o prazo ou conclua o próximo passo.",
       action: "Abrir tarefas",
       // A ferramenta de tarefas do Espaço, não /central-trabalho (que abre a
-      // Central de Implantação vazia por cima da página).
-      route: "/todogreen/espaco?ferramenta=tarefas",
+      // Central de Implantação vazia por cima da página). Quando há UMA única
+      // atrasada, abre direto nela (?task=<id>) — sem obrigar a caçar na lista.
+      route: overdueTasks.length === 1 && overdueTasks[0]?.id
+        ? `/todogreen/espaco?ferramenta=tarefas&task=${encodeURIComponent(overdueTasks[0].id)}`
+        : "/todogreen/espaco?ferramenta=tarefas",
     },
   ].filter(Boolean);
 
