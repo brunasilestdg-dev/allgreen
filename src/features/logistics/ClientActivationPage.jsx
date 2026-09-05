@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import "./ClientActivationPage.css";
 import ClientBriefingPanel from "./ClientBriefingPanel.jsx";
+import ClientPocPanel from "./ClientPocPanel.jsx";
 
 const CHECK_LINKS = {
   contract: ["Contrato", "/todogreen/propostas"],
@@ -371,6 +372,12 @@ export default function ClientActivationPage({ authHeaders, setToast }) {
           </div>
 
           <aside className="ca-side">
+            <ClientPocPanel
+              authHeaders={authHeaders}
+              clientId={clientId}
+              clientName={selectedClient?.name}
+              setToast={setToast}
+            />
             <form onSubmit={createProject}>
               <span className="ca-eyebrow">NOVA IMPLANTAÇÃO</span>
               <h3>Projeto operacional</h3>
