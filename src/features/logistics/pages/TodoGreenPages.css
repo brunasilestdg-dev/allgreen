@@ -3949,3 +3949,21 @@
 
 .tdg-crm-more-actions{position:relative}.tdg-crm-more-actions>summary{list-style:none;cursor:pointer;min-height:40px;padding:9px 12px;border:1px solid var(--tdg-line);border-radius:10px;font-weight:800;background:var(--tdg-card);color:var(--tdg-ink)}
 .tdg-crm-more-actions>summary::-webkit-details-marker{display:none}.tdg-crm-more-actions>summary:focus-visible{outline:3px solid var(--tdg-green);outline-offset:3px}.tdg-crm-more-actions>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding:10px;border:1px solid var(--tdg-line);border-radius:12px;background:var(--tdg-card);box-shadow:var(--tdg-shadow)}
+
+/* Motor de HC e DRE (#150): régua + simulador lado a lado. */
+.tdg-op-engine-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; }
+@media (max-width: 900px) { .tdg-op-engine-grid { grid-template-columns: 1fr; } }
+.tdg-op-engine-campos { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tdg-op-engine-campos label { display: grid; gap: 4px; font-size: .8rem; font-weight: 700; color: var(--tdg-muted); }
+.tdg-op-engine-campos input, .tdg-op-engine-campos select { font: inherit; }
+.tdg-op-engine-nota { color: var(--tdg-muted); font-size: .78rem; margin: 12px 0 0; }
+.tdg-op-engine-somente-leitura { align-items: center; color: var(--tdg-muted); display: inline-flex; font-size: .8rem; font-weight: 700; gap: 6px; }
+.tdg-op-engine-resultado { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+@media (max-width: 620px) { .tdg-op-engine-resultado, .tdg-op-engine-campos { grid-template-columns: 1fr; } }
+.tdg-op-engine-bloco { background: var(--tdg-soft, #eef6f1); border-radius: 12px; padding: 14px; }
+.tdg-op-engine-bloco h4 { align-items: center; display: flex; font-size: .82rem; gap: 6px; margin: 0 0 10px; }
+.tdg-op-engine-bloco ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.tdg-op-engine-bloco li { align-items: baseline; display: flex; font-size: .82rem; justify-content: space-between; gap: 10px; }
+.tdg-op-engine-bloco li span { color: var(--tdg-muted); }
+.tdg-op-engine-bloco li.destaque { border-top: 1px solid var(--tdg-line); margin-top: 4px; padding-top: 8px; }
+.tdg-op-engine-bloco li.destaque strong { color: var(--tdg-green); }

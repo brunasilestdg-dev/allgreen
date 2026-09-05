@@ -155,6 +155,7 @@ const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
 const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
 const RoteirizacaoPage = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
+const OperationEnginePage = lazy(() => import("./pages/OperationEnginePage.jsx"));
 const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
 const QualityPage = lazy(() => import("./pages/QualityPage.jsx"));
 const LegalPage = lazy(() => import("./pages/LegalPage.jsx"));
@@ -525,12 +526,20 @@ const MODULE_IMPLEMENTATION = Object.freeze({
   },
   produtos: {
     title: "Produtos logísticos",
-    navLabel: "Produtos",
+    navLabel: "Catálogo",
     route: "/todogreen/produtos",
     area: "produtos",
     status: "functional",
     permission: "product:manage",
     description: "Catálogo de first, middle e last mile com escopo, SLA, unidade de cobrança, premissas e restrições por produto.",
+  },
+  "motor-operacao": {
+    title: "Motor de HC e DRE",
+    navLabel: "Motor HC e DRE",
+    route: "/todogreen/motor-operacao",
+    area: "produtos",
+    status: "functional",
+    description: "Régua editável por admin (impostos, margem, headcount) e simulador de dimensionamento e resultado por tipo de operação.",
   },
   planejamento: {
     title: "Planejamento operacional",
@@ -968,7 +977,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
   { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
-  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos"] },
+  { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "motor-operacao"] },
   { id: "documentos", label: "Documentos", route: "/todogreen/documentos", pages: ["documentos"] },
   // A matriz RASCI é artefato de governança: mora só aqui, não repetida em cada
   // área nem no menu de Compliance (pedido da titular).
@@ -3287,6 +3296,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </Suspense>
       )}
       {page === "produtos" && <Suspense fallback={<section className="tdg-panel">Carregando produtos...</section>}><EnterpriseAreaPage area="products" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
+      {page === "motor-operacao" && <Suspense fallback={<section className="tdg-panel">Carregando o motor de HC e DRE...</section>}><OperationEnginePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "planejamento" && <Suspense fallback={<section className="tdg-panel">Carregando planejamento...</section>}><EnterpriseAreaPage area="planning" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
       {/* O simulador de aceite tem tela própria de novo: ele nasceu em
           Financeiro → Custos, foi parar no rodapé do Planejamento e o menu
