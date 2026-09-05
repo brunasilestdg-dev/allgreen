@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   alertsForArea,
+  blocosDaHome,
+  moverBloco,
   normalizeHomePreferences,
   tasksForCollaborator,
 } from "./erpHomeDomain.js";
@@ -21,8 +23,37 @@ describe("erpHomeDomain", () => {
       areaId: "finance",
       functionLabel: "Controladoria",
       widgetIds: ["metrics"],
+      widgetOrder: ["metrics", "painel", "queue", "shortcuts", "portais"],
       shortcutIds: ["billing"],
     });
+  });
+
+  it("respeita a ordem salva dos blocos e acrescenta bloco novo no fim", () => {
+    const perfil = normalizeHomePreferences("admin", {
+      widgetOrder: ["portais", "metrics"],
+    });
+    // A ordem salva vem primeiro; os blocos que faltavam entram na ordem padrão.
+    expect(perfil.widgetOrder).toEqual(["portais", "metrics", "painel", "queue", "shortcuts"]);
+  });
+
+  it("monta a home só com os blocos ligados, na ordem escolhida", () => {
+    const perfil = normalizeHomePreferences("admin", {
+      widgetIds: ["queue", "metrics"],
+      widgetOrder: ["portais", "queue", "metrics", "painel", "shortcuts"],
+    });
+    // Só os ligados (metrics, queue), na ordem salva (queue antes de metrics).
+    expect(blocosDaHome(perfil)).toEqual(["queue", "metrics"]);
+  });
+
+  it("move um bloco para cima/baixo sem mutar e sem sair da lista", () => {
+    const ordem = ["metrics", "painel", "queue"];
+    expect(moverBloco(ordem, "painel", "cima")).toEqual(["painel", "metrics", "queue"]);
+    expect(moverBloco(ordem, "painel", "baixo")).toEqual(["metrics", "queue", "painel"]);
+    // Nas bordas, não sai da lista.
+    expect(moverBloco(ordem, "metrics", "cima")).toEqual(ordem);
+    expect(moverBloco(ordem, "queue", "baixo")).toEqual(ordem);
+    // Não mutou o original.
+    expect(ordem).toEqual(["metrics", "painel", "queue"]);
   });
 
   it("mostra somente tarefas abertas atribuídas ao colaborador", () => {

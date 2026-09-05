@@ -1,4 +1,6 @@
-.tdg-erp-home { display: grid; gap: 16px; }
+/* #118: Visão geral com respiro — mais ar entre os blocos e cartões macios,
+   no espírito leve da tela de acesso. */
+.tdg-erp-home { display: grid; gap: 18px; }
 .tdg-home-welcome {
   align-items: center;
   /* Mesmo verde-petróleo da tela de acesso (a titular achou o visual do login
@@ -22,7 +24,7 @@
 .tdg-home-identity { align-items: flex-end; display: grid; flex: 0 0 auto; gap: 8px; justify-items: end; }
 .tdg-home-identity > span { color: rgba(255,255,255,.72); font-size: .76rem; font-weight: 750; }
 .tdg-home-identity button { align-items: center; background: var(--tdg-card); border: 0; border-radius: 8px; color: var(--tdg-green); cursor: pointer; display: inline-flex; font-weight: 800; gap: 7px; min-height: 38px; padding: 8px 11px; }
-.tdg-home-metrics { display: grid; gap: 1px; grid-template-columns: repeat(4, minmax(0,1fr)); overflow: hidden; border: 1px solid var(--tdg-line); border-radius: 10px; background: var(--tdg-line); }
+.tdg-home-metrics { display: grid; gap: 1px; grid-template-columns: repeat(4, minmax(0,1fr)); overflow: hidden; border: 1px solid var(--tdg-line); border-radius: 13px; background: var(--tdg-line); box-shadow: 0 1px 3px rgba(10, 40, 30, .04); }
 .tdg-home-metrics article,
 .tdg-home-metrics .tdg-home-metric-link { background: var(--tdg-card); display: grid; gap: 4px; min-width: 0; padding: 16px; }
 /* Indicador clicável: mesmo cartão, com pista de que abre a tela do assunto. */
@@ -34,7 +36,7 @@
 .tdg-home-metrics strong { font-size: clamp(1.1rem, 2vw, 1.45rem); letter-spacing: -.025em; overflow-wrap: anywhere; }
 .tdg-home-metrics small { color: var(--tdg-muted); font-size: .71rem; line-height: 1.35; }
 .tdg-home-grid { align-items: start; display: grid; gap: 14px; grid-template-columns: minmax(0,1.35fr) minmax(280px,.65fr); }
-.tdg-home-section { background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 10px; padding: 17px; }
+.tdg-home-section { background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 13px; padding: 18px; box-shadow: 0 1px 3px rgba(10, 40, 30, .04); }
 .tdg-home-section > header { align-items: end; border-bottom: 1px solid var(--tdg-line); display: flex; gap: 16px; justify-content: space-between; margin-bottom: 8px; padding-bottom: 12px; }
 .tdg-home-section > header span { color: var(--tdg-green); font-size: .66rem; font-weight: 850; letter-spacing: .1em; }
 .tdg-home-section h3 { font-size: 1rem; margin: 3px 0 0; }
@@ -77,6 +79,17 @@
 .tdg-home-check { align-items: center; display: flex !important; gap: 8px; }
 .tdg-home-check input { min-height: auto; width: auto; }
 .tdg-home-config-shortcuts { display: grid; gap: 8px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+
+/* #118: lista de blocos montável — ligar/desligar e reordenar com setas. */
+.tdg-home-config-dica { color: var(--tdg-muted); font-size: .74rem; }
+.tdg-home-config-blocos { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tdg-home-config-blocos > li { align-items: center; background: var(--tdg-soft); border: 1px solid var(--tdg-line); border-radius: 8px; display: flex; gap: 8px; justify-content: space-between; padding: 8px 10px; }
+.tdg-home-config-blocos > li.ligado { border-color: #bad5ca; background: #f4faf7; }
+.tdg-home-config-blocos .tdg-home-check { flex: 1; }
+.tdg-home-config-setas { display: inline-flex; gap: 4px; }
+.tdg-home-config-setas button { align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 7px; color: var(--tdg-green); cursor: pointer; display: inline-flex; padding: 5px; }
+.tdg-home-config-setas button:disabled { color: var(--tdg-muted); cursor: default; opacity: .5; }
+.tdg-home-config-setas button:not(:disabled):hover { background: var(--tdg-soft); }
 .tdg-home-config footer { align-items: center; border-top: 1px solid var(--tdg-line); display: flex; gap: 9px; justify-content: flex-end; margin-top: auto; padding-top: 16px; }
 .tdg-home-config footer > button:not(.tdg-action) { background: transparent; border: 1px solid var(--tdg-line); border-radius: 8px; cursor: pointer; min-height: 40px; padding: 8px 13px; }
 @media (max-width: 900px) { .tdg-home-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .tdg-home-grid { grid-template-columns: 1fr; } }

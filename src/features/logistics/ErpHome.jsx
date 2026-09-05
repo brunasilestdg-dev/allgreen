@@ -8,10 +8,13 @@ import {
   ERP_HOME_WIDGETS,
   ERP_SHORTCUTS,
   alertsForArea,
+  blocosDaHome,
   homeArea,
+  moverBloco,
   normalizeHomePreferences,
   tasksForCollaborator,
 } from "./erpHomeDomain.js";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import "./ErpHome.css";
 import { comRotulo } from "./rotulosDomain.js";
 import WidgetChart from "./pages/DashboardCharts.jsx";
@@ -160,12 +163,72 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     greenScore: "/todogreen/central-esg",
   };
 
-  const visible = (id) => profile.widgetIds.includes(id);
   const shortcuts = profile.shortcutIds.map((id) => ERP_SHORTCUTS.find((item) => item.id === id)).filter(Boolean);
   const save = () => {
     const normalized = normalizeHomePreferences(role, draft);
     onSave?.(normalized);
     setEditing(false);
+  };
+
+  // Cada bloco da Visão geral desenhado sob demanda, para a home ser montada na
+  // ordem e com os blocos que a pessoa escolheu (#118). O painel visual só
+  // aparece com dado operacional (cada gráfico já trata o vazio sozinho).
+  const renderBloco = (id) => {
+    if (id === "metrics") {
+      return <div className="tdg-home-metrics" aria-label={`Indicadores de ${area.label}`} key="metrics">
+        {area.metrics.map((mid) => {
+          const metric = metrics[mid];
+          if (!metric) return null;
+          const rota = rotaDoIndicador[mid];
+          const conteudo = <><span>{metric[0]}</span><strong>{metric[1]}</strong><small>{metric[2]}</small></>;
+          return rota
+            ? <button type="button" className="tdg-home-metric-link" onClick={() => onNavigate?.(rota)} key={mid} title={`Abrir ${metric[0]}`}>{conteudo}</button>
+            : <article key={mid}>{conteudo}</article>;
+        })}
+      </div>;
+    }
+    if (id === "painel") {
+      if (!hasOperationalData) return null;
+      return <section className="tdg-home-section tdg-home-painel-sec" key="painel">
+        <header><div><span>PANORAMA · {area.label.toUpperCase()}</span><h3>Painel visual da área</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/dashboards")}>Painéis completos<ArrowRight size={14} /></button></header>
+        <div className="tdg-home-painel">
+          {painelDaArea(area.id).map((g) => (
+            <article className="tdg-home-painel-card" key={g.metric}>
+              <div className="tdg-home-painel-cab"><strong>{g.titulo}</strong><small>{g.subtitulo}</small></div>
+              <WidgetChart widget={{ metric: g.metric, type: g.type }} data={data} />
+            </article>
+          ))}
+        </div>
+      </section>;
+    }
+    if (id === "queue") {
+      return <div className="tdg-home-grid" key="queue">
+        <section className="tdg-home-section tdg-home-queue">
+          <header><div><span>TRABALHO</span><h3>Minha fila</h3></div><small>{queue.length} item(ns)</small></header>
+          {queue.length ? queue.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>
+            <span className={item.tone === "risk" ? "risk" : ""}>{item.tone === "risk" ? <AlertTriangle size={17} /> : <ClipboardCheck size={17} />}</span>
+            <span><strong>{item.title}</strong><small>{item.detail}</small></span><b>{item.action}<ArrowRight size={14} /></b>
+          </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>Nenhuma pendência atribuída</strong><small>Itens da sua área aparecem aqui quando exigem ação.</small></span></div>}
+        </section>
+      </div>;
+    }
+    if (id === "shortcuts") {
+      return <section className="tdg-home-section tdg-home-shortcuts" key="shortcuts">
+        <header><div><span>ACESSO RÁPIDO</span><h3>Ferramentas da minha rotina</h3></div><small>{shortcuts.length} atalho(s)</small></header>
+        <div>{shortcuts.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>{item.label}<ArrowRight size={14} /></button>)}</div>
+      </section>;
+    }
+    if (id === "portais") {
+      return <section className="tdg-home-section tdg-home-portais" key="portais">
+        <header><div><span>PORTAIS</span><h3>Portal TMS</h3></div></header>
+        <a className="tdg-home-portal-link" href="/portal-tms">
+          <span className="tdg-home-portal-icon"><Truck size={18} /></span>
+          <span><strong>Abrir Portal TMS</strong><small>Controle, roteirização, despacho, fiscal e auditoria de transporte</small></span>
+          <ArrowRight size={16} />
+        </a>
+      </section>;
+    }
+    return null;
   };
 
   return <section className="tdg-erp-home" aria-labelledby="tdg-home-title">
@@ -184,61 +247,9 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
 
     {!hasOperationalData && <div className="tdg-home-empty tdg-home-empty-operational" role="status" aria-live="polite"><CheckCircle2 size={20} /><span><strong>Sem dados operacionais</strong><small>Cadastre clientes, oportunidades ou simulações para alimentar o painel.</small></span></div>}
 
-    {visible("metrics") && <div className="tdg-home-metrics" aria-label={`Indicadores de ${area.label}`}>
-      {area.metrics.map((id) => {
-        const metric = metrics[id];
-        if (!metric) return null;
-        const rota = rotaDoIndicador[id];
-        const conteudo = <><span>{metric[0]}</span><strong>{metric[1]}</strong><small>{metric[2]}</small></>;
-        return rota
-          ? <button type="button" className="tdg-home-metric-link" onClick={() => onNavigate?.(rota)} key={id} title={`Abrir ${metric[0]}`}>{conteudo}</button>
-          : <article key={id}>{conteudo}</article>;
-      })}
-    </div>}
-
-    {/* Painel visual: gráficos ao vivo dos mesmos dados. É o "dashboard" e o
-        dinamismo que faltavam — a home tinha só números soltos. Só aparece com
-        dado operacional; cada gráfico já mostra "sem dados" sozinho se faltar. */}
-    {hasOperationalData && <section className="tdg-home-section tdg-home-painel-sec">
-      <header><div><span>PANORAMA · {area.label.toUpperCase()}</span><h3>Painel visual da área</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/dashboards")}>Painéis completos<ArrowRight size={14} /></button></header>
-      <div className="tdg-home-painel">
-        {painelDaArea(area.id).map((g) => (
-          <article className="tdg-home-painel-card" key={g.metric}>
-            <div className="tdg-home-painel-cab"><strong>{g.titulo}</strong><small>{g.subtitulo}</small></div>
-            <WidgetChart widget={{ metric: g.metric, type: g.type }} data={data} />
-          </article>
-        ))}
-      </div>
-    </section>}
-
-    <div className="tdg-home-grid">
-      {visible("queue") && <section className="tdg-home-section tdg-home-queue">
-        <header><div><span>TRABALHO</span><h3>Minha fila</h3></div><small>{queue.length} item(ns)</small></header>
-        {queue.length ? queue.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>
-          <span className={item.tone === "risk" ? "risk" : ""}>{item.tone === "risk" ? <AlertTriangle size={17} /> : <ClipboardCheck size={17} />}</span>
-          <span><strong>{item.title}</strong><small>{item.detail}</small></span><b>{item.action}<ArrowRight size={14} /></b>
-        </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>Nenhuma pendência atribuída</strong><small>Itens da sua área aparecem aqui quando exigem ação.</small></span></div>}
-      </section>}
-
-    </div>
-
-    {visible("shortcuts") && <section className="tdg-home-section tdg-home-shortcuts">
-      <header><div><span>ACESSO RÁPIDO</span><h3>Ferramentas da minha rotina</h3></div><small>{shortcuts.length} atalho(s)</small></header>
-      <div>{shortcuts.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>{item.label}<ArrowRight size={14} /></button>)}</div>
-    </section>}
-
-    {/* O Portal TMS (/portal-tms) é um portal próprio, fora das rotas
-        /todogreen — antes só dava para chegar nele digitando a URL. Como é
-        outro topo de rota, o acesso é por link real, não pela navegação
-        interna da vertical. */}
-    <section className="tdg-home-section tdg-home-portais">
-      <header><div><span>PORTAIS</span><h3>Portal TMS</h3></div></header>
-      <a className="tdg-home-portal-link" href="/portal-tms">
-        <span className="tdg-home-portal-icon"><Truck size={18} /></span>
-        <span><strong>Abrir Portal TMS</strong><small>Controle, roteirização, despacho, fiscal e auditoria de transporte</small></span>
-        <ArrowRight size={16} />
-      </a>
-    </section>
+    {/* A Visão geral é montada na ordem e com os blocos que a pessoa escolheu
+        em "Configurar meu início". Bloco desligado nem entra na lista. */}
+    {blocosDaHome(profile).map((id) => renderBloco(id))}
 
     {editing && <div className="tdg-home-config-backdrop" role="presentation">
       <section className="tdg-home-config" role="dialog" aria-modal="true" aria-labelledby="tdg-home-config-title">
@@ -248,7 +259,29 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
           setDraft((current) => ({ ...current, areaId: nextArea.id, functionLabel: nextArea.functionLabel, shortcutIds: nextArea.shortcuts }));
         }}>{ERP_HOME_AREAS.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label>
         <label><span>Minha função</span><input value={draft.functionLabel} onChange={(event) => setDraft((current) => ({ ...current, functionLabel: event.target.value }))} /></label>
-        <fieldset><legend>O que aparece no início</legend>{ERP_HOME_WIDGETS.map((item) => <label className="tdg-home-check" key={item.id}><input type="checkbox" checked={draft.widgetIds.includes(item.id)} onChange={(event) => setDraft((current) => ({ ...current, widgetIds: event.target.checked ? [...current.widgetIds, item.id] : current.widgetIds.filter((id) => id !== item.id) }))} /><span>{item.label}</span></label>)}</fieldset>
+        {/* Montar a home: cada bloco liga/desliga e sobe/desce. A lista é
+            desenhada na ORDEM salva (não na ordem fixa do catálogo), para a
+            pessoa ver a home como ela vai ficar. */}
+        <fieldset><legend>Blocos da minha Visão geral</legend>
+          <small className="tdg-home-config-dica">Ligue os blocos que quer e use as setas para pôr na ordem que preferir.</small>
+          <ul className="tdg-home-config-blocos">
+            {(draft.widgetOrder || ERP_HOME_WIDGETS.map((w) => w.id)).map((id, indice, lista) => {
+              const bloco = ERP_HOME_WIDGETS.find((w) => w.id === id);
+              if (!bloco) return null;
+              const ligado = draft.widgetIds.includes(id);
+              return <li key={id} className={ligado ? "ligado" : ""}>
+                <label className="tdg-home-check">
+                  <input type="checkbox" checked={ligado} onChange={(event) => setDraft((current) => ({ ...current, widgetIds: event.target.checked ? [...current.widgetIds, id] : current.widgetIds.filter((w) => w !== id) }))} />
+                  <span>{bloco.label}</span>
+                </label>
+                <span className="tdg-home-config-setas">
+                  <button type="button" aria-label={`Subir ${bloco.label}`} disabled={indice === 0} onClick={() => setDraft((current) => ({ ...current, widgetOrder: moverBloco(current.widgetOrder, id, "cima") }))}><ChevronUp size={15} /></button>
+                  <button type="button" aria-label={`Descer ${bloco.label}`} disabled={indice === lista.length - 1} onClick={() => setDraft((current) => ({ ...current, widgetOrder: moverBloco(current.widgetOrder, id, "baixo") }))}><ChevronDown size={15} /></button>
+                </span>
+              </li>;
+            })}
+          </ul>
+        </fieldset>
         <fieldset><legend>Meus atalhos</legend><div className="tdg-home-config-shortcuts">{ERP_SHORTCUTS.map((item) => <label className="tdg-home-check" key={item.id}><input type="checkbox" checked={draft.shortcutIds.includes(item.id)} onChange={(event) => setDraft((current) => ({ ...current, shortcutIds: event.target.checked ? [...current.shortcutIds, item.id] : current.shortcutIds.filter((id) => id !== item.id) }))} /><span>{item.label}</span></label>)}</div></fieldset>
         <footer><button type="button" onClick={() => setEditing(false)}>Cancelar</button><button className="tdg-action" type="button" onClick={save}>Salvar meu início</button></footer>
       </section>

@@ -1,8 +1,15 @@
+// Blocos que montam a Visão geral. A pessoa liga/desliga cada um e escolhe a
+// ORDEM (#118). Todos os blocos da home entram aqui — inclusive o painel visual
+// e os portais, que antes eram fixos.
 export const ERP_HOME_WIDGETS = Object.freeze([
   { id: "metrics", label: "Indicadores da minha área" },
+  { id: "painel", label: "Painel visual (gráficos)" },
   { id: "queue", label: "Minha fila e pendências" },
   { id: "shortcuts", label: "Atalhos de trabalho" },
+  { id: "portais", label: "Portais (TMS)" },
 ]);
+
+const IDS_DOS_BLOCOS = ERP_HOME_WIDGETS.map((item) => item.id);
 
 export const ERP_SHORTCUTS = Object.freeze([
   { id: "clients", label: "Clientes", route: "/todogreen/clientes", area: "commercial" },
@@ -170,14 +177,41 @@ export const homeArea = (id) => ERP_HOME_AREAS.find((item) => item.id === id) ||
 
 export const normalizeHomePreferences = (role, saved = {}) => {
   const area = homeArea(saved.areaId || ROLE_AREA[role] || "commercial");
-  const widgetIds = uniqueKnown(saved.widgetIds, new Set(ERP_HOME_WIDGETS.map((item) => item.id)));
+  const conhecidos = new Set(IDS_DOS_BLOCOS);
+  const widgetIds = uniqueKnown(saved.widgetIds, conhecidos);
   const shortcutIds = uniqueKnown(saved.shortcutIds, new Set(ERP_SHORTCUTS.map((item) => item.id)));
+  // A ordem salva vem primeiro; qualquer bloco novo (que a pessoa nunca viu)
+  // entra no fim, na ordem padrão — assim uma home antiga ganha o bloco novo
+  // sem sumir com os que já tinha.
+  const ordemSalva = uniqueKnown(saved.widgetOrder, conhecidos);
+  const widgetOrder = [...ordemSalva, ...IDS_DOS_BLOCOS.filter((id) => !ordemSalva.includes(id))];
   return {
     areaId: area.id,
     functionLabel: String(saved.functionLabel || area.functionLabel).trim().slice(0, 80),
-    widgetIds: widgetIds.length ? widgetIds : ERP_HOME_WIDGETS.map((item) => item.id),
+    widgetIds: widgetIds.length ? widgetIds : [...IDS_DOS_BLOCOS],
+    widgetOrder,
     shortcutIds: shortcutIds.length ? shortcutIds : area.shortcuts,
   };
+};
+
+// A lista de blocos a renderizar, na ordem escolhida e só os ligados. É a
+// fonte única para a tela: mesma ordem para desenhar e para reconfigurar.
+export const blocosDaHome = (profile = {}) => {
+  const ligados = new Set(profile.widgetIds || []);
+  const ordem = Array.isArray(profile.widgetOrder) && profile.widgetOrder.length ? profile.widgetOrder : IDS_DOS_BLOCOS;
+  return ordem.filter((id) => ligados.has(id) && IDS_DOS_BLOCOS.includes(id));
+};
+
+// Move um bloco uma posição para cima/baixo na ordem, sem mutar. Base dos
+// botões de reordenar no configurador.
+export const moverBloco = (ordem = [], id, direcao) => {
+  const lista = [...(Array.isArray(ordem) ? ordem : [])];
+  const de = lista.indexOf(id);
+  if (de < 0) return lista;
+  const para = direcao === "cima" ? de - 1 : de + 1;
+  if (para < 0 || para >= lista.length) return lista;
+  [lista[de], lista[para]] = [lista[para], lista[de]];
+  return lista;
 };
 
 export const tasksForCollaborator = (tasks = [], user = {}) => {
