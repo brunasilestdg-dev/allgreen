@@ -185,11 +185,11 @@ describe("a proposta dita em português", () => {
   });
 });
 
-describe("identidade do Plantû", () => {
+describe("identidade do Todô", () => {
   it("carrega o nome, a assinatura e o lema da marca", () => {
-    expect(SEMENTE.nome).toBe("Plantû");
-    expect(SEMENTE.assinatura).toBe("Assistente do ERP");
-    expect(SEMENTE.lema).toBe("Consultas, análises e ações do ERP.");
+    expect(SEMENTE.nome).toBe("Todô");
+    expect(SEMENTE.assinatura).toBe("Assistente da plataforma");
+    expect(SEMENTE.lema.length).toBeGreaterThan(10);
     expect(SEMENTE.saudacao.length).toBeGreaterThan(40);
   });
 

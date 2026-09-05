@@ -1112,9 +1112,21 @@ export async function handleTodoGreenSemente(request, env, access, user) {
   if (decisao.consultar) {
     const dados = await executarFerramenta(env, { access, pedido: decisao.consultar, linhas });
     consultou = { ferramenta: dados.ferramenta, pedido: decisao.consultar };
+    // Segunda chamada ENXUTA: aqui o trabalho é redigir a resposta a partir do
+    // resultado da ferramenta, não decidir de novo. Reenviar o cabeçalho inteiro
+    // (dossiê + índice de 200 contas) só engordava o prompt e fazia a resposta
+    // "demorar séculos". A persona vem do system; o resultado do banco é o dado
+    // que importa. Mantemos só o essencial de contexto.
+    const contextoLeve = [
+      `Pessoa: ${clean(user?.name, 120) || email || "usuária da To Do Green"}.`,
+      `Tela: ${clean(body.tela, 60) || "não informada"}.`,
+      emFoco ? `Conta aberta agora: ${emFoco.name}.` : "",
+      historico.length ? `\nConversa até aqui:\n${historico.slice(-4).join("\n")}` : "",
+      `\nPERGUNTA: ${pergunta}`,
+    ].filter(Boolean).join("\n");
     const segunda = await runWithFallback(envIa, {
       prompt: [
-        cabecalho,
+        contextoLeve,
         `\nVocê pediu a ferramenta "${dados.ferramenta}". Resultado real, vindo do banco:`,
         JSON.stringify(dados, null, 1),
         "\nAgora responda. Não peça outra ferramenta: responda com o que tem e diga o que falta, se faltar.",

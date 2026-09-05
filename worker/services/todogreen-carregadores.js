@@ -23,35 +23,47 @@ const OVERPASS_ENDPOINTS = [
 // fetch — senão o cliente mata uma resposta lenta porém válida antes de a
 // consulta terminar (o bug antigo: fetch 15s < timeout:20s). Agora
 // timeout:18s no servidor e 24s no cliente, com folga.
-const OVERPASS_QUERY_TIMEOUT = 18;
-const FETCH_ABORT_MS = 24_000;
+// Os espelhos públicos do Overpass têm disponibilidade irregular: um pode
+// pendurar por minutos enquanto outro responde em segundos. O bug antigo era
+// tentá-los EM SÉRIE com um abort longo (24s cada) — se o primeiro pendurava, o
+// Worker estourava o próprio orçamento de tempo antes de chegar num espelho
+// bom, e a tela ficava sem carregadores. Agora a consulta vai para TODOS ao
+// mesmo tempo e o primeiro que responder válido vence; timeout curto por
+// espelho, e o do servidor Overpass menor que o abort do cliente.
+const OVERPASS_QUERY_TIMEOUT = 8;
+const FETCH_ABORT_MS = 10_000;
 const finite = (valor, fallback = 0) => (Number.isFinite(Number(valor)) ? Number(valor) : fallback);
+
+async function consultarEspelho(endpoint, consulta) {
+  const controlador = new AbortController();
+  const timer = setTimeout(() => controlador.abort("timeout"), FETCH_ABORT_MS);
+  try {
+    const resposta = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+      body: `data=${encodeURIComponent(consulta)}`,
+      signal: controlador.signal,
+    });
+    if (!resposta.ok) throw new Error(`Overpass respondeu HTTP ${resposta.status}`);
+    const dados = await resposta.json();
+    return Array.isArray(dados?.elements) ? dados.elements : [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function buscarNoOverpass(latitude, longitude, raioMetros, limite) {
   // `nwr` pega nós e polígonos (estações mapeadas como área); `out center` dá
   // um ponto para cada; `qt` ordena por proximidade e acelera a resposta.
   const consulta = `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT}];nwr["amenity"="charging_station"](around:${raioMetros},${latitude},${longitude});out center ${limite} qt;`;
-  let ultimoErro = null;
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    const controlador = new AbortController();
-    const timer = setTimeout(() => controlador.abort("timeout"), FETCH_ABORT_MS);
-    try {
-      const resposta = await fetch(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
-        body: `data=${encodeURIComponent(consulta)}`,
-        signal: controlador.signal,
-      });
-      if (!resposta.ok) throw new Error(`Overpass respondeu HTTP ${resposta.status}`);
-      const dados = await resposta.json();
-      return Array.isArray(dados?.elements) ? dados.elements : [];
-    } catch (erro) {
-      ultimoErro = erro;
-    } finally {
-      clearTimeout(timer);
-    }
+  try {
+    // Corrida: o primeiro espelho a responder com sucesso vence; os demais são
+    // abortados pelo próprio timeout. Só falha se TODOS falharem.
+    return await Promise.any(OVERPASS_ENDPOINTS.map((endpoint) => consultarEspelho(endpoint, consulta)));
+  } catch (erro) {
+    const causa = erro?.errors?.[erro.errors.length - 1] || erro;
+    throw causa instanceof Error ? causa : new Error("Overpass indisponível.");
   }
-  throw ultimoErro || new Error("Overpass indisponível.");
 }
 
 export async function consultarCarregadores(env, entrada = {}) {
