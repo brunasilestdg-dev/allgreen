@@ -204,20 +204,37 @@ export default function PlannerPage({
   useEffect(() => { if (planoAtivoId) carregarTarefas(planoAtivoId); }, [planoAtivoId]);
   useEffect(() => { if (vendoMinhas) carregarMinhas(); }, [vendoMinhas]);
   useEffect(() => {
-    if (!espacoId) return undefined;
     let ativo = true;
-    fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
-      .then((resposta) => (resposta.ok ? resposta.json() : null))
-      .then((corpo) => {
-        if (!ativo || !corpo) return;
-        const candidatos = [corpo.owner, ...(corpo.members || []).filter((m) => m.status === "ativo")];
-        const unicos = [];
-        for (const pessoa of candidatos) {
-          if (pessoa?.id && pessoa?.name && !unicos.some((p) => p.id === pessoa.id)) unicos.push(pessoa);
+    // Duas portas de "gente do espaço", exatamente as que o servidor aceita
+    // como responsável/membro: colaboradores do app (memberships, via
+    // /api/collab) E vínculos diretos da vertical (tenant_users, via
+    // /planner/pessoas). Antes só a primeira era sugerida — quem entrou pela
+    // vertical existia e era aceito na gravação, mas nunca aparecia ao digitar
+    // o nome. Unimos as duas por id, sem duplicar.
+    const juntar = (listas) => {
+      const unicos = [];
+      const vistos = new Set();
+      for (const pessoa of listas.flat()) {
+        if (pessoa?.id && pessoa?.name && !vistos.has(pessoa.id)) {
+          vistos.add(pessoa.id);
+          unicos.push({ id: pessoa.id, name: pessoa.name, email: pessoa.email || "" });
         }
-        setPessoas(unicos);
-      })
-      .catch(() => {});
+      }
+      return unicos;
+    };
+    const daVertical = request("/pessoas", authHeaders)
+      .then((corpo) => corpo?.registros || [])
+      .catch(() => []);
+    const doCollab = espacoId
+      ? fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
+        .then((resposta) => (resposta.ok ? resposta.json() : null))
+        .then((corpo) => (corpo ? [corpo.owner, ...(corpo.members || []).filter((m) => m.status === "ativo")] : []))
+        .catch(() => [])
+      : Promise.resolve([]);
+    Promise.all([daVertical, doCollab]).then(([vertical, collab]) => {
+      if (!ativo) return;
+      setPessoas(juntar([vertical, collab]));
+    });
     return () => { ativo = false; };
   }, [espacoId, authHeaders]);
 

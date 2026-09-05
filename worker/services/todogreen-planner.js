@@ -433,6 +433,45 @@ const arquivarTarefa = async (env, access, planId, taskId) => {
 // Roteamento
 // ---------------------------------------------------------------------------
 
+// As pessoas que a tela pode sugerir para responsável de tarefa e para
+// compartilhar plano são as MESMAS duas portas que `responsavelValidado`
+// aceita: membro do espaço do app (memberships, status 'ativo') e vínculo
+// direto na vertical (tenant_users, status 'active'). O /api/collab só
+// enxerga a primeira porta — quem entrou pela vertical (ex.: um colaborador
+// cadastrado só no To Do Green) existia no banco, era aceito na gravação,
+// mas nunca aparecia na sugestão. Aqui unimos as duas, sempre dentro do
+// espaço (owner_id/workspace_owner_id), com nome e e-mail de `users`.
+const pessoasDoEspaco = async (env, access) => {
+  const dono = await env.DB.prepare(
+    "SELECT id, name, email FROM users WHERE id = ?",
+  ).bind(access.ownerId).first();
+
+  const membros = await env.DB.prepare(
+    `SELECT users.id, users.name, users.email
+       FROM memberships
+       JOIN users ON users.id = memberships.member_id
+      WHERE memberships.owner_id = ? AND memberships.status = 'ativo'`,
+  ).bind(access.ownerId).all();
+
+  const vinculos = await env.DB.prepare(
+    `SELECT users.id, users.name, users.email
+       FROM tenant_users
+       JOIN users ON users.id = tenant_users.user_id
+      WHERE tenant_users.tenant_id = ? AND tenant_users.workspace_owner_id = ?
+        AND tenant_users.status = 'active'`,
+  ).bind(TENANT_ID, access.ownerId).all();
+
+  const unicos = [];
+  const vistos = new Set();
+  for (const pessoa of [dono, ...(membros.results || []), ...(vinculos.results || [])]) {
+    if (pessoa?.id && pessoa?.name && !vistos.has(pessoa.id)) {
+      vistos.add(pessoa.id);
+      unicos.push({ id: pessoa.id, name: pessoa.name, email: pessoa.email || "" });
+    }
+  }
+  return json({ registros: unicos });
+};
+
 export async function handleTodoGreenPlanner(request, env, access) {
   const url = new URL(request.url);
   const path = url.pathname.replace("/api/todogreen/planner", "");
@@ -448,6 +487,7 @@ export async function handleTodoGreenPlanner(request, env, access) {
   const corpo = async () => request.json().catch(() => ({}));
 
   if (path === "/minhas-tarefas" && method === "GET") return minhasTarefas(env, access, url);
+  if (path === "/pessoas" && method === "GET") return pessoasDoEspaco(env, access);
 
   // Planos: /planos e /planos/:id
   const planoMatch = path.match(/^\/planos(?:\/([^/]+))?$/);
