@@ -57,7 +57,7 @@ describe("página de clientes", () => {
     expect(screen.getByRole("button", { name: "Oportunidades" })).toHaveClass("active");
     expect(screen.getByText("White Space")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Atividade" }));
+    fireEvent.click(screen.getByRole("button", { name: "Conversas realizadas" }));
     expect(await screen.findByText("Nenhuma mensagem ou reunião registrada")).toBeInTheDocument();
   });
 
@@ -166,7 +166,7 @@ describe("página de clientes", () => {
       comments={[{ id: "c1", clientId: "client-1", opportunityId: "", comentario: "Conta estratégica para o Q4.", autorEmail: "bruna@todogreen.com", criadoEm: "2026-08-29T09:00:00Z" }]}
     />);
     fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Atividade" }));
+    fireEvent.click(screen.getByRole("button", { name: "Conversas realizadas" }));
 
     expect(screen.getByText("Conta estratégica para o Q4.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Escreva um comentário desta conta"), { target: { value: "Piloto em SP fechado" } });
@@ -193,7 +193,7 @@ describe("página de clientes", () => {
       ]}
     />);
     fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Atividade" }));
+    fireEvent.click(screen.getByRole("button", { name: "Conversas realizadas" }));
 
     // Na conta só entra o que é da conta: a interação da oportunidade fica nela.
     expect(screen.getByText("Kick-off da malha")).toBeInTheDocument();

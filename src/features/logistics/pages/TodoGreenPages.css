@@ -825,6 +825,7 @@
 .tdg-account-tab-opportunities .tdg-account-opportunities,
 .tdg-account-tab-strategy .tdg-account-strategy,
 .tdg-account-tab-activity .tdg-account-activity,
+.tdg-account-tab-next .tdg-account-next,
 .tdg-account-tab-intelligence .tdg-account-intelligence { display: grid !important; }
 .tdg-account-tab-relationship,
 .tdg-account-tab-comercial,
@@ -3752,3 +3753,37 @@
 .tdg-legal-card footer { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
 .tdg-legal-prazo { color: var(--tdg-muted); font-size: .74rem; }
 .tdg-legal-situacao select { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; font-size: .78rem; padding: 5px 8px; }
+
+
+/* CRM progressivo: funciona da primeira pista ao histórico completo. */
+.tdg-progressive-form > p { margin:0; color:var(--tdg-muted); line-height:1.55; }
+.tdg-progressive-form details { border:1px solid var(--tdg-line); border-radius:12px; padding:12px; background:var(--tdg-card); }
+.tdg-progressive-form summary { cursor:pointer; font-weight:800; color:var(--tdg-green); }
+.tdg-progressive-form details[open] summary { margin-bottom:12px; }
+.tdg-progressive-form .tdg-form-wide { grid-column:1/-1; }
+.tdg-account-work { gap:14px; }
+.tdg-account-work > header div { display:grid; gap:3px; }
+.tdg-account-work-routes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.tdg-account-work-routes button { position:relative; display:grid; gap:6px; min-height:126px; padding:16px; text-align:left; border:1px solid var(--tdg-line); border-radius:14px; background:var(--tdg-card); color:var(--tdg-ink); }
+.tdg-account-work-routes button > svg { position:absolute; right:14px; top:16px; color:var(--tdg-green); }
+.tdg-account-work-routes button span { color:var(--tdg-green); font-weight:800; }
+.tdg-account-work-routes button small,.tdg-account-work-preview > header small { color:var(--tdg-muted); line-height:1.45; }
+.tdg-account-work-routes button:hover { border-color:var(--tdg-green); transform:translateY(-1px); }
+.tdg-account-work-routes button:focus-visible { outline:3px solid var(--tdg-green); outline-offset:3px; }
+.tdg-account-clue { padding:12px 14px; border-left:3px solid var(--tdg-green); background:var(--tdg-soft); border-radius:8px; }
+.tdg-account-clue p { margin:5px 0 0; white-space:pre-wrap; }
+.tdg-account-work-preview { display:grid; gap:8px; }
+.tdg-account-work-preview > header { display:grid; gap:3px; }
+.tdg-account-work-preview > button { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; padding:12px; text-align:left; border:1px solid var(--tdg-line); border-radius:10px; background:var(--tdg-card); color:var(--tdg-ink); }
+.tdg-account-work-preview > button span { display:grid; gap:3px; }
+.tdg-account-work-preview > button small { color:var(--tdg-muted); }
+.tdg-account-work-preview > button b { display:flex; align-items:center; gap:5px; color:var(--tdg-green); white-space:nowrap; }
+.tdg-crm-next > div span { display:block; margin-top:4px; color:var(--tdg-muted); font-size:.78rem; font-weight:500; line-height:1.4; }
+@media(max-width:760px){.tdg-account-work-routes{grid-template-columns:minmax(0,1fr)}.tdg-account-work-routes button{min-height:0}.tdg-account-work-preview>button{align-items:flex-start;flex-direction:column}}
+
+.task-deep-link{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--tdg-line);border-radius:12px;background:var(--tdg-soft)}
+.task-deep-link>span{display:grid;gap:3px}.task-deep-link small{color:var(--tdg-muted)}
+@media(max-width:560px){.task-deep-link{align-items:flex-start;flex-direction:column}}
+
+.tdg-crm-more-actions{position:relative}.tdg-crm-more-actions>summary{list-style:none;cursor:pointer;min-height:40px;padding:9px 12px;border:1px solid var(--tdg-line);border-radius:10px;font-weight:800;background:var(--tdg-card);color:var(--tdg-ink)}
+.tdg-crm-more-actions>summary::-webkit-details-marker{display:none}.tdg-crm-more-actions>summary:focus-visible{outline:3px solid var(--tdg-green);outline-offset:3px}.tdg-crm-more-actions>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding:10px;border:1px solid var(--tdg-line);border-radius:12px;background:var(--tdg-card);box-shadow:var(--tdg-shadow)}

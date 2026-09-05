@@ -118,6 +118,7 @@ export default function Tasks({
   const [taskAiBusy, setTaskAiBusy] = useState(false);
   const [taskAiError, setTaskAiError] = useState("");
   const [search, setSearch] = useState("");
+  const [targetTaskId, setTargetTaskId] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("task") || "");
   const searchTerm = searchSeed || search;
   useEffect(() => {
     if (!searchSeed) return undefined;
@@ -512,6 +513,7 @@ export default function Tasks({
   };
   const items = db.tasks.filter(
     (t) =>
+      (!targetTaskId || t.id === targetTaskId) &&
       (!business || t.businessId === business.id) &&
       `${t.title} ${t.description || ""} ${t.assignee || ""} ${t.project || ""}`
         .toLowerCase()
@@ -1182,6 +1184,7 @@ export default function Tasks({
         setToast={setToast}
         go={go}
       />
+      {targetTaskId && <section className="task-deep-link" role="status"><span><strong>Tarefa vinculada</strong><small>Esta é a mesma tarefa exibida no CRM e no Planner. O status é único.</small></span><Button variant="ghost" onClick={() => { setTargetTaskId(""); if (typeof window !== "undefined") { const url = new URL(window.location.href); url.searchParams.delete("task"); window.history.replaceState({}, "", `${url.pathname}${url.search}`); } }}>Mostrar todas</Button></section>}
       <section className="task-focus-card" aria-label="Foco recomendado">
         <div className="task-focus-head">
           <span>

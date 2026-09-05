@@ -351,6 +351,18 @@ describe("LogisticsVertical", () => {
     expect(screen.queryByText(/demonstração ativo/i)).toBeNull();
   });
 
+  it("mantém o estado vazio quando existem tarefas, mas REGISTROS está vazio", async () => {
+    await renderarAutorizada({
+      db: {
+        ...baseDb,
+        tasks: [{ id: "t1", title: "Organizar campanha", status: "Pendente", assigneeId: "u1" }],
+      },
+    });
+    expect(screen.getByText("Sem dados operacionais")).toBeTruthy();
+    expect(screen.getByText("Cadastre clientes, oportunidades ou simulações para alimentar o painel.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Organizar campanha/ })).toBeTruthy();
+  });
+
   it("leva margem e ocupação críticas para uma ação específica", async () => {
     stubDeRede({
       "/api/todogreen/records": () => jsonOk({

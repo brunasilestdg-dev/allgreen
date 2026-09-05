@@ -38,6 +38,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
   const [draft, setDraft] = useState(profile);
   const area = homeArea(profile.areaId);
   const decision = useMemo(() => buildTodoGreenDecisionCenter({ data, dashboard, tasks }), [data, dashboard, tasks]);
+  const hasOperationalData = decision.hasData;
   const margin = useMemo(() => resumoDeMargem({ cenarios: data.pricingScenarios }), [data.pricingScenarios]);
   const myTasks = useMemo(() => tasksForCollaborator(tasks, user), [tasks, user]);
   const alerts = useMemo(() => alertsForArea(decision.alerts, area.id), [decision.alerts, area.id]);
@@ -119,6 +120,8 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
       </div>
     </header>
 
+    {!hasOperationalData && <div className="tdg-home-empty tdg-home-empty-operational" role="status" aria-live="polite"><CheckCircle2 size={20} /><span><strong>Sem dados operacionais</strong><small>Cadastre clientes, oportunidades ou simulações para alimentar o painel.</small></span></div>}
+
     {visible("metrics") && <div className="tdg-home-metrics" aria-label={`Indicadores de ${area.label}`}>
       {area.metrics.map((id) => {
         const metric = metrics[id];
@@ -132,7 +135,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
         {queue.length ? queue.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>
           <span className={item.tone === "risk" ? "risk" : ""}>{item.tone === "risk" ? <AlertTriangle size={17} /> : <ClipboardCheck size={17} />}</span>
           <span><strong>{item.title}</strong><small>{item.detail}</small></span><b>{item.action}<ArrowRight size={14} /></b>
-        </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>{decision.hasData ? "Nenhuma pendência atribuída" : "Sem dados operacionais"}</strong><small>{decision.hasData ? "Itens da sua área aparecem aqui quando exigem ação." : "Cadastre clientes, oportunidades ou simulações para alimentar o painel."}</small></span></div>}
+        </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>Nenhuma pendência atribuída</strong><small>Itens da sua área aparecem aqui quando exigem ação.</small></span></div>}
       </section>}
 
     </div>
