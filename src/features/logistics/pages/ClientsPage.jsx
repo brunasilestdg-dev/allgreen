@@ -23,6 +23,7 @@ import {
   Mail,
   MessageCircle,
   RefreshCw,
+  Send,
   UserSearch,
   UserPlus,
   Users,
@@ -35,6 +36,7 @@ import ComentariosPanel from "./ComentariosPanel.jsx";
 import InteracoesPanel from "./InteracoesPanel.jsx";
 import SaudeDaContaPanel from "./SaudeDaContaPanel.jsx";
 import AccountWorkOverview from "../AccountWorkOverview.jsx";
+import EnviarApresentacao from "../EnviarApresentacao.jsx";
 import { suggestionContext } from "../accountWorkDomain.js";
 import { interacoesVisiveis } from "../interacoesDomain.js";
 import { ESTAGIOS_OPORTUNIDADE, estagioValido } from "../opportunityIntelligenceDomain.js";
@@ -702,6 +704,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   // revisão velha tomaria 409, perdendo a escolha.
   const [salvandoTemperatura, setSalvandoTemperatura] = useState(null);
   const [completingSuggestion, setCompletingSuggestion] = useState(false);
+  const [apresentacaoAberta, setApresentacaoAberta] = useState(false);
   const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
   const [detailTab, setDetailTab] = useState("summary");
   const [accountInteractions, setAccountInteractions] = useState([]);
@@ -1308,7 +1311,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
             options={[{ value: "", label: "Sem" }, ...TODO_GREEN_ACCOUNT_TEMPERATURES.map((item) => ({ value: item, label: item }))]}
           />
         </div>
-      )}{access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={15} />Editar</button>}{access.podeEditar && onInteraction && <button type="button" className="tdg-action" onClick={() => { setDetailTab("activity"); setInteractionFormRequest((valor) => valor + 1); }}><MessageCircle size={15} />Registrar contato/follow-up</button>}<button type="button" onClick={() => setTaskClientId(selected.id)}><ListPlus size={15} />Adicionar tarefa</button><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Pipeline <ArrowRight size={15} /></button><details className="tdg-crm-more-actions"><summary>Mais ações</summary><div><button type="button" onClick={() => researchSelected("company")} disabled={researching}><Globe2 size={15} />Pesquisar empresa</button><button type="button" onClick={() => researchSelected("contacts")} disabled={researching}><UserSearch size={15} />Atualizar contatos</button><button type="button" onClick={() => setPortalPreviewOpen(true)}><Eye size={15} />Ver como cliente</button>{access.podeGerenciar && <button type="button" className="tdg-danger-action" onClick={() => deleteClient(selected)} disabled={deletingClientId === selected.id}><Trash2 size={15} />{deletingClientId === selected.id ? "Excluindo..." : "Excluir cliente"}</button>}</div></details></div></header>
+      )}{access.podeEditar && <button type="button" onClick={() => setEditingId(selected.id)}><Edit3 size={15} />Editar</button>}{access.podeEditar && onInteraction && <button type="button" className="tdg-action" onClick={() => { setDetailTab("activity"); setInteractionFormRequest((valor) => valor + 1); }}><MessageCircle size={15} />Registrar contato/follow-up</button>}{access.podeEditar && <button type="button" className="tdg-action" onClick={() => setApresentacaoAberta(true)}><Send size={15} />Enviar apresentação</button>}<button type="button" onClick={() => setTaskClientId(selected.id)}><ListPlus size={15} />Adicionar tarefa</button><button type="button" onClick={() => onNavigate?.(`/todogreen/oportunidades?client=${encodeURIComponent(selected.id)}`)}>Pipeline <ArrowRight size={15} /></button><details className="tdg-crm-more-actions"><summary>Mais ações</summary><div><button type="button" onClick={() => researchSelected("company")} disabled={researching}><Globe2 size={15} />Pesquisar empresa</button><button type="button" onClick={() => researchSelected("contacts")} disabled={researching}><UserSearch size={15} />Atualizar contatos</button><button type="button" onClick={() => setPortalPreviewOpen(true)}><Eye size={15} />Ver como cliente</button>{access.podeGerenciar && <button type="button" className="tdg-danger-action" onClick={() => deleteClient(selected)} disabled={deletingClientId === selected.id}><Trash2 size={15} />{deletingClientId === selected.id ? "Excluindo..." : "Excluir cliente"}</button>}</div></details></div></header>
       <Tabs
         ariaLabel="Visões da conta"
         className="tdg-crm-account-tabs-ds"
@@ -1341,8 +1344,22 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         }}
       />
       {selectedAccount.contacts.length === 0 && <section className="tdg-crm-contact-cta"><Users size={18} /><div><strong>Nenhum contato comercial cadastrado</strong><span>Cadastre pessoas do cliente, como Compras, Logística, ESG, influenciadores e decisores.</span></div><button type="button" className="tdg-action" onClick={() => { setDetailTab("relationship"); setQuickContactOpen(true); }}><UserPlus size={14} />Adicionar contato comercial</button></section>}
+      {/* Cliente "não tratado": ainda sem nenhuma interação registrada nem
+          oportunidade aberta. O primeiro passo comercial é se apresentar — por
+          isso o CTA leva direto ao envio da apresentação com a abordagem por
+          perfil (temperatura). */}
+      {access.podeEditar && interacoesVisiveis({ interacoes: interactions, clientId: selected.id }).length === 0 && (selectedSummary.openOpportunities || 0) === 0 && <section className="tdg-crm-contact-cta tdg-crm-untreated-cta"><Send size={18} /><div><strong>Cliente ainda não tratado</strong><span>Nenhum contato registrado nem oportunidade aberta. Comece se apresentando: a mensagem já vem pronta pela temperatura da conta.</span></div><button type="button" className="tdg-action" onClick={() => setApresentacaoAberta(true)}><Send size={14} />Enviar apresentação</button></section>}
       <section className="tdg-crm-next"><Target size={17} /><div><small>PRÓXIMA AÇÃO SUGERIDA</small><strong>{selectedIntelligence.nextTask}</strong><span>{suggestionContext(selectedIntelligence.nextTaskKey)}</span></div><button type="button" onClick={() => { setDetailTab("relationship"); setQuickContactOpen(true); }}><UserPlus size={14} />Adicionar contato comercial</button><button type="button" onClick={() => setTaskClientId(selected.id)}>Transformar em tarefa</button><button type="button" onClick={completeSuggestedAction} disabled={!selectedIntelligence.nextTaskCanComplete || completingSuggestion}>{completingSuggestion ? "Atualizando..." : "Marcar feita e ver próxima"}</button></section>
       {portalPreviewOpen && <ClientPortalPreview client={selected} authHeaders={authHeaders} open onClose={() => setPortalPreviewOpen(false)} />}
+      {apresentacaoAberta && <EnviarApresentacao
+        conta={selected}
+        setToast={setToast}
+        onClose={() => setApresentacaoAberta(false)}
+        onRegistrar={onInteraction ? async (interacao) => {
+          await onInteraction({ ...interacao, clientId: selected.id });
+          await load();
+        } : undefined}
+      />}
       <div className={`tdg-crm-detail-grid tdg-account-tab-${detailTab}`}><main>
         <AccountWorkOverview client={selected} contacts={selectedAccount.contacts} interactions={interacoesVisiveis({ interacoes: interactions, clientId: selected.id })} tasks={tasks} onTab={setDetailTab} onNavigate={onNavigate} />
         {comercial && <section className="tdg-crm-detail-section tdg-account-panel tdg-account-comercial">

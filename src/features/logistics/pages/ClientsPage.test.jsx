@@ -374,10 +374,23 @@ describe("página de clientes", () => {
       revision: 3,
       crm: { ...firstClient.crm, completedSuggestedActions: ["request-procurement-referral"] },
     };
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ clientes: [firstClient], acesso: { podeEditar: true } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, id: "conta-1" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ clientes: [nextClient], acesso: { podeEditar: true } }), { status: 200 }));
+    // Mock por URL/método, não por ordem de chamada: a tela dispara fetches
+    // auxiliares no mount (ex.: /planner/pessoas para sugerir responsáveis) que
+    // não podem consumir uma resposta encadeada e embaralhar os índices. A
+    // resposta de clientes vira `nextClient` só depois que o PATCH acontece.
+    let patchBody = null;
+    const fetchMock = vi.fn((url, options = {}) => {
+      const alvo = String(url);
+      if (alvo.includes("/planner/pessoas") || alvo.includes("/collab")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      if (options.method === "PATCH") {
+        patchBody = JSON.parse(options.body);
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, id: "conta-1" }), { status: 200 }));
+      }
+      const cliente = patchBody ? nextClient : firstClient;
+      return Promise.resolve(new Response(JSON.stringify({ clientes: [cliente], acesso: { podeEditar: true } }), { status: 200 }));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ClientsPage authHeaders={() => ({})} />);
@@ -386,9 +399,8 @@ describe("página de clientes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Marcar feita e ver próxima" }));
 
     expect(await screen.findAllByText(/Não há próxima ação confiável/i)).not.toHaveLength(0);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    const patchRequest = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(patchRequest.crm.completedSuggestedActions).toContain("request-procurement-referral");
+    await waitFor(() => expect(patchBody).not.toBeNull());
+    expect(patchBody.crm.completedSuggestedActions).toContain("request-procurement-referral");
   });
 });
 
