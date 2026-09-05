@@ -11,6 +11,8 @@ export { Button, IconButton } from "./Button.jsx";
 export { Field, Input, Textarea } from "./fields.jsx";
 export { SearchableSelect } from "./SearchableSelect.jsx";
 export { RadioCards } from "./RadioCards.jsx";
+export { SegmentedControl } from "./SegmentedControl.jsx";
+export { Tabs } from "./Tabs.jsx";
 export { Badge, StatusBadge } from "./Badge.jsx";
 export {
   normalizar,

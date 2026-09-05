@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Copy, Pencil, Save, Trash2, User } from "lucide-react";
-import { Badge, Button, Field, IconButton, Input, RadioCards, SearchableSelect, StatusBadge, Textarea } from "./index.js";
+import { Badge, Button, Field, IconButton, Input, RadioCards, SearchableSelect, SegmentedControl, StatusBadge, Tabs, Textarea } from "./index.js";
 
 // ===== Galeria do Design System (Onda 1) =====
 //
@@ -20,6 +20,8 @@ export default function DesignSystemGallery() {
   const [cliente, setCliente] = useState(null);
   const [equipe, setEquipe] = useState([]);
   const [visibilidade, setVisibilidade] = useState("espaco");
+  const [temperatura, setTemperatura] = useState("Morno");
+  const [aba, setAba] = useState("resumo");
 
   return (
     <main className="tdg" style={{ display: "grid", gap: 28, maxWidth: 820, margin: "0 auto", padding: 24 }}>
@@ -82,6 +84,25 @@ export default function DesignSystemGallery() {
             ]}
           />
         </Field>
+      </section>
+
+      <section style={{ display: "grid", gap: 12 }}>
+        <h2 style={{ fontSize: "1rem" }}>Alternância e abas</h2>
+        <Field label="Temperatura da conta">
+          <SegmentedControl
+            ariaLabel="Temperatura" value={temperatura} onChange={setTemperatura}
+            options={[{ value: "Frio", label: "Frio" }, { value: "Morno", label: "Morno" }, { value: "Quente", label: "Quente" }]}
+          />
+        </Field>
+        <Tabs
+          ariaLabel="Seções da conta" value={aba} onChange={setAba}
+          tabs={[
+            { value: "resumo", label: "Resumo" },
+            { value: "pessoas", label: "Pessoas", badge: 4 },
+            { value: "oportunidades", label: "Oportunidades", badge: 2 },
+            { value: "conversas", label: "Conversas" },
+          ]}
+        />
       </section>
 
       <section style={{ display: "grid", gap: 12 }}>

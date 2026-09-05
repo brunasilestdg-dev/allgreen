@@ -43,4 +43,21 @@ describe("Design System — galeria e combobox", () => {
     fireEvent.click(within(privado).getByRole("radio"));
     expect(within(privado).getByRole("radio")).toBeChecked();
   });
+
+  it("SegmentedControl marca a opção clicada (aria-checked)", () => {
+    render(<DesignSystemGallery />);
+    const seg = screen.getByRole("radiogroup", { name: "Temperatura" });
+    const quente = within(seg).getByRole("radio", { name: "Quente" });
+    expect(quente).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(quente);
+    expect(within(seg).getByRole("radio", { name: "Quente" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("Tabs seleciona a aba clicada (aria-selected)", () => {
+    render(<DesignSystemGallery />);
+    const tablist = screen.getByRole("tablist", { name: "Seções da conta" });
+    const pessoas = within(tablist).getByRole("tab", { name: /Pessoas/ });
+    fireEvent.click(pessoas);
+    expect(within(tablist).getByRole("tab", { name: /Pessoas/ })).toHaveAttribute("aria-selected", "true");
+  });
 });

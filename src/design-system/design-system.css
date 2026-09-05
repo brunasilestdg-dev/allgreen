@@ -158,3 +158,30 @@
 .ds-badge--danger .ds-badge__dot { background: var(--ds-danger); }
 .ds-badge--info { background: var(--ds-info-soft); color: var(--ds-info); }
 .ds-badge--info .ds-badge__dot { background: var(--ds-info); }
+
+/* ---------- SegmentedControl (item 7) ---------- */
+.ds-seg { align-items: center; background: var(--ds-surface-soft); border: 1px solid var(--ds-line); border-radius: var(--ds-radius-md); display: inline-flex; gap: 2px; padding: 3px; }
+.ds-seg__opt {
+  align-items: center; background: transparent; border: 0; border-radius: var(--ds-radius-sm); color: var(--ds-ink-muted);
+  cursor: pointer; display: inline-flex; font: inherit; font-family: var(--ds-font); font-weight: var(--ds-weight-medium);
+  gap: 5px; justify-content: center; transition: background var(--ds-motion-fast), color var(--ds-motion-fast), box-shadow var(--ds-motion-fast);
+}
+.ds-seg--sm .ds-seg__opt { font-size: var(--ds-text-xs); min-height: 28px; padding: 0 var(--ds-space-2); }
+.ds-seg--md .ds-seg__opt { font-size: var(--ds-text-sm); min-height: 32px; padding: 0 var(--ds-space-3); }
+.ds-seg__opt:hover { color: var(--ds-ink); }
+.ds-seg__opt.is-active { background: var(--ds-surface); box-shadow: var(--ds-shadow-sm); color: var(--ds-brand); }
+.ds-seg__opt:focus-visible { box-shadow: var(--ds-focus-ring); outline: none; }
+
+/* ---------- Tabs (item 23/25) ---------- */
+.ds-tabs { border-bottom: 1px solid var(--ds-line); display: flex; flex-wrap: wrap; gap: var(--ds-space-1); }
+.ds-tab {
+  align-items: center; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ds-ink-muted);
+  cursor: pointer; display: inline-flex; font: inherit; font-family: var(--ds-font); font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium); gap: 6px; margin-bottom: -1px; padding: var(--ds-space-2) var(--ds-space-3);
+  transition: color var(--ds-motion-fast), border-color var(--ds-motion-fast);
+}
+.ds-tab:hover { color: var(--ds-ink); }
+.ds-tab.is-active { border-bottom-color: var(--ds-brand); color: var(--ds-brand); font-weight: var(--ds-weight-bold); }
+.ds-tab:focus-visible { border-radius: var(--ds-radius-sm); box-shadow: var(--ds-focus-ring); outline: none; }
+.ds-tab__badge { background: var(--ds-surface-soft); border-radius: var(--ds-radius-pill); color: var(--ds-ink-muted); font-size: var(--ds-text-xs); font-weight: var(--ds-weight-bold); padding: 1px 7px; }
+.ds-tab.is-active .ds-tab__badge { background: var(--ds-surface-soft); color: var(--ds-brand); }
