@@ -403,9 +403,15 @@ export default function PlannerPage({
         <div>
           <span>Produtividade</span>
           <h2>Planner</h2>
-          <p>Planos com tarefas, prazo, prioridade e checklist.</p>
+          <p>Planos compartilhados com tarefas, prazo, prioridade e checklist. Estas tarefas também aparecem no <strong>quadro To Do</strong> — o lugar único de todas as suas tarefas.</p>
         </div>
         <div className="tdg-page-actions">
+          {/* #115: ponte para o lugar único de tarefas. Toda tarefa do Planner
+              já aparece lá (espelhada); o botão torna isso visível em vez de a
+              pessoa sentir que há dois mundos de tarefa. */}
+          <button type="button" className="tdg-planner-toggle" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")} title="Ver todas as tarefas no quadro To Do">
+            <LayoutGrid size={15} /> Quadro To Do
+          </button>
           <button type="button" className="tdg-planner-toggle" data-ativo={vendoMinhas} onClick={() => setVendoMinhas((v) => !v)}>
             <ListChecks size={15} /> Minhas tarefas
           </button>
