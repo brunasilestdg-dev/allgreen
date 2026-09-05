@@ -13080,6 +13080,11 @@ function ExtensionCard({ setToast }) {
 
 function AccountSettings({ db, update, setToast, go }) {
   const [name, setName] = useState(db.user.name);
+  // Perfil: foto (lembrete forte, mas pulável) + status (emoji + frase).
+  const [statusEmoji, setStatusEmoji] = useState(db.user.statusEmoji || "");
+  const [statusText, setStatusText] = useState(db.user.statusText || "");
+  const [fotoBusy, setFotoBusy] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
   const [busy, setBusy] = useState(false),
     [err, setErr] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -13352,6 +13357,90 @@ function AccountSettings({ db, update, setToast, go }) {
       setBusy(false);
     }
   };
+  // Reduz a foto no cliente para um data URL pequeno (256px, JPEG) antes de
+  // subir — a coluna guarda o data URL direto, sem blob store separado.
+  const reduzirFoto = (arquivo) =>
+    new Promise((resolve, reject) => {
+      const leitor = new FileReader();
+      leitor.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+      leitor.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Imagem inválida."));
+        img.onload = () => {
+          const lado = 256;
+          const canvas = document.createElement("canvas");
+          canvas.width = lado;
+          canvas.height = lado;
+          const ctx = canvas.getContext("2d");
+          const escala = Math.max(lado / img.width, lado / img.height);
+          const w = img.width * escala;
+          const h = img.height * escala;
+          ctx.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = leitor.result;
+      };
+      leitor.readAsDataURL(arquivo);
+    });
+  const enviarFoto = async (evento) => {
+    const arquivo = evento.target.files?.[0];
+    if (!arquivo) return;
+    setFotoBusy(true);
+    setErr("");
+    try {
+      const avatarUrl = await reduzirFoto(arquivo);
+      const r = await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ avatarUrl }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Não foi possível salvar a foto.");
+      update((d) => ({ ...d, user: { ...d.user, avatarUrl: data.user.avatarUrl } }));
+      setToast("Foto de perfil atualizada");
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setFotoBusy(false);
+      if (evento.target) evento.target.value = "";
+    }
+  };
+  const removerFoto = async () => {
+    setFotoBusy(true);
+    try {
+      const r = await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ avatarUrl: "" }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Não foi possível remover a foto.");
+      update((d) => ({ ...d, user: { ...d.user, avatarUrl: "" } }));
+    } catch (e) {
+      setToast(e.message);
+    } finally {
+      setFotoBusy(false);
+    }
+  };
+  const salvarStatus = async () => {
+    setStatusBusy(true);
+    setErr("");
+    try {
+      const r = await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ statusEmoji, statusText }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Não foi possível salvar o status.");
+      update((d) => ({ ...d, user: { ...d.user, statusEmoji: data.user.statusEmoji, statusText: data.user.statusText } }));
+      setToast("Status atualizado");
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setStatusBusy(false);
+    }
+  };
   const exportData = () => {
     const { user: _user, spaceKey: _spaceKey, ...rest } = db;
     const blob = new Blob([JSON.stringify(rest, null, 2)], {
@@ -13405,12 +13494,19 @@ function AccountSettings({ db, update, setToast, go }) {
         <section className="settings-overview" aria-label="Resumo da conta">
           <div className="settings-overview-profile">
             <span className="settings-avatar" aria-hidden="true">
-              {String(db.user.name || "U").trim().charAt(0).toUpperCase()}
+              {db.user.avatarUrl
+                ? <img src={db.user.avatarUrl} alt="" className="settings-avatar-img" />
+                : String(db.user.name || "U").trim().charAt(0).toUpperCase()}
             </span>
             <div>
               <span className="eyebrow light">CONTA PRINCIPAL</span>
               <h2>{db.user.name}</h2>
               <p>{db.user.email}</p>
+              {(db.user.statusEmoji || db.user.statusText) && (
+                <p className="settings-status-line">
+                  {db.user.statusEmoji ? `${db.user.statusEmoji} ` : ""}{db.user.statusText || ""}
+                </p>
+              )}
             </div>
           </div>
           <div className="settings-overview-status">
@@ -13494,6 +13590,29 @@ function AccountSettings({ db, update, setToast, go }) {
               <p>Como você aparece no aplicativo.</p>
             </div>
           </div>
+          <div className="profile-photo-row">
+            <span className="profile-photo">
+              {db.user.avatarUrl
+                ? <img src={db.user.avatarUrl} alt="Sua foto de perfil" />
+                : <span className="profile-photo-initial">{String(db.user.name || "U").trim().charAt(0).toUpperCase()}</span>}
+            </span>
+            <div className="profile-photo-actions">
+              <label className="profile-photo-btn">
+                {fotoBusy ? "Enviando…" : (db.user.avatarUrl ? "Trocar foto" : "Adicionar foto")}
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={enviarFoto} disabled={fotoBusy} hidden />
+              </label>
+              {db.user.avatarUrl && (
+                <button type="button" className="profile-photo-remove" onClick={removerFoto} disabled={fotoBusy}>
+                  Remover
+                </button>
+              )}
+            </div>
+          </div>
+          {!db.user.avatarUrl && (
+            <p className="profile-photo-nudge">
+              Uma foto ajuda o time a te reconhecer. Não é obrigatória — dá pra deixar pra depois.
+            </p>
+          )}
           <Field label="Seu nome">
             <input
               value={name}
@@ -13504,6 +13623,34 @@ function AccountSettings({ db, update, setToast, go }) {
           <Field label="E-mail">
             <input value={db.user.email} readOnly className="readonly" />
           </Field>
+          <div className="profile-status">
+            <Field label="Status (emoji)">
+              <input
+                value={statusEmoji}
+                onChange={(e) => setStatusEmoji(e.target.value)}
+                maxLength={16}
+                placeholder="🟢"
+                className="profile-status-emoji"
+              />
+            </Field>
+            <Field label="Status (frase)">
+              <input
+                value={statusText}
+                onChange={(e) => setStatusText(e.target.value)}
+                maxLength={140}
+                placeholder="Ex.: Focada em fechamento"
+              />
+            </Field>
+          </div>
+          <div className="settings-actions">
+            <Button
+              variant="ghost"
+              disabled={statusBusy || (statusEmoji === (db.user.statusEmoji || "") && statusText === (db.user.statusText || ""))}
+              onClick={salvarStatus}
+            >
+              {statusBusy ? "Salvando..." : "Salvar status"}
+            </Button>
+          </div>
           {err && (
             <div className="ask-error">
               <CircleAlert />

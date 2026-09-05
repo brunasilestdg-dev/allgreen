@@ -52,13 +52,25 @@ export async function handleAuth(request, env, url) {
     }
     if (request.method !== "GET")
       return json({ error: "Método não permitido." }, 405);
-    const user = await env.DB.prepare(
-      `SELECT users.id, users.name, users.email FROM sessions
-      JOIN users ON users.id = sessions.user_id
-      WHERE sessions.token_hash = ? AND sessions.expires_at > ?`,
-    )
-      .bind(tokenHash, new Date().toISOString())
-      .first();
+    const agoraSessao = new Date().toISOString();
+    // As colunas de perfil (avatar/status) entram por migração; se ela ainda
+    // não rodou, o login não pode quebrar — cai para o SELECT básico.
+    let user;
+    try {
+      user = await env.DB.prepare(
+        `SELECT users.id, users.name, users.email,
+                users.avatar_url AS avatarUrl, users.status_emoji AS statusEmoji, users.status_text AS statusText
+        FROM sessions
+        JOIN users ON users.id = sessions.user_id
+        WHERE sessions.token_hash = ? AND sessions.expires_at > ?`,
+      ).bind(tokenHash, agoraSessao).first();
+    } catch {
+      user = await env.DB.prepare(
+        `SELECT users.id, users.name, users.email FROM sessions
+        JOIN users ON users.id = sessions.user_id
+        WHERE sessions.token_hash = ? AND sessions.expires_at > ?`,
+      ).bind(tokenHash, agoraSessao).first();
+    }
     return user
       ? json({ user })
       : json({ error: "Sua sessão expirou. Entre novamente." }, 401);
@@ -352,16 +364,62 @@ export async function handleAuth(request, env, url) {
     const account = await sessionUser(request, env);
     if (!account)
       return json({ error: "Sua sessão expirou. Entre novamente." }, 401);
-    const name =
-      typeof body.name === "string"
-        ? body.name.trim().replace(/\s+/g, " ")
-        : "";
-    if (name.length < 2 || name.length > 100)
-      return json({ error: "Informe um nome válido." }, 400);
-    await env.DB.prepare("UPDATE users SET name = ? WHERE id = ?")
-      .bind(name, account.id)
-      .run();
-    return json({ user: { id: account.id, name, email: account.email } });
+    // Nome, foto e status são campos independentes do perfil: a tela pode
+    // mandar só um. Foto é um "lembrete forte que dá pra pular" (não trava),
+    // e o status é livre — emoji e/ou frase curta.
+    const campos = [];
+    const valores = [];
+    if (Object.prototype.hasOwnProperty.call(body, "name")) {
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
+      if (name.length < 2 || name.length > 100)
+        return json({ error: "Informe um nome válido." }, 400);
+      campos.push("name = ?");
+      valores.push(name);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "avatarUrl")) {
+      const avatar = String(body.avatarUrl || "").trim();
+      // Só imagem em data URL (o cliente já reduz), com teto de ~700 KB de
+      // base64 para não estourar a linha do usuário.
+      if (avatar && !/^data:image\/(png|jpe?g|webp);base64,/.test(avatar))
+        return json({ error: "Envie uma imagem válida (PNG, JPG ou WebP)." }, 400);
+      if (avatar.length > 720000)
+        return json({ error: "A foto ficou grande demais. Use uma imagem menor." }, 400);
+      campos.push("avatar_url = ?");
+      valores.push(avatar || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "statusEmoji")) {
+      campos.push("status_emoji = ?");
+      valores.push(String(body.statusEmoji || "").slice(0, 16) || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "statusText")) {
+      campos.push("status_text = ?");
+      valores.push(String(body.statusText || "").trim().slice(0, 140) || null);
+    }
+    if (!campos.length) return json({ error: "Nada para atualizar." }, 400);
+    valores.push(account.id);
+    try {
+      await env.DB.prepare(`UPDATE users SET ${campos.join(", ")} WHERE id = ?`)
+        .bind(...valores)
+        .run();
+    } catch {
+      // Colunas de perfil ainda sem migração: se veio só foto/status, avisa
+      // com clareza; se veio nome junto, ainda grava o nome.
+      const temNome = campos.some((c) => c.startsWith("name"));
+      if (!temNome) return json({ error: "Perfil de foto/status ainda não está disponível. Tente de novo em instantes." }, 503);
+      await env.DB.prepare("UPDATE users SET name = ? WHERE id = ?")
+        .bind(valores[campos.findIndex((c) => c.startsWith("name"))], account.id)
+        .run();
+    }
+    let atualizado;
+    try {
+      atualizado = await env.DB.prepare(
+        `SELECT id, name, email, avatar_url AS avatarUrl, status_emoji AS statusEmoji, status_text AS statusText
+         FROM users WHERE id = ?`,
+      ).bind(account.id).first();
+    } catch {
+      atualizado = await env.DB.prepare("SELECT id, name, email FROM users WHERE id = ?").bind(account.id).first();
+    }
+    return json({ user: atualizado });
   }
 
   const email =
