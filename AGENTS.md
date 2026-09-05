@@ -225,6 +225,19 @@ quantos resultados vieram.
   criar um segundo cadastro de estudo nem marcar etapa como concluída só por
   clique. A precificação aberta pela oportunidade recebe os dados mapeados,
   mas custos e premissas continuam vazios até confirmação explícita.
+- **Rota do dia do motorista To Do Green** (`todogreen_routes`, migração
+  `0100`): o roteirizador (`pages/RoteirizacaoPage.jsx`) traça e otimiza a rota
+  e AGORA a salva/atribui a um motorista; o app do motorista
+  (`pages/DriverPortalPage.jsx`, aba "Rota") a lê pelo `driver_id` — mesmo
+  recorte das viagens (`todogreen-driver-portal.js`, endpoints `/rotas` e
+  `/rotas/:id/parada`). O núcleo puro é `routePlanDomain.js`
+  (`montarParadasDaRota`, `statusPelaConclusao`, `progressoDaRota`,
+  `linkNavegacao`). As paradas ordenadas vivem em `stops_json` (lidas/gravadas
+  sempre com a rota, nunca isoladas); o CRUD entra na coleção genérica `rotas`
+  em `todogreen-vertical-records.js` (`COLECOES`), sem handler novo. Regra da
+  jornada: o status da rota (`planejada → em_rota → concluida`) é derivado das
+  paradas concluídas, nunca marcado por clique solto. Não criar segunda tabela
+  de rota nem ligar rota ao motorista por nome — o elo é o `driver_id` (0070).
 - **CRM To Do Green**: o cadastro canônico da conta continua em
   `todogreen_clients`; a inteligência fica em `fields_json` e é normalizada
   por `todoGreenCrmDomain.js`. A tela `pages/ClientsPage.jsx` conecta carteira,

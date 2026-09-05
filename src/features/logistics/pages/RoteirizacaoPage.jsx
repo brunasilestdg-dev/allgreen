@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BatteryCharging, Clock, Coins, GripVertical, Navigation, Plug, Plus, Route, Shuffle, Sparkles, Trash2 } from "lucide-react";
+import { BatteryCharging, Clock, Coins, GripVertical, Navigation, Plug, Plus, Route, Shuffle, Sparkles, Trash2, Truck, UserCheck } from "lucide-react";
 import {
   aplicarOrdemDoMeio,
   otimizarOrdemDeParadas,
@@ -9,6 +9,12 @@ import {
   tracarRota,
 } from "../distanciaRodoviariaDomain.js";
 import { estimarTotalPedagios } from "../pedagiosDomain.js";
+import {
+  ROTULO_STATUS_ROTA,
+  montarParadasDaRota,
+  resumoDaRota,
+  rotaValidaParaAtribuir,
+} from "../routePlanDomain.js";
 import "./TodoGreenPages.css";
 
 const formatarReais = (valor) =>
@@ -106,6 +112,12 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [considerarTransito, setConsiderarTransito] = useState(false);
   // Índice sendo arrastado (reordenar paradas ao estilo Circuit/Linx).
   const [arrastando, setArrastando] = useState(null);
+  // #139: atribuir a rota traçada a um motorista. O motorista escolhido recebe
+  // a rota no próprio app (portal do motorista), pelo driver_id.
+  const [motoristas, setMotoristas] = useState([]);
+  const [rotasSalvas, setRotasSalvas] = useState([]);
+  const [atribuir, setAtribuir] = useState({ motoristaId: "", nome: "", nomeRota: "", data: "" });
+  const [salvandoRota, setSalvandoRota] = useState(false);
 
   const containerRef = useRef(null);
   const mapaRef = useRef(null);
@@ -433,6 +445,69 @@ Regras:
     }
   };
 
+  // Motoristas do cadastro mestre (0070) e rotas já salvas do espaço. A rota
+  // liga-se ao motorista pelo id — é o mesmo recorte que leva a rota ao app dele.
+  const carregarRotas = async () => {
+    if (!authHeaders) return;
+    try {
+      const resposta = await fetch("/api/todogreen/records/rotas?limit=30", { headers: authHeaders() });
+      if (!resposta.ok) return;
+      const corpo = await resposta.json();
+      setRotasSalvas(corpo.registros || corpo.records || []);
+    } catch { /* lista de rotas é secundária; a tela segue sem ela */ }
+  };
+  useEffect(() => {
+    if (!authHeaders) return;
+    let ativo = true;
+    fetch("/api/todogreen/master-data/drivers", { headers: authHeaders() })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((dados) => { if (ativo) setMotoristas(dados?.records || dados?.registros || []); })
+      .catch(() => {});
+    carregarRotas();
+    return () => { ativo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authHeaders]);
+
+  // Salva a rota traçada e a atribui ao motorista escolhido. As paradas saem do
+  // resultado do traçado (rótulo + coordenada), somadas às janelas e recargas
+  // marcadas — a mesma verdade que o mapa mostra.
+  const salvarEAtribuir = async () => {
+    const resultado = estado.resultado;
+    const stops = montarParadasDaRota({ paradas: resultado?.paradas || [], recargas, janelas });
+    const validacao = rotaValidaParaAtribuir({ driverId: atribuir.motoristaId, stops });
+    if (!validacao.valido) { setToast?.(validacao.erro); return; }
+    setSalvandoRota(true);
+    try {
+      const corpo = {
+        nome: atribuir.nomeRota || `Rota ${stops[0].rotulo.split(",")[0]} → ${stops[stops.length - 1].rotulo.split(",")[0]}`,
+        motoristaId: atribuir.motoristaId,
+        motorista: atribuir.nome || motoristas.find((m) => m.id === atribuir.motoristaId)?.fullName || "",
+        dataServico: atribuir.data || "",
+        origem: stops[0].rotulo,
+        destino: stops[stops.length - 1].rotulo,
+        distanciaKm: Number(resultado?.distanciaKm || 0),
+        duracaoMin: Number(resultado?.minutos || 0),
+        pedagioTotal: Number(estimarTotalPedagios(pedagios.dados?.quantidade, tarifaMedia) || 0),
+        paradas: stops,
+        status: "planejada",
+      };
+      const resposta = await fetch("/api/todogreen/records/rotas", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify(corpo),
+      });
+      const retorno = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(retorno.error || "Não foi possível salvar a rota.");
+      setToast?.("Rota atribuída ao motorista — ela aparece no app dele.");
+      setAtribuir({ motoristaId: "", nome: "", nomeRota: "", data: "" });
+      carregarRotas();
+    } catch (erro) {
+      setToast?.(erro.message || "Não foi possível salvar a rota.");
+    } finally {
+      setSalvandoRota(false);
+    }
+  };
+
   const r = estado.resultado;
   const qtdRecargas = r ? [...recargas].filter((i) => i < (r.enderecos?.length || 0)).length : 0;
   const minutosTotal = r ? r.minutos + qtdRecargas * MINUTOS_RECARGA : 0;
@@ -605,6 +680,74 @@ Regras:
           )}
           <small>{r.paradas.map((p) => p.rotulo.split(",")[0]).join(" → ")}</small>
           <small className="tdg-roteirizacao-fonte">{r.fonte}{considerarTransito ? " · trânsito de pico é estimativa (régua por horário); ao vivo depende de provedor pago" : ""}</small>
+        </div>
+      )}
+
+      {/* #139: atribuir a rota traçada a um motorista. Ele a recebe no próprio
+          app (portal do motorista) e vai concluindo parada por parada. */}
+      {estado.fase === "pronto" && r && (
+        <div className="tdg-roteirizacao-atribuir">
+          <strong><UserCheck size={15} aria-hidden="true" /> Atribuir esta rota a um motorista</strong>
+          <div className="tdg-roteirizacao-atribuir-campos">
+            <label>
+              <span>Motorista</span>
+              {motoristas.length ? (
+                <select
+                  value={atribuir.motoristaId}
+                  onChange={(event) => {
+                    const escolhido = motoristas.find((m) => m.id === event.target.value);
+                    setAtribuir((v) => ({ ...v, motoristaId: event.target.value, nome: escolhido?.fullName || "" }));
+                  }}
+                >
+                  <option value="">Selecionar do cadastro</option>
+                  {motoristas.map((m) => (
+                    <option key={m.id} value={m.id}>{m.fullName}{m.availabilityStatus && m.availabilityStatus !== "available" ? ` (${m.availabilityStatus})` : ""}</option>
+                  ))}
+                </select>
+              ) : (
+                <small className="tdg-roteirizacao-sem-motorista">Cadastre motoristas em Cadastros → Motoristas (com e-mail de acesso) para atribuir.</small>
+              )}
+            </label>
+            <label>
+              <span>Data da rota</span>
+              <input type="date" value={atribuir.data} onChange={(event) => setAtribuir((v) => ({ ...v, data: event.target.value }))} />
+            </label>
+            <label>
+              <span>Nome da rota (opcional)</span>
+              <input value={atribuir.nomeRota} onChange={(event) => setAtribuir((v) => ({ ...v, nomeRota: event.target.value }))} placeholder="Ex.: Entregas Zona Sul" />
+            </label>
+          </div>
+          <button
+            type="button"
+            className="tdg-action"
+            onClick={salvarEAtribuir}
+            disabled={salvandoRota || !atribuir.motoristaId}
+          >
+            <Truck size={16} />{salvandoRota ? "Atribuindo…" : "Salvar e atribuir ao motorista"}
+          </button>
+        </div>
+      )}
+
+      {rotasSalvas.length > 0 && (
+        <div className="tdg-roteirizacao-rotas-salvas">
+          <strong>Rotas atribuídas</strong>
+          <ul>
+            {rotasSalvas.map((rota) => {
+              const resumo = resumoDaRota(rota.paradas);
+              return (
+                <li key={rota.id}>
+                  <span className="tdg-rota-salva-nome">{rota.nome || "Rota sem nome"}</span>
+                  <span className="tdg-rota-salva-info">
+                    {rota.motorista || "sem motorista"}
+                    {rota.dataServico ? ` · ${rota.dataServico}` : ""}
+                    {` · ${resumo.total} parada(s)`}
+                    {resumo.concluidas ? ` · ${resumo.concluidas} concluída(s)` : ""}
+                  </span>
+                  <span className={`tdg-rota-salva-status status-${rota.status || "planejada"}`}>{ROTULO_STATUS_ROTA[rota.status] || "Planejada"}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

@@ -12,6 +12,7 @@
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { aplicarEventoOperacional } from "./todogreen-vertical-records.js";
+import { marcarParadaConcluida, statusPelaConclusao } from "../../src/features/logistics/routePlanDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -58,6 +59,27 @@ const viagemDaLinha = (row) => ({
   comprovanteRegistrado: Boolean(row.proof_url),
   ocorrencias: Number(row.incident_count || 0),
 });
+
+const rotaDaLinha = (row) => {
+  let paradas = [];
+  try {
+    const bruto = JSON.parse(row.stops_json || "[]");
+    if (Array.isArray(bruto)) paradas = bruto;
+  } catch { /* rota sem paradas legíveis vira lista vazia, não quebra o app */ }
+  return {
+    id: row.id,
+    nome: row.name || "",
+    status: row.status || "planejada",
+    dataServico: row.service_date || "",
+    placa: row.vehicle_plate || "",
+    origem: row.origin || "",
+    destino: row.destination || "",
+    distanciaKm: Number(row.distance_km || 0),
+    duracaoMin: Number(row.duration_min || 0),
+    paradas,
+    revision: Number(row.revision || 1),
+  };
+};
 
 export async function handleTodoGreenDriverPortal(request, env, access, user) {
   if (!env.DB) return json({ error: "Banco indisponível." }, 503);
@@ -190,6 +212,52 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
       { evento: resultado.evento, viagem: viagemDaLinha(resultado.atualizada), duplicada: resultado.duplicada || false },
       resultado.duplicada ? 200 : 201,
     );
+  }
+
+  // As rotas do dia atribuídas a este motorista (#139). Mesmo recorte das
+  // viagens: só as do próprio driver_id. Planejadas e em rota primeiro; as
+  // concluídas descem.
+  if (request.method === "GET" && recurso === "rotas") {
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM todogreen_routes
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND archived_at IS NULL
+        ORDER BY (status = 'concluida') ASC, service_date DESC, updated_at DESC
+        LIMIT 50`,
+    ).bind(TENANT_ID, access.ownerId, motorista.id).all();
+    return json({ rotas: (results || []).map(rotaDaLinha) });
+  }
+
+  // O motorista marca/desmarca UMA parada como concluída pelo índice. O status
+  // da rota é recalculado do que foi feito (planejada → em rota → concluída),
+  // nunca por um botão solto. Rota de outro motorista responde 404, não 403.
+  if (request.method === "POST" && recurso === "rotas" && id && acao === "parada") {
+    const corpo = await request.json().catch(() => ({}));
+    const indice = Number(corpo.indice);
+    if (!Number.isInteger(indice) || indice < 0)
+      return json({ error: "Informe qual parada foi concluída." }, 400);
+    const rota = await env.DB.prepare(
+      `SELECT * FROM todogreen_routes
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND archived_at IS NULL`,
+    ).bind(id, TENANT_ID, access.ownerId, motorista.id).first();
+    if (!rota) return json({ error: "Rota não encontrada." }, 404);
+    let paradas = [];
+    try {
+      const bruto = JSON.parse(rota.stops_json || "[]");
+      if (Array.isArray(bruto)) paradas = bruto;
+    } catch { /* segue com lista vazia */ }
+    if (indice >= paradas.length) return json({ error: "Parada não existe nesta rota." }, 400);
+    const atualizadas = marcarParadaConcluida(paradas, indice, corpo.concluida !== false);
+    const status = statusPelaConclusao(atualizadas);
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `UPDATE todogreen_routes
+        SET stops_json = ?, status = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+    ).bind(JSON.stringify(atualizadas), status, user.id, agora, id, TENANT_ID, access.ownerId).run();
+    const nova = await env.DB.prepare(
+      `SELECT * FROM todogreen_routes WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+    ).bind(id, TENANT_ID, access.ownerId).first();
+    return json({ rota: rotaDaLinha(nova) });
   }
 
   return json({ error: "Rota do portal do motorista não encontrada." }, 404);

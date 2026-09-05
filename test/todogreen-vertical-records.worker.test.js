@@ -774,6 +774,7 @@ describe("a vertical inteira numa chamada só", () => {
       "proposals",
       "quality",
       "rfq",
+      "rotas",
       "scenarios",
       "warehouses",
     ]);

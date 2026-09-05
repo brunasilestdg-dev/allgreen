@@ -326,3 +326,60 @@ describe("POD do motorista: foto e assinatura capturadas", () => {
     expect(op.delivered_at).toBeFalsy();
   });
 });
+
+describe("rota do dia atribuída ao motorista (#139)", () => {
+  const paradas = [
+    { ordem: 1, rotulo: "CD Osasco, SP", lat: -23.5, lng: -46.7, recarga: false, concluida: false },
+    { ordem: 2, rotulo: "Loja Centro, SP", lat: -23.55, lng: -46.63, recarga: true, concluida: false },
+  ];
+
+  const criarRota = (driverId, token) =>
+    pedir("/api/todogreen/records/rotas", {
+      method: "POST",
+      token,
+      body: {
+        nome: `Rota ${driverId}`,
+        motoristaId: driverId,
+        motorista: "Motorista",
+        dataServico: "2026-08-26",
+        origem: paradas[0].rotulo,
+        destino: paradas[1].rotulo,
+        distanciaKm: 12,
+        paradas,
+      },
+    });
+
+  it("a operação cria a rota e o motorista dono a enxerga; o outro não", async () => {
+    const criacao = await criarRota("drv-joao", dona.token);
+    expect(criacao.status).toBe(201);
+
+    const doJoao = await (await pedir("/api/todogreen/driver-portal/rotas", { token: joao.token })).json();
+    expect(doJoao.rotas.map((r) => r.nome)).toContain("Rota drv-joao");
+    const daMaria = await (await pedir("/api/todogreen/driver-portal/rotas", { token: maria.token })).json();
+    expect(daMaria.rotas.map((r) => r.nome)).not.toContain("Rota drv-joao");
+  });
+
+  it("marcar parada recalcula o status (planejada → em rota → concluída)", async () => {
+    const criacao = await (await criarRota("drv-joao", dona.token)).json();
+    const rotaId = criacao.registro.id;
+
+    const parcial = await (await pedir(`/api/todogreen/driver-portal/rotas/${rotaId}/parada`, {
+      method: "POST", token: joao.token, body: { indice: 0, concluida: true },
+    })).json();
+    expect(parcial.rota.status).toBe("em_rota");
+    expect(parcial.rota.paradas[0].concluida).toBe(true);
+
+    const total = await (await pedir(`/api/todogreen/driver-portal/rotas/${rotaId}/parada`, {
+      method: "POST", token: joao.token, body: { indice: 1, concluida: true },
+    })).json();
+    expect(total.rota.status).toBe("concluida");
+  });
+
+  it("marcar parada de rota de outro motorista responde 404", async () => {
+    const criacao = await (await criarRota("drv-joao", dona.token)).json();
+    const r = await pedir(`/api/todogreen/driver-portal/rotas/${criacao.registro.id}/parada`, {
+      method: "POST", token: maria.token, body: { indice: 0, concluida: true },
+    });
+    expect(r.status).toBe(404);
+  });
+});

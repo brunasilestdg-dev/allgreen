@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Camera, CheckCircle2, Clock, CreditCard, Home, MapPin, PackageCheck, Truck, User } from "lucide-react";
+import { AlertTriangle, BatteryCharging, Camera, CheckCircle2, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Route, Truck, User } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
+import { ROTULO_STATUS_ROTA, linkNavegacao, progressoDaRota, resumoDaRota } from "../routePlanDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
@@ -121,6 +122,7 @@ const ROTULO_SITUACAO = { active: "em andamento", em_andamento: "em andamento", 
 export default function DriverPortalPage() {
   const [sessao, setSessao] = useState(null);
   const [viagens, setViagens] = useState([]);
+  const [rotas, setRotas] = useState([]);
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
   const [formulario, setFormulario] = useState(null); // { viagem, tipo }
@@ -190,6 +192,7 @@ export default function DriverPortalPage() {
         const resultado = await escoarFila().catch(() => ({ enviados: 0 }));
         if (resultado.enviados > 0) setAviso(`${resultado.enviados} registro(s) guardado(s) foram enviados agora.`);
         setViagens((await pedir("/viagens")).viagens || []);
+        setRotas((await pedir("/rotas").catch(() => ({ rotas: [] }))).rotas || []);
       }
       setErro("");
     } catch (motivo) {
@@ -204,6 +207,21 @@ export default function DriverPortalPage() {
     window.addEventListener("online", aoVoltar);
     return () => window.removeEventListener("online", aoVoltar);
   }, [escoarFila, carregar]);
+
+  // Marca/desmarca uma parada da rota como concluída. O servidor recalcula o
+  // status da rota (planejada → em rota → concluída) e devolve a rota nova.
+  const marcarParada = async (rotaId, indice, concluida) => {
+    try {
+      const resposta = await pedir(`/rotas/${rotaId}/parada`, {
+        method: "POST",
+        body: JSON.stringify({ indice, concluida }),
+      });
+      setRotas((atuais) => atuais.map((rota) => (rota.id === rotaId ? resposta.rota : rota)));
+    } catch (motivo) {
+      setAviso("");
+      setErro(motivo.message);
+    }
+  };
 
   const aoEscolherFoto = async (event) => {
     const file = event.target.files?.[0];
@@ -325,8 +343,10 @@ export default function DriverPortalPage() {
   const ocorrenciasTotal = viagens.reduce((soma, v) => soma + (Number(v.ocorrencias) || 0), 0);
   const primeiroNome = String(sessao.motorista.nome || "").split(" ")[0];
 
+  const rotasAtivas = rotas.filter((rota) => rota.status !== "concluida");
   const abas = [
     { id: "hoje", rotulo: "Hoje", icone: Home },
+    { id: "rota", rotulo: "Rota", icone: Route },
     { id: "entregas", rotulo: "Entregas", icone: PackageCheck },
     { id: "perfil", rotulo: "Perfil", icone: User },
   ];
@@ -381,6 +401,64 @@ export default function DriverPortalPage() {
             </article>
           ))}
           {!pendentes.length && <div className="tdg-driver-cartao tdg-driver-vazio"><PackageCheck size={30} /><p>Tudo entregue. 🎉</p><small>Nada pendente com você agora.</small></div>}
+        </>
+      )}
+
+      {/* ===== ROTA: a rota do dia atribuída pela operação (#139) ===== */}
+      {secao === "rota" && (
+        <>
+          <div className="tdg-driver-secao-titulo"><Route size={18} /><h2>Minha rota</h2></div>
+          {rotasAtivas.length === 0 && (
+            <div className="tdg-driver-cartao tdg-driver-vazio"><Route size={30} /><p>Nenhuma rota atribuída.</p><small>Quando a operação montar e atribuir uma rota para você, ela aparece aqui em ordem.</small></div>
+          )}
+          {rotasAtivas.map((rota) => {
+            const resumo = resumoDaRota(rota.paradas);
+            const progresso = progressoDaRota(rota.paradas);
+            return (
+              <article className="tdg-driver-cartao tdg-driver-rota-card" key={rota.id}>
+                <div className="tdg-driver-rota-cabecalho">
+                  <strong>{rota.nome || "Rota do dia"}</strong>
+                  <span className={`tdg-driver-rota-status status-${rota.status || "planejada"}`}>{ROTULO_STATUS_ROTA[rota.status] || "Planejada"}</span>
+                </div>
+                <small className="tdg-driver-rota-meta">
+                  {rota.dataServico ? `${rota.dataServico} · ` : ""}
+                  {resumo.concluidas}/{resumo.total} paradas · {progresso}%
+                  {rota.distanciaKm ? ` · ${rota.distanciaKm} km` : ""}
+                  {rota.placa ? ` · ${rota.placa}` : ""}
+                </small>
+                <div className="tdg-driver-rota-progresso" aria-hidden="true"><span style={{ width: `${progresso}%` }} /></div>
+                <ol className="tdg-driver-rota-paradas">
+                  {(rota.paradas || []).map((parada, indice) => {
+                    const link = linkNavegacao(parada);
+                    return (
+                      <li key={indice} className={parada.concluida ? "concluida" : ""}>
+                        <label className="tdg-driver-rota-check">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(parada.concluida)}
+                            onChange={(event) => marcarParada(rota.id, indice, event.target.checked)}
+                          />
+                          <span className="tdg-driver-rota-ordem">{parada.ordem || indice + 1}</span>
+                        </label>
+                        <div className="tdg-driver-rota-parada-info">
+                          <span className="tdg-driver-rota-endereco">{parada.rotulo || parada.endereco || "Parada"}</span>
+                          <small>
+                            {parada.recarga && <em className="tdg-driver-rota-recarga"><BatteryCharging size={12} /> recarga</em>}
+                            {(parada.janelaInicio || parada.janelaFim) && <span><Clock size={11} /> {parada.janelaInicio || "—"}{parada.janelaFim ? `–${parada.janelaFim}` : ""}</span>}
+                          </small>
+                        </div>
+                        {link && (
+                          <a className="tdg-driver-rota-nav" href={link} target="_blank" rel="noopener noreferrer" aria-label={`Navegar até ${parada.rotulo || "a parada"}`}>
+                            <Navigation size={16} />
+                          </a>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </article>
+            );
+          })}
         </>
       )}
 
@@ -503,7 +581,7 @@ export default function DriverPortalPage() {
         {abas.map((aba) => {
           const Icone = aba.icone;
           const ativa = secao === aba.id;
-          const badge = aba.id === "hoje" ? pendentes.length : aba.id === "entregas" ? feitas.length : 0;
+          const badge = aba.id === "hoje" ? pendentes.length : aba.id === "rota" ? rotasAtivas.length : aba.id === "entregas" ? feitas.length : 0;
           return (
             <button
               key={aba.id}

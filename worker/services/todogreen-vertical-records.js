@@ -932,6 +932,57 @@ const COLECOES = {
     exigido: (corpo) => (texto(corpo.clientId) ? "" : "Informe o cliente da operação."),
   },
 
+  // #139: rota do dia planejada no roteirizador e atribuída a um motorista. O
+  // cabeçalho vive em colunas próprias (motorista, veículo, data, resumo, status)
+  // e as paradas ORDENADAS em stops_json — lidas/gravadas sempre com a rota. O
+  // app do motorista lê pelo driver_id (mesmo recorte das viagens).
+  rotas: {
+    tabela: "todogreen_routes",
+    permissao: "operations:manage",
+    permissoesLeitura: ["operations:manage", "planning:manage", "tms:manage", "fleet:manage", "audit:read"],
+    ordem: "updated_at DESC",
+    daLinha: (row) => ({
+      id: row.id,
+      nome: row.name || "",
+      motoristaId: row.driver_id || "",
+      motorista: row.driver_name || "",
+      placa: row.vehicle_plate || "",
+      dataServico: row.service_date || "",
+      status: row.status || "planejada",
+      origem: row.origin || "",
+      destino: row.destination || "",
+      distanciaKm: numero(row.distance_km),
+      duracaoMin: numero(row.duration_min),
+      pedagioTotal: numero(row.toll_total),
+      paradas: parse(row.stops_json, []),
+      notas: row.notes || "",
+      revision: row.revision,
+      criadoEm: row.created_at,
+      atualizadoEm: row.updated_at,
+    }),
+    colunas: (corpo) => ({
+      name: texto(corpo.nome, 200),
+      driver_id: texto(corpo.motoristaId, 120),
+      driver_name: texto(corpo.motorista, 160),
+      vehicle_plate: texto(corpo.placa, 20).toUpperCase(),
+      service_date: /^\d{4}-\d{2}-\d{2}$/.test(texto(corpo.dataServico, 10)) ? texto(corpo.dataServico, 10) : null,
+      status: texto(corpo.status, 40) || "planejada",
+      origin: texto(corpo.origem, 300),
+      destination: texto(corpo.destino, 300),
+      distance_km: numero(corpo.distanciaKm),
+      duration_min: numero(corpo.duracaoMin),
+      toll_total: numero(corpo.pedagioTotal),
+      stops_json: JSON.stringify(Array.isArray(corpo.paradas) ? corpo.paradas.slice(0, 200) : []),
+      notes: texto(corpo.notas, 1000),
+    }),
+    exigido: (corpo) => {
+      if (!texto(corpo.motoristaId)) return "Escolha o motorista que vai receber a rota.";
+      if (!Array.isArray(corpo.paradas) || corpo.paradas.length < 2)
+        return "A rota precisa de pelo menos duas paradas (origem e destino).";
+      return "";
+    },
+  },
+
   financial: {
     tabela: "todogreen_financial_entries",
     permissao: "finance:manage",

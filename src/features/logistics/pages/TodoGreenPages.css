@@ -3370,6 +3370,137 @@
 .tdg-roteirizacao-resumo strong { font-size: 1.3rem; color: var(--tdg-ink); }
 .tdg-roteirizacao-resumo small { color: var(--tdg-muted, var(--tdg-muted)); }
 .tdg-roteirizacao-fonte { font-size: 0.72rem; }
+
+/* #139: atribuir a rota a um motorista + lista de rotas salvas. */
+.tdg-roteirizacao-atribuir {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  background: var(--tdg-surface, #fff);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-left: 3px solid var(--tdg-brand, #1f8a54);
+  border-radius: 11px;
+}
+.tdg-roteirizacao-atribuir > strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tdg-ink);
+}
+.tdg-roteirizacao-atribuir-campos {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1.4fr;
+  gap: 10px;
+}
+.tdg-roteirizacao-atribuir-campos label { display: grid; gap: 3px; }
+.tdg-roteirizacao-atribuir-campos label > span { font-size: 0.75rem; color: var(--tdg-muted, #5b6b64); }
+.tdg-roteirizacao-atribuir-campos select,
+.tdg-roteirizacao-atribuir-campos input {
+  padding: 8px 10px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 8px;
+  background: var(--tdg-surface, #fff);
+  color: var(--tdg-ink);
+  font: inherit;
+}
+.tdg-roteirizacao-sem-motorista { color: #a5342a; font-size: 0.78rem; }
+@media (max-width: 700px) {
+  .tdg-roteirizacao-atribuir-campos { grid-template-columns: 1fr; }
+}
+
+.tdg-roteirizacao-rotas-salvas {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tdg-roteirizacao-rotas-salvas > strong { color: var(--tdg-ink); font-size: 0.9rem; }
+.tdg-roteirizacao-rotas-salvas ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tdg-roteirizacao-rotas-salvas li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 9px 12px;
+  background: var(--tdg-surface-muted, #f6faf8);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+}
+.tdg-rota-salva-nome { font-weight: 600; color: var(--tdg-ink); }
+.tdg-rota-salva-info { grid-column: 1; font-size: 0.76rem; color: var(--tdg-muted, #5b6b64); }
+.tdg-rota-salva-status {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #e6efe9;
+  color: #2b6b47;
+}
+.tdg-rota-salva-status.status-em_rota { background: #fdf1dc; color: #8a5a12; }
+.tdg-rota-salva-status.status-concluida { background: #e2eff7; color: #245b82; }
+
+/* #139: cartão da rota no app do motorista. */
+.tdg-driver-rota-card { display: grid; gap: 8px; }
+.tdg-driver-rota-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tdg-driver-rota-status {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #e6efe9;
+  color: #2b6b47;
+}
+.tdg-driver-rota-status.status-em_rota { background: #fdf1dc; color: #8a5a12; }
+.tdg-driver-rota-status.status-concluida { background: #e2eff7; color: #245b82; }
+.tdg-driver-rota-meta { color: var(--tdg-muted, #5b6b64); }
+.tdg-driver-rota-progresso {
+  height: 6px;
+  border-radius: 999px;
+  background: #e6efe9;
+  overflow: hidden;
+}
+.tdg-driver-rota-progresso > span { display: block; height: 100%; background: var(--tdg-brand, #1f8a54); transition: width 0.2s; }
+.tdg-driver-rota-paradas { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tdg-driver-rota-paradas > li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-top: 1px solid var(--tdg-line, #eef3f1);
+}
+.tdg-driver-rota-paradas > li.concluida .tdg-driver-rota-endereco { text-decoration: line-through; color: var(--tdg-muted, #8a9992); }
+.tdg-driver-rota-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.tdg-driver-rota-check input { width: 22px; height: 22px; accent-color: var(--tdg-brand, #1f8a54); }
+.tdg-driver-rota-ordem {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e6efe9;
+  color: #2b6b47;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.tdg-driver-rota-parada-info { display: grid; gap: 2px; min-width: 0; }
+.tdg-driver-rota-endereco { color: var(--tdg-ink); font-size: 0.9rem; word-break: break-word; }
+.tdg-driver-rota-parada-info small { display: flex; align-items: center; gap: 8px; color: var(--tdg-muted, #5b6b64); font-size: 0.74rem; }
+.tdg-driver-rota-parada-info small span,
+.tdg-driver-rota-recarga { display: inline-flex; align-items: center; gap: 3px; }
+.tdg-driver-rota-recarga { color: #8a5a12; font-style: normal; }
+.tdg-driver-rota-nav {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--tdg-brand, #1f8a54);
+  color: #fff;
+}
 .tdg-roteirizacao-mapa {
   width: 100%;
   height: clamp(360px, 56vh, 640px);
