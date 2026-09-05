@@ -3177,7 +3177,26 @@
 /* #81: roteirização com mapa (OpenStreetMap + Leaflet), várias paradas. */
 .tdg-roteirizacao-form { display: grid; gap: 12px; margin: 6px 0 14px; }
 .tdg-roteirizacao-paradas { display: grid; gap: 8px; }
-.tdg-roteirizacao-parada { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.tdg-roteirizacao-parada { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; border-radius: 10px; padding: 4px; transition: background-color .12s ease, box-shadow .12s ease; }
+.tdg-roteirizacao-parada.arrastando { background: #eef8f4; box-shadow: 0 0 0 2px #7fcbb8 inset; opacity: .85; }
+/* Alça de arrastar: só ela inicia o arraste, o campo segue selecionável. */
+.tdg-roteirizacao-arrasta { align-items: center; align-self: center; color: #8fa79d; cursor: grab; display: flex; flex: 0 0 auto; margin-bottom: 7px; touch-action: none; }
+.tdg-roteirizacao-arrasta:active { cursor: grabbing; }
+.tdg-roteirizacao-arrasta:hover { color: #0b9f8f; }
+/* Janela de horário por parada. */
+.tdg-roteirizacao-janela { align-items: center; align-self: flex-end; background: #f4f8f6; border: 1px solid #d5e5de; border-radius: 8px; color: #3d5a4c; display: flex; gap: 3px; margin-bottom: 3px; padding: 4px 7px; }
+.tdg-roteirizacao-janela input { background: transparent; border: 0; color: #17372e; font: inherit; font-size: .82rem; width: 74px; }
+.tdg-roteirizacao-janela input:focus { outline: none; }
+.tdg-roteirizacao-janela span { color: #8fa79d; }
+/* Partida + trânsito. */
+.tdg-roteirizacao-partida { align-items: end; display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 2px; }
+.tdg-roteirizacao-partida > label { display: grid; gap: 4px; }
+.tdg-roteirizacao-partida > label > span { align-items: center; color: var(--tdg-ink); display: flex; font-size: .78rem; font-weight: 700; gap: 4px; }
+.tdg-roteirizacao-partida input[type="datetime-local"] { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; min-height: 40px; padding: 8px 10px; }
+.tdg-roteirizacao-transito-check { align-items: center; display: flex !important; gap: 7px; font-size: .84rem; }
+.tdg-roteirizacao-transito-check input { min-height: auto; width: auto; }
+.tdg-roteirizacao-chegada { align-items: center; color: #17734f !important; display: flex; font-weight: 600; gap: 5px; }
+.tdg-roteirizacao-chegada strong { color: #0b6f52; }
 .tdg-roteirizacao-num {
   flex: 0 0 auto;
   display: grid;

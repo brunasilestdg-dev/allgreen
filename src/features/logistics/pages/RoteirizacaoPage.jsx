@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BatteryCharging, Coins, Plug, Plus, Route, Shuffle, Sparkles, Trash2 } from "lucide-react";
+import { BatteryCharging, Clock, Coins, GripVertical, Navigation, Plug, Plus, Route, Shuffle, Sparkles, Trash2 } from "lucide-react";
 import {
   aplicarOrdemDoMeio,
   otimizarOrdemDeParadas,
@@ -54,9 +54,45 @@ const formatarTempo = (minutos) => {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m} min`;
 };
 
+// Move um item de `from` para `to` sem mutar o original — base do arrastar
+// paradas. Usado em paradas, janelas e no espelho booleano das recargas, para
+// os três andarem juntos na reordenação.
+const arrayMove = (arr, from, to) => {
+  const copia = arr.slice();
+  const [item] = copia.splice(from, 1);
+  copia.splice(to, 0, item);
+  return copia;
+};
+
+// Fator de trânsito honesto e transparente: sem provedor pago, o OSRM dá tempo
+// de fluxo livre. Nos horários de pico (7-9h e 17-19h) aplicamos um acréscimo
+// declarado à ESTIMATIVA — não é trânsito ao vivo, é uma régua de pico. Fora do
+// pico, 1.0 (sem mexer). Parte "HH:MM" ou ISO; hora inválida devolve 1.0.
+const fatorDeTransito = (partidaISO) => {
+  const hora = Number(String(partidaISO || "").slice(11, 13));
+  if (!Number.isFinite(hora)) return 1;
+  if (hora >= 7 && hora < 9) return 1.35;
+  if (hora >= 17 && hora < 19) return 1.4;
+  if ((hora >= 6 && hora < 7) || (hora >= 9 && hora < 10) || (hora >= 16 && hora < 17) || (hora >= 19 && hora < 20)) return 1.15;
+  return 1;
+};
+
+// Soma minutos a um instante e devolve "HH:MM" (chegada estimada). Parte
+// vazia devolve "".
+const horaMais = (partidaISO, minutos) => {
+  if (!partidaISO) return "";
+  const base = new Date(partidaISO);
+  if (!Number.isFinite(base.getTime())) return "";
+  const fim = new Date(base.getTime() + minutos * 60000);
+  return `${String(fim.getHours()).padStart(2, "0")}:${String(fim.getMinutes()).padStart(2, "0")}`;
+};
+
 export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [paradas, setParadas] = useState(["", ""]);
   const [recargas, setRecargas] = useState(() => new Set());
+  // Janela de horário por parada (paralelo a `paradas`): { inicio, fim } em
+  // "HH:MM". Alimenta o otimizador IA e a leitura da chegada estimada.
+  const [janelas, setJanelas] = useState(() => [{ inicio: "", fim: "" }, { inicio: "", fim: "" }]);
   const [restricoes, setRestricoes] = useState("");
   const [iaEstado, setIaEstado] = useState({ fase: "idle" });
   const [estado, setEstado] = useState({ fase: "parado" });
@@ -64,6 +100,12 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
   const [pedagios, setPedagios] = useState({ fase: "idle" });
   const [tarifaMedia, setTarifaMedia] = useState("");
+  // Trânsito: horário de partida + fator de pico (estimativa transparente; o
+  // trânsito ao vivo real depende de provedor pago, ligado por chave depois).
+  const [partida, setPartida] = useState("");
+  const [considerarTransito, setConsiderarTransito] = useState(false);
+  // Índice sendo arrastado (reordenar paradas ao estilo Circuit/Linx).
+  const [arrastando, setArrastando] = useState(null);
 
   const containerRef = useRef(null);
   const mapaRef = useRef(null);
@@ -118,15 +160,45 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
       setSugestoes((atual) => ({ ...atual, [indice]: lista }));
     }, 350);
   };
-  const adicionarParada = () => setParadas((atual) => [...atual, ""]);
-  const removerParada = (indice) =>
+  const adicionarParada = () => {
+    setParadas((atual) => [...atual, ""]);
+    setJanelas((atual) => [...atual, { inicio: "", fim: "" }]);
+  };
+  const removerParada = (indice) => {
     setParadas((atual) => (atual.length <= 2 ? atual : atual.filter((_, i) => i !== indice)));
+    setJanelas((atual) => (paradas.length <= 2 ? atual : atual.filter((_, i) => i !== indice)));
+    setRecargas((atual) => {
+      // Os índices acima de `indice` recuam um; o removido sai.
+      const bool = paradas.map((_, i) => atual.has(i)).filter((_, i) => i !== indice);
+      const next = new Set();
+      bool.forEach((v, i) => { if (v) next.add(i); });
+      return next;
+    });
+  };
   const alternarRecarga = (indice) =>
     setRecargas((atual) => {
       const proximo = new Set(atual);
       if (proximo.has(indice)) proximo.delete(indice); else proximo.add(indice);
       return proximo;
     });
+  const alterarJanela = (indice, campo, valor) =>
+    setJanelas((atual) => atual.map((j, i) => (i === indice ? { ...j, [campo]: valor } : j)));
+
+  // Reordena as paradas (arrastar-e-soltar). Paradas, janelas e recargas andam
+  // juntas; as sugestões se limpam (os índices mudaram) e as coords ficam
+  // (indexadas pelo texto do endereço, não pela posição).
+  const moverParada = (de, para) => {
+    if (de === para || de == null || para == null) return;
+    setParadas((atual) => arrayMove(atual, de, para));
+    setJanelas((atual) => arrayMove(atual, de, para));
+    setRecargas((atual) => {
+      const bool = arrayMove(paradas.map((_, i) => atual.has(i)), de, para);
+      const next = new Set();
+      bool.forEach((v, i) => { if (v) next.add(i); });
+      return next;
+    });
+    setSugestoes({});
+  };
 
   const desenhar = (resultado) => {
     const mapa = mapaRef.current;
@@ -235,10 +307,30 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
       setToast?.("A ordem já está otimizada.");
       return;
     }
-    setParadas(nova);
-    setRecargas(new Set());
+    reordenarEstado(r.enderecos, nova);
     await tracar(nova);
     setToast?.("Ordem das paradas otimizada.");
+  };
+
+  // Reordena paradas + janelas + recargas para bater com `novos` (uma
+  // permutação de `velhos`, por endereço, consumindo duplicatas). Base comum do
+  // "Otimizar ordem" e do "Sugerir (IA)": nenhum dos dois perde a janela nem a
+  // marca de recarga da parada, que agora viajam com ela.
+  const reordenarEstado = (velhos, novos) => {
+    const usados = new Array(velhos.length).fill(false);
+    const perm = novos.map((end) => {
+      const idx = velhos.findIndex((v, i) => !usados[i] && v === end);
+      if (idx >= 0) usados[idx] = true;
+      return idx;
+    });
+    setParadas(novos);
+    setJanelas((atual) => perm.map((oi) => (oi >= 0 ? atual[oi] || { inicio: "", fim: "" } : { inicio: "", fim: "" })));
+    setRecargas((atual) => {
+      const next = new Set();
+      perm.forEach((oi, ni) => { if (oi >= 0 && atual.has(oi)) next.add(ni); });
+      return next;
+    });
+    setSugestoes({});
   };
 
   // #93: a IA sugere a ordem das paradas do meio a partir de restrições em texto
@@ -253,7 +345,15 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
       return;
     }
     setIaEstado({ fase: "pensando" });
-    const meio = validas.slice(1, -1).map((p, i) => `${i + 1}. ${p}`).join("\n");
+    // Janelas alinhadas às paradas válidas (mesmo filtro), para o prompt citar a
+    // faixa de horário de cada parada do meio — a IA passa a ordenar por ela.
+    const idxValidas = paradas.map((p, i) => ({ p: p.trim(), i })).filter((x) => x.p.length >= 3).map((x) => x.i);
+    const janelasValidas = idxValidas.map((i) => janelas[i] || { inicio: "", fim: "" });
+    const meio = validas.slice(1, -1).map((p, i) => {
+      const j = janelasValidas[i + 1] || {};
+      const faixa = j.inicio || j.fim ? ` [janela ${j.inicio || "?"}–${j.fim || "?"}]` : "";
+      return `${i + 1}. ${p}${faixa}`;
+    }).join("\n");
     const prompt = `Você é um roteirizador de logística de uma transportadora rodoviária 100% elétrica no Brasil. A rota tem origem e destino FIXOS; você só decide a ordem de visita das paradas do meio.
 
 Origem: ${validas[0]}
@@ -283,8 +383,7 @@ Regras:
       const obj = JSON.parse(recorte);
       const nova = aplicarOrdemDoMeio(validas, (obj.ordem || []).map((n) => Number(n)));
       if (!nova) throw new Error("A IA devolveu uma ordem inválida. Tente de novo ou ajuste as restrições.");
-      setParadas(nova);
-      setRecargas(new Set());
+      reordenarEstado(validas, nova);
       setIaEstado({ fase: "ok", motivo: String(obj.motivo || "").slice(0, 200) });
       await tracar(nova);
       setToast?.("Ordem sugerida pela IA aplicada.");
@@ -338,6 +437,11 @@ Regras:
   const qtdRecargas = r ? [...recargas].filter((i) => i < (r.enderecos?.length || 0)).length : 0;
   const minutosTotal = r ? r.minutos + qtdRecargas * MINUTOS_RECARGA : 0;
   const pesadosNoMapa = carregadores.lista.filter((c) => c.pesados).length;
+  // Trânsito: só na estimativa, e só quando a pessoa marca. Aplica o fator de
+  // pico ao tempo de VIAGEM (não às recargas, que são fixas de 1h30).
+  const fatorTransito = considerarTransito ? fatorDeTransito(partida) : 1;
+  const minutosComTransito = r ? Math.round(r.minutos * fatorTransito) + qtdRecargas * MINUTOS_RECARGA : 0;
+  const chegadaEstimada = horaMais(partida, minutosComTransito);
 
   return (
     <section className="tdg-panel tdg-page tdg-roteirizacao">
@@ -345,7 +449,7 @@ Regras:
         <div>
           <span>OPERAÇÃO · MAPA</span>
           <h2><Route size={20} /> Roteirização</h2>
-          <p>Várias paradas no mapa do Brasil (OpenStreetMap), com rota, distância e tempo. Digite e escolha o endereço na sugestão, marque as paradas de recarga (soma 1h30 cada), use "Otimizar ordem" para tirar o zigue-zague e "Carregadores" para ver pontos de recarga (foco em pesados). Referência, sem trânsito.</p>
+          <p>Várias paradas no mapa do Brasil (OpenStreetMap), com rota, distância e tempo. Digite e escolha o endereço na sugestão, <strong>arraste pela alça para reordenar</strong>, marque a <strong>janela de horário</strong> de cada parada (a IA respeita), defina a saída para ver a <strong>chegada estimada</strong> (com régua de trânsito de pico), marque recargas (1h30 cada) e veja pedágios e carregadores (foco em pesados).</p>
         </div>
       </header>
 
@@ -360,8 +464,25 @@ Regras:
           {paradas.map((valor, indice) => {
             const papel = indice === 0 ? "origem" : indice === paradas.length - 1 ? "destino" : "meio";
             const recarga = recargas.has(indice);
+            const janela = janelas[indice] || { inicio: "", fim: "" };
             return (
-              <div className={`tdg-roteirizacao-parada ${papel}`} key={indice}>
+              <div
+                className={`tdg-roteirizacao-parada ${papel}${arrastando === indice ? " arrastando" : ""}`}
+                key={indice}
+                onDragOver={(event) => { if (arrastando != null) event.preventDefault(); }}
+                onDrop={(event) => { event.preventDefault(); moverParada(arrastando, indice); setArrastando(null); }}
+              >
+                {/* Só a alça arrasta — o campo de endereço segue selecionável. */}
+                <span
+                  className="tdg-roteirizacao-arrasta"
+                  draggable
+                  onDragStart={(event) => { setArrastando(indice); event.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => setArrastando(null)}
+                  title="Arraste para reordenar"
+                  aria-label={`Arrastar parada ${indice + 1} para reordenar`}
+                >
+                  <GripVertical size={16} />
+                </span>
                 <span className="tdg-roteirizacao-num" aria-hidden="true">{indice + 1}</span>
                 <label className="tdg-roteirizacao-campo">
                   <span>{papel === "origem" ? "Origem" : papel === "destino" ? "Destino" : `Parada ${indice}`}</span>
@@ -378,6 +499,12 @@ Regras:
                     ))}
                   </datalist>
                 </label>
+                <div className="tdg-roteirizacao-janela" title="Janela de horário para esta parada (opcional)">
+                  <Clock size={13} aria-hidden="true" />
+                  <input type="time" aria-label={`Início da janela da parada ${indice + 1}`} value={janela.inicio} onChange={(event) => alterarJanela(indice, "inicio", event.target.value)} />
+                  <span aria-hidden="true">–</span>
+                  <input type="time" aria-label={`Fim da janela da parada ${indice + 1}`} value={janela.fim} onChange={(event) => alterarJanela(indice, "fim", event.target.value)} />
+                </div>
                 <button
                   type="button"
                   className={`tdg-roteirizacao-recarga${recarga ? " ativa" : ""}`}
@@ -405,6 +532,18 @@ Regras:
             placeholder="Ex.: entregar Campinas antes das 12h; a parada de Sorocaba é prioridade; evitar centro de SP no horário de pico."
           />
         </label>
+        {/* Partida + trânsito: dá a chegada estimada. O trânsito ao vivo real
+            depende de provedor pago; aqui é uma régua de pico transparente. */}
+        <div className="tdg-roteirizacao-partida">
+          <label>
+            <span><Navigation size={13} aria-hidden="true" /> Saída</span>
+            <input type="datetime-local" value={partida} onChange={(event) => setPartida(event.target.value)} />
+          </label>
+          <label className="tdg-roteirizacao-transito-check" title="Aplica um acréscimo de horário de pico à ESTIMATIVA (não é trânsito ao vivo)">
+            <input type="checkbox" checked={considerarTransito} onChange={(event) => setConsiderarTransito(event.target.checked)} />
+            <span>Considerar trânsito de pico (estimativa)</span>
+          </label>
+        </div>
         <div className="tdg-roteirizacao-acoes">
           <button type="button" className="tdg-action tdg-action-ghost" onClick={adicionarParada}>
             <Plus size={16} /> Adicionar parada
@@ -457,12 +596,15 @@ Regras:
         <div className="tdg-roteirizacao-resumo">
           <strong>{r.distanciaKm} km</strong>
           <span>
-            {formatarTempo(minutosTotal)} no total
-            {qtdRecargas > 0 ? ` (${formatarTempo(r.minutos)} de viagem + ${qtdRecargas} recarga(s) de 1h30)` : " de viagem"}
-            , sem trânsito · {r.paradas.length} paradas
+            {formatarTempo(considerarTransito ? minutosComTransito : minutosTotal)} no total
+            {qtdRecargas > 0 ? ` (${formatarTempo(Math.round(r.minutos * fatorTransito))} de viagem + ${qtdRecargas} recarga(s) de 1h30)` : " de viagem"}
+            {considerarTransito ? ` · com trânsito de pico (+${Math.round((fatorTransito - 1) * 100)}%)` : " · sem trânsito"} · {r.paradas.length} paradas
           </span>
+          {chegadaEstimada && (
+            <span className="tdg-roteirizacao-chegada"><Clock size={13} aria-hidden="true" /> Chegada estimada às <strong>{chegadaEstimada}</strong></span>
+          )}
           <small>{r.paradas.map((p) => p.rotulo.split(",")[0]).join(" → ")}</small>
-          <small className="tdg-roteirizacao-fonte">{r.fonte}</small>
+          <small className="tdg-roteirizacao-fonte">{r.fonte}{considerarTransito ? " · trânsito de pico é estimativa (régua por horário); ao vivo depende de provedor pago" : ""}</small>
         </div>
       )}
 
