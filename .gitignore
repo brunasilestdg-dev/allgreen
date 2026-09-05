@@ -20,3 +20,7 @@ scripts/track3r-local-bridge/.track3r-downloads/
 scripts/track3r-local-bridge/.track3r-state.json
 scripts/track3r-local-bridge/.track3r-network-candidates.json
 logs/track3r-local-bridge.log
+
+# Credenciais locais de deploy (NUNCA commitar)
+.cloudflare.env
+*.secret

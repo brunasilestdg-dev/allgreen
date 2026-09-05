@@ -7,6 +7,9 @@ const ClientActivationPage = lazy(() => import("../features/logistics/ClientActi
 const TodoGreenAccessInvite = lazy(() => import("../features/logistics/TodoGreenAccessInvite.jsx"));
 const DriverFleetCenterPage = lazy(() => import("../features/logistics/pages/DriverFleetCenterPage.jsx"));
 const DriverPortalPage = lazy(() => import("../features/logistics/pages/DriverPortalPage.jsx"));
+// Galeria viva do design system (Onda 1 do redesign) — referência dos
+// componentes novos antes de adotá-los nas telas.
+const DesignSystemGallery = lazy(() => import("../design-system/DesignSystemGallery.jsx"));
 
 export function resolvePrimaryRoute(pathname, authenticated) {
   const path = String(pathname || "/");
@@ -37,6 +40,7 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   if (/^\/(?:motorista-frota|central-frota)(?:\/|$)/.test(path))
     return { kind: "driver-fleet-portal" };
   if (/^\/todogreen\/ativacao(?:\/|$)/.test(path)) return { kind: "todogreen-activation" };
+  if (/^\/design-system(?:\/|$)/.test(path)) return { kind: "design-system" };
   if (/^\/todogreen(?:\/|$)/.test(path)) return { kind: "todogreen" };
   return { kind: "workspace" };
 }
@@ -98,6 +102,12 @@ export default function PrimaryAppRouter({
     return (
       <Suspense fallback={<div className="inbox-loading">Carregando implantação...</div>}>
         <ClientActivationPage db={db} update={update} setToast={setToast} authHeaders={authHeaders} />
+      </Suspense>
+    );
+  if (route.kind === "design-system")
+    return (
+      <Suspense fallback={<div className="inbox-loading">Carregando design system...</div>}>
+        <DesignSystemGallery />
       </Suspense>
     );
   if (route.kind === "todogreen")
