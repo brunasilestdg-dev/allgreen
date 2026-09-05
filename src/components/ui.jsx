@@ -71,16 +71,23 @@ export function Field({ label, children, hint }) {
 
 export function FilterSelect({
   "aria-label": ariaLabel,
+  label,
   value,
   onChange,
   children,
 }) {
+  // `label` visível deixa claro o que cada filtro faz — sem ele os selects
+  // viram uma fileira de "Todos/Todas" que não diz o que filtra (feedback da
+  // titular no board de tarefas).
   return (
-    <div className="filter-select">
-      <select aria-label={ariaLabel} value={value} onChange={onChange}>
-        {children}
-      </select>
-      <ChevronDown />
+    <div className={`filter-select${label ? " filter-select--labeled" : ""}`}>
+      {label && <span className="filter-select-label">{label}</span>}
+      <div className="filter-select-control">
+        <select aria-label={ariaLabel || label} value={value} onChange={onChange}>
+          {children}
+        </select>
+        <ChevronDown />
+      </div>
     </div>
   );
 }

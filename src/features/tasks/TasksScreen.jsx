@@ -1822,6 +1822,7 @@ export default function Tasks({
       {view !== "missoes" && (
         <div className="filter-row">
           <FilterSelect
+            label="Status"
             aria-label="Filtrar por status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -1832,6 +1833,7 @@ export default function Tasks({
             ))}
           </FilterSelect>
           <FilterSelect
+            label="Prioridade"
             aria-label="Filtrar por prioridade"
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
@@ -1842,6 +1844,7 @@ export default function Tasks({
             <option>Alta</option>
           </FilterSelect>
           <FilterSelect
+            label="Responsável"
             aria-label="Filtrar por responsável"
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
@@ -1852,6 +1855,7 @@ export default function Tasks({
             ))}
           </FilterSelect>
           <FilterSelect
+            label="Projeto"
             aria-label="Filtrar por projeto"
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
@@ -1862,6 +1866,7 @@ export default function Tasks({
             ))}
           </FilterSelect>
           <FilterSelect
+            label="Arquivo"
             aria-label="Filtrar arquivamento"
             value={archiveFilter}
             onChange={(e) => setArchiveFilter(e.target.value)}
