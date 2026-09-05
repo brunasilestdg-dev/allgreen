@@ -9,18 +9,32 @@ import { runTodoGreenExternalIntegration } from "./todogreen-integration-gateway
 // vira o OpenStreetMap (via Overpass, gratuito e sem chave) quando não há chave
 // do OCM; com a chave configurada, usa o OCM (dados de potência mais ricos).
 // O resultado sai no mesmo formato canônico, então o mapa não sabe a origem.
+// Vários espelhos do Overpass: o público (overpass-api.de) vive saturado e
+// devolve 429/504; girar entre espelhos é o que mantém a busca de pesos
+// funcionando. kumi e a fr são mais folgados. A ordem tenta primeiro os mais
+// estáveis para a maioria dos casos cair no primeiro acerto.
 const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
+// A janela do servidor Overpass (timeout:N) tem de ser MENOR que o abort do
+// fetch — senão o cliente mata uma resposta lenta porém válida antes de a
+// consulta terminar (o bug antigo: fetch 15s < timeout:20s). Agora
+// timeout:18s no servidor e 24s no cliente, com folga.
+const OVERPASS_QUERY_TIMEOUT = 18;
+const FETCH_ABORT_MS = 24_000;
 const finite = (valor, fallback = 0) => (Number.isFinite(Number(valor)) ? Number(valor) : fallback);
 
 async function buscarNoOverpass(latitude, longitude, raioMetros, limite) {
-  const consulta = `[out:json][timeout:20];node["amenity"="charging_station"](around:${raioMetros},${latitude},${longitude});out ${limite};`;
+  // `nwr` pega nós e polígonos (estações mapeadas como área); `out center` dá
+  // um ponto para cada; `qt` ordena por proximidade e acelera a resposta.
+  const consulta = `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT}];nwr["amenity"="charging_station"](around:${raioMetros},${latitude},${longitude});out center ${limite} qt;`;
   let ultimoErro = null;
   for (const endpoint of OVERPASS_ENDPOINTS) {
     const controlador = new AbortController();
-    const timer = setTimeout(() => controlador.abort("timeout"), 15_000);
+    const timer = setTimeout(() => controlador.abort("timeout"), FETCH_ABORT_MS);
     try {
       const resposta = await fetch(endpoint, {
         method: "POST",

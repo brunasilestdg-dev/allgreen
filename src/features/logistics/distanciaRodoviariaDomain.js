@@ -373,8 +373,10 @@ export function normalizarCarregadoresOSM(elementos) {
   const nodes = Array.isArray(elementos) ? elementos : [];
   return nodes
     .map((node) => {
-      const lat = Number(node?.lat);
-      const lon = Number(node?.lon);
+      // Nós trazem lat/lon no topo; ways/relations (estação mapeada como área,
+      // via `out center`) trazem o ponto em node.center. Aceita os dois.
+      const lat = Number(node?.lat ?? node?.center?.lat);
+      const lon = Number(node?.lon ?? node?.center?.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
       const tags = node?.tags && typeof node.tags === "object" ? node.tags : {};
       // Potência: procura um número em kW em qualquer tag de saída/potência.
