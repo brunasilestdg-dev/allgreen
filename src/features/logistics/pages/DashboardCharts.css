@@ -34,6 +34,34 @@
 .tdgc-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tdgc-legend b { color: var(--tdg-muted); font-family: "IBM Plex Mono", monospace; font-weight: 600; }
 
+/* #dinâmico: gráficos clicáveis + entrada animada (pedido da titular). Quando a
+   barra/fatia/ponto é botão, zera o estilo de botão e ganha realce ao passar o
+   mouse; o cursor e o leve destaque dizem "clique aqui". */
+button.tdgc-bar-col { background: none; border: 0; cursor: pointer; font: inherit; padding: 0; }
+.tdgc-clic { cursor: pointer; }
+button.tdgc-bar-col:hover .tdgc-bar,
+.tdgc-bar-col.tdgc-clic:hover .tdgc-bar { filter: brightness(1.12); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tdg-green) 30%, transparent); }
+button.tdgc-bar-col:focus-visible { outline: 2px solid var(--tdg-green); outline-offset: 2px; border-radius: 6px; }
+.tdgc-legend-btn { align-items: center; background: none; border: 0; cursor: pointer; display: grid; font: inherit; gap: 8px; grid-template-columns: 10px 1fr auto; padding: 2px 4px; margin: -2px -4px; border-radius: 6px; text-align: left; width: 100%; color: inherit; }
+.tdgc-legend-btn:hover { background: var(--tdg-soft, #f2f7f4); }
+.tdgc-legend-btn:focus-visible { outline: 2px solid var(--tdg-green); outline-offset: 1px; }
+.tdgc-point.tdgc-clic { cursor: pointer; }
+.tdgc-point.tdgc-clic:hover { r: 5; }
+.tdgc-table tr.tdgc-clic:hover td { background: var(--tdg-soft, #f2f7f4); }
+
+/* Entrada animada — só quando a pessoa não pediu menos movimento. */
+@media (prefers-reduced-motion: no-preference) {
+  .tdgc-bar { transform-origin: bottom; animation: tdgc-crescer .5s ease-out both; transition: filter .15s, box-shadow .15s; }
+  .tdgc-area { animation: tdgc-surgir .6s ease-out both; }
+  .tdgc-stroke { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: tdgc-tracar 1s ease-out forwards; }
+  .tdgc-donut { animation: tdgc-girar .7s ease-out both; }
+  .tdgc-point { transition: r .12s; }
+}
+@keyframes tdgc-crescer { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes tdgc-tracar { to { stroke-dashoffset: 0; } }
+@keyframes tdgc-surgir { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tdgc-girar { from { opacity: 0; transform: rotate(-25deg) scale(.9); } to { opacity: 1; transform: none; } }
+
 /* Tabela */
 .tdgc-table-wrap { max-height: 150px; overflow-y: auto; }
 .tdgc-table { border-collapse: collapse; width: 100%; }

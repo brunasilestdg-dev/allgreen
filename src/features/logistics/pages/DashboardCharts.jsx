@@ -4,6 +4,12 @@ import "./DashboardCharts.css";
 // Os desenhos dos indicadores do painel. Puro SVG/CSS — sem biblioteca externa
 // (a CSP do produto não deixaria carregar uma, e a régua visual da vertical é
 // própria). A série vem pronta de `dashboardChartsDomain`; aqui só se desenha.
+//
+// Dinâmicos (pedido da titular: "clicar nos gráficos, torná-los dinâmicos"):
+// cada barra/fatia/ponto mostra o valor exato ao passar o mouse (tooltip nativo)
+// e, quando a tela passa `onSelecionar`, vira botão clicável que devolve o item
+// tocado — a pessoa clica a fatia e a tela decide para onde levar. A entrada é
+// animada por CSS (barra cresce, linha se desenha, rosca aparece).
 
 // Paleta categórica da rosca: verde da marca primeiro, depois tons que se
 // distinguem em claro e escuro. Índices além do tamanho dão a volta.
@@ -32,24 +38,37 @@ function Numero({ valor, unidade }) {
   );
 }
 
-function Barras({ serie, unidade }) {
+function Barras({ serie, unidade, onSelecionar }) {
   if (!serie.length) return <SemDados />;
   const max = maiorValor(serie);
   return (
     <div className="tdgc-bars" role="img" aria-label="Gráfico de barras">
-      {serie.map((item, i) => (
-        <div className="tdgc-bar-col" key={item.chave || item.rotulo || i}>
-          <span className="tdgc-bar-val">{formatarValor(item.valor, unidade)}</span>
-          <span className="tdgc-bar" style={{ height: `${Math.max(4, (Math.abs(item.valor) / max) * 100)}%` }} />
-          <span className="tdgc-bar-lbl">{item.rotulo}</span>
-        </div>
-      ))}
+      {serie.map((item, i) => {
+        const dica = `${item.rotulo}: ${formatarValor(item.valor, unidade)}`;
+        const altura = `${Math.max(4, (Math.abs(item.valor) / max) * 100)}%`;
+        const conteudo = (
+          <>
+            <span className="tdgc-bar-val">{formatarValor(item.valor, unidade)}</span>
+            <span className="tdgc-bar" style={{ height: altura }} />
+            <span className="tdgc-bar-lbl">{item.rotulo}</span>
+          </>
+        );
+        return onSelecionar ? (
+          <button type="button" className="tdgc-bar-col tdgc-clic" key={item.chave || item.rotulo || i} title={dica} aria-label={`Abrir ${dica}`} onClick={() => onSelecionar(item)}>
+            {conteudo}
+          </button>
+        ) : (
+          <div className="tdgc-bar-col" key={item.chave || item.rotulo || i} title={dica}>
+            {conteudo}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function Evolucao({ serie, unidade }) {
-  if (serie.length < 2) return serie.length ? <Barras serie={serie} unidade={unidade} /> : <SemDados />;
+function Evolucao({ serie, unidade, onSelecionar }) {
+  if (serie.length < 2) return serie.length ? <Barras serie={serie} unidade={unidade} onSelecionar={onSelecionar} /> : <SemDados />;
   const W = 300;
   const H = 120;
   const pts = pontosDaLinha(serie, { largura: W, altura: H - 24 });
@@ -62,7 +81,19 @@ function Evolucao({ serie, unidade }) {
         <line x1="0" y1={H - 12} x2={W} y2={H - 12} className="tdgc-axis" />
         <polygon points={area} className="tdgc-area" />
         <polyline points={desenho} className="tdgc-stroke" />
-        <circle cx={ultimo.x} cy={ultimo.y + 6} r="4" className="tdgc-endpoint" />
+        {/* Um ponto por mês com o valor no tooltip; clicável quando a tela pede. */}
+        {pts.map((p, i) => (
+          <circle
+            key={serie[i]?.chave || serie[i]?.rotulo || i}
+            cx={p.x}
+            cy={p.y + 6}
+            r={i === pts.length - 1 ? 4 : 3}
+            className={`tdgc-point${i === pts.length - 1 ? " tdgc-endpoint" : ""}${onSelecionar ? " tdgc-clic" : ""}`}
+            onClick={onSelecionar ? () => onSelecionar(serie[i]) : undefined}
+          >
+            <title>{`${serie[i].rotulo}: ${formatarValor(serie[i].valor, unidade)}`}</title>
+          </circle>
+        ))}
       </svg>
       <div className="tdgc-line-labels">
         <span>{serie[0].rotulo}</span>
@@ -73,7 +104,7 @@ function Evolucao({ serie, unidade }) {
   );
 }
 
-function Distribuicao({ distribuicao }) {
+function Distribuicao({ distribuicao, onSelecionar }) {
   const fatias = fatiasDaRosca(distribuicao);
   if (!fatias.length) return <SemDados />;
   const gradiente = fatias
@@ -83,26 +114,42 @@ function Distribuicao({ distribuicao }) {
     <div className="tdgc-donut-wrap">
       <div className="tdgc-donut" style={{ background: `conic-gradient(${gradiente})` }} role="img" aria-label="Gráfico de distribuição" />
       <ul className="tdgc-legend">
-        {fatias.map((f, i) => (
-          <li key={f.rotulo}>
-            <i style={{ background: CORES[i % CORES.length] }} />
-            <span>{f.rotulo}</span>
-            <b>{f.percentual}%</b>
-          </li>
-        ))}
+        {fatias.map((f, i) => {
+          const dica = `${f.rotulo}: ${f.percentual}%`;
+          const conteudo = (
+            <>
+              <i style={{ background: CORES[i % CORES.length] }} />
+              <span>{f.rotulo}</span>
+              <b>{f.percentual}%</b>
+            </>
+          );
+          return onSelecionar ? (
+            <li key={f.rotulo}>
+              <button type="button" className="tdgc-legend-btn tdgc-clic" title={dica} aria-label={`Abrir ${dica}`} onClick={() => onSelecionar(f)}>
+                {conteudo}
+              </button>
+            </li>
+          ) : (
+            <li key={f.rotulo} title={dica}>{conteudo}</li>
+          );
+        })}
       </ul>
     </div>
   );
 }
 
-function Tabela({ serie, unidade }) {
+function Tabela({ serie, unidade, onSelecionar }) {
   if (!serie.length) return <SemDados />;
   return (
     <div className="tdgc-table-wrap">
       <table className="tdgc-table">
         <tbody>
           {serie.map((item, i) => (
-            <tr key={item.chave || item.rotulo || i}>
+            <tr
+              key={item.chave || item.rotulo || i}
+              className={onSelecionar ? "tdgc-clic" : ""}
+              onClick={onSelecionar ? () => onSelecionar(item) : undefined}
+            >
               <td>{item.rotulo}</td>
               <td className="tdgc-num">{formatarValor(item.valor, unidade)}</td>
             </tr>
@@ -114,14 +161,15 @@ function Tabela({ serie, unidade }) {
 }
 
 // O ponto de entrada: dado o widget e os dados, escolhe o desenho. Um `type`
-// desconhecido cai em número — nunca tela em branco.
-export default function WidgetChart({ widget, data, valorEscalar }) {
+// desconhecido cai em número — nunca tela em branco. `onSelecionar(item)` é
+// opcional: quando a tela passa, o gráfico fica clicável (barra/fatia/ponto).
+export default function WidgetChart({ widget, data, valorEscalar, onSelecionar }) {
   const { valor, unidade, serie, distribuicao } = serieDoIndicador(widget.metric, data, valorEscalar);
   switch (widget.type) {
-    case "bar": return <Barras serie={serie} unidade={unidade} />;
-    case "line": return <Evolucao serie={serie} unidade={unidade} />;
-    case "donut": return <Distribuicao distribuicao={distribuicao} />;
-    case "table": return <Tabela serie={serie} unidade={unidade} />;
+    case "bar": return <Barras serie={serie} unidade={unidade} onSelecionar={onSelecionar} />;
+    case "line": return <Evolucao serie={serie} unidade={unidade} onSelecionar={onSelecionar} />;
+    case "donut": return <Distribuicao distribuicao={distribuicao} onSelecionar={onSelecionar} />;
+    case "table": return <Tabela serie={serie} unidade={unidade} onSelecionar={onSelecionar} />;
     default: return <Numero valor={valor} unidade={unidade} />;
   }
 }

@@ -163,6 +163,18 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     greenScore: "/todogreen/central-esg",
   };
 
+  // Clicar num gráfico do painel leva à tela onde aquele número vive (pedido da
+  // titular: "clicar nos gráficos"). As chaves são as do painel (GRAFICOS).
+  const rotaDoGrafico = {
+    receita: "/todogreen/faturamento",
+    custo: "/todogreen/custos",
+    margem: "/todogreen/precificacao",
+    pipeline: "/todogreen/funil",
+    propostas: "/todogreen/propostas",
+    operacoes: "/todogreen/operacoes",
+    clientes: "/todogreen/clientes",
+  };
+
   const shortcuts = profile.shortcutIds.map((id) => ERP_SHORTCUTS.find((item) => item.id === id)).filter(Boolean);
   const save = () => {
     const normalized = normalizeHomePreferences(role, draft);
@@ -195,7 +207,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
           {painelDaArea(area.id).map((g) => (
             <article className="tdg-home-painel-card" key={g.metric}>
               <div className="tdg-home-painel-cab"><strong>{g.titulo}</strong><small>{g.subtitulo}</small></div>
-              <WidgetChart widget={{ metric: g.metric, type: g.type }} data={data} />
+              <WidgetChart widget={{ metric: g.metric, type: g.type }} data={data} onSelecionar={rotaDoGrafico[g.metric] ? () => onNavigate?.(rotaDoGrafico[g.metric]) : undefined} />
             </article>
           ))}
         </div>
