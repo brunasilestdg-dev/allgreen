@@ -12,11 +12,12 @@
 // assim que ela se apresenta; quem monta o contexto de verdade é o servidor.
 
 export const SEMENTE = Object.freeze({
-  nome: "Plantû",
-  assinatura: "Assistente do ERP",
-  lema: "Consultas, análises e ações do ERP.",
-  saudacao:
-    "Consulte contas, preço, frota, operação, financeiro, ESG, notícias e RFQs. Nada é gravado sem confirmação.",
+  nome: "Todô",
+  assinatura: "Assistente da plataforma",
+  lema: "Ajudo em toda a plataforma. Nada é gravado sem sua confirmação.",
+  // Abre a conversa sozinho — sem chips de sugestão. Uma saudação simples que
+  // convida a pessoa a falar; se houver leitura da rotina, ela é anexada.
+  saudacao: "Oie! Sou o Todô, seu assistente aqui na plataforma. Como posso ajudar você hoje?",
 });
 
 // O que ela faz, na ordem em que a marca apresenta.

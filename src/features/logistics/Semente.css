@@ -123,7 +123,7 @@
 /* ===== Conversa ===== */
 
 .semente-conversa {
-  background: #f7faf8;
+  background: var(--tdg-bg, #f7faf8);
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -209,7 +209,9 @@
 .semente .semente-msg--semente li,
 .semente .semente-msg--semente strong,
 .semente .semente-msg--semente em {
-  color: #0d1f1a;
+  /* Token, não preto fixo: a bolha usa var(--tdg-card), que escurece no modo
+     escuro — texto preto ali some. Com o token, o texto inverte junto. */
+  color: var(--tdg-ink, #0d1f1a);
 }
 
 .semente-msg--semente {

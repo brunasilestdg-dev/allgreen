@@ -35,10 +35,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const abrir = () => fireEvent.click(screen.getByRole("button", { name: /Abrir Plantû/i }));
+const abrir = () => fireEvent.click(screen.getByRole("button", { name: /Abrir Todô/i }));
 
 const perguntarPor = async (texto) => {
-  fireEvent.change(await screen.findByPlaceholderText(/Pergunte sobre o ERP/i), {
+  fireEvent.change(await screen.findByPlaceholderText(/Escreva sua mensagem/i), {
     target: { value: texto },
   });
   fireEvent.click(screen.getByRole("button", { name: /Enviar pergunta/i }));
@@ -47,7 +47,7 @@ const perguntarPor = async (texto) => {
 describe("ela não ocupa a tela sem ser chamada", () => {
   it("começa recolhida, num botão só", () => {
     render(<Semente pagina="clientes" authHeaders={authHeaders} />);
-    expect(screen.getByRole("button", { name: /Abrir Plantû/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Abrir Todô/i })).toBeTruthy();
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
@@ -60,13 +60,13 @@ describe("ela não ocupa a tela sem ser chamada", () => {
     const { unmount } = render(<Semente pagina="clientes" authHeaders={authHeaders} />);
     abrir();
     await screen.findByRole("complementary");
-    fireEvent.click(screen.getByRole("button", { name: /Fechar o Plantû/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Fechar o Todô/i }));
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
     unmount();
 
     render(<Semente pagina="esg" authHeaders={authHeaders} />);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Abrir Plantû/i })).toBeTruthy(),
+      expect(screen.getByRole("button", { name: /Abrir Todô/i })).toBeTruthy(),
     );
     expect(screen.queryByRole("complementary")).toBeNull();
   });
@@ -88,10 +88,10 @@ describe("ela não ocupa a tela sem ser chamada", () => {
     }
   });
 
-  it("abre como assistente do ERP, não como área comercial", async () => {
+  it("abre como assistente da plataforma, não como área comercial", async () => {
     render(<Semente pagina="clientes" authHeaders={authHeaders} />);
     abrir();
-    expect(await screen.findByText("Assistente do ERP")).toBeTruthy();
+    expect(await screen.findByText("Assistente da plataforma")).toBeTruthy();
     expect(screen.queryByText("Especialista Comercial")).toBeNull();
   });
 });
@@ -168,58 +168,36 @@ describe("a pergunta vai para a vertical, com o contexto da tela", () => {
   it("não envia pergunta curta demais", async () => {
     render(<Semente pagina="clientes" authHeaders={authHeaders} />);
     abrir();
-    fireEvent.change(await screen.findByPlaceholderText(/Pergunte sobre o ERP/i), {
+    fireEvent.change(await screen.findByPlaceholderText(/Escreva sua mensagem/i), {
       target: { value: "oi" },
     });
     expect(screen.getByRole("button", { name: /Enviar pergunta/i }).disabled).toBe(true);
-    fireEvent.submit(screen.getByPlaceholderText(/Pergunte sobre o ERP/i).closest("form"));
+    fireEvent.submit(screen.getByPlaceholderText(/Escreva sua mensagem/i).closest("form"));
     expect(chamadasDePergunta()).toHaveLength(0);
   });
 });
 
-describe("a pauta do dia", () => {
-  it("chega sozinha ao abrir, sem ninguém perguntar", async () => {
-    // É o que separa assistente de campo de busca com boas maneiras.
-    global.fetch = vi.fn((url, opcoes) =>
-      JSON.parse(opcoes.body).briefing
-        ? resposta({
-            leitura: "2 ponto(s) de atenção em 9 conta(s).",
-            pautas: [
-              { id: "prazo-vencido", urgencia: "alta", titulo: "Próxima ação com prazo vencido", quantidade: 2, contas: ["Rede Alfa", "Beta Log"], restantes: 0, pergunta: "Quais contas estão com a próxima ação vencida?" },
-            ],
-          })
-        : resposta({ resposta: "ok" }));
+describe("abre a conversa sozinho", () => {
+  it("mostra a saudação ao abrir, sem chips de sugestão", async () => {
+    // O Todô abre a conversa com uma saudação — não com uma grade de sugestões.
     render(<Semente pagina="clientes" authHeaders={authHeaders} />);
     abrir();
-    expect(await screen.findByText("Próxima ação com prazo vencido")).toBeTruthy();
-    // Os nomes ficam à vista: número sem nome obriga a ir procurar.
-    expect(screen.getByText(/Rede Alfa, Beta Log/)).toBeTruthy();
+    expect(await screen.findByText(/Como posso ajudar você hoje/)).toBeTruthy();
+    // Nada de perguntas disparadas sozinhas.
     expect(chamadasDePergunta()).toHaveLength(0);
   });
 
-  it("clicar na pauta faz a pergunta correspondente", async () => {
+  it("anexa a leitura da rotina à saudação quando o briefing traz uma", async () => {
     global.fetch = vi.fn((url, opcoes) =>
       JSON.parse(opcoes.body).briefing
-        ? resposta({
-            leitura: "1 ponto de atenção.",
-            pautas: [{ id: "sem-canal", urgencia: "media", titulo: "Conta sem contato com canal", quantidade: 1, contas: ["Alfa"], restantes: 0, pergunta: "Quais contas estão sem contato com canal?" }],
-          })
-        : resposta({ resposta: "A conta Alfa não tem canal." }));
+        ? resposta({ pautas: [], leitura: "2 ponto(s) de atenção em 9 conta(s)." })
+        : resposta({ resposta: "ok" }));
     render(<Semente pagina="clientes" authHeaders={authHeaders} />);
     abrir();
-    fireEvent.click(await screen.findByText("Conta sem contato com canal"));
-    expect(await screen.findByText("A conta Alfa não tem canal.")).toBeTruthy();
-    expect(corpoEnviado().pergunta).toBe("Quais contas estão sem contato com canal?");
+    expect(await screen.findByText(/2 ponto\(s\) de atenção/)).toBeTruthy();
   });
 
-  it("carteira em dia mostra os atalhos, não uma pauta inventada", async () => {
-    render(<Semente pagina="clientes" authHeaders={authHeaders} />);
-    abrir();
-    expect(await screen.findByText(/Carteira em dia/)).toBeTruthy();
-    expect(screen.getByText("O que está parado na minha carteira?")).toBeTruthy();
-  });
-
-  it("pauta que falha não impede de usar o Plantû", async () => {
+  it("briefing que falha não impede de usar o Todô", async () => {
     global.fetch = vi.fn((url, opcoes) =>
       JSON.parse(opcoes.body).briefing
         ? Promise.reject(new Error("rede"))

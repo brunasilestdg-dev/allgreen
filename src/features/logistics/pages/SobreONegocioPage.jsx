@@ -122,7 +122,7 @@ export default function SobreONegocioPage({
         <div>
           <h2><BookOpen size={20} /> Sobre o negócio</h2>
           <p>
-            Isto é o que o Plantû sabe da To Do Green antes de responder qualquer pergunta. O que
+            Isto é o que o Todô sabe da To Do Green antes de responder qualquer pergunta. O que
             estiver escrito aqui ele afirma; o que não estiver, ele não inventa.
           </p>
         </div>
@@ -176,7 +176,7 @@ export default function SobreONegocioPage({
       {!fatos.length && (
         <p className="tdg-page-empty">
           O dossiê ainda não foi carregado neste espaço. Ele é gravado sozinho na primeira pergunta
-          feita ao Plantû{podeEditar ? ", ou agora, no botão acima." : "."}
+          feita ao Todô{podeEditar ? ", ou agora, no botão acima." : "."}
         </p>
       )}
 

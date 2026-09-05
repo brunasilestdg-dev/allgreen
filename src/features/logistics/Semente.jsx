@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Send, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import SementeAvatar from "./SementeAvatar.jsx";
 import {
-  HABILIDADES,
   SEMENTE,
-  atalhosDaTela,
   corpoDaPergunta,
   textoDaProposta,
 } from "./sementeDomain.js";
@@ -107,8 +105,6 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
   const [executando, setExecutando] = useState("");
   const [pauta, setPauta] = useState(null);
   const conversa = useRef(null);
-
-  const atalhos = atalhosDaTela(pagina);
 
   useEffect(() => {
     try {
@@ -311,21 +307,21 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
           <strong>{SEMENTE.nome}</strong>
           <small>{pensando ? "Analisando..." : SEMENTE.assinatura}</small>
         </div>
-        <button type="button" onClick={() => alternar(false)} aria-label="Fechar o Plantû">
+        <button type="button" onClick={() => alternar(false)} aria-label={`Fechar o ${SEMENTE.nome}`}>
           <X size={17} />
         </button>
       </header>
 
       <div className="semente-conversa" role="log" aria-live="polite" ref={conversa}>
+        {/* Sem chips de sugestão: o Todô abre a conversa sozinho com uma
+            saudação. Se o briefing trouxe uma leitura da rotina, ela entra
+            junto — senão, só o "Oie, como posso ajudar?". */}
         {mensagens.length === 0 && (
-          <div className="semente-boas-vindas">
-            <p>{SEMENTE.saudacao}</p>
-            <ul className="semente-habilidades">
-              {HABILIDADES.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <span className="semente-lema">{SEMENTE.lema}</span>
+          <div className="semente-bloco semente-bloco--semente">
+            <MensagemSemente
+              texto={pauta?.leitura ? `${SEMENTE.saudacao}\n\n${pauta.leitura}` : SEMENTE.saudacao}
+              classe="semente-msg semente-msg--semente"
+            />
           </div>
         )}
 
@@ -383,7 +379,7 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
             {item.mensagemId && corrigindoId === item.mensagemId && !item.corrigida && (
               <div className="semente-corrigir">
                 <textarea value={textoCorrecao} onChange={(e) => setTextoCorrecao(e.target.value)} rows={2}
-                  placeholder="Qual era a resposta certa? O Plantû aprende com isso e não repete o erro." maxLength={2000} />
+                  placeholder={`Qual era a resposta certa? O ${SEMENTE.nome} aprende com isso e não repete o erro.`} maxLength={2000} />
                 <div className="semente-corrigir-acoes">
                   <button type="button" onClick={() => { setCorrigindoId(null); setTextoCorrecao(""); }}>Cancelar</button>
                   <button type="button" className="principal" disabled={salvandoCorrecao || !textoCorrecao.trim()} onClick={() => corrigir(item.mensagemId)}>{salvandoCorrecao ? "Salvando..." : "Salvar correção"}</button>
@@ -398,45 +394,6 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
         )}
       </div>
 
-      {mensagens.length === 0 && pauta?.pautas?.length > 0 && (
-        <div className="semente-pauta">
-          <header>
-            <strong>Pendências do ERP</strong>
-            <small>{pauta.leitura}</small>
-          </header>
-          {pauta.pautas.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={`semente-pauta-item semente-pauta-item--${item.urgencia}`}
-              onClick={() => perguntar(item.pergunta)}
-            >
-              <span className="semente-pauta-topo">
-                <b>{item.titulo}</b>
-                <em>{item.quantidade}</em>
-              </span>
-              {/* Os nomes ficam à vista: número sem nome obriga a pessoa a ir
-                  procurar, e aí ela não usa mais. */}
-              <small>
-                {item.contas.join(", ")}
-                {item.restantes > 0 ? ` e mais ${item.restantes}` : ""}
-              </small>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {mensagens.length === 0 && pauta && !pauta.pautas?.length && (
-        <div className="semente-atalhos">
-          {pauta.leitura && <p className="semente-pauta-limpa">{pauta.leitura}</p>}
-          {atalhos.map((item) => (
-            <button type="button" key={item} onClick={() => perguntar(item)}>
-              {item}
-            </button>
-          ))}
-        </div>
-      )}
-
       <form
         className="semente-campo"
         onSubmit={(evento) => {
@@ -447,8 +404,8 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
         <input
           value={pergunta}
           onChange={(evento) => setPergunta(evento.target.value)}
-          placeholder="Pergunte sobre o ERP..."
-          aria-label={`Perguntar para a ${SEMENTE.nome}`}
+          placeholder="Escreva sua mensagem..."
+          aria-label={`Perguntar para o ${SEMENTE.nome}`}
         />
         <button
           type="submit"
