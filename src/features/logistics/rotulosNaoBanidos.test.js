@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BLOCKED_PATTERNS, polirTexto } from "./LogisticsVerticalPolish.js";
+import { BLOCKED_PATTERNS, polirTexto } from "./rotulosBanidos.js";
 
 // ===== O apagador de jargão não pode comer rótulo de tela =====
 //

@@ -14,8 +14,11 @@ const arquivo = (nome) =>
   readFileSync(new URL(`./features/logistics/${nome}`, import.meta.url), "utf8");
 
 const OBSERVADORES = [
-  "LogisticsVerticalPolish.js",
   "LogisticsVerticalCredentials.js",
+  // LogisticsVerticalPolish.js foi removido (#117): era um apagador de DOM
+  // (MutationObserver global) que já não era carregado em produção — código
+  // morto. A parte pura e testada (polirTexto) migrou para rotulosBanidos.js,
+  // sem tocar no DOM.
   // LogisticsVerticalNavigation.js foi removido: era navegação imperativa
   // (MutationObserver global + clique sintético) sobre um DOM que o React
   // parou de gerar — código morto. A navegação da precificação agora é
