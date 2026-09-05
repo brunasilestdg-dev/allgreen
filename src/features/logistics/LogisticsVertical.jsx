@@ -951,7 +951,10 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
   { id: "marketing", label: "Marketing", route: "/todogreen/marketing", pages: ["marketing"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
+  // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
+  // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
+  // como atalho para a ferramenta do Espaço.
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "metas", "performance-comercial", "playbook-comercial"], extras: [["Notícias e inteligência", "/todogreen/espaco?ferramenta=inteligencia"], ["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
@@ -2744,6 +2747,25 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       return proximo;
     });
   }, []);
+  // Personalizar o menu (pedido da titular: "quero que o usuário possa
+  // selecionar o que deixar disponível"). A pessoa marca quais áreas aparecem;
+  // desmarcadas somem da lateral (mas continuam acessíveis por link direto e
+  // pela busca). Guardado por navegador. Vazio no storage = tudo visível.
+  const [personalizando, setPersonalizando] = useState(false);
+  const [areasOcultas, setAreasOcultas] = useState(() => {
+    try {
+      const salvo = JSON.parse(localStorage.getItem("todogreen-menu-areas-ocultas") || "[]");
+      return new Set(Array.isArray(salvo) ? salvo : []);
+    } catch { return new Set(); }
+  });
+  const alternarAreaVisivel = useCallback((id) => {
+    setAreasOcultas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) proximo.delete(id); else proximo.add(id);
+      try { localStorage.setItem("todogreen-menu-areas-ocultas", JSON.stringify([...proximo])); } catch { /* ok */ }
+      return proximo;
+    });
+  }, []);
   // `access` chega vazio hoje; se um dia vier preenchido, ainda precisa passar
   // pela mesma leitura — a origem é que decide, não o formato.
   const [remoteAccess, setRemoteAccess] = useState(() => lerRespostaDeAcesso(access) || {});
@@ -3014,10 +3036,27 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         <aside className="tdg-erp-sidebar" hidden={menuOculto}>
           <div className="tdg-erp-sidebar-head">
             <div><strong>To Do Green</strong><small>Espaço corporativo</small></div>
-            <button type="button" className="tdg-menu-ocultar" onClick={alternarMenu} aria-label="Esconder menu lateral" title="Esconder menu">
-              <PanelLeftClose size={16} />
-            </button>
+            <div className="tdg-erp-sidebar-head-acoes">
+              <button
+                type="button"
+                className={`tdg-menu-personalizar${personalizando ? " ativo" : ""}`}
+                onClick={() => setPersonalizando((v) => !v)}
+                aria-pressed={personalizando}
+                aria-label="Escolher o que aparece no menu"
+                title="Escolher o que aparece no menu"
+              >
+                <SlidersHorizontal size={15} />
+              </button>
+              <button type="button" className="tdg-menu-ocultar" onClick={alternarMenu} aria-label="Esconder menu lateral" title="Esconder menu">
+                <PanelLeftClose size={16} />
+              </button>
+            </div>
           </div>
+          {personalizando && (
+            <p className="tdg-menu-personalizar-dica">
+              Marque o que quer ver no menu. O que ficar desmarcado some daqui — mas continua no buscador e por link direto.
+            </p>
+          )}
           {/* "Início": a titular sentiu falta de um botão de casa sempre à mão.
               "Principal" existe como área no meio da lista, mas de dentro de uma
               tela funda não havia o gesto óbvio de voltar ao painel. Este atalho
@@ -3067,6 +3106,9 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           ) : (
             <nav className="tdg-nav-areas" aria-label="Navegação To Do Green">
               {PRIMARY_NAVIGATION.map((item) => {
+                const ocultaDaLista = areasOcultas.has(item.id);
+                // Fora do modo personalizar, área desmarcada não aparece.
+                if (ocultaDaLista && !personalizando) return null;
                 const ativa = primaryNavigation.id === item.id;
                 const aberta = areasAbertas.has(item.id) || ativa;
                 // O Workspace apresenta "Projetos e tarefas", "Visualizações e
@@ -3083,12 +3125,22 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                   .filter(([id]) => !jornadasInternas.has(id))
                   .filter(([, modulo]) => podeAcessarFuncionalidade(role, remoteAccess.permissions, modulo.permission));
                 return (
-                  <div className={`tdg-nav-area${aberta ? " aberta" : ""}`} key={item.id}>
+                  <div className={`tdg-nav-area${aberta ? " aberta" : ""}${personalizando && ocultaDaLista ? " oculta-preview" : ""}`} key={item.id}>
                     <div className="tdg-nav-area-cabeca">
+                      {personalizando && (
+                        <input
+                          type="checkbox"
+                          className="tdg-nav-area-check"
+                          checked={!ocultaDaLista}
+                          onChange={() => alternarAreaVisivel(item.id)}
+                          aria-label={`Mostrar ${item.label} no menu`}
+                          title={ocultaDaLista ? `Mostrar ${item.label}` : `Esconder ${item.label}`}
+                        />
+                      )}
                       <button
                         type="button"
                         className={ativa ? "active" : ""}
-                        onClick={() => { navigate(item.route); abrirArea(item.id); }}
+                        onClick={() => { if (personalizando) { alternarAreaVisivel(item.id); return; } navigate(item.route); abrirArea(item.id); }}
                       >
                         {item.label}
                       </button>

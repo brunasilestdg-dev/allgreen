@@ -245,6 +245,7 @@ import {
   PanelsTopLeft,
   FileText,
   History,
+  Leaf,
   Menu,
   X,
   ChevronLeft,
@@ -377,6 +378,8 @@ const WorkStructure = lazy(
   () => import("./features/work/WorkStructure.jsx"),
 );
 const Goals = lazy(() => import("./features/goals/Goals.jsx"));
+// Simulador de impacto ESG — público, aberto na tela de entrada sem login.
+const EsgEmissionSimulator = lazy(() => import("./features/logistics/EsgEmissionSimulator.jsx"));
 const Bills = lazy(() => import("./features/finance/Bills.jsx"));
 const SalesPipeline = lazy(
   () => import("./features/crm/SalesPipeline.jsx"),
@@ -1657,6 +1660,9 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
           ? "Entre no Portal TMS"
           : "Entre no ambiente To Do Green";
   const [mode, setMode] = useState("login");
+  // Simulador de impacto ESG: público, aberto por um botão na tela de entrada,
+  // sem exigir login (pedido da titular).
+  const [simuladorEsgAberto, setSimuladorEsgAberto] = useState(false);
   useEffect(() => {
     if (entradaToDoGreen)
       document.title =
@@ -2038,6 +2044,21 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
     );
   return (
     <main className="auth-shell">
+      {simuladorEsgAberto && (
+        <div className="tdg-sim-overlay" role="dialog" aria-modal="true" aria-label="Simulador de impacto ESG">
+          <div className="tdg-sim-overlay-bar">
+            <strong>Simulador de impacto ESG</strong>
+            <button type="button" onClick={() => setSimuladorEsgAberto(false)} aria-label="Fechar simulador">
+              <X size={18} /> Fechar
+            </button>
+          </div>
+          <div className="tdg-sim-overlay-body">
+            <Suspense fallback={<div className="tdg-sim-overlay-load">Carregando simulador…</div>}>
+              <EsgEmissionSimulator />
+            </Suspense>
+          </div>
+        </div>
+      )}
       <div className="auth-art">
         {entradaToDoGreen ? <strong className="tdg-auth-marca">To Do Green</strong> : <Logo />}
         {entradaToDoGreen ? (
@@ -2159,6 +2180,16 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
                 Site oficial
               </a>
             </div>
+          )}
+          {entradaToDoGreen && (
+            <button
+              type="button"
+              className="tdg-auth-simulador"
+              onClick={() => setSimuladorEsgAberto(true)}
+            >
+              <Leaf aria-hidden="true" />
+              Simulador de Emissão
+            </button>
           )}
           {!entradaToDoGreen && (
             <div className="auth-tabs" role="tablist" aria-label="Acesso">
