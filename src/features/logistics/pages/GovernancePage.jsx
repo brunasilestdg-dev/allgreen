@@ -1,3 +1,4 @@
+import "./TodoGreenPages.css";
 import { useEffect, useMemo, useState } from "react";
 import { History, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import { hasTodoGreenPermission } from "../logisticsVerticalDomain.js";

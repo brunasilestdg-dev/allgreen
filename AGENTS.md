@@ -238,6 +238,34 @@ quantos resultados vieram.
   jornada: o status da rota (`planejada → em_rota → concluida`) é derivado das
   paradas concluídas, nunca marcado por clique solto. Não criar segunda tabela
   de rota nem ligar rota ao motorista por nome — o elo é o `driver_id` (0070).
+- **Módulos de ERP da vertical (NÃO confundir com os homônimos do monólito)**:
+  cada um tem núcleo puro testado + tela lazy, e escreve em tabela própria
+  `todogreen_*` (nunca no blob do workspace). Saldo/valor é sempre `SUM` de
+  lançamento imutável, jamais coluna mutável (o erro de `CatalogScreen`).
+  - **Estoque To Do Green** — `stockDomain.js` + `pages/StockPage.jsx`,
+    `todogreen_stock_movements` (append-only). Saída acima do saldo é **409**,
+    nunca clamp; custo médio ponderado. É outro módulo que o `productStock` do
+    monólito.
+  - **Suprimentos To Do Green** — `purchaseDomain.js` + `pages/PurchasingPage.jsx`
+    (requisição → RFQ → pedido → recebimento). É outro que o
+    `features/procurement/` do app geral; recebimento vira entrada no estoque e
+    conta a pagar.
+  - **Fiscal To Do Green** — `fiscalDomain.js` + `pages/FiscalPage.jsx`:
+    CT-e/MDF-e/NFS-e (não NF-e). Transmissão desligada por ausência de segredo
+    (padrão `pushEnabled`); sem credencial, gera XML/DANFE e diz o que falta.
+  - **Folha/DP To Do Green** — `payrollDomain.js` + `pages/PeoplePage.jsx`.
+    Dado sensível (CPF, salário): só `rh`/`admin`/`owner`, nunca no portal do
+    cliente. Faixas de INSS/IRRF testadas na fronteira. Vocabulário "colaborador".
+  - **Tesouraria To Do Green** — `treasuryDomain.js` + `pages/TreasuryPage.jsx`:
+    extrato, conciliação e fechamento de período; a baixa gera lançamento no
+    razão único (`todogreen_financial_entries`), não é terceira fonte de verdade.
+  - **TMS Tracker To Do Green** — `track3rDomain.js` + `pages/TrackerPage.jsx`:
+    integração agnóstica de transporte (arquivo/API/webhook), casa embarcador
+    por CNPJ, projeta em `todogreen_client_operations`. Molde: `todogreen-tracker.js`.
+  - **Motor HC + DRE** — `operationEngineDomain.js` + `pages/OperationEnginePage.jsx`
+    + régua `todogreen_operation_params` (0099): dimensiona headcount e monta DRE
+    por tipo de operação, editável só por admin. É outro que o `statementDomain.js`
+    do monólito.
 - **CRM To Do Green**: o cadastro canônico da conta continua em
   `todogreen_clients`; a inteligência fica em `fields_json` e é normalizada
   por `todoGreenCrmDomain.js`. A tela `pages/ClientsPage.jsx` conecta carteira,

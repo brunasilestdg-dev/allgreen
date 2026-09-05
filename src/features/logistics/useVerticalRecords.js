@@ -52,6 +52,12 @@ const VAZIO = Object.freeze({
   quality: [],
   // Documentos jurídicos (minutas, contratos, aditivos) — idem.
   legal: [],
+  // Pastas de documentos e rotas do dia: o servidor serve as duas (COLECOES),
+  // então precisam existir aqui — senão o gancho descarta calado o que veio no
+  // pacote inicial. As telas donas (DocumentVaultPage, RoteirizacaoPage) seguem
+  // buscando sob demanda; declará-las só fecha a inconsistência.
+  documentFolders: [],
+  rotas: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {

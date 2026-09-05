@@ -1,3 +1,4 @@
+import "./TodoGreenPages.css";
 import { ScrollText, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { TODO_GREEN_MODULE_CATALOG } from "../logisticsVerticalDomain.js";
