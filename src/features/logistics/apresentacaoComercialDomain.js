@@ -23,7 +23,9 @@ const ABERTURA_PADRAO = (conta) =>
 
 const VALOR = [
   "O que a To Do Green entrega:",
-  "• Frota 100% elétrica — redução real de emissões, com relatório auditável para o seu ESG.",
+  "• Custo competitivo — preço de frete alinhado ao mercado, com economia de diesel e menor custo por km da frota elétrica repassada na operação.",
+  "• Previsibilidade de custo — sem exposição à variação do diesel; TCO por rota transparente na proposta.",
+  "• Frota 100% elétrica — redução real de emissões, com relatório auditável para o seu ESG (Escopo 3).",
   "• Rastreio ao vivo e comprovante de entrega (POD) no portal do cliente.",
   "• Roteirização que entende autonomia e recarga, sem surpresa no prazo.",
 ].join("\n");

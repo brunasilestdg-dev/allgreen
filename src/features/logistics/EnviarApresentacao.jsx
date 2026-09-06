@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, Mail, Send } from "lucide-react";
 import Modal from "../../components/Modal.jsx";
-import { sendGmailReal, base64FromBytes } from "../../integrations/google.js";
+import { sendGmailReal, createGmailDraftReal, base64FromBytes } from "../../integrations/google.js";
 import {
   APRESENTACAO_PDF_URL,
   APRESENTACAO_PDF_NOME,
@@ -77,20 +77,42 @@ export default function EnviarApresentacao({ conta, onRegistrar, onMoverEstagio,
       .filter(Boolean)
       .join(" ");
 
+  // Lê o PDF da apresentação e devolve o anexo pronto. Reusado pelo envio
+  // direto e pela criação do rascunho.
+  const carregarAnexo = async () => {
+    const resposta = await fetch(APRESENTACAO_PDF_URL);
+    if (!resposta.ok) throw new Error("Não encontrei o arquivo da apresentação.");
+    const base64 = base64FromBytes(new Uint8Array(await resposta.arrayBuffer()));
+    return [{ filename: APRESENTACAO_PDF_NOME, mimeType: "application/pdf", base64 }];
+  };
+
+  // Cria um RASCUNHO no Gmail com o PDF já anexado — a pessoa revisa e envia.
+  // É o que corrige "o rascunho não anexa o material": a compose por URL não
+  // carrega anexo; a API de drafts carrega.
+  const criarRascunhoComAnexo = async () => {
+    if (!para.trim() || enviando) return;
+    setEnviando(true);
+    setErro("");
+    try {
+      const attachments = await carregarAnexo();
+      await createGmailDraftReal(googleId, { to: para.trim(), subject: assunto, body: corpo, attachments });
+      const feito = await registrarEMover();
+      setToast?.(avisoDe("Rascunho criado no Gmail com o anexo — revise e envie.", feito));
+      onClose();
+    } catch (motivo) {
+      setErro(motivo?.message || "Não foi possível criar o rascunho agora.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const enviarComAnexo = async () => {
     if (!para.trim() || enviando) return;
     setEnviando(true);
     setErro("");
     try {
-      const resposta = await fetch(APRESENTACAO_PDF_URL);
-      if (!resposta.ok) throw new Error("Não encontrei o arquivo da apresentação.");
-      const base64 = base64FromBytes(new Uint8Array(await resposta.arrayBuffer()));
-      await sendGmailReal(googleId, {
-        to: para.trim(),
-        subject: assunto,
-        body: corpo,
-        attachments: [{ filename: APRESENTACAO_PDF_NOME, mimeType: "application/pdf", base64 }],
-      });
+      const attachments = await carregarAnexo();
+      await sendGmailReal(googleId, { to: para.trim(), subject: assunto, body: corpo, attachments });
       const feito = await registrarEMover();
       setToast?.(avisoDe("Apresentação enviada com anexo.", feito));
       onClose();
@@ -136,9 +158,12 @@ export default function EnviarApresentacao({ conta, onRegistrar, onMoverEstagio,
         {erro && <p className="tdg-erro" style={{ color: "#a5342a" }}>{erro}</p>}
         <div className="tdg-form-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {googleId
-            ? <button type="button" className="principal" onClick={enviarComAnexo} disabled={enviando}><Send size={15} /> {enviando ? "Enviando..." : "Enviar com anexo"}</button>
+            ? <>
+                <button type="button" className="principal" onClick={criarRascunhoComAnexo} disabled={enviando}><Mail size={15} /> {enviando ? "Criando..." : "Criar rascunho com anexo"}</button>
+                <button type="button" onClick={enviarComAnexo} disabled={enviando}><Send size={15} /> {enviando ? "Enviando..." : "Enviar com anexo"}</button>
+              </>
             : null}
-          <button type="button" onClick={abrirCompose} disabled={enviando}><Mail size={15} /> Abrir no Gmail</button>
+          <button type="button" onClick={abrirCompose} disabled={enviando}><Mail size={15} /> {googleId ? "Compose sem anexo" : "Abrir no Gmail"}</button>
           <button type="button" onClick={onClose} disabled={enviando}>Cancelar</button>
         </div>
         {!googleId && <small>Para enviar com o anexo automático, conecte sua conta Google em Integrações. Sem isso, use &quot;Abrir no Gmail&quot; e anexe o PDF baixado.</small>}

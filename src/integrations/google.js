@@ -199,6 +199,32 @@ export const sendGmailReal = async (clientId, { to, subject, body, attachments =
   return res.json();
 };
 
+// Cria um RASCUNHO no Gmail (não envia) — com o mesmo MIME multipart do envio,
+// então o anexo vai junto. É o que resolve "o rascunho não anexa o material":
+// a compose por URL não carrega anexo; a API de drafts carrega.
+export const createGmailDraftReal = async (clientId, { to, subject, body, attachments = [] }) => {
+  const token = await requestGoogleAccessToken(
+    clientId,
+    "https://www.googleapis.com/auth/gmail.compose",
+  );
+  const res = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ message: { raw: buildRawEmail({ to, subject, body, attachments }) } }),
+    },
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error?.message || "Não foi possível criar o rascunho agora.");
+  }
+  return res.json();
+};
+
 export const createGoogleCalendarEventReal = async (clientId, task) => {
   const token = await requestGoogleAccessToken(
     clientId,
