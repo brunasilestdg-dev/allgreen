@@ -1209,20 +1209,45 @@ const booleanFields = new Set([
   "temperatureControlled",
 ]);
 
-// Frota elétrica da To Do Green. "Tipo de veículo" deixa de ser texto livre
-// (onde "moto" ≠ "Moto elétrica" nunca casava com a régua) e vira uma escolha —
-// e o valor escolhido é a MESMA chave usada pela régua por veículo (escopo
-// "Veículo"), então selecionar passa a poder mudar o custo quando houver um
-// perfil de régua para aquele veículo.
+// Frota da To Do Green (arquivo de referência tipos_operacao.yaml — frota
+// disponível). "Tipo de veículo" deixa de ser texto livre e vira uma escolha,
+// e cada escolha carrega o custo de referência daquele veículo (abaixo) nos
+// "Custos da operação", então SELECIONAR passa a mudar o preço na hora.
 const VEHICLE_TYPES = Object.freeze([
-  "Bicicleta cargo elétrica",
-  "Moto elétrica",
-  "VUC elétrico",
-  "Furgão elétrico",
-  "Van elétrica",
-  "Caminhão leve elétrico (3/4)",
-  "Toco elétrico",
+  "Moto",
+  "Passeio",
+  "Fiorino / Van",
+  "VUC",
+  "Toco",
+  "Truck",
+  "Carreta Sider",
+  "Carreta Aberta",
+  "Carreta elétrica",
 ]);
+
+// Custo de referência por veículo, aplicado aos "Custos da operação" ao escolher
+// o veículo (editável depois — é um ponto de partida, não trava). As chaves são
+// as premissas que o motor lê (driverDailyCost, vehicleDailyCost, energyCostPerKm,
+// maintenancePerKm).
+//
+// PROCEDÊNCIA (tipos_operacao.yaml, da titular):
+//  • VUC/Toco: custo_diario_veiculo 495; motorista_dia 280; manutenção 0,42/km.
+//  • Carretas: custo_diario_veiculo 1742; motorista+ajudante ~480; manutenção
+//    carreta 0,12/km; energia do conjunto ~1,35 kWh/km × ~1,05 R$/kWh ≈ 1,42/km.
+//  • Moto/Passeio/Fiorino (last mile spot): entregador PJ 220/dia.
+// Os valores de veículo/energia de moto/passeio/fiorino/truck são pontos de
+// partida derivados do modelo (porte do veículo) — a titular confirma/ajusta.
+const VEHICLE_COST_DEFAULTS = Object.freeze({
+  "Moto": { driverDailyCost: 220, vehicleDailyCost: 40, energyCostPerKm: 0.06, maintenancePerKm: 0.12 },
+  "Passeio": { driverDailyCost: 220, vehicleDailyCost: 90, energyCostPerKm: 0.10, maintenancePerKm: 0.15 },
+  "Fiorino / Van": { driverDailyCost: 280, vehicleDailyCost: 160, energyCostPerKm: 0.12, maintenancePerKm: 0.20 },
+  "VUC": { driverDailyCost: 280, vehicleDailyCost: 495, energyCostPerKm: 0.12, maintenancePerKm: 0.42 },
+  "Toco": { driverDailyCost: 280, vehicleDailyCost: 495, energyCostPerKm: 0.30, maintenancePerKm: 0.42 },
+  "Truck": { driverDailyCost: 340, vehicleDailyCost: 900, energyCostPerKm: 0.60, maintenancePerKm: 0.42 },
+  "Carreta Sider": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
+  "Carreta Aberta": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
+  "Carreta elétrica": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
+});
 
 // Toda premissa que muda preço, margem ou CO₂ nasce vazia.
 //
@@ -2052,6 +2077,13 @@ function PricingPanel({ role, criar, db, authHeaders, setToast, opportunities = 
   };
   const changeInput = (key, value) => {
     setInputs((current) => ({ ...current, [key]: value }));
+    // Escolher o veículo carrega o custo de referência daquele veículo nos
+    // "Custos da operação" — é o que faz o tipo de veículo MUDAR o preço na
+    // hora (antes não interferia em nada). Continua editável: a pessoa ajusta.
+    if (key === "vehicleType") {
+      const perfil = VEHICLE_COST_DEFAULTS[value];
+      if (perfil) setCustosManuais((atual) => ({ ...atual, ...perfil }));
+    }
     setPremissasConfirmadas(false);
     // Mudou a premissa, mudou a condição: o pedido de aprovação teria que ser
     // sobre a simulação nova, não sobre a que foi salva antes.
