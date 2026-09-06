@@ -258,8 +258,10 @@ describe("tracarRota com várias paradas", () => {
 describe("otimizarOrdemDeParadas (rota dinâmica)", () => {
   const P = (endereco, lat, lon) => ({ endereco, coord: [lat, lon] });
 
-  it("mantém origem e destino fixos e reordena o meio por proximidade", () => {
-    // Origem SP; meio fora de ordem (RJ longe, Campinas perto); destino Curitiba.
+  it("mantém origem e destino fixos e reordena o meio pelo menor trajeto", () => {
+    // Origem SP; meio fora de ordem; destino Curitiba (longe, a sudoeste). A
+    // rota mais curta termina por Campinas (perto de Curitiba), com o Rio antes
+    // — o 2-opt acha isso; o vizinho-mais-próximo guloso não achava.
     const paradas = [
       P("Sao Paulo", -23.55, -46.63),
       P("Rio de Janeiro", -22.90, -43.20),
@@ -269,8 +271,10 @@ describe("otimizarOrdemDeParadas (rota dinâmica)", () => {
     const ordem = otimizarOrdemDeParadas(paradas);
     expect(ordem[0]).toBe("Sao Paulo");
     expect(ordem[ordem.length - 1]).toBe("Curitiba");
-    // Campinas (perto de SP) vem antes do Rio.
-    expect(ordem.indexOf("Campinas")).toBeLessThan(ordem.indexOf("Rio de Janeiro"));
+    expect(ordem).toContain("Campinas");
+    expect(ordem).toContain("Rio de Janeiro");
+    // Terminar por Campinas (vizinha de Curitiba) é o trajeto curto.
+    expect(ordem.indexOf("Campinas")).toBeGreaterThan(ordem.indexOf("Rio de Janeiro"));
   });
 
   it("com 3 ou menos paradas não há meio para reordenar", () => {
@@ -281,6 +285,25 @@ describe("otimizarOrdemDeParadas (rota dinâmica)", () => {
   it("ignora paradas sem coordenada em vez de quebrar", () => {
     const paradas = [P("A", -23, -46), { endereco: "sem-coord" }, P("C", -25, -49)];
     expect(otimizarOrdemDeParadas(paradas)).toEqual(["A", "C"]);
+  });
+
+  it("desfaz o cruzamento que o vizinho-mais-próximo deixa (2-opt)", () => {
+    // Quatro paradas nos cantos de um quadrado + origem e destino. Em ordem
+    // "cruzada" (diagonal, diagonal), a rota se auto-intercepta; a ótima é o
+    // perímetro. O 2-opt tem de devolver o contorno, não a cruz.
+    const paradas = [
+      P("O", 0, 0),        // origem, canto inferior-esquerdo
+      P("cima-dir", 1, 1),
+      P("baixo-dir", 0, 1),
+      P("cima-esq", 1, 0),
+      P("D", 0.01, 0.01),  // destino, perto da origem
+    ];
+    const ordem = otimizarOrdemDeParadas(paradas);
+    expect(ordem[0]).toBe("O");
+    expect(ordem[ordem.length - 1]).toBe("D");
+    // No contorno, os dois cantos de cima ficam adjacentes (não separados por
+    // um canto de baixo no meio) — sinal de que não há mais cruzamento.
+    expect(Math.abs(ordem.indexOf("cima-dir") - ordem.indexOf("cima-esq"))).toBe(1);
   });
 });
 

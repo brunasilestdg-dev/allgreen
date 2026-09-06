@@ -239,12 +239,43 @@ const kmEntre = ([lat1, lon1], [lat2, lon2]) => {
   return 2 * R * Math.asin(Math.sqrt(a));
 };
 
+// 2-opt: enquanto houver, desfaz o par de arestas que se cruza (troca que mais
+// encurta a rota), invertendo o trecho entre elas. Origem (0) e destino (n-1)
+// ficam fixos. É o passo que o vizinho-mais-próximo não faz: NN escolhe sempre
+// o mais perto AGORA e deixa cruzamentos que saltam aos olhos de 8 paradas pra
+// cima; o 2-opt limpa isso. O(n²) por passada — cap de nós e de passadas para
+// não travar em listas patológicas (rota manual não passa disso na prática).
+const CAP_2OPT = 60;
+function refinar2opt(nos) {
+  if (nos.length > CAP_2OPT) return nos;
+  const custo = (a, b) => kmEntre(a.coord, b.coord);
+  let seq = nos;
+  let melhorou = true;
+  let passadas = 0;
+  while (melhorou && passadas < 40) {
+    melhorou = false;
+    passadas += 1;
+    for (let i = 1; i < seq.length - 2; i += 1) {
+      for (let j = i + 1; j < seq.length - 1; j += 1) {
+        const atual = custo(seq[i - 1], seq[i]) + custo(seq[j], seq[j + 1]);
+        const trocado = custo(seq[i - 1], seq[j]) + custo(seq[i], seq[j + 1]);
+        if (trocado + 1e-9 < atual) {
+          seq = [...seq.slice(0, i), ...seq.slice(i, j + 1).reverse(), ...seq.slice(j + 1)];
+          melhorou = true;
+        }
+      }
+    }
+  }
+  return seq;
+}
+
 /**
- * Otimiza a ORDEM das paradas do meio por vizinho mais próximo, mantendo origem
- * (primeira) e destino (última) fixos. Recebe [{endereco, coord:[lat,lon]}] e
- * devolve a lista de endereços na ordem otimizada. Rota dinâmica sem servidor:
- * a régua é aproximada (linha reta), mas suficiente para tirar o "zigue-zague"
- * de digitar as paradas fora de ordem; o OSRM recalcula a distância real.
+ * Otimiza a ORDEM das paradas do meio, mantendo origem (primeira) e destino
+ * (última) fixos. Recebe [{endereco, coord:[lat,lon]}] e devolve a lista de
+ * endereços na ordem otimizada. Duas etapas: vizinho-mais-próximo dá uma ordem
+ * inicial; o 2-opt então desfaz os cruzamentos que o NN deixa. Rota dinâmica
+ * sem servidor: a régua é aproximada (linha reta), mas suficiente para tirar o
+ * "zigue-zague"; o OSRM recalcula a distância real depois.
  */
 export function otimizarOrdemDeParadas(paradas) {
   const lista = Array.isArray(paradas) ? paradas.filter((p) => Array.isArray(p?.coord)) : [];
@@ -265,7 +296,7 @@ export function otimizarOrdemDeParadas(paradas) {
     ordem.push(atual);
     restantes.splice(melhor, 1);
   }
-  return [origem, ...ordem, destino].map((p) => p.endereco);
+  return refinar2opt([origem, ...ordem, destino]).map((p) => p.endereco);
 }
 
 /**
