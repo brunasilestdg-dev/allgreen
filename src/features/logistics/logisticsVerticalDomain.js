@@ -681,6 +681,17 @@ const product = (id, name, code, modality, billingUnit, fields, config = {}) => 
   version: config.version || "1.0.0",
 });
 
+// Política de margem por produto (definida pela titular):
+//  • Piso 18% (padrão do sistema): Middle Mile/Spot, Transferência, Coleta em
+//    fornecedores, Abastecimento de lojas, Granel — o comercial pode baixar até
+//    18%; abaixo disso vai para o Deal Desk (Precificação ou Head Comercial).
+//  • Piso 26% (os "demais"): Last Mile, Distribuição fracionada, Operação
+//    dedicada, Projeto personalizado — protegidos em 26%.
+const PISO_26 = {
+  marginRules: { minimumMarginPercent: 26 },
+  approvalRules: { minimumMarginPercent: 26, maximumDiscountPercent: 8, dataQualityMinimum: 60 },
+};
+
 export const LOGISTICS_PRODUCTS = [
   product("middle-mile", "Middle Mile", "MM", "line-haul", "viagem", {
     required: ["client", "origin", "destination", "distanceKm", "tripsPerMonth", "vehicleType"],
@@ -693,11 +704,11 @@ export const LOGISTICS_PRODUCTS = [
   product("last-mile", "Last Mile", "LM", "last-mile", "pacote", {
     required: ["client", "city", "packages", "routesPerDay", "daysPerMonth", "kmPerRoute", "vehicleType"],
     optional: ["stops", "successRate", "returnsRate", "weightKg", "density", "sla", "customerTargetPrice"],
-  }),
+  }, PISO_26),
   product("dedicated", "Operação dedicada", "DED", "dedicated", "mensalidade", {
     required: ["client", "vehicles", "vehicleType", "drivers", "hoursPerDay", "daysPerMonth"],
     optional: ["helpers", "reserveVehicle", "supervisionCost", "technologyCost", "trainingCost", "implementationCost", "customerTargetPrice"],
-  }),
+  }, PISO_26),
   product("transfer", "Transferência entre CDs, hubs ou lojas", "TRF", "transfer", "transferência", {
     required: ["origin", "destination", "distanceKm", "frequencyPerMonth", "vehicleType"],
     optional: ["points", "pallets", "weightKg", "waitingHours", "returnLoaded", "customerTargetPrice"],
@@ -713,7 +724,7 @@ export const LOGISTICS_PRODUCTS = [
   product("fractional-distribution", "Distribuição fracionada", "DFR", "fractional", "entrega", {
     required: ["sharedRouteCost", "allocationPercent", "deliveries", "distanceKm"],
     optional: ["clientsOnRoute", "occupancyPercent", "weightKg", "volumeM3", "customerTargetPrice"],
-  }),
+  }, PISO_26),
   product("bulk", "Operação a granel", "GRN", "bulk", "tonelada", {
     required: ["materialType", "tons", "distanceKm", "tripsPerMonth", "vehicleType"],
     optional: ["cleaningCost", "waitingHours", "lossPercent", "licenseCost", "customerTargetPrice"],
@@ -721,7 +732,7 @@ export const LOGISTICS_PRODUCTS = [
   product("custom-project", "Projeto logístico personalizado", "PLP", "custom-project", "projeto", {
     required: ["client", "components", "contractMonths"],
     optional: ["initialInvestment", "cashFlowMonths", "services", "sla", "customerTargetPrice"],
-  }),
+  }, PISO_26),
 ];
 
 export const PRODUCT_PRICING_BLUEPRINTS = Object.freeze({
@@ -1192,12 +1203,25 @@ export const dealDeskTriggers = (summary = {}, productConfig = {}) => {
   const primeiraAlcada = ALCADAS[0];
   if (primeiraAlcada && n(summary.selectedPrice) > primeiraAlcada.valorMaximoContrato)
     triggers.push("Receita relevante acima de alçada");
+  // Regra da titular: o comercial pode baixar a margem até o piso do produto
+  // (18% no line-haul/B2B, 26% nos demais); abaixo do piso a alçada é de
+  // Precificação OU Head Comercial — qualquer um dos dois destrava. Só quando
+  // margem é o gatilho essa alçada aparece explícita no fluxo.
+  const margemAbaixo = triggers.includes("Margem abaixo do mínimo");
+  const flow = triggers.length
+    ? [
+        "Comercial",
+        margemAbaixo ? "Precificação ou Head Comercial" : "Liderança comercial",
+        "Operações",
+        "Sustentabilidade",
+        "Aprovador final",
+      ]
+    : [];
   return {
     required: triggers.length > 0,
     triggers,
-    flow: triggers.length
-      ? ["Comercial", "Liderança comercial", "Precificação/Financeiro", "Operações", "Sustentabilidade", "Aprovador final"]
-      : [],
+    flow,
+    marginFloorApprover: margemAbaixo ? "Precificação ou Head Comercial" : null,
   };
 };
 
