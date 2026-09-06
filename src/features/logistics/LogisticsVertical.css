@@ -224,6 +224,49 @@
   border-color: var(--tdg-green);
   outline: none;
 }
+/* Pendências: o Decision Center acessível de qualquer tela (Onda 2). */
+.tdg-shell-pendencias {
+  align-items: center;
+  background: #fff4ec;
+  border: 1px solid #f0cdb0;
+  border-radius: 10px;
+  color: #a5521a;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: .78rem;
+  font-weight: 800;
+  gap: 6px;
+  padding: 8px 11px;
+}
+.tdg-shell-pendencias:hover,
+.tdg-shell-pendencias:focus-visible { border-color: #a5521a; outline: none; }
+.tdg-shell-pendencias-selo {
+  background: #d64524;
+  border-radius: 999px;
+  color: #fff;
+  font-size: .68rem;
+  min-width: 18px;
+  padding: 1px 5px;
+  text-align: center;
+}
+.tdg-pendencias-lista { display: grid; gap: 10px; }
+.tdg-pendencias-vazio { color: var(--tdg-muted); margin: 0; }
+.tdg-pendencia {
+  align-items: center;
+  background: var(--tdg-surface, #fff);
+  border: 1px solid var(--tdg-line);
+  border-left: 4px solid var(--tdg-line);
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+.tdg-pendencia.tom-risk { border-left-color: #d64524; }
+.tdg-pendencia.tom-attention { border-left-color: #c6902a; }
+.tdg-pendencia > div { display: grid; gap: 3px; min-width: 0; }
+.tdg-pendencia small { color: var(--tdg-muted); }
+.tdg-pendencia .tdg-action { flex: none; }
 .tdg-shell-theme {
   align-items: center;
   background: var(--tdg-soft);

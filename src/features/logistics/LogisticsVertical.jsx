@@ -97,6 +97,7 @@ import {
   resumirAssuntos,
 } from "./moduleGroupingDomain.js";
 import Semente from "./Semente.jsx";
+import Modal from "../../components/Modal.jsx";
 import ErpHome from "./ErpHome.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
@@ -2897,6 +2898,15 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     [registros, clientes, db, remoteAccess],
   );
   const dashboard = useMemo(() => summarizeTodoGreenDashboard(verticalData), [verticalData]);
+  // Pendências acessíveis de qualquer tela (Onda 2): o Decision Center era
+  // calculado só dentro da home e evaporava quando a pessoa saía dela. Aqui ele
+  // vira um botão no cabeçalho, com o número no selo, para "o que precisa de mim
+  // agora" nunca ficar a um retorno-à-home de distância.
+  const decisao = useMemo(
+    () => buildTodoGreenDecisionCenter({ data: verticalData, dashboard, tasks: db?.tasks || [] }),
+    [verticalData, dashboard, db?.tasks],
+  );
+  const [pendenciasAbertas, setPendenciasAbertas] = useState(false);
   // Um cartão por tela. O catálogo continua com o vocabulário todo — é ele que
   // faz a busca por "motorista" ou "forecast" achar alguma coisa — mas a tela
   // deixa de mostrar sete nomes que abrem o mesmo lugar.
@@ -2964,6 +2974,11 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           <span className="tdg-shell-quem" title={`Sessão de ${db?.user?.name || ""} — ${db?.user?.email || ""}`}>
             <UserRound size={13} />{db?.user?.email || db?.user?.name || ""}
           </span>
+          {decisao.alerts.length > 0 && (
+            <button className="tdg-shell-pendencias" type="button" onClick={() => setPendenciasAbertas(true)} aria-label={`Pendências — ${decisao.alerts.length} ponto(s) precisam de você`}>
+              <ListChecks size={15} />Pendências<span className="tdg-shell-pendencias-selo">{decisao.alerts.length}</span>
+            </button>
+          )}
           <button className="tdg-shell-search" type="button" onClick={() => navigate("/todogreen/dashboard?ferramentas=1")}>
             <Search size={15} />Buscar ferramenta
           </button>
@@ -3035,6 +3050,27 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           </button>
         </div>
       </header>
+
+      {pendenciasAbertas && (
+        <Modal title="Pendências — o que precisa de você agora" onClose={() => setPendenciasAbertas(false)}>
+          <div className="tdg-pendencias-lista">
+            {!decisao.alerts.length && <p className="tdg-pendencias-vazio">Nada aberto no momento. Sua operação está em dia.</p>}
+            {decisao.alerts.map((alerta) => (
+              <article className={`tdg-pendencia tom-${alerta.tone}`} key={alerta.id}>
+                <div>
+                  <strong>{alerta.title}</strong>
+                  <small>{alerta.detail}</small>
+                </div>
+                {alerta.route && (
+                  <button type="button" className="tdg-action" onClick={() => { setPendenciasAbertas(false); navigate(alerta.route); }}>
+                    {alerta.action || "Abrir"}
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
+        </Modal>
+      )}
 
       <div className={`tdg-erp-layout${menuOculto ? " menu-oculto" : ""}`}>
         {menuOculto && (
