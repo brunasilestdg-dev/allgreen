@@ -17,7 +17,7 @@ import {
 // Caminho principal: envio direto pela conta Google do usuário, com o PDF
 // ANEXADO (sendGmailReal + multipart). Sem Google conectado, cai no compose do
 // Gmail (o PDF vai por download para a pessoa anexar).
-export default function EnviarApresentacao({ conta, houveContato = false, contexto = null, remetenteNome = "", onRegistrar, onMoverEstagio, setToast, onClose }) {
+export default function EnviarApresentacao({ conta, houveContato = false, contexto = null, remetenteNome = "", onRegistrar, onMoverEstagio, onEnviado, setToast, onClose }) {
   const contatos = useMemo(() => conta?.crm?.contacts || conta?.contacts || [], [conta]);
   // Default recipient: an ACTIVE contact with e-mail. Nunca sugerir um contato
   // desligado/inativo como destinatário — a pessoa ainda pode digitar outro no
@@ -63,6 +63,7 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
   const registrarEMover = async () => {
     let registrado = false;
     let movido = false;
+    let tarefaConcluida = false;
     try {
       await onRegistrar?.({
         tipo: "email",
@@ -73,12 +74,20 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
       registrado = true;
     } catch { /* registro é secundário */ }
     try { movido = (await onMoverEstagio?.()) === true; } catch { /* idem */ }
-    return { registrado, movido };
+    // Fecha a tarefa "enviar apresentação" da conta, se houver uma em aberto —
+    // o trabalho foi feito, não faz sentido continuar pendente (pedido da titular).
+    try { tarefaConcluida = (await onEnviado?.()) === true; } catch { /* idem */ }
+    return { registrado, movido, tarefaConcluida };
   };
 
   // Monta um aviso que só afirma o que realmente ocorreu.
-  const avisoDe = (inicio, { registrado, movido }) =>
-    [inicio, registrado ? "Registrada no CRM." : "", movido ? "Estágio movido para Apresentação." : ""]
+  const avisoDe = (inicio, { registrado, movido, tarefaConcluida }) =>
+    [
+      inicio,
+      registrado ? "Registrada no CRM." : "",
+      movido ? "Estágio movido para Apresentação." : "",
+      tarefaConcluida ? 'Tarefa "enviar apresentação" concluída.' : "",
+    ]
       .filter(Boolean)
       .join(" ");
 

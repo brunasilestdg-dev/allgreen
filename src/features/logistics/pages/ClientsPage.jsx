@@ -38,7 +38,7 @@ import SaudeDaContaPanel from "./SaudeDaContaPanel.jsx";
 import AccountWorkOverview from "../AccountWorkOverview.jsx";
 import EnviarApresentacao from "../EnviarApresentacao.jsx";
 import { contextoDeMercado } from "../apresentacaoComercialDomain.js";
-import { suggestionContext } from "../accountWorkDomain.js";
+import { accountWorkTasks, suggestionContext } from "../accountWorkDomain.js";
 import { interacoesVisiveis } from "../interacoesDomain.js";
 import { ESTAGIOS_OPORTUNIDADE, estagioValido } from "../opportunityIntelligenceDomain.js";
 import { inboxUrl } from "../../../session/telemetria.js";
@@ -668,7 +668,7 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, currentUserId, remetenteNome = "", espacoId = "", onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, onCompletarTarefa, currentUserId, remetenteNome = "", espacoId = "", onClientContextChange }) {
   const [clients, setClients] = useState([]);
   const [pessoas, setPessoas] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
@@ -1357,6 +1357,15 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         houveContato={interacoesVisiveis({ interacoes: interactions, clientId: selected.id }).length > 0}
         contexto={contextoDeMercado(selectedReportCandidate || {}, { segmento: selected.segment })}
         remetenteNome={remetenteNome}
+        onEnviado={async () => {
+          // Fecha a tarefa "enviar apresentação" desta conta, se houver uma em
+          // aberto. Casa por título (apresenta/apresentação) e status não concluído.
+          const alvo = accountWorkTasks(tasks, selected.id).find(
+            (t) => t.status !== "Concluído" && /apresenta/i.test(String(t.title || "")),
+          );
+          if (alvo && onCompletarTarefa) { await onCompletarTarefa(alvo.id); return true; }
+          return false;
+        }}
         setToast={setToast}
         onClose={() => setApresentacaoAberta(false)}
         onRegistrar={onInteraction ? async (interacao) => {
