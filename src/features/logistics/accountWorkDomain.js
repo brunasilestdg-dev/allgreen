@@ -24,3 +24,30 @@ export function suggestionContext(key = "") {
     return "Sugestão baseada em uma lacuna do cadastro. Ela não comprova uma necessidade do cliente; valide antes de agir.";
   return "Os registros atuais não sustentam uma próxima ação. Registre uma pista ou defina seu próprio passo.";
 }
+
+// "O que já sabemos": as notas da conta chegam como um bloco só (ex.: o
+// pipeline importado do Monday — "Funil: X | Prioridade: Y | Status: Z ...
+// Últimos updates: - data (autor): texto"). Despejar tudo num parágrafo vira
+// uma parede ilegível. Aqui o bloco é quebrado em campos e em uma lista de
+// updates, sem inventar nada — só reorganiza o texto que já existe.
+export function estruturarNotasDaConta(notes = "") {
+  const texto = String(notes || "").trim();
+  if (!texto) return { linhas: [], updates: [] };
+  let cabecalho = texto;
+  let updatesBruto = "";
+  const partes = texto.split(/últimos updates:?/i);
+  if (partes.length > 1) {
+    cabecalho = partes[0];
+    updatesBruto = partes.slice(1).join(" ");
+  }
+  const comQuebras = cabecalho
+    .replace(/\s*[|·]\s*/g, "\n")
+    .replace(/\s+(Faturamento anual esperado|Faturamento anual|Responsável|Prioridade|Status|Funil|Segmento|Prazo|Origem|Valor|Etapa)\s*:/gi, "\n$1:")
+    .replace(/\n{2,}/g, "\n");
+  const linhas = comQuebras.split("\n").map((l) => l.trim()).filter(Boolean);
+  const updates = updatesBruto
+    .split(/\s+-\s+/)
+    .map((u) => u.trim().replace(/^-\s*/, ""))
+    .filter(Boolean);
+  return { linhas, updates };
+}

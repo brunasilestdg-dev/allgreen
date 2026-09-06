@@ -65,7 +65,10 @@ export function assessAccount(account = {}, opportunities = [], interactions = [
   });
   if (activeContacts.length && !procurementContacts.length) candidates.push({
     key: "request-procurement-referral",
-    title: `Pedir a ${namedContact} a indicação de quem responde por fretes e contratação de transportes.`,
+    // Não presumir que o contato cadastrado NÃO é o responsável — só não está
+    // marcado como tal. Perguntar se é ele mesmo; e, se não for, pedir a
+    // indicação de quem responde. (Pedido da titular.)
+    title: `Confirmar com ${namedContact} se é quem responde por fretes e contratação de transportes; se não for, pedir a indicação de quem responde.`,
   });
   if (procurementContacts.length && !logisticsProcurementContacts.length) candidates.push({
     key: "validate-logistics-scope",

@@ -1,0 +1,110 @@
+/* Tela de envio da apresentação comercial — acabamento (pedido "tá feião"). */
+.tdg-envio { display: flex; flex-direction: column; gap: 14px; }
+
+.tdg-envio-campo { display: flex; flex-direction: column; gap: 5px; }
+.tdg-envio-campo > span {
+  color: var(--tdg-ink, #10241f);
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: .8rem;
+  font-weight: 700;
+}
+.tdg-envio-campo > span em {
+  color: var(--tdg-muted, #6b7b76);
+  font-style: normal;
+  font-size: .72rem;
+  font-weight: 500;
+}
+.tdg-envio-campo input,
+.tdg-envio-campo textarea {
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #d8e2de);
+  border-radius: 10px;
+  color: var(--tdg-ink, #10241f);
+  font: inherit;
+  padding: 10px 12px;
+  width: 100%;
+}
+.tdg-envio-campo textarea { line-height: 1.5; resize: vertical; min-height: 180px; }
+.tdg-envio-campo input:focus,
+.tdg-envio-campo textarea:focus {
+  border-color: var(--tdg-green, #17624f);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(23, 98, 79, .14);
+}
+
+.tdg-envio-aviso { color: #a5342a; font-size: .78rem; margin: -6px 0 0; }
+.tdg-envio-erro {
+  background: rgba(165, 52, 42, .08);
+  border: 1px solid rgba(165, 52, 42, .3);
+  border-radius: 10px;
+  color: #a5342a;
+  font-size: .82rem;
+  margin: 0;
+  padding: 10px 12px;
+}
+.tdg-envio-nota { color: var(--tdg-muted, #6b7b76); font-size: .76rem; line-height: 1.45; margin: 0; }
+
+.tdg-envio-anexo {
+  align-items: center;
+  background: var(--tdg-soft, rgba(23, 98, 79, .06));
+  border-radius: 10px;
+  color: var(--tdg-ink, #10241f);
+  display: flex;
+  font-size: .82rem;
+  gap: 8px;
+  padding: 9px 12px;
+}
+.tdg-envio-anexo strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-envio-anexo a { align-items: center; color: var(--tdg-green, #17624f); display: inline-flex; font-weight: 700; gap: 4px; }
+
+.tdg-envio-acoes { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
+.tdg-envio-acoes button {
+  align-items: center;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #d8e2de);
+  border-radius: 10px;
+  color: var(--tdg-ink, #10241f);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 700;
+  gap: 6px;
+  padding: 9px 14px;
+}
+.tdg-envio-acoes button:hover:not(:disabled) { border-color: var(--tdg-green, #17624f); }
+.tdg-envio-acoes button:disabled { cursor: progress; opacity: .6; }
+.tdg-envio-acoes .tdg-action {
+  background: var(--tdg-green, #17624f);
+  border-color: var(--tdg-green, #17624f);
+  color: #fff;
+}
+.tdg-envio-acoes .tdg-envio-cancelar { margin-left: auto; border-color: transparent; }
+
+/* "O que já sabemos": campos e updates estruturados, fim da parede de texto. */
+.tdg-account-clue-campos { display: grid; gap: 4px; list-style: none; margin: 8px 0 0; padding: 0; }
+.tdg-account-clue-campos li {
+  color: var(--tdg-ink, #10241f);
+  font-size: .82rem;
+  line-height: 1.4;
+  padding-left: 12px;
+  position: relative;
+}
+.tdg-account-clue-campos li::before { color: var(--tdg-green, #17624f); content: "•"; left: 0; position: absolute; }
+.tdg-account-clue-updates { margin-top: 10px; }
+.tdg-account-clue-updates > span {
+  color: var(--tdg-muted, #6b7b76);
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.tdg-account-clue-updates ul { display: grid; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; }
+.tdg-account-clue-updates li {
+  background: var(--tdg-soft, rgba(23, 98, 79, .06));
+  border-radius: 8px;
+  color: var(--tdg-ink, #10241f);
+  font-size: .8rem;
+  line-height: 1.4;
+  padding: 8px 10px;
+}

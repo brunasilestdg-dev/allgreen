@@ -25,13 +25,15 @@ describe("inteligência e canais da conta", () => {
       currentEmploymentVerified: false, active: true,
     }] } });
     expect(result.procurementContacts).toHaveLength(0);
-    expect(result.nextTask).toMatch(/indicação de quem responde por fretes/i);
+    // Não presume que o contato não é o responsável: pergunta se é ele.
+    expect(result.nextTask).toMatch(/se é quem responde por fretes/i);
+    expect(result.nextTask).toMatch(/se não for, pedir a indicação/i);
   });
 
   it("usa o contato cadastrado e avança quando a ação sugerida é concluída", () => {
     const account = { name: "Empresa", crm: { contacts: [{ id: "1", name: "Marina", department: "Operações" }] } };
     const first = assessAccount(account);
-    expect(first.nextTask).toMatch(/Pedir a Marina a indicação/i);
+    expect(first.nextTask).toMatch(/Confirmar com Marina se é quem responde/i);
     expect(first.nextTaskKey).toBe("request-procurement-referral");
 
     const next = assessAccount({

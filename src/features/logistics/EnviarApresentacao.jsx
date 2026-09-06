@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Mail, Send } from "lucide-react";
+import { Download, Mail, Paperclip, Send } from "lucide-react";
 import Modal from "../../components/Modal.jsx";
+import "./EnviarApresentacao.css";
 import { sendGmailReal, createGmailDraftReal, base64FromBytes } from "../../integrations/google.js";
 import {
   APRESENTACAO_PDF_URL,
@@ -149,29 +150,44 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
     }
   };
 
+  const temp = conta?.crm?.temperature;
   return (
     <Modal title="Enviar apresentação comercial" onClose={onClose}>
-      <div className="tdg-form-em-modal" style={{ display: "grid", gap: 10 }}>
-        <label><span>Para</span><input type="email" value={para} onChange={(e) => setPara(e.target.value)} placeholder="email@empresa.com.br" /></label>
-        {!contatoComEmail?.email && <small style={{ color: "#a5342a" }}>Esta conta não tem contato com e-mail — digite o destinatário.</small>}
-        <label><span>Cc (opcional)</span><input type="text" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Coloque alguém em cópia — separe vários por vírgula" /></label>
-        <label><span>Assunto</span><input value={assunto} onChange={(e) => setAssunto(e.target.value)} /></label>
-        <label><span>Mensagem {conta?.crm?.temperatura ? "" : ""}(abordagem por perfil{conta?.crm?.temperature ? ` · conta ${conta.crm.temperature.toLowerCase()}` : ""})</span>
-          <textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={9} />
+      <div className="tdg-envio">
+        <label className="tdg-envio-campo">
+          <span>Para</span>
+          <input type="email" value={para} onChange={(e) => setPara(e.target.value)} placeholder="email@empresa.com.br" />
         </label>
-        <small>Anexo: <strong>{APRESENTACAO_PDF_NOME}</strong> · <a href={APRESENTACAO_PDF_URL} target="_blank" rel="noopener noreferrer"><Download size={12} /> Baixar apresentação</a></small>
-        {erro && <p className="tdg-erro" style={{ color: "#a5342a" }}>{erro}</p>}
-        <div className="tdg-form-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {!contatoComEmail?.email && <p className="tdg-envio-aviso">Esta conta não tem contato com e-mail — digite o destinatário.</p>}
+        <label className="tdg-envio-campo">
+          <span>Cc <em>opcional</em></span>
+          <input type="text" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Coloque alguém em cópia — separe vários por vírgula" />
+        </label>
+        <label className="tdg-envio-campo">
+          <span>Assunto</span>
+          <input value={assunto} onChange={(e) => setAssunto(e.target.value)} />
+        </label>
+        <label className="tdg-envio-campo">
+          <span>Mensagem {temp ? <em>abordagem · conta {temp.toLowerCase()}</em> : <em>abordagem por perfil</em>}</span>
+          <textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={10} />
+        </label>
+        <div className="tdg-envio-anexo">
+          <Paperclip size={14} />
+          <strong>{APRESENTACAO_PDF_NOME}</strong>
+          <a href={APRESENTACAO_PDF_URL} target="_blank" rel="noopener noreferrer"><Download size={13} /> Baixar</a>
+        </div>
+        {erro && <p className="tdg-envio-erro" role="alert">{erro}</p>}
+        <div className="tdg-envio-acoes">
           {googleId
             ? <>
-                <button type="button" className="principal" onClick={criarRascunhoComAnexo} disabled={enviando}><Mail size={15} /> {enviando ? "Criando..." : "Criar rascunho com anexo"}</button>
-                <button type="button" onClick={enviarComAnexo} disabled={enviando}><Send size={15} /> {enviando ? "Enviando..." : "Enviar com anexo"}</button>
+                <button type="button" className="tdg-action" onClick={enviarComAnexo} disabled={enviando}><Send size={15} /> {enviando ? "Enviando…" : "Enviar com anexo"}</button>
+                <button type="button" onClick={criarRascunhoComAnexo} disabled={enviando}><Mail size={15} /> {enviando ? "Criando…" : "Criar rascunho"}</button>
               </>
             : null}
-          <button type="button" onClick={abrirCompose} disabled={enviando}><Mail size={15} /> {googleId ? "Compose sem anexo" : "Abrir no Gmail"}</button>
-          <button type="button" onClick={onClose} disabled={enviando}>Cancelar</button>
+          <button type="button" onClick={abrirCompose} disabled={enviando}><Mail size={15} /> {googleId ? "Abrir no Gmail" : "Abrir no Gmail (anexar manual)"}</button>
+          <button type="button" className="tdg-envio-cancelar" onClick={onClose} disabled={enviando}>Cancelar</button>
         </div>
-        {!googleId && <small>Para enviar com o anexo automático, conecte sua conta Google em Integrações. Sem isso, use &quot;Abrir no Gmail&quot; e anexe o PDF baixado.</small>}
+        {!googleId && <p className="tdg-envio-nota">Para enviar direto com o anexo, conecte sua conta Google em Integrações. Sem isso, use &quot;Abrir no Gmail&quot; e anexe o PDF baixado.</p>}
       </div>
     </Modal>
   );
