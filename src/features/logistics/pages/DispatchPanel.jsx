@@ -42,6 +42,11 @@ export default function DispatchPanel({ authHeaders, setToast }) {
     finally { setOtimizando(false); }
   };
 
+  // Nome do cliente para rotular cada parada da sequência otimizada; cai no id
+  // se a conta não estiver no lote carregado.
+  const nomeDaOperacao = (opId) =>
+    (cand?.operacoes || []).find((o) => o.id === opId)?.cliente || opId;
+
   const aplicar = async () => {
     const atribuicoes = (resultado?.tours || []).flatMap((tour) =>
       (tour.operacoes || []).map((operationId) => ({
@@ -89,7 +94,14 @@ export default function DispatchPanel({ authHeaders, setToast }) {
               {(resultado.tours || []).map((tour) => (
                 <article className="tdg-dispatch-tour" key={tour.veiculoId}>
                   <header><strong>{tour.prefixo || tour.placa || tour.veiculoId}</strong><small>{tour.motoristaNome || "sem motorista livre"}{tour.placa ? ` · ${tour.placa}` : ""}</small></header>
-                  <span>{tour.operacoes?.length || 0} parada(s)</span>
+                  <span className="tdg-dispatch-tour-tot">{tour.operacoes?.length || 0} parada(s), na ordem:</span>
+                  {/* A sequência de paradas que o motor escolheu — não só a
+                      contagem. O operador precisa ver a ordem antes de aplicar. */}
+                  <ol className="tdg-dispatch-sequencia">
+                    {(tour.operacoes || []).map((opId) => (
+                      <li key={opId}>{nomeDaOperacao(opId)}</li>
+                    ))}
+                  </ol>
                 </article>
               ))}
               {(resultado.naoAtribuidas || []).length > 0 && <p className="tdg-dispatch-nao">{resultado.naoAtribuidas.length} operação(ões) não coube(ram) na frota/turno disponível.</p>}

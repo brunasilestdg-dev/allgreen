@@ -62,11 +62,13 @@ const DEFAULT_STOP_DURATION_S = 600; // 10 min por parada — coleta ou entrega
 const carregarCandidatos = async (env, access) => {
   const [operacoes, motoristas, veiculos] = await Promise.all([
     env.DB.prepare(
-      `SELECT id, client_id, driver_id, vehicle_plate, delivery_lat, delivery_lng, pickup_lat, pickup_lng, fields_json
-         FROM todogreen_client_operations
-        WHERE workspace_owner_id = ? AND archived_at IS NULL AND delivered_at IS NULL
-          AND (driver_id = '' OR driver_id IS NULL)
-        ORDER BY created_at ASC LIMIT 200`,
+      `SELECT o.id, o.client_id, o.driver_id, o.vehicle_plate, o.delivery_lat, o.delivery_lng,
+              o.pickup_lat, o.pickup_lng, o.fields_json, c.name AS client_name
+         FROM todogreen_client_operations o
+         LEFT JOIN todogreen_clients c ON c.id = o.client_id AND c.workspace_owner_id = o.workspace_owner_id
+        WHERE o.workspace_owner_id = ? AND o.archived_at IS NULL AND o.delivered_at IS NULL
+          AND (o.driver_id = '' OR o.driver_id IS NULL)
+        ORDER BY o.created_at ASC LIMIT 200`,
     ).bind(access.ownerId).all(),
     env.DB.prepare(
       `SELECT id, full_name, availability_status FROM todogreen_drivers
@@ -156,7 +158,7 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
     const { operacoes, semCoordenadas, motoristas, veiculos } = await carregarCandidatos(env, access);
     return json({
       operacoes: operacoes.map((op) => ({
-        id: op.id, clienteId: op.client_id,
+        id: op.id, clienteId: op.client_id, cliente: op.client_name || op.client_id || "",
         entregaLat: op.delivery_lat, entregaLng: op.delivery_lng,
         coletaLat: op.pickup_lat, coletaLng: op.pickup_lng,
       })),
