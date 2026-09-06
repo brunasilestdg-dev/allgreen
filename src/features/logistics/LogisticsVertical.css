@@ -756,6 +756,24 @@
   padding: clamp(16px, 2vw, 22px);
 }
 
+/* Dinamismo (pedido da titular: "sinto falta"): o conteúdo "chega" com um leve
+   movimento quando a tela monta — ao trocar de aba, cada painel remonta e a
+   animação toca de novo, então a interface responde em vez de piscar pronta.
+   Curto e sutil de propósito; nada de festival de animação. Quem pede menos
+   movimento no sistema não vê nenhuma. */
+@keyframes tdg-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.tdg-panel,
+.tdg-section {
+  animation: tdg-rise 0.26s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tdg-panel,
+  .tdg-section { animation: none; }
+}
+
 .tdg-section-head {
   align-items: flex-start;
   display: flex;
