@@ -544,7 +544,7 @@ export default function Meetings({ db, update, business, setToast }) {
               <input
                 required
                 autoFocus
-                placeholder="Ex.: alinhamento do casamento com a cliente"
+                placeholder="Ex.: alinhamento de go-live da operação com o embarcador"
                 value={modal.title}
                 onChange={(e) => setModal({ ...modal, title: e.target.value })}
               />

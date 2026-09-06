@@ -890,7 +890,7 @@ function Finance({ db, update, business, setToast, go, AreaToolkit, pushNotifica
                     onChange={(e) =>
                       setRecForm({ ...recForm, clientName: e.target.value })
                     }
-                    placeholder="Ex.: Condomínio Jardim"
+                    placeholder="Ex.: Contrato Middle Mile — Cliente X"
                   />
                 </Field>
                 <Field label="Valor mensal (R$)">
@@ -924,7 +924,7 @@ function Finance({ db, update, business, setToast, go, AreaToolkit, pushNotifica
                     onChange={(e) =>
                       setRecForm({ ...recForm, description: e.target.value })
                     }
-                    placeholder="Ex.: Lavagem mensal de rouparia"
+                    placeholder="Ex.: Recarga elétrica da frota"
                   />
                 </Field>
               </div>

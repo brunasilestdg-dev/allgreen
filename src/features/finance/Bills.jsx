@@ -418,7 +418,7 @@ export default function Bills({ db, update, business, setToast }) {
               <input
                 required
                 autoFocus
-                placeholder="Ex.: bolo de casamento, aluguel da loja"
+                placeholder="Ex.: recarga da frota, pedágio, manutenção de veículo"
                 value={modal.description}
                 onChange={(e) =>
                   setModal({ ...modal, description: e.target.value })

@@ -256,7 +256,7 @@ export const OFFICIAL_TEMPLATES = [
     description: "Apresentação, benefícios, formulário e dúvidas frequentes.",
     category: "Vendas",
     license: "CC0-1.0",
-    publisherName: "Seu Funcionário",
+    publisherName: "To Do Green",
     schema: appFromPrompt(
       "Landing page com formulário de contato e FAQ",
       "Captação de clientes",
@@ -269,7 +269,7 @@ export const OFFICIAL_TEMPLATES = [
     description: "Indicadores essenciais para acompanhar a rotina.",
     category: "Gestão",
     license: "CC0-1.0",
-    publisherName: "Seu Funcionário",
+    publisherName: "To Do Green",
     schema: appFromPrompt(
       "Dashboard com indicadores",
       "Painel de operação",
@@ -282,7 +282,7 @@ export const OFFICIAL_TEMPLATES = [
     description: "Página responsiva para apresentar serviços e receber contatos.",
     category: "Marketing",
     license: "CC0-1.0",
-    publisherName: "Seu Funcionário",
+    publisherName: "To Do Green",
     schema: appFromPrompt(
       "Site de serviços com contato",
       "Nossos serviços",

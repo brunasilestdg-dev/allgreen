@@ -342,7 +342,7 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
             <textarea
               aria-label="Nova memória"
               rows={2}
-              placeholder="Ex.: Entregamos bolos somente pela manhã, nunca à tarde."
+              placeholder="Ex.: Coletas fechadas até as 14h saem para entrega no mesmo dia útil."
               value={nova.text}
               onChange={(e) => setNova({ ...nova, text: e.target.value })}
             />

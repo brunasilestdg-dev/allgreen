@@ -285,7 +285,7 @@ export default function Appointments({
                 autoFocus
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="Ex.: Banho e tosa, Consulta de rotina"
+                placeholder="Ex.: Coleta programada, Janela de entrega dedicada"
               />
             </Field>
             <div className="form-grid">

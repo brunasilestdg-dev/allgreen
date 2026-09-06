@@ -1461,7 +1461,7 @@ function Sites({ db, update, business, setToast, go, AreaToolkit }) {
                 onChange={(e) =>
                   setForm({ ...form, instructions: e.target.value })
                 }
-                placeholder="Ex.: Uma landing page para apresentar meus serviços de organização residencial..."
+                placeholder="Ex.: Uma landing page para apresentar operações de frete com frota 100% elétrica e redução de CO₂..."
               />
             </Field>
             <Field
@@ -1473,7 +1473,7 @@ function Sites({ db, update, business, setToast, go, AreaToolkit }) {
                 onChange={(e) =>
                   setForm({ ...form, description: e.target.value })
                 }
-                placeholder="Ex.: Organização prática para uma casa mais leve e funcional."
+                placeholder="Ex.: Logística sustentável que reduz o CO₂ da sua cadeia."
               />
             </Field>
             <div className="form-grid">

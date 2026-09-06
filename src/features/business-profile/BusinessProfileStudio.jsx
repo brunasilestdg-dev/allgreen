@@ -181,7 +181,7 @@ export default function BusinessProfileStudio({
                   segment: event.target.value,
                 }))
               }
-              placeholder="Ex.: criadora de conteúdo sobre beleza e carreira"
+              placeholder="Ex.: transportadora de logística sustentável com frota 100% elétrica"
             />
           </label>
           {selectedType && (

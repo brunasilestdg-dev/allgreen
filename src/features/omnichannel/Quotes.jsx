@@ -399,7 +399,7 @@ export default function Quotes({
                       className="qi-name"
                       value={i.name}
                       onChange={(e) => setItem(i.id, { name: e.target.value })}
-                      placeholder="Descrição (ex.: Lavagem de edredom king)"
+                      placeholder="Descrição (ex.: Frete Middle Mile SP→RJ, 12 t)"
                     />
                     <input
                       className="qi-qty"

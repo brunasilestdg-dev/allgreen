@@ -387,7 +387,7 @@ export default function SalesPipeline({ db, update, business, setToast }) {
               <input
                 required
                 autoFocus
-                placeholder="Ex.: bolo de casamento para 120 pessoas"
+                placeholder="Ex.: Operação dedicada Last Mile — 3 rotas/dia"
                 value={modal.title}
                 onChange={(e) => setModal({ ...modal, title: e.target.value })}
               />

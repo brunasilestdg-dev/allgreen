@@ -53,10 +53,10 @@ export const readStagedRequest = (storage) => {
 export const SUGESTOES = [
   "Quanto entrou e quanto saiu este mês?",
   "Escreve uma mensagem de cobrança educada para um cliente atrasado",
-  "Monta um orçamento para um bolo de casamento de 100 pessoas",
+  "Monta uma cotação de frete Last Mile para 500 pacotes por dia",
   "Quais tarefas estão atrasadas?",
-  "Cria um post para o Instagram sobre a promoção da semana",
-  "Me ajuda a decidir o preço de um produto novo",
+  "Quanto CO₂ evitamos com a frota elétrica este mês?",
+  "Me ajuda a precificar uma operação dedicada de transferência entre CDs",
 ];
 
 // Rotação estável por dia: a entrada não muda a cada abertura (o que faria a
