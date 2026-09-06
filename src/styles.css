@@ -129,6 +129,35 @@
 .tdg-auth-simulador svg { width: 16px; height: 16px; }
 .tdg-auth-simulador:hover { background: rgba(255, 255, 255, .24); }
 
+/* Os dois CTAs públicos da entrada (simular emissão + falar com o comercial no
+   WhatsApp) ficam lado a lado; quebram para baixo no celular. */
+.tdg-auth-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.tdg-auth-ctas .tdg-auth-simulador { margin-top: 0; }
+
+/* "Quero fazer uma cotação" → WhatsApp do comercial. É a ação-dinheiro, então
+   é o CTA cheio (verde WhatsApp), destacado do simulador que fica como contorno. */
+.tdg-auth-cotacao {
+  align-items: center;
+  background: #25d366;
+  border: 1px solid #25d366;
+  border-radius: 999px;
+  color: #08351f;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 8px;
+  padding: 10px 18px;
+  text-decoration: none;
+}
+.tdg-auth-cotacao svg { width: 16px; height: 16px; }
+.tdg-auth-cotacao:hover { background: #1ebe5a; border-color: #1ebe5a; }
+
 /* Overlay em tela cheia do simulador — público, sem login. */
 .tdg-sim-overlay {
   position: fixed;

@@ -2187,14 +2187,31 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
             </div>
           )}
           {entradaToDoGreen && (
-            <button
-              type="button"
-              className="tdg-auth-simulador"
-              onClick={() => setSimuladorEsgAberto(true)}
-            >
-              <Leaf aria-hidden="true" />
-              Simulador de Emissão
-            </button>
+            <div className="tdg-auth-ctas">
+              <button
+                type="button"
+                className="tdg-auth-simulador"
+                onClick={() => setSimuladorEsgAberto(true)}
+              >
+                <Leaf aria-hidden="true" />
+                Simulador de Emissão
+              </button>
+              {/* CTA de prospecção: qualquer pessoa (sem login) fala direto com
+                  o comercial da To Do Green no WhatsApp. Número da titular, com
+                  DDI 55 + DDD 11, e uma mensagem já preenchida. */}
+              <a
+                className="tdg-auth-cotacao"
+                href={whatsappLink(
+                  "5511951006360",
+                  "Olá! Vim pela plataforma da To Do Green e quero fazer uma cotação de frete.",
+                )}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <MessageSquareText aria-hidden="true" />
+                Quero fazer uma cotação
+              </a>
+            </div>
           )}
           {!entradaToDoGreen && (
             <div className="auth-tabs" role="tablist" aria-label="Acesso">
