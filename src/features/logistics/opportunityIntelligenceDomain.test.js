@@ -11,6 +11,7 @@ import {
   potencialExpansao,
   probabilidadeDoEstagio,
   proximaAcao,
+  resolverEstagioDeAvanco,
   resumirPipeline,
   riscosDaOportunidade,
   subtituloDaOportunidade,
@@ -54,6 +55,34 @@ describe("estágio e probabilidade", () => {
     expect(probabilidadeDoEstagio("Apresentação", 150)).toBe(35);
     expect(probabilidadeDoEstagio("Apresentação", -3)).toBe(35);
     expect(probabilidadeDoEstagio("Apresentação", "mais ou menos")).toBe(35);
+  });
+});
+
+describe("resolverEstagioDeAvanco (o Todô avança no funil)", () => {
+  it("aceita um estágio do funil, com ou sem acento e caixa", () => {
+    expect(resolverEstagioDeAvanco("Negociação")).toEqual({ estagio: "Negociação" });
+    expect(resolverEstagioDeAvanco("negociacao")).toEqual({ estagio: "Negociação" });
+    expect(resolverEstagioDeAvanco("APRESENTAÇÃO")).toEqual({ estagio: "Apresentação" });
+  });
+
+  it("traduz apelido antigo para o funil da titular", () => {
+    expect(resolverEstagioDeAvanco("proposta")).toEqual({ estagio: "Apresentação" });
+    expect(resolverEstagioDeAvanco("mapeamento")).toEqual({ estagio: "Prospecção" });
+  });
+
+  it("recusa fechar negócio pelo chat: ganha e perdida são da tela do CRM", () => {
+    expect(resolverEstagioDeAvanco("Fechada ganha").estagio).toBeUndefined();
+    expect(resolverEstagioDeAvanco("Fechada ganha").erro).toMatch(/tela do CRM/);
+    expect(resolverEstagioDeAvanco("ganho").erro).toMatch(/tela do CRM/);
+    expect(resolverEstagioDeAvanco("perdida").erro).toMatch(/tela do CRM/);
+    // "implantação" é pós-fechamento (vira "Fechada ganha") — também barrado.
+    expect(resolverEstagioDeAvanco("implantação").erro).toMatch(/tela do CRM/);
+  });
+
+  it("recusa o desconhecido em vez de retroceder para Prospecção sem querer", () => {
+    expect(resolverEstagioDeAvanco("qualquer coisa").estagio).toBeUndefined();
+    expect(resolverEstagioDeAvanco("qualquer coisa").erro).toMatch(/não reconhecido/i);
+    expect(resolverEstagioDeAvanco("").erro).toMatch(/Informe o estágio/);
   });
 });
 

@@ -39,6 +39,10 @@ import {
   resumoDoAcervo,
   situacaoDoDocumento,
 } from "../../src/features/logistics/habilitacaoDomain.js";
+import {
+  ESTAGIOS_FUNIL,
+  resolverEstagioDeAvanco,
+} from "../../src/features/logistics/opportunityIntelligenceDomain.js";
 
 const response = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -78,6 +82,8 @@ export const ACOES = Object.freeze({
   criar_tarefa: "cria uma tarefa na Central de Implantação. Campos: titulo (obrigatório), descricao, cliente, responsavel (nome ou e-mail; se omitido vai para o vendedor da conta), prazo (AAAA-MM-DD), prioridade (baixa|media|alta|critica).",
   definir_proxima_acao: "grava a próxima ação de uma conta. Campos: cliente (obrigatório), acao (obrigatório), prazo (AAAA-MM-DD).",
   pesquisar_empresa: "dispara a pesquisa externa de uma conta na web. Campo: cliente (obrigatório).",
+  criar_oportunidade: `abre uma oportunidade (negócio) para uma conta que já existe na carteira. Campos: cliente (obrigatório, conta da carteira), titulo (obrigatório, o nome do negócio — ex.: "Transferência CD Cajamar", "Last mile Grande SP"), valorMensal (R$/mês, número), distanciaKm (número), viagensMes (número), tipoVeiculo. Nasce sempre no estágio "Prospecção". Proponha quando a pessoa descrever um negócio novo com uma conta que já está na carteira. Não invente valor, distância nem frequência: deixe em branco o que ela não disse.`,
+  avancar_oportunidade: `avança uma oportunidade existente no funil. Campos: cliente (obrigatório), estagio (obrigatório: ${ESTAGIOS_FUNIL.join(" | ")}), titulo (informe quando a conta tiver mais de uma oportunidade aberta, para não mover a errada). NÃO fecha negócio: marcar como ganha ou perdida é feito na tela do CRM, nunca aqui.`,
   aprender: "guarda no dossiê da To Do Green um fato NOVO sobre o próprio negócio que a pessoa acabou de te contar e que você não sabia. Campos: titulo (obrigatório), conteudo (obrigatório), categoria (identidade|proposta|operacao|numeros|clientes|habilitacao|fiscal|vocabulario|aprendido), fonte (quem contou ou de onde veio), sigilo (publico|interno|restrito). Só proponha quando o fato for sobre a EMPRESA, valer para as próximas conversas e não estiver no dossiê. Nunca proponha aprender dado de uma conta de cliente: isso é registro de CRM, não conhecimento do negócio.",
 });
 
@@ -595,6 +601,10 @@ const podeEscrever = (access) =>
   podeNaVertical(access, "work:item:write") ||
   ["owner", "admin"].includes(access.role);
 
+// Escrever no CRM (oportunidade) é a mesma permissão que a coleção usa:
+// `crm:manage`. Dono e admin têm `*`, então passam por `crm:manage`.
+const podeCrm = (access) => podeNaVertical(access, "crm:manage");
+
 export async function executarAcao(env, { access, user, email, acao, linhas }) {
   const tipo = clean(acao?.tipo, 40);
   if (!ACOES[tipo]) return { erro: "Ação desconhecida.", status: 400 };
@@ -675,6 +685,92 @@ export async function executarAcao(env, { access, user, email, acao, linhas }) {
       tipo,
       resumo: `Próxima ação de ${linha.name}: ${proxima}${prazo ? ` (até ${prazo})` : ""}.`,
       id: linha.id,
+    };
+  }
+
+  if (tipo === "criar_oportunidade") {
+    if (!podeCrm(access)) return { erro: "Seu papel não abre oportunidades no CRM.", status: 403 };
+    const { linha, ambiguidade } = escolherCliente(linhas, acao?.cliente);
+    if (ambiguidade.length) return { erro: `Mais de uma conta corresponde: ${ambiguidade.join(", ")}.`, status: 409 };
+    if (!linha) return { erro: "Conta não encontrada na sua carteira. Cadastre o cliente primeiro em Clientes.", status: 404 };
+    const titulo = clean(acao?.titulo, 200);
+    if (titulo.length < 3) return { erro: "A oportunidade precisa de um nome (título do negócio).", status: 400 };
+    // Números só entram se forem números — texto vira 0, e 0 aqui vira premissa
+    // inventada no forecast. Deixar em branco (0 é o default da coluna) é honesto.
+    const numeroCampo = (valor) => {
+      const n = Number(valor);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    };
+    const id = crypto.randomUUID();
+    // O nome do negócio mora na COLUNA `title` (0081) — é o que a coleção e o
+    // Kanban leem. Guardar só no fields_json deixaria a oportunidade "sem
+    // título" na tela, o defeito que a 0081 veio corrigir.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_opportunities
+        (id, tenant_id, workspace_owner_id, client_id, client_name, title, stage, monthly_value,
+         contract_value, distance_km, trips_per_month, vehicle_type, owner_user_id,
+         last_interaction_at, fields_json, revision, created_by, updated_by, created_at, updated_at, archived_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'Prospecção', ?, 0, ?, ?, ?, ?, ?, '{}', 1, ?, ?, ?, ?, NULL)`,
+    ).bind(
+      id, TENANT_ID, access.ownerId, linha.id, linha.name, titulo,
+      numeroCampo(acao?.valorMensal), numeroCampo(acao?.distanciaKm), numeroCampo(acao?.viagensMes),
+      clean(acao?.tipoVeiculo, 120), user.id, agora,
+      user.id, user.id, agora, agora,
+    ).run();
+    return {
+      ok: true,
+      tipo,
+      resumo: `Oportunidade "${titulo}" aberta para ${linha.name} em Prospecção.`,
+      id,
+    };
+  }
+
+  if (tipo === "avancar_oportunidade") {
+    if (!podeCrm(access)) return { erro: "Seu papel não move oportunidades no CRM.", status: 403 };
+    const { linha, ambiguidade } = escolherCliente(linhas, acao?.cliente);
+    if (ambiguidade.length) return { erro: `Mais de uma conta corresponde: ${ambiguidade.join(", ")}.`, status: 409 };
+    if (!linha) return { erro: "Conta não encontrada na sua carteira.", status: 404 };
+    const alvo = resolverEstagioDeAvanco(acao?.estagio);
+    if (alvo.erro) return { erro: alvo.erro, status: 400 };
+
+    // Só as oportunidades ABERTAS da conta entram na escolha: uma já ganha ou
+    // perdida não volta ao funil por aqui. Sem título informado e com mais de
+    // uma aberta, a resposta é a lista — mover a errada é pior que perguntar.
+    const abertas = await env.DB.prepare(
+      `SELECT id, title, stage, revision FROM todogreen_opportunities
+        WHERE tenant_id=? AND workspace_owner_id=? AND client_id=? AND archived_at IS NULL
+          AND lower(stage) NOT IN ('fechada ganha','fechada perdida')
+        ORDER BY updated_at DESC LIMIT 50`,
+    ).bind(TENANT_ID, access.ownerId, linha.id).all().then((r) => r.results || []);
+    if (!abertas.length)
+      return { erro: `${linha.name} não tem oportunidade aberta para avançar.`, status: 404 };
+
+    const termoTitulo = semAcento(acao?.titulo);
+    const candidatas = termoTitulo
+      ? abertas.filter((o) => semAcento(o.title).includes(termoTitulo))
+      : abertas;
+    if (!candidatas.length)
+      return { erro: `Nenhuma oportunidade aberta de ${linha.name} bate com "${clean(acao?.titulo, 120)}".`, status: 404 };
+    if (candidatas.length > 1)
+      return {
+        erro: `${linha.name} tem mais de uma oportunidade aberta. Diga qual pelo título: ${candidatas.slice(0, 8).map((o) => `"${o.title || "sem título"}"`).join(", ")}.`,
+        status: 409,
+      };
+
+    const oportunidade = candidatas[0];
+    if (semAcento(oportunidade.stage) === semAcento(alvo.estagio))
+      return { erro: `A oportunidade "${oportunidade.title || "sem título"}" já está em ${alvo.estagio}.`, status: 409 };
+    const { meta } = await env.DB.prepare(
+      `UPDATE todogreen_opportunities
+          SET stage=?, last_interaction_at=?, revision=revision+1, updated_by=?, updated_at=?
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
+    ).bind(alvo.estagio, agora, user.id, agora, oportunidade.id, TENANT_ID, access.ownerId, oportunidade.revision).run();
+    if (!meta?.changes) return { erro: "A oportunidade mudou enquanto você confirmava. Abra de novo e refaça.", status: 409 };
+    return {
+      ok: true,
+      tipo,
+      resumo: `Oportunidade "${oportunidade.title || "sem título"}" de ${linha.name}: ${oportunidade.stage || "?"} → ${alvo.estagio}.`,
+      id: oportunidade.id,
     };
   }
 

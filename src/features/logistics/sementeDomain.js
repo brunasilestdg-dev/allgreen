@@ -165,6 +165,26 @@ export const textoDaProposta = (proposta = {}) => {
   }
   if (tipo === "pesquisar_empresa")
     return `Pesquisar ${proposta.cliente || "a empresa"} na web agora`;
+  if (tipo === "criar_oportunidade") {
+    const partes = [`Abrir oportunidade "${proposta.titulo || "sem título"}"`];
+    if (proposta.cliente) partes.push(`para ${proposta.cliente}`);
+    partes.push("em Prospecção");
+    const numeros = [
+      proposta.valorMensal ? `R$ ${proposta.valorMensal}/mês` : "",
+      proposta.distanciaKm ? `${proposta.distanciaKm} km` : "",
+      proposta.viagensMes ? `${proposta.viagensMes} viagens/mês` : "",
+      proposta.tipoVeiculo ? String(proposta.tipoVeiculo) : "",
+    ].filter(Boolean);
+    if (numeros.length) partes.push(`(${numeros.join(" · ")})`);
+    return partes.join(" ");
+  }
+  if (tipo === "avancar_oportunidade") {
+    const alvo = proposta.titulo ? `"${proposta.titulo}"` : "a oportunidade";
+    const partes = [`Avançar ${alvo}`];
+    if (proposta.cliente) partes.push(`de ${proposta.cliente}`);
+    partes.push(`para ${proposta.estagio || "?"}`);
+    return partes.join(" ");
+  }
   if (tipo === "aprender") {
     // Aqui o texto INTEIRO importa. Nas outras ações a pessoa confere um
     // título e um prazo; nesta ela está autorizando o assistente a afirmar

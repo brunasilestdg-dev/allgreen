@@ -107,6 +107,27 @@ export const estagioValido = (valor) => {
   return APELIDOS_ESTAGIO[chave] || "Prospecção";
 };
 
+// Resolve um estágio pedido em linguagem livre para um estágio do FUNIL (aberto).
+// Existe para o Todô poder avançar a oportunidade sem dois perigos:
+//   1) fechar negócio pelo chat — marcar "Fechada ganha" dispara o handoff
+//      operacional, cria implantação e vira receita; isso é ato deliberado da
+//      tela do CRM, não de um clique numa proposta de uma linha.
+//   2) mover a oportunidade para trás sem querer — `estagioValido` derruba o
+//      que não reconhece em "Prospecção"; aqui, o não reconhecido é ERRO, não
+//      um retrocesso silencioso.
+export const resolverEstagioDeAvanco = (valor) => {
+  const bruto = texto(valor);
+  if (!bruto) return { erro: `Informe o estágio do funil: ${ESTAGIOS_FUNIL.join(", ")}.` };
+  const chave = semAcento(bruto);
+  const canonico =
+    ESTAGIOS_OPORTUNIDADE.find((e) => semAcento(e) === chave) || APELIDOS_ESTAGIO[chave] || null;
+  if (!canonico)
+    return { erro: `Estágio não reconhecido. Use um destes: ${ESTAGIOS_FUNIL.join(", ")}.` };
+  if (!ESTAGIOS_FUNIL.includes(canonico))
+    return { erro: "Fechar como ganha ou perdida é feito na tela do CRM, não pelo Todô." };
+  return { estagio: canonico };
+};
+
 export const probabilidadeDoEstagio = (estagio, informada) => {
   const n = Number(informada);
   // Probabilidade informada pela pessoa vence a do estágio — ela conhece o

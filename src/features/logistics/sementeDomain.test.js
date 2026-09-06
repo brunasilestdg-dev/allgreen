@@ -161,6 +161,35 @@ describe("a proposta dita em português", () => {
     );
   });
 
+  it("abrir oportunidade lê o negócio, a conta e os números que a pessoa deu", () => {
+    expect(
+      textoDaProposta({ tipo: "criar_oportunidade", titulo: "Transferência CD Cajamar", cliente: "Rede Alfa" }),
+    ).toBe('Abrir oportunidade "Transferência CD Cajamar" para Rede Alfa em Prospecção');
+    const comNumeros = textoDaProposta({
+      tipo: "criar_oportunidade",
+      titulo: "Last mile SP",
+      cliente: "Rede Alfa",
+      valorMensal: 40000,
+      distanciaKm: 120,
+      viagensMes: 22,
+      tipoVeiculo: "elétrico",
+    });
+    expect(comNumeros).toContain('Abrir oportunidade "Last mile SP" para Rede Alfa em Prospecção');
+    expect(comNumeros).toContain("R$ 40000/mês");
+    expect(comNumeros).toContain("120 km");
+    expect(comNumeros).toContain("22 viagens/mês");
+    expect(comNumeros).toContain("elétrico");
+  });
+
+  it("avançar oportunidade mostra de onde para onde ela vai no funil", () => {
+    expect(
+      textoDaProposta({ tipo: "avancar_oportunidade", cliente: "Rede Alfa", estagio: "Negociação", titulo: "Last mile SP" }),
+    ).toBe('Avançar "Last mile SP" de Rede Alfa para Negociação');
+    expect(
+      textoDaProposta({ tipo: "avancar_oportunidade", cliente: "Rede Alfa", estagio: "Apresentação" }),
+    ).toBe("Avançar a oportunidade de Rede Alfa para Apresentação");
+  });
+
   it("o aprendizado mostra o texto INTEIRO que vai virar conhecimento", () => {
     // Nas outras ações confere-se um título; nesta a pessoa autoriza o
     // assistente a AFIRMAR aquilo para todo o espaço. Resumir seria pedir
