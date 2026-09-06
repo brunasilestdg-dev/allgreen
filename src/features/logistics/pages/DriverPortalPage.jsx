@@ -455,6 +455,7 @@ export default function DriverPortalPage() {
                 <small>{viagem.dataServico || ""} · placa {viagem.placa || "—"} · {comRotulo(ROTULO_SITUACAO, viagem.situacao)}</small>
               </div>
               <div className="tdg-driver-acoes">
+                <button type="button" onClick={() => { setFormulario({ viagem, tipo: "coleta" }); setAviso(""); }}>Coletei</button>
                 <button type="button" onClick={() => { setFormulario({ viagem, tipo: "chegada" }); setAviso(""); }}>Cheguei</button>
                 <button type="button" className="principal" onClick={() => { setFormulario({ viagem, tipo: "entrega" }); setAviso(""); }}><PackageCheck size={17} /> Entreguei</button>
                 <button type="button" className="alerta" onClick={() => { setFormulario({ viagem, tipo: "ocorrencia" }); setAviso(""); }}>Ocorrência</button>
@@ -605,7 +606,7 @@ export default function DriverPortalPage() {
           formulário nascia no fim da página — com várias viagens, fora da tela. */}
       {formulario && (
         <Modal
-          title={formulario.tipo === "entrega" ? "Confirmar entrega" : formulario.tipo === "chegada" ? "Confirmar chegada" : "Registrar ocorrência"}
+          title={formulario.tipo === "entrega" ? "Confirmar entrega" : formulario.tipo === "chegada" ? "Confirmar chegada" : formulario.tipo === "coleta" ? "Confirmar coleta" : "Registrar ocorrência"}
           onClose={() => setFormulario(null)}
         >
           <form className="tdg-driver-cartao tdg-driver-form tdg-form-em-modal" onSubmit={registrar}>

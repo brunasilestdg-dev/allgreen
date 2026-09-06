@@ -2159,6 +2159,18 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   const paramsEntrega = tipo === "entrega"
     ? [ocorridoEm, ...(comprovanteUrl ? [comprovanteUrl, comprovanteHash] : []), ...(assinaturaUrl ? [assinaturaUrl, assinaturaHash] : [])]
     : [];
+  // Posição do motorista → rastreio ao vivo. Todo evento de rua (chegada,
+  // coleta, entrega, ocorrência) já manda lat/lng; até aqui só a entrega usava
+  // (no POD) e o resto era descartado. Agora QUALQUER evento com coordenada
+  // carimba last_position na operação — o mesmo campo que o portal do cliente e
+  // a torre de controle já desenham no mapa. De graça, do que o motorista já faz.
+  const latEvento = Number(corpo.latitude);
+  const lngEvento = Number(corpo.longitude);
+  const temPosicao = Number.isFinite(latEvento) && Number.isFinite(lngEvento);
+  const atualizacaoPosicao = temPosicao
+    ? ", last_position_lat = ?, last_position_lng = ?, last_position_at = ?"
+    : "";
+  const paramsPosicao = temPosicao ? [latEvento, lngEvento, ocorridoEm] : [];
   const instrucoes = [
     env.DB.prepare(
       `INSERT INTO todogreen_client_operation_events
@@ -2171,9 +2183,9 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
     ),
     env.DB.prepare(
       `UPDATE todogreen_client_operations
-          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}
+          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}${atualizacaoPosicao}
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-    ).bind(agora, userId, ...paramsEntrega, operationId, TENANT_ID, ownerId),
+    ).bind(agora, userId, ...paramsEntrega, ...paramsPosicao, operationId, TENANT_ID, ownerId),
   ];
   if (tipo === "entrega") {
     // POD para toda OS amarrada a esta operação. INSERT direto com subselect:

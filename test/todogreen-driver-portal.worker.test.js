@@ -188,6 +188,20 @@ describe("a entrega da rua fecha o ciclo", () => {
     ).first();
     expect(linha.incident_count).toBe(1);
   });
+
+  it("evento com GPS carimba a posição ao vivo na operação (rastreio de graça)", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/viagens/op-j2/evento", {
+      method: "POST", token: joao.token,
+      body: { tipo: "coleta", titulo: "Coletei na origem", latitude: -23.5, longitude: -46.6 },
+    });
+    expect(r.status).toBe(201);
+    const linha = await env.DB.prepare(
+      "SELECT last_position_lat, last_position_lng, last_position_at FROM todogreen_client_operations WHERE id = 'op-j2'",
+    ).first();
+    expect(linha.last_position_lat).toBeCloseTo(-23.5);
+    expect(linha.last_position_lng).toBeCloseTo(-46.6);
+    expect(linha.last_position_at).toBeTruthy();
+  });
 });
 
 // #132 — a fila offline reenvia com uma chave estável por gesto. O reenvio não
