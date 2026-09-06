@@ -9,6 +9,7 @@ import {
   tracarRota,
 } from "../distanciaRodoviariaDomain.js";
 import { estimarTotalPedagios } from "../pedagiosDomain.js";
+import DispatchPanel from "./DispatchPanel.jsx";
 import {
   ROTULO_STATUS_ROTA,
   montarParadasDaRota,
@@ -527,6 +528,8 @@ Regras:
           <p>Várias paradas no mapa do Brasil (OpenStreetMap), com rota, distância e tempo. Digite e escolha o endereço na sugestão, <strong>arraste pela alça para reordenar</strong>, marque a <strong>janela de horário</strong> de cada parada (a IA respeita), defina a saída para ver a <strong>chegada estimada</strong> (com régua de trânsito de pico), marque recargas (1h30 cada) e veja pedágios e carregadores (foco em pesados).</p>
         </div>
       </header>
+
+      <DispatchPanel authHeaders={authHeaders} setToast={setToast} />
 
       {/* Workspace de duas colunas ao estilo Circuit/Linx: controles e paradas
           à esquerda, o mapa como herói à direita (grande e fixo enquanto se

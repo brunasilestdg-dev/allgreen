@@ -4160,3 +4160,20 @@
 .tdg-legal-anexo { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
 .tdg-legal-fluxo-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .tdg-legal-fluxo-fim { color: var(--tdg-muted, #5a6b64); font-style: italic; margin: 0; }
+
+/* Despacho inteligente (VRP) na Roteirização (Onda A / TMS) */
+.tdg-dispatch { border: 1px solid var(--tdg-line, #d7e0dc); border-radius: 16px; margin-bottom: 16px; padding: 14px 16px; }
+.tdg-dispatch-head { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.tdg-dispatch-head h3 { align-items: center; display: flex; gap: 7px; margin: 4px 0 0; }
+.tdg-dispatch-corpo { display: grid; gap: 12px; margin-top: 12px; }
+.tdg-dispatch-stats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+.tdg-dispatch-stats article { background: var(--tdg-card, #fff); border: 1px solid var(--tdg-line, #d7e0dc); border-radius: 12px; display: grid; gap: 3px; padding: 10px 12px; }
+.tdg-dispatch-stats article span { align-items: center; color: var(--tdg-muted, #5a6b64); display: flex; font-size: .78rem; gap: 5px; }
+.tdg-dispatch-stats article strong { font-size: 1.3rem; }
+.tdg-dispatch-stats article.risk strong { color: #c0473b; }
+.tdg-dispatch-acoes, .tdg-dispatch-resultado { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tdg-dispatch-resultado { display: grid; gap: 8px; }
+.tdg-dispatch-tour { align-items: center; border: 1px solid var(--tdg-line, #d7e0dc); border-left: 3px solid var(--tdg-green, #075c45); border-radius: 12px; display: flex; gap: 12px; justify-content: space-between; padding: 8px 12px; }
+.tdg-dispatch-tour header { display: grid; gap: 2px; }
+.tdg-dispatch-tour header small { color: var(--tdg-muted, #5a6b64); }
+.tdg-dispatch-nao { color: #c98a1e; margin: 0; }
