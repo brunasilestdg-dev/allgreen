@@ -3,7 +3,11 @@ import {
   custoAtivoPesado,
   custoMotoristaMes,
   referenciaEngineAtivoPesado,
+  ehVeiculoAtivoPesado,
+  validarPremissasAtivo,
   PREMISSAS_ATIVO_PESADO,
+  PREMISSAS_ATIVO_FIELDS,
+  PREMISSAS_ATIVO_CHAVES,
 } from "./heavyAssetCostDomain.js";
 
 // A prova real: reproduzir, ao centavo, a aba "Custo Frota" da planilha da
@@ -53,5 +57,52 @@ describe("custo do cavalo elétrico XCMG bate com a planilha da titular", () => 
   it("as premissas de fábrica são a planilha XCMG", () => {
     expect(PREMISSAS_ATIVO_PESADO.valorCavalo).toBe(1300000);
     expect(PREMISSAS_ATIVO_PESADO.diasUteisMes).toBe(22);
+  });
+});
+
+describe("premissas editáveis pelo admin na régua", () => {
+  it("todo campo do formulário existe nas premissas de fábrica — sem campo órfão", () => {
+    for (const chave of PREMISSAS_ATIVO_CHAVES) {
+      expect(PREMISSAS_ATIVO_PESADO).toHaveProperty(chave);
+    }
+    // e o inverso: nenhuma premissa de fábrica ficou sem campo editável.
+    for (const chave of Object.keys(PREMISSAS_ATIVO_PESADO)) {
+      expect(PREMISSAS_ATIVO_CHAVES).toContain(chave);
+    }
+  });
+
+  it("só as carretas/cavalos elétricos são de ativo pesado", () => {
+    expect(ehVeiculoAtivoPesado("Carreta elétrica")).toBe(true);
+    expect(ehVeiculoAtivoPesado("Cavalo elétrico (solo)")).toBe(true);
+    expect(ehVeiculoAtivoPesado("VUC")).toBe(false);
+    expect(ehVeiculoAtivoPesado("")).toBe(false);
+  });
+
+  it("valida um número fora da faixa e recusa premissa desconhecida", () => {
+    const fora = validarPremissasAtivo({ seguroCascoPctAa: 5 }, { parcial: true });
+    expect(fora.valido).toBe(false);
+    const desconhecida = validarPremissasAtivo({ naoExiste: 1 }, { parcial: true });
+    expect(desconhecida.valido).toBe(false);
+    expect(desconhecida.erros.join(" ")).toContain("desconhecida");
+  });
+
+  it("aceita um override parcial e devolve só o que veio", () => {
+    const ok = validarPremissasAtivo({ valorCavalo: 1600000 }, { parcial: true });
+    expect(ok.valido).toBe(true);
+    expect(ok.premissas).toEqual({ valorCavalo: 1600000 });
+  });
+
+  it("campos percentuais são frações e batem o modelo do seguro", () => {
+    const campoSeguro = PREMISSAS_ATIVO_FIELDS.find((f) => f.chave === "seguroCascoPctAa");
+    expect(campoSeguro.escala).toBe("fracao");
+    // 4,5% a.a. = 0,045; validado dentro da faixa.
+    const ok = validarPremissasAtivo({ seguroCascoPctAa: 0.045 }, { parcial: true });
+    expect(ok.valido).toBe(true);
+  });
+
+  it("um cavalo mais caro via premissa sobe o custo de veículo do motor", () => {
+    const base = referenciaEngineAtivoPesado({}, { incluiCarreta: true }).vehicleDailyCost;
+    const caro = referenciaEngineAtivoPesado({ valorCavalo: 1600000 }, { incluiCarreta: true }).vehicleDailyCost;
+    expect(caro).toBeGreaterThan(base);
   });
 });

@@ -10,6 +10,7 @@ import {
   validarParametros,
   VEHICLE_COST_REFERENCE,
 } from "./pricingParametersDomain.js";
+import { referenciaEngineAtivoPesado } from "./heavyAssetCostDomain.js";
 
 const regua = (extra = {}) => ({
   minimumMarginPercent: 18,
@@ -205,5 +206,53 @@ describe("custo por veículo: fábrica muda o preço, admin sobrescreve", () => 
     expect(resolvido.parametros.vehicleDailyCost).toBe(640); // admin vence a fábrica (495)
     // A manutenção, que o admin não mexeu, segue a referência de fábrica.
     expect(resolvido.parametros.maintenancePerKm).toBe(VEHICLE_COST_REFERENCE["Toco"].maintenancePerKm);
+  });
+});
+
+describe("premissas do ativo pesado editáveis na régua (compramos um cavalo mais caro)", () => {
+  it("premissas no perfil do veículo RECALCULAM veículo/energia/manutenção", () => {
+    // O admin edita o valor do cavalo na Régua (escopo Veículo). O custo NÃO é
+    // um R$/dia salvo: é derivado da premissa (depreciação, capital, seguro).
+    const esperado = referenciaEngineAtivoPesado({ valorCavalo: 1600000 }, { incluiCarreta: true });
+    const resolvido = resolverParametros(regua(), [
+      {
+        id: "carreta-2026", versao: "xcmg-2026", scopeType: "vehicle", scopeKey: "Carreta elétrica",
+        status: "active", parametros: { premissasAtivo: { valorCavalo: 1600000 } },
+      },
+    ], { vehicleType: "Carreta elétrica" });
+    expect(resolvido.parametros.vehicleDailyCost).toBe(esperado.vehicleDailyCost);
+    expect(resolvido.parametros.energyCostPerKm).toBe(esperado.energyCostPerKm);
+    expect(resolvido.aplicados.some((a) => a.fonte === "premissas_ativo")).toBe(true);
+  });
+
+  it("a premissa vence um R$/dia salvo junto no mesmo perfil", () => {
+    // Se alguém digitar um vehicleDailyCost à mão E premissas, a premissa manda:
+    // é a fonte da verdade, senão o número chapado mentiria sobre o ativo.
+    const esperado = referenciaEngineAtivoPesado({}, { incluiCarreta: false });
+    const resolvido = resolverParametros(regua(), [
+      {
+        id: "solo", versao: "solo-2026", scopeType: "vehicle", scopeKey: "Cavalo elétrico (solo)",
+        status: "active", parametros: { vehicleDailyCost: 10, premissasAtivo: {} },
+      },
+    ], { vehicleType: "Cavalo elétrico (solo)" });
+    expect(resolvido.parametros.vehicleDailyCost).toBe(esperado.vehicleDailyCost);
+    expect(resolvido.parametros.vehicleDailyCost).not.toBe(10);
+  });
+
+  it("validarParametros aceita o bloco premissasAtivo e o devolve limpo", () => {
+    const v = validarParametros(
+      { vehicleDailyCost: 1687.12, premissasAtivo: { valorCavalo: 1600000 } },
+      { parcial: true, base: regua() },
+    );
+    expect(v.valido).toBe(true);
+    expect(v.parametros.premissasAtivo).toEqual({ valorCavalo: 1600000 });
+  });
+
+  it("validarParametros recusa uma premissa fora da faixa", () => {
+    const v = validarParametros(
+      { premissasAtivo: { seguroCascoPctAa: 9 } },
+      { parcial: true, base: regua() },
+    );
+    expect(v.valido).toBe(false);
   });
 });

@@ -138,3 +138,92 @@ export const referenciaEngineAtivoPesado = (premissas = {}, opcoes = {}) => {
     maintenancePerKm: arredondar(c.detalhamento.manutencaoKm + c.detalhamento.pneusKm, 4),
   };
 };
+
+// Quais veículos do catálogo têm o custo dominado pelo ATIVO (e portanto usam
+// este modelo em vez de um R$/dia chapado), e se a configuração inclui a
+// carreta. As chaves batem com VEHICLE_TYPES e VEHICLE_COST_REFERENCE.
+export const VEICULOS_ATIVO_PESADO = Object.freeze({
+  "Carreta elétrica": { incluiCarreta: true, rotulo: "Cavalo + carreta elétricos" },
+  "Cavalo elétrico (solo)": { incluiCarreta: false, rotulo: "Cavalo elétrico (cliente fornece a carreta)" },
+});
+
+export const ehVeiculoAtivoPesado = (chave) => Boolean(VEICULOS_ATIVO_PESADO[chave]);
+
+// Metadados das premissas para a régua: rótulo, grupo, unidade e faixa. `escala`
+// "fracao" = valor guardado como fração (0,045) mas exibido como % (4,5). Assim o
+// admin edita "seguro 4,5% a.a." e o modelo recebe 0,045.
+export const PREMISSAS_ATIVO_FIELDS = Object.freeze([
+  { chave: "valorCavalo", rotulo: "Valor do cavalo", grupo: "Ativos", sufixo: "R$", min: 0, max: 10_000_000 },
+  { chave: "vidaUtilCavaloMeses", rotulo: "Vida útil do cavalo", grupo: "Ativos", sufixo: "meses", min: 1, max: 360 },
+  { chave: "residualCavaloPct", rotulo: "Valor residual do cavalo", grupo: "Ativos", sufixo: "%", escala: "fracao", min: 0, max: 1 },
+  { chave: "valorCarreta", rotulo: "Valor da carreta", grupo: "Ativos", sufixo: "R$", min: 0, max: 5_000_000 },
+  { chave: "vidaUtilCarretaMeses", rotulo: "Vida útil da carreta", grupo: "Ativos", sufixo: "meses", min: 1, max: 360 },
+  { chave: "residualCarretaPct", rotulo: "Valor residual da carreta", grupo: "Ativos", sufixo: "%", escala: "fracao", min: 0, max: 1 },
+
+  { chave: "ipvaPctAa", rotulo: "IPVA ao ano", grupo: "Propriedade e risco", sufixo: "%", escala: "fracao", min: 0, max: 0.2 },
+  { chave: "seguroCascoPctAa", rotulo: "Seguro casco ao ano", grupo: "Propriedade e risco", sufixo: "%", escala: "fracao", min: 0, max: 0.3 },
+  { chave: "rctrRcfMes", rotulo: "RCTR-C / RCF-DC mensal", grupo: "Propriedade e risco", sufixo: "R$", min: 0, max: 20_000 },
+  { chave: "rastreamentoGrMes", rotulo: "Rastreamento e GR mensal", grupo: "Propriedade e risco", sufixo: "R$", min: 0, max: 20_000 },
+  { chave: "licenciamentoAnttAno", rotulo: "Licenciamento e ANTT ao ano", grupo: "Propriedade e risco", sufixo: "R$", min: 0, max: 50_000 },
+  { chave: "custoCapitalPctAa", rotulo: "Custo de capital ao ano", grupo: "Propriedade e risco", sufixo: "%", escala: "fracao", min: 0, max: 0.6 },
+  { chave: "baseCustoCapitalPct", rotulo: "Base sujeita a custo de capital", grupo: "Propriedade e risco", sufixo: "%", escala: "fracao", min: 0, max: 1 },
+
+  { chave: "salarioMotoristaMes", rotulo: "Salário do motorista", grupo: "Mão de obra", sufixo: "R$", min: 0, max: 50_000 },
+  { chave: "encargosPct", rotulo: "Encargos sobre o salário", grupo: "Mão de obra", sufixo: "%", escala: "fracao", min: 0, max: 3 },
+  { chave: "beneficiosMes", rotulo: "Benefícios mensais", grupo: "Mão de obra", sufixo: "R$", min: 0, max: 20_000 },
+  { chave: "horasExtrasPct", rotulo: "Horas extras", grupo: "Mão de obra", sufixo: "%", escala: "fracao", min: 0, max: 1 },
+  { chave: "coberturaReservaPct", rotulo: "Cobertura de reserva", grupo: "Mão de obra", sufixo: "%", escala: "fracao", min: 0, max: 1 },
+  { chave: "ajudanteMes", rotulo: "Ajudante mensal", grupo: "Mão de obra", sufixo: "R$", min: 0, max: 20_000 },
+
+  { chave: "precoEnergiaKwh", rotulo: "Preço da energia", grupo: "Energia e infraestrutura", sufixo: "R$/kWh", min: 0, max: 20 },
+  { chave: "consumoSoloKwhKm", rotulo: "Consumo do cavalo solo", grupo: "Energia e infraestrutura", sufixo: "kWh/km", min: 0, max: 10 },
+  { chave: "consumoConjuntoKwhKm", rotulo: "Consumo do conjunto", grupo: "Energia e infraestrutura", sufixo: "kWh/km", min: 0, max: 10 },
+  { chave: "investInfraRecarga", rotulo: "Investimento em recarga", grupo: "Energia e infraestrutura", sufixo: "R$", min: 0, max: 10_000_000 },
+  { chave: "amortizacaoInfraMeses", rotulo: "Amortização da infra", grupo: "Energia e infraestrutura", sufixo: "meses", min: 1, max: 360 },
+  { chave: "veiculosRateandoInfra", rotulo: "Veículos rateando a infra", grupo: "Energia e infraestrutura", sufixo: "un", min: 1, max: 500 },
+
+  { chave: "manutencaoCavaloKm", rotulo: "Manutenção do cavalo", grupo: "Manutenção e pneus", sufixo: "R$/km", min: 0, max: 50 },
+  { chave: "manutencaoCarretaKm", rotulo: "Manutenção da carreta", grupo: "Manutenção e pneus", sufixo: "R$/km", min: 0, max: 50 },
+  { chave: "pneusCavaloQtd", rotulo: "Pneus do cavalo (qtd)", grupo: "Manutenção e pneus", sufixo: "un", min: 0, max: 60 },
+  { chave: "pneusCavaloPreco", rotulo: "Preço do pneu do cavalo", grupo: "Manutenção e pneus", sufixo: "R$", min: 0, max: 20_000 },
+  { chave: "pneusCavaloVidaKm", rotulo: "Vida do pneu do cavalo", grupo: "Manutenção e pneus", sufixo: "km", min: 1, max: 500_000 },
+  { chave: "pneusCarretaQtd", rotulo: "Pneus da carreta (qtd)", grupo: "Manutenção e pneus", sufixo: "un", min: 0, max: 60 },
+  { chave: "pneusCarretaPreco", rotulo: "Preço do pneu da carreta", grupo: "Manutenção e pneus", sufixo: "R$", min: 0, max: 20_000 },
+  { chave: "pneusCarretaVidaKm", rotulo: "Vida do pneu da carreta", grupo: "Manutenção e pneus", sufixo: "km", min: 1, max: 500_000 },
+
+  { chave: "diasUteisMes", rotulo: "Dias úteis no mês", grupo: "Rateio", sufixo: "dias", min: 1, max: 31 },
+]);
+
+export const PREMISSAS_ATIVO_CHAVES = PREMISSAS_ATIVO_FIELDS.map((f) => f.chave);
+
+// Valida um conjunto de premissas do ativo pesado. `parcial` aceita só as chaves
+// enviadas (as demais herdam de fábrica). Devolve as premissas limpas ou os erros
+// — no espírito do resto da régua: nada entra sem passar por validação.
+export const validarPremissasAtivo = (valores = {}, { parcial = false } = {}) => {
+  const erros = [];
+  const limpos = {};
+  const porChave = Object.fromEntries(PREMISSAS_ATIVO_FIELDS.map((f) => [f.chave, f]));
+  const chaves = parcial ? Object.keys(valores) : PREMISSAS_ATIVO_CHAVES;
+  for (const chave of chaves) {
+    const def = porChave[chave];
+    if (!def) {
+      erros.push(`Premissa desconhecida: ${chave}.`);
+      continue;
+    }
+    const valor = Number(valores[chave]);
+    if (!Number.isFinite(valor)) {
+      erros.push(`${def.rotulo}: informe um número.`);
+      continue;
+    }
+    if (valor < def.min || valor > def.max) {
+      const u = def.escala === "fracao" ? "" : ` ${def.sufixo}`;
+      const mostra = (n) => (def.escala === "fracao" ? `${arredondar(n * 100, 2)}%` : `${n}${u}`);
+      erros.push(`${def.rotulo}: use um valor entre ${mostra(def.min)} e ${mostra(def.max)}.`);
+      continue;
+    }
+    limpos[chave] = arredondar(valor, 6);
+  }
+  return erros.length
+    ? { valido: false, erros, premissas: null }
+    : { valido: true, erros: [], premissas: limpos };
+};

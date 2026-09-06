@@ -216,6 +216,28 @@ quantos resultados vieram.
   A conversão de cenário em `quotes` é explícita e mantém
   `sourcePricingScenarioId`. Templates setoriais são configurações iniciais,
   nunca regras fixas ou produtos separados.
+- **Régua de precificação versionada** (`src/features/logistics/pricingParametersDomain.js`
+  + `PricingParametersPanel.jsx`; tabela `todogreen_simulator_parameter_sets`,
+  handler `worker/services/todogreen-pricing-parameters.js`): `resolverParametros(padrao, perfis, contexto)`
+  aplica os perfis em ordem de ESCOPO (global→produto→modalidade→**veículo**→região→cliente→contrato);
+  nada entra sem versão + justificativa (`validarParametros`). O escopo **Veículo**
+  injeta primeiro o custo de fábrica (`VEHICLE_COST_REFERENCE`) e o perfil ativo do
+  admin sobrescreve. **Custo de ativo pesado** (`heavyAssetCostDomain.js`): cavalo/carreta
+  elétricos NÃO têm R$/dia chapado — o custo é derivado do ATIVO (depreciação, custo de
+  capital, seguro sobre o valor, infra de recarga), reproduzindo ao centavo a planilha
+  XCMG da titular. As premissas (`PREMISSAS_ATIVO_FIELDS`, editáveis pelo admin no painel
+  quando o veículo é `VEICULOS_ATIVO_PESADO`) viajam como o bloco `premissasAtivo` dentro
+  de `parameters_json`; `resolverParametros` RECALCULA veículo/energia/manutenção delas —
+  a premissa é a fonte da verdade e vence qualquer R$/dia salvo junto. É o
+  "compramos um cavalo mais caro" num lugar só. Nunca duplicar o parser de número nem
+  gravar custo que ninguém confirmou: a tela existe para impedir isso.
+- **Política de margem por produto** (`logisticsVerticalDomain.js`, const `PISO_26` no
+  catálogo `LOGISTICS_PRODUCTS`): piso 18% em line-haul/B2B (Middle Mile, Spot,
+  Transferência, Coleta em fornecedores/first mile, Abastecimento de lojas, Granel) e
+  **26% nos "demais"** (Last Mile, Distribuição fracionada — que NÃO é B2B —, Operação
+  dedicada, Projeto personalizado). Abaixo do piso, `dealDeskTriggers` aciona o Deal Desk
+  com alçada **"Precificação ou Head Comercial"** (`marginFloorApprover`). Testado em
+  `marginPolicyDomain.test.js`.
 - **Jornada de eletrificação To Do Green**: regras puras em
   `src/features/logistics/electrificationJourneyDomain.js` e interface dentro
   da oportunidade em `pages/OpportunitiesPage.jsx`. A jornada é sempre

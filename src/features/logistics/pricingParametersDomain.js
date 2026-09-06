@@ -1,7 +1,11 @@
 // Parâmetros versionados do simulador. A régua comercial é uma das categorias,
 // não o sistema inteiro: frota, equipe e operação também precisam sair do código.
 
-import { referenciaEngineAtivoPesado } from "./heavyAssetCostDomain.js";
+import {
+  referenciaEngineAtivoPesado,
+  validarPremissasAtivo,
+  VEICULOS_ATIVO_PESADO,
+} from "./heavyAssetCostDomain.js";
 
 export const PARAMETROS_VERSAO_PADRAO = "v1.2026";
 
@@ -128,9 +132,13 @@ export const validarParametros = (valores = {}, opcoes = {}) => {
   const parcial = opcoes.parcial === true;
   const erros = [];
   const limpos = {};
+  // As premissas do ativo pesado viajam como um bloco à parte (não são um
+  // parâmetro plano da régua); tira-as daqui e valida-as em separado, senão o
+  // laço as trataria como "parâmetro desconhecido".
+  const { premissasAtivo, ...planos } = valores;
   const chaves = parcial
-    ? Object.keys(valores)
-    : [...new Set([...PARAMETROS_OBRIGATORIOS_GLOBAIS, ...Object.keys(valores)])];
+    ? Object.keys(planos)
+    : [...new Set([...PARAMETROS_OBRIGATORIOS_GLOBAIS, ...Object.keys(planos)])];
 
   for (const chave of chaves) {
     const definicao = PARAMETROS[chave];
@@ -149,6 +157,11 @@ export const validarParametros = (valores = {}, opcoes = {}) => {
       continue;
     }
     limpos[chave] = arredondar(valor, 4);
+  }
+  if (premissasAtivo && typeof premissasAtivo === "object") {
+    const pv = validarPremissasAtivo(premissasAtivo, { parcial: true });
+    if (!pv.valido) erros.push(...pv.erros);
+    else if (Object.keys(pv.premissas).length) limpos.premissasAtivo = pv.premissas;
   }
   if (erros.length) return { valido: false, erros, parametros: null };
 
@@ -231,6 +244,16 @@ export const resolverParametros = (padrao, perfis = [], contexto = {}) => {
     if (!perfil) continue;
     Object.assign(parametros, perfil.parametros || {});
     aplicados.push({ id: perfil.id, versao: perfil.versao, scopeType: tipo, scopeKey: chave, parametros: perfil.parametros || {} });
+    // Premissas do ativo pesado são a fonte da verdade: se o perfil do veículo
+    // as carrega, veículo/energia/manutenção são RECALCULADOS delas (depreciação,
+    // capital e seguro sobre o valor do ativo), sobrepondo qualquer R$/dia salvo
+    // junto. É o que faz "compramos um cavalo mais caro" recompor tudo sozinho.
+    const premissas = perfil.parametros?.premissasAtivo;
+    if (tipo === "vehicle" && premissas && VEICULOS_ATIVO_PESADO[chave]) {
+      const ref = referenciaEngineAtivoPesado(premissas, { incluiCarreta: VEICULOS_ATIVO_PESADO[chave].incluiCarreta });
+      Object.assign(parametros, ref);
+      aplicados.push({ versao: "ativo-pesado", scopeType: "vehicle", scopeKey: chave, fonte: "premissas_ativo", parametros: ref });
+    }
   }
   return { parametros, aplicados };
 };

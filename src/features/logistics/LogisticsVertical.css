@@ -1792,6 +1792,15 @@
 .tdg-parameter-why { grid-column: 1 / -2; }
 .tdg-parameter-publish .tdg-action { align-self: end; }
 
+/* Editor de premissas do ativo pesado (cavalo/carreta elétricos). */
+.tdg-parameter-asset { background: var(--tdg-surface-soft, rgba(16, 122, 87, .05)); border-radius: 14px; border-top: 0; margin-top: 18px; padding: 16px 16px 18px; }
+.tdg-parameter-asset legend { align-items: center; display: inline-flex; gap: 8px; }
+.tdg-parameter-asset .tdg-esg-pesos { margin: 6px 0 14px; }
+.tdg-parameter-subgroup { margin-top: 14px; }
+.tdg-parameter-subgroup h4 { color: var(--tdg-ink); font-size: .8rem; font-weight: 800; letter-spacing: .02em; margin: 0 0 8px; text-transform: uppercase; }
+.tdg-btn-ghost { background: transparent; border: 1px solid var(--tdg-line); border-radius: 10px; color: var(--tdg-ink); cursor: pointer; font-weight: 700; margin-top: 14px; padding: 8px 14px; }
+.tdg-btn-ghost:hover { background: var(--tdg-surface, rgba(0, 0, 0, .04)); }
+
 @media (max-width: 1050px) {
   .tdg-parameter-group .tdg-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tdg-parameter-publish { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -1,15 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, BookOpen, Loader2, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, BookOpen, Loader2, SlidersHorizontal, Truck } from "lucide-react";
 import { LOGISTICS_PRODUCTS } from "./logisticsVerticalDomain.js";
 import {
   CATEGORIAS_PARAMETROS,
   ESCOPO_PARAMETROS,
   PARAMETROS,
+  VEHICLE_COST_REFERENCE,
   simularEfeito,
   validarParametros,
 } from "./pricingParametersDomain.js";
+import {
+  PREMISSAS_ATIVO_FIELDS,
+  PREMISSAS_ATIVO_PESADO,
+  VEICULOS_ATIVO_PESADO,
+  ehVeiculoAtivoPesado,
+  referenciaEngineAtivoPesado,
+} from "./heavyAssetCostDomain.js";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const VEHICLE_KEYS = Object.keys(VEHICLE_COST_REFERENCE);
+const incluiCarretaDe = (chave) => VEICULOS_ATIVO_PESADO[chave]?.incluiCarreta ?? true;
+// Agrupa os campos de premissa do ativo pesado na ordem em que foram declarados.
+const GRUPOS_PREMISSAS = PREMISSAS_ATIVO_FIELDS.reduce((acc, campo) => {
+  (acc[campo.grupo] = acc[campo.grupo] || []).push(campo);
+  return acc;
+}, {});
+const paraExibicao = (campo, valor) =>
+  campo.escala === "fracao" ? Math.round((Number(valor) || 0) * 1e6) / 1e4 : valor;
+const doInput = (campo, texto) => {
+  const n = Number(texto);
+  if (!Number.isFinite(n)) return texto;
+  return campo.escala === "fracao" ? n / 100 : n;
+};
 const pedir = async (opcoes = {}, authHeaders) => {
   const resposta = await fetch("/api/todogreen/pricing-parameters", {
     ...opcoes,
@@ -27,6 +49,7 @@ export default function PricingParametersPanel({ authHeaders, setToast }) {
   const [scopeType, setScopeType] = useState("global");
   const [scopeKey, setScopeKey] = useState("global");
   const [valores, setValores] = useState({});
+  const [premissas, setPremissas] = useState(null);
   const [versao, setVersao] = useState("");
   const [nome, setNome] = useState("Base global");
   const [fonte, setFonte] = useState("");
@@ -57,9 +80,41 @@ export default function PricingParametersPanel({ authHeaders, setToast }) {
     setScopeType(tipo);
     setScopeKey(chave);
     const ativo = dados?.perfis?.find((item) => item.scopeType === tipo && item.scopeKey === chave);
-    setValores(tipo === "global" ? { ...(ativo?.parametros || dados?.atual?.parametros || {}) } : { ...(ativo?.parametros || {}) });
+    const baseValores = tipo === "global"
+      ? { ...(ativo?.parametros || dados?.atual?.parametros || {}) }
+      : { ...(ativo?.parametros || {}) };
+    // Veículo de ativo pesado (cavalo/carreta elétricos): abre o editor de
+    // premissas — valor do ativo, seguro, capital — e deriva veículo/energia/
+    // manutenção delas, em vez de um R$/dia chapado.
+    if (tipo === "vehicle" && ehVeiculoAtivoPesado(chave)) {
+      const premi = { ...PREMISSAS_ATIVO_PESADO, ...(ativo?.parametros?.premissasAtivo || {}) };
+      const ref = referenciaEngineAtivoPesado(premi, { incluiCarreta: incluiCarretaDe(chave) });
+      setPremissas(premi);
+      setValores({ ...baseValores, ...ref, premissasAtivo: premi });
+    } else {
+      setPremissas(null);
+      setValores(baseValores);
+    }
     setNome(ativo?.nome || (tipo === "global" ? "Base global" : ""));
     setFonte(ativo?.fonte || "");
+  };
+
+  // Uma premissa mudou: recalcula veículo/energia/manutenção e mantém o bloco de
+  // premissas junto, para o motor recompor tudo (a fonte da verdade é a premissa).
+  const editarPremissa = (campo, texto) => {
+    setPremissas((atual) => {
+      const proximas = { ...(atual || PREMISSAS_ATIVO_PESADO), [campo.chave]: doInput(campo, texto) };
+      const ref = referenciaEngineAtivoPesado(proximas, { incluiCarreta: incluiCarretaDe(scopeKey) });
+      setValores((v) => ({ ...v, ...ref, premissasAtivo: proximas }));
+      return proximas;
+    });
+  };
+
+  const restaurarPremissas = () => {
+    const premi = { ...PREMISSAS_ATIVO_PESADO };
+    const ref = referenciaEngineAtivoPesado(premi, { incluiCarreta: incluiCarretaDe(scopeKey) });
+    setPremissas(premi);
+    setValores((v) => ({ ...v, ...ref, premissasAtivo: premi }));
   };
 
   const base = useMemo(() => dados?.atual?.parametros || {}, [dados]);
@@ -92,7 +147,12 @@ export default function PricingParametersPanel({ authHeaders, setToast }) {
       setJustificativa("");
       const atualizados = await carregar();
       const ativo = atualizados?.perfis?.find((item) => item.scopeType === scopeType && item.scopeKey === scopeKey);
-      if (ativo) setValores({ ...ativo.parametros });
+      if (ativo) {
+        setValores({ ...ativo.parametros });
+        if (scopeType === "vehicle" && ehVeiculoAtivoPesado(scopeKey)) {
+          setPremissas({ ...PREMISSAS_ATIVO_PESADO, ...(ativo.parametros?.premissasAtivo || {}) });
+        }
+      }
     } catch (causa) {
       setAviso(causa.message);
     } finally {
@@ -133,6 +193,11 @@ export default function PricingParametersPanel({ authHeaders, setToast }) {
               <option value="">Selecione o produto</option>
               {LOGISTICS_PRODUCTS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
+          ) : scopeType === "vehicle" ? (
+            <select value={scopeKey} disabled={somenteLeitura} onChange={(e) => selecionarEscopo(scopeType, e.target.value)}>
+              <option value="">Selecione o veículo</option>
+              {VEHICLE_KEYS.map((chave) => <option key={chave} value={chave}>{chave}</option>)}
+            </select>
           ) : <input value={scopeKey} disabled={somenteLeitura || scopeType === "global"} placeholder={escopo?.dica} onChange={(e) => selecionarEscopo(scopeType, e.target.value)} />}
         </label>
         <div className="tdg-parameter-inheritance">
@@ -145,6 +210,49 @@ export default function PricingParametersPanel({ authHeaders, setToast }) {
         <div><BookOpen size={18} /><strong>Modelos de referência</strong><small>Copiam valores para edição. Não ativam nada sozinhos.</small></div>
         {dados.modelos?.map((modelo) => <button type="button" key={modelo.id} disabled={somenteLeitura} onClick={() => aplicarModelo(modelo)}>{modelo.nome}</button>)}
       </div>
+
+      {premissas && scopeType === "vehicle" ? (
+        <fieldset className="tdg-parameter-group tdg-parameter-asset">
+          <legend><Truck size={16} /> Premissas do ativo pesado — {VEICULOS_ATIVO_PESADO[scopeKey]?.rotulo || scopeKey}</legend>
+          <p className="tdg-esg-nota">
+            O custo deste veículo é dominado pelo ativo: depreciação, custo de capital e seguro sobre o valor.
+            Edite as premissas e o custo de veículo, energia e manutenção recompõem sozinhos. É o
+            &ldquo;compramos um cavalo mais caro&rdquo; num lugar só, versionado.
+          </p>
+          <div className="tdg-esg-pesos">
+            <div><small>veículo por dia</small><strong>{brl.format(valores.vehicleDailyCost || 0)}</strong></div>
+            <div><small>motorista por dia</small><strong>{brl.format(valores.driverDailyCost || 0)}</strong></div>
+            <div><small>energia por km</small><strong>R$ {Number(valores.energyCostPerKm || 0).toFixed(4)}</strong></div>
+            <div><small>manutenção por km</small><strong>R$ {Number(valores.maintenancePerKm || 0).toFixed(4)}</strong></div>
+          </div>
+          {Object.entries(GRUPOS_PREMISSAS).map(([grupo, campos]) => (
+            <div key={grupo} className="tdg-parameter-subgroup">
+              <h4>{grupo}</h4>
+              <div className="tdg-form">
+                {campos.map((campo) => (
+                  <label key={campo.chave}>
+                    <span>{campo.rotulo} ({campo.sufixo})</span>
+                    <input
+                      type="number"
+                      min={campo.escala === "fracao" ? campo.min * 100 : campo.min}
+                      max={campo.escala === "fracao" ? campo.max * 100 : campo.max}
+                      step="any"
+                      value={paraExibicao(campo, premissas[campo.chave])}
+                      disabled={somenteLeitura}
+                      onChange={(e) => editarPremissa(campo, e.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!somenteLeitura ? (
+            <button type="button" className="tdg-btn-ghost" onClick={restaurarPremissas}>
+              Restaurar premissas de fábrica (XCMG)
+            </button>
+          ) : null}
+        </fieldset>
+      ) : null}
 
       {CATEGORIAS_PARAMETROS.map((categoria) => {
         const campos = Object.entries(PARAMETROS).filter(([, def]) => def.categoria === categoria.id);
