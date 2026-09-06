@@ -13,6 +13,7 @@ import {
 } from "./todogreen-customer-portal.js";
 import { handleTodoGreenEsg } from "./todogreen-esg.js";
 import { handleTodoGreenPricingParameters } from "./todogreen-pricing-parameters.js";
+import { handleTodoGreenEnvironmentalParameters } from "./todogreen-environmental-parameters.js";
 import { handleTodoGreenOperationParams } from "./todogreen-operation-params.js";
 import { handleTodoGreenDashboards } from "./todogreen-dashboards.js";
 import { handleTodoGreenRequests } from "./todogreen-requests.js";
@@ -143,6 +144,13 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenPricingParameters(request, env);
+    });
+  }
+  if (path.startsWith("/api/todogreen/environmental-parameters")) {
+    return guarded("To Do Green environmental parameters error", "Não foi possível carregar a régua ESG.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenEnvironmentalParameters(request, env);
     });
   }
   if (path.startsWith("/api/todogreen/operation-params")) {

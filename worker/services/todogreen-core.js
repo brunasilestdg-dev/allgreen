@@ -10,6 +10,7 @@ import {
   summarizeTodoGreenDashboard,
 } from "../../src/features/logistics/logisticsVerticalDomain.js";
 import { parametrosResolvidos } from "./todogreen-pricing-parameters.js";
+import { reguaEsgEmVigor } from "./todogreen-environmental-parameters.js";
 import { podeNaVertical, resolveTodoGreenAccess } from "./todogreen-access.js";
 import { handleTodoGreenGoals } from "./todogreen-goals.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
@@ -559,11 +560,16 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
         productId,modality:inputs.modality || product?.modality,vehicleType:inputs.vehicleType,
         region:inputs.region || inputs.city,clientId:body.clientId || inputs.clientId,contractId:inputs.contractId,
       });
+      const reguaEsg = await reguaEsgEmVigor(env,access.ownerId);
       scenario = createPricingScenarioSnapshot(productId,inputs,{
         tenantId:TODO_GREEN_TENANT.id,userId:user.id,clientId:body.clientId || "",
         opportunityId:body.opportunityId || "",justification:body.justification || "",
       },{
         assumptions:resolved.parametros,
+        // Régua ESG editável alimenta o CO₂ evitado e o Green Score do simulador
+        // oficial. Sem régua, cai nos defaults de fábrica.
+        environmentalFactors:reguaEsg.fatores,
+        greenScoreWeights:reguaEsg.pesos,
         parameterVersion:resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
       });
     } catch (error) {
@@ -606,8 +612,11 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
         productId,modality:inputs.modality || product?.modality,vehicleType:inputs.vehicleType,
         region:inputs.region || inputs.city,clientId:inputs.clientId,contractId:inputs.contractId,
       });
+      const reguaEsg = await reguaEsgEmVigor(env,access.ownerId);
       return response({ result:centralPricingEngine(productId,inputs,{
         assumptions:resolved.parametros,
+        environmentalFactors:reguaEsg.fatores,
+        greenScoreWeights:reguaEsg.pesos,
         parameterVersion:resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
       }) });
     } catch (error) {

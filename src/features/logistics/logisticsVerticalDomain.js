@@ -963,16 +963,19 @@ export const calculateEnvironmentalImpact = (inputs = {}, factors = {}) => {
   };
 };
 
+// Pesos padrão do Green Score — fonte única, para o motor e a régua ESG
+// editável (todogreen_environmental_parameters) partirem do mesmo lugar.
+export const DEFAULT_GREEN_SCORE_WEIGHTS = Object.freeze({
+  reduction: 35,
+  lowEmissionKm: 20,
+  cleanEnergy: 15,
+  efficiency: 10,
+  targetEvolution: 10,
+  dataQuality: 10,
+});
+
 export const calculateGreenScore = (impact = {}, metrics = {}, weights = {}) => {
-  const w = {
-    reduction: 35,
-    lowEmissionKm: 20,
-    cleanEnergy: 15,
-    efficiency: 10,
-    targetEvolution: 10,
-    dataQuality: 10,
-    ...weights,
-  };
+  const w = { ...DEFAULT_GREEN_SCORE_WEIGHTS, ...weights };
   const parts = {
     reduction: Math.min(100, n(impact.reductionPercent)),
     lowEmissionKm: Math.min(100, (n(impact.lowEmissionKm) / Math.max(1, n(metrics.lowEmissionKmTarget || 1000))) * 100),
