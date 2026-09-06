@@ -762,16 +762,39 @@
    Curto e sutil de propósito; nada de festival de animação. Quem pede menos
    movimento no sistema não vê nenhuma. */
 @keyframes tdg-rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: none; }
 }
+/* Blocos grandes sobem ao montar — movimento que dá para ver (antes era sutil
+   demais). Curva "ease-out" com leve assentar, não um salto. */
 .tdg-panel,
 .tdg-section {
-  animation: tdg-rise 0.26s ease both;
+  animation: tdg-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+/* Cascata: os cartões de indicador (aparecem em quase toda tela) e os cartões
+   das grades entram UM APÓS O OUTRO, então a tela se monta na frente da pessoa
+   em vez de piscar pronta. É o "dinamismo em todas as telas". */
+.tdg-metric,
+.tdg-operation-card,
+.tdg-module-card,
+.tdg-product-card {
+  animation: tdg-rise 0.46s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tdg-metric:nth-child(1), .tdg-operation-card:nth-child(1), .tdg-module-card:nth-child(1), .tdg-product-card:nth-child(1) { animation-delay: .05s; }
+.tdg-metric:nth-child(2), .tdg-operation-card:nth-child(2), .tdg-module-card:nth-child(2), .tdg-product-card:nth-child(2) { animation-delay: .11s; }
+.tdg-metric:nth-child(3), .tdg-operation-card:nth-child(3), .tdg-module-card:nth-child(3), .tdg-product-card:nth-child(3) { animation-delay: .17s; }
+.tdg-metric:nth-child(4), .tdg-operation-card:nth-child(4), .tdg-module-card:nth-child(4), .tdg-product-card:nth-child(4) { animation-delay: .23s; }
+.tdg-metric:nth-child(5), .tdg-operation-card:nth-child(5), .tdg-module-card:nth-child(5), .tdg-product-card:nth-child(5) { animation-delay: .29s; }
+.tdg-metric:nth-child(6), .tdg-operation-card:nth-child(6), .tdg-module-card:nth-child(6), .tdg-product-card:nth-child(6) { animation-delay: .35s; }
+.tdg-metric:nth-child(7), .tdg-operation-card:nth-child(7), .tdg-module-card:nth-child(7), .tdg-product-card:nth-child(7) { animation-delay: .41s; }
+.tdg-metric:nth-child(n+8), .tdg-operation-card:nth-child(n+8), .tdg-module-card:nth-child(n+8), .tdg-product-card:nth-child(n+8) { animation-delay: .47s; }
 @media (prefers-reduced-motion: reduce) {
   .tdg-panel,
-  .tdg-section { animation: none; }
+  .tdg-section,
+  .tdg-metric,
+  .tdg-operation-card,
+  .tdg-module-card,
+  .tdg-product-card { animation: none; }
 }
 
 .tdg-section-head {
