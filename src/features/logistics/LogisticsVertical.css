@@ -307,6 +307,57 @@
   .tdg-shell-quem { display: none; }
 }
 
+/* Chip de perfil (foto + status) no cabeçalho da vertical — abre o editor. */
+.tdg-perfil-chip {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--tdg-line);
+  border-radius: 999px;
+  color: var(--tdg-ink);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  max-width: 220px;
+  padding: 3px 10px 3px 3px;
+}
+.tdg-perfil-chip:hover { background: var(--tdg-surface, rgba(0, 0, 0, .04)); }
+.tdg-perfil-avatar {
+  align-items: center;
+  background: var(--tdg-primary, #107a57);
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: .8rem;
+  font-weight: 800;
+  height: 26px;
+  justify-content: center;
+  overflow: hidden;
+  width: 26px;
+}
+.tdg-perfil-avatar.grande { font-size: 1.4rem; height: 64px; width: 64px; }
+.tdg-perfil-avatar img { height: 100%; object-fit: cover; width: 100%; }
+.tdg-perfil-quem { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; text-align: left; }
+.tdg-perfil-quem strong { font-size: .76rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-perfil-quem small { color: var(--tdg-muted); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) {
+  .tdg-perfil-quem { display: none; }
+}
+
+.tdg-perfil-editor { display: flex; flex-direction: column; gap: 16px; }
+.tdg-perfil-foto-linha { align-items: center; display: flex; gap: 16px; }
+.tdg-perfil-foto-acoes { display: flex; flex-direction: column; gap: 8px; }
+.tdg-perfil-foto-btn {
+  background: var(--tdg-primary, #107a57);
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 8px 14px;
+  text-align: center;
+}
+.tdg-perfil-editor-acoes { display: flex; gap: 10px; justify-content: flex-end; }
+
 /* Saída sempre à vista: sem ela a sessão fica eterna no navegador e quem
    pega o mesmo aparelho entra direto na conta de quem esqueceu de sair. */
 .tdg-shell-sair {

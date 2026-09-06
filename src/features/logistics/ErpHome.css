@@ -52,6 +52,7 @@
 
 /* Painel visual da home: três gráficos ao vivo (SVG puro). */
 .tdg-home-painel-sec > header button { align-items: center; background: var(--tdg-soft); border: 0; border-radius: 8px; color: var(--tdg-green); cursor: pointer; display: inline-flex; font-size: .72rem; font-weight: 700; gap: 5px; padding: 6px 11px; white-space: nowrap; }
+.tdg-home-painel-vazio { color: var(--tdg-muted); font-size: .74rem; line-height: 1.4; margin: 2px 0 8px; }
 .tdg-home-painel { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 6px; }
 .tdg-home-painel-card { background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 10px; min-width: 0; padding: 12px; }
 .tdg-home-painel-cab { display: grid; gap: 1px; margin-bottom: 8px; }

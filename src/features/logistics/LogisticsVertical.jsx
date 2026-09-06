@@ -99,6 +99,7 @@ import {
 import Semente from "./Semente.jsx";
 import Modal from "../../components/Modal.jsx";
 import ErpHome from "./ErpHome.jsx";
+import TodoGreenProfile from "./TodoGreenProfile.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
 import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
@@ -3116,9 +3117,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           <p title={currentPage.description}>{currentPage.description}</p>
         </div>
         <div className="tdg-shell-actions">
-          <span className="tdg-shell-quem" title={`Sessão de ${db?.user?.name || ""} — ${db?.user?.email || ""}`}>
-            <UserRound size={13} />{db?.user?.email || db?.user?.name || ""}
-          </span>
+          <TodoGreenProfile db={db} update={update} authHeaders={authHeaders} setToast={setToast} />
           {decisao.alerts.length > 0 && (
             <button className="tdg-shell-pendencias" type="button" onClick={() => setPendenciasAbertas(true)} aria-label={`Pendências — ${decisao.alerts.length} ponto(s) precisam de você`}>
               <ListChecks size={15} />Pendências<span className="tdg-shell-pendencias-selo">{decisao.alerts.length}</span>

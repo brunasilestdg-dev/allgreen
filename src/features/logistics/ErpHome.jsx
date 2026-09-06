@@ -203,9 +203,9 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
       </div>;
     }
     if (id === "painel") {
-      if (!hasOperationalData) return null;
       return <section className="tdg-home-section tdg-home-painel-sec" key="painel">
         <header><div><span>PANORAMA · {area.label.toUpperCase()}</span><h3>Painel visual da área</h3></div><button type="button" onClick={() => onNavigate?.("/todogreen/dashboards")}>Painéis completos<ArrowRight size={14} /></button></header>
+        {!hasOperationalData && <p className="tdg-home-painel-vazio">Os gráficos preenchem conforme a operação roda. Abaixo, a estrutura de cada indicador — clique para abrir a tela onde o número vive.</p>}
         <div className="tdg-home-painel">
           {painelDaArea(area.id).map((g) => (
             <article className="tdg-home-painel-card" key={g.metric}>
