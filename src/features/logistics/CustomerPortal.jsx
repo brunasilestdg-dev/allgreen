@@ -506,9 +506,30 @@ export default function CustomerPortal() {
 
   useEffect(() => {
     let ativo = true;
-    Promise.all([pedir("sessao"), pedir("resumo")])
-      .then(([dadosSessao, dadosResumo]) => { if (ativo) { setSessao(dadosSessao); setResumo(dadosResumo.resumo); } })
-      .catch((erro) => { if (ativo) setErroFatal(erro.message); })
+    const carregar = () => Promise.all([pedir("sessao"), pedir("resumo")]);
+    const aplicar = ([dadosSessao, dadosResumo]) => {
+      if (ativo) { setSessao(dadosSessao); setResumo(dadosResumo.resumo); }
+    };
+    carregar()
+      .then(aplicar)
+      .catch(async (erro) => {
+        // Uma empresa antiga guardada no navegador (compartilhou o computador,
+        // ou o time interno tirou o vínculo com AQUELA empresa) fazia o servidor
+        // negar e o portal inteiro travava numa tela fatal — mesmo quando a
+        // pessoa ainda tem OUTRAS empresas. Limpa a escolha presa e tenta de
+        // novo com a empresa padrão da sessão antes de desistir.
+        if (ativo && empresaEscolhida()) {
+          escolherEmpresa("");
+          try {
+            aplicar(await carregar());
+            return;
+          } catch (erroPadrao) {
+            if (ativo) setErroFatal(erroPadrao.message);
+            return;
+          }
+        }
+        if (ativo) setErroFatal(erro.message);
+      })
       .finally(() => { if (ativo) setPronto(true); });
     return () => { ativo = false; };
   }, []);

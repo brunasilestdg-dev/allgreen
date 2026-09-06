@@ -70,6 +70,35 @@ describe("Sala do Cliente", () => {
     expect(screen.queryByRole("button", { name: /Oportunidades/ })).toBeNull();
   });
 
+  it("recupera de uma empresa antiga presa no navegador em vez de travar o portal", async () => {
+    // O navegador tem uma empresa guardada que a sessão não enxerga mais.
+    const store = {
+      "seu-funcionario-auth-token": "token-de-teste",
+      "tdg-portal-empresa": "cli-fantasma",
+    };
+    vi.stubGlobal("localStorage", {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = v; },
+      removeItem: (k) => { delete store[k]; },
+    });
+    // Com a empresa presa (empresa=), o servidor nega; sem ela (padrão), responde.
+    vi.stubGlobal("fetch", vi.fn((url) => {
+      const s = String(url);
+      if (s.includes("empresa=")) return resposta({ error: "Sem acesso a esta empresa." }, false);
+      const chave = s.split("/portal/")[1]?.split("?")[0];
+      if (chave === "sessao") return resposta(sessaoPadrao);
+      if (chave === "resumo") return resposta(resumoComDados);
+      return resposta({ titulos: [], totais: {} });
+    }));
+
+    render(<CustomerPortal />);
+
+    // Não trava: limpa a empresa presa, refaz com a padrão e mostra o cliente.
+    expect(await screen.findByText("Cliente A")).toBeTruthy();
+    expect(store["tdg-portal-empresa"]).toBeUndefined();
+    expect(screen.queryByText("Portal indisponível")).toBeNull();
+  });
+
   it("sem dado, convida a esperar o registro em vez de inventar número", async () => {
     vi.stubGlobal(
       "fetch",
