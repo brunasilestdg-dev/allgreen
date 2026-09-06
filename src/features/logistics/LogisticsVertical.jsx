@@ -2960,6 +2960,16 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const page = todoGreenRouteToPage(path);
   const secaoDeCadastro = secaoDaRota(path);
   const primaryNavigation = navigationFor(page, secaoDeCadastro);
+  // Ao navegar para uma área, abre o grupo dela no menu (preserva o
+  // comportamento antigo de "a área da tela atual vem aberta"), mas sem travar:
+  // o usuário ainda pode recolher pelo chevron, porque o efeito só dispara
+  // quando a ÁREA muda, não a cada render.
+  useEffect(() => {
+    // abrirArea devolve o MESMO Set quando a área já está aberta, então o React
+    // descarta o render — não há cascata apesar do aviso do lint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (primaryNavigation?.id) abrirArea(primaryNavigation.id);
+  }, [primaryNavigation?.id, abrirArea]);
   const isOverview = page === "dashboard";
   const isWorkCenter = page === "espaco";
   const activeManagement = MANAGEMENT_TOOLS.find((item) => item.id === page) || null;
@@ -3290,7 +3300,12 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                 // Fora do modo personalizar, área desmarcada não aparece.
                 if (ocultaDaLista && !personalizando) return null;
                 const ativa = primaryNavigation.id === item.id;
-                const aberta = areasAbertas.has(item.id) || ativa;
+                // `aberta` vem SÓ do estado de abertas — não força a área ativa a
+                // ficar aberta. Antes, `|| ativa` prendia aberta a área da tela
+                // atual, então o chevron dela "abria mas não fechava". A área
+                // ativa é auto-aberta ao navegar (efeito abaixo), o que pode ser
+                // desfeito pelo chevron.
+                const aberta = areasAbertas.has(item.id);
                 // O Workspace apresenta "Projetos e tarefas", "Visualizações e
                 // gráficos" e "Agentes e funções" na barra de jornadas dele.
                 // Repetir os mesmos rótulos no menu lateral é o mesmo nome
