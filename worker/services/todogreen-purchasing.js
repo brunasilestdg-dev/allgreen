@@ -618,15 +618,15 @@ const criarRecebimento = async (env, access, user, corpo) => {
         `INSERT INTO todogreen_financial_entries
            (id, tenant_id, workspace_owner_id, kind, client_id, product_id, scenario_id,
             category, description, amount, reference_month, status, fields_json,
-            due_date, paid_amount, counterparty, document_number, cost_center,
+            due_date, paid_amount, counterparty, party_id, document_number, cost_center,
             budget_code, payment_method, competence_date, contract_id, invoice_status,
             revision, created_by, updated_by, created_at, updated_at, archived_at)
          VALUES (?, ?, ?, 'cost', '', '', '', ?, ?, ?, ?, 'confirmed', ?,
-                 ?, 0, ?, ?, ?, '', '', ?, '', ?, 1, ?, ?, ?, ?, NULL)`,
+                 ?, 0, ?, ?, ?, ?, '', '', ?, '', ?, 1, ?, ?, ?, ?, NULL)`,
       ).bind(
         contaId, TENANT_ID, access.ownerId, conta.categoria, conta.descricao,
         conta.valor, conta.mesReferencia, JSON.stringify(conta.campos),
-        conta.vencimentoEm || null, conta.contraparte, conta.numeroDocumento,
+        conta.vencimentoEm || null, conta.contraparte, conta.partyId || "", conta.numeroDocumento,
         conta.centroCusto, conta.competenciaEm || null, conta.statusFinanceiro,
         user.id, user.id, agora, agora,
       ),

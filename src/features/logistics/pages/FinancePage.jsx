@@ -1,5 +1,5 @@
 import "./TodoGreenPages.css";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Plus, ReceiptText } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
@@ -15,9 +15,21 @@ const LABEL = {
 };
 const STATUS = { pending: "em aberto", partial: "parcial", paid: "pago", overdue: "vencido", cancelled: "cancelado" };
 
-export default function FinancePage({ type, entries = [], clients = [], contracts = [], criar, registrarPagamento, estornarPagamento, listarSubrecurso, setToast }) {
+export default function FinancePage({ type, entries = [], clients = [], contracts = [], criar, registrarPagamento, estornarPagamento, listarSubrecurso, setToast, authHeaders }) {
   const copy = LABEL[type] || LABEL.cost;
   const [query, setQuery] = useState("");
+  // Contraparte por cadastro, não por texto livre (costura 4): a mesma parte
+  // digitada de dois jeitos deixava de casar com o fornecedor do pedido. Sem
+  // cadastro carregado, cai no texto livre — nada trava.
+  const [parties, setParties] = useState([]);
+  useEffect(() => {
+    if (!authHeaders) return;
+    fetch("/api/todogreen/records/parties", { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setParties(d?.registros || d?.records || []))
+      .catch(() => {});
+  }, [authHeaders]);
+  const rotuloParte = (p) => p.razaoSocial || p.nomeFantasia || p.documento || p.id;
   const [saving, setSaving] = useState(false);
   // Lançamento novo abre em janela própria: o livro não é mais empurrado
   // por um formulário de 12 campos (rodada "nada corta a tela", 30/08).
@@ -25,7 +37,7 @@ export default function FinancePage({ type, entries = [], clients = [], contract
   const [paymentFor, setPaymentFor] = useState(null);
   const [payments, setPayments] = useState([]);
   const [payment, setPayment] = useState({ valor: "", pagoEm: hoje(), meioPagamento: "pix", referencia: "", observacoes: "" });
-  const empty = { clientId: "", contractId: "", productId: "middle-mile", category: "", description: "", amount: "", referenceMonth: hoje().slice(0, 7), competenceDate: hoje(), dueDate: "", counterparty: "", documentNumber: "", costCenter: "", budgetCode: "" };
+  const empty = { clientId: "", contractId: "", productId: "middle-mile", category: "", description: "", amount: "", referenceMonth: hoje().slice(0, 7), competenceDate: hoje(), dueDate: "", counterparty: "", partyId: "", documentNumber: "", costCenter: "", budgetCode: "" };
   const [form, setForm] = useState(empty);
   const summary = useMemo(() => resumoFinanceiro(entries), [entries]);
   // Aging por faixa de atraso — motor do app geral, via ponte (regra 5).
@@ -46,7 +58,7 @@ export default function FinancePage({ type, entries = [], clients = [], contract
         tipo: type, clientId: form.clientId, contratoId: form.contractId, produtoId: form.productId,
         categoria: form.category, descricao: form.description, valor: Number(form.amount),
         mesReferencia: form.referenceMonth, competenciaEm: form.competenceDate, vencimentoEm: form.dueDate,
-        contraparte: form.counterparty, numeroDocumento: form.documentNumber, centroCusto: form.costCenter,
+        contraparte: form.counterparty, partyId: form.partyId, numeroDocumento: form.documentNumber, centroCusto: form.costCenter,
         codigoOrcamento: form.budgetCode, situacao: "confirmed", statusFinanceiro: "pending",
       });
       setForm(empty);
@@ -68,7 +80,7 @@ export default function FinancePage({ type, entries = [], clients = [], contract
         produtoId: entry.produtoId || "middle-mile", categoria: entry.categoria || "",
         descricao: entry.descricao || "", valor: Number(entry.valor) || 0,
         mesReferencia: vencimento.slice(0, 7), competenciaEm: vencimento, vencimentoEm: vencimento,
-        contraparte: entry.contraparte || "", numeroDocumento: entry.numeroDocumento || "",
+        contraparte: entry.contraparte || "", partyId: entry.partyId || "", numeroDocumento: entry.numeroDocumento || "",
         centroCusto: entry.centroCusto || "", codigoOrcamento: entry.codigoOrcamento || "",
         situacao: "confirmed", statusFinanceiro: "pending",
       });
@@ -141,7 +153,9 @@ export default function FinancePage({ type, entries = [], clients = [], contract
       <form className="tdg-access-form tdg-enterprise-form tdg-form-em-modal" onSubmit={save}>
         <label><span>Cliente</span><select value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value }))}><option value="">Sem vínculo</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name || client.nome || client.id}</option>)}</select></label>
         <label><span>Contrato</span><select value={form.contractId} onChange={(e) => setForm((v) => ({ ...v, contractId: e.target.value }))}><option value="">Sem contrato</option>{contracts.filter((contract) => !form.clientId || contract.clientId === form.clientId).map((contract) => <option key={contract.id} value={contract.id}>{contract.titulo || contract.title}</option>)}</select></label>
-        <label><span>{copy.party}</span><input value={form.counterparty} onChange={(e) => setForm((v) => ({ ...v, counterparty: e.target.value }))} /></label>
+        <label><span>{copy.party}</span>{parties.length
+          ? <select value={form.partyId} onChange={(e) => { const p = parties.find((x) => x.id === e.target.value); setForm((v) => ({ ...v, partyId: e.target.value, counterparty: p ? rotuloParte(p) : "" })); }}><option value="">Selecione do cadastro</option>{parties.map((p) => <option key={p.id} value={p.id}>{rotuloParte(p)}{p.documento ? ` · ${p.documento}` : ""}</option>)}</select>
+          : <input value={form.counterparty} onChange={(e) => setForm((v) => ({ ...v, counterparty: e.target.value }))} placeholder="Cadastre partes e fornecedores em Cadastros" />}<small>Vincular ao cadastro faz a conta casar com o fornecedor do pedido; o nome sozinho não concilia.</small></label>
         <label><span>Descrição</span><input value={form.description} onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))} /></label>
         <label><span>Categoria</span><input value={form.category} onChange={(e) => setForm((v) => ({ ...v, category: e.target.value }))} /></label>
         <label><span>Valor R$</span><input type="number" min="0.01" step="0.01" required value={form.amount} onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></label>

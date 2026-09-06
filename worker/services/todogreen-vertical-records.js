@@ -1004,6 +1004,9 @@ const COLECOES = {
       pagoEm: row.paid_at || "",
       valorPago: row.paid_amount || 0,
       contraparte: row.counterparty || "",
+      // Contraparte por referência (costura 4): o id da parte é o que concilia
+      // com o fornecedor do pedido; `contraparte` fica como rótulo legível.
+      partyId: row.party_id || "",
       numeroDocumento: row.document_number || "",
       centroCusto: row.cost_center || "",
       codigoOrcamento: row.budget_code || "",
@@ -1038,6 +1041,7 @@ const COLECOES = {
       paid_at: texto(corpo.pagoEm, 40) || null,
       paid_amount: Math.max(0, numero(corpo.valorPago)),
       counterparty: texto(corpo.contraparte, 200),
+      party_id: texto(corpo.partyId, 120),
       document_number: texto(corpo.numeroDocumento, 120),
       cost_center: texto(corpo.centroCusto, 120),
       budget_code: texto(corpo.codigoOrcamento, 120),

@@ -290,6 +290,9 @@ export const recebimentoParaConta = (recebimento = {}, pedido = {}, pedidoLinhas
     }`,
     valor: bruto,
     contraparte: texto(pedido.supplierName),
+    // O id da parte é o que faz a conta a pagar CASAR com o fornecedor do
+    // pedido — o nome é só rótulo, e nome redigitado não concilia.
+    partyId: texto(pedido.supplierPartyId),
     numeroDocumento: texto(recebimento.invoiceNumber),
     centroCusto: texto(pedido.costCenterId),
     // Vence conforme o prazo do pedido, contado do recebimento. Sem prazo, vence
