@@ -78,7 +78,10 @@ const CTA = "Neste momento, faz sentido buscar uma alternativa para otimizar a s
 //    — senão nunca afirma um contato que não existiu (pedido da titular).
 //  • `contexto`: saída de contextoDeMercado — havendo contexto da empresa, a
 //    abertura é personalizada; sem ele, prospecção genérica honesta.
-export const montarEmailApresentacao = ({ contatoNome, contaNome, temperatura, houveContato = false, contexto = null, remetenteNome } = {}) => {
+//  • `assinatura`: bloco de assinatura da pessoa (cargo, telefone…). Quando
+//    definido, fecha o e-mail com ELE, verbatim — é "a minha assinatura" que a
+//    titular pediu. Sem ele, cai no fecho padrão com o primeiro nome.
+export const montarEmailApresentacao = ({ contatoNome, contaNome, temperatura, houveContato = false, contexto = null, remetenteNome, assinatura } = {}) => {
   const nome = primeiroNome(contatoNome);
   const saudacao = nome ? `Olá, ${nome}.` : "Olá.";
   const conta = String(contaNome || "").trim();
@@ -86,8 +89,10 @@ export const montarEmailApresentacao = ({ contatoNome, contaNome, temperatura, h
   // "Retomar" exige contato real E uma temperatura morna/quente.
   const retoma = !!houveContato && (temperatura === "Quente" || temperatura === "Morno");
   const abertura = `${apresentacaoPessoal(remetente, retoma)} ${gancho(contexto, conta, retoma, temperatura)}`;
-  const assinatura = remetente ? `Um abraço,\n${remetente} · To Do Green` : "Um abraço,\nEquipe comercial · To Do Green";
-  const corpo = [saudacao, "", abertura, "", VALOR, "", CTA, "", assinatura].join("\n");
+  const assinaturaCustom = String(assinatura || "").trim();
+  const fecho = assinaturaCustom
+    || (remetente ? `Um abraço,\n${remetente} · To Do Green` : "Um abraço,\nEquipe comercial · To Do Green");
+  const corpo = [saudacao, "", abertura, "", VALOR, "", CTA, "", fecho].join("\n");
   return { assunto: APRESENTACAO_ASSUNTO, corpo };
 };
 

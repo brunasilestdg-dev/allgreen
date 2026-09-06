@@ -357,6 +357,20 @@
   text-align: center;
 }
 .tdg-perfil-editor-acoes { display: flex; gap: 10px; justify-content: flex-end; }
+.tdg-perfil-assinatura { display: flex; flex-direction: column; gap: 6px; }
+.tdg-perfil-assinatura > span { color: var(--tdg-ink); font-size: .8rem; font-weight: 700; }
+.tdg-perfil-assinatura textarea {
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  color: var(--tdg-ink);
+  font: inherit;
+  line-height: 1.5;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.tdg-perfil-assinatura textarea:focus { border-color: var(--tdg-green, #107a57); outline: none; }
+.tdg-perfil-assinatura button { align-self: flex-start; }
 
 /* Saída sempre à vista: sem ela a sessão fica eterna no navegador e quem
    pega o mesmo aparelho entra direto na conta de quem esqueceu de sair. */

@@ -35,6 +35,14 @@ describe("montarEmailApresentacao", () => {
     expect(corpo).toContain("Equipe comercial · To Do Green");
   });
 
+  it("usa a assinatura personalizada no fecho, quando definida", () => {
+    const assinatura = "Bruna Paula · Comercial · To Do Green\n(11) 90000-0000";
+    const { corpo } = montarEmailApresentacao({ contaNome: "Acme", remetenteNome: "Bruna", assinatura });
+    expect(corpo.trimEnd().endsWith(assinatura)).toBe(true);
+    // A assinatura custom substitui o fecho padrão "· To Do Green" de uma linha só.
+    expect(corpo).not.toContain("Um abraço,\nBruna · To Do Green");
+  });
+
   it("NUNCA diz 'retomando' quando não houve contato — mesmo Morno/Quente", () => {
     const morno = montarEmailApresentacao({ contaNome: "X", temperatura: "Morno", houveContato: false }).corpo;
     const quente = montarEmailApresentacao({ contaNome: "X", temperatura: "Quente", houveContato: false }).corpo;

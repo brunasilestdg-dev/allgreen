@@ -39,6 +39,7 @@ export default function TodoGreenProfile({ db, update, authHeaders, setToast }) 
   const [aberto, setAberto] = useState(false);
   const [statusEmoji, setStatusEmoji] = useState(user.statusEmoji || "");
   const [statusText, setStatusText] = useState(user.statusText || "");
+  const [assinatura, setAssinatura] = useState(db?.preferences?.assinaturaEmail || "");
   const [fotoBusy, setFotoBusy] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [erro, setErro] = useState("");
@@ -102,14 +103,22 @@ export default function TodoGreenProfile({ db, update, authHeaders, setToast }) 
     }
   };
 
+  // Assinatura de e-mail: preferência do espaço (db.preferences), não do /auth.
+  // É "a minha assinatura" usada no fecho da apresentação comercial.
+  const salvarAssinatura = () => {
+    update?.((d) => ({ ...d, preferences: { ...(d.preferences || {}), assinaturaEmail: assinatura.trim() } }));
+    setToast?.("Assinatura de e-mail salva");
+  };
+  const assinaturaSalva = (db?.preferences?.assinaturaEmail || "");
   const statusMudou = statusEmoji !== (user.statusEmoji || "") || statusText !== (user.statusText || "");
+  const assinaturaMudou = assinatura.trim() !== assinaturaSalva.trim();
 
   return (
     <>
       <button
         type="button"
         className="tdg-perfil-chip"
-        onClick={() => { setStatusEmoji(user.statusEmoji || ""); setStatusText(user.statusText || ""); setErro(""); setAberto(true); }}
+        onClick={() => { setStatusEmoji(user.statusEmoji || ""); setStatusText(user.statusText || ""); setAssinatura(assinaturaSalva); setErro(""); setAberto(true); }}
         title={`Perfil de ${user.name || user.email || ""} — foto e status`}
         aria-label="Abrir meu perfil (foto e status)"
       >
@@ -161,6 +170,21 @@ export default function TodoGreenProfile({ db, update, authHeaders, setToast }) 
                 <input value={statusText} onChange={(e) => setStatusText(e.target.value)} maxLength={140} placeholder="Ex.: Focada em fechamento" />
               </label>
             </div>
+
+            <label className="tdg-perfil-assinatura">
+              <span>Minha assinatura de e-mail</span>
+              <textarea
+                value={assinatura}
+                onChange={(e) => setAssinatura(e.target.value)}
+                rows={4}
+                maxLength={600}
+                placeholder={"Ex.:\nBruna Paula · Comercial · To Do Green\n(11) 90000-0000 · bruna@todogreen.com.br"}
+              />
+              <small className="tdg-esg-nota">Usada no fecho do e-mail de apresentação. Em branco, assina com seu primeiro nome.</small>
+              <button type="button" className="tdg-btn-ghost" disabled={!assinaturaMudou} onClick={salvarAssinatura}>
+                Salvar assinatura
+              </button>
+            </label>
 
             {erro ? <p className="tdg-alert" role="alert">{erro}</p> : null}
 

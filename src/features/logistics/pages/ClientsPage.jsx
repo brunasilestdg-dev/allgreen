@@ -668,7 +668,7 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, onCompletarTarefa, currentUserId, remetenteNome = "", espacoId = "", onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, onCompletarTarefa, currentUserId, remetenteNome = "", assinaturaEmail = "", espacoId = "", onClientContextChange }) {
   const [clients, setClients] = useState([]);
   const [pessoas, setPessoas] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
@@ -1357,6 +1357,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         houveContato={interacoesVisiveis({ interacoes: interactions, clientId: selected.id }).length > 0}
         contexto={contextoDeMercado(selectedReportCandidate || {}, { segmento: selected.segment })}
         remetenteNome={remetenteNome}
+        assinatura={assinaturaEmail}
         onEnviado={async () => {
           // Fecha a tarefa "enviar apresentação" desta conta, se houver uma em
           // aberto. Casa por título (apresenta/apresentação) e status não concluído.
