@@ -103,6 +103,7 @@ import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
 import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
 import { contextoComercialDaTarefa, tarefaPlannerParaTodo } from "./plannerIntegrationDomain.js";
+import { sugestaoDeContrato } from "./contratoSugeridoDomain.js";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
 const PricingParametersPanel = lazy(() => import("./PricingParametersPanel.jsx"));
@@ -2323,6 +2324,16 @@ function ProposalPanel({ data, criar, atualizar, pedidosDeAprovacao = [], setToa
   const contratoVazio = { titulo: "Contrato de operação logística", inicioEm: "", fimEm: "", valorMensal: "", tipoCobranca: "mensal", valorTotal: "", termos: "", assinatura: "pending", aprovacao: "pending", renovacao: "manual", avisoRenovacaoEm: "", diaFaturamento: "", antecedenciaAvisoDias: "60", servicoId: "", tabelaPrecoId: "", indiceReajuste: "", dataBaseReajuste: "", compromissoMinimo: "", slaPrazoHoras: "", prazoPagamentoDias: "", aliquotaImposto: "", eventoFaturamento: "delivery" };
   const [contrato, setContrato] = useState(contratoVazio);
   const [salvandoContrato, setSalvandoContrato] = useState(false);
+  // Quando a proposta selecionada muda, o contrato nasce já preenchido com o
+  // que a simulação aprovou (valor, serviço, imposto) — sugestão, não trava:
+  // os campos seguem editáveis. É o que impede o valor negociado de divergir
+  // do preço aprovado por um erro de digitação.
+  useEffect(() => {
+    setContrato({ ...contratoVazio, ...sugestaoDeContrato(propostaContrato, data.pricingScenarios || []) });
+    // Re-semeia só quando a proposta escolhida troca; contratoVazio é literal
+    // constante e não precisa entrar nas dependências.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propostaContrato?.id]);
   const save = async (event) => {
     event.preventDefault();
     if (!latest) {
@@ -2425,7 +2436,7 @@ function ProposalPanel({ data, criar, atualizar, pedidosDeAprovacao = [], setToa
       <div className="tdg-access-list">{data.proposals.map((item) => <div className="tdg-access-row" key={item.id}><span><strong>{item.title}</strong><small>{item.client || "cliente não informado"}</small></span><span>{propostaAceita(item) ? "aceita" : item.scenarioId ? "com simulação" : "rascunho"}</span><button type="button" onClick={() => baixarProposta(item)}>Baixar documento</button>{!propostaAceita(item) && <button type="button" onClick={() => aceitarProposta(item)}>Registrar aceite</button>}</div>)}</div>
       <div className="tdg-section-head"><div><span className="tdg-kicker">CONTRATOS</span><h2>Gerar contrato a partir de proposta aceita</h2></div><strong>{data.contracts.length} contrato(s)</strong></div>
       <form className="tdg-access-form" onSubmit={salvarContrato}>
-        <label><span>Proposta aceita</span><select value={propostaContrato?.id || ""} onChange={(event) => setPropostaContratoId(event.target.value)}><option value="">Selecione</option>{propostasAceitas.map((item) => <option key={item.id} value={item.id}>{item.client || "Cliente"} · {item.title}</option>)}</select></label>
+        <label><span>Proposta aceita</span><select value={propostaContrato?.id || ""} onChange={(event) => setPropostaContratoId(event.target.value)}><option value="">Selecione</option>{propostasAceitas.map((item) => <option key={item.id} value={item.id}>{item.client || "Cliente"} · {item.title}</option>)}</select><small>Valor, serviço e imposto vêm preenchidos da simulação aceita — confira e ajuste antes de gerar.</small></label>
         <label><span>Título</span><input value={contrato.titulo} onChange={(event) => setContrato((current) => ({ ...current, titulo: event.target.value }))} /></label>
         <label><span>Início</span><input type="date" value={contrato.inicioEm} onChange={(event) => setContrato((current) => ({ ...current, inicioEm: event.target.value }))} /></label>
         <label><span>Fim</span><input type="date" value={contrato.fimEm} onChange={(event) => setContrato((current) => ({ ...current, fimEm: event.target.value }))} /></label>
