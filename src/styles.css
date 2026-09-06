@@ -111,52 +111,67 @@
 .tdg-auth-solicitar:hover { filter: brightness(1.08); }
 .tdg-auth-solicitar:disabled { opacity: .6; cursor: default; }
 
-/* Botão do Simulador de Emissão na tela de entrada (público). */
+/* Os dois CTAs públicos da entrada (simular emissão + falar com o comercial)
+   seguem o MESMO padrão dos botões de acesso e das redes (auth-perfis /
+   auth-social): mesma grade de 2 colunas, mesmos tokens de tema. Antes o
+   simulador usava texto quase branco sobre o cartão claro — ficava invisível —
+   e a cotação vinha no verde do WhatsApp, fora da paleta To Do Green. */
+.tdg-auth-ctas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+/* Simulador de Emissão: pílula de contorno, igual aos botões de rede. */
 .tdg-auth-simulador {
   align-items: center;
-  background: rgba(255, 255, 255, .14);
-  border: 1px solid rgba(255, 255, 255, .35);
-  border-radius: 999px;
-  color: #eafff5;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
   cursor: pointer;
   display: inline-flex;
-  font-size: 13px;
+  font-size: 0.8rem;
   font-weight: 700;
   gap: 8px;
-  margin-top: 16px;
-  padding: 10px 18px;
+  padding: 11px 12px;
+  transition: border-color .15s, color .15s, background .15s;
 }
 .tdg-auth-simulador svg { width: 16px; height: 16px; }
-.tdg-auth-simulador:hover { background: rgba(255, 255, 255, .24); }
-
-/* Os dois CTAs públicos da entrada (simular emissão + falar com o comercial no
-   WhatsApp) ficam lado a lado; quebram para baixo no celular. */
-.tdg-auth-ctas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
+.tdg-auth-simulador:hover,
+.tdg-auth-simulador:focus-visible {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--surface2);
+  outline: none;
 }
-.tdg-auth-ctas .tdg-auth-simulador { margin-top: 0; }
 
-/* "Quero fazer uma cotação" → WhatsApp do comercial. É a ação-dinheiro, então
-   é o CTA cheio (verde WhatsApp), destacado do simulador que fica como contorno. */
+/* "Quero fazer uma cotação": é a ação-dinheiro, então é o CTA cheio — mas no
+   VERDE da To Do Green (var(--primary)), como a aba de acesso ativa, não no
+   verde do WhatsApp. */
 .tdg-auth-cotacao {
   align-items: center;
-  background: #25d366;
-  border: 1px solid #25d366;
-  border-radius: 999px;
-  color: #08351f;
+  justify-content: center;
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  color: #fff;
   cursor: pointer;
   display: inline-flex;
-  font-size: 13px;
+  font-size: 0.8rem;
   font-weight: 800;
   gap: 8px;
-  padding: 10px 18px;
+  padding: 11px 12px;
   text-decoration: none;
+  box-shadow: 0 8px 20px -12px var(--primary);
+  transition: filter .15s;
 }
 .tdg-auth-cotacao svg { width: 16px; height: 16px; }
-.tdg-auth-cotacao:hover { background: #1ebe5a; border-color: #1ebe5a; }
+.tdg-auth-cotacao:hover,
+.tdg-auth-cotacao:focus-visible { filter: brightness(1.08); outline: none; }
 
 /* Overlay em tela cheia do simulador — público, sem login. */
 .tdg-sim-overlay {
