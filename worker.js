@@ -84,6 +84,7 @@ import { createWebhookHandlers } from "./worker/services/webhooks.js";
 import { runTodoGreenScheduledWorkAutomations } from "./worker/services/todogreen-work-center.js";
 import { runTodoGreenIntelligenceWatches } from "./worker/services/todogreen-client-intelligence.js";
 import { runTodoGreenMarketIntelligenceScheduled } from "./worker/services/todogreen-market-intelligence.js";
+import { runTodoGreenTrackerScheduled } from "./worker/services/todogreen-tracker.js";
 
 
 
@@ -4262,6 +4263,15 @@ export default {
     ctx.waitUntil(
       runTodoGreenMarketIntelligenceScheduled(env, now).catch((error) =>
         console.error("scheduled To Do Green market intelligence", error),
+      ),
+    );
+    // Rastreador → operação no cron: a posição do veículo (last_position) fica
+    // fresca para o cockpit e o portal do cliente sem ninguém clicar "sincronizar".
+    // Auto-limitado: só integrações em polling, respeitando o intervalo ≥60min de
+    // cada uma, no máximo 10 por disparo — não é uma enxurrada de chamadas externas.
+    ctx.waitUntil(
+      runTodoGreenTrackerScheduled(env).catch((error) =>
+        console.error("scheduled To Do Green tracker", error),
       ),
     );
   },
