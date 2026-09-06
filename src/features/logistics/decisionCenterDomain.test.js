@@ -28,6 +28,40 @@ describe("centro de decisão To Do Green", () => {
     expect(result.alerts.every((item) => item.route && item.action)).toBe(true);
   });
 
+  describe("janela de renovação de contrato", () => {
+    const em = (data, extra = {}) => buildTodoGreenDecisionCenter({
+      now: new Date("2026-08-13T12:00:00Z"),
+      data: { contracts: [{ id: "c1", ...extra }] },
+      ...data,
+    });
+    const alerta = (r) => r.alerts.find((a) => a.id === "contracts-expiring");
+
+    it("acende para o campo real do contrato (fimEm), não só o alias inglês", () => {
+      // fimEm ~19 dias à frente — antes o alerta lia endAt/endDate e nunca via
+      // o contrato real, ficando morto em produção.
+      expect(alerta(em({}, { fimEm: "2026-09-01" }))).toBeTruthy();
+    });
+
+    it("respeita a antecedência combinada: avisa aos 120 dias, não só aos 90", () => {
+      // Fim daqui a 100 dias, aviso exigido de 120 → já está na janela hoje.
+      expect(alerta(em({}, { fimEm: "2026-11-21", antecedenciaAvisoDias: 120 }))).toBeTruthy();
+      // Sem a antecedência, o padrão de 90 dias ainda não pegaria 100 dias fora.
+      expect(alerta(em({}, { fimEm: "2026-11-21" }))).toBeUndefined();
+    });
+
+    it("usa a data de aviso combinada quando ela existe", () => {
+      expect(alerta(em({}, { fimEm: "2027-06-01", avisoRenovacaoEm: "2026-08-01" }))).toBeTruthy();
+    });
+
+    it("contrato sem renovação não gera aviso", () => {
+      expect(alerta(em({}, { fimEm: "2026-09-01", renovacao: "none" }))).toBeUndefined();
+    });
+
+    it("contrato já vencido sai deste alerta (é outro problema)", () => {
+      expect(alerta(em({}, { fimEm: "2026-07-01" }))).toBeUndefined();
+    });
+  });
+
   it("não inventa alerta quando não há evidência", () => {
     const result = buildTodoGreenDecisionCenter({ data: {}, dashboard: {} });
     expect(result.alerts).toEqual([]);

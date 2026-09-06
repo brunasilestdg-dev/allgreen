@@ -24,8 +24,30 @@ const isOpenOpportunity = (item) =>
 
 const countLabel = (total, singular, plural) => `${total} ${total === 1 ? singular : plural}`;
 
+// O contrato da vertical expõe o fim como `fimEm`; os aliases em inglês ficam
+// por compatibilidade com fixtures e chamadores antigos. Sem `fimEm` aqui, o
+// alerta de renovação nunca acendia para contrato real nenhum.
 const contractEnd = (item) =>
-  dateValue(item?.endAt ?? item?.endsAt ?? item?.endDate ?? item?.expiresAt ?? item?.validUntil);
+  dateValue(item?.endAt ?? item?.endsAt ?? item?.endDate ?? item?.expiresAt ?? item?.validUntil ?? item?.fimEm);
+
+const renewalType = (item) =>
+  String(item?.renewalType ?? item?.renovacao ?? item?.renewal_type ?? "").trim().toLowerCase();
+
+const renewalNoticeDays = (item) => {
+  const parsed = Number(item?.noticeDays ?? item?.antecedenciaAvisoDias ?? item?.notice_days);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+// Quando começa a janela de renovação: a data de aviso combolada no contrato
+// manda; sem ela, `fim − antecedência`; sem antecedência, 90 dias antes do fim
+// (o padrão histórico). Assim um contrato que exige aviso de 120 dias avisa aos
+// 120, não aos 90 — que já seria tarde.
+const renewalNoticeMs = (item, end) => {
+  const explicit = dateValue(item?.renewalNoticeDate ?? item?.avisoRenovacaoEm ?? item?.renewal_notice_date);
+  if (explicit !== null) return explicit;
+  if (end === null) return null;
+  return end - (renewalNoticeDays(item) ?? 90) * DAY;
+};
 
 const scenarioMargin = (item) => {
   const result = item?.result || item?.resultado || {};
@@ -62,8 +84,13 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
     !String(item?.nextStep ?? item?.proximoPasso ?? item?.nextAction ?? "").trim(),
   );
   const expiringContracts = contracts.filter((item) => {
+    // Contrato sem renovação não gera aviso de renovação — acender aqui seria
+    // ruído. Já vencido também sai: é outro problema, não "antecipe".
+    if (renewalType(item) === "none") return false;
     const end = contractEnd(item);
-    return end !== null && end >= nowMs && end <= nowMs + 90 * DAY;
+    if (end === null || end < nowMs) return false;
+    const notice = renewalNoticeMs(item, end);
+    return notice !== null && notice <= nowMs;
   });
   const lowMarginScenarios = scenarios.filter((item) => {
     const margin = scenarioMargin(item);
@@ -114,8 +141,8 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
     expiringContracts.length && {
       id: "contracts-expiring",
       tone: "attention",
-      title: `${countLabel(expiringContracts.length, "contrato vence", "contratos vencem")} em até 90 dias`,
-      detail: "Antecipe a renovação e confirme a estratégia da conta.",
+      title: `${countLabel(expiringContracts.length, "contrato na janela de renovação", "contratos na janela de renovação")}`,
+      detail: "Antecipe a renovação: reveja preço, reajuste e estratégia da conta antes do vencimento.",
       action: "Abrir contratos",
       route: "/todogreen/propostas",
     },
