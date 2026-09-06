@@ -2518,12 +2518,98 @@ function EsgPanel({ dashboard, data, onNavigate }) {
   );
 }
 
-function MethodologyPanel() {
+// Rótulos legíveis dos fatores da régua ESG. A chave é a mesma do motor
+// (DEFAULT_ENVIRONMENTAL_FACTORS); a ordem aqui é a ordem na tela.
+const ROTULOS_FATORES_ESG = [
+  ["dieselKgCo2ePerLiter", "Diesel — kg CO₂e por litro", 0.01],
+  ["gasolineKgCo2ePerLiter", "Gasolina — kg CO₂e por litro", 0.01],
+  ["dieselKmPerLiter", "Diesel — km por litro", 0.1],
+  ["electricKgCo2ePerKwh", "Elétrico — kg CO₂e por kWh (grid BR)", 0.0001],
+  ["electricKwhPerKm", "Elétrico — kWh por km", 0.01],
+  ["treeKgCo2eYear", "Equivalência — kg CO₂e por árvore/ano", 1],
+  ["carKgCo2eYear", "Equivalência — kg CO₂e por carro/ano", 1],
+  ["flightKgCo2e", "Equivalência — kg CO₂e por voo", 1],
+  ["homeKwhMonth", "Equivalência — kWh por casa/mês", 1],
+];
+const ROTULOS_PESOS_ESG = [
+  ["reduction", "Redução de emissão"],
+  ["lowEmissionKm", "Km de baixa emissão"],
+  ["cleanEnergy", "Energia limpa"],
+  ["efficiency", "Eficiência (ocupação/produtividade)"],
+  ["targetEvolution", "Evolução vs. meta"],
+  ["dataQuality", "Qualidade do dado"],
+];
+
+// Editor da régua ESG (fatores de CO₂ + pesos do Green Score). É o que torna o
+// número ESG do simulador editável — antes era constante no código. Sem régua
+// salva, mostra os defaults de fábrica; salvar cria uma versão nova, auditada.
+function ReguaEsgEditor({ authHeaders, setToast }) {
+  const [dados, setDados] = useState(null);
+  const [fatores, setFatores] = useState({});
+  const [pesos, setPesos] = useState({});
+  const [justificativa, setJustificativa] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const carregar = useCallback(() => {
+    const headers = authHeaders?.() || {};
+    if (!headers.authorization) return;
+    fetch("/api/todogreen/environmental-parameters", { headers })
+      .then(async (r) => { const p = await r.json().catch(() => ({})); if (!r.ok) throw new Error(p.error || "Falha ao carregar a régua ESG."); return p; })
+      .then((p) => { setDados(p); setFatores({ ...p.atual.fatores }); setPesos({ ...p.atual.pesos }); })
+      .catch((e) => setToast?.(e.message));
+  }, [authHeaders, setToast]);
+  useEffect(() => { carregar(); }, [carregar]);
+  if (!dados) return null;
+  const restaurarPadrao = () => { setFatores({ ...dados.padrao.fatores }); setPesos({ ...dados.padrao.pesos }); };
+  const salvar = async (event) => {
+    event.preventDefault();
+    if (justificativa.trim().length < 5) { setToast?.("Escreva a justificativa da mudança — ela fica no registro."); return; }
+    setSalvando(true);
+    try {
+      const headers = { ...(authHeaders?.() || {}), "content-type": "application/json" };
+      const r = await fetch("/api/todogreen/environmental-parameters", {
+        method: "POST", headers, body: JSON.stringify({ fatores, pesos, justificativa }),
+      });
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(p.error || "Não foi possível salvar a régua ESG.");
+      setJustificativa("");
+      if (p.atual) { setFatores({ ...p.atual.fatores }); setPesos({ ...p.atual.pesos }); }
+      setToast?.("Régua ESG salva. O simulador já usa os novos fatores.");
+      carregar();
+    } catch (e) { setToast?.(e.message); }
+    finally { setSalvando(false); }
+  };
+  const somaPesos = Object.values(pesos).reduce((s, v) => s + (Number(v) || 0), 0);
+  return (
+    <form className="tdg-access-form tdg-esg-regua" onSubmit={salvar}>
+      <div className="tdg-section-head"><div><span className="tdg-kicker">RÉGUA ESG</span><h3>Fatores de CO₂ e pesos do Green Score</h3></div><strong>{dados.atual.deFabrica ? "padrão de fábrica" : `versão ${dados.atual.versao}`}</strong></div>
+      <p className="tdg-esg-nota">Estes números movem o CO₂ evitado e o Green Score do simulador oficial. Campo em branco ou inválido volta ao padrão de fábrica ao salvar.</p>
+      <fieldset disabled={!dados.podeEditar} className="tdg-esg-campos">
+        <legend>Fatores de emissão e equivalências</legend>
+        {ROTULOS_FATORES_ESG.map(([chave, rotulo, passo]) => (
+          <label key={chave}><span>{rotulo}</span><input type="number" step={passo} min="0" value={fatores[chave] ?? ""} onChange={(e) => setFatores((v) => ({ ...v, [chave]: e.target.value }))} /></label>
+        ))}
+      </fieldset>
+      <fieldset disabled={!dados.podeEditar} className="tdg-esg-campos">
+        <legend>Pesos do Green Score {somaPesos > 0 ? `(somam ${somaPesos})` : ""}</legend>
+        {ROTULOS_PESOS_ESG.map(([chave, rotulo]) => (
+          <label key={chave}><span>{rotulo}</span><input type="number" step="1" min="0" value={pesos[chave] ?? ""} onChange={(e) => setPesos((v) => ({ ...v, [chave]: e.target.value }))} /></label>
+        ))}
+      </fieldset>
+      {dados.podeEditar ? <>
+        <label><span>Justificativa da mudança</span><input value={justificativa} onChange={(e) => setJustificativa(e.target.value)} placeholder="Por que está mudando a régua? Fica no registro." /></label>
+        <div className="tdg-form-actions"><button type="button" onClick={restaurarPadrao}>Restaurar padrão de fábrica</button><button className="tdg-action" type="submit" disabled={salvando}><FileCheck size={17} />{salvando ? "Salvando..." : "Salvar régua ESG"}</button></div>
+      </> : <p className="tdg-esg-nota">Você pode consultar a régua, mas só quem administra ESG pode alterá-la.</p>}
+    </form>
+  );
+}
+
+function MethodologyPanel({ authHeaders, setToast }) {
   const rows = LOGISTICS_PRODUCTS.map((product) => ({ product, blueprint: getProductPricingBlueprint(product.id) }));
   return (
     <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">METODOLOGIA</span><h2>Premissas, evidências e rastreabilidade por produto</h2></div><strong>tdg-env-v1</strong></div>
       <div className="tdg-access-list">{rows.map(({ product, blueprint }) => <div className="tdg-access-row" key={product.id}><span><strong>{product.name}</strong><small>{blueprint.requiredEvidence.join(" · ")}</small></span><span>{blueprint.pricingUnit}</span></div>)}</div>
       <div className="tdg-method"><strong>Regra de dados</strong><p>{TODO_GREEN_PRODUCTION_DATA_POLICY.rule}</p><small>Estimativas ESG não são certificação oficial; servem como memória de cálculo comercial e operacional.</small></div>
+      <ReguaEsgEditor authHeaders={authHeaders} setToast={setToast} />
     </section>
   );
 }
@@ -3402,7 +3488,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "indicadores" && <Suspense fallback={<section className="tdg-panel">Carregando indicadores...</section>}><EnterpriseAreaPage area="indicators" onNavigate={navigate} /></Suspense>}
       {page === "administracao" && <Suspense fallback={<section className="tdg-panel">Carregando administração...</section>}><EnterpriseAreaPage area="admin" onNavigate={navigate} /></Suspense>}
       {page === "relatorios" && <Suspense fallback={<section className="tdg-panel">Carregando relatórios...</section>}><ReportsPage dashboard={dashboard} data={verticalData} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "metodologia" && <MethodologyPanel />}
+      {page === "metodologia" && <MethodologyPanel authHeaders={authHeaders} setToast={setToast} />}
       {page === "documentos" && (
         <Suspense fallback={<section className="tdg-panel">Carregando os documentos...</section>}>
           <DocumentVaultPage authHeaders={authHeaders} clientes={clientes} setToast={setToast} />

@@ -1682,6 +1682,11 @@
 .tdg-operation-card dl div { display: grid; gap: 3px; }
 .tdg-operation-card dt { align-items: center; color: var(--tdg-muted); display: flex; font-size: .75rem; gap: 5px; }
 .tdg-operation-card dd { font-size: .86rem; margin: 0; }
+.tdg-esg-regua { margin-top: 18px; }
+.tdg-esg-regua fieldset { border: 1px solid var(--tdg-line); border-radius: 14px; margin: 12px 0; padding: 14px 16px; }
+.tdg-esg-regua legend { color: var(--tdg-muted); font-size: .78rem; letter-spacing: .04em; padding: 0 6px; text-transform: uppercase; }
+.tdg-esg-campos { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.tdg-esg-campos label { display: grid; gap: 4px; }
 .tdg-operation-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .tdg-operation-card-actions > button { flex: 1; min-width: max-content; }
 .tdg-operation-timeline { margin-top: 14px; }
