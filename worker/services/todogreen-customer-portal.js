@@ -640,6 +640,10 @@ async function clientOverview(env, escopo) {
   const ambiental = await env.DB.prepare(
     `SELECT COALESCE(SUM(CAST(json_extract(result_json, '$.impact.co2AvoidedKg') AS REAL)), 0) AS co2,
             COALESCE(SUM(CAST(json_extract(result_json, '$.impact.dieselAvoidedLiters') AS REAL)), 0) AS diesel,
+            -- Cenário convencional × operação real: os dois lados da comparação
+            -- que a tela promete e que o motor já grava (só não eram somados).
+            COALESCE(SUM(CAST(json_extract(result_json, '$.impact.referenceEmissionsKg') AS REAL)), 0) AS convencional,
+            COALESCE(SUM(CAST(json_extract(result_json, '$.impact.actualEmissionsKg') AS REAL)), 0) AS realizado,
             COALESCE(AVG(CAST(json_extract(result_json, '$.impact.reductionPercent') AS REAL)), 0) AS reducao,
             COALESCE(AVG(data_quality), 0) AS qualidade,
             COUNT(*) AS calculos
@@ -670,6 +674,10 @@ async function clientOverview(env, escopo) {
     ambiental: {
       co2EvitadoKg: ambiental?.co2 || 0,
       dieselEvitadoL: ambiental?.diesel || 0,
+      // A comparação de cenários do portal lê estes dois campos (antes vinham
+      // sempre 0, então o bloco nunca renderizava).
+      emissaoConvencionalKg: ambiental?.convencional || 0,
+      emissaoTodogreenKg: ambiental?.realizado || 0,
       reducaoPercent: ambiental?.reducao || 0,
       qualidadeDados: ambiental?.qualidade || 0,
       calculos: ambiental?.calculos || 0,
