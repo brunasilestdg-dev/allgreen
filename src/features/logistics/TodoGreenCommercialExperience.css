@@ -569,6 +569,13 @@
   color: rgba(240, 255, 251, .8);
 }
 
+/* O hero pinta TODO span de quase-branco (para ler no verde escuro), mas isso
+   vazava para dentro do seletor de temperatura: o rótulo do pill ATIVO ficava
+   branco sobre o fundo branco do próprio pill — sumia. O seletor tem superfície
+   clara e cores próprias; que o rótulo herde a cor do botão (verde no ativo,
+   cinza no inativo), não a do hero. */
+.tdg-crm-temp-inline .ds-seg__opt span { color: inherit; }
+
 .tdg-crm-account-tabs {
   position: sticky;
   z-index: 7;

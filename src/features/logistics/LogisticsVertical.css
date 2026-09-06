@@ -848,6 +848,46 @@
   .tdg-product-card { animation: none; }
 }
 
+/* Dinamismo 2 — a tela REAGE, não só monta: os cartões e itens clicáveis sobem
+   no hover e afundam no clique. É o movimento que o usuário sente a CADA
+   interação (a entrada acima toca uma vez; isto responde sempre), em toda tela. */
+.tdg-module-card, .tdg-product-card, .tdg-operation-card,
+.tdg-home-metric-link, .tdg-home-queue button, .tdg-home-shortcuts button,
+.tdg-home-portal-link, .tdg-home-painel-card {
+  transition: transform .16s cubic-bezier(.22, 1, .36, 1), box-shadow .16s ease, border-color .16s ease;
+}
+.tdg-module-card:hover, .tdg-product-card:hover, .tdg-operation-card:hover,
+.tdg-home-metric-link:hover, .tdg-home-queue button:hover, .tdg-home-shortcuts button:hover,
+.tdg-home-portal-link:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px -14px rgba(6, 63, 61, .42);
+}
+.tdg-module-card:active, .tdg-product-card:active, .tdg-operation-card:active,
+.tdg-home-metric-link:active, .tdg-home-queue button:active, .tdg-home-shortcuts button:active,
+.tdg-home-portal-link:active { transform: translateY(-1px) scale(.99); }
+.tdg-home-painel-card:hover { box-shadow: 0 12px 26px -16px rgba(6, 63, 61, .38); }
+
+/* A cascata de entrada agora alcança os cartões da Visão geral (home) — antes só
+   pegava tdg-metric/tdg-module-card, que NÃO são as classes da home, então a
+   primeira tela do usuário montava sem movimento. */
+.tdg-home-metric-link, .tdg-home-metrics > article, .tdg-home-painel-card {
+  animation: tdg-rise 0.46s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tdg-home-metric-link:nth-child(1), .tdg-home-metrics > article:nth-child(1), .tdg-home-painel-card:nth-child(1) { animation-delay: .05s; }
+.tdg-home-metric-link:nth-child(2), .tdg-home-metrics > article:nth-child(2), .tdg-home-painel-card:nth-child(2) { animation-delay: .11s; }
+.tdg-home-metric-link:nth-child(3), .tdg-home-metrics > article:nth-child(3), .tdg-home-painel-card:nth-child(3) { animation-delay: .17s; }
+.tdg-home-metric-link:nth-child(4), .tdg-home-metrics > article:nth-child(4), .tdg-home-painel-card:nth-child(4) { animation-delay: .23s; }
+.tdg-home-metric-link:nth-child(n+5), .tdg-home-metrics > article:nth-child(n+5), .tdg-home-painel-card:nth-child(n+5) { animation-delay: .29s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tdg-module-card, .tdg-product-card, .tdg-operation-card,
+  .tdg-home-metric-link, .tdg-home-queue button, .tdg-home-shortcuts button,
+  .tdg-home-portal-link, .tdg-home-painel-card { transition: none; animation: none; }
+  .tdg-module-card:hover, .tdg-product-card:hover, .tdg-operation-card:hover,
+  .tdg-home-metric-link:hover, .tdg-home-queue button:hover, .tdg-home-shortcuts button:hover,
+  .tdg-home-portal-link:hover { transform: none; }
+}
+
 .tdg-section-head {
   align-items: flex-start;
   display: flex;
