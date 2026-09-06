@@ -32,6 +32,35 @@ export function pontosDeAtencaoAltos(pauta) {
   return lista.filter((item) => item?.urgencia === "alta").length;
 }
 
+// ===== Aviso de pendência: só o que é NOVO (Onda 2) =====
+//
+// O cron avalia a pauta de alta urgência e avisa por push/e-mail — mas só
+// quando surge algo que a pessoa ainda não viu. O truque é uma CHAVE estável
+// por item concreto (a "Precificação da DHL", não "há pendências"): guardamos as
+// chaves já avisadas e, no disparo seguinte, avisamos apenas as que não estavam
+// lá. Assim a mesma pendência não bate no celular toda hora, e uma pendência
+// que se resolve e volta é avisada de novo (a chave sai e reentra).
+//
+// Erra para o lado quieto de propósito: as chaves cobrem os nomes que a pauta
+// mostra (as primeiras contas), então na dúvida avisa de menos, nunca de mais.
+export function itensDePendenciaAlta(pauta) {
+  const altas = (pauta?.pautas || []).filter((item) => item?.urgencia === "alta");
+  const itens = [];
+  for (const bloco of altas) {
+    const nomes = Array.isArray(bloco.contas) && bloco.contas.length ? bloco.contas : [""];
+    for (const nome of nomes) itens.push({ chave: `${bloco.id}|${nome}`, titulo: bloco.titulo });
+  }
+  return itens;
+}
+
+export function novidadesDePendencia(itensAtuais, chavesVistas) {
+  const itens = Array.isArray(itensAtuais) ? itensAtuais : [];
+  const vistas = new Set(Array.isArray(chavesVistas) ? chavesVistas : []);
+  const novos = itens.filter((item) => !vistas.has(item.chave));
+  const titulos = [...new Set(novos.map((item) => item.titulo))];
+  return { novos, titulos, todasAsChaves: itens.map((item) => item.chave) };
+}
+
 const NOMES_NA_PAUTA = 4;
 
 const pauta = ({ id, urgencia, titulo, porque, contas = [], pergunta }) => {

@@ -85,6 +85,7 @@ import { runTodoGreenScheduledWorkAutomations } from "./worker/services/todogree
 import { runTodoGreenIntelligenceWatches } from "./worker/services/todogreen-client-intelligence.js";
 import { runTodoGreenMarketIntelligenceScheduled } from "./worker/services/todogreen-market-intelligence.js";
 import { runTodoGreenTrackerScheduled } from "./worker/services/todogreen-tracker.js";
+import { runTodoGreenPendenciaAvisos } from "./worker/services/todogreen-semente.js";
 
 
 
@@ -4272,6 +4273,13 @@ export default {
     ctx.waitUntil(
       runTodoGreenTrackerScheduled(env).catch((error) =>
         console.error("scheduled To Do Green tracker", error),
+      ),
+    );
+    // Aviso de pendências novas (push + e-mail), só o que surgiu desde o último
+    // disparo. Primeiro disparo de cada espaço só registra o baseline, não envia.
+    ctx.waitUntil(
+      runTodoGreenPendenciaAvisos(env).catch((error) =>
+        console.error("scheduled To Do Green pendências", error),
       ),
     );
   },

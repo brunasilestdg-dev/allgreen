@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { montarPauta, pontosDeAtencaoAltos } from "./sementeBriefingDomain.js";
+import { itensDePendenciaAlta, montarPauta, novidadesDePendencia, pontosDeAtencaoAltos } from "./sementeBriefingDomain.js";
 
 const conta = (extra = {}) => ({
   id: "c", nome: "Conta", temperatura: null, proximaAcao: null, prazoDaProximaAcao: null,
@@ -123,5 +123,42 @@ describe("selo proativo (falar primeiro)", () => {
       agora: "2026-09-06T00:00:00Z",
     });
     expect(pontosDeAtencaoAltos(pauta)).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("aviso de pendência só do que é novo", () => {
+  const pauta = {
+    pautas: [
+      { id: "prazo-vencido", urgencia: "alta", titulo: "Próxima ação vencida", contas: ["DHL", "Vivara"] },
+      { id: "quente-sem-acao", urgencia: "alta", titulo: "Conta quente sem ação", contas: ["Ambev"] },
+      { id: "sem-canal", urgencia: "media", titulo: "Sem canal", contas: ["Foo"] },
+    ],
+  };
+  it("gera uma chave por item concreto, só das altas", () => {
+    const itens = itensDePendenciaAlta(pauta);
+    expect(itens.map((i) => i.chave)).toEqual([
+      "prazo-vencido|DHL", "prazo-vencido|Vivara", "quente-sem-acao|Ambev",
+    ]);
+  });
+  it("na primeira vez (nada visto), tudo é novidade", () => {
+    const r = novidadesDePendencia(itensDePendenciaAlta(pauta), []);
+    expect(r.novos).toHaveLength(3);
+    expect(r.titulos).toEqual(["Próxima ação vencida", "Conta quente sem ação"]);
+  });
+  it("com tudo já visto, nenhuma novidade", () => {
+    const itens = itensDePendenciaAlta(pauta);
+    const r = novidadesDePendencia(itens, itens.map((i) => i.chave));
+    expect(r.novos).toEqual([]);
+    expect(r.titulos).toEqual([]);
+    expect(r.todasAsChaves).toHaveLength(3);
+  });
+  it("avisa só a conta nova quando o resto já era conhecido", () => {
+    const r = novidadesDePendencia(itensDePendenciaAlta(pauta), ["prazo-vencido|DHL", "prazo-vencido|Vivara"]);
+    expect(r.novos.map((i) => i.chave)).toEqual(["quente-sem-acao|Ambev"]);
+    expect(r.titulos).toEqual(["Conta quente sem ação"]);
+  });
+  it("pauta em dia não gera item nem novidade", () => {
+    expect(itensDePendenciaAlta({ pautas: [] })).toEqual([]);
+    expect(novidadesDePendencia([], []).novos).toEqual([]);
   });
 });

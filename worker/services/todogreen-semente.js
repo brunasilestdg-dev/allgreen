@@ -27,7 +27,8 @@ import { webSearchConfiguration } from "./web-search.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { pesquisarEmpresa } from "./todogreen-client-intelligence.js";
 import { pessoasAtribuiveis, resolverResponsavel } from "../../src/features/logistics/taskAssignmentDomain.js";
-import { montarPauta } from "../../src/features/logistics/sementeBriefingDomain.js";
+import { itensDePendenciaAlta, montarPauta, novidadesDePendencia } from "../../src/features/logistics/sementeBriefingDomain.js";
+import { emailEnabled, pushEnabled, sendEmailText, sendWebPush } from "../mensageria/envio.js";
 import {
   blocoDeContexto,
   propostaDeAprendizado,
@@ -1232,4 +1233,93 @@ export async function handleTodoGreenSemente(request, env, access, user) {
     proposta: decisao.acao || null,
     carteira: indice.length,
   });
+}
+
+// ===== O cron que avisa das pendências novas (Onda 2) =====
+//
+// A plataforma falando primeiro, fora do app: a cada hora avalia a pauta de
+// alta urgência de cada dono e avisa por push e e-mail — mas SÓ o que é novo,
+// para não bater no celular toda hora com a mesma coisa. A defesa contra o
+// "despejo do acúmulo" é o baseline: na primeira avaliação de um espaço nada é
+// enviado, só se registra o que já existe; dali em diante, só o que entrou.
+//
+// Escopo do DONO (vê a carteira inteira) — o recorte por vendedor fica para uma
+// próxima leva. Sem push nem e-mail configurados, não faz nada.
+export async function runTodoGreenPendenciaAvisos(env) {
+  if (!env.DB) return { avisados: 0 };
+  if (!pushEnabled(env) && !emailEnabled(env)) return { avisados: 0 };
+  const agora = new Date().toISOString();
+  const hoje = agora.slice(0, 10);
+  const donos = await env.DB.prepare(
+    `SELECT DISTINCT workspace_owner_id FROM todogreen_clients
+       WHERE tenant_id=? AND archived_at IS NULL LIMIT 50`,
+  ).bind(TENANT_ID).all().then((r) => r.results || []).catch(() => []);
+  let avisados = 0;
+  for (const { workspace_owner_id: ownerId } of donos) {
+    try {
+      const dono = await env.DB.prepare("SELECT id, email FROM users WHERE id=?").bind(ownerId).first();
+      if (!dono?.email) continue;
+      const access = { ownerId, email: dono.email, role: "owner", permissions: ["*"], tenant: TENANT_ID };
+      const linhas = await lerCarteira(env, access, dono.email);
+      const vencidas = await env.DB.prepare(
+        `SELECT title FROM todogreen_work_items
+           WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+             AND status <> 'concluido' AND due_date IS NOT NULL AND due_date < ?
+           ORDER BY due_date LIMIT 40`,
+      ).bind(TENANT_ID, ownerId, hoje).all().then((r) => (r.results || []).map((x) => ({ titulo: x.title })));
+      const pauta = montarPauta({ indice: montarIndice(linhas), tarefasVencidas: vencidas });
+      const itens = itensDePendenciaAlta(pauta);
+
+      const registro = await env.DB.prepare(
+        "SELECT chaves_json FROM todogreen_pendencia_avisos WHERE tenant_id=? AND workspace_owner_id=? AND user_id=?",
+      ).bind(TENANT_ID, ownerId, dono.id).first();
+      const chavesVistas = registro ? (parse(registro.chaves_json, []) || []) : [];
+      const { novos, titulos, todasAsChaves } = novidadesDePendencia(itens, chavesVistas);
+      const novoJson = JSON.stringify(todasAsChaves);
+
+      // Reserva de envio único sob o cron "pelo menos uma vez": só quem consegue
+      // AVANÇAR o estado (INSERT novo, ou UPDATE casando o estado exato que leu)
+      // dispara. Um segundo disparo concorrente encontra o estado já mudado e
+      // fica quieto — nada de aviso em dobro.
+      if (!registro) {
+        const ins = await env.DB.prepare(
+          `INSERT OR IGNORE INTO todogreen_pendencia_avisos
+             (id, tenant_id, workspace_owner_id, user_id, chaves_json, updated_at)
+           VALUES (?,?,?,?,?,?)`,
+        ).bind(crypto.randomUUID(), TENANT_ID, ownerId, dono.id, novoJson, agora).run();
+        // Primeira vez: baseline gravado, nada enviado (mesmo se houver itens).
+        continue;
+      }
+      if (!novos.length) continue;
+      const avanco = await env.DB.prepare(
+        `UPDATE todogreen_pendencia_avisos SET chaves_json=?, updated_at=?
+          WHERE tenant_id=? AND workspace_owner_id=? AND user_id=? AND chaves_json=?`,
+      ).bind(novoJson, agora, TENANT_ID, ownerId, dono.id, registro.chaves_json).run();
+      if (!avanco?.meta?.changes) continue;
+
+      const titulo = "Pendências que precisam de você";
+      const corpo = titulos.slice(0, 4).join(" · ") + (titulos.length > 4 ? ` e mais ${titulos.length - 4}` : "");
+      if (pushEnabled(env)) {
+        const subs = await env.DB.prepare(
+          "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?",
+        ).bind(dono.id).all().then((r) => r.results || []).catch(() => []);
+        for (const s of subs) {
+          const subscription = { endpoint: s.endpoint, expirationTime: null, keys: { p256dh: s.p256dh, auth: s.auth } };
+          await sendWebPush(env, subscription, {
+            data: { title: titulo, body: corpo, link: "todogreen/dashboard" },
+            options: { ttl: 86400, urgency: "normal" },
+          }).then((r) => {
+            if (r?.gone) return env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint=?").bind(s.endpoint).run();
+          }).catch(() => {});
+        }
+      }
+      if (emailEnabled(env)) {
+        await sendEmailText(env, dono.email, titulo, `${corpo}\n\nAbra o To Do Green para resolver.`).catch(() => {});
+      }
+      avisados += 1;
+    } catch (erro) {
+      console.error("To Do Green pendências aviso", ownerId, erro?.message || erro);
+    }
+  }
+  return { avisados };
 }
