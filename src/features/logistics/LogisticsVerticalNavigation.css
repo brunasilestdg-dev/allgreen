@@ -285,13 +285,13 @@
   }
 
   .tdg-pricing.tdg-pricing-select .tdg-product-strip {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tdg-pricing-detail .tdg-form,
   .tdg-price-summary,
   .tdg-price-guidance {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tdg-price-summary > div {

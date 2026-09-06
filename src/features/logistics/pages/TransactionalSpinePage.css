@@ -44,4 +44,4 @@
 .tdg-derivado-nota { background: var(--tdg-soft); border-radius: 10px; color: var(--tdg-ink); font-size: .82rem; line-height: 1.45; margin: 0; padding: 10px 12px; }
 @media (max-width: 920px) { .tdg-derivado-row { grid-template-columns: minmax(0, 1fr) auto; } .tdg-derivado-passo { grid-column: 1 / -1; } }
 @media (max-width: 920px) { .tdg-txn-form, .tdg-txn-allocation, .tdg-txn-readiness { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tdg-txn-row { grid-template-columns: minmax(0, 1fr) auto; } }
-@media (max-width: 620px) { .tdg-txn-form, .tdg-txn-allocation, .tdg-txn-row, .tdg-txn-readiness { grid-template-columns: 1fr; } .tdg-txn-form-actions, .tdg-txn-close { align-items: stretch; flex-direction: column; } }
+@media (max-width: 620px) { .tdg-txn-form, .tdg-txn-allocation, .tdg-txn-row, .tdg-txn-readiness { grid-template-columns: minmax(0, 1fr); } .tdg-txn-form-actions, .tdg-txn-close { align-items: stretch; flex-direction: column; } }

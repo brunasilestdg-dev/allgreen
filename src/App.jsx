@@ -149,6 +149,7 @@ import CRM from "./features/omnichannel/CRM.jsx";
 import Appointments from "./features/omnichannel/Appointments.jsx";
 import Quotes from "./features/omnichannel/Quotes.jsx";
 import TimeTracking from "./features/omnichannel/TimeTracking.jsx";
+import { textoDoToast, tomDoToast } from "./toastTone.js";
 import {
   BUSINESS_INDUSTRY_CATALOG,
   businessPackLabels,
@@ -1543,12 +1544,16 @@ function useWhatsappSender({ db, setToast }) {
 // Movido para ./components/SharingFields.jsx.
 
 function Toast({ toast }) {
-  return toast ? (
-    <div className="toast">
-      <CheckCircle2 size={18} />
-      {toast}
+  if (!toast) return null;
+  const tom = tomDoToast(toast);
+  const texto = textoDoToast(toast);
+  const Icone = tom === "erro" ? CircleAlert : CheckCircle2;
+  return (
+    <div className={`toast ${tom === "erro" ? "erro" : ""}`} role="status" aria-live="polite">
+      <Icone size={18} />
+      {texto}
     </div>
-  ) : null;
+  );
 }
 
 function AppUpdate({ visible, latestVersion }) {

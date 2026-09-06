@@ -136,7 +136,7 @@
   }
 
   .tdg-denied-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     border-radius: 24px;
     padding: 24px;
   }
@@ -149,7 +149,7 @@
   }
 
   .tdg-denied-card dl {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tdg-denied-card h1 {

@@ -514,6 +514,14 @@
 .toast svg {
   color: #65dfb0;
 }
+/* Erro deixou de se disfarçar de sucesso: pílula avermelhada e ícone de alerta,
+   para a gravação que falhou não passar por "feito". */
+.toast.erro {
+  background: #3a201c;
+}
+.toast.erro svg {
+  color: #ff9d86;
+}
 .app-update {
   position: fixed;
   right: 22px;

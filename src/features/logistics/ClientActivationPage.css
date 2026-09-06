@@ -50,8 +50,8 @@
 .spin { animation: ca-spin .8s linear infinite; }
 @keyframes ca-spin { to { transform: rotate(360deg); } }
 @media (max-width: 900px) {
-  .ca-layout { grid-template-columns: 1fr; }
-  .ca-checks { grid-template-columns: 1fr; }
+  .ca-layout { grid-template-columns: minmax(0, 1fr); }
+  .ca-checks { grid-template-columns: minmax(0, 1fr); }
   .ca-checks article:nth-child(odd) { border-right: 0; }
 }
 @media (max-width: 640px) {

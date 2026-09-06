@@ -304,7 +304,7 @@
 
   .creative-form-grid,
   .creative-form-grid.compact {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .creative-field-wide {

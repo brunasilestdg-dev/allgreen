@@ -149,7 +149,7 @@
   .tdg-fleet-card,
   .tdg-fleet-form,
   .tdg-fleet-telemetry {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tdg-fleet-form .full {

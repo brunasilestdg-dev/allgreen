@@ -586,7 +586,7 @@
 @media (max-width: 820px) {
   .ps-grid,
   .ps-kanban {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .ps-card.ps-wide {
@@ -626,11 +626,11 @@
   }
 
   .ps-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .ps-mini-columns {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .ps-row {

@@ -220,10 +220,10 @@
 }
 
 @media (max-width: 900px) {
-  .tms-api-grid { grid-template-columns: 1fr; }
+  .tms-api-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 520px) {
-  .tms-api-scopes { grid-template-columns: 1fr; }
+  .tms-api-scopes { grid-template-columns: minmax(0, 1fr); }
   .tms-api-secret-row { align-items: stretch; flex-direction: column; }
 }

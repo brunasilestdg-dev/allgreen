@@ -176,6 +176,6 @@
 @media (max-width: 640px) {
   .tdg-routine-map { border-radius: 20px; padding: 16px; }
   .tdg-routine-grid,
-  .tdg-crm-grid { grid-template-columns: 1fr; }
+  .tdg-crm-grid { grid-template-columns: minmax(0, 1fr); }
   .tdg-routine-card { min-height: auto; }
 }

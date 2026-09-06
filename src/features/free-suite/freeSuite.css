@@ -443,7 +443,7 @@
   .fs-two-columns,
   .fs-market,
   .fs-builder {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .fs-builder-controls {
@@ -472,6 +472,6 @@
 
   .fs-range-row,
   .fs-template-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }

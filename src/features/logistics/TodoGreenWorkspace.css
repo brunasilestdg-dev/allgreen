@@ -513,7 +513,7 @@
   .tdg-space-context-grid,
   .tdg-space-tool-group > div,
   .tdg-space-tools > div,
-  .tdg-automation-templates > div { grid-template-columns: 1fr; }
+  .tdg-automation-templates > div { grid-template-columns: minmax(0, 1fr); }
   .tdg-space-routines > div,
   .tdg-help-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tdg-intelligence-contact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -523,7 +523,7 @@
   .tdg-space-hero { display: grid; padding: 19px; }
   .tdg-space-hero .tdg-action { width: 100%; justify-content: center; }
   .tdg-space-metrics { grid-template-columns: 1fr 1fr; }
-  .tdg-space-context-grid > div { grid-template-columns: 1fr; }
+  .tdg-space-context-grid > div { grid-template-columns: minmax(0, 1fr); }
   .tdg-space-context-grid > div > span { grid-column: auto; }
   .tdg-space-attention { grid-template-columns: auto 1fr; }
   .tdg-space-attention button { grid-column: 1 / -1; text-align: left; padding-left: 30px; }
@@ -534,7 +534,7 @@
   .tdg-automation-hero-actions { width: 100%; flex-wrap: wrap; }
   .tdg-automation-hero-actions button { flex: 1; justify-content: center; }
   .tdg-automation-metrics { grid-template-columns: 1fr 1fr; }
-  .tdg-automation-builder { grid-template-columns: 1fr; }
+  .tdg-automation-builder { grid-template-columns: minmax(0, 1fr); }
   .tdg-automation-builder > header,
   .tdg-automation-builder > .full,
   .tdg-automation-builder > footer { grid-column: auto; }
@@ -547,8 +547,8 @@
   .tdg-intelligence-source-list article > button { grid-column: 1 / -1; margin-left: 53px; }
   .tdg-intelligence-contact-grid,
   .tdg-space-routines > div,
-  .tdg-help-grid { grid-template-columns: 1fr; }
-  .tdg-playbook-list article { grid-template-columns: 1fr; }
+  .tdg-help-grid { grid-template-columns: minmax(0, 1fr); }
+  .tdg-playbook-list article { grid-template-columns: minmax(0, 1fr); }
   .tdg-playbook-list article button { justify-self: start; }
 }
 
@@ -779,7 +779,7 @@
   }
 
   .tdg-space-tool-group > div {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -954,7 +954,7 @@
   }
 
   .tdg-space-tools > .tdg-space-tool-group > div {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1003,7 +1003,7 @@
 }
 .tdg-contact-escrever:hover { text-decoration: underline; }
 @media (max-width: 640px) {
-  .tdg-contact-compose-grid { grid-template-columns: 1fr; }
+  .tdg-contact-compose-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Notícias: bloco da carteira em destaque acima do mercado amplo. */

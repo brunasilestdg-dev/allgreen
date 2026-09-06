@@ -660,7 +660,7 @@
 }
 
 @media (max-width: 820px) {
-  .tms-portal { grid-template-columns: 1fr; }
+  .tms-portal { grid-template-columns: minmax(0, 1fr); }
   .tms-sidebar {
     position: static;
     min-height: auto;
@@ -685,7 +685,7 @@
   .tms-metrics { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
   .tms-flow { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
   .tms-readiness { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
-  .tms-two-columns { grid-template-columns: 1fr; }
+  .tms-two-columns { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 520px) {
@@ -789,7 +789,7 @@
 .tms-electric-result > svg { color: var(--tms-green); }
 
 @media (max-width: 820px) {
-  .tms-electric-grid { grid-template-columns: 1fr; }
+  .tms-electric-grid { grid-template-columns: minmax(0, 1fr); }
   .tms-electric-card { min-height: auto; }
   .tms-electric-live { display: none; }
   .tms-electric-endpoint { display: none; }

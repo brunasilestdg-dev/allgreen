@@ -1116,7 +1116,7 @@
 .tdg-access-request-decidido small { color: var(--tdg-muted, #5a6b64); }
 .tdg-access-request-decidido .good { color: var(--tdg-green, #17624f); font-weight: 600; }
 @media (max-width: 640px) {
-  .tdg-access-request { grid-template-columns: 1fr; }
+  .tdg-access-request { grid-template-columns: minmax(0, 1fr); }
   .tdg-access-request-acoes { justify-items: stretch; }
 }
 
@@ -1188,7 +1188,7 @@
 
 @media (max-width: 920px) {
   .tdg { gap: 14px; padding: 14px; }
-  .tdg-hero { border-radius: 22px; grid-template-columns: 1fr; }
+  .tdg-hero { border-radius: 22px; grid-template-columns: minmax(0, 1fr); }
   .tdg-hero aside { align-items: center; grid-template-columns: auto 1fr; }
   .tdg-hero aside small { grid-column: 1 / -1; }
   .tdg-module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1196,7 +1196,7 @@
   .tdg-result,
   .tdg-output-grid,
   .tdg-governance-grid { grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); }
-  .tdg-calculator-grid { grid-template-columns: 1fr; }
+  .tdg-calculator-grid { grid-template-columns: minmax(0, 1fr); }
   .tdg-access-form,
   .tdg-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1218,10 +1218,10 @@
   .tdg-output-grid,
   .tdg-governance-grid,
   .tdg-access-form,
-  .tdg-form { grid-template-columns: 1fr; }
+  .tdg-form { grid-template-columns: minmax(0, 1fr); }
   .tdg-module-card { grid-template-columns: 42px minmax(0, 1fr) 18px; min-height: 108px; padding: 14px; }
   .tdg-module-card em { display: none; }
-  .tdg-access-row { align-items: start; grid-template-columns: 1fr; }
+  .tdg-access-row { align-items: start; grid-template-columns: minmax(0, 1fr); }
   .tdg-product-strip { display: flex; margin: 0 -10px 16px; overflow-x: auto; padding: 0 10px; scroll-snap-type: x mandatory; }
   .tdg-product-card { flex: 0 0 76%; scroll-snap-align: start; }
 }
@@ -1456,7 +1456,7 @@
 
 @media (max-width: 960px) {
   .tdg-esg-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .tdg-esg-kpis {
     grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
@@ -1596,7 +1596,7 @@
 }
 
 @media (max-width: 680px) {
-  .tdg-work-area-grid { grid-template-columns: 1fr; }
+  .tdg-work-area-grid { grid-template-columns: minmax(0, 1fr); }
   .tdg-journey { gap: 7px; }
   .tdg-shell-header,
   .tdg-decision-header,
@@ -1649,8 +1649,8 @@
 .tdg-audit-action { background: color-mix(in srgb, var(--tdg-green) 11%, transparent); border-radius: 999px; font-size: .72rem; font-weight: 800; padding: 4px 7px; text-transform: uppercase; width: fit-content; }
 
 @media (max-width: 640px) {
-  .tdg-ledger-row, .tdg-operation-card dl, .tdg-timeline-list article, .tdg-audit-stream article { grid-template-columns: 1fr; }
-  .tdg-operation-grid { grid-template-columns: 1fr; }
+  .tdg-ledger-row, .tdg-operation-card dl, .tdg-timeline-list article, .tdg-audit-stream article { grid-template-columns: minmax(0, 1fr); }
+  .tdg-operation-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Parâmetros do simulador: uma tela densa de ERP, organizada por escopo. */
@@ -1707,7 +1707,7 @@
   .tdg-parameter-why { grid-column: 1 / -1; }
 }
 @media (max-width: 680px) {
-  .tdg-parameter-scope, .tdg-parameter-publish, .tdg-parameter-group .tdg-form { grid-template-columns: 1fr; }
+  .tdg-parameter-scope, .tdg-parameter-publish, .tdg-parameter-group .tdg-form { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Estrutura principal do ERP: módulos estáveis à esquerda e contexto de trabalho à direita. */
@@ -1996,7 +1996,7 @@
 
 @media (max-width: 1180px) {
   .tdg-erp-layout,
-  .tdg-erp-layout.menu-oculto { grid-template-columns: 1fr; }
+  .tdg-erp-layout.menu-oculto { grid-template-columns: minmax(0, 1fr); }
   .tdg-erp-sidebar { max-height: none; padding: 8px; position: static; }
   .tdg-erp-sidebar-head { display: none; }
   .tdg-work-entry {
@@ -2045,7 +2045,7 @@
   .tdg-module-grid,
   .tdg-work-area-grid,
   .tdg-enterprise-area-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -2134,7 +2134,7 @@
 .tdg-manual-passos li { display: flex; flex-direction: column; gap: 4px; font-size: .74rem; color: var(--tdg-muted); }
 .tdg-manual-passos li strong { color: var(--tdg-ink); font-weight: 700; font-size: .78rem; }
 .tdg-manual-passos li p { margin: 0; line-height: 1.3; }
-@media (max-width: 760px) { .tdg-area-referencias { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .tdg-area-referencias { grid-template-columns: minmax(0, 1fr); } }
 
 /* ===== Distância pelo mapa =====
    Vive dentro do <label> do campo, logo abaixo do input: a sugestão pertence
@@ -2591,7 +2591,7 @@
 @media (max-width: 1180px) {
   .tdg-erp-layout,
   .tdg-erp-layout.menu-oculto {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tdg-erp-sidebar {
@@ -2644,7 +2644,7 @@
   }
 
   .tdg-module-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -57,7 +57,7 @@
 .tdg-home-painel-cab { display: grid; gap: 1px; margin-bottom: 8px; }
 .tdg-home-painel-cab strong { color: var(--tdg-ink); font-size: .82rem; }
 .tdg-home-painel-cab small { color: var(--tdg-muted); font-size: .68rem; }
-@media (max-width: 760px) { .tdg-home-painel { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .tdg-home-painel { grid-template-columns: minmax(0, 1fr); } }
 .tdg-home-empty { align-items: center; color: var(--tdg-green); display: flex; gap: 10px; padding: 18px 2px 10px; }
 .tdg-home-empty span { display: grid; gap: 3px; }
 .tdg-home-empty small { color: var(--tdg-muted); }
@@ -92,8 +92,8 @@
 .tdg-home-config-setas button:not(:disabled):hover { background: var(--tdg-soft); }
 .tdg-home-config footer { align-items: center; border-top: 1px solid var(--tdg-line); display: flex; gap: 9px; justify-content: flex-end; margin-top: auto; padding-top: 16px; }
 .tdg-home-config footer > button:not(.tdg-action) { background: transparent; border: 1px solid var(--tdg-line); border-radius: 8px; cursor: pointer; min-height: 40px; padding: 8px 13px; }
-@media (max-width: 900px) { .tdg-home-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .tdg-home-grid { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .tdg-home-welcome { align-items: stretch; flex-direction: column; } .tdg-home-identity { align-items: stretch; justify-items: stretch; } .tdg-home-metrics, .tdg-home-config-shortcuts { grid-template-columns: 1fr; } .tdg-home-queue > button { grid-template-columns: auto minmax(0,1fr); } .tdg-home-queue > button > b { grid-column: 2; } }
+@media (max-width: 900px) { .tdg-home-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .tdg-home-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 620px) { .tdg-home-welcome { align-items: stretch; flex-direction: column; } .tdg-home-identity { align-items: stretch; justify-items: stretch; } .tdg-home-metrics, .tdg-home-config-shortcuts { grid-template-columns: minmax(0, 1fr); } .tdg-home-queue > button { grid-template-columns: auto minmax(0,1fr); } .tdg-home-queue > button > b { grid-column: 2; } }
 
 /* Portal TMS: link real para a rota de topo /portal-tms (fora de /todogreen). */
 .tdg-home-portais { margin-top: 14px; }

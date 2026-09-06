@@ -59,6 +59,6 @@
   .pv-view-switch button, .pv-mode-switch button { flex: 1; justify-content: center; min-height: 44px; }
   .pv-filters label { flex: 1 1 145px; }
   .pv-filters select { width: 100%; min-height: 44px; }
-  .pv-card footer { grid-template-columns: 1fr; }
+  .pv-card footer { grid-template-columns: minmax(0, 1fr); }
   .pv-kanban { grid-auto-columns: minmax(250px, 86vw); }
 }

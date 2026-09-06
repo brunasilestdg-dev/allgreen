@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { folhaCompleta } from "./styles/folhaCompleta.js";
 import { describe, expect, it } from "vitest";
@@ -91,5 +91,49 @@ describe("layout no celular", () => {
 
   it("a página não rola para os lados", () => {
     expect(css).toMatch(/html,\s*\n?body\s*\{[^}]*overflow-x:\s*hidden/);
+  });
+});
+
+// ===== A mesma trava, agora sobre o CSS das FEATURES =====
+//
+// A trava acima só enxerga `src/styles/` (o que `folhaCompleta` monta). A CSS
+// da vertical To Do Green é carregada por `import "./Xyz.css"` dentro dos
+// componentes e escapava inteira da trava — foi por essa fresta que 72 grids de
+// `1fr` puro passaram, o mesmo erro de "cartão mais largo que a tela" que a
+// titular via no celular. Aqui varremos TODOS os `.css` sob `src/features/` e
+// proibimos `grid-template-columns: 1fr;` puro: `minmax(0, 1fr)` tem o mesmo
+// comportamento e nunca estoura a largura, então a regra vale fora do @media
+// também — e blinda as telas novas por padrão.
+const cssDasFeatures = () => {
+  const raiz = fileURLToPath(new URL("./features", import.meta.url));
+  const arquivos = [];
+  const entradas = readdirSync(raiz, { recursive: true, withFileTypes: true });
+  for (const entrada of entradas) {
+    if (!entrada.isFile() || !entrada.name.endsWith(".css")) continue;
+    const dir = entrada.parentPath || entrada.path;
+    const caminho = `${dir}/${entrada.name}`;
+    arquivos.push({
+      caminho: caminho.slice(caminho.indexOf("src/")),
+      texto: readFileSync(caminho, "utf8"),
+    });
+  }
+  return arquivos;
+};
+
+describe("layout no celular — CSS das features", () => {
+  it("acha os arquivos de estilo da vertical", () => {
+    expect(cssDasFeatures().length).toBeGreaterThan(10);
+  });
+
+  it("nenhum grid de feature usa 1fr puro (usa minmax(0, 1fr))", () => {
+    const culpados = [];
+    for (const { caminho, texto } of cssDasFeatures()) {
+      const linhas = texto.split("\n");
+      linhas.forEach((linha, i) => {
+        if (/grid-template-columns:\s*1fr\s*;/.test(linha))
+          culpados.push(`${caminho}:${i + 1}`);
+      });
+    }
+    expect(culpados).toEqual([]);
   });
 });
