@@ -123,6 +123,10 @@ export default function DriverPortalPage() {
   const [sessao, setSessao] = useState(null);
   const [viagens, setViagens] = useState([]);
   const [rotas, setRotas] = useState([]);
+  // Falha ao buscar as rotas (rede/servidor) é diferente de "não tem rota": sem
+  // esta marca, um erro virava a mesma tela de "Nenhuma rota atribuída" e o
+  // motorista não sabia se devia esperar ou tentar de novo.
+  const [rotasErro, setRotasErro] = useState(false);
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
   const [formulario, setFormulario] = useState(null); // { viagem, tipo }
@@ -199,7 +203,15 @@ export default function DriverPortalPage() {
         const resultado = await escoarFila().catch(() => ({ enviados: 0 }));
         if (resultado.enviados > 0) setAviso(`${resultado.enviados} registro(s) guardado(s) foram enviados agora.`);
         setViagens((await pedir("/viagens")).viagens || []);
-        setRotas((await pedir("/rotas").catch(() => ({ rotas: [] }))).rotas || []);
+        // A rota não pode derrubar o app se falhar (o /viagens acima é o que
+        // decide se a sessão está de pé); mas a falha precisa ser visível, não
+        // virar uma lista vazia silenciosa. Mantém a última rota conhecida.
+        try {
+          setRotas((await pedir("/rotas")).rotas || []);
+          setRotasErro(false);
+        } catch {
+          setRotasErro(true);
+        }
       }
       setErro("");
     } catch (motivo) {
@@ -279,8 +291,10 @@ export default function DriverPortalPage() {
       });
       setRotas((atuais) => atuais.map((rota) => (rota.id === rotaId ? resposta.rota : rota)));
     } catch (motivo) {
-      setAviso("");
-      setErro(motivo.message);
+      // Uma falha de rede ao marcar UMA parada não pode derrubar o app inteiro
+      // (o `erro` fatal troca a tela toda e joga o motorista pra fora no meio do
+      // turno). É um aviso dispensável: a marcação não foi; ele tenta de novo.
+      setAviso(motivo.message || "Não consegui atualizar a parada agora. Tente de novo.");
     }
   };
 
@@ -470,7 +484,10 @@ export default function DriverPortalPage() {
       {secao === "rota" && (
         <>
           <div className="tdg-driver-secao-titulo"><Route size={18} /><h2>Minha rota</h2></div>
-          {rotasAtivas.length === 0 && (
+          {rotasAtivas.length === 0 && rotasErro && (
+            <div className="tdg-driver-cartao tdg-driver-vazio"><AlertTriangle size={30} /><p>Não consegui carregar suas rotas agora.</p><small>Pode ser o sinal. Puxe para atualizar ou tente de novo em instantes — nada foi perdido.</small></div>
+          )}
+          {rotasAtivas.length === 0 && !rotasErro && (
             <div className="tdg-driver-cartao tdg-driver-vazio"><Route size={30} /><p>Nenhuma rota atribuída.</p><small>Quando a operação montar e atribuir uma rota para você, ela aparece aqui em ordem.</small></div>
           )}
           {rotasAtivas.map((rota) => {
