@@ -11,7 +11,7 @@ import {
 // mercado, genérico só quando não há. Puro e testável — a tela só monta daqui.
 
 describe("montarEmailApresentacao", () => {
-  it("usa o assunto padrão e só o primeiro nome na saudação", () => {
+  it("usa o assunto padrão e só o primeiro nome na saudação (com ponto)", () => {
     const { assunto, corpo } = montarEmailApresentacao({
       contatoNome: "Ana Paula Souza",
       contaNome: "Acme Log",
@@ -19,13 +19,20 @@ describe("montarEmailApresentacao", () => {
       houveContato: true,
     });
     expect(assunto).toBe(APRESENTACAO_ASSUNTO);
-    expect(corpo.startsWith("Olá, Ana,")).toBe(true);
+    expect(corpo.startsWith("Olá, Ana.")).toBe(true);
     expect(corpo).toContain("Acme Log");
   });
 
-  it("sem nome do contato, saúda de forma neutra", () => {
+  it("assina em primeira pessoa com o nome do remetente", () => {
+    const { corpo } = montarEmailApresentacao({ contaNome: "Acme", remetenteNome: "Bruna Paula" });
+    expect(corpo).toContain("Meu nome é Bruna e represento a To Do Green, a única transportadora 100% elétrica do Brasil");
+    expect(corpo.trimEnd().endsWith("Bruna · To Do Green")).toBe(true);
+  });
+
+  it("sem remetente, fala e assina em nome da equipe", () => {
     const { corpo } = montarEmailApresentacao({ contaNome: "Acme" });
-    expect(corpo.startsWith("Olá,\n")).toBe(true);
+    expect(corpo).toContain("Represento a To Do Green");
+    expect(corpo).toContain("Equipe comercial · To Do Green");
   });
 
   it("NUNCA diz 'retomando' quando não houve contato — mesmo Morno/Quente", () => {
@@ -33,9 +40,9 @@ describe("montarEmailApresentacao", () => {
     const quente = montarEmailApresentacao({ contaNome: "X", temperatura: "Quente", houveContato: false }).corpo;
     expect(morno).not.toContain("Retomando");
     expect(morno).not.toContain("seguir com a conversa");
-    expect(morno).toContain("gostaria de me apresentar");
+    expect(morno).toContain("possibilidade de uma conversa");
     expect(quente).not.toContain("Retomando");
-    expect(quente).toContain("gostaria de me apresentar");
+    expect(quente).toContain("possibilidade de uma conversa");
   });
 
   it("com contato real, Quente retoma a conversa e Morno retoma o contato", () => {
@@ -47,7 +54,7 @@ describe("montarEmailApresentacao", () => {
 
   it("Frio se apresenta, sem inventar histórico", () => {
     const frio = montarEmailApresentacao({ contaNome: "X", temperatura: "Frio" }).corpo;
-    expect(frio).toContain("gostaria de me apresentar");
+    expect(frio).toContain("possibilidade de uma conversa");
     expect(frio).not.toContain("Retomando");
   });
 
@@ -56,7 +63,6 @@ describe("montarEmailApresentacao", () => {
     const semContato = montarEmailApresentacao({ contaNome: "Acme", temperatura: "Frio", houveContato: false, contexto }).corpo;
     const comContato = montarEmailApresentacao({ contaNome: "Acme", temperatura: "Morno", houveContato: true, contexto }).corpo;
     expect(semContato).toContain("cotações de transporte em aberto");
-    expect(semContato).toContain("queria me apresentar");
     expect(semContato).not.toContain("Retomando");
     expect(comContato).toContain("cotações de transporte em aberto");
     expect(comContato).toContain("Retomando");
@@ -68,19 +74,22 @@ describe("montarEmailApresentacao", () => {
     expect(corpo).toContain("varejo farmacêutico");
   });
 
-  it("sem contexto nenhum, cai no genérico honesto (apresentação), sem retomar", () => {
+  it("sem contexto nenhum, cai na prospecção honesta, sem retomar", () => {
     const contexto = contextoDeMercado({});
     expect(contexto.temContexto).toBe(false);
     const { corpo } = montarEmailApresentacao({ contaNome: "X", temperatura: "Morno", houveContato: false, contexto });
-    expect(corpo).toContain("gostaria de me apresentar");
+    expect(corpo).toContain("possibilidade de uma conversa");
     expect(corpo).not.toContain("Retomando");
   });
 
-  it("sempre traz a proposta de valor (frota elétrica, POD, roteirização)", () => {
+  it("traz a proposta de valor completa e a pergunta de fechamento", () => {
     const { corpo } = montarEmailApresentacao({ contaNome: "X", temperatura: "Frio" });
     expect(corpo).toContain("Frota 100% elétrica");
     expect(corpo).toContain("POD");
     expect(corpo).toContain("Roteirização");
+    expect(corpo).toContain("SLA de entrega de 99%");
+    expect(corpo).toContain("Frota mista, da moto à carreta");
+    expect(corpo).toContain("faz sentido buscar uma alternativa para otimizar a sua operação?");
   });
 });
 
@@ -105,6 +114,11 @@ describe("linkComposeGmail", () => {
     expect(url).toContain("to=a%20b%40x.com");
     expect(url).toContain("su=Ol%C3%A1%20%26%20tchau");
     expect(url).toContain("body=linha%201%0Alinha%202");
+  });
+
+  it("inclui cc quando informado, e omite quando vazio", () => {
+    expect(linkComposeGmail({ para: "a@x.com", cc: "chefe@x.com" })).toContain("cc=chefe%40x.com");
+    expect(linkComposeGmail({ para: "a@x.com" })).not.toContain("cc=");
   });
 
   it("aguenta campos vazios sem quebrar", () => {

@@ -668,7 +668,7 @@ function AccountEditor({ client, onClose, onSave }) {
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, currentUserId, espacoId = "", onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, currentUserId, remetenteNome = "", espacoId = "", onClientContextChange }) {
   const [clients, setClients] = useState([]);
   const [pessoas, setPessoas] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
@@ -1356,6 +1356,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         conta={selected}
         houveContato={interacoesVisiveis({ interacoes: interactions, clientId: selected.id }).length > 0}
         contexto={contextoDeMercado(selectedReportCandidate || {}, { segmento: selected.segment })}
+        remetenteNome={remetenteNome}
         setToast={setToast}
         onClose={() => setApresentacaoAberta(false)}
         onRegistrar={onInteraction ? async (interacao) => {

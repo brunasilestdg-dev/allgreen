@@ -1,23 +1,15 @@
-// Apresentação comercial por e-mail: o texto muda conforme a TEMPERATURA da
-// conta (a "melhor abordagem por perfil"). Puro e testável — a tela só monta o
-// e-mail a partir daqui e envia com o PDF anexado.
+// Apresentação comercial por e-mail. Tom de prospecção em PRIMEIRA PESSOA (quem
+// assina se apresenta), personalizado pelo contexto da empresa e honesto sobre o
+// histórico: nunca "retoma" um contato que não existiu. Puro e testável — a tela
+// só monta o e-mail a partir daqui e envia com o PDF anexado.
 
 export const APRESENTACAO_PDF_URL = "/apresentacao-comercial-todogreen.pdf";
 export const APRESENTACAO_PDF_NOME = "Apresentacao-To-Do-Green.pdf";
 export const APRESENTACAO_ASSUNTO = "To Do Green — logística 100% elétrica para a sua operação";
 
-const primeiroNome = (nome) => String(nome || "").trim().split(/\s+/)[0] || "";
+const POSICIONAMENTO = "a única transportadora 100% elétrica do Brasil";
 
-// Abertura QUENTE/MORNO só é usada quando houve contato de verdade — senão o
-// e-mail mentiria "retomando nosso contato" para quem nunca foi abordado.
-const ABERTURA = {
-  Quente: (conta) =>
-    `Que bom seguir com a conversa${conta ? ` sobre a ${conta}` : ""}! Como combinamos, envio em anexo a apresentação da To Do Green para você avançar internamente.`,
-  Morno: (conta) =>
-    `Retomando nosso contato${conta ? ` sobre a ${conta}` : ""}, segue em anexo a apresentação da To Do Green — assim você tem o panorama completo para a próxima conversa.`,
-  Frio: (conta) =>
-    `Sou da To Do Green e gostaria de me apresentar${conta ? ` para a ${conta}` : ""}. Somos uma operação logística 100% elétrica, e envio em anexo nossa apresentação para você conhecer a proposta.`,
-};
+const primeiroNome = (nome) => String(nome || "").trim().split(/\s+/)[0] || "";
 
 // Distila o contexto de mercado da empresa (pesquisa/inteligência externa) em
 // sinais simples que o e-mail pode CITAR sem inventar — só o que a pesquisa
@@ -30,20 +22,37 @@ export const contextoDeMercado = (report = {}, { segmento } = {}) => {
   return { rfqAberta, esgRelevante, segmento: setor, temContexto: rfqAberta || esgRelevante || !!setor };
 };
 
-// Abertura personalizada pelo momento da empresa. `retoma` = houve contato real
-// (só então dá para "retomar"); sem contato, a mesma personalização entra como
-// apresentação, nunca como retomada.
-const aberturaPersonalizada = (contexto, conta, retoma) => {
-  const alvo = conta ? ` a ${conta}` : "";
-  if (contexto.rfqAberta) {
+// Quem assina se apresenta em primeira pessoa (pedido da titular). Sem nome do
+// remetente, fala em nome da equipe — nunca inventa um nome. Sem artigo de gênero
+// antes do nome (não dá para inferir gênero de um nome).
+const apresentacaoPessoal = (remetente, retoma) => {
+  if (retoma) return remetente ? `Aqui é ${remetente}, da To Do Green.` : "Aqui é a equipe da To Do Green.";
+  return remetente
+    ? `Meu nome é ${remetente} e represento a To Do Green, ${POSICIONAMENTO}.`
+    : `Represento a To Do Green, ${POSICIONAMENTO}.`;
+};
+
+// O gancho: o convite da mensagem, personalizado pelo contexto quando há.
+// `retoma` = houve contato real; só então o texto pode "retomar".
+const gancho = (contexto, conta, retoma, temperatura) => {
+  const sobre = conta ? ` sobre a ${conta}` : "";
+  if (contexto?.rfqAberta) {
     return retoma
-      ? `Retomando o contato${conta ? ` sobre${alvo}` : ""}: vi que vocês estão com cotações de transporte em aberto e a To Do Green pode participar — operação 100% elétrica, com custo por km competitivo e relatório de impacto para o seu ESG. Segue a apresentação em anexo.`
-      : `Sou da To Do Green e queria me apresentar${alvo}: vi que vocês estão com cotações de transporte em aberto, e somos uma operação logística 100% elétrica — envio nossa apresentação para você conhecer a proposta.`;
+      ? `Retomando nosso contato${sobre}: vi que vocês estão com cotações de transporte em aberto e a To Do Green pode participar com uma operação 100% elétrica. Deixo nossa apresentação em anexo.`
+      : `Vi que a ${conta || "empresa"} está com cotações de transporte em aberto e gostaria de avaliar com você uma alternativa 100% elétrica — deixo nossa apresentação em anexo para um primeiro panorama.`;
   }
-  const setor = contexto.segmento ? ` em ${contexto.segmento}` : "";
-  return retoma
-    ? `Retomando nosso contato${conta ? ` sobre${alvo}` : ""}: acompanho empresas${setor} que estão levando a pauta ESG para a logística, e trago a apresentação da To Do Green para avançarmos.`
-    : `Sou da To Do Green e gostaria de me apresentar${alvo}: empresas${setor} têm buscado tirar emissão da operação logística, e é exatamente isso que entregamos — frota 100% elétrica. Segue nossa apresentação em anexo.`;
+  if (contexto?.segmento) {
+    const setor = ` em ${contexto.segmento}`;
+    return retoma
+      ? `Retomando nosso contato${sobre}: empresas${setor} têm levado a pauta ESG para a logística, e trago nossa apresentação para avançarmos.`
+      : `Empresas${setor} têm buscado tirar emissão da operação logística, e gostaria de avaliar com você essa conversa — deixo nossa apresentação em anexo.`;
+  }
+  if (retoma) {
+    return temperatura === "Quente"
+      ? `Que bom seguir com a conversa${sobre}! Como combinamos, deixo nossa apresentação em anexo para você avançar internamente.`
+      : `Retomando nosso contato${sobre}, deixo nossa apresentação em anexo — assim você tem o panorama completo para a próxima conversa.`;
+  }
+  return "Gostaria de avaliar com você a possibilidade de uma conversa para apresentarmos nossas soluções — deixo nossa apresentação em anexo para um primeiro panorama.";
 };
 
 const VALOR = [
@@ -53,45 +62,38 @@ const VALOR = [
   "• Frota 100% elétrica — redução real de emissões, com relatório auditável para o seu ESG (Escopo 3).",
   "• Rastreio ao vivo e comprovante de entrega (POD) no portal do cliente.",
   "• Roteirização que entende autonomia e recarga, sem surpresa no prazo.",
+  "• SLA de entrega de 99%.",
+  "• Soluções personalizadas para o seu tipo de entrega.",
+  "• Frota mista, da moto à carreta.",
 ].join("\n");
 
-// Monta o e-mail (assunto + corpo) a partir do perfil da conta e do contato.
-// `houveContato`: houve interação registrada? Só então o texto pode "retomar" —
-// senão nunca afirma um contato que não existiu (pedido da titular).
-// `contexto`: saída de contextoDeMercado — quando há contexto da empresa, a
-// abertura é personalizada; sem ele, cai no genérico por temperatura.
-export const montarEmailApresentacao = ({ contatoNome, contaNome, temperatura, houveContato = false, contexto = null } = {}) => {
+// Pergunta de fechamento (pedido da titular): convida à resposta em vez de só
+// "ficar à disposição".
+const CTA = "Neste momento, faz sentido buscar uma alternativa para otimizar a sua operação?";
+
+// Monta o e-mail (assunto + corpo).
+//  • `remetenteNome`: quem assina — entra em primeira pessoa na abertura e na
+//    assinatura. Sem ele, assina "Equipe comercial".
+//  • `houveContato`: houve interação registrada? Só então o texto pode "retomar"
+//    — senão nunca afirma um contato que não existiu (pedido da titular).
+//  • `contexto`: saída de contextoDeMercado — havendo contexto da empresa, a
+//    abertura é personalizada; sem ele, prospecção genérica honesta.
+export const montarEmailApresentacao = ({ contatoNome, contaNome, temperatura, houveContato = false, contexto = null, remetenteNome } = {}) => {
   const nome = primeiroNome(contatoNome);
-  const saudacao = nome ? `Olá, ${nome},` : "Olá,";
+  const saudacao = nome ? `Olá, ${nome}.` : "Olá.";
   const conta = String(contaNome || "").trim();
+  const remetente = primeiroNome(remetenteNome);
   // "Retomar" exige contato real E uma temperatura morna/quente.
   const retoma = !!houveContato && (temperatura === "Quente" || temperatura === "Morno");
-  let abertura;
-  if (contexto && contexto.temContexto) {
-    abertura = aberturaPersonalizada(contexto, conta, retoma);
-  } else if (retoma) {
-    abertura = ABERTURA[temperatura](conta);
-  } else {
-    // Sem contexto e sem contato comprovado: apresentação honesta (nunca "retomando").
-    abertura = ABERTURA.Frio(conta);
-  }
-  const corpo = [
-    saudacao,
-    "",
-    abertura,
-    "",
-    VALOR,
-    "",
-    "Fico à disposição para agendar uma conversa e adaptar a proposta à sua operação.",
-    "",
-    "Abraço,",
-    "Equipe comercial · To Do Green",
-  ].join("\n");
+  const abertura = `${apresentacaoPessoal(remetente, retoma)} ${gancho(contexto, conta, retoma, temperatura)}`;
+  const assinatura = remetente ? `Um abraço,\n${remetente} · To Do Green` : "Um abraço,\nEquipe comercial · To Do Green";
+  const corpo = [saudacao, "", abertura, "", VALOR, "", CTA, "", assinatura].join("\n");
   return { assunto: APRESENTACAO_ASSUNTO, corpo };
 };
 
 // Link de compose do Gmail (fallback quando o envio direto não está disponível):
 // leva to/assunto/corpo prontos; o anexo a pessoa põe manualmente.
-export const linkComposeGmail = ({ para, assunto, corpo } = {}) =>
+export const linkComposeGmail = ({ para, cc, assunto, corpo } = {}) =>
   `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(para || "")}` +
+  (cc ? `&cc=${encodeURIComponent(cc)}` : "") +
   `&su=${encodeURIComponent(assunto || "")}&body=${encodeURIComponent(corpo || "")}`;

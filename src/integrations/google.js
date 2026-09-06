@@ -123,18 +123,21 @@ export const base64FromBytes = (bytes) => {
   return btoa(binary);
 };
 
-const buildRawEmail = ({ to, subject, body, attachments = [] }) => {
-  // Higieniza o destinatário contra injeção de cabeçalho (CR/LF viram
+const buildRawEmail = ({ to, cc, subject, body, attachments = [] }) => {
+  // Higieniza destinatário e cópia contra injeção de cabeçalho (CR/LF viram
   // "Bcc:", "To:" extras no envelope). O assunto já é seguro por vir em
   // =?UTF-8?B?...?= (base64); o nome do anexo é higienizado abaixo.
   const safeTo = String(to || "").replace(/[\r\n]+/g, " ").trim();
+  const safeCc = String(cc || "").replace(/[\r\n]+/g, " ").trim();
   const encodedSubject = `=?UTF-8?B?${base64UrlFromText(subject || "")}?=`;
+  const ccHeader = safeCc ? [`Cc: ${safeCc}`] : [];
   let message;
   if (attachments.length) {
     // Com anexo: multipart/mixed — uma parte de texto e uma parte por arquivo.
     const boundary = `tdg_${Math.random().toString(36).slice(2)}_${Date.now()}`;
     const partes = [
       `To: ${safeTo}`,
+      ...ccHeader,
       `Subject: ${encodedSubject}`,
       "MIME-Version: 1.0",
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -161,6 +164,7 @@ const buildRawEmail = ({ to, subject, body, attachments = [] }) => {
   } else {
     message = [
       `To: ${safeTo}`,
+      ...ccHeader,
       `Subject: ${encodedSubject}`,
       "Content-Type: text/plain; charset=UTF-8",
       "MIME-Version: 1.0",
@@ -174,7 +178,7 @@ const buildRawEmail = ({ to, subject, body, attachments = [] }) => {
     .replace(/=+$/, "");
 };
 
-export const sendGmailReal = async (clientId, { to, subject, body, attachments = [] }) => {
+export const sendGmailReal = async (clientId, { to, cc, subject, body, attachments = [] }) => {
   const token = await requestGoogleAccessToken(
     clientId,
     "https://www.googleapis.com/auth/gmail.send",
@@ -187,7 +191,7 @@ export const sendGmailReal = async (clientId, { to, subject, body, attachments =
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ raw: buildRawEmail({ to, subject, body, attachments }) }),
+      body: JSON.stringify({ raw: buildRawEmail({ to, cc, subject, body, attachments }) }),
     },
   );
   if (!res.ok) {
@@ -202,7 +206,7 @@ export const sendGmailReal = async (clientId, { to, subject, body, attachments =
 // Cria um RASCUNHO no Gmail (não envia) — com o mesmo MIME multipart do envio,
 // então o anexo vai junto. É o que resolve "o rascunho não anexa o material":
 // a compose por URL não carrega anexo; a API de drafts carrega.
-export const createGmailDraftReal = async (clientId, { to, subject, body, attachments = [] }) => {
+export const createGmailDraftReal = async (clientId, { to, cc, subject, body, attachments = [] }) => {
   const token = await requestGoogleAccessToken(
     clientId,
     "https://www.googleapis.com/auth/gmail.compose",
@@ -215,7 +219,7 @@ export const createGmailDraftReal = async (clientId, { to, subject, body, attach
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ message: { raw: buildRawEmail({ to, subject, body, attachments }) } }),
+      body: JSON.stringify({ message: { raw: buildRawEmail({ to, cc, subject, body, attachments }) } }),
     },
   );
   if (!res.ok) {

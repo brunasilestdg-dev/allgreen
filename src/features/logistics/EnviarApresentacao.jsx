@@ -16,7 +16,7 @@ import {
 // Caminho principal: envio direto pela conta Google do usuário, com o PDF
 // ANEXADO (sendGmailReal + multipart). Sem Google conectado, cai no compose do
 // Gmail (o PDF vai por download para a pessoa anexar).
-export default function EnviarApresentacao({ conta, houveContato = false, contexto = null, onRegistrar, onMoverEstagio, setToast, onClose }) {
+export default function EnviarApresentacao({ conta, houveContato = false, contexto = null, remetenteNome = "", onRegistrar, onMoverEstagio, setToast, onClose }) {
   const contatos = useMemo(() => conta?.crm?.contacts || conta?.contacts || [], [conta]);
   // Default recipient: an ACTIVE contact with e-mail. Nunca sugerir um contato
   // desligado/inativo como destinatário — a pessoa ainda pode digitar outro no
@@ -36,11 +36,13 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
       temperatura: conta?.crm?.temperature,
       houveContato,
       contexto,
+      remetenteNome,
     }),
-    [contatoComEmail, conta, houveContato, contexto],
+    [contatoComEmail, conta, houveContato, contexto, remetenteNome],
   );
 
   const [para, setPara] = useState(contatoComEmail?.email || "");
+  const [cc, setCc] = useState("");
   const [assunto, setAssunto] = useState(inicial.assunto);
   const [corpo, setCorpo] = useState(inicial.corpo);
   const [googleId, setGoogleId] = useState("");
@@ -97,7 +99,7 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
     setErro("");
     try {
       const attachments = await carregarAnexo();
-      await createGmailDraftReal(googleId, { to: para.trim(), subject: assunto, body: corpo, attachments });
+      await createGmailDraftReal(googleId, { to: para.trim(), cc: cc.trim(), subject: assunto, body: corpo, attachments });
       const feito = await registrarEMover();
       setToast?.(avisoDe("Rascunho criado no Gmail com o anexo — revise e envie.", feito));
       onClose();
@@ -114,7 +116,7 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
     setErro("");
     try {
       const attachments = await carregarAnexo();
-      await sendGmailReal(googleId, { to: para.trim(), subject: assunto, body: corpo, attachments });
+      await sendGmailReal(googleId, { to: para.trim(), cc: cc.trim(), subject: assunto, body: corpo, attachments });
       const feito = await registrarEMover();
       setToast?.(avisoDe("Apresentação enviada com anexo.", feito));
       onClose();
@@ -131,7 +133,7 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
     // Se o pop-up for bloqueado, o rascunho não abre — não podemos registrar
     // "apresentação enviada" nem mexer no estágio com base num envio que não
     // vai acontecer.
-    const janela = window.open(linkComposeGmail({ para: para.trim(), assunto, corpo }), "_blank", "noopener");
+    const janela = window.open(linkComposeGmail({ para: para.trim(), cc: cc.trim(), assunto, corpo }), "_blank", "noopener");
     if (!janela) {
       setErro("O navegador bloqueou a janela do Gmail. Libere o pop-up e tente de novo.");
       return;
@@ -152,6 +154,7 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
       <div className="tdg-form-em-modal" style={{ display: "grid", gap: 10 }}>
         <label><span>Para</span><input type="email" value={para} onChange={(e) => setPara(e.target.value)} placeholder="email@empresa.com.br" /></label>
         {!contatoComEmail?.email && <small style={{ color: "#a5342a" }}>Esta conta não tem contato com e-mail — digite o destinatário.</small>}
+        <label><span>Cc (opcional)</span><input type="text" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Coloque alguém em cópia — separe vários por vírgula" /></label>
         <label><span>Assunto</span><input value={assunto} onChange={(e) => setAssunto(e.target.value)} /></label>
         <label><span>Mensagem {conta?.crm?.temperatura ? "" : ""}(abordagem por perfil{conta?.crm?.temperature ? ` · conta ${conta.crm.temperature.toLowerCase()}` : ""})</span>
           <textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={9} />
