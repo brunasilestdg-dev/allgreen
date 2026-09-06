@@ -1,6 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { Sparkles, Truck, UserCheck } from "lucide-react";
 
+// Uma rota SEM motorista livre não pode ser aplicada: gravaria um veículo
+// comprometido sem condutor, e como a operação continua sem driver_id ela
+// reaparece como candidata — "atribuída" e pendente ao mesmo tempo. Estas duas
+// funções puras são a regra, testável fora da tela: só entram no lote as rotas
+// com motorista; as demais ficam pendentes de propósito.
+export function atribuicoesDeTours(tours) {
+  return (tours || [])
+    .filter((tour) => tour.motoristaId)
+    .flatMap((tour) =>
+      (tour.operacoes || []).map((operationId) => ({
+        operationId,
+        driverId: tour.motoristaId,
+        driverName: tour.motoristaNome,
+        vehiclePlate: tour.placa,
+      })));
+}
+
+export function toursSemMotorista(tours) {
+  return (tours || []).filter((tour) => !tour.motoristaId).length;
+}
+
 // Despacho inteligente: liga o motor VRP (solver genético no Worker) que estava
 // órfão — pronto no back, sem tela nenhuma. Carrega as operações pendentes com
 // coordenada, os motoristas e veículos disponíveis, otimiza as rotas de VÁRIOS
@@ -48,18 +69,25 @@ export default function DispatchPanel({ authHeaders, setToast }) {
     (cand?.operacoes || []).find((o) => o.id === opId)?.cliente || opId;
 
   const aplicar = async () => {
-    const atribuicoes = (resultado?.tours || []).flatMap((tour) =>
-      (tour.operacoes || []).map((operationId) => ({
-        operationId, driverId: tour.motoristaId, driverName: tour.motoristaNome, vehiclePlate: tour.placa,
-      })));
-    if (!atribuicoes.length) { setToast?.("Nada para aplicar."); return; }
+    const tours = resultado?.tours || [];
+    const atribuicoes = atribuicoesDeTours(tours);
+    const semMotorista = toursSemMotorista(tours);
+    if (!atribuicoes.length) {
+      setToast?.(semMotorista
+        ? "Nenhuma rota tem motorista livre para aplicar — libere um motorista e otimize de novo."
+        : "Nada para aplicar.");
+      return;
+    }
     setAplicando(true);
     try {
       const headers = { ...(authHeaders?.() || {}), "content-type": "application/json" };
       const r = await fetch("/api/todogreen/dispatch/aplicar", { method: "POST", headers, body: JSON.stringify({ atribuicoes }) });
       const p = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(p.error || "Não foi possível aplicar as atribuições.");
-      setToast?.(`${p.aplicados || 0} operação(ões) atribuída(s) a motorista e veículo.`);
+      const aviso = semMotorista
+        ? ` ${semMotorista} rota(s) sem motorista livre ficou(aram) pendente(s).`
+        : "";
+      setToast?.(`${p.aplicados || 0} operação(ões) atribuída(s) a motorista e veículo.${aviso}`);
       setResultado(null);
       setCand(null);
       carregar();
@@ -87,13 +115,18 @@ export default function DispatchPanel({ authHeaders, setToast }) {
           )}
           <div className="tdg-dispatch-acoes">
             <button type="button" onClick={carregar} disabled={carregando}>Recarregar</button>
-            <button type="button" className="tdg-action" onClick={otimizar} disabled={otimizando || !(cand?.operacoes?.length) || !(cand?.veiculos?.length)}>{otimizando ? "Otimizando…" : "Otimizar rotas"}</button>
+            <button type="button" className="tdg-action" onClick={otimizar} disabled={otimizando || !(cand?.operacoes?.length) || !(cand?.veiculos?.length) || !(cand?.motoristas?.length)}>{otimizando ? "Otimizando…" : "Otimizar rotas"}</button>
           </div>
+          {/* Sem motorista livre, otimizar só produziria rota sem condutor — que
+              não pode ser aplicada. Diz o porquê em vez de um botão morto. */}
+          {cand && !cand.motoristas?.length && (cand.operacoes?.length > 0) && (
+            <small className="tdg-dispatch-nao">Nenhum motorista livre no momento — libere um motorista para otimizar e atribuir.</small>
+          )}
           {resultado && (
             <div className="tdg-dispatch-resultado">
               {(resultado.tours || []).map((tour) => (
-                <article className="tdg-dispatch-tour" key={tour.veiculoId}>
-                  <header><strong>{tour.prefixo || tour.placa || tour.veiculoId}</strong><small>{tour.motoristaNome || "sem motorista livre"}{tour.placa ? ` · ${tour.placa}` : ""}</small></header>
+                <article className={`tdg-dispatch-tour${tour.motoristaId ? "" : " sem-motorista"}`} key={tour.veiculoId}>
+                  <header><strong>{tour.prefixo || tour.placa || tour.veiculoId}</strong><small>{tour.motoristaNome || "sem motorista livre — não será aplicada"}{tour.placa ? ` · ${tour.placa}` : ""}</small></header>
                   <span className="tdg-dispatch-tour-tot">{tour.operacoes?.length || 0} parada(s), na ordem:</span>
                   {/* A sequência de paradas que o motor escolheu — não só a
                       contagem. O operador precisa ver a ordem antes de aplicar. */}

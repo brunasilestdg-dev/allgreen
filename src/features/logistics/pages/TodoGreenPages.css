@@ -4183,6 +4183,9 @@
 .tdg-dispatch-tour { align-items: stretch; border: 1px solid var(--tdg-line, #d7e0dc); border-left: 3px solid var(--tdg-green, #075c45); border-radius: 12px; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
 .tdg-dispatch-tour header { display: grid; gap: 2px; }
 .tdg-dispatch-tour header small { color: var(--tdg-muted, #5a6b64); }
+/* Rota sem motorista livre: fica na prévia para o operador entender por que não
+   coube, mas apagada e com a borda de alerta — não será aplicada. */
+.tdg-dispatch-tour.sem-motorista { border-left-color: var(--tdg-warn, #b7791f); opacity: .6; }
 .tdg-dispatch-tour-tot { color: var(--tdg-muted, #5a6b64); font-size: 12px; font-weight: 600; }
 .tdg-dispatch-sequencia { margin: 0; padding-left: 20px; display: grid; gap: 2px; }
 .tdg-dispatch-sequencia li { font-size: 13px; }
