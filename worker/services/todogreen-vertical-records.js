@@ -2167,10 +2167,21 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   const latEvento = Number(corpo.latitude);
   const lngEvento = Number(corpo.longitude);
   const temPosicao = Number.isFinite(latEvento) && Number.isFinite(lngEvento);
+  // Trava anti-regressão: um evento gravado offline (chegada às 10h) que só
+  // sincroniza DEPOIS de uma entrega às 11h não pode jogar a posição viva de
+  // volta para as 10h. Cada coluna só avança quando o horário do evento é
+  // igual ou mais novo que o carimbo atual (a mesma proteção que delivered_at
+  // já tem com COALESCE). O WHEN enxerga o valor ANTERIOR de last_position_at,
+  // então as três colunas usam a mesma guarda de forma consistente.
+  const guardaPosicao = "last_position_at IS NULL OR last_position_at <= ?";
   const atualizacaoPosicao = temPosicao
-    ? ", last_position_lat = ?, last_position_lng = ?, last_position_at = ?"
+    ? `, last_position_lat = CASE WHEN ${guardaPosicao} THEN ? ELSE last_position_lat END`
+      + `, last_position_lng = CASE WHEN ${guardaPosicao} THEN ? ELSE last_position_lng END`
+      + `, last_position_at = CASE WHEN ${guardaPosicao} THEN ? ELSE last_position_at END`
     : "";
-  const paramsPosicao = temPosicao ? [latEvento, lngEvento, ocorridoEm] : [];
+  const paramsPosicao = temPosicao
+    ? [ocorridoEm, latEvento, ocorridoEm, lngEvento, ocorridoEm, ocorridoEm]
+    : [];
   const instrucoes = [
     env.DB.prepare(
       `INSERT INTO todogreen_client_operation_events

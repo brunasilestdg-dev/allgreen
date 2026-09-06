@@ -204,6 +204,56 @@ describe("a entrega da rua fecha o ciclo", () => {
   });
 });
 
+// A posição ao vivo alimenta o mapa da torre e do portal do cliente. Um evento
+// gravado offline e sincronizado atrasado NÃO pode jogar a posição para trás no
+// tempo (chegada das 10h chegando depois da entrega das 11h).
+describe("posição ao vivo não anda para trás no tempo", () => {
+  const posicaoDe = (opId) =>
+    env.DB.prepare(
+      "SELECT last_position_lat AS lat, last_position_lng AS lng, last_position_at AS em FROM todogreen_client_operations WHERE id = ?",
+    ).bind(opId).first();
+
+  it("evento antigo sincronizado atrasado não sobrescreve a posição mais nova", async () => {
+    // Já existe uma posição "das 11h" (futura) carimbada na operação.
+    await env.DB.prepare(
+      `UPDATE todogreen_client_operations
+          SET last_position_lat = -10, last_position_lng = -20, last_position_at = '2099-01-01T11:00:00.000Z'
+        WHERE id = 'op-j2'`,
+    ).run();
+
+    // Chega, atrasado, um evento COM GPS cujo horário é anterior ao carimbo.
+    const atrasado = await pedir("/api/todogreen/driver-portal/viagens/op-j2/evento", {
+      method: "POST", token: joao.token,
+      body: { tipo: "coleta", latitude: 1, longitude: 1, ocorridoEm: "2020-01-01T10:00:00.000Z", idempotencyKey: "pos-antiga" },
+    });
+    expect(atrasado.status).toBe(201);
+
+    const inalterada = await posicaoDe("op-j2");
+    expect(inalterada.lat).toBeCloseTo(-10);
+    expect(inalterada.lng).toBeCloseTo(-20);
+    expect(inalterada.em).toBe("2099-01-01T11:00:00.000Z");
+  });
+
+  it("evento mais novo que o carimbo atual avança a posição normalmente", async () => {
+    await env.DB.prepare(
+      `UPDATE todogreen_client_operations
+          SET last_position_lat = -10, last_position_lng = -20, last_position_at = '2020-01-01T09:00:00.000Z'
+        WHERE id = 'op-j2'`,
+    ).run();
+
+    const novo = await pedir("/api/todogreen/driver-portal/viagens/op-j2/evento", {
+      method: "POST", token: joao.token,
+      body: { tipo: "coleta", latitude: 2, longitude: 3, ocorridoEm: "2026-08-27T08:00:00.000Z", idempotencyKey: "pos-nova" },
+    });
+    expect(novo.status).toBe(201);
+
+    const avancou = await posicaoDe("op-j2");
+    expect(avancou.lat).toBeCloseTo(2);
+    expect(avancou.lng).toBeCloseTo(3);
+    expect(avancou.em).toBe("2026-08-27T08:00:00.000Z");
+  });
+});
+
 // #132 — a fila offline reenvia com uma chave estável por gesto. O reenvio não
 // pode gravar o mesmo evento duas vezes (nem notificar o cliente de novo).
 describe("idempotência da fila offline do motorista", () => {
