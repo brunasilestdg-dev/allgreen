@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { montarPauta } from "./sementeBriefingDomain.js";
+import { montarPauta, pontosDeAtencaoAltos } from "./sementeBriefingDomain.js";
 
 const conta = (extra = {}) => ({
   id: "c", nome: "Conta", temperatura: null, proximaAcao: null, prazoDaProximaAcao: null,
@@ -104,5 +104,24 @@ describe("a pauta do dia", () => {
     expect(resultado.pautas[0].urgencia).toBe("alta");
     const medias = resultado.pautas.filter((item) => item.urgencia === "media");
     expect(medias[0].quantidade).toBeGreaterThanOrEqual(medias.at(-1).quantidade);
+  });
+});
+
+describe("selo proativo (falar primeiro)", () => {
+  it("conta só os pontos de alta urgência", () => {
+    const pauta = { pautas: [{ urgencia: "alta" }, { urgencia: "alta" }, { urgencia: "media" }, { urgencia: "baixa" }] };
+    expect(pontosDeAtencaoAltos(pauta)).toBe(2);
+  });
+  it("carteira em dia não acende o selo", () => {
+    expect(pontosDeAtencaoAltos({ pautas: [] })).toBe(0);
+    expect(pontosDeAtencaoAltos(null)).toBe(0);
+    expect(pontosDeAtencaoAltos(undefined)).toBe(0);
+  });
+  it("integra com montarPauta: prazo vencido acende o selo", () => {
+    const pauta = montarPauta({
+      indice: [{ id: "c1", nome: "DHL", proximaAcao: "Ligar", prazoDaProximaAcao: "2020-01-01" }],
+      agora: "2026-09-06T00:00:00Z",
+    });
+    expect(pontosDeAtencaoAltos(pauta)).toBeGreaterThanOrEqual(1);
   });
 });

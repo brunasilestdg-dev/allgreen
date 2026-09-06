@@ -23,6 +23,15 @@ const hoje = (agora) => new Date(agora).toISOString().slice(0, 10);
 
 export const URGENCIAS = Object.freeze({ alta: 0, media: 1, baixa: 2 });
 
+// Quantos pontos de atenção de ALTA urgência a pauta tem — o gatilho de "falar
+// primeiro": é o número que vira o selo no lançador do Todô, para o operador
+// ver que algo mudou sem precisar abrir o painel. Só urgência alta conta; um
+// selo que acende para tudo vira ruído e a pessoa aprende a ignorá-lo.
+export function pontosDeAtencaoAltos(pauta) {
+  const lista = Array.isArray(pauta?.pautas) ? pauta.pautas : [];
+  return lista.filter((item) => item?.urgencia === "alta").length;
+}
+
 const NOMES_NA_PAUTA = 4;
 
 const pauta = ({ id, urgencia, titulo, porque, contas = [], pergunta }) => {

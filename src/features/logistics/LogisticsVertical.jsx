@@ -2858,6 +2858,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const {
     dados: registros,
     erro: erroDosRegistros,
+    recarregar: recarregarRegistros,
     criar,
     atualizar,
     arquivar,
@@ -3403,6 +3404,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         pagina={page}
         clienteId={new URLSearchParams(path.split("?")[1] || "").get("client") || ""}
         authHeaders={authHeaders}
+        aoAgir={() => { if (allowed) recarregarRegistros(); }}
       />
     </main>
   );

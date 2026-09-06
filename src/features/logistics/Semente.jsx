@@ -6,6 +6,7 @@ import {
   corpoDaPergunta,
   textoDaProposta,
 } from "./sementeDomain.js";
+import { pontosDeAtencaoAltos } from "./sementeBriefingDomain.js";
 import "./Semente.css";
 
 // A Semente na tela.
@@ -284,17 +285,19 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
     [aoAgir, chamar],
   );
 
-  // A pauta é buscada quando o painel abre, uma vez. Um assistente que só
-  // responde é um campo de busca com boas maneiras: chegar com o que mudou na
-  // carteira é o que separa chat de assistente.
+  // A pauta é buscada UMA vez, ao montar — não só ao abrir. É o "falar
+  // primeiro": o lançador acende um selo com quantos pontos de alta urgência a
+  // carteira tem, para o operador ver que algo mudou sem precisar abrir. A
+  // consulta é barata (agregação no banco, sem modelo), então cabe no load.
   useEffect(() => {
-    if (!aberta || pauta) return undefined;
+    if (pauta) return undefined;
     let ativo = true;
     chamar({ briefing: true })
       .then((dados) => { if (ativo) setPauta(dados); })
       .catch(() => { if (ativo) setPauta({ pautas: [], leitura: "" }); });
     return () => { ativo = false; };
-  }, [aberta, chamar, pauta]);
+  }, [chamar, pauta]);
+  const alertasAltos = pontosDeAtencaoAltos(pauta);
 
   // Escondido: só um ponto discreto para reabrir. Continua existindo.
   if (oculta && !aberta) {
@@ -303,10 +306,11 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
         type="button"
         className="semente-launcher semente-launcher--min"
         onClick={() => ocultar(false)}
-        aria-label={`Mostrar ${SEMENTE.nome}`}
-        title={`Mostrar ${SEMENTE.nome}`}
+        aria-label={alertasAltos ? `Mostrar ${SEMENTE.nome} — ${alertasAltos} ponto(s) de atenção` : `Mostrar ${SEMENTE.nome}`}
+        title={alertasAltos ? `${alertasAltos} ponto(s) de atenção na sua carteira` : `Mostrar ${SEMENTE.nome}`}
       >
         <SementeAvatar estado="calma" tamanho={18} />
+        {alertasAltos > 0 && <span className="semente-selo" aria-hidden="true">{alertasAltos > 9 ? "9+" : alertasAltos}</span>}
       </button>
     );
   }
@@ -317,10 +321,11 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
           type="button"
           className="semente-launcher"
           onClick={() => alternar(true)}
-          aria-label={`Abrir ${SEMENTE.nome}, ${SEMENTE.assinatura}`}
+          aria-label={alertasAltos ? `Abrir ${SEMENTE.nome} — ${alertasAltos} ponto(s) de atenção na sua carteira` : `Abrir ${SEMENTE.nome}, ${SEMENTE.assinatura}`}
         >
           <SementeAvatar estado="calma" tamanho={28} />
           <span>{SEMENTE.nome}</span>
+          {alertasAltos > 0 && <span className="semente-selo" aria-hidden="true">{alertasAltos > 9 ? "9+" : alertasAltos}</span>}
         </button>
         <button
           type="button"
