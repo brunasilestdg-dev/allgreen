@@ -66,72 +66,91 @@ export const removeProject = (lista = [], id) =>
 // Pontos de partida
 // ---------------------------------------------------------------------------
 
-// Não são exemplos de programador: são peças que um negócio pequeno realmente
-// publica. Quem nunca escreveu código consegue trocar o texto e usar.
+// Não são exemplos de programador: são peças que a To Do Green realmente
+// publica — logística de frota elétrica para embarcadores, não um negócio
+// genérico. Quem nunca escreveu código troca o texto e usa. O WhatsApp é o
+// comercial de verdade (55 11 95100-6360), o mesmo da tela de entrada.
 export const TEMPLATES = [
   {
     id: "vazio",
     label: "Em branco",
-    html: "<h1>Olá</h1>\n<p>Escreva aqui.</p>",
-    css: "body { font-family: system-ui; padding: 24px; }",
+    html: "<h1>To Do Green</h1>\n<p>Mudando o mundo a cada entrega.</p>",
+    css: "body { font-family: system-ui; padding: 24px; color:#14201a; }",
     js: "",
   },
   {
     id: "cartao",
-    label: "Cartão de visita",
+    label: "Cartão de serviço",
     html: `<main class="cartao">
-  <h1>Doces da Ana</h1>
-  <p>Bolos e doces artesanais sob encomenda</p>
-  <a class="zap" href="https://wa.me/5511999999999">Falar no WhatsApp</a>
+  <span class="marca">To Do Green</span>
+  <h1>Logística com frota 100% elétrica</h1>
+  <p>Entregamos com redução comprovada de CO₂ na cadeia do seu cliente.</p>
+  <a class="zap" href="https://wa.me/5511951006360">Solicitar uma cotação</a>
 </main>`,
     css: `body { margin:0; min-height:100vh; display:grid; place-items:center;
-  font-family: system-ui; background:#f2fbf8; }
-.cartao { text-align:center; padding:40px 28px; border-radius:20px;
-  background:#fff; box-shadow:0 18px 50px rgba(11,159,143,.14); }
-.cartao h1 { margin:0 0 6px; }
-.cartao p { color:#5b6f6d; margin:0 0 20px; }
+  font-family: system-ui; background:#e8f4ec; }
+.cartao { text-align:center; padding:40px 28px; border-radius:20px; max-width:420px;
+  background:#fff; box-shadow:0 18px 50px rgba(15,122,61,.16); }
+.marca { font-weight:800; letter-spacing:.02em; color:#0a5c2e; }
+.cartao h1 { margin:10px 0 6px; font-size:24px; color:#14201a; }
+.cartao p { color:#5a6b62; margin:0 0 20px; }
 .zap { display:inline-block; padding:12px 22px; border-radius:12px;
-  background:#25d366; color:#fff; text-decoration:none; font-weight:700; }`,
+  background:#25d366; color:#08351f; text-decoration:none; font-weight:800; }`,
     js: "",
   },
   {
     id: "formulario",
-    label: "Formulário de pedido",
-    html: `<form id="pedido">
-  <h2>Fazer pedido</h2>
+    label: "Pedido de cotação",
+    html: `<form id="cotacao">
+  <h2>Peça uma cotação de frete</h2>
+  <label>Empresa <input name="empresa" required></label>
   <label>Seu nome <input name="nome" required></label>
-  <label>O que deseja <input name="item" required></label>
-  <label>Quantidade <input name="qtd" type="number" min="1" value="1"></label>
+  <label>Origem (cidade/UF) <input name="origem" required></label>
+  <label>Destino (cidade/UF) <input name="destino" required></label>
+  <label>Entregas por mês <input name="volume" type="number" min="1" value="1000"></label>
+  <label>Tipo de operação
+    <select name="operacao">
+      <option>Last Mile</option>
+      <option>Middle Mile</option>
+      <option>Operação dedicada</option>
+      <option>Transferência entre CDs</option>
+    </select>
+  </label>
   <button>Enviar pelo WhatsApp</button>
 </form>`,
-    css: `body { font-family: system-ui; padding:24px; background:#fafafa; }
-form { display:grid; gap:12px; max-width:380px; margin:0 auto; padding:24px;
+    css: `body { font-family: system-ui; padding:24px; background:#f2fbf8; }
+form { display:grid; gap:12px; max-width:420px; margin:0 auto; padding:24px;
   background:#fff; border-radius:16px; }
-label { display:grid; gap:5px; font-size:14px; font-weight:600; }
-input { padding:10px; border:1px solid #ddd; border-radius:9px; font:inherit; }
-button { padding:12px; border:0; border-radius:10px; background:#0b9f8f;
+h2 { margin:0 0 4px; color:#0a5c2e; }
+label { display:grid; gap:5px; font-size:14px; font-weight:600; color:#3e4e45; }
+input, select { padding:10px; border:1px solid #d7e3db; border-radius:9px; font:inherit; }
+button { padding:12px; border:0; border-radius:10px; background:#0f7a3d;
   color:#fff; font-weight:700; cursor:pointer; }`,
-    js: `document.getElementById("pedido").addEventListener("submit", (e) => {
+    js: `document.getElementById("cotacao").addEventListener("submit", (e) => {
   e.preventDefault();
   const d = new FormData(e.target);
-  const texto = \`Olá! Sou \${d.get("nome")} e quero \${d.get("qtd")}x \${d.get("item")}.\`;
-  console.log("Mensagem pronta:", texto);
+  const texto = \`Olá! Sou \${d.get("nome")}, da \${d.get("empresa")}. \` +
+    \`Quero cotar \${d.get("operacao")}: \${d.get("origem")} → \${d.get("destino")}, \` +
+    \`~\${d.get("volume")} entregas/mês.\`;
+  // Abre o WhatsApp do comercial da To Do Green com a mensagem pronta.
+  window.open("https://wa.me/5511951006360?text=" + encodeURIComponent(texto), "_blank");
 });`,
   },
   {
     id: "precos",
-    label: "Tabela de preços",
+    label: "Serviços",
     html: `<section class="precos">
-  <article><h3>Simples</h3><strong>R$ 60</strong><p>Bolo de 1 andar</p></article>
-  <article class="destaque"><h3>Festa</h3><strong>R$ 140</strong><p>Bolo de 2 andares</p></article>
-  <article><h3>Casamento</h3><strong>sob consulta</strong><p>Projeto exclusivo</p></article>
+  <article><h3>Last Mile</h3><strong>por entrega</strong><p>Entrega ao consumidor final, medida em pacotes e taxa de sucesso.</p></article>
+  <article class="destaque"><h3>Middle Mile</h3><strong>por rota</strong><p>Transferência entre CD e hub, alto volume e janela previsível.</p></article>
+  <article><h3>Operação dedicada</h3><strong>sob consulta</strong><p>Frota e motoristas exclusivos, cobrada por mensalidade.</p></article>
 </section>`,
-    css: `body { font-family: system-ui; padding:24px; background:#f2fbf8; }
-.precos { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr)); }
+    css: `body { font-family: system-ui; padding:24px; background:#e8f4ec; }
+.precos { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); }
 article { padding:22px; border-radius:16px; background:#fff; text-align:center; }
-.destaque { outline:2px solid #0b9f8f; }
-strong { display:block; font-size:26px; margin:8px 0; color:#0b9f8f; }
-p { color:#5b6f6d; margin:0; }`,
+h3 { margin:0; color:#14201a; }
+.destaque { outline:2px solid #0f7a3d; }
+strong { display:block; font-size:22px; margin:8px 0; color:#0f7a3d; }
+p { color:#5a6b62; margin:0; font-size:14px; }`,
     js: "",
   },
 ];

@@ -6,7 +6,7 @@ import {
   corpoDaPergunta,
   textoDaProposta,
 } from "./sementeDomain.js";
-import { pontosDeAtencaoAltos } from "./sementeBriefingDomain.js";
+import { itensDePendenciaAlta, novidadesDePendencia, pontosDeAtencaoAltos } from "./sementeBriefingDomain.js";
 import "./Semente.css";
 
 // A Semente na tela.
@@ -30,6 +30,15 @@ import "./Semente.css";
 
 const CHAVE_ABERTA = "todogreen:semente:aberta";
 const CHAVE_OCULTA = "todogreen:semente:oculta";
+// Pendências que a pessoa JÁ VIU. O selo (a bolinha "1") não pode marcar o
+// total de pendências — senão nunca some, mesmo depois de lida (queixa da
+// titular). Guarda as chaves já vistas e o selo passa a contar só o que é
+// novo desde a última vez que ela abriu o Todô. Mesma régua do aviso por
+// push/e-mail (novidadesDePendencia), agora também no selo da tela.
+const CHAVE_VISTAS = "todogreen:semente:pendencias-vistas";
+const lerVistas = () => {
+  try { return JSON.parse(localStorage.getItem(CHAVE_VISTAS) || "[]"); } catch { return []; }
+};
 
 let contador = 0;
 const proximoId = () => (contador += 1);
@@ -116,7 +125,16 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
   const [pensando, setPensando] = useState(false);
   const [executando, setExecutando] = useState("");
   const [pauta, setPauta] = useState(null);
+  const [chavesVistas, setChavesVistas] = useState(lerVistas);
   const conversa = useRef(null);
+
+  // Ao abrir o Todô, tudo que está na pauta AGORA passa a contar como visto —
+  // o selo zera. Só uma pendência que aparecer depois reacende a bolinha.
+  const marcarPendenciasVistas = useCallback(() => {
+    const chaves = itensDePendenciaAlta(pauta).map((item) => item.chave);
+    setChavesVistas(chaves);
+    try { localStorage.setItem(CHAVE_VISTAS, JSON.stringify(chaves)); } catch { /* ok */ }
+  }, [pauta]);
 
   useEffect(() => {
     try {
@@ -129,6 +147,8 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
 
   const alternar = useCallback((proximo) => {
     setAberta(proximo);
+    // "Abriu = leu" é tratado pelo efeito abaixo (que também cobre o reabrir
+    // automático): quando aberta e a pauta existe, marca as pendências vistas.
     try {
       localStorage.setItem(CHAVE_ABERTA, proximo ? "1" : "0");
     } catch {
@@ -143,6 +163,12 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
     const caixa = conversa.current;
     if (aberta && caixa) caixa.scrollTop = caixa.scrollHeight;
   }, [aberta, mensagens, pensando]);
+
+  // Painel aberto (inclusive quando reabre sozinho pela preferência salva) e a
+  // pauta chegou → marca visto, para o selo continuar zerado depois de fechar.
+  useEffect(() => {
+    if (aberta && pauta) marcarPendenciasVistas();
+  }, [aberta, pauta, marcarPendenciasVistas]);
 
   const chamar = useCallback(
     async (corpo) => {
@@ -298,6 +324,10 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
     return () => { ativo = false; };
   }, [chamar, pauta]);
   const alertasAltos = pontosDeAtencaoAltos(pauta);
+  // O selo conta só o que é NOVO desde a última abertura — não o total. Assim
+  // "já li e continua marcando" deixa de acontecer: leu, zerou; só uma
+  // pendência nova reacende. Se já está aberta, nada de selo.
+  const naoVistos = aberta ? 0 : novidadesDePendencia(itensDePendenciaAlta(pauta), chavesVistas).novos.length;
 
   // Escondido: só um ponto discreto para reabrir. Continua existindo.
   if (oculta && !aberta) {
@@ -310,7 +340,7 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
         title={alertasAltos ? `${alertasAltos} ponto(s) de atenção na sua carteira` : `Mostrar ${SEMENTE.nome}`}
       >
         <SementeAvatar estado="calma" tamanho={18} />
-        {alertasAltos > 0 && <span className="semente-selo" aria-hidden="true">{alertasAltos > 9 ? "9+" : alertasAltos}</span>}
+        {naoVistos > 0 && <span className="semente-selo" aria-hidden="true">{naoVistos > 9 ? "9+" : naoVistos}</span>}
       </button>
     );
   }
@@ -325,7 +355,7 @@ export default function Semente({ pagina, clienteId, authHeaders, aoAgir }) {
         >
           <SementeAvatar estado="calma" tamanho={28} />
           <span>{SEMENTE.nome}</span>
-          {alertasAltos > 0 && <span className="semente-selo" aria-hidden="true">{alertasAltos > 9 ? "9+" : alertasAltos}</span>}
+          {naoVistos > 0 && <span className="semente-selo" aria-hidden="true">{naoVistos > 9 ? "9+" : naoVistos}</span>}
         </button>
         <button
           type="button"
