@@ -853,3 +853,26 @@
   --tdg-x-paper: #12302a;
   --tdg-x-shadow: 0 18px 42px rgba(0, 0, 0, 0.4);
 }
+
+/* "Já mandei a apresentação pra esse cliente" — selo na carteira e no detalhe. */
+.tdg-crm-card-apres {
+  align-items: center;
+  background: rgba(23, 98, 79, .1);
+  border-radius: 999px;
+  color: var(--tdg-green, #17624f);
+  display: inline-flex;
+  font-weight: 700;
+  gap: 4px;
+}
+.tdg-crm-apres-selo {
+  align-items: center;
+  background: rgba(23, 98, 79, .1);
+  border-radius: 999px;
+  color: var(--tdg-green, #17624f);
+  display: inline-flex;
+  font-size: .74rem;
+  font-weight: 700;
+  gap: 4px;
+  padding: 5px 11px;
+  white-space: nowrap;
+}

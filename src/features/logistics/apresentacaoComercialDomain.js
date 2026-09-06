@@ -9,6 +9,27 @@ export const APRESENTACAO_ASSUNTO = "To Do Green — logística 100% elétrica p
 
 const POSICIONAMENTO = "a única transportadora 100% elétrica do Brasil";
 
+// Assunto canônico da interação que o envio registra — é por ele que a tela
+// sabe "para quem já mandei a apresentação".
+export const ASSUNTO_APRESENTACAO_ENVIADA = "Apresentação comercial enviada";
+
+// A partir das interações de uma conta, diz se a apresentação já foi enviada e
+// quando (a mais recente). Não inventa: lê o registro que o próprio envio cria.
+export const detectarApresentacaoEnviada = (interacoes = []) => {
+  const lista = Array.isArray(interacoes) ? interacoes : [];
+  const enviadas = lista.filter((i) =>
+    i && (i.assunto === ASSUNTO_APRESENTACAO_ENVIADA
+      || /apresenta[çc][aã]o.*enviad/i.test(String(i.assunto || ""))
+      || /apresenta[çc][aã]o comercial.*enviad/i.test(String(i.ata || ""))),
+  );
+  if (!enviadas.length) return { enviada: false, em: "" };
+  const em = enviadas
+    .map((i) => String(i.ocorridaEm || i.criadoEm || ""))
+    .filter(Boolean)
+    .sort((a, b) => b.localeCompare(a))[0] || "";
+  return { enviada: true, em };
+};
+
 const primeiroNome = (nome) => String(nome || "").trim().split(/\s+/)[0] || "";
 
 // Distila o contexto de mercado da empresa (pesquisa/inteligência externa) em

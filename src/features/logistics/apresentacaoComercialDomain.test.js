@@ -1,10 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
   APRESENTACAO_ASSUNTO,
+  ASSUNTO_APRESENTACAO_ENVIADA,
   contextoDeMercado,
+  detectarApresentacaoEnviada,
   linkComposeGmail,
   montarEmailApresentacao,
 } from "./apresentacaoComercialDomain.js";
+
+describe("detectarApresentacaoEnviada — 'para quem já mandei'", () => {
+  it("acha o envio pelo assunto canônico e traz a data mais recente", () => {
+    const r = detectarApresentacaoEnviada([
+      { assunto: "Ligação", ocorridaEm: "2026-08-01" },
+      { assunto: ASSUNTO_APRESENTACAO_ENVIADA, ocorridaEm: "2026-08-10" },
+      { assunto: ASSUNTO_APRESENTACAO_ENVIADA, ocorridaEm: "2026-09-02" },
+    ]);
+    expect(r.enviada).toBe(true);
+    expect(r.em).toBe("2026-09-02");
+  });
+
+  it("sem envio, não marca nada", () => {
+    expect(detectarApresentacaoEnviada([{ assunto: "Reunião" }]).enviada).toBe(false);
+    expect(detectarApresentacaoEnviada([]).enviada).toBe(false);
+    expect(detectarApresentacaoEnviada(null).enviada).toBe(false);
+  });
+});
 
 // A abordagem muda com o CONTATO REAL e o CONTEXTO da empresa. Regra da titular:
 // nunca "retomar" contato que não existiu; personalizar quando há contexto de

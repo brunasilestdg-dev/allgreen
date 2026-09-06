@@ -6,6 +6,7 @@ import { sendGmailReal, createGmailDraftReal, base64FromBytes } from "../../inte
 import {
   APRESENTACAO_PDF_URL,
   APRESENTACAO_PDF_NOME,
+  ASSUNTO_APRESENTACAO_ENVIADA,
   montarEmailApresentacao,
   linkComposeGmail,
 } from "./apresentacaoComercialDomain.js";
@@ -68,7 +69,7 @@ export default function EnviarApresentacao({ conta, houveContato = false, contex
     try {
       await onRegistrar?.({
         tipo: "email",
-        assunto: "Apresentação comercial enviada",
+        assunto: ASSUNTO_APRESENTACAO_ENVIADA,
         ata: `Apresentação comercial da To Do Green enviada por e-mail para ${para}.`,
         ocorridaEm: new Date().toISOString().slice(0, 10),
       });
