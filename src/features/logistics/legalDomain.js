@@ -25,7 +25,8 @@ export const JURIDICO_RISCOS = Object.freeze([
 // Situação do documento. "encerrada" = não exige mais tratativa do Jurídico.
 export const JURIDICO_SITUACOES = Object.freeze([
   { id: "rascunho", rotulo: "Rascunho", encerrada: false },
-  { id: "em_analise", rotulo: "Em análise", encerrada: false },
+  { id: "em_analise", rotulo: "Em análise no Jurídico", encerrada: false },
+  { id: "ajuste_solicitado", rotulo: "Ajustes solicitados", encerrada: false },
   { id: "aprovado", rotulo: "Aprovado, aguardando assinatura", encerrada: false },
   { id: "assinado", rotulo: "Assinado", encerrada: true },
   { id: "arquivado", rotulo: "Arquivado", encerrada: true },
@@ -54,6 +55,44 @@ export const validarDocumentoJuridico = (corpo = {}) => {
 export const normalizarTipoJuridico = (id) => (TIPOS.has(id) ? id : "minuta");
 export const normalizarRisco = (id) => (RISCOS.has(id) ? id : "medio");
 export const normalizarSituacaoJuridica = (id) => (SITUACOES.has(id) ? id : "rascunho");
+
+// ===== O vai-e-volta do Jurídico como máquina de estados =====
+//
+// Alguém envia o documento (arquivo ou solicitação redigida) → o Jurídico
+// valida, reprova ou pede ajustes → volta ao solicitante, que reenvia →
+// quantas vezes forem precisas, até concluir. Cada ação diz de quais situações
+// parte, para qual leva e o que exige. `juridico: true` = só o Jurídico faz
+// (validar/reprovar/pedir ajuste); as demais são do solicitante. A tela oferece
+// só o que `acoesJuridicasDisponiveis` devolve, e o servidor valida de novo com
+// `resolverAcaoJuridica` — nunca confia no botão que veio do cliente.
+export const ACOES_JURIDICAS = Object.freeze({
+  submeter: { de: ["rascunho", "ajuste_solicitado"], para: "em_analise", rotulo: "Enviar ao Jurídico", exigeConteudo: true },
+  solicitar_ajuste: { de: ["em_analise"], para: "ajuste_solicitado", rotulo: "Solicitar ajustes", exigeMensagem: true, juridico: true },
+  aprovar: { de: ["em_analise"], para: "aprovado", rotulo: "Validar / aprovar", juridico: true },
+  reprovar: { de: ["em_analise"], para: "recusado", rotulo: "Reprovar", exigeMensagem: true, juridico: true },
+  comentar: { de: ["rascunho", "em_analise", "ajuste_solicitado", "aprovado"], para: null, rotulo: "Comentar", exigeMensagem: true },
+});
+
+const KIND_POR_ACAO = { submeter: "submissao", solicitar_ajuste: "ajuste_solicitado", aprovar: "validado", reprovar: "reprovado", comentar: "comentario" };
+
+export function acoesJuridicasDisponiveis(situacao, { juridico = false } = {}) {
+  return Object.entries(ACOES_JURIDICAS)
+    .filter(([, acao]) => acao.de.includes(situacao) && (!acao.juridico || juridico))
+    .map(([id, acao]) => ({ id, rotulo: acao.rotulo, exigeMensagem: !!acao.exigeMensagem, exigeConteudo: !!acao.exigeConteudo, juridico: !!acao.juridico }));
+}
+
+// Resolve uma ação: valida permissão, transição e conteúdo, e devolve o próximo
+// estado + o tipo de evento a gravar. `para: null` (comentar) mantém a situação.
+export function resolverAcaoJuridica(situacao, acaoId, { juridico = false, temTexto = false, temAnexo = false } = {}) {
+  const acao = ACOES_JURIDICAS[acaoId];
+  if (!acao) return { ok: false, erro: "Ação jurídica desconhecida." };
+  if (acao.juridico && !juridico) return { ok: false, erro: "Só o Jurídico pode validar, reprovar ou pedir ajuste." };
+  if (!acao.de.includes(situacao)) return { ok: false, erro: `Ação indisponível na situação atual (${rotuloSituacaoJuridica(situacao)}).` };
+  if (acao.exigeMensagem && !temTexto) return { ok: false, erro: "Escreva a mensagem desta ação." };
+  if (acao.exigeConteudo && !temTexto && !temAnexo) return { ok: false, erro: "Envie o documento (arquivo/link) ou uma solicitação redigida." };
+  const kind = acaoId === "submeter" && situacao === "ajuste_solicitado" ? "reenvio" : KIND_POR_ACAO[acaoId];
+  return { ok: true, para: acao.para, kind };
+}
 
 const soData = (valor) => String(valor || "").slice(0, 10);
 

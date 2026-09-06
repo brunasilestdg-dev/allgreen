@@ -56,6 +56,7 @@ import {
   normalizarRisco,
   normalizarSituacaoJuridica,
   normalizarTipoJuridico,
+  resolverAcaoJuridica,
   validarDocumentoJuridico,
 } from "../../src/features/logistics/legalDomain.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
@@ -1993,6 +1994,81 @@ const listarEventosOperacao = async (env, access, user, operationId) => {
   });
 };
 
+// ===== Jurídico como fluxo: o vai-e-volta do documento =====
+// Quem é "o Jurídico" (valida/reprova/pede ajuste): owner/admin ou quem tem
+// compliance:manage. Os demais com proposal:manage submetem e comentam.
+const ehJuridico = (access) =>
+  access.role === "owner" || access.role === "admin" ||
+  access.permissions.includes("*") || access.permissions.includes("compliance:manage");
+
+const documentoJuridicoNoEspaco = async (env, ownerId, legalId) =>
+  env.DB.prepare(
+    `SELECT id,status,revision,title FROM todogreen_legal_records
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(legalId, TENANT_ID, ownerId).first();
+
+const listarEventosJuridicos = async (env, access, legalId) => {
+  const doc = await documentoJuridicoNoEspaco(env, access.ownerId, legalId);
+  if (!doc) return json({ error: "Documento jurídico não encontrado." }, 404);
+  const { results } = await env.DB.prepare(
+    `SELECT id,kind,message,attachment_url,attachment_name,from_status,to_status,actor_label,created_at
+       FROM todogreen_legal_events
+      WHERE tenant_id=? AND workspace_owner_id=? AND legal_id=?
+      ORDER BY created_at ASC LIMIT 300`,
+  ).bind(TENANT_ID, access.ownerId, legalId).all();
+  return json({
+    situacao: doc.status,
+    eventos: (results || []).map((row) => ({
+      id: row.id, tipo: row.kind, mensagem: row.message,
+      anexoUrl: row.attachment_url, anexoNome: row.attachment_name,
+      de: row.from_status, para: row.to_status, autor: row.actor_label, criadoEm: row.created_at,
+    })),
+  });
+};
+
+// Aplica uma ação do fluxo: valida (máquina de estados no domínio), grava o
+// evento imutável e move a situação do documento na mesma ida ao banco.
+const registrarEventoJuridico = async (env, access, user, legalId, corpo) => {
+  const doc = await documentoJuridicoNoEspaco(env, access.ownerId, legalId);
+  if (!doc) return json({ error: "Documento jurídico não encontrado." }, 404);
+  const situacao = normalizarSituacaoJuridica(doc.status);
+  const acaoId = texto(corpo.acao, 40);
+  const mensagem = texto(corpo.mensagem, 4000);
+  const anexoUrl = texto(corpo.anexoUrl, 2000);
+  const anexoNome = texto(corpo.anexoNome, 240);
+  const decisao = resolverAcaoJuridica(situacao, acaoId, {
+    juridico: ehJuridico(access),
+    temTexto: Boolean(mensagem),
+    temAnexo: Boolean(anexoUrl),
+  });
+  if (!decisao.ok) return json({ error: decisao.erro }, 400);
+
+  const agora = new Date().toISOString();
+  const novaSituacao = decisao.para || situacao;
+  const rotulo = texto(user.name || user.email, 200);
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO todogreen_legal_events
+         (id,tenant_id,workspace_owner_id,legal_id,kind,message,attachment_url,attachment_name,
+          from_status,to_status,actor_user_id,actor_label,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(crypto.randomUUID(), TENANT_ID, access.ownerId, legalId, decisao.kind, mensagem,
+      anexoUrl, anexoNome, situacao, novaSituacao, user.id, rotulo, agora),
+    // Comentar não move a situação (para = null); as demais movem.
+    ...(decisao.para
+      ? [env.DB.prepare(
+          `UPDATE todogreen_legal_records SET status=?,revision=revision+1,updated_at=?
+            WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+        ).bind(novaSituacao, agora, legalId, TENANT_ID, access.ownerId)]
+      : []),
+  ]);
+  await registrarAuditoriaTodoGreen(env, {
+    access, user, action: "todogreen_juridico_evento", resourceType: "legal_record",
+    resourceId: legalId, after: { acao: acaoId, de: situacao, para: novaSituacao },
+  });
+  return listarEventosJuridicos(env, access, legalId);
+};
+
 // O núcleo do evento operacional, compartilhado entre a tela interna e o
 // portal do motorista: são o MESMO fato (a carga chegou, a entrega aconteceu,
 // houve ocorrência) — duas implementações produziriam dois delivered_at e
@@ -2447,6 +2523,19 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
   if (id && subrecurso === "events" && colecao === COLECOES.contracts) {
     if (request.method === "GET") return listarEventosContrato(env, access, user, id);
     return json({ error: "O histórico contratual é gerado pelas alterações do contrato." }, 405);
+  }
+
+  // Jurídico como fluxo: a linha do tempo do documento (submissão → análise →
+  // validar/reprovar/pedir ajuste → reenvio → conclusão). A permissão de papel
+  // (submeter vs. decidir) é resolvida dentro do handler pela máquina de estados.
+  if (id && subrecurso === "events" && colecao === COLECOES.legal) {
+    if (request.method === "GET") return listarEventosJuridicos(env, access, id);
+    if (request.method === "POST") {
+      if (!podeNaVertical(access, colecao.permissao))
+        return json({ error: "Seu papel não pode atuar no fluxo jurídico." }, 403);
+      return registrarEventoJuridico(env, access, user, id, await request.json().catch(() => ({})));
+    }
+    return json({ error: "Método não permitido." }, 405);
   }
 
   if (request.method === "GET") {

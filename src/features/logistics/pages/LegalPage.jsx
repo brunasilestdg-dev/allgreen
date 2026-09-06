@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { FileCheck2, Plus, ScrollText, ShieldAlert } from "lucide-react";
+import { FileCheck2, MessagesSquare, Paperclip, Plus, ScrollText, ShieldAlert } from "lucide-react";
+import Modal from "../../../components/Modal.jsx";
 import {
   JURIDICO_RISCOS,
   JURIDICO_SITUACOES,
   JURIDICO_TIPOS,
+  acoesJuridicasDisponiveis,
   resumoJuridico,
   rotuloRisco,
   rotuloSituacaoJuridica,
@@ -12,6 +14,12 @@ import {
   validarDocumentoJuridico,
 } from "../legalDomain.js";
 import "./TodoGreenPages.css";
+
+const ROTULO_EVENTO = {
+  submissao: "Enviado ao Jurídico", reenvio: "Reenviado", validado: "Validado",
+  reprovado: "Reprovado", ajuste_solicitado: "Ajustes solicitados", comentario: "Comentário", conclusao: "Concluído",
+};
+const dataHoraBR = (valor) => { const d = new Date(valor); return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("pt-BR"); };
 
 const formVazio = {
   titulo: "",
@@ -31,11 +39,49 @@ const dataBR = (valor) => {
   return Number.isNaN(d.getTime()) ? valor : d.toLocaleDateString("pt-BR");
 };
 
-export default function LegalPage({ registros = [], clients = [], criar, atualizar, setToast }) {
+export default function LegalPage({ registros = [], clients = [], criar, atualizar, setToast, authHeaders, listarSubrecurso, recarregar, juridico = false }) {
   const [form, setForm] = useState(formVazio);
   const [aberto, setAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [filtro, setFiltro] = useState("abertos");
+  // O vai-e-volta do documento: qual está aberto, a linha do tempo, e o envio.
+  const [fluxo, setFluxo] = useState(null); // registro selecionado
+  const [eventos, setEventos] = useState([]);
+  const [situacaoFluxo, setSituacaoFluxo] = useState("");
+  const [envio, setEnvio] = useState({ mensagem: "", anexoUrl: "", anexoNome: "" });
+  const [agindo, setAgindo] = useState(false);
+
+  const carregarFluxo = async (registro) => {
+    setFluxo(registro);
+    setEventos([]);
+    setSituacaoFluxo(registro.situacao);
+    setEnvio({ mensagem: "", anexoUrl: "", anexoNome: "" });
+    try {
+      const r = await listarSubrecurso?.("legal", registro.id, "events");
+      setEventos(r?.eventos || []);
+      setSituacaoFluxo(r?.situacao || registro.situacao);
+    } catch (e) { setToast?.(e.message); }
+  };
+
+  const agir = async (acaoId) => {
+    if (!fluxo) return;
+    setAgindo(true);
+    try {
+      const headers = { ...(authHeaders?.() || {}), "content-type": "application/json" };
+      const r = await fetch(`/api/todogreen/records/legal/${encodeURIComponent(fluxo.id)}/events`, {
+        method: "POST", headers,
+        body: JSON.stringify({ acao: acaoId, mensagem: envio.mensagem, anexoUrl: envio.anexoUrl, anexoNome: envio.anexoNome }),
+      });
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(p.error || "Não foi possível registrar a ação.");
+      setEventos(p.eventos || []);
+      setSituacaoFluxo(p.situacao || situacaoFluxo);
+      setEnvio({ mensagem: "", anexoUrl: "", anexoNome: "" });
+      setToast?.("Ação registrada no fluxo jurídico.");
+      recarregar?.();
+    } catch (e) { setToast?.(e.message); }
+    finally { setAgindo(false); }
+  };
 
   const resumo = useMemo(() => resumoJuridico(registros), [registros]);
   const nomeCliente = (id) => clients.find((c) => c.id === id)?.name || "";
@@ -141,7 +187,7 @@ export default function LegalPage({ registros = [], clients = [], criar, atualiz
               </dl>
             )}
             <footer>
-              <span className="tdg-legal-prazo">{r.fimVigencia ? `Vence ${dataBR(r.fimVigencia)}` : "Sem vigência definida"}</span>
+              <button type="button" className="tdg-legal-fluxo-btn" onClick={() => carregarFluxo(r)}><MessagesSquare size={14} />Abrir fluxo · {rotuloSituacaoJuridica(r.situacao)}</button>
               <label className="tdg-legal-situacao">
                 <select value={r.situacao} onChange={(e) => mudarSituacao(r, e.target.value)} aria-label={`Situação de ${r.titulo}`}>
                   {JURIDICO_SITUACOES.map((s) => <option key={s.id} value={s.id}>{s.rotulo}</option>)}
@@ -151,6 +197,44 @@ export default function LegalPage({ registros = [], clients = [], criar, atualiz
           </article>
         ))}
       </div>
+
+      {fluxo && (
+        <Modal title={`Fluxo jurídico · ${fluxo.titulo}`} onClose={() => setFluxo(null)} wide>
+          <div className="tdg-legal-fluxo">
+            <p className="tdg-legal-fluxo-situacao">Situação atual: <strong>{rotuloSituacaoJuridica(situacaoFluxo)}</strong></p>
+            <div className="tdg-legal-timeline">
+              {eventos.length === 0 && <small>Sem movimentações ainda. Envie o documento ou uma solicitação ao Jurídico para começar.</small>}
+              {eventos.map((ev) => (
+                <article className={`tdg-legal-ev ev-${ev.tipo}`} key={ev.id}>
+                  <header><strong>{ROTULO_EVENTO[ev.tipo] || ev.tipo}</strong><small>{ev.autor} · {dataHoraBR(ev.criadoEm)}</small></header>
+                  {ev.mensagem && <p>{ev.mensagem}</p>}
+                  {ev.anexoUrl && <a href={ev.anexoUrl} target="_blank" rel="noreferrer noopener"><Paperclip size={13} />{ev.anexoNome || "Anexo"}</a>}
+                </article>
+              ))}
+            </div>
+            {situacaoJuridicaEncerrada(situacaoFluxo) ? (
+              <p className="tdg-legal-fluxo-fim">Documento encerrado ({rotuloSituacaoJuridica(situacaoFluxo)}). Não há mais tratativa em aberto.</p>
+            ) : (
+              <div className="tdg-legal-envio">
+                <label><span>Mensagem / solicitação redigida</span><textarea value={envio.mensagem} onChange={(e) => setEnvio((v) => ({ ...v, mensagem: e.target.value }))} placeholder="Descreva o pedido, o parecer ou os ajustes necessários" /></label>
+                <div className="tdg-legal-anexo">
+                  <label><span>Anexo — link do arquivo</span><input value={envio.anexoUrl} onChange={(e) => setEnvio((v) => ({ ...v, anexoUrl: e.target.value }))} placeholder="https://... (minuta, parecer, contrato)" /></label>
+                  <label><span>Nome do anexo</span><input value={envio.anexoNome} onChange={(e) => setEnvio((v) => ({ ...v, anexoNome: e.target.value }))} placeholder="Ex.: Minuta v2" /></label>
+                </div>
+                <div className="tdg-legal-fluxo-acoes">
+                  {acoesJuridicasDisponiveis(situacaoFluxo, { juridico }).map((acao) => {
+                    const faltaMensagem = acao.exigeMensagem && !envio.mensagem.trim();
+                    const faltaConteudo = acao.exigeConteudo && !envio.mensagem.trim() && !envio.anexoUrl.trim();
+                    return (
+                      <button key={acao.id} type="button" className={acao.juridico ? "tdg-action" : ""} disabled={agindo || faltaMensagem || faltaConteudo} onClick={() => agir(acao.id)} title={faltaConteudo ? "Envie o arquivo (link) ou escreva a solicitação" : faltaMensagem ? "Escreva a mensagem" : ""}>{acao.rotulo}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
