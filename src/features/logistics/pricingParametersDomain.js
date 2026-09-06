@@ -181,6 +181,28 @@ export const validarParametros = (valores = {}, opcoes = {}) => {
   return erros.length ? { valido: false, erros, parametros: null } : { valido: true, erros: [], parametros: limpos };
 };
 
+// Custo de referência de FÁBRICA por veículo (modelo tipos_operacao.yaml da
+// titular). É o que faz o "Tipo de veículo" mudar o preço já de fábrica: ao
+// escolher o veículo, estes custos entram na régua ANTES de um eventual perfil
+// de régua daquele veículo (escopo "Veículo"), que o admin cria/edita na tela
+// de Parâmetros e SOBRESCREVE isto. "Compramos um caminhão mais caro" =
+// o admin edita o perfil do veículo, num lugar só, valendo para toda cotação.
+//
+// Procedência: VUC/Toco 495/dia + motorista 280 + manutenção 0,42/km; carretas
+// 1742/dia + motorista/ajudante ~480 + manutenção 0,12/km. Veículo/energia de
+// moto/passeio/fiorino/truck são pontos de partida por porte, a confirmar.
+export const VEHICLE_COST_REFERENCE = Object.freeze({
+  "Moto": { driverDailyCost: 220, vehicleDailyCost: 40, energyCostPerKm: 0.06, maintenancePerKm: 0.12 },
+  "Passeio": { driverDailyCost: 220, vehicleDailyCost: 90, energyCostPerKm: 0.10, maintenancePerKm: 0.15 },
+  "Fiorino / Van": { driverDailyCost: 280, vehicleDailyCost: 160, energyCostPerKm: 0.12, maintenancePerKm: 0.20 },
+  "VUC": { driverDailyCost: 280, vehicleDailyCost: 495, energyCostPerKm: 0.12, maintenancePerKm: 0.42 },
+  "Toco": { driverDailyCost: 280, vehicleDailyCost: 495, energyCostPerKm: 0.30, maintenancePerKm: 0.42 },
+  "Truck": { driverDailyCost: 340, vehicleDailyCost: 900, energyCostPerKm: 0.60, maintenancePerKm: 0.42 },
+  "Carreta Sider": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
+  "Carreta Aberta": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
+  "Carreta elétrica": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
+});
+
 export const resolverParametros = (padrao, perfis = [], contexto = {}) => {
   const ordem = ESCOPO_PARAMETROS.map((item) => item.id);
   const chaves = {
@@ -193,6 +215,11 @@ export const resolverParametros = (padrao, perfis = [], contexto = {}) => {
   for (const tipo of ordem) {
     const chave = chaves[tipo];
     if (!chave) continue;
+    // Referência de fábrica do veículo, sob o perfil do admin (se houver).
+    if (tipo === "vehicle" && VEHICLE_COST_REFERENCE[chave]) {
+      Object.assign(parametros, VEHICLE_COST_REFERENCE[chave]);
+      aplicados.push({ versao: "ref-frota", scopeType: "vehicle", scopeKey: chave, fonte: "referencia_de_fabrica", parametros: VEHICLE_COST_REFERENCE[chave] });
+    }
     const perfil = perfis.find((item) => item.status === "active" && item.scopeType === tipo && item.scopeKey === chave);
     if (!perfil) continue;
     Object.assign(parametros, perfil.parametros || {});

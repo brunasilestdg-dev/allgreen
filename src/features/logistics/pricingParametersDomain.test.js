@@ -8,6 +8,7 @@ import {
   resolverParametros,
   simularEfeito,
   validarParametros,
+  VEHICLE_COST_REFERENCE,
 } from "./pricingParametersDomain.js";
 
 const regua = (extra = {}) => ({
@@ -178,5 +179,31 @@ describe("herança por escopo", () => {
     expect(resolvido.parametros.targetMarginPercent).toBe(26);
     expect(resolvido.parametros.waitingCostPerHour).toBe(120);
     expect(resolvido.aplicados.map((item) => item.versao)).toEqual(["g1", "spot1"]);
+  });
+});
+
+describe("custo por veículo: fábrica muda o preço, admin sobrescreve", () => {
+  it("sem veículo escolhido, mantém o custo de veículo da régua global", () => {
+    const resolvido = resolverParametros(regua(), [], {});
+    expect(resolvido.parametros.vehicleDailyCost).toBe(430); // régua global
+    expect(resolvido.aplicados).toHaveLength(0);
+  });
+
+  it("escolher o veículo aplica o custo de referência de fábrica (muda o preço)", () => {
+    const resolvido = resolverParametros(regua(), [], { vehicleType: "Toco" });
+    expect(resolvido.parametros.vehicleDailyCost).toBe(VEHICLE_COST_REFERENCE["Toco"].vehicleDailyCost); // 495, não 430
+    expect(resolvido.parametros.maintenancePerKm).toBe(VEHICLE_COST_REFERENCE["Toco"].maintenancePerKm);
+    expect(resolvido.aplicados.some((a) => a.fonte === "referencia_de_fabrica" && a.scopeKey === "Toco")).toBe(true);
+  });
+
+  it("um perfil de régua do admin para o veículo SOBRESCREVE a fábrica", () => {
+    // Cenário da titular: compramos um Toco mais caro; o admin edita o custo do
+    // veículo na Régua (escopo Veículo). O perfil ativo vence a referência.
+    const resolvido = resolverParametros(regua(), [
+      { id: "v", versao: "toco-2026", scopeType: "vehicle", scopeKey: "Toco", status: "active", parametros: { vehicleDailyCost: 640 } },
+    ], { vehicleType: "Toco" });
+    expect(resolvido.parametros.vehicleDailyCost).toBe(640); // admin vence a fábrica (495)
+    // A manutenção, que o admin não mexeu, segue a referência de fábrica.
+    expect(resolvido.parametros.maintenancePerKm).toBe(VEHICLE_COST_REFERENCE["Toco"].maintenancePerKm);
   });
 });
