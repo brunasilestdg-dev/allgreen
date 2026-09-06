@@ -629,7 +629,7 @@ async function clientOverview(env, escopo) {
             COALESCE(SUM(CAST(json_extract(fields_json, '$.distanceKm') AS REAL)), 0) AS km,
             COALESCE(AVG(CAST(json_extract(fields_json, '$.occupancyPercent') AS REAL)), 0) AS ocupacao
        FROM todogreen_client_operations
-      WHERE ${sql}`,
+      WHERE ${sql} AND lower(status) != 'rascunho'`,
   )
     .bind(...params)
     .first()
@@ -730,7 +730,7 @@ export async function handleTodoGreenClientPortalPreview(request, env, access, u
     clientOverview(env, previewScope),
     env.DB.prepare(
       `SELECT id,reference,status,service_date AS serviceDate,origin,destination
-         FROM todogreen_client_operations WHERE ${sql}
+         FROM todogreen_client_operations WHERE ${sql} AND lower(status) != 'rascunho'
         ORDER BY service_date DESC,created_at DESC LIMIT 5`,
     ).bind(...params).all().catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] })),
     env.DB.prepare(`SELECT COUNT(*) AS total FROM todogreen_evidences WHERE ${sql}`)
@@ -825,7 +825,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
               (SELECT COUNT(*) FROM todogreen_client_operation_events e
                 WHERE e.operation_id = o.id AND e.kind = 'ocorrencia') AS ocorrencias
          FROM todogreen_client_operations o
-        WHERE ${sql}
+        WHERE ${sql} AND lower(o.status) != 'rascunho'
         ORDER BY o.service_date DESC, o.created_at DESC
         LIMIT ?`,
     )

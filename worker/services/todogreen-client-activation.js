@@ -262,6 +262,29 @@ async function prepare(env, access, user, clientId) {
     ).bind(user.id, now, clientId, TENANT_ID, access.ownerId).run();
   }
 
+  // A operação do cliente nasce como RASCUNHO, ligada ao contrato — um
+  // pré-cadastro que a operação confirma em vez de digitar do zero. O gate de
+  // go-live NÃO se dá por satisfeito com rascunho: continua exigindo a
+  // confirmação (o "não cria operação fictícia" segue de pé — a diferença é que
+  // agora há um rascunho para conferir, não um formulário em branco). O
+  // rascunho não vaza para o portal do cliente (as consultas do portal excluem
+  // status 'rascunho'). Só semeia se ainda não há operação e já existe contrato.
+  if (!snapshot.operation && snapshot.contract?.id) {
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO todogreen_client_operations
+         (id,tenant_id,client_id,workspace_owner_id,contract_id,product_id,reference,status,
+          service_date,origin,destination,fields_json,revision,created_by,updated_by,created_at,updated_at)
+       VALUES (?,?,?,?,?,'',?,'rascunho',NULL,'','',?,1,?,?,?,?)`,
+    ).bind(
+      `tdg-op-draft-${clientId}`.slice(0, 120), TENANT_ID, clientId, access.ownerId,
+      snapshot.contract.id,
+      `Operação · ${snapshot.client.name}`.slice(0, 200),
+      JSON.stringify({ source: "client_activation", contractId: snapshot.contract.id }),
+      user.id, user.id, now, now,
+    ).run();
+    created.push("operation");
+  }
+
   snapshot = await loadSnapshot(env, access, clientId);
   await registrarAuditoriaTodoGreen(env, {
     access, user, action: "client_activation_prepared", resourceType: "client_activation",

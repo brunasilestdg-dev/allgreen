@@ -18,7 +18,9 @@ const slaEfetivo = (operation, now = new Date()) => {
 };
 const isLate = (operation) => slaEfetivo(operation) === "atrasado";
 
-export default function OperationsPage({ operations = [], clients = [], contracts = [], criar, registrarEventoOperacao, listarSubrecurso, setToast, mode = "operations", authHeaders }) {
+const ehRascunho = (operation) => String(operation?.situacao || "").toLowerCase() === "rascunho";
+
+export default function OperationsPage({ operations = [], clients = [], contracts = [], criar, atualizar, registrarEventoOperacao, listarSubrecurso, setToast, mode = "operations", authHeaders }) {
   // Motoristas do cadastro mestre: o vínculo por ID é o que liga a operação ao
   // portal do motorista (0070). Texto livre continua valendo como fallback
   // para quem ainda não cadastrou a equipe.
@@ -36,6 +38,26 @@ export default function OperationsPage({ operations = [], clients = [], contract
   const [saving, setSaving] = useState(false);
   // Registro em janela própria (rodada "nada corta a tela", 30/08).
   const [novaAberta, setNovaAberta] = useState(false);
+  // Quando não é null, o modal está CONFIRMANDO um rascunho pré-cadastrado pelo
+  // go-live (Onda 3, costura 2): mesma janela, mas salva por cima do rascunho e
+  // tira o "rascunho" — a operação passa a valer e libera o gate de go-live.
+  const [confirmando, setConfirmando] = useState(null);
+  const abrirConfirmacao = (operation) => {
+    setForm({
+      clientId: operation.clientId || "", contractId: operation.contratoId || "",
+      productId: operation.produtoId || "middle-mile", reference: operation.referencia || "",
+      serviceDate: operation.dataServico || "", origin: operation.origem || "", destination: operation.destino || "",
+      promisedAt: operation.prometidoEm || "", etaAt: operation.etaEm || "", plate: operation.placa || "",
+      driver: operation.motorista || "", driverId: operation.motoristaId || "",
+      trips: operation.viagens || "", deliveries: operation.entregas || "", packages: operation.pacotes || "",
+      distanceKm: operation.distanciaKm || "", occupancyPercent: operation.ocupacaoPercent || "",
+      // Sai do rascunho: 'planned' é o começo natural de uma operação confirmada.
+      status: "planned",
+    });
+    setConfirmando({ id: operation.id, revision: operation.revision });
+    setNovaAberta(true);
+  };
+  const fecharModal = () => { setNovaAberta(false); setConfirmando(null); setForm(empty); };
   const [selected, setSelected] = useState(null);
   const [events, setEvents] = useState([]);
   const [event, setEvent] = useState({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal(), recebedor: "", comprovanteUrl: "" });
@@ -54,17 +76,22 @@ export default function OperationsPage({ operations = [], clients = [], contract
   const save = async (submitEvent) => {
     submitEvent.preventDefault();
     setSaving(true);
+    const payload = {
+      clientId: form.clientId, contratoId: form.contractId, produtoId: form.productId,
+      referencia: form.reference, dataServico: form.serviceDate, origem: form.origin, destino: form.destination,
+      prometidoEm: form.promisedAt, etaEm: form.etaAt, placa: form.plate, motorista: form.driver, motoristaId: form.driverId,
+      viagens: Number(form.trips), entregas: Number(form.deliveries), pacotes: Number(form.packages),
+      distanciaKm: Number(form.distanceKm), ocupacaoPercent: Number(form.occupancyPercent), situacao: form.status,
+    };
     try {
-      await criar("operations", {
-        clientId: form.clientId, contratoId: form.contractId, produtoId: form.productId,
-        referencia: form.reference, dataServico: form.serviceDate, origem: form.origin, destino: form.destination,
-        prometidoEm: form.promisedAt, etaEm: form.etaAt, placa: form.plate, motorista: form.driver, motoristaId: form.driverId,
-        viagens: Number(form.trips), entregas: Number(form.deliveries), pacotes: Number(form.packages),
-        distanciaKm: Number(form.distanceKm), ocupacaoPercent: Number(form.occupancyPercent), situacao: form.status,
-      });
-      setForm(empty);
-      setNovaAberta(false);
-      setToast?.("Operação registrada na mesma fonte do portal");
+      if (confirmando) {
+        await atualizar("operations", confirmando.id, { ...payload, revision: confirmando.revision });
+        setToast?.("Operação confirmada. O gate de go-live está liberado.");
+      } else {
+        await criar("operations", payload);
+        setToast?.("Operação registrada na mesma fonte do portal");
+      }
+      fecharModal();
     } catch (error) { setToast?.(error.message); }
     finally { setSaving(false); }
   };
@@ -97,7 +124,8 @@ export default function OperationsPage({ operations = [], clients = [], contract
       <div className="tdg-result"><article className="tdg-metric"><span>Viagens</span><strong>{totals.trips.toLocaleString("pt-BR")}</strong><small>volume registrado</small></article><article className="tdg-metric good"><span>Entregas</span><strong>{totals.deliveries.toLocaleString("pt-BR")}</strong><small>execução consolidada</small></article><article className={`tdg-metric ${totals.incidents ? "risk" : ""}`}><span>Ocorrências</span><strong>{totals.incidents}</strong><small>eventos operacionais</small></article><article className="tdg-metric"><span>Distância</span><strong>{totals.distance.toLocaleString("pt-BR")} km</strong><small>base para custo e ESG</small></article></div>
       {/* Registro em janela própria: o formulário de 17 campos não empurra
           mais a grade de operações (rodada "nada corta a tela", 30/08). */}
-      {!isIncidents && novaAberta && <Modal title="Nova operação" onClose={() => setNovaAberta(false)} wide><form className="tdg-access-form tdg-enterprise-form tdg-form-em-modal" onSubmit={save}>
+      {!isIncidents && novaAberta && <Modal title={confirmando ? "Confirmar operação do contrato" : "Nova operação"} onClose={fecharModal} wide><form className="tdg-access-form tdg-enterprise-form tdg-form-em-modal" onSubmit={save}>
+        {confirmando && <p className="tdg-esg-nota">Rascunho pré-cadastrado pelo go-live a partir do contrato. Confira os dados e confirme — a operação passa a valer e o gate de implantação é liberado.</p>}
         <label><span>Cliente</span><select required value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value }))}><option value="">Selecione</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name || client.nome || client.id}</option>)}</select></label>
         <label><span>Contrato</span><select value={form.contractId} onChange={(e) => setForm((v) => ({ ...v, contractId: e.target.value }))}><option value="">Sem contrato</option>{contracts.filter((contract) => !form.clientId || contract.clientId === form.clientId).map((contract) => <option key={contract.id} value={contract.id}>{contract.titulo || contract.title}</option>)}</select></label>
         <label><span>Referência</span><input required value={form.reference} onChange={(e) => setForm((v) => ({ ...v, reference: e.target.value }))} placeholder="Carga, rota ou pedido" /></label>
@@ -115,9 +143,9 @@ export default function OperationsPage({ operations = [], clients = [], contract
         <label><span>Ocupação %</span><input type="number" min="0" max="100" value={form.occupancyPercent} onChange={(e) => setForm((v) => ({ ...v, occupancyPercent: e.target.value }))} /></label>
         <label><span>Situação</span><select value={form.status} onChange={(e) => setForm((v) => ({ ...v, status: e.target.value }))}>{STATUS.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label>
         <label><span>Produto</span><select value={form.productId} onChange={(e) => setForm((v) => ({ ...v, productId: e.target.value }))}>{LOGISTICS_PRODUCTS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <div className="tdg-form-actions"><button type="button" onClick={() => setNovaAberta(false)}>Cancelar</button><button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : "Registrar operação"}</button></div>
+        <div className="tdg-form-actions"><button type="button" onClick={fecharModal}>Cancelar</button><button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : confirmando ? "Confirmar operação" : "Registrar operação"}</button></div>
       </form></Modal>}
-      <div className="tdg-operation-grid">{visibleOperations.length === 0 && <div className="tdg-empty-access">{isIncidents ? "Nenhuma ocorrência ou atraso em aberto." : "Nenhuma operação real registrada."}</div>}{visibleOperations.map((operation) => <article className="tdg-operation-card" key={operation.id}><div><Route size={18} /><span><strong>{operation.referencia || "Operação sem referência"}</strong><small>{operation.origem || "origem pendente"} → {operation.destino || "destino pendente"}</small></span><span className={`tdg-ledger-status ${slaEfetivo(operation) === "atrasado" ? "overdue" : "pending"}`}>{slaEfetivo(operation) === "atrasado" && <AlertTriangle size={14} />}{slaEfetivo(operation)}</span></div><dl><div><dt><Truck size={14} /> Frota</dt><dd>{operation.placa || "sem placa"} · {operation.motorista || "sem motorista"}</dd></div><div><dt><Clock3 size={14} /> Prometido</dt><dd>{operation.prometidoEm || "não informado"}</dd></div><div><dt><PackageCheck size={14} /> Volume</dt><dd>{Number(operation.entregas || 0)} entregas · {Number(operation.pacotes || 0)} pacotes</dd></div><div><dt><MapPin size={14} /> Última posição</dt><dd>{operation.ultimaPosicaoEm || "não informada"}</dd></div></dl><button type="button" onClick={() => openEvents(operation)}>{isIncidents ? "Tratar ocorrência" : "Linha do tempo"} · {Number(operation.ocorrencias || 0)} ocorrência(s)</button></article>)}</div>
+      <div className="tdg-operation-grid">{visibleOperations.length === 0 && <div className="tdg-empty-access">{isIncidents ? "Nenhuma ocorrência ou atraso em aberto." : "Nenhuma operação real registrada."}</div>}{visibleOperations.map((operation) => <article className="tdg-operation-card" key={operation.id}><div><Route size={18} /><span><strong>{operation.referencia || "Operação sem referência"}</strong><small>{operation.origem || "origem pendente"} → {operation.destino || "destino pendente"}</small></span><span className={`tdg-ledger-status ${ehRascunho(operation) || slaEfetivo(operation) === "atrasado" ? "overdue" : "pending"}`}>{(ehRascunho(operation) || slaEfetivo(operation) === "atrasado") && <AlertTriangle size={14} />}{ehRascunho(operation) ? "rascunho · confirmar" : slaEfetivo(operation)}</span></div><dl><div><dt><Truck size={14} /> Frota</dt><dd>{operation.placa || "sem placa"} · {operation.motorista || "sem motorista"}</dd></div><div><dt><Clock3 size={14} /> Prometido</dt><dd>{operation.prometidoEm || "não informado"}</dd></div><div><dt><PackageCheck size={14} /> Volume</dt><dd>{Number(operation.entregas || 0)} entregas · {Number(operation.pacotes || 0)} pacotes</dd></div><div><dt><MapPin size={14} /> Última posição</dt><dd>{operation.ultimaPosicaoEm || "não informada"}</dd></div></dl><div className="tdg-operation-card-actions">{!isIncidents && ehRascunho(operation) && <button type="button" className="tdg-action" onClick={() => abrirConfirmacao(operation)}>Confirmar operação</button>}<button type="button" onClick={() => openEvents(operation)}>{isIncidents ? "Tratar ocorrência" : "Linha do tempo"} · {Number(operation.ocorrencias || 0)} ocorrência(s)</button></div></article>)}</div>
       {/* Linha do tempo em janela própria: antes o formulário de evento
           nascia depois da grade inteira, fora da tela em carteiras grandes. */}
       {selected && <Modal title={`Linha do tempo · ${selected.referencia}`} onClose={() => setSelected(null)} wide><div className="tdg-operation-timeline tdg-form-em-modal"><form className="tdg-inline-editor" onSubmit={saveEvent}><div><strong>Evento em {selected.referencia}</strong><small>Histórico append-only: o evento não pode ser reescrito depois.</small></div><label><span>Tipo</span><select value={event.tipo} onChange={(e) => setEvent((v) => ({ ...v, tipo: e.target.value }))}>{EVENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label><label><span>Título</span><input value={event.titulo} onChange={(e) => setEvent((v) => ({ ...v, titulo: e.target.value }))} /></label><label><span>Local</span><input value={event.local} onChange={(e) => setEvent((v) => ({ ...v, local: e.target.value }))} /></label><label><span>Quando ocorreu</span><input type="datetime-local" value={event.ocorridoEm} onChange={(e) => setEvent((v) => ({ ...v, ocorridoEm: e.target.value }))} /></label><label><span>Descrição</span><input value={event.descricao} onChange={(e) => setEvent((v) => ({ ...v, descricao: e.target.value }))} /></label>{event.tipo === "entrega" && <><label><span>Quem recebeu</span><input value={event.recebedor} onChange={(e) => setEvent((v) => ({ ...v, recebedor: e.target.value }))} placeholder="Nome do recebedor" /></label><label><span>Comprovante (link do canhoto/foto)</span><input value={event.comprovanteUrl} onChange={(e) => setEvent((v) => ({ ...v, comprovanteUrl: e.target.value }))} placeholder="https://..." /></label></>}<button className="tdg-action" type="submit" disabled={saving}>Registrar evento</button><button type="button" onClick={() => setSelected(null)}>Fechar</button></form><div className="tdg-timeline-list">{events.length === 0 && <small>Nenhum evento registrado.</small>}{events.map((item) => <article key={item.id}><span>{item.tipo}</span><strong>{item.titulo || item.descricao}</strong><small>{item.local || "sem local"} · {item.ocorridoEm}</small></article>)}</div></div></Modal>}

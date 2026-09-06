@@ -1682,6 +1682,8 @@
 .tdg-operation-card dl div { display: grid; gap: 3px; }
 .tdg-operation-card dt { align-items: center; color: var(--tdg-muted); display: flex; font-size: .75rem; gap: 5px; }
 .tdg-operation-card dd { font-size: .86rem; margin: 0; }
+.tdg-operation-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tdg-operation-card-actions > button { flex: 1; min-width: max-content; }
 .tdg-operation-timeline { margin-top: 14px; }
 .tdg-timeline-list, .tdg-audit-stream { display: grid; gap: 8px; margin-top: 12px; }
 .tdg-timeline-list article { align-items: center; background: color-mix(in srgb, var(--tdg-green) 5%, var(--tdg-card)); border-left: 3px solid var(--tdg-green); display: grid; gap: 10px; grid-template-columns: 100px 1fr auto; padding: 10px 12px; }

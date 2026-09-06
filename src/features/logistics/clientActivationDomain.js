@@ -96,8 +96,16 @@ export function buildClientActivationReadiness(snapshot = {}, today = new Date()
     ),
     makeCheck(
       "operation",
-      Boolean(snapshot.operation?.id),
-      snapshot.operation?.id ? `Operação ${snapshot.operation.reference || snapshot.operation.id} vinculada.` : "Cadastre a operação real do cliente; o gate não cria operação fictícia.",
+      // Rascunho não conta: o go-live pré-cadastra a operação ligada ao
+      // contrato, mas o gate segue exigindo que a operação seja CONFIRMADA — a
+      // trava "não vale operação fictícia" continua de pé, só que agora há um
+      // rascunho para conferir em vez de um formulário em branco.
+      Boolean(snapshot.operation?.id) && String(snapshot.operation.status || "").toLowerCase() !== "rascunho",
+      Boolean(snapshot.operation?.id) && String(snapshot.operation.status || "").toLowerCase() !== "rascunho"
+        ? `Operação ${snapshot.operation.reference || snapshot.operation.id} vinculada.`
+        : snapshot.operation?.id
+          ? "Operação em rascunho, pré-cadastrada pelo go-live: confirme os dados para liberar."
+          : "Cadastre a operação real do cliente; o gate não cria operação fictícia.",
     ),
     makeCheck(
       "sla",
