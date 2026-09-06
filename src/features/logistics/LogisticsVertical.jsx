@@ -1209,6 +1209,21 @@ const booleanFields = new Set([
   "temperatureControlled",
 ]);
 
+// Frota elétrica da To Do Green. "Tipo de veículo" deixa de ser texto livre
+// (onde "moto" ≠ "Moto elétrica" nunca casava com a régua) e vira uma escolha —
+// e o valor escolhido é a MESMA chave usada pela régua por veículo (escopo
+// "Veículo"), então selecionar passa a poder mudar o custo quando houver um
+// perfil de régua para aquele veículo.
+const VEHICLE_TYPES = Object.freeze([
+  "Bicicleta cargo elétrica",
+  "Moto elétrica",
+  "VUC elétrico",
+  "Furgão elétrico",
+  "Van elétrica",
+  "Caminhão leve elétrico (3/4)",
+  "Toco elétrico",
+]);
+
 // Toda premissa que muda preço, margem ou CO₂ nasce vazia.
 //
 // Antes a calculadora abria com distância, frequência, ocupação, tipo de
@@ -1826,6 +1841,23 @@ function FieldInput({ name, value, required, onChange, inputs }) {
           idaEVolta={inputs?.returnLoaded === true || inputs?.roundTrip === true}
           onAceitar={(km) => onChange(name, km)}
         />
+      </label>
+    );
+  }
+  if (name === "vehicleType") {
+    const valorAtual = value ?? "";
+    // Preserva um valor antigo que não esteja na lista (ex.: "moto" digitado
+    // antes de existir a escolha) para não sumir com a premissa gravada.
+    const opcoes = valorAtual && !VEHICLE_TYPES.includes(valorAtual)
+      ? [valorAtual, ...VEHICLE_TYPES]
+      : VEHICLE_TYPES;
+    return (
+      <label>
+        <span>{comRotulo(fieldLabels, name)}{required ? " *" : ""}</span>
+        <select value={valorAtual} onChange={(event) => onChange(name, event.target.value)}>
+          <option value="">Selecione o veículo</option>
+          {opcoes.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+        </select>
       </label>
     );
   }
@@ -3484,7 +3516,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} interactions={verticalData.interactions} onComment={(registro) => criar("comments", registro)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><QualityPage registros={registros.quality} clients={clientes} operations={registros.operations} criar={criar} atualizar={atualizar} setToast={setToast} /></Suspense>}
       {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando inteligência de mercado...</section>}><TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={navigate} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><LegalPage registros={registros.legal} clients={clientes} criar={criar} atualizar={atualizar} setToast={setToast} authHeaders={authHeaders} listarSubrecurso={listarSubrecurso} recarregar={recarregarRegistros} juridico={hasTodoGreenPermission(role, "compliance:manage", permissions)} /></Suspense>}
+      {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><LegalPage registros={registros.legal} clients={clientes} criar={criar} atualizar={atualizar} setToast={setToast} authHeaders={authHeaders} listarSubrecurso={listarSubrecurso} recarregar={recarregarRegistros} juridico={hasTodoGreenPermission(role, "compliance:manage", remoteAccess.permissions)} /></Suspense>}
       {page === "indicadores" && <Suspense fallback={<section className="tdg-panel">Carregando indicadores...</section>}><EnterpriseAreaPage area="indicators" onNavigate={navigate} /></Suspense>}
       {page === "administracao" && <Suspense fallback={<section className="tdg-panel">Carregando administração...</section>}><EnterpriseAreaPage area="admin" onNavigate={navigate} /></Suspense>}
       {page === "relatorios" && <Suspense fallback={<section className="tdg-panel">Carregando relatórios...</section>}><ReportsPage dashboard={dashboard} data={verticalData} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
