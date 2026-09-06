@@ -1223,6 +1223,7 @@ const VEHICLE_TYPES = Object.freeze([
   "Carreta Sider",
   "Carreta Aberta",
   "Carreta elétrica",
+  "Cavalo elétrico (solo)",
 ]);
 
 // Toda premissa que muda preço, margem ou CO₂ nasce vazia.

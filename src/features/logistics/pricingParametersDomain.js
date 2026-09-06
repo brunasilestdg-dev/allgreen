@@ -1,6 +1,8 @@
 // Parâmetros versionados do simulador. A régua comercial é uma das categorias,
 // não o sistema inteiro: frota, equipe e operação também precisam sair do código.
 
+import { referenciaEngineAtivoPesado } from "./heavyAssetCostDomain.js";
+
 export const PARAMETROS_VERSAO_PADRAO = "v1.2026";
 
 const percentual = (rotulo, descricao, max = 100) => ({
@@ -200,7 +202,12 @@ export const VEHICLE_COST_REFERENCE = Object.freeze({
   "Truck": { driverDailyCost: 340, vehicleDailyCost: 900, energyCostPerKm: 0.60, maintenancePerKm: 0.42 },
   "Carreta Sider": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
   "Carreta Aberta": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
-  "Carreta elétrica": { driverDailyCost: 480, vehicleDailyCost: 1742, energyCostPerKm: 1.42, maintenancePerKm: 0.12 },
+  // Cavalo elétrico XCMG: custo derivado do modelo de ATIVO PESADO (depreciação,
+  // capital, seguro sobre o valor, infra de recarga) — reproduz a planilha da
+  // titular. Muito acima de um R$/dia chapado justamente porque considera essas
+  // variáveis. "Solo" = o cliente fornece os semirreboques.
+  "Carreta elétrica": referenciaEngineAtivoPesado({}, { incluiCarreta: true }),
+  "Cavalo elétrico (solo)": referenciaEngineAtivoPesado({}, { incluiCarreta: false }),
 });
 
 export const resolverParametros = (padrao, perfis = [], contexto = {}) => {
