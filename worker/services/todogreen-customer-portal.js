@@ -641,9 +641,13 @@ async function clientOverview(env, escopo) {
     `SELECT COALESCE(SUM(CAST(json_extract(result_json, '$.impact.co2AvoidedKg') AS REAL)), 0) AS co2,
             COALESCE(SUM(CAST(json_extract(result_json, '$.impact.dieselAvoidedLiters') AS REAL)), 0) AS diesel,
             -- Cenário convencional × operação real: os dois lados da comparação
-            -- que a tela promete e que o motor já grava (só não eram somados).
-            COALESCE(SUM(CAST(json_extract(result_json, '$.impact.referenceEmissionsKg') AS REAL)), 0) AS convencional,
-            COALESCE(SUM(CAST(json_extract(result_json, '$.impact.actualEmissionsKg') AS REAL)), 0) AS realizado,
+            -- que a tela promete e que o motor já grava. As chaves são as que o
+            -- motor ambiental emite (co2ReferenciaKg/co2ExecutadoKg) — antes esta
+            -- consulta lia referenceEmissionsKg/actualEmissionsKg, que não existem
+            -- no result_json, então convencional/realizado vinham sempre 0 e o
+            -- bloco "Comparação de cenários" nunca renderizava.
+            COALESCE(SUM(CAST(json_extract(result_json, '$.impact.co2ReferenciaKg') AS REAL)), 0) AS convencional,
+            COALESCE(SUM(CAST(json_extract(result_json, '$.impact.co2ExecutadoKg') AS REAL)), 0) AS realizado,
             COALESCE(AVG(CAST(json_extract(result_json, '$.impact.reductionPercent') AS REAL)), 0) AS reducao,
             COALESCE(AVG(data_quality), 0) AS qualidade,
             COUNT(*) AS calculos
@@ -654,15 +658,23 @@ async function clientOverview(env, escopo) {
     .first()
     .catch(() => null);
 
-  const score = await env.DB.prepare(
-    `SELECT score, weights_version, calculated_at
+  // As duas notas mais recentes: a atual e a anterior. A tela mostra a
+  // composição (components_json) e a variação (atual − anterior) — antes o
+  // /resumo só devolvia valor/versão/data, então "Composição da nota" caía
+  // sempre no texto de fallback e a variação nunca aparecia.
+  const scores = await env.DB.prepare(
+    `SELECT score, weights_version, components_json, calculated_at
        FROM todogreen_green_scores
       WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ? AND scope_type = 'cliente'
-      ORDER BY calculated_at DESC LIMIT 1`,
+      ORDER BY calculated_at DESC LIMIT 2`,
   )
     .bind(escopo.tenantId, escopo.workspaceOwnerId, escopo.clientId)
-    .first()
+    .all()
     .catch(() => null);
+
+  const scoreRows = scores?.results || [];
+  const score = scoreRows[0] || null;
+  const scoreAnterior = scoreRows[1] || null;
 
   return {
     operacoes: {
@@ -687,6 +699,8 @@ async function clientOverview(env, escopo) {
           valor: score.score,
           versaoPesos: score.weights_version,
           calculadoEm: score.calculated_at,
+          componentes: parse(score.components_json, {}),
+          anterior: scoreAnterior ? scoreAnterior.score : null,
         }
       : null,
     // Sem dado é sem dado. A tela mostra convite para cadastrar, não número

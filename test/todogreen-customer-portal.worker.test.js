@@ -264,6 +264,71 @@ describe("o cliente A nunca alcança o cliente B", () => {
   });
 });
 
+describe("indicadores ambientais e Green Score chegam ao portal", () => {
+  it("o resumo traz a comparação de emissões e a composição/variação do Green Score", async () => {
+    const agora = new Date().toISOString();
+    const ontem = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+
+    // Um cálculo ambiental do cliente A com as MESMAS chaves que o motor grava
+    // em result_json.impact. Antes o /resumo lia referenceEmissionsKg/
+    // actualEmissionsKg (que não existem no JSON) e a comparação de cenários
+    // vinha sempre 0 — então o bloco nunca renderizava.
+    await env.DB.prepare(
+      `INSERT INTO environmental_calculations
+         (id, tenant_id, workspace_owner_id, created_by, product_id, client_id,
+          inputs_json, result_json, methodology_version, data_quality, created_at)
+       VALUES ('env-a','todogreen','dono','seed','middle-mile','cli-a','{}',?,'v1',80,?)`,
+    ).bind(
+      JSON.stringify({
+        impact: {
+          co2ReferenciaKg: 1000,
+          co2ExecutadoKg: 300,
+          co2AvoidedKg: 700,
+          reductionPercent: 70,
+          dieselAvoidedLiters: 260,
+        },
+      }),
+      agora,
+    ).run();
+
+    // Duas notas do mesmo cliente: a anterior (ontem) e a atual (hoje). A tela
+    // mostra a composição (components_json) e a variação (atual − anterior) —
+    // antes o /resumo só devolvia valor/versão/data.
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO todogreen_green_scores
+           (id, tenant_id, workspace_owner_id, client_id, scope_type, scope_id,
+            score, components_json, inputs_json, weights_version, data_quality,
+            calculated_by, calculated_at)
+         VALUES ('gs-ant','todogreen','dono','cli-a','cliente','',72,'{}','{}','2026.1',80,'seed',?)`,
+      ).bind(ontem),
+      env.DB.prepare(
+        `INSERT INTO todogreen_green_scores
+           (id, tenant_id, workspace_owner_id, client_id, scope_type, scope_id,
+            score, components_json, inputs_json, weights_version, data_quality,
+            calculated_by, calculated_at)
+         VALUES ('gs-atual','todogreen','dono','cli-a','cliente','',81,?,'{}','2026.1',80,'seed',?)`,
+      ).bind(JSON.stringify({ ambiental: 85, eficiencia: 78, evidencias: 80 }), agora),
+    ]);
+
+    const { resumo } = await (await pedir("/api/todogreen/portal/resumo", { token: pessoaA.token })).json();
+
+    // Comparação de cenários: os dois lados chegam com valor (não mais 0).
+    expect(resumo.ambiental.emissaoConvencionalKg).toBe(1000);
+    expect(resumo.ambiental.emissaoTodogreenKg).toBe(300);
+    expect(resumo.ambiental.co2EvitadoKg).toBe(700);
+
+    // Green Score: nota atual, composição da nota e variação vinda da anterior.
+    expect(resumo.greenScore.valor).toBe(81);
+    expect(resumo.greenScore.anterior).toBe(72);
+    expect(resumo.greenScore.componentes).toMatchObject({
+      ambiental: 85,
+      eficiencia: 78,
+      evidencias: 80,
+    });
+  });
+});
+
 describe("faturas do cliente no portal", () => {
   it("lista só os títulos DELE, com 2ª via quando o documento fiscal existe", async () => {
     const agora = new Date().toISOString();
