@@ -138,6 +138,13 @@ export default function DriverPortalPage() {
   // CNH subida pelo próprio motorista (fica disponível à operação).
   const [enviandoCnh, setEnviandoCnh] = useState(false);
   const cnhInputRef = useRef(null);
+  // Foto de perfil DO MOTORISTA: é dele, ele escolhe (pedido da titular — "as
+  // pessoas escolhem, são delas"). Mora na conta (users.avatar_url) e é gravada
+  // pelo mesmo endpoint do perfil do app, com a mesma sessão. Distinta da foto
+  // do canhoto (POD) e da CNH — esta é a cara da pessoa.
+  const [perfil, setPerfil] = useState(null); // { name, avatarUrl }
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const avatarInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
   // dreno por vez.
@@ -200,6 +207,60 @@ export default function DriverPortalPage() {
     }
   }, [escoarFila]);
   useEffect(() => { carregar(); }, [carregar]);
+
+  // A conta (nome + foto escolhida) vem do mesmo endpoint de sessão do app —
+  // com a MESMA sessão do motorista. Só leitura; se falhar, o perfil segue com
+  // o placeholder e o resto do portal não quebra.
+  const carregarPerfil = useCallback(async () => {
+    try {
+      const r = await fetch("/api/auth/session", { headers: authHeaders() });
+      if (!r.ok) return;
+      const d = await r.json().catch(() => ({}));
+      if (d?.user) setPerfil({ name: d.user.name || "", avatarUrl: d.user.avatarUrl || "" });
+    } catch { /* offline: mantém o placeholder */ }
+  }, []);
+  useEffect(() => { carregarPerfil(); }, [carregarPerfil]);
+
+  const enviarFotoPerfil = async (event) => {
+    const arquivo = event.target.files?.[0];
+    event.target.value = "";
+    if (!arquivo) return;
+    setEnviandoFoto(true);
+    try {
+      const avatarUrl = await reduzirImagem(arquivo, 320, 0.72);
+      const r = await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ avatarUrl }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Não consegui salvar sua foto agora.");
+      setPerfil((p) => ({ ...(p || {}), avatarUrl: d.user?.avatarUrl || avatarUrl }));
+      setAviso("Foto de perfil atualizada.");
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui salvar sua foto agora.");
+    } finally {
+      setEnviandoFoto(false);
+    }
+  };
+
+  const removerFotoPerfil = async () => {
+    setEnviandoFoto(true);
+    try {
+      const r = await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ avatarUrl: "" }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "Não consegui remover a foto."); }
+      setPerfil((p) => ({ ...(p || {}), avatarUrl: "" }));
+      setAviso("Foto removida.");
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui remover a foto.");
+    } finally {
+      setEnviandoFoto(false);
+    }
+  };
 
   // Voltou o sinal: escoa a fila sem esperar o motorista reabrir o app.
   useEffect(() => {
@@ -486,10 +547,25 @@ export default function DriverPortalPage() {
       {secao === "perfil" && (
         <>
           <article className="tdg-driver-cartao tdg-driver-perfil">
-            <div className="tdg-driver-avatar"><User size={26} /></div>
-            <div>
-              <strong>{sessao.motorista.nome || "Motorista"}</strong>
+            <div className="tdg-driver-avatar">
+              {perfil?.avatarUrl
+                ? <img src={perfil.avatarUrl} alt="Sua foto de perfil" />
+                : <User size={26} />}
+            </div>
+            <div className="tdg-driver-perfil-info">
+              <strong>{sessao.motorista.nome || perfil?.name || "Motorista"}</strong>
               <small>{sessao.motorista.disponibilidade ? `Situação: ${sessao.motorista.disponibilidade}` : "Motorista To Do Green"}</small>
+              <div className="tdg-driver-perfil-foto-acoes">
+                <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={enviarFotoPerfil} />
+                <button type="button" className="tdg-driver-foto-btn" onClick={() => avatarInputRef.current?.click()} disabled={enviandoFoto}>
+                  <Camera size={15} /> {enviandoFoto ? "Salvando…" : perfil?.avatarUrl ? "Trocar foto" : "Adicionar minha foto"}
+                </button>
+                {perfil?.avatarUrl && (
+                  <button type="button" className="tdg-driver-foto-remover" onClick={removerFotoPerfil} disabled={enviandoFoto}>
+                    Remover
+                  </button>
+                )}
+              </div>
             </div>
           </article>
           <article className="tdg-driver-cartao">
