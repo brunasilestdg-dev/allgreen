@@ -423,8 +423,8 @@ function Catalog({ db, update, business, setToast, go: _go, upsertContact, useWh
   return (
     <PageTitle
       eyebrow="PRODUTOS E PEDIDOS"
-      title="Catálogo, estoque e pedidos em um só lugar"
-      text="Cadastre produtos, acompanhe o estoque e registre pedidos com atualização automática."
+      title="Materiais, estoque e pedidos em um só lugar"
+      text="Cadastre materiais e suprimentos da operação (pneus, baterias, peças, uniformes), acompanhe o estoque e registre pedidos com atualização automática."
       action={
         <Button
           icon={Plus}
@@ -661,7 +661,7 @@ function Catalog({ db, update, business, setToast, go: _go, upsertContact, useWh
                 <input
                   value={productForm.unit}
                   onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}
-                  placeholder="un, kg, caixa..."
+                  placeholder="un, litro, pallet..."
                 />
               </Field>
             </div>
@@ -675,7 +675,7 @@ function Catalog({ db, update, business, setToast, go: _go, upsertContact, useWh
                       onChange={(e) =>
                         updateVariantRow(v.id, "name", e.target.value)
                       }
-                      placeholder="Nome da variação (ex.: G, Azul)"
+                      placeholder="Nome da variação (ex.: aro 22.5, 12V)"
                       aria-label="Nome da variação"
                     />
                     <input
@@ -950,7 +950,7 @@ function Catalog({ db, update, business, setToast, go: _go, upsertContact, useWh
                   autoFocus
                   value={zoneForm.name}
                   onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
-                  placeholder="Centro, Zona Sul, até 5 km..."
+                  placeholder="Grande SP, interior, até 50 km..."
                 />
               </Field>
               <Field label="Taxa de entrega">
