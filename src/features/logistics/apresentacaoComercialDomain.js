@@ -8,7 +8,8 @@ export const APRESENTACAO_ASSUNTO = "To Do Green — logística 100% elétrica p
 
 const primeiroNome = (nome) => String(nome || "").trim().split(/\s+/)[0] || "";
 
-// Abertura por temperatura: quente retoma, morno reconecta, frio se apresenta.
+// Abertura QUENTE/MORNO só é usada quando houve contato de verdade — senão o
+// e-mail mentiria "retomando nosso contato" para quem nunca foi abordado.
 const ABERTURA = {
   Quente: (conta) =>
     `Que bom seguir com a conversa${conta ? ` sobre a ${conta}` : ""}! Como combinamos, envio em anexo a apresentação da To Do Green para você avançar internamente.`,
@@ -18,8 +19,32 @@ const ABERTURA = {
     `Sou da To Do Green e gostaria de me apresentar${conta ? ` para a ${conta}` : ""}. Somos uma operação logística 100% elétrica, e envio em anexo nossa apresentação para você conhecer a proposta.`,
 };
 
-const ABERTURA_PADRAO = (conta) =>
-  `Segue em anexo a apresentação da To Do Green${conta ? ` para a ${conta}` : ""} — logística 100% elétrica, com rastreio, comprovação de entrega e relatório de impacto ambiental.`;
+// Distila o contexto de mercado da empresa (pesquisa/inteligência externa) em
+// sinais simples que o e-mail pode CITAR sem inventar — só o que a pesquisa
+// comprovou. Devolve { rfqAberta, esgRelevante, segmento, temContexto }.
+export const contextoDeMercado = (report = {}, { segmento } = {}) => {
+  const r = report && typeof report === "object" ? report : {};
+  const rfqAberta = Array.isArray(r.openRfqs) && r.openRfqs.length > 0;
+  const esgRelevante = /alt|relevan/i.test(String(r.esg?.relevance || ""));
+  const setor = String(r.suggestedSegment?.value || segmento || "").trim();
+  return { rfqAberta, esgRelevante, segmento: setor, temContexto: rfqAberta || esgRelevante || !!setor };
+};
+
+// Abertura personalizada pelo momento da empresa. `retoma` = houve contato real
+// (só então dá para "retomar"); sem contato, a mesma personalização entra como
+// apresentação, nunca como retomada.
+const aberturaPersonalizada = (contexto, conta, retoma) => {
+  const alvo = conta ? ` a ${conta}` : "";
+  if (contexto.rfqAberta) {
+    return retoma
+      ? `Retomando o contato${conta ? ` sobre${alvo}` : ""}: vi que vocês estão com cotações de transporte em aberto e a To Do Green pode participar — operação 100% elétrica, com custo por km competitivo e relatório de impacto para o seu ESG. Segue a apresentação em anexo.`
+      : `Sou da To Do Green e queria me apresentar${alvo}: vi que vocês estão com cotações de transporte em aberto, e somos uma operação logística 100% elétrica — envio nossa apresentação para você conhecer a proposta.`;
+  }
+  const setor = contexto.segmento ? ` em ${contexto.segmento}` : "";
+  return retoma
+    ? `Retomando nosso contato${conta ? ` sobre${alvo}` : ""}: acompanho empresas${setor} que estão levando a pauta ESG para a logística, e trago a apresentação da To Do Green para avançarmos.`
+    : `Sou da To Do Green e gostaria de me apresentar${alvo}: empresas${setor} têm buscado tirar emissão da operação logística, e é exatamente isso que entregamos — frota 100% elétrica. Segue nossa apresentação em anexo.`;
+};
 
 const VALOR = [
   "O que a To Do Green entrega:",
@@ -31,11 +56,25 @@ const VALOR = [
 ].join("\n");
 
 // Monta o e-mail (assunto + corpo) a partir do perfil da conta e do contato.
-export const montarEmailApresentacao = ({ contatoNome, contaNome, temperatura } = {}) => {
+// `houveContato`: houve interação registrada? Só então o texto pode "retomar" —
+// senão nunca afirma um contato que não existiu (pedido da titular).
+// `contexto`: saída de contextoDeMercado — quando há contexto da empresa, a
+// abertura é personalizada; sem ele, cai no genérico por temperatura.
+export const montarEmailApresentacao = ({ contatoNome, contaNome, temperatura, houveContato = false, contexto = null } = {}) => {
   const nome = primeiroNome(contatoNome);
   const saudacao = nome ? `Olá, ${nome},` : "Olá,";
   const conta = String(contaNome || "").trim();
-  const abertura = (ABERTURA[temperatura] || ABERTURA_PADRAO)(conta);
+  // "Retomar" exige contato real E uma temperatura morna/quente.
+  const retoma = !!houveContato && (temperatura === "Quente" || temperatura === "Morno");
+  let abertura;
+  if (contexto && contexto.temContexto) {
+    abertura = aberturaPersonalizada(contexto, conta, retoma);
+  } else if (retoma) {
+    abertura = ABERTURA[temperatura](conta);
+  } else {
+    // Sem contexto e sem contato comprovado: apresentação honesta (nunca "retomando").
+    abertura = ABERTURA.Frio(conta);
+  }
   const corpo = [
     saudacao,
     "",

@@ -37,6 +37,7 @@ import InteracoesPanel from "./InteracoesPanel.jsx";
 import SaudeDaContaPanel from "./SaudeDaContaPanel.jsx";
 import AccountWorkOverview from "../AccountWorkOverview.jsx";
 import EnviarApresentacao from "../EnviarApresentacao.jsx";
+import { contextoDeMercado } from "../apresentacaoComercialDomain.js";
 import { suggestionContext } from "../accountWorkDomain.js";
 import { interacoesVisiveis } from "../interacoesDomain.js";
 import { ESTAGIOS_OPORTUNIDADE, estagioValido } from "../opportunityIntelligenceDomain.js";
@@ -1353,6 +1354,8 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       {portalPreviewOpen && <ClientPortalPreview client={selected} authHeaders={authHeaders} open onClose={() => setPortalPreviewOpen(false)} />}
       {apresentacaoAberta && <EnviarApresentacao
         conta={selected}
+        houveContato={interacoesVisiveis({ interacoes: interactions, clientId: selected.id }).length > 0}
+        contexto={contextoDeMercado(selectedReportCandidate || {}, { segmento: selected.segment })}
         setToast={setToast}
         onClose={() => setApresentacaoAberta(false)}
         onRegistrar={onInteraction ? async (interacao) => {

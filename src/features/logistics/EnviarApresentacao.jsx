@@ -16,7 +16,7 @@ import {
 // Caminho principal: envio direto pela conta Google do usuário, com o PDF
 // ANEXADO (sendGmailReal + multipart). Sem Google conectado, cai no compose do
 // Gmail (o PDF vai por download para a pessoa anexar).
-export default function EnviarApresentacao({ conta, onRegistrar, onMoverEstagio, setToast, onClose }) {
+export default function EnviarApresentacao({ conta, houveContato = false, contexto = null, onRegistrar, onMoverEstagio, setToast, onClose }) {
   const contatos = useMemo(() => conta?.crm?.contacts || conta?.contacts || [], [conta]);
   // Default recipient: an ACTIVE contact with e-mail. Nunca sugerir um contato
   // desligado/inativo como destinatário — a pessoa ainda pode digitar outro no
@@ -34,8 +34,10 @@ export default function EnviarApresentacao({ conta, onRegistrar, onMoverEstagio,
       contatoNome: contatoComEmail?.name,
       contaNome: conta?.name,
       temperatura: conta?.crm?.temperature,
+      houveContato,
+      contexto,
     }),
-    [contatoComEmail, conta],
+    [contatoComEmail, conta, houveContato, contexto],
   );
 
   const [para, setPara] = useState(contatoComEmail?.email || "");
