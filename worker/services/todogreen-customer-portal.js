@@ -871,7 +871,16 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       // O SLA vai junto de cada linha: calcular de novo na tela seria uma
       // segunda implementação da mesma pergunta, e duas implementações
       // produzem dois "atrasado" diferentes.
-      operacoes: pagina.itens.map((operacao) => ({ ...operacao, sla: slaDaOperacao(operacao) })),
+      //
+      // A posição viva (last_position) NÃO viaja na lista: a tabela nunca a
+      // desenha — ela só aparece no DETALHE, e lá com a janela LGPD de 6h e só
+      // em trânsito. Deixá-la em toda linha (inclusive entregue/cancelada)
+      // furava essa mesma proteção pela lista. Minimização de dados.
+      operacoes: pagina.itens.map((operacao) => {
+        const linha = { ...operacao, sla: slaDaOperacao(operacao) };
+        delete linha.ultimaPosicao;
+        return linha;
+      }),
       paginacao: {
         pagina: pagina.pagina,
         paginas: pagina.paginas,

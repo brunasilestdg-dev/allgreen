@@ -138,6 +138,24 @@ describe("a lista deixou de ser cinco colunas", () => {
     expect(atrasada.placa).toBe("ABC1D23");
   });
 
+  it("a lista nunca despeja a posição viva (last_position) — nem de operação entregue", async () => {
+    // Carimba uma posição na operação JÁ ENTREGUE. A tabela nunca desenha
+    // posição (ela só aparece no detalhe, com a janela LGPD de 6h e só em
+    // trânsito); a lista não pode furar essa proteção despejando last_position.
+    await env.DB.prepare(
+      `UPDATE todogreen_client_operations
+          SET last_position_lat = -23.5, last_position_lng = -46.6, last_position_at = ?
+        WHERE id = ?`,
+    ).bind(new Date().toISOString(), comAtraso).run();
+
+    const corpo = await (await pedir("/api/todogreen/portal/operacoes", cliente.token)).json();
+    const atrasada = corpo.operacoes.find((o) => o.referencia === "OP-ATRASO");
+    expect(atrasada).toBeTruthy();
+    expect(atrasada.ultimaPosicao).toBeUndefined();
+    // E nada de latitude/longitude vazando por outro nome no JSON da lista.
+    expect(JSON.stringify(corpo)).not.toMatch(/-23\.5|-46\.6/);
+  });
+
   it("busca por origem, ignorando acento", async () => {
     const corpo = await (await pedir("/api/todogreen/portal/operacoes?busca=santos", cliente.token)).json();
     expect(corpo.operacoes.map((o) => o.referencia)).toEqual(["OP-NOPRAZO"]);
