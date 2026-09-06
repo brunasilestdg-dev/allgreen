@@ -43,6 +43,12 @@ import {
   ESTAGIOS_FUNIL,
   resolverEstagioDeAvanco,
 } from "../../src/features/logistics/opportunityIntelligenceDomain.js";
+import {
+  LOGISTICS_PRODUCTS,
+  centralPricingEngine,
+} from "../../src/features/logistics/logisticsVerticalDomain.js";
+import { parametrosResolvidos } from "./todogreen-pricing-parameters.js";
+import { reguaEsgEmVigor } from "./todogreen-environmental-parameters.js";
 
 const response = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -76,6 +82,7 @@ export const FERRAMENTAS = Object.freeze({
   contratos: "consulta assinatura, vigência, renovação, aviso e valores dos contratos. Aceita {\"cliente\":\"nome ou id\"}.",
   precificacao: "consulta as simulações salvas, premissas, resultado, margem e aprovações. Aceita {\"cliente\":\"nome ou id\"}.",
   esg: "consulta cálculos ambientais reais, metodologia e qualidade do dado. Aceita {\"cliente\":\"nome ou id\"}.",
+  simular: `roda o MOTOR DE PREÇO oficial da To Do Green a partir da conversa e devolve preço mínimo, recomendado, margem, CO₂ evitado, Green Score e se cai no Deal Desk. Use quando a pessoa perguntar "quanto cobrar" ou descrever uma operação. Requer {"productId": um de [${LOGISTICS_PRODUCTS.map((p) => p.id).join(", ")}], "inputs": {...campos daquele produto}}. Exemplos de campos: last-mile → packages, routesPerDay, daysPerMonth, kmPerRoute, vehicleType; middle-mile/transfer → distanceKm, tripsPerMonth (ou frequencyPerMonth), vehicleType; dedicated → vehicles, drivers, hoursPerDay, daysPerMonth, vehicleType. Passe só o que a pessoa disse — não invente número. É simulação, não grava nada; para salvar, a pessoa usa a tela de Precificação.`,
 });
 
 export const ACOES = Object.freeze({
@@ -589,6 +596,58 @@ export async function executarFerramenta(env, { access, pedido, linhas }) {
         situacao: row.status || null, criadoEm: row.created_at,
       })),
     };
+  }
+
+  if (ferramenta === "simular") {
+    const productId = clean(pedido?.productId, 60);
+    if (!LOGISTICS_PRODUCTS.some((p) => p.id === productId))
+      return { ferramenta, erro: `Produto inválido. Use um de: ${LOGISTICS_PRODUCTS.map((p) => p.id).join(", ")}.` };
+    // Só números viram número; texto/". Não inventa: o que a pessoa não deu
+    // fica de fora e o motor usa a régua/premissa em vigor.
+    const inputs = {};
+    const bruto = pedido?.inputs && typeof pedido.inputs === "object" ? pedido.inputs : {};
+    for (const [chave, valor] of Object.entries(bruto)) {
+      const nome = clean(chave, 40);
+      if (!nome) continue;
+      const num = Number(valor);
+      inputs[nome] = Number.isFinite(num) && String(valor).trim() !== "" ? num : clean(valor, 60);
+    }
+    try {
+      const produto = LOGISTICS_PRODUCTS.find((p) => p.id === productId);
+      const resolved = await parametrosResolvidos(env, access.ownerId, {
+        productId,
+        modality: inputs.modality || produto?.modality,
+        vehicleType: inputs.vehicleType,
+        region: inputs.region || inputs.city,
+      });
+      const reguaEsg = await reguaEsgEmVigor(env, access.ownerId);
+      const r = centralPricingEngine(productId, inputs, {
+        assumptions: resolved.parametros,
+        environmentalFactors: reguaEsg.fatores,
+        greenScoreWeights: reguaEsg.pesos,
+        parameterVersion: resolved.aplicados.map((item) => item.versao).join(" + ") || "padrao-de-fabrica",
+      });
+      // Devolve o essencial para a resposta — não o objeto inteiro do motor.
+      return {
+        ferramenta,
+        simulacao: {
+          produto: r.productName,
+          precoMinimo: r.minimumPrice,
+          precoRecomendado: r.recommendedPrice,
+          precoSelecionado: r.selectedPrice,
+          margemPercent: r.marginPercent,
+          resultadoMensal: r.resultMonthly,
+          co2EvitadoKg: r.impact?.co2AvoidedKg ?? r.impact?.co2Avoided ?? null,
+          greenScore: r.greenScore?.score ?? r.greenScore ?? null,
+          precisaDealDesk: Boolean(r.approval?.required),
+          motivosDealDesk: r.approval?.reasons || [],
+          recomendacao: r.recommendation?.headline || r.recommendation?.summary || null,
+          regua: r.traceability?.ruleVersion || null,
+        },
+      };
+    } catch (error) {
+      return { ferramenta, erro: error.message || "Não consegui simular com esses dados. Confira os campos do produto." };
+    }
   }
 
   return { ferramenta, erro: "Ferramenta desconhecida." };
