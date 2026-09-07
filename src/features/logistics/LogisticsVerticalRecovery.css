@@ -73,3 +73,164 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+/* Planner: o modal é portalado para fora de .tdg.
+   Reinjeta apenas nele os tokens da vertical para evitar campos transparentes
+   e superfícies claras no tema escuro, sem afetar outros módulos. */
+.modal:has(> .tdg-planner-taskform) {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.modal:has(> .tdg-planner-taskform) .modal-head {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.modal:has(> .tdg-planner-taskform) .modal-head h2,
+.modal:has(> .tdg-planner-taskform) .modal-head button {
+  color: var(--text);
+}
+
+.tdg-planner-taskform {
+  --tdg-card: var(--surface);
+  --tdg-bg: var(--bg);
+  --tdg-soft: var(--surface2);
+  --tdg-ink: var(--text);
+  --tdg-muted: var(--muted);
+  --tdg-line: var(--line);
+  --tdg-green: #17624f;
+  --tdg-x-line: var(--line);
+  --tdg-x-ink: var(--text);
+  --tdg-x-ink-soft: var(--muted);
+  --tdg-x-wash: var(--surface2);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .tdg-planner-taskform {
+  --tdg-green: var(--primary);
+}
+
+.tdg-planner-taskform label {
+  color: var(--text);
+}
+
+.tdg-planner-taskform :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.tdg-planner-taskform :is(input, select) {
+  min-height: 42px;
+}
+
+.tdg-planner-taskform textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.tdg-planner-taskform :is(input, select, textarea)::placeholder {
+  color: var(--muted);
+  opacity: .82;
+}
+
+.tdg-planner-taskform :is(input, select, textarea):focus {
+  border-color: var(--tdg-green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tdg-green) 20%, transparent);
+  outline: none;
+}
+
+.tdg-planner-taskform .tdg-planner-grid3,
+.tdg-planner-taskform .tdg-planner-business-context,
+.tdg-planner-taskform .tdg-planner-checklist {
+  border-color: var(--line);
+  background: var(--surface2);
+}
+
+.tdg-planner-taskform .tdg-planner-business-context legend,
+.tdg-planner-taskform .tdg-section-head h3 {
+  color: var(--text);
+}
+
+.tdg-planner-taskform .tdg-planner-business-context > p {
+  color: var(--muted);
+}
+
+.tdg-planner-taskform .tdg-planner-checklist {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.tdg-planner-taskform .tdg-planner-checkrow {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+}
+
+.tdg-planner-taskform .tdg-planner-checkrow input[type="checkbox"] {
+  display: block;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--tdg-green);
+}
+
+.tdg-planner-taskform .tdg-planner-checkrow input[type="text"] {
+  display: block;
+  min-width: 0;
+  min-height: 40px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.tdg-planner-taskform .tdg-planner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.tdg-planner-taskform .tdg-planner-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.tdg-planner-taskform .tdg-form-actions button:not(.tdg-action) {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.tdg-planner-taskform .tdg-planner-danger {
+  color: #b42318 !important;
+}
+
+:root[data-theme="dark"] .tdg-planner-taskform .tdg-planner-danger {
+  color: #ff9a91 !important;
+}
+
+@media (max-width: 620px) {
+  .tdg-planner-taskform .tdg-planner-checkrow {
+    grid-template-columns: 18px minmax(0, 1fr) 38px;
+  }
+}
