@@ -809,8 +809,26 @@
 /* Selo "Enviada em DD/MM" convive na mesma linha dos botões: mesma altura, cor
    própria (verde clara sobre o hero escuro), sem herdar o caixa-alta do olho. */
 .tdg-crm-detail-actions .tdg-crm-apres-selo { align-items: center; align-self: center; background: #ffffff1f; border: 1px solid #ffffff4d; border-radius: 999px; color: #bff0d8; display: inline-flex; font-size: 11px; font-weight: 750; gap: 4px; letter-spacing: normal; min-height: 34px; padding: 0 12px; text-transform: none; white-space: nowrap; }
-/* "Mais ações" e a temperatura acompanham a mesma altura da linha. */
-.tdg-crm-detail-actions .tdg-crm-more-actions > summary { min-height: 34px; padding: 0 12px; display: inline-flex; align-items: center; }
+/* "Mais ações" no hero escuro é um botão como os outros — translúcido, texto
+   branco, mesma altura. Sem isto o summary herdava o fundo branco/―texto escuro
+   do estilo padrão e virava "texto pelado" sobre o verde. */
+.tdg-crm-detail-actions .tdg-crm-more-actions > summary {
+  align-items: center;
+  background: #ffffff0d;
+  border: 1px solid #ffffff4d;
+  border-radius: 9px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 750;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+.tdg-crm-detail-actions .tdg-crm-more-actions > summary:hover { background: var(--tdg-card); color: #174638; }
+/* O painel de "Mais ações" abre por cima do hero (verde): mantém fundo claro e
+   texto escuro próprios, não os do hero. */
+.tdg-crm-detail-actions .tdg-crm-more-actions > div { color: var(--tdg-ink); }
 .tdg-crm-temp-inline { align-items: center; display: inline-flex; gap: 6px; }
 .tdg-crm-temp-inline span { color: #ffffffcc; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
 /* A temperatura vive no hero verde escuro: o SegmentedControl usa tokens
