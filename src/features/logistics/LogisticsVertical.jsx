@@ -1656,6 +1656,11 @@ const montarDadosDaVertical = (registros = {}, clientes = [], db = {}, access = 
     revenueEntries: financeiro.filter((item) => item.kind === "revenue"),
     costEntries: financeiro.filter((item) => item.kind === "cost"),
     commissionEntries: financeiro.filter((item) => item.kind === "commission"),
+    // Registros financeiros CRUS (tipo/valor/mesReferencia/clientId) — é o que os
+    // extratores de gráfico leem (`data.financial`). Sem isto, os cartões
+    // receita/custo/margem/clientes da home caíam sempre em "Sem dados ainda",
+    // mesmo com lançamento no razão. Mesma forma que a tela "Meus painéis" já usa.
+    financial: registros.financial || [],
     operations: (registros.operations || []).map(operacaoDaApi),
     tasks: db.tasks || [],
     inboxUnread: (db.notifications || []).filter((item) => !item.read).length,

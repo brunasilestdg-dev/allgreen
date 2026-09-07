@@ -178,17 +178,31 @@ export const homeArea = (id) => ERP_HOME_AREAS.find((item) => item.id === id) ||
 export const normalizeHomePreferences = (role, saved = {}) => {
   const area = homeArea(saved.areaId || ROLE_AREA[role] || "commercial");
   const conhecidos = new Set(IDS_DOS_BLOCOS);
-  const widgetIds = uniqueKnown(saved.widgetIds, conhecidos);
+  const widgetIdsSalvos = uniqueKnown(saved.widgetIds, conhecidos);
   const shortcutIds = uniqueKnown(saved.shortcutIds, new Set(ERP_SHORTCUTS.map((item) => item.id)));
   // A ordem salva vem primeiro; qualquer bloco novo (que a pessoa nunca viu)
   // entra no fim, na ordem padrão — assim uma home antiga ganha o bloco novo
   // sem sumir com os que já tinha.
   const ordemSalva = uniqueKnown(saved.widgetOrder, conhecidos);
-  const widgetOrder = [...ordemSalva, ...IDS_DOS_BLOCOS.filter((id) => !ordemSalva.includes(id))];
+  // A ORDEM sempre fica completa: bloco que falta entra no fim, na ordem padrão.
+  const faltamNaOrdem = IDS_DOS_BLOCOS.filter((id) => !ordemSalva.includes(id));
+  const widgetOrder = [...ordemSalva, ...faltamNaOrdem];
+  // Um bloco NOVO nasce LIGADO. Antes só a ORDEM ganhava o bloco novo; o conjunto
+  // de ligados (widgetIds) não — então quem salvou a home antes do painel de
+  // gráficos existir ficava com ele DESLIGADO para sempre (a titular: "não vejo
+  // gráfico nenhum"). "Novo" = falta na ordem que a PRÓPRIA pessoa gravou; só
+  // vale quando havia ordem salva (a config grava a ordem de todos os blocos que
+  // ela viu). Sem ordem salva, respeitamos os widgetIds como vieram, e um bloco
+  // que ela viu e desligou de propósito (está na ordem salva, fora dos ligados)
+  // continua desligado.
+  const blocosNovos = ordemSalva.length ? faltamNaOrdem : [];
+  const widgetIds = widgetIdsSalvos.length
+    ? [...widgetIdsSalvos, ...blocosNovos.filter((id) => !widgetIdsSalvos.includes(id))]
+    : [...IDS_DOS_BLOCOS];
   return {
     areaId: area.id,
     functionLabel: String(saved.functionLabel || area.functionLabel).trim().slice(0, 80),
-    widgetIds: widgetIds.length ? widgetIds : [...IDS_DOS_BLOCOS],
+    widgetIds,
     widgetOrder,
     shortcutIds: shortcutIds.length ? shortcutIds : area.shortcuts,
   };

@@ -28,6 +28,20 @@ describe("erpHomeDomain", () => {
     });
   });
 
+  it("liga um bloco novo para quem salvou a home antes de ele existir", () => {
+    // Home salva ANTES do "painel" (gráficos) existir: a ordem gravada não o
+    // tem. Ele deve nascer LIGADO — senão a pessoa "não vê gráfico nenhum".
+    const perfil = normalizeHomePreferences("admin", {
+      widgetIds: ["metrics", "queue"],
+      widgetOrder: ["metrics", "queue", "shortcuts", "portais"],
+    });
+    expect(perfil.widgetIds).toContain("painel");
+    expect(blocosDaHome(perfil)).toContain("painel");
+    // ...sem religar o que ela desligou de propósito (shortcuts/portais ficaram fora).
+    expect(perfil.widgetIds).not.toContain("shortcuts");
+    expect(perfil.widgetIds).not.toContain("portais");
+  });
+
   it("respeita a ordem salva dos blocos e acrescenta bloco novo no fim", () => {
     const perfil = normalizeHomePreferences("admin", {
       widgetOrder: ["portais", "metrics"],
