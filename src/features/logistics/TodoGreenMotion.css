@@ -1,0 +1,98 @@
+/* ===== Dinamismo da vertical To Do Green =====
+ *
+ * Camada SÓ de movimento e interação — nada de cor, fundo ou layout (para não
+ * repetir o conflito da folha global que foi removida). As telas tinham hover
+ * que "pulava" seco (mudavam transform sem transição) e cartões que apareciam
+ * de uma vez, dando sensação de tela morta. Aqui tudo ganha:
+ *   1) transição suave no hover (o card sobe, a sombra cresce com fluidez);
+ *   2) uma entrada em cascata, leve, quando a tela monta (vida ao carregar);
+ *   3) realce de toque nos botões e itens de menu.
+ * Tudo respeitando quem pediu menos movimento (prefers-reduced-motion). */
+
+/* --- 1. Transições suaves (valem sempre; não são "animação", são fluidez) --- */
+.tdg-crm-card-grid > button,
+.tdg-crm-kanban-card,
+.tdg-opp-kb-card,
+.tdg-crm-detail-metrics article,
+.tdg-module-card,
+.tdg-product-card,
+.tdg-operation-card,
+.tdg-home-metric-link,
+.tdg-crm-metric-card,
+.tdg-account-work-routes button,
+.tdg-work-entry,
+.tdg-home-entry,
+.tdg-crm-funil-card,
+.tdg-space-metrics button {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
+}
+
+/* Botões de ação e itens de menu: realce ao passar/segurar, sem trocar de cor. */
+.tdg-crm-detail-actions button,
+.tdg-crm-detail-actions .tdg-crm-more-actions > summary,
+.tdg-nav-area-cabeca > button,
+.tdg-nav-area-itens button,
+.tdg-crm-account-tabs button,
+.ds-btn, .ds-tab, .ds-seg__opt {
+  transition: transform .14s ease, box-shadow .14s ease, background-color .14s ease, color .14s ease, border-color .14s ease;
+}
+.tdg-crm-detail-actions button:active,
+.tdg-nav-area-cabeca > button:active { transform: translateY(1px); }
+
+/* Métricas do detalhe ganham o mesmo "subir no hover" dos outros cartões. */
+.tdg-crm-detail-metrics article:hover {
+  border-color: #8eb9a5;
+  box-shadow: 0 8px 22px #173d3112;
+  transform: translateY(-2px);
+}
+
+/* --- 2. Entrada em cascata (só quando há apetite por movimento) --- */
+@media (prefers-reduced-motion: no-preference) {
+  .tdg-crm-card-grid > button,
+  .tdg-crm-detail-metrics article,
+  .tdg-crm-kanban-column,
+  .tdg-opp-kb-col,
+  .tdg-home-metrics > *,
+  .tdg-space-metrics > *,
+  .tdg-module-card {
+    animation: tdg-entrar .34s cubic-bezier(.22, .61, .36, 1) both;
+  }
+  /* Cascata: cada item entra um tico depois do anterior (até ~14). */
+  .tdg-crm-card-grid > button:nth-child(1),
+  .tdg-crm-detail-metrics article:nth-child(1),
+  .tdg-crm-kanban-column:nth-child(1),
+  .tdg-opp-kb-col:nth-child(1) { animation-delay: .02s; }
+  .tdg-crm-card-grid > button:nth-child(2),
+  .tdg-crm-detail-metrics article:nth-child(2),
+  .tdg-crm-kanban-column:nth-child(2),
+  .tdg-opp-kb-col:nth-child(2) { animation-delay: .06s; }
+  .tdg-crm-card-grid > button:nth-child(3),
+  .tdg-crm-detail-metrics article:nth-child(3),
+  .tdg-crm-kanban-column:nth-child(3),
+  .tdg-opp-kb-col:nth-child(3) { animation-delay: .10s; }
+  .tdg-crm-card-grid > button:nth-child(4),
+  .tdg-crm-detail-metrics article:nth-child(4),
+  .tdg-crm-kanban-column:nth-child(4),
+  .tdg-opp-kb-col:nth-child(4) { animation-delay: .14s; }
+  .tdg-crm-card-grid > button:nth-child(5),
+  .tdg-crm-detail-metrics article:nth-child(5),
+  .tdg-crm-kanban-column:nth-child(5),
+  .tdg-opp-kb-col:nth-child(5) { animation-delay: .18s; }
+  .tdg-crm-card-grid > button:nth-child(6),
+  .tdg-crm-detail-metrics article:nth-child(6),
+  .tdg-opp-kb-col:nth-child(6) { animation-delay: .22s; }
+  .tdg-crm-card-grid > button:nth-child(n+7) { animation-delay: .26s; }
+
+  /* O cabeçalho da conta desliza de cima; as abas surgem logo abaixo. */
+  .tdg-crm-detail-hero { animation: tdg-descer .4s cubic-bezier(.22, .61, .36, 1) both; }
+  .tdg-crm-account-tabs, .tdg-crm-account-tabs-ds { animation: tdg-entrar .4s ease .08s both; }
+}
+
+@keyframes tdg-entrar {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tdg-descer {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}

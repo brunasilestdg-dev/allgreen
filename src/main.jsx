@@ -5,6 +5,7 @@ import "./styles.css";
 import "./features/logistics/LogisticsVertical.css";
 import "./features/logistics/TodoGreenWorkspace.css";
 import "./features/logistics/TodoGreenCommercialExperience.css";
+import "./features/logistics/TodoGreenMotion.css";
 import "./features/logistics/LogisticsVerticalNavigation.css";
 import "./features/logistics/LogisticsVerticalAccess.css";
 import "./features/logistics/LogisticsVerticalEnterprise.css";
