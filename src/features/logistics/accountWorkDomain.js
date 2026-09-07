@@ -40,9 +40,24 @@ export function estruturarNotasDaConta(notes = "") {
     cabecalho = partes[0];
     updatesBruto = partes.slice(1).join(" ");
   }
+  // Rótulos conhecidos que o texto usa como campos (Monday e cadastro da conta).
+  // Lista, não regex genérica de "Palavra:", de propósito: um valor com nome
+  // próprio ("Responsável: Ana Lima Silva") não pode ser fatiado no meio. Os
+  // rótulos mais longos vêm primeiro para casarem antes dos curtos.
+  const ROTULOS = [
+    "Faturamento anual esperado", "Faturamento anual", "Faturamento",
+    "Próximo passo", "Próxima ação", "Próximo contato",
+    "Responsável", "Prioridade", "Status", "Funil", "Segmento", "Prazo",
+    "Origem", "Valor", "Etapa", "Estágio", "Contato", "Decisor", "Telefone",
+    "Celular", "E-mail", "Email", "Cargo", "Empresa", "CNPJ", "Cidade",
+    "Estado", "UF", "Região", "Regional", "Concorrente", "Volume", "Rota",
+    "Rotas", "Operação", "Frota", "Cotação", "Tabela", "Contrato", "Início",
+    "Interesse", "Necessidade", "Dor", "Observação", "Observações", "Setor",
+  ];
+  const rotulosRe = new RegExp(`\\s+(${ROTULOS.join("|")})\\s*:`, "gi");
   const comQuebras = cabecalho
-    .replace(/\s*[|·]\s*/g, "\n")
-    .replace(/\s+(Faturamento anual esperado|Faturamento anual|Responsável|Prioridade|Status|Funil|Segmento|Prazo|Origem|Valor|Etapa)\s*:/gi, "\n$1:")
+    .replace(/\s*[|·•;]\s*/g, "\n")
+    .replace(rotulosRe, "\n$1:")
     .replace(/\n{2,}/g, "\n");
   const linhas = comQuebras.split("\n").map((l) => l.trim()).filter(Boolean);
   const updates = updatesBruto

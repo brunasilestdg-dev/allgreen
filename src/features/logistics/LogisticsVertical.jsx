@@ -3334,7 +3334,19 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                       <button
                         type="button"
                         className={ativa ? "active" : ""}
-                        onClick={() => { if (personalizando) { alternarAreaVisivel(item.id); return; } navigate(item.route); abrirArea(item.id); }}
+                        onClick={() => {
+                          if (personalizando) { alternarAreaVisivel(item.id); return; }
+                          const temSubitens = paginas.length > 1 || (item.extras || []).length > 0;
+                          // Já estou nesta área e ela tem subitens: clicar no NOME
+                          // recolhe/expande. Antes o nome só ABRIA (abrirArea), então
+                          // clicar de novo para fechar não fazia nada — só o chevrão
+                          // de 14px fechava, e a titular clicava no nome. Como a área
+                          // ativa só é auto-aberta quando o id MUDA (efeito abaixo),
+                          // recolher aqui não é desfeito na sequência.
+                          if (ativa && temSubitens) { alternarArea(item.id); return; }
+                          navigate(item.route);
+                          abrirArea(item.id);
+                        }}
                       >
                         {item.label}
                       </button>

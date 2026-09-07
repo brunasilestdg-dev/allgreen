@@ -565,7 +565,10 @@
   color: #fff;
 }
 
-.tdg-crm-detail-hero :is(p, small, span) {
+/* Só o texto da coluna de informação herda o cinza-claro. Fora dela (linha de
+   ações, selo "Enviada", chips) cada elemento manda na própria cor — senão o
+   selo verde vira um borrão apagado. */
+.tdg-crm-detail-hero > div:first-child :is(p, small, span) {
   color: rgba(240, 255, 251, .8);
 }
 

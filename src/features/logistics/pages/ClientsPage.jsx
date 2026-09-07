@@ -40,7 +40,7 @@ import EnviarApresentacao from "../EnviarApresentacao.jsx";
 import { contextoDeMercado, detectarApresentacaoEnviada, ASSUNTO_APRESENTACAO_ENVIADA } from "../apresentacaoComercialDomain.js";
 import { accountWorkTasks, suggestionContext } from "../accountWorkDomain.js";
 import { interacoesVisiveis } from "../interacoesDomain.js";
-import { ESTAGIOS_OPORTUNIDADE, estagioValido } from "../opportunityIntelligenceDomain.js";
+import { ESTAGIOS_FUNIL, estagioValido } from "../opportunityIntelligenceDomain.js";
 import { inboxUrl } from "../../../session/telemetria.js";
 import RelationshipMap from "../RelationshipMap.jsx";
 import {
@@ -1256,21 +1256,36 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
           <button type="button" className={kanbanMode === "simples" ? "active" : ""} onClick={() => setKanbanMode("simples")}>Simplificado</button>
           <button type="button" className={kanbanMode === "detalhado" ? "active" : ""} onClick={() => setKanbanMode("detalhado")}>Detalhado</button>
         </div>
-        {/* O kanban SIMPLIFICADO é o mockup aprovado pela titular: as etapas
-            do funil de oportunidades (Prospecção → Fechamento, mais os dois
-            desfechos), com o total em R$ na cabeça e o cartão só com cliente
-            e valor — nada mais. O detalhado (por etapa da CONTA) segue na
-            pílula ao lado. */}
+        {/* O kanban SIMPLIFICADO é o mockup aprovado pela titular: SÓ as cinco
+            etapas do funil (Prospecção → Fechamento), com o total em R$ na
+            cabeça e o cartão com cliente e valor. "Fechada ganha"/"Fechada
+            perdida" são DESFECHOS, não colunas (regra do domínio) — viram um
+            resumo enxuto acima do quadro, para o funil não virar sete colunas
+            confusas com duas quase sempre vazias. O detalhado (por etapa da
+            CONTA) segue na pílula ao lado. */}
         {kanbanMode === "simples" && (() => {
-          const colunas = ESTAGIOS_OPORTUNIDADE.map((etapa) => {
-            const itens = crmOpportunities.filter((item) => estagioValido(item.estagio || item.stage) === etapa);
+          const norm = (item) => estagioValido(item.estagio || item.stage);
+          const colunas = ESTAGIOS_FUNIL.map((etapa) => {
+            const itens = crmOpportunities.filter((item) => norm(item) === etapa);
             return { etapa, itens, total: itens.reduce((soma, item) => soma + (Number(item.value) || 0), 0) };
           });
+          const ganhas = crmOpportunities.filter((item) => norm(item) === "Fechada ganha");
+          const perdidas = crmOpportunities.filter((item) => norm(item) === "Fechada perdida");
+          const somaGanhas = ganhas.reduce((soma, item) => soma + (Number(item.value) || 0), 0);
+          const abertas = colunas.reduce((soma, coluna) => soma + coluna.itens.length, 0);
           return <>
-            <p className="tdg-opp-kb-resumo">{crmOpportunities.length} oportunidade(s), cada uma na etapa em que está hoje. Clique no cartão para abrir a conta.</p>
+            <div className="tdg-opp-kb-cabecalho">
+              <p className="tdg-opp-kb-resumo">{abertas} oportunidade(s) no funil, cada uma na etapa em que está hoje. Clique no cartão para abrir a conta.</p>
+              {(ganhas.length > 0 || perdidas.length > 0) && (
+                <p className="tdg-opp-kb-desfechos">
+                  <span className="ganhas">✓ Ganhas: {ganhas.length} · {BRL_COMPACTO(somaGanhas)}</span>
+                  <span className="perdidas">✗ Perdidas: {perdidas.length}</span>
+                </p>
+              )}
+            </div>
             <TopScrollRow className="tdg-opp-kanban-wrap" ariaLabel="Kanban simplificado — oportunidades por etapa do funil">
               <div className="tdg-opp-kanban">
-                {colunas.map((coluna, indice) => <section className={`tdg-opp-kb-col${coluna.etapa === "Fechada perdida" ? " perdida" : ""}`} style={{ "--kb-tom": Math.min(indice, 5) }} aria-label={`${coluna.etapa}: ${coluna.itens.length} oportunidade(s)`} key={coluna.etapa}>
+                {colunas.map((coluna, indice) => <section className="tdg-opp-kb-col" style={{ "--kb-tom": Math.min(indice, 5) }} aria-label={`${coluna.etapa}: ${coluna.itens.length} oportunidade(s)`} key={coluna.etapa}>
                   <header>
                     <strong>{coluna.etapa} · {coluna.itens.length}</strong>
                     <span>{BRL_COMPACTO(coluna.total)}</span>

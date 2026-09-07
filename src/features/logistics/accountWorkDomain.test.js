@@ -24,6 +24,18 @@ describe("estruturarNotasDaConta — fim da parede de texto", () => {
     expect(r.linhas).toContain("Segmento: Varejo");
     expect(r.linhas).toContain("Prazo: Q4");
   });
+
+  it("estrutura campos além do formato Monday, sem fatiar valores com nome próprio", () => {
+    const r = estruturarNotasDaConta(
+      "Contato: Ana Lima Silva Decisor: João Cargo: Diretor de Logística Rota: SP-RJ",
+    );
+    expect(r.linhas).toContain("Contato: Ana Lima Silva");
+    expect(r.linhas).toContain("Decisor: João");
+    expect(r.linhas).toContain("Cargo: Diretor de Logística");
+    expect(r.linhas).toContain("Rota: SP-RJ");
+    // O nome próprio no valor NÃO vira um rótulo novo.
+    expect(r.linhas.some((l) => /^Lima|^Silva|^Ana/.test(l))).toBe(false);
+  });
 });
 
 describe("trabalho da conta", () => {

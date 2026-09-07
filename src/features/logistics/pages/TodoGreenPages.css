@@ -793,13 +793,24 @@
 .tdg-crm-back { align-items: center; background: transparent; border: 0; color: var(--tdg-green); display: inline-flex; font-size: 12px; font-weight: 800; gap: 6px; justify-self: start; padding: 4px 0; }
 .tdg-crm-detail-hero { align-items: flex-start; background: #173d31; border-radius: 18px; color: #fff; display: flex; gap: 18px; justify-content: space-between; padding: clamp(18px,3vw,28px); }
 .tdg-crm-detail-hero > div:first-child { display: grid; gap: 5px; }
-.tdg-crm-detail-hero span { color: #9fd4bb; font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+/* O sobrescrito de cor/caixa-alta é só do "olho" da coluna de informação (à
+   esquerda). Escopado ao primeiro filho para NÃO vazar no selo "Enviada" nem
+   em nenhum span da linha de ações (bug do selo minúsculo e apagado). */
+.tdg-crm-detail-hero > div:first-child > span { color: #9fd4bb; font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .tdg-crm-detail-hero h2 { color: #fff; font-size: clamp(1.55rem,3vw,2.2rem); margin: 0; }
-.tdg-crm-detail-hero p,.tdg-crm-detail-hero small { color: #d8e8e0; margin: 0; }
-.tdg-crm-detail-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; max-width: 600px; }
-.tdg-crm-detail-actions button { align-items: center; background: #ffffff0d; border: 1px solid #ffffff4d; border-radius: 9px; color: #fff; display: inline-flex; font-size: 11px; font-weight: 750; gap: 5px; padding: 8px 10px; }
+.tdg-crm-detail-hero > div:first-child p,.tdg-crm-detail-hero > div:first-child small { color: #d8e8e0; margin: 0; }
+/* Linha de ações: sem a trava de 600px que empurrava tudo para a direita e
+   quebrava em degraus. Alinhada ao topo, itens centrados na vertical e alturas
+   iguais — chega de baseline torto. */
+.tdg-crm-detail-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.tdg-crm-detail-actions button { align-items: center; background: #ffffff0d; border: 1px solid #ffffff4d; border-radius: 9px; color: #fff; display: inline-flex; font-size: 11px; font-weight: 750; gap: 5px; min-height: 34px; padding: 0 12px; }
 .tdg-crm-detail-actions button:hover { background: var(--tdg-card); color: #174638; }
 .tdg-crm-detail-actions button:disabled { opacity: .55; }
+/* Selo "Enviada em DD/MM" convive na mesma linha dos botões: mesma altura, cor
+   própria (verde clara sobre o hero escuro), sem herdar o caixa-alta do olho. */
+.tdg-crm-detail-actions .tdg-crm-apres-selo { align-items: center; align-self: center; background: #ffffff1f; border: 1px solid #ffffff4d; border-radius: 999px; color: #bff0d8; display: inline-flex; font-size: 11px; font-weight: 750; gap: 4px; letter-spacing: normal; min-height: 34px; padding: 0 12px; text-transform: none; white-space: nowrap; }
+/* "Mais ações" e a temperatura acompanham a mesma altura da linha. */
+.tdg-crm-detail-actions .tdg-crm-more-actions > summary { min-height: 34px; padding: 0 12px; display: inline-flex; align-items: center; }
 .tdg-crm-temp-inline { align-items: center; display: inline-flex; gap: 6px; }
 .tdg-crm-temp-inline span { color: #ffffffcc; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
 /* A temperatura vive no hero verde escuro: o SegmentedControl usa tokens
@@ -1976,7 +1987,13 @@
 .tdg-view-switch { display: inline-flex; gap: 2px; background: var(--tdg-soft); border-radius: 9px; padding: 2px; margin-left: auto; }
 .tdg-view-switch button { background: none; border: 0; border-radius: 7px; color: var(--tdg-muted); cursor: pointer; font-size: .82rem; font-weight: 700; padding: 5px 12px; }
 .tdg-view-switch button.active { background: var(--tdg-card); color: var(--tdg-green); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-.tdg-opp-kb-resumo { color: var(--tdg-muted); margin: 2px 0 10px; }
+.tdg-opp-kb-cabecalho { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; margin: 2px 0 10px; }
+.tdg-opp-kb-resumo { color: var(--tdg-muted); margin: 0; }
+/* Desfechos (ganhas/perdidas) fora do quadro: chips discretos, não colunas. */
+.tdg-opp-kb-desfechos { display: inline-flex; gap: 8px; margin: 0; }
+.tdg-opp-kb-desfechos span { border-radius: 999px; font-size: .78rem; font-weight: 800; padding: 4px 11px; white-space: nowrap; }
+.tdg-opp-kb-desfechos .ganhas { background: #dcfce7; color: #14532d; }
+.tdg-opp-kb-desfechos .perdidas { background: #f4f4f5; color: #6b7280; }
 .tdg-opp-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(165px, 1fr); gap: 12px; padding-bottom: 4px; }
 .tdg-opp-kb-col { background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 12px; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
 /* Cabeçalho no tom do funil: clareia na prospecção, escurece rumo ao
@@ -4113,7 +4130,6 @@
 .tdg-account-work-routes button:hover { border-color:var(--tdg-green); transform:translateY(-1px); }
 .tdg-account-work-routes button:focus-visible { outline:3px solid var(--tdg-green); outline-offset:3px; }
 .tdg-account-clue { padding:12px 14px; border-left:3px solid var(--tdg-green); background:var(--tdg-soft); border-radius:8px; }
-.tdg-account-clue p { margin:5px 0 0; white-space:pre-wrap; }
 .tdg-account-work-preview { display:grid; gap:8px; }
 .tdg-account-work-preview > header { display:grid; gap:3px; }
 .tdg-account-work-preview > button { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; padding:12px; text-align:left; border:1px solid var(--tdg-line); border-radius:10px; background:var(--tdg-card); color:var(--tdg-ink); }

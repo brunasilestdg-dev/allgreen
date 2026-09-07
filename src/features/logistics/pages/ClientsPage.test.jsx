@@ -85,17 +85,18 @@ describe("página de clientes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
     expect(screen.getByRole("button", { name: "Kanban" })).toHaveClass("active");
 
-    // O kanban abre no formato SIMPLIFICADO aprovado pela titular: as etapas
-    // do FUNIL DE OPORTUNIDADES (Prospecção → Fechamento + desfechos), coluna
-    // com total em R$ e cartão só com cliente e valor. A oportunidade da
+    // O kanban abre no formato SIMPLIFICADO aprovado pela titular: SÓ as cinco
+    // etapas do FUNIL (Prospecção → Fechamento), coluna com total em R$ e cartão
+    // só com cliente e valor. "Fechada ganha"/"Fechada perdida" são DESFECHOS,
+    // não colunas (regra do domínio) — não entram no quadro. A oportunidade da
     // fixture está em "Proposta" (nome antigo), que cai em Apresentação.
     const simples = screen.getByLabelText("Kanban simplificado — oportunidades por etapa do funil");
     const colunaApresentacao = within(simples).getByRole("region", { name: /Apresentação/ });
     expect(within(colunaApresentacao).getByText("Apresentação · 1")).toBeInTheDocument();
     expect(within(colunaApresentacao).getByRole("button", { name: /Rede Alfa.*750 mil/ })).toBeInTheDocument();
-    // As duas colunas de desfecho existem, vazias.
-    expect(within(simples).getByRole("region", { name: /Fechada ganha/ })).toBeInTheDocument();
-    expect(within(simples).getByRole("region", { name: /Fechada perdida/ })).toBeInTheDocument();
+    // Os desfechos NÃO são colunas — chega de duas colunas quase sempre vazias.
+    expect(within(simples).queryByRole("region", { name: /Fechada ganha/ })).not.toBeInTheDocument();
+    expect(within(simples).queryByRole("region", { name: /Fechada perdida/ })).not.toBeInTheDocument();
 
     // O detalhado (por etapa da conta) continua a um clique.
     fireEvent.click(screen.getByRole("button", { name: "Detalhado" }));
