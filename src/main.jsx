@@ -11,7 +11,6 @@ import "./features/logistics/LogisticsVerticalEnterprise.css";
 import "./features/logistics/LogisticsVerticalRecovery.css";
 import "./features/logistics/LogisticsVerticalRecovery.js";
 import "./features/logistics/LogisticsVerticalCredentials.js";
-import "./features/logistics/TodoGreenUnifiedVisual.css";
 // WorkCenterV2 é lazy-loaded quando acessado (ARQ-01 otimização)
 import "./features/logistics/LogisticsVerticalFleet.js";
 
