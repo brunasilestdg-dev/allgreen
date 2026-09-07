@@ -92,12 +92,13 @@
 
 .semente-avatar { display: inline-flex; flex: 0 0 auto; }
 
-.semente-cabeca { fill: #fff; stroke: rgba(16, 36, 31, 0.14); stroke-width: 1; }
-.semente-viseira { fill: #10241f; }
+.semente-cabeca { fill: #fff; stroke: rgba(16, 36, 31, 0.12); stroke-width: 1; }
+.semente-viseira { fill: #123a30; }
 .semente-olho { fill: var(--tdg-lime, #92c83e); }
-.semente-orelha { fill: #e3ede7; }
+.semente-sorriso { fill: none; stroke: var(--tdg-lime, #92c83e); stroke-width: 2; stroke-linecap: round; }
+.semente-orelha { fill: #cfe3d6; }
 .semente-folha { fill: var(--tdg-lime, #92c83e); }
-.semente-folha--esquerda { fill: var(--tdg-green, #17624f); }
+.semente-folha--traseira { fill: var(--tdg-green, #17624f); }
 .semente-caule { stroke: var(--tdg-green, #17624f); stroke-width: 2; stroke-linecap: round; fill: none; }
 
 /* Pensando: os olhos pulsam. É o "Analisando..." da identidade, sem texto. */

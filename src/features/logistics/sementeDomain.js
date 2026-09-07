@@ -1,12 +1,12 @@
-// ===== Plantû — assistente operacional da To Do Green =====
+// ===== Todô — assistente operacional da To Do Green =====
 //
 // Assistente operacional da vertical To Do Green.
 //
-// A parte pura: qual especialista atende cada tela, o que o Plantû sabe
+// A parte pura: qual especialista atende cada tela, o que o Todô sabe
 // fazer, como ela se apresenta, e o corpo que vai para o servidor. Fica
 // separada do componente porque é isso que dá para testar sem montar tela.
 //
-// O Plantû fala com /api/todogreen/semente — o endpoint da vertical que
+// O Todô fala com /api/todogreen/semente — o endpoint da vertical que
 // carrega a carteira real, as ferramentas de consulta ao CRM e as ações que
 // ela pode propor. O rótulo de especialista continua vindo da tela, porque é
 // assim que ela se apresenta; quem monta o contexto de verdade é o servidor.
@@ -73,7 +73,7 @@ export const especialistaDaTela = (pagina) =>
   ESPECIALISTA_POR_TELA[String(pagina || "").trim()] || "Especialista em Operações Logísticas";
 
 // O que a pessoa provavelmente quer perguntar naquela tela. Existe para a
-// Plantû não abrir com uma caixa de texto vazia — campo vazio é a forma mais
+// Todô não abrir com uma caixa de texto vazia — campo vazio é a forma mais
 // rápida de alguém fechar e não voltar.
 const ATALHOS_POR_ESPECIALISTA = Object.freeze({
   "Especialista em Contas e Vendas": [
@@ -120,7 +120,7 @@ export const atalhosDaTela = (pagina) =>
 // ===== O corpo que vai para /api/todogreen/semente =====
 //
 // O servidor monta o contexto sozinho — carteira, ferramentas, permissões.
-// Daqui vão só a pergunta, a tela (para o Plantû saber onde a pessoa está),
+// Daqui vão só a pergunta, a tela (para o Todô saber onde a pessoa está),
 // o cliente em foco quando há um, e a conversa até aqui.
 
 export const HISTORICO_MAXIMO = 8;
