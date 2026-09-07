@@ -22,9 +22,12 @@ describe("WidgetChart escolhe o desenho pelo tipo", () => {
     expect(container.querySelector("polyline.tdgc-stroke")).toBeTruthy();
   });
 
-  it("distribuição desenha a rosca e a legenda por estágio", () => {
+  it("distribuição desenha a rosca em SVG, com total no centro e legenda por estágio", () => {
     const { container } = render(<WidgetChart widget={{ metric: "pipeline", type: "donut" }} data={data} valorEscalar={3} />);
-    expect(container.querySelector(".tdgc-donut")).toBeTruthy();
+    // Anel em SVG (arcos), não mais conic-gradient chapado.
+    expect(container.querySelectorAll("svg.tdgc-donut2-svg .tdgc-donut2-arco").length).toBe(2);
+    // O buraco deixou de ser vazio: mostra o total.
+    expect(container.querySelector(".tdgc-donut2-centro strong")).toBeTruthy();
     expect(container.querySelectorAll(".tdgc-legend li").length).toBe(2);
   });
 

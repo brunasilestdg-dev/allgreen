@@ -24,8 +24,19 @@
 .tdgc-line-labels { align-items: baseline; color: var(--tdg-muted); display: flex; font-size: 11px; justify-content: space-between; }
 .tdgc-line-labels strong { color: var(--tdg-green); font-family: "IBM Plex Mono", monospace; font-size: 13px; }
 
-/* Distribuição (rosca) */
-.tdgc-donut-wrap { align-items: center; display: flex; gap: 16px; min-height: 96px; }
+/* Distribuição (rosca) — anel em SVG, segmentado, com total no centro. */
+.tdgc-donut-wrap { align-items: center; display: flex; gap: 18px; min-height: 108px; }
+.tdgc-donut2 { flex: none; height: 112px; position: relative; width: 112px; }
+/* Começa no topo (12h) e vai no sentido horário. */
+.tdgc-donut2-svg { height: 100%; transform: rotate(-90deg); width: 100%; }
+.tdgc-donut2-trilho { fill: none; stroke: var(--tdg-line, #e3ede7); stroke-width: 4; }
+.tdgc-donut2-arco { fill: none; stroke-width: 5; transition: stroke-width .15s ease; }
+.tdgc-donut2-arco.tdgc-clic { cursor: pointer; }
+.tdgc-donut2-arco.tdgc-clic:hover { stroke-width: 6.4; }
+.tdgc-donut2-centro { align-content: center; display: grid; inset: 0; justify-items: center; position: absolute; text-align: center; }
+.tdgc-donut2-centro strong { color: var(--tdg-ink); font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+.tdgc-donut2-centro small { color: var(--tdg-muted); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+/* Rosca antiga (conic-gradient) — mantida para não quebrar nada que ainda use. */
 .tdgc-donut { border-radius: 50%; flex: none; height: 96px; position: relative; width: 96px; }
 .tdgc-donut::after { background: var(--tdg-card, #fff); border-radius: 50%; content: ""; inset: 26%; position: absolute; }
 .tdgc-legend { display: grid; gap: 6px; list-style: none; margin: 0; min-width: 0; padding: 0; }
@@ -54,7 +65,8 @@ button.tdgc-bar-col:focus-visible { outline: 2px solid var(--tdg-green); outline
   .tdgc-bar { transform-origin: bottom; animation: tdgc-crescer .5s ease-out both; transition: filter .15s, box-shadow .15s; }
   .tdgc-area { animation: tdgc-surgir .6s ease-out both; }
   .tdgc-stroke { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: tdgc-tracar 1s ease-out forwards; }
-  .tdgc-donut { animation: tdgc-girar .7s ease-out both; }
+  .tdgc-donut, .tdgc-donut2 { animation: tdgc-girar .7s ease-out both; }
+  .tdgc-donut2-centro { animation: tdgc-surgir .5s ease-out .3s both; }
   .tdgc-point { transition: r .12s; }
 }
 @keyframes tdgc-crescer { from { transform: scaleY(0); } to { transform: scaleY(1); } }

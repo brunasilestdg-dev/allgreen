@@ -104,23 +104,54 @@ function Evolucao({ serie, unidade, onSelecionar }) {
   );
 }
 
+// Rosca em SVG (não mais conic-gradient chapado): um anel segmentado com vão
+// fino entre as fatias, o TOTAL no centro (o buraco deixa de ser vazio) e a
+// legenda com nome + contagem + %. Cada fatia é clicável e mostra o valor no
+// tooltip. Circunferência ≈ 100 (r = 15.915), então cada 1% = 1 unidade de
+// traço — o começo de cada fatia é a sua % acumulada.
 function Distribuicao({ distribuicao, onSelecionar }) {
   const fatias = fatiasDaRosca(distribuicao);
   if (!fatias.length) return <SemDados />;
-  const gradiente = fatias
-    .map((f, i) => `${CORES[i % CORES.length]} ${f.inicio}% ${f.fim}%`)
-    .join(", ");
+  const total = fatias.reduce((soma, f) => soma + f.valor, 0);
+  const R = 15.915;
+  const VAO = fatias.length > 1 ? 1.5 : 0; // vão entre fatias, em % do anel
   return (
     <div className="tdgc-donut-wrap">
-      <div className="tdgc-donut" style={{ background: `conic-gradient(${gradiente})` }} role="img" aria-label="Gráfico de distribuição" />
+      <div className="tdgc-donut2">
+        <svg viewBox="0 0 42 42" className="tdgc-donut2-svg" role="img" aria-label="Gráfico de distribuição">
+          <circle cx="21" cy="21" r={R} className="tdgc-donut2-trilho" />
+          {fatias.map((f, i) => {
+            const traco = Math.max(0.5, f.percentual - VAO);
+            return (
+              <circle
+                key={f.rotulo}
+                cx="21"
+                cy="21"
+                r={R}
+                className={`tdgc-donut2-arco${onSelecionar ? " tdgc-clic" : ""}`}
+                stroke={CORES[i % CORES.length]}
+                strokeDasharray={`${traco} ${100 - traco}`}
+                strokeDashoffset={-f.inicio}
+                onClick={onSelecionar ? () => onSelecionar(f) : undefined}
+              >
+                <title>{`${f.rotulo}: ${f.valor} (${f.percentual}%)`}</title>
+              </circle>
+            );
+          })}
+        </svg>
+        <div className="tdgc-donut2-centro">
+          <strong>{total.toLocaleString("pt-BR")}</strong>
+          <small>total</small>
+        </div>
+      </div>
       <ul className="tdgc-legend">
         {fatias.map((f, i) => {
-          const dica = `${f.rotulo}: ${f.percentual}%`;
+          const dica = `${f.rotulo}: ${f.valor} (${f.percentual}%)`;
           const conteudo = (
             <>
               <i style={{ background: CORES[i % CORES.length] }} />
               <span>{f.rotulo}</span>
-              <b>{f.percentual}%</b>
+              <b>{f.valor} · {f.percentual}%</b>
             </>
           );
           return onSelecionar ? (
