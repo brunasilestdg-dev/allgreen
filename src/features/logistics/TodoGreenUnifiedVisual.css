@@ -202,13 +202,13 @@
   box-shadow: none;
   transform: none;
 }
-.tdg .tdg-page-actions button:not([type="submit"]),
+.tdg .tdg-page-actions button:not(.tdg-action):not([type="submit"]),
 .tdg :is(.tdg-action.secondary, .tdg-action.secundario) {
   border-color: var(--tdg-line-strong);
   background: var(--tdg-card);
   color: var(--tdg-primary);
 }
-.tdg .tdg-page-actions button:not([type="submit"]):hover,
+.tdg .tdg-page-actions button:not(.tdg-action):not([type="submit"]):hover,
 .tdg :is(.tdg-action.secondary, .tdg-action.secundario):hover {
   border-color: var(--tdg-primary);
   background: var(--tdg-soft);
