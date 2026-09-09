@@ -14,6 +14,8 @@
 // mesma lista — assim qualquer tipo de gráfico funciona para qualquer indicador,
 // sem tela quebrada.
 
+import { rotuloLegivel } from "./rotulosDomain.js";
+
 const n = (v) => {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
@@ -83,7 +85,9 @@ const EXTRATORES = {
     distribuicao: agruparPorCategoria(data.opportunities, (o) => o.estagio || o.stage),
   }),
   propostas: (data) => ({
-    distribuicao: agruparPorCategoria(data.proposals, (p) => p.situacao || p.status),
+    // Traduz o status cru do banco (draft/sent/accepted…) para pt-BR na hora de
+    // agrupar — senão a legenda da rosca mostra código em inglês.
+    distribuicao: agruparPorCategoria(data.proposals, (p) => rotuloLegivel(p.situacao || p.status) || "Sem situação"),
   }),
   operacoes: (data) => ({
     serie: somarPorMes(data.operations, (o) => o.entregas || 1),

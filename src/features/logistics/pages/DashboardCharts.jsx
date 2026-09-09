@@ -77,7 +77,9 @@ function Evolucao({ serie, unidade, onSelecionar }) {
   const ultimo = pts[pts.length - 1];
   return (
     <div className="tdgc-line-wrap">
-      <svg className="tdgc-line" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Gráfico de evolução">
+      {/* viewBox com 6px de margem lateral para o ponto de valor (r=4) nas
+          pontas não ficar cortado pela borda. */}
+      <svg className="tdgc-line" viewBox={`-6 0 ${W + 12} ${H}`} preserveAspectRatio="none" role="img" aria-label="Gráfico de evolução">
         <line x1="0" y1={H - 12} x2={W} y2={H - 12} className="tdgc-axis" />
         <polygon points={area} className="tdgc-area" />
         <polyline points={desenho} className="tdgc-stroke" />

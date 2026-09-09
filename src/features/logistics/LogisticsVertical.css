@@ -1956,7 +1956,7 @@
 .tdg-erp-sidebar-head small { color: var(--tdg-muted); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tdg-menu-ocultar {
   align-items: center;
-  background: #f6faf7;
+  background: var(--tdg-soft);
   border: 1px solid var(--tdg-line);
   border-radius: 7px;
   color: var(--tdg-muted);
@@ -1974,7 +1974,7 @@
 /* Botão de personalizar o menu (escolher o que aparece). */
 .tdg-menu-personalizar {
   align-items: center;
-  background: #f6faf7;
+  background: var(--tdg-soft);
   border: 1px solid var(--tdg-line);
   border-radius: 7px;
   color: var(--tdg-muted);
@@ -2152,7 +2152,7 @@
 }
 .tdg-erp-sidebar .tdg-tabs button:hover,
 .tdg-erp-sidebar .tdg-tabs button:focus-visible {
-  background: #f2f7f3;
+  background: var(--tdg-soft);
   outline: none;
 }
 .tdg-erp-sidebar .tdg-tabs button.active {
@@ -2574,7 +2574,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tdg-nav-area-cabeca > button:first-child:hover { background: #f2f7f3; }
+.tdg-nav-area-cabeca > button:first-child:hover { background: var(--tdg-soft); }
 .tdg-nav-area-cabeca > button:first-child.active { background: var(--tdg-soft); color: var(--tdg-green); }
 .tdg-nav-area-seta {
   align-items: center;
@@ -2589,7 +2589,7 @@
   min-height: 30px;
   min-width: 28px;
 }
-.tdg-nav-area-seta:hover { background: #f2f7f3; color: var(--tdg-green); }
+.tdg-nav-area-seta:hover { background: var(--tdg-soft); color: var(--tdg-green); }
 .tdg-nav-area-seta svg { transition: transform .15s ease; }
 .tdg-nav-area-seta svg.aberta { transform: rotate(180deg); }
 .tdg-nav-area-itens { border-left: 2px solid var(--tdg-line); display: grid; gap: 1px; margin: 2px 0 6px 14px; padding-left: 6px; }
@@ -2609,7 +2609,7 @@
   text-align: left;
   white-space: normal;
 }
-.tdg-nav-area-itens button:hover { background: #f2f7f3; color: var(--tdg-ink); }
+.tdg-nav-area-itens button:hover { background: var(--tdg-soft); color: var(--tdg-ink); }
 .tdg-nav-area-itens button.active { background: var(--tdg-soft); color: var(--tdg-green); }
 .tdg-nav-vazio { color: var(--tdg-muted); font-size: .8rem; margin: 8px 2px; }
 /* A barra vertical do menu fica visível de verdade. */
@@ -2764,7 +2764,7 @@
 
 .tdg-nav-area-itens button[aria-current="page"],
 .tdg-nav-area-itens button:hover {
-  background: #e9f5ef;
+  background: var(--tdg-soft);
 }
 
 .tdg-menu-mostrar {
