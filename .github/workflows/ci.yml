@@ -3,14 +3,19 @@ name: Qualidade
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 permissions:
   contents: read
 
-# Um push novo cancela a verificação do anterior. Sem isto, a fila enche de
-# runs conferindo commit que já foi substituído — e cada um deles ainda
-# concorre pelo mesmo runner com o que interessa.
+# Um push novo cancela a verificação do anterior. Assim, commits substituídos
+# não continuam consumindo runner sem necessidade.
 concurrency:
   group: qualidade-${{ github.ref }}
   cancel-in-progress: true
@@ -18,78 +23,60 @@ concurrency:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    # Os dois últimos runs foram cancelados em 15min01s e 15min03s: o limite
-    # anterior era exatamente 15, e a suíte cresceu além dele. O runner tem
-    # metade dos núcleos desta máquina, então o tempo daqui não serve de régua.
     timeout-minutes: 30
     steps:
       - name: Baixar código
         uses: actions/checkout@v4
+
       - name: Preparar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - name: Instalar dependências
         run: npm ci
         env:
-          # O Playwright entrou no projeto para os testes de ponta a ponta.
-          # Sem isto, toda instalação baixaria navegador que este job não usa.
+          # Os navegadores são tratados no cache abaixo.
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
       - name: Lint (trava em erros; avisos não bloqueiam)
         run: npm run lint
-      # Separados para a falha dizer qual camada quebrou sem precisar abrir o
-      # log inteiro.
+
       - name: Testes de interface e domínio
         run: npm run test:unit
+
       - name: Testes de worker
         run: npm run test:worker
+
       - name: Construir
         run: npm run build
-      # Guardar o navegador entre rodadas: numa rodada com cache não há
-      # download nenhum, que é a única forma de não depender de espelho lento.
+
+      # O Chromium é grande e não precisa ser reinstalado em toda execução.
+      # A chave muda quando package-lock.json muda, acompanhando a versão do
+      # Playwright. Em cache hit, o passo de instalação é pulado por completo.
       - name: Cache do navegador do Playwright
+        id: playwright-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: playwright-${{ runner.os }}-
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
-      # Só o Chromium — é o único navegador que os specs usam.
-      #
-      # Este passo já pendurou o job duas vezes (`f747fbe`, `eb2a0c2`), 25 e
-      # 20+ minutos, com lint, testes e build TODOS aprovados antes dele. O E2E
-      # vem depois, então some junto: a validação morre por causa do passo que
-      # não valida nada, só instala.
-      #
-      # O que trava NÃO é o download do Chromium: é o `apt-get` do
-      # `--with-deps` contra os espelhos do Ubuntu. Medido no log do `0ea3970`.
-      #
-      # Uma primeira versão disto repetia três vezes em laço, e foi pior:
-      # matar o `apt-get` no meio deixa o processo órfão SEGURANDO o lock do
-      # apt, e as duas repetições seguintes morreram em um segundo com
-      # "Could not get lock /var/lib/apt/lists/lock". Repetir a mesma coisa
-      # que acabou de ser morta não recupera nada.
-      #
-      # Então: uma única passada com apt e, se ela ceder, uma segunda SEM apt.
-      # O runner ubuntu-latest já traz as bibliotecas que o Chromium precisa;
-      # o `--with-deps` é cinto de segurança, não requisito. Sem apt não há
-      # lock para disputar.
       - name: Instalar Chromium para o E2E
-        timeout-minutes: 9
-        run: |
-          if timeout 300 npx playwright install --with-deps chromium; then
-            exit 0
-          fi
-          echo "::warning::Instalação com dependências do sistema cedeu (apt lento). Tentando só o navegador, sem apt."
-          timeout 180 npx playwright install chromium
-      # `wrangler dev` serve `dist/`, por isso este passo vem depois de
-      # "Construir". Só o arquivo de controle de acesso: é o único E2E
-      # promovido — ver o comentário no topo de vertical-acesso.spec.js.
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 4
+        run: timeout 180 npx playwright install chromium
+
+      # Gate crítico de acesso continua obrigatório antes da publicação.
       - name: E2E de acesso à vertical (gate de produção)
         run: npm run test:e2e:acesso
         env:
           CI: true
+
+      # Jornadas e layout continuam no gate. Não removemos cobertura para
+      # economizar minutos; só eliminamos trabalho repetido e docs-only runs.
       - name: E2E das jornadas e do layout da To Do Green
         run: npm run test:e2e:todogreen
         env:
