@@ -61,6 +61,7 @@ import {
 } from "../../src/features/logistics/legalDomain.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { normalizarFato } from "../../src/features/logistics/businessContextDomain.js";
+import { efeitosDoEvento, normalizarTipoEvento } from "../../src/features/logistics/operationTrackingDomain.js";
 import {
   criaCiclo,
   nomeDisponivel,
@@ -2136,8 +2137,10 @@ const eventoPelaChave = async (env, ownerId, operationId, idempotencyKey) => {
 };
 
 export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId, corpo, origem = "" }) => {
-  const tipos = new Set(["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"]);
-  const tipo = tipos.has(texto(corpo.tipo, 40)) ? texto(corpo.tipo, 40) : "transito";
+  // Tipo e efeitos vêm do contrato único (operationTrackingDomain), não mais de
+  // um Set copiado aqui. É a mesma verdade que a projeção do TMS lê.
+  const tipo = normalizarTipoEvento(corpo.tipo);
+  const efeitos = efeitosDoEvento(tipo);
   const titulo = texto(corpo.titulo, 200);
   const descricao = texto(corpo.descricao, 3000);
   if (!titulo && !descricao) return { erro: "Informe o título ou a descrição do evento." };
@@ -2154,23 +2157,23 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   const ocorridoEm = texto(corpo.ocorridoEm, 40) || new Date().toISOString();
   const agora = new Date().toISOString();
   const eventoId = crypto.randomUUID();
-  const atualizacaoIncidente = tipo === "ocorrencia" ? ", incident_count = incident_count + 1" : "";
+  const atualizacaoIncidente = efeitos.contaOcorrencia ? ", incident_count = incident_count + 1" : "";
   // O evento "entrega" é o fato que fecha o ciclo: carimba delivered_at,
   // guarda o comprovante que o portal do cliente baixa e registra o POD que a
   // régua de faturamento exige (trigger da 0062). Antes, o evento era só uma
   // linha na timeline — a operação nunca "entregava" e a OS nunca faturava.
-  const recebedor = tipo === "entrega" ? texto(corpo.recebedor, 200) : "";
+  const recebedor = efeitos.concluiEntrega ? texto(corpo.recebedor, 200) : "";
   // Comprovante e assinatura da entrega: ou já vêm como URL (retrocompatível:
   // link colado, upload prévio), ou vêm como data URL de imagem capturada no
   // celular (câmera do canhoto, assinatura na tela — #120b). Nesse caso a imagem
   // é guardada no cofre AQUI e vira a URL de download. Só na entrega.
-  let comprovanteUrl = tipo === "entrega" ? texto(corpo.comprovanteUrl, 800) : "";
-  let comprovanteHash = tipo === "entrega" ? texto(corpo.comprovanteHash, 200) : "";
-  let assinaturaUrl = tipo === "entrega" ? texto(corpo.assinaturaUrl, 800) : "";
-  let assinaturaHash = tipo === "entrega" ? texto(corpo.assinaturaHash, 200) : "";
+  let comprovanteUrl = efeitos.concluiEntrega ? texto(corpo.comprovanteUrl, 800) : "";
+  let comprovanteHash = efeitos.concluiEntrega ? texto(corpo.comprovanteHash, 200) : "";
+  let assinaturaUrl = efeitos.concluiEntrega ? texto(corpo.assinaturaUrl, 800) : "";
+  let assinaturaHash = efeitos.concluiEntrega ? texto(corpo.assinaturaHash, 200) : "";
   // Ids das imagens guardadas no cofre — para limpar se o evento não entrar.
   const arquivosGuardados = [];
-  if (tipo === "entrega") {
+  if (efeitos.concluiEntrega) {
     try {
       if (!comprovanteUrl && corpo.comprovanteBase64) {
         const g = await armazenarImagemBase64(env, {
@@ -2193,10 +2196,10 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
       return { erro: erroImagem?.message || "Comprovante inválido." };
     }
   }
-  const atualizacaoEntrega = tipo === "entrega"
+  const atualizacaoEntrega = efeitos.concluiEntrega
     ? `, delivered_at = COALESCE(delivered_at, ?)${comprovanteUrl ? ", proof_url = ?, proof_hash = ?" : ""}${assinaturaUrl ? ", signature_url = ?, signature_hash = ?" : ""}`
     : "";
-  const paramsEntrega = tipo === "entrega"
+  const paramsEntrega = efeitos.concluiEntrega
     ? [ocorridoEm, ...(comprovanteUrl ? [comprovanteUrl, comprovanteHash] : []), ...(assinaturaUrl ? [assinaturaUrl, assinaturaHash] : [])]
     : [];
   // Posição do motorista → rastreio ao vivo. Todo evento de rua (chegada,
@@ -2238,7 +2241,7 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
     ).bind(agora, userId, ...paramsEntrega, ...paramsPosicao, operationId, TENANT_ID, ownerId),
   ];
-  if (tipo === "entrega") {
+  if (efeitos.concluiEntrega) {
     // POD para toda OS amarrada a esta operação. INSERT direto com subselect:
     // se não houver OS vinculada, nada acontece; se houver, o gate de
     // faturamento passa a enxergar o comprovante.
@@ -2290,12 +2293,12 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   const evento = { id: eventoId, tipo, titulo, descricao, local: texto(corpo.local, 300), ocorridoEm, registradoPor: userId, criadoEm: agora };
   // Entrega e ocorrência são os dois eventos que o embarcador quer saber na
   // hora — os demais ele acompanha pela linha do tempo quando quiser.
-  if (tipo === "entrega" || tipo === "ocorrencia") {
+  if (efeitos.concluiEntrega || efeitos.contaOcorrencia) {
     await notificarPortalDoCliente(env, operacao.client_id, {
-      assunto: tipo === "entrega"
+      assunto: efeitos.concluiEntrega
         ? `Entrega concluída — ${operacao.reference || "operação"}`
         : `Ocorrência registrada — ${operacao.reference || "operação"}`,
-      titulo: tipo === "entrega" ? "Sua carga foi entregue" : "Registramos uma ocorrência",
+      titulo: efeitos.concluiEntrega ? "Sua carga foi entregue" : "Registramos uma ocorrência",
       corpo: `${operacao.reference || "A operação"}: ${titulo || descricao || tipo}. Detalhes e comprovante na linha do tempo do portal.`,
       origem,
     });

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   SITUACOES_SLA,
+  TIPOS_EVENTO_VALIDOS,
+  efeitosDoEvento,
   filtrarOperacoes,
+  normalizarTipoEvento,
   ocorrenciasDaLinha,
   ordenarLinhaDoTempo,
   paginar,
@@ -174,5 +177,29 @@ describe("linha do tempo", () => {
 
   it("evento sem data não quebra a ordenação", () => {
     expect(ordenarLinhaDoTempo([{ id: "a" }, { id: "b", ocorridoEm: h(1) }]).map((e) => e.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("contrato do evento de operação", () => {
+  it("lista o vocabulário canônico dos tipos, na ordem da viagem", () => {
+    expect(TIPOS_EVENTO_VALIDOS).toEqual([
+      "coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento",
+    ]);
+  });
+
+  it("normaliza qualquer tipo ao conjunto canônico, com transito como padrão", () => {
+    expect(normalizarTipoEvento("entrega")).toBe("entrega");
+    expect(normalizarTipoEvento(" Entrega ")).toBe("entrega");
+    expect(normalizarTipoEvento("inventado")).toBe("transito");
+    expect(normalizarTipoEvento("")).toBe("transito");
+    expect(normalizarTipoEvento(null)).toBe("transito");
+  });
+
+  it("declara os efeitos por tipo — entrega fecha o ciclo, ocorrência conta incidente", () => {
+    expect(efeitosDoEvento("entrega")).toEqual({ tipo: "entrega", concluiEntrega: true, contaOcorrencia: false });
+    expect(efeitosDoEvento("ocorrencia")).toEqual({ tipo: "ocorrencia", concluiEntrega: false, contaOcorrencia: true });
+    expect(efeitosDoEvento("transito")).toEqual({ tipo: "transito", concluiEntrega: false, contaOcorrencia: false });
+    // Tipo desconhecido cai em transito e não dispara efeito nenhum.
+    expect(efeitosDoEvento("xpto")).toEqual({ tipo: "transito", concluiEntrega: false, contaOcorrencia: false });
   });
 });

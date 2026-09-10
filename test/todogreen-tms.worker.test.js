@@ -424,10 +424,14 @@ describe("projeção na operação", () => {
     });
 
     const evento = await env.DB.prepare(
-      `SELECT kind, titulo FROM todogreen_client_operation_events
+      `SELECT kind, titulo, idempotency_key FROM todogreen_client_operation_events
         WHERE workspace_owner_id = ? ORDER BY created_at DESC LIMIT 1`,
     ).bind(gestora.id).first();
     expect(evento).toMatchObject({ kind: "entrega", titulo: "Entregue" });
+    // Contrato de evento único: o evento projetado do TMS carrega a mesma
+    // identidade que o app do motorista — `kind` canônico e chave de idempotência
+    // estável por documento, para não duplicar num reprocesso.
+    expect(evento.idempotency_key).toBe(`tms:${doc.id}`);
   });
 
   it("não projeta sem conta casada, e diz o motivo", async () => {

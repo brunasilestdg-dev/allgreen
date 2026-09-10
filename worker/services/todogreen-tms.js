@@ -35,6 +35,7 @@ import {
   sugerirEmbarcador,
   validarDocumento,
 } from "../../src/features/logistics/track3rDomain.js";
+import { normalizarTipoEvento } from "../../src/features/logistics/operationTrackingDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -653,16 +654,19 @@ const projetar = async (env, access, user, corpo) => {
         // `client_id` é NOT NULL nesta tabela (0045) e não tem default: o evento
         // é consultado por cliente direto, sem passar pela operação.
         env.DB.prepare(
+          // Mesmo contrato de evento do app do motorista: `kind` normalizado pelo
+          // vocabulário canônico e `idempotency_key` estável por documento, para o
+          // evento projetado ter a mesma identidade e nunca duplicar num reprocesso.
           `INSERT INTO todogreen_client_operation_events
              (id, tenant_id, operation_id, client_id, workspace_owner_id, kind, titulo,
-              descricao, local, ocorrido_em, registrado_por, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              descricao, local, ocorrido_em, registrado_por, created_at, idempotency_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).bind(
           crypto.randomUUID(), TENANT_ID, operacaoId, operacao.clientId, access.ownerId,
-          evento.kind, evento.titulo, evento.descricao, evento.local,
+          normalizarTipoEvento(evento.kind), evento.titulo, evento.descricao, evento.local,
           // `ocorrido_em` é NOT NULL: sem hora no documento, usa a data do
           // serviço em vez de gravar vazio.
-          evento.ocorridoEm || operacao.serviceDate, user.id, agora,
+          evento.ocorridoEm || operacao.serviceDate, user.id, agora, `tms:${doc.id}`,
         ),
       );
     }

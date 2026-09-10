@@ -173,6 +173,39 @@ export const TIPOS_DE_EVENTO = Object.freeze({
   documento: "Documento",
 });
 
+// ===== O contrato do evento de operação (base única) =====
+//
+// O que é um evento de operação e o que cada tipo dispara vivia copiado em três
+// lugares: um `Set` embutido no app do motorista (worker), uma lista na projeção
+// do TMS e os rótulos aqui. Três cópias divergem — e o caminho do TMS nem
+// aplicava os efeitos, então o MESMO fato (uma "entrega") gerava estado
+// diferente conforme a porta de entrada. Aqui fica a única definição: o
+// vocabulário canônico e a regra de efeito. Todo caminho de escrita lê daqui.
+
+// A ordem canônica dos tipos — a mesma do `kind` gravado no ledger.
+export const TIPOS_EVENTO_VALIDOS = Object.freeze(Object.keys(TIPOS_DE_EVENTO));
+
+// Coage qualquer tipo recebido ao conjunto canônico. Fora da lista vira
+// "transito" (o default do ledger) em vez de gravar um `kind` que a linha do
+// tempo não sabe desenhar. Nenhum caminho de escrita inventa tipo.
+export const normalizarTipoEvento = (tipo) => {
+  const t = String(tipo ?? "").trim().toLowerCase();
+  return TIPOS_EVENTO_VALIDOS.includes(t) ? t : "transito";
+};
+
+// O contrato de efeito: dado um tipo, o que ele muda na operação. "entrega"
+// fecha o ciclo (carimba a entrega e gera o comprovante que o faturamento
+// exige); "ocorrência" conta um incidente. Uma verdade só, lida pelo app do
+// motorista e pela projeção do TMS — para o efeito nunca depender da porta.
+export const efeitosDoEvento = (tipo) => {
+  const t = normalizarTipoEvento(tipo);
+  return {
+    tipo: t,
+    concluiEntrega: t === "entrega",
+    contaOcorrencia: t === "ocorrencia",
+  };
+};
+
 // A linha do tempo é ordenada por quando ACONTECEU, não por quando foi
 // registrada. Um evento lançado com atraso não pode reescrever a ordem da
 // viagem.

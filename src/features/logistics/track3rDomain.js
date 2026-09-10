@@ -18,6 +18,7 @@
 
 import { normalizeDocument, isValidDocument } from "./erpCoreDomain.js";
 import { normalizeVehicleClass } from "./vehicleClassDomain.js";
+import { TIPOS_EVENTO_VALIDOS } from "./operationTrackingDomain.js";
 
 const texto = (valor) => String(valor ?? "").trim();
 
@@ -280,9 +281,10 @@ export const eventoDoCodigoDeOcorrencia = (codigo, mapaDeCodigos = {}) => {
   const declarado = texto(mapaDeCodigos?.[chave] || mapaDeCodigos?.[chave.replace(/^0+/, "")]);
   if (!declarado) return "";
   // O valor configurado pode ser o próprio nome do evento ou uma descrição.
-  const direto = ["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"];
+  // O vocabulário canônico vem do contrato único (operationTrackingDomain),
+  // não de mais uma cópia da lista aqui.
   const normalizado = semAcento(declarado);
-  return direto.includes(normalizado) ? normalizado : mapearStatusParaEvento(declarado);
+  return TIPOS_EVENTO_VALIDOS.includes(normalizado) ? normalizado : mapearStatusParaEvento(declarado);
 };
 
 // O corpo aninhado do webhook vira a linha achatada que o normalizador já lê.
