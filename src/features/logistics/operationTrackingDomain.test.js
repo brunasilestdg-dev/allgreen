@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  QUALIDADE_MEDICAO,
   SITUACOES_SLA,
   TIPOS_EVENTO_VALIDOS,
   efeitosDoEvento,
   filtrarOperacoes,
+  medicaoDoEvento,
+  normalizarQualidade,
   normalizarTipoEvento,
   ocorrenciasDaLinha,
   ordenarLinhaDoTempo,
@@ -201,5 +204,41 @@ describe("contrato do evento de operação", () => {
     expect(efeitosDoEvento("transito")).toEqual({ tipo: "transito", concluiEntrega: false, contaOcorrencia: false });
     // Tipo desconhecido cai em transito e não dispara efeito nenhum.
     expect(efeitosDoEvento("xpto")).toEqual({ tipo: "transito", concluiEntrega: false, contaOcorrencia: false });
+  });
+});
+
+describe("medição do evento (km e energia como fato)", () => {
+  it("normaliza a origem ao vocabulário de qualidade, com padrão", () => {
+    expect(QUALIDADE_MEDICAO).toEqual(["medido", "documentado", "estimado", "presumido"]);
+    expect(normalizarQualidade("medido")).toBe("medido");
+    expect(normalizarQualidade(" Documentado ")).toBe("documentado");
+    expect(normalizarQualidade("chute")).toBe("estimado");
+    expect(normalizarQualidade("chute", "presumido")).toBe("presumido");
+    expect(normalizarQualidade(null)).toBe("estimado");
+  });
+
+  it("devolve null quando o evento não mede nada", () => {
+    expect(medicaoDoEvento({})).toBeNull();
+    expect(medicaoDoEvento({ tipo: "entrega", titulo: "X" })).toBeNull();
+    expect(medicaoDoEvento({ distanciaKm: "", energiaKwh: "" })).toBeNull();
+    expect(medicaoDoEvento({ distanciaKm: "abc" })).toBeNull();
+  });
+
+  it("lê km e energia de forma independente; medida informada nasce 'medido'", () => {
+    expect(medicaoDoEvento({ distanciaKm: 42 })).toEqual({
+      distanciaKm: 42, distanciaOrigem: "medido", energiaKwh: null, energiaOrigem: null,
+    });
+    expect(medicaoDoEvento({ energiaKwh: 13.5 })).toEqual({
+      distanciaKm: null, distanciaOrigem: null, energiaKwh: 13.5, energiaOrigem: "medido",
+    });
+    expect(medicaoDoEvento({ distanciaKm: 40, energiaKwh: 12, distanciaOrigem: "documentado" })).toEqual({
+      distanciaKm: 40, distanciaOrigem: "documentado", energiaKwh: 12, energiaOrigem: "medido",
+    });
+  });
+
+  it("zera valores negativos — não existe distância nem energia negativa num fato", () => {
+    expect(medicaoDoEvento({ distanciaKm: -10, energiaKwh: -3 })).toEqual({
+      distanciaKm: 0, distanciaOrigem: "medido", energiaKwh: 0, energiaOrigem: "medido",
+    });
   });
 });

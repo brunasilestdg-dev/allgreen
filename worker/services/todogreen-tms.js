@@ -657,16 +657,22 @@ const projetar = async (env, access, user, corpo) => {
           // Mesmo contrato de evento do app do motorista: `kind` normalizado pelo
           // vocabulário canônico e `idempotency_key` estável por documento, para o
           // evento projetado ter a mesma identidade e nunca duplicar num reprocesso.
+          // A distância do documento (N.2) vai como medição do evento com origem
+          // 'documentado' — o MESMO número que a operação projetada carrega (não há
+          // reflect aqui, então não dobra); dá rastro de proveniência ao fato.
           `INSERT INTO todogreen_client_operation_events
              (id, tenant_id, operation_id, client_id, workspace_owner_id, kind, titulo,
-              descricao, local, ocorrido_em, registrado_por, created_at, idempotency_key)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              descricao, local, ocorrido_em, registrado_por, created_at, idempotency_key,
+              distance_km, distance_source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).bind(
           crypto.randomUUID(), TENANT_ID, operacaoId, operacao.clientId, access.ownerId,
           normalizarTipoEvento(evento.kind), evento.titulo, evento.descricao, evento.local,
           // `ocorrido_em` é NOT NULL: sem hora no documento, usa a data do
           // serviço em vez de gravar vazio.
           evento.ocorridoEm || operacao.serviceDate, user.id, agora, `tms:${doc.id}`,
+          Number(operacao.distanceKm) > 0 ? Number(operacao.distanceKm) : null,
+          Number(operacao.distanceKm) > 0 ? "documentado" : null,
         ),
       );
     }

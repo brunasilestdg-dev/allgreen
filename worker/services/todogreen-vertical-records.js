@@ -61,7 +61,7 @@ import {
 } from "../../src/features/logistics/legalDomain.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { normalizarFato } from "../../src/features/logistics/businessContextDomain.js";
-import { efeitosDoEvento, normalizarTipoEvento } from "../../src/features/logistics/operationTrackingDomain.js";
+import { efeitosDoEvento, medicaoDoEvento, normalizarTipoEvento } from "../../src/features/logistics/operationTrackingDomain.js";
 import {
   criaCiclo,
   nomeDisponivel,
@@ -2131,6 +2131,8 @@ const eventoPelaChave = async (env, ownerId, operationId, idempotencyKey) => {
     evento: {
       id: linha.id, tipo: linha.kind, titulo: linha.titulo, descricao: linha.descricao,
       local: linha.local, ocorridoEm: linha.ocorrido_em, registradoPor: linha.registrado_por, criadoEm: linha.created_at,
+      distanciaKm: linha.distance_km, distanciaOrigem: linha.distance_source,
+      energiaKwh: linha.energy_kwh, energiaOrigem: linha.energy_source,
     },
     tipo: linha.kind, titulo: linha.titulo, descricao: linha.descricao, atualizada, duplicada: true,
   };
@@ -2225,21 +2227,43 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   const paramsPosicao = temPosicao
     ? [ocorridoEm, latEvento, ocorridoEm, lngEvento, ocorridoEm, ocorridoEm]
     : [];
+  // Medição (km/energia) como fato do evento (N.2). É gravada SEMPRE que vier
+  // (colunas do evento), e REFLETIDA na operação com a mesma guarda anti-regressão
+  // do last_position: só preenche quando a operação ainda não tem o dado — a
+  // distância (NOT NULL DEFAULT 0) reflete quando é 0; a energia (nullable)
+  // quando é NULL. Nunca soma, então o SUM(distance_km) da frota não dobra.
+  const medicao = medicaoDoEvento(corpo);
+  const refleteDistancia = medicao?.distanciaKm != null;
+  const refleteEnergia = medicao?.energiaKwh != null;
+  let atualizacaoMedicao = "";
+  const paramsMedicao = [];
+  if (refleteDistancia) {
+    atualizacaoMedicao += ", distance_km = CASE WHEN (distance_km IS NULL OR distance_km = 0) THEN ? ELSE distance_km END"
+      + ", distance_km_quality = CASE WHEN (distance_km IS NULL OR distance_km = 0) THEN ? ELSE distance_km_quality END";
+    paramsMedicao.push(medicao.distanciaKm, medicao.distanciaOrigem);
+  }
+  if (refleteEnergia) {
+    atualizacaoMedicao += ", energy_kwh = CASE WHEN energy_kwh IS NULL THEN ? ELSE energy_kwh END"
+      + ", energy_kwh_quality = CASE WHEN energy_kwh IS NULL THEN ? ELSE energy_kwh_quality END";
+    paramsMedicao.push(medicao.energiaKwh, medicao.energiaOrigem);
+  }
   const instrucoes = [
     env.DB.prepare(
       `INSERT INTO todogreen_client_operation_events
          (id,tenant_id,operation_id,client_id,workspace_owner_id,kind,titulo,descricao,local,
-          ocorrido_em,registrado_por,created_at,idempotency_key)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          ocorrido_em,registrado_por,created_at,idempotency_key,distance_km,distance_source,energy_kwh,energy_source)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(
       eventoId, TENANT_ID, operationId, operacao.client_id, ownerId, tipo, titulo,
       descricao, texto(corpo.local, 300), ocorridoEm, userId, agora, idempotencyKey,
+      medicao?.distanciaKm ?? null, medicao?.distanciaOrigem ?? null,
+      medicao?.energiaKwh ?? null, medicao?.energiaOrigem ?? null,
     ),
     env.DB.prepare(
       `UPDATE todogreen_client_operations
-          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}${atualizacaoPosicao}
+          SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}${atualizacaoPosicao}${atualizacaoMedicao}
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-    ).bind(agora, userId, ...paramsEntrega, ...paramsPosicao, operationId, TENANT_ID, ownerId),
+    ).bind(agora, userId, ...paramsEntrega, ...paramsPosicao, ...paramsMedicao, operationId, TENANT_ID, ownerId),
   ];
   if (efeitos.concluiEntrega) {
     // POD para toda OS amarrada a esta operação. INSERT direto com subselect:
@@ -2290,7 +2314,11 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
     `SELECT * FROM todogreen_client_operations
       WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
   ).bind(operationId, TENANT_ID, ownerId).first();
-  const evento = { id: eventoId, tipo, titulo, descricao, local: texto(corpo.local, 300), ocorridoEm, registradoPor: userId, criadoEm: agora };
+  const evento = {
+    id: eventoId, tipo, titulo, descricao, local: texto(corpo.local, 300), ocorridoEm, registradoPor: userId, criadoEm: agora,
+    distanciaKm: medicao?.distanciaKm ?? null, distanciaOrigem: medicao?.distanciaOrigem ?? null,
+    energiaKwh: medicao?.energiaKwh ?? null, energiaOrigem: medicao?.energiaOrigem ?? null,
+  };
   // Entrega e ocorrência são os dois eventos que o embarcador quer saber na
   // hora — os demais ele acompanha pela linha do tempo quando quiser.
   if (efeitos.concluiEntrega || efeitos.contaOcorrencia) {

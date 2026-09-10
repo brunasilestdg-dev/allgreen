@@ -709,6 +709,57 @@ describe("linha do tempo operacional", () => {
       expect.objectContaining({ tipo: "ocorrencia", titulo: "Atraso no acesso", local: "CD Sul" }),
     ]);
   });
+
+  it("km e energia viram fato do evento e refletem na operação vazia, sem sobrescrever depois (N.2)", async () => {
+    const clienteId = `cli-medicao-${crypto.randomUUID()}`;
+    await criarCliente(gestora, clienteId, "Cliente Medição");
+    const operacao = (await (await pedir("/api/todogreen/records/operations", {
+      metodo: "POST", token: gestora.token,
+      corpo: { clientId: clienteId, referencia: "OP-MEDICAO", viagens: 1 },
+    })).json()).registro;
+
+    // Evento com medição numa operação sem distância (distance_km=0): grava o
+    // fato no evento e REFLETE na operação (estava vazia).
+    const ev1 = await pedir(`/api/todogreen/records/operations/${operacao.id}/events`, {
+      metodo: "POST", token: gestora.token,
+      corpo: { tipo: "transito", titulo: "Perna 1", distanciaKm: 120, energiaKwh: 30 },
+    });
+    expect(ev1.status).toBe(201);
+
+    const eventoRow = await env.DB.prepare(
+      `SELECT distance_km, distance_source, energy_kwh, energy_source
+         FROM todogreen_client_operation_events WHERE operation_id=? ORDER BY created_at DESC LIMIT 1`,
+    ).bind(operacao.id).first();
+    expect(eventoRow).toEqual({ distance_km: 120, distance_source: "medido", energy_kwh: 30, energy_source: "medido" });
+
+    const op1 = await env.DB.prepare(
+      `SELECT distance_km, distance_km_quality, energy_kwh, energy_kwh_quality
+         FROM todogreen_client_operations WHERE id=?`,
+    ).bind(operacao.id).first();
+    expect(op1).toEqual({ distance_km: 120, distance_km_quality: "medido", energy_kwh: 30, energy_kwh_quality: "medido" });
+
+    // Segundo evento com outra distância NÃO sobrescreve — a operação já tinha o
+    // dado (guarda "só-se-vazio", igual ao last_position). Sem double-count.
+    await pedir(`/api/todogreen/records/operations/${operacao.id}/events`, {
+      metodo: "POST", token: gestora.token,
+      corpo: { tipo: "transito", titulo: "Perna 2", distanciaKm: 999, energiaKwh: 500 },
+    });
+    const op2 = await env.DB.prepare(
+      `SELECT distance_km, energy_kwh FROM todogreen_client_operations WHERE id=?`,
+    ).bind(operacao.id).first();
+    expect(op2).toEqual({ distance_km: 120, energy_kwh: 30 });
+
+    // Evento sem medição deixa tudo intacto e grava NULL nas 4 colunas do evento.
+    await pedir(`/api/todogreen/records/operations/${operacao.id}/events`, {
+      metodo: "POST", token: gestora.token,
+      corpo: { tipo: "chegada", titulo: "Sem medir" },
+    });
+    const semMedicao = await env.DB.prepare(
+      `SELECT distance_km, energy_kwh FROM todogreen_client_operation_events
+        WHERE operation_id=? ORDER BY created_at DESC LIMIT 1`,
+    ).bind(operacao.id).first();
+    expect(semMedicao).toEqual({ distance_km: null, energy_kwh: null });
+  });
 });
 
 describe("papel que só consulta não altera", () => {

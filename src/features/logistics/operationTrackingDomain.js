@@ -206,6 +206,41 @@ export const efeitosDoEvento = (tipo) => {
   };
 };
 
+// ===== Medição (km e energia) como parte do evento (N.2) =====
+//
+// A medição é ORTOGONAL ao kind: qualquer evento pode carregar distância e/ou
+// energia. Por isso é um contrato próprio, não entra em efeitosDoEvento. Cada
+// medida vem com a sua ORIGEM (qualidade do dado) — o mesmo vocabulário que o
+// motor ESG já usa, para "medido" e "estimado" significarem o mesmo em todo lugar.
+export const QUALIDADE_MEDICAO = Object.freeze(["medido", "documentado", "estimado", "presumido"]);
+
+// Coage a origem ao vocabulário; fora da lista vira o padrão — a mesma
+// disciplina de normalizarTipoEvento com o kind. Nenhum caminho grava lixo.
+export const normalizarQualidade = (origem, padrao = "estimado") => {
+  const q = String(origem ?? "").trim().toLowerCase();
+  return QUALIDADE_MEDICAO.includes(q) ? q : padrao;
+};
+
+// Lê a medição do corpo do evento. Distância e energia são INDEPENDENTES: um
+// evento pode trazer só km, só kWh, os dois, ou nenhum. Devolve null quando nada
+// foi informado — e o caminho de escrita então grava NULL nas colunas (o evento
+// não mede nada). Medida informada nasce "medido"; sem energia informada, o ESG
+// segue derivando com "estimado" (a origem não some, muda de dono). Valores
+// negativos são zerados (não existe distância/energia negativa num fato).
+export const medicaoDoEvento = (corpo = {}) => {
+  const nKm = Number(corpo.distanciaKm);
+  const nKwh = Number(corpo.energiaKwh);
+  const temKm = corpo.distanciaKm != null && corpo.distanciaKm !== "" && Number.isFinite(nKm);
+  const temKwh = corpo.energiaKwh != null && corpo.energiaKwh !== "" && Number.isFinite(nKwh);
+  if (!temKm && !temKwh) return null;
+  return {
+    distanciaKm: temKm ? Math.max(0, nKm) : null,
+    distanciaOrigem: temKm ? normalizarQualidade(corpo.distanciaOrigem, "medido") : null,
+    energiaKwh: temKwh ? Math.max(0, nKwh) : null,
+    energiaOrigem: temKwh ? normalizarQualidade(corpo.energiaOrigem, "medido") : null,
+  };
+};
+
 // A linha do tempo é ordenada por quando ACONTECEU, não por quando foi
 // registrada. Um evento lançado com atraso não pode reescrever a ordem da
 // viagem.
