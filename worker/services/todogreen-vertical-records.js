@@ -1645,16 +1645,46 @@ const bloqueioDeCompetencia = async (env, access, ...entradas) => {
   return "";
 };
 
+// Documentos jurídicos (todogreen_legal_records) deste espaço amarrados a um
+// contrato/proposta, via `campos.contractId`/`campos.proposalId` (fields_json).
+// O corte de espaço fica no SQL; o casamento por contrato/proposta é em JS
+// porque o vínculo mora no JSON — o mesmo padrão do gate legado. Só devolve os
+// ids, para o chamador decidir o que a situação de cada um significa.
+const idsJuridicosDoContrato = async (env, access, cid, pid, { status } = {}) => {
+  const filtroStatus = Array.isArray(status) && status.length
+    ? ` AND status IN (${status.map(() => "?").join(",")})` : "";
+  const { results } = await env.DB
+    .prepare(
+      `SELECT id, status, fields_json FROM todogreen_legal_records
+        WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL${filtroStatus}`,
+    )
+    .bind(TENANT_ID, access.ownerId, ...(status || []))
+    .all()
+    .catch(() => ({ results: [] }));
+  const ids = [];
+  for (const row of results || []) {
+    let campos = {};
+    try { campos = JSON.parse(row.fields_json || "{}"); } catch { campos = {}; }
+    if ((cid && texto(campos.contractId, 120) === cid) || (pid && texto(campos.proposalId, 120) === pid))
+      ids.push(row.id);
+  }
+  return ids;
+};
+
 // Gate do Jurídico (regra da titular: todo contrato passa pelo Jurídico antes
-// de ser aprovado ou assinado). A validação jurídica vive em
-// todogreen_enterprise_workflows (domínio "legal"), amarrada ao contrato pelo
-// data_json.contractId (ou proposalId, quando o contrato ainda não existe no
-// momento da criação). "Concluído" = a etapa `juridico` recebeu decisão
-// aprovada ou aprovada com ressalva.
+// de ser aprovado ou assinado). Fonte única, escolhida pela titular: a página
+// do Jurídico (todogreen_legal_records). Um documento amarrado a este
+// contrato/proposta e já Aprovado ou Assinado conclui o gate. O fluxo antigo em
+// todogreen_enterprise_workflows (domínio "legal") permanece aceito como legado
+// — contratos aprovados antes da unificação não podem regredir.
 const juridicoConcluido = async (env, access, { contractId = "", proposalId = "" }) => {
   const cid = texto(contractId, 120);
   const pid = texto(proposalId, 120);
   if (!cid && !pid) return false;
+  // Fonte única: documento do Jurídico aprovado/assinado amarrado ao contrato.
+  const concluidos = await idsJuridicosDoContrato(env, access, cid, pid, { status: ["aprovado", "assinado"] });
+  if (concluidos.length) return true;
+  // Legado: fluxo jurídico do painel empresarial.
   const { results } = await env.DB
     .prepare(
       `SELECT data_json, approval_json FROM todogreen_enterprise_workflows
@@ -1679,15 +1709,36 @@ const juridicoConcluido = async (env, access, { contractId = "", proposalId = ""
   return false;
 };
 
-// Gate da assinatura: não se marca um contrato como assinado sem a evidência
-// do documento assinado. O documento é anexado ao fluxo jurídico do contrato
-// (EnterpriseWorkflowPanel → "Contrato e documentos", cofre interno com
-// context_type='workflow'). Aqui exigimos ao menos um anexo num fluxo legal
-// amarrado a este contrato.
+// Há ao menos um anexo no cofre interno para algum dos contextos dados? O corte
+// de espaço é o de sempre; o context_type diz de qual sistema veio o anexo.
+const temAnexoNoCofre = async (env, access, contextType, ids) => {
+  if (!ids.length) return false;
+  const marcadores = ids.map(() => "?").join(",");
+  const anexo = await env.DB
+    .prepare(
+      `SELECT id FROM todogreen_internal_files
+        WHERE tenant_id=? AND workspace_owner_id=? AND context_type=?
+          AND context_id IN (${marcadores}) AND archived_at IS NULL LIMIT 1`,
+    )
+    .bind(TENANT_ID, access.ownerId, contextType, ...ids)
+    .first()
+    .catch(() => null);
+  return Boolean(anexo);
+};
+
+// Gate da assinatura: não se marca um contrato como assinado sem a evidência do
+// documento assinado. Fonte única (escolha da titular): o arquivo anexado ao
+// documento do Jurídico deste contrato (cofre interno, context_type='legal').
+// O fluxo antigo (EnterpriseWorkflowPanel, context_type='workflow') segue aceito
+// como legado, para contratos que já anexaram a evidência por lá.
 const documentoDeAssinaturaVinculado = async (env, access, { contractId = "", proposalId = "" }) => {
   const cid = texto(contractId, 120);
   const pid = texto(proposalId, 120);
   if (!cid && !pid) return false;
+  // Novo: anexo no próprio documento do Jurídico amarrado a este contrato.
+  const idsJuridicos = await idsJuridicosDoContrato(env, access, cid, pid);
+  if (await temAnexoNoCofre(env, access, "legal", idsJuridicos)) return true;
+  // Legado: anexo no fluxo jurídico do painel empresarial.
   const { results } = await env.DB
     .prepare(
       `SELECT id, data_json FROM todogreen_enterprise_workflows
@@ -1703,18 +1754,7 @@ const documentoDeAssinaturaVinculado = async (env, access, { contractId = "", pr
     if ((cid && texto(data.contractId, 120) === cid) || (pid && texto(data.proposalId, 120) === pid))
       ids.push(row.id);
   }
-  if (!ids.length) return false;
-  const marcadores = ids.map(() => "?").join(",");
-  const anexo = await env.DB
-    .prepare(
-      `SELECT id FROM todogreen_internal_files
-        WHERE tenant_id=? AND workspace_owner_id=? AND context_type='workflow'
-          AND context_id IN (${marcadores}) AND archived_at IS NULL LIMIT 1`,
-    )
-    .bind(TENANT_ID, access.ownerId, ...ids)
-    .first()
-    .catch(() => null);
-  return Boolean(anexo);
+  return temAnexoNoCofre(env, access, "workflow", ids);
 };
 
 const criar = async (env, colecao, access, user, corpo, email = "") => {

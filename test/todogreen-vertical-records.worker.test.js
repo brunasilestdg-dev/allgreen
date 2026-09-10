@@ -479,6 +479,57 @@ describe("contrato nasce de proposta aceita", () => {
     expect(historico.status).toBe(200);
     expect((await historico.json()).eventos.map((evento) => evento.acao)).toEqual(expect.arrayContaining(["created", "updated"]));
   });
+
+  it("conclui o gate pela página do Jurídico (sistema unificado), não só pelo fluxo empresarial", async () => {
+    const clienteId = `cli-jur-uni-${crypto.randomUUID()}`;
+    await criarCliente(gestora, clienteId, "Cliente Jurídico Unificado");
+    const proposta = (await (await pedir("/api/todogreen/records/proposals", {
+      metodo: "POST", token: gestora.token,
+      corpo: { clientId: clienteId, cliente: "Cliente Jurídico Unificado", titulo: "Proposta unificada", cenarioId: "cen-uni", situacao: "accepted" },
+    })).json()).registro;
+    const contrato = (await (await pedir("/api/todogreen/records/contracts", {
+      metodo: "POST", token: gestora.token,
+      corpo: { clientId: clienteId, propostaId: proposta.id, titulo: "Contrato unificado" },
+    })).json()).registro;
+
+    // Sem documento jurídico, assinar é recusado (gate ativo).
+    const semJuridico = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14" },
+    });
+    expect(semJuridico.status).toBe(409);
+
+    // Documento na PÁGINA DO JURÍDICO, aprovado e amarrado à proposta pelo
+    // campos.proposalId — a fonte única que a titular escolheu.
+    const legal = (await (await pedir("/api/todogreen/records/legal", {
+      metodo: "POST", token: gestora.token,
+      corpo: { titulo: "Contrato unificado — minuta", situacao: "aprovado", clientId: clienteId, campos: { proposalId: proposta.id } },
+    })).json()).registro;
+    expect(legal.situacao).toBe("aprovado");
+
+    // Jurídico aprovado libera a aprovação; a assinatura ainda exige o anexo.
+    const semAnexo = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14" },
+    });
+    expect(semAnexo.status).toBe(409);
+
+    // Contrato assinado anexado AO DOCUMENTO DO JURÍDICO (context_type='legal').
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_internal_files
+        (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,file_name,content_type,
+         byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at)
+       VALUES (?,'todogreen',?,?,NULL,'legal',?,'contrato-assinado.pdf','application/pdf',2048,'hash2',1,'internal_upload','','',?,?,NULL)`,
+    ).bind(crypto.randomUUID(), gestora.id, clienteId, legal.id, gestora.id, agora).run();
+
+    const assinado = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14" },
+    });
+    expect(assinado.status).toBe(200);
+    expect((await assinado.json()).registro).toEqual(expect.objectContaining({ assinatura: "signed" }));
+  });
 });
 
 describe("oportunidade ganha abre handoff operacional", () => {

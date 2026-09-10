@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlarmClock, Building2, CalendarClock, FileCheck2, MessagesSquare, Paperclip, PenLine, Plus, ScrollText, ShieldAlert } from "lucide-react";
+import { AlarmClock, Building2, CalendarClock, FileCheck2, Link2 as LinkIcon, MessagesSquare, Paperclip, PenLine, Plus, ScrollText, ShieldAlert } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import AnexosContexto from "./AnexosContexto.jsx";
 import {
@@ -33,6 +33,7 @@ const formVazio = {
   signatarioEmail: "",
   tipo: "minuta",
   risco: "medio",
+  proposalId: "",
   inicioVigencia: "",
   fimVigencia: "",
   observacoes: "",
@@ -65,7 +66,7 @@ const alertaDeVencimento = (dias) => {
   return null;
 };
 
-export default function LegalPage({ registros = [], clients = [], criar, setToast, authHeaders, listarSubrecurso, recarregar, juridico = false }) {
+export default function LegalPage({ registros = [], clients = [], proposals = [], criar, setToast, authHeaders, listarSubrecurso, recarregar, juridico = false }) {
   const [form, setForm] = useState(formVazio);
   const [aberto, setAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -115,6 +116,18 @@ export default function LegalPage({ registros = [], clients = [], criar, setToas
   const vencendo = useMemo(() => documentosVencendo(registros, { dias: 90 }), [registros]);
   const nomeCliente = (id) => clients.find((c) => c.id === id)?.name || "";
   const contraparteDe = (r) => r.contraparte || nomeCliente(r.clientId) || r.titulo;
+  // Propostas oferecidas para vínculo: as do cliente escolhido, ou todas quando
+  // ainda não há cliente. Ordena pela mais recente.
+  const propostasVinculaveis = useMemo(() => {
+    const base = form.clientId ? proposals.filter((p) => p.clientId === form.clientId) : proposals;
+    return [...base].sort((a, b) => String(b.atualizadoEm || "").localeCompare(String(a.atualizadoEm || "")));
+  }, [proposals, form.clientId]);
+  const propostaVinculada = (r) => {
+    const pid = r.campos?.proposalId;
+    if (!pid) return "";
+    const p = proposals.find((x) => x.id === pid);
+    return p ? (p.titulo || "Proposta vinculada") : "Proposta vinculada";
+  };
 
   const lista = useMemo(() => {
     const ordenados = [...registros].sort((a, b) => String(b.atualizadoEm || "").localeCompare(String(a.atualizadoEm || "")));
@@ -129,10 +142,11 @@ export default function LegalPage({ registros = [], clients = [], criar, setToas
     if (erro) { setToast?.(erro); return; }
     setSalvando(true);
     try {
-      // Contraparte estruturada (CNPJ e signatário) viaja em `campos`, sem
+      // Contraparte estruturada (CNPJ e signatário) e o vínculo com a proposta
+      // (que liga o Jurídico ao gate do contrato) viajam em `campos`, sem
       // migração — o worker grava em fields_json e devolve em `campos`.
-      const { cnpj, signatario, signatarioEmail, ...base } = form;
-      await criar?.("legal", { ...base, campos: { cnpj: soDigitos(cnpj), signatario: signatario.trim(), signatarioEmail: signatarioEmail.trim() } });
+      const { cnpj, signatario, signatarioEmail, proposalId, ...base } = form;
+      await criar?.("legal", { ...base, campos: { cnpj: soDigitos(cnpj), signatario: signatario.trim(), signatarioEmail: signatarioEmail.trim(), proposalId: proposalId.trim() } });
       setForm(formVazio);
       setAberto(false);
       setToast?.("Documento jurídico registrado.");
@@ -191,6 +205,10 @@ export default function LegalPage({ registros = [], clients = [], criar, setToas
           <label><span>Tipo</span><select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>{JURIDICO_TIPOS.map((t) => <option key={t.id} value={t.id}>{t.rotulo}</option>)}</select></label>
           <label><span>Risco jurídico</span><select value={form.risco} onChange={(e) => setForm({ ...form, risco: e.target.value })}>{JURIDICO_RISCOS.map((r) => <option key={r.id} value={r.id}>{r.rotulo}</option>)}</select></label>
           <label><span>Cliente</span><select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}><option value="">Sem cliente</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+          {/* Vínculo com a proposta: quando o documento chega a Aprovado/Assinado,
+              ele libera o gate do contrato gerado desta proposta. É a ponte que
+              une o Jurídico ao contrato num sistema só. */}
+          <label><span>Proposta / contrato vinculado</span><select value={form.proposalId} onChange={(e) => setForm({ ...form, proposalId: e.target.value })}><option value="">Não vincular</option>{propostasVinculaveis.map((p) => <option key={p.id} value={p.id}>{p.titulo || "Proposta"}{p.cliente ? ` · ${p.cliente}` : ""}</option>)}</select></label>
           <label><span>Contraparte (razão social)</span><input value={form.contraparte} onChange={(e) => setForm({ ...form, contraparte: e.target.value })} placeholder="Empresa que assina do outro lado" /></label>
           <label><span>CNPJ da contraparte</span><input value={form.cnpj} inputMode="numeric" onChange={(e) => setForm({ ...form, cnpj: soDigitos(e.target.value) })} placeholder="Só números" /></label>
           <label><span>Signatário (quem assina)</span><input value={form.signatario} onChange={(e) => setForm({ ...form, signatario: e.target.value })} placeholder="Nome de quem assina pela contraparte" /></label>
@@ -233,8 +251,9 @@ export default function LegalPage({ registros = [], clients = [], criar, setToas
                 </span>
                 <span className={`tdg-legal-risco r-${r.risco}`}>{r.risco === "alto" && <ShieldAlert size={13} />}Risco {rotuloRisco(r.risco).toLowerCase()}</span>
               </header>
-              {(r.inicioVigencia || r.fimVigencia || cnpj || signatario || r.observacoes) && (
+              {(r.inicioVigencia || r.fimVigencia || cnpj || signatario || propostaVinculada(r) || r.observacoes) && (
                 <dl className="tdg-legal-detalhe">
+                  {propostaVinculada(r) && <div><dt><LinkIcon size={11} />Contrato vinculado</dt><dd>{propostaVinculada(r)}{["aprovado", "assinado"].includes(r.situacao) ? " · libera a assinatura do contrato" : " · conclua o Jurídico para liberar"}</dd></div>}
                   {cnpj && <div><dt><Building2 size={11} />CNPJ</dt><dd>{cnpj}</dd></div>}
                   {signatario && <div><dt><PenLine size={11} />Signatário</dt><dd>{signatario}{r.campos?.signatarioEmail ? ` · ${r.campos.signatarioEmail}` : ""}</dd></div>}
                   {(r.inicioVigencia || r.fimVigencia) && <div><dt>Vigência</dt><dd>{dataBR(r.inicioVigencia)} → {dataBR(r.fimVigencia)}</dd></div>}
