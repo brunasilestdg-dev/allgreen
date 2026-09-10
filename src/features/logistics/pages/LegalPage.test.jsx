@@ -40,11 +40,36 @@ describe("página de Jurídico", () => {
     expect(criar.mock.calls[0][1]).toMatchObject({ titulo: "Aditivo prazo" });
   });
 
-  it("muda a situação de um documento pela própria lista", async () => {
-    const atualizar = vi.fn().mockResolvedValue({});
-    render(<LegalPage registros={registros} clients={clients} atualizar={atualizar} />);
-    fireEvent.change(screen.getByRole("combobox", { name: /Situação de Contrato Rede Alfa/ }), { target: { value: "aprovado" } });
-    await waitFor(() => expect(atualizar).toHaveBeenCalledWith("legal", "l1", { situacao: "aprovado", revision: 1 }));
+  it("conduz a situação pelo fluxo auditado, sem seletor solto de status", async () => {
+    // O antigo <select> de status na lista era mudança não auditada; agora a
+    // situação só muda por ações do fluxo, que gravam evento imutável.
+    render(<LegalPage registros={registros} clients={clients} juridico />);
+    expect(screen.queryByRole("combobox", { name: /Situação de/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Abrir fluxo/ }));
+    // O documento em análise oferece a ação auditada de arquivar no fluxo.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Arquivar" })).toBeInTheDocument());
+  });
+
+  it("mostra o painel de renovação para documentos em aberto vencendo", () => {
+    const hoje = new Date();
+    const em15dias = new Date(hoje.getTime() + 15 * 86400000).toISOString().slice(0, 10);
+    const vencendo = [{ id: "l3", titulo: "Contrato a renovar", tipo: "contrato", risco: "medio", situacao: "aprovado", fimVigencia: em15dias, revision: 1, atualizadoEm: "2026-09-01" }];
+    render(<LegalPage registros={vencendo} clients={clients} />);
+    expect(screen.getByText("Renove antes de vencer")).toBeInTheDocument();
+    // Aparece no painel de renovação e no rodapé do cartão.
+    expect(screen.getAllByText(/Vence em 15 dias/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("guarda contraparte estruturada (CNPJ e signatário) em campos", async () => {
+    const criar = vi.fn().mockResolvedValue({ id: "novo" });
+    render(<LegalPage registros={registros} clients={clients} criar={criar} setToast={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Novo documento/ }));
+    fireEvent.change(screen.getByPlaceholderText(/Contrato de operação/), { target: { value: "Contrato novo" } });
+    fireEvent.change(screen.getByPlaceholderText("Só números"), { target: { value: "12.345.678/0001-95" } });
+    fireEvent.change(screen.getByPlaceholderText(/Nome de quem assina/), { target: { value: "Maria Souza" } });
+    fireEvent.click(screen.getByRole("button", { name: /Registrar documento/ }));
+    await waitFor(() => expect(criar).toHaveBeenCalledTimes(1));
+    expect(criar.mock.calls[0][1].campos).toMatchObject({ cnpj: "12345678000195", signatario: "Maria Souza" });
   });
 
   it("o filtro Todos revela também os encerrados", () => {

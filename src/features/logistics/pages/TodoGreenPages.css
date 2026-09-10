@@ -4055,6 +4055,57 @@
 .tdg-legal-metrics small { color: var(--tdg-muted); font-size: .7rem; }
 .tdg-legal-metrics strong { font-size: 1.35rem; }
 .tdg-legal-metrics article.risk strong { color: var(--tdg-danger, #b3261e); }
+.tdg-legal-metrics article.warn strong { color: #b5730a; }
+
+/* Agenda de renovação: os documentos em aberto que estão vencendo, do mais
+   urgente ao menos, para a data nunca passar despercebida. */
+.tdg-legal-alertas {
+  background: color-mix(in srgb, #b5730a 7%, var(--tdg-card, #fff));
+  border: 1px solid color-mix(in srgb, #b5730a 28%, var(--tdg-line, #d7e0dc));
+  border-radius: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+.tdg-legal-alertas > header { align-items: center; color: #8a5906; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.tdg-legal-alertas > header strong { font-size: .9rem; }
+.tdg-legal-alertas > header small { color: var(--tdg-muted); }
+.tdg-legal-alertas ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.tdg-legal-alerta {
+  align-items: center;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #d7e0dc);
+  border-left: 3px solid #b5730a;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  font: inherit;
+  gap: 6px 12px;
+  padding: 9px 12px;
+  text-align: left;
+  width: 100%;
+}
+.tdg-legal-alerta:hover { border-color: color-mix(in srgb, #b5730a 40%, var(--tdg-line, #d7e0dc)); }
+.tdg-legal-alerta.tom-vencido { border-left-color: var(--tdg-danger, #b3261e); }
+.tdg-legal-alerta.tom-urgente { border-left-color: #d98324; }
+.tdg-legal-alerta-titulo { align-items: center; display: inline-flex; flex: 1 1 200px; font-size: .86rem; font-weight: 600; gap: 6px; min-width: 0; }
+.tdg-legal-alerta-meta { color: var(--tdg-muted); font-size: .74rem; flex: 1 1 160px; }
+
+/* Selo de vigência, usado no alerta e no rodapé do cartão. */
+.tdg-legal-vencimento {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: .74rem;
+  font-weight: 700;
+  gap: 4px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.tdg-legal-vencimento.tom-atencao { background: #fbeede; color: #a15c12; }
+.tdg-legal-vencimento.tom-urgente { background: #fbe9d6; color: #a15c12; }
+.tdg-legal-vencimento.tom-vencido { background: #fbe4e2; color: var(--tdg-danger, #b3261e); }
 
 .tdg-legal-form {
   display: grid;
@@ -4125,11 +4176,9 @@
 .tdg-legal-risco.r-alto { background: #fbe4e2; color: var(--tdg-danger, #b3261e); }
 .tdg-legal-detalhe { display: grid; gap: 6px; margin: 0; }
 .tdg-legal-detalhe div { display: grid; gap: 1px; }
-.tdg-legal-detalhe dt { color: var(--tdg-muted); font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+.tdg-legal-detalhe dt { align-items: center; color: var(--tdg-muted); display: inline-flex; font-size: .68rem; font-weight: 700; gap: 4px; text-transform: uppercase; }
 .tdg-legal-detalhe dd { font-size: .82rem; margin: 0; }
-.tdg-legal-card footer { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
-.tdg-legal-prazo { color: var(--tdg-muted); font-size: .74rem; }
-.tdg-legal-situacao select { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; font-size: .78rem; padding: 5px 8px; }
+.tdg-legal-card footer { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
 
 
 /* CRM progressivo: funciona da primeira pista ao histórico completo. */

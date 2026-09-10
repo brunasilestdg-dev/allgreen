@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  acoesJuridicasDisponiveis,
+  diasParaVencer,
+  documentosVencendo,
+  resolverAcaoJuridica,
   resumoJuridico,
   validarDocumentoJuridico,
   normalizarRisco,
@@ -53,5 +57,62 @@ describe("domínio jurídico", () => {
     const r = resumoJuridico([{ id: "x", status: "em_analise", risk: "alto", effectiveEnd: "2026-08-01" }], HOJE);
     expect(r.riscoAlto).toBe(1);
     expect(r.vencidos).toBe(1);
+  });
+
+  it("conta os dias até o vencimento em dias de calendário (UTC)", () => {
+    expect(diasParaVencer("2026-09-03", HOJE)).toBe(0); // vence hoje
+    expect(diasParaVencer("2026-09-13", HOJE)).toBe(10); // dez dias à frente
+    expect(diasParaVencer("2026-08-24", HOJE)).toBe(-10); // já venceu há dez dias
+    expect(diasParaVencer("", HOJE)).toBeNull();
+    expect(diasParaVencer("data-invalida", HOJE)).toBeNull();
+    // Aceita timestamp completo, usando só a data.
+    expect(diasParaVencer("2026-09-13T23:59:00Z", HOJE)).toBe(10);
+  });
+
+  it("lista os documentos em aberto que vencem dentro da janela, urgentes primeiro", () => {
+    const registros = [
+      { id: "1", situacao: "aprovado", fimVigencia: "2026-09-20" }, // vence em 17 dias
+      { id: "2", situacao: "em_analise", fimVigencia: "2026-08-30" }, // vencido há 4 dias (entra, negativo)
+      { id: "3", situacao: "assinado", fimVigencia: "2026-09-05" }, // encerrado: fora
+      { id: "4", situacao: "rascunho", fimVigencia: "2027-01-01" }, // muito longe: fora da janela de 30
+      { id: "5", situacao: "aprovado" }, // sem data: fora
+    ];
+    const venc = documentosVencendo(registros, { dias: 30 }, HOJE);
+    expect(venc.map((r) => r.id)).toEqual(["2", "1"]); // ordenado: mais urgente (negativo) primeiro
+    expect(venc[0].diasParaVencer).toBe(-4);
+    expect(venc[1].diasParaVencer).toBe(17);
+  });
+
+  it("resume os documentos vencendo em até 30 dias (sem contar os já vencidos)", () => {
+    const registros = [
+      { id: "1", situacao: "aprovado", fimVigencia: "2026-09-20" }, // 17 dias: vencendo
+      { id: "2", situacao: "em_analise", fimVigencia: "2026-08-30" }, // vencido: conta em vencidos, não em vencendo
+      { id: "3", situacao: "aprovado", fimVigencia: "2027-06-01" }, // longe: nenhum
+    ];
+    const r = resumoJuridico(registros, HOJE);
+    expect(r.vencendo).toBe(1);
+    expect(r.vencidos).toBe(1);
+  });
+
+  it("oferece marcar assinado e arquivar como ações auditadas do fluxo", () => {
+    const doAprovado = acoesJuridicasDisponiveis("aprovado", { juridico: true }).map((a) => a.id);
+    expect(doAprovado).toContain("marcar_assinado");
+    expect(doAprovado).toContain("arquivar");
+  });
+
+  it("resolve marcar_assinado como transição auditada de aprovado para assinado", () => {
+    const r = resolverAcaoJuridica("aprovado", "marcar_assinado", { juridico: true });
+    expect(r.ok).toBe(true);
+    expect(r.para).toBe("assinado");
+    expect(r.kind).toBe("assinatura");
+    // Só a partir de aprovado.
+    expect(resolverAcaoJuridica("rascunho", "marcar_assinado", { juridico: true }).ok).toBe(false);
+  });
+
+  it("resolve arquivar como transição auditada para arquivado a partir de qualquer situação em aberto", () => {
+    const r = resolverAcaoJuridica("em_analise", "arquivar", { juridico: false });
+    expect(r.ok).toBe(true);
+    expect(r.para).toBe("arquivado");
+    expect(r.kind).toBe("arquivamento");
   });
 });

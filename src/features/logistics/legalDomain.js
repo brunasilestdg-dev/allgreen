@@ -70,10 +70,15 @@ export const ACOES_JURIDICAS = Object.freeze({
   solicitar_ajuste: { de: ["em_analise"], para: "ajuste_solicitado", rotulo: "Solicitar ajustes", exigeMensagem: true, juridico: true },
   aprovar: { de: ["em_analise"], para: "aprovado", rotulo: "Validar / aprovar", juridico: true },
   reprovar: { de: ["em_analise"], para: "recusado", rotulo: "Reprovar", exigeMensagem: true, juridico: true },
+  // Fecho do ciclo. Antes viravam "assinado"/"arquivado" por um dropdown solto,
+  // fora da linha do tempo (mudança não auditada). Agora são ações do fluxo:
+  // gravam evento imutável e movem a situação como as demais.
+  marcar_assinado: { de: ["aprovado"], para: "assinado", rotulo: "Marcar como assinado" },
+  arquivar: { de: ["rascunho", "em_analise", "ajuste_solicitado", "aprovado", "recusado"], para: "arquivado", rotulo: "Arquivar" },
   comentar: { de: ["rascunho", "em_analise", "ajuste_solicitado", "aprovado"], para: null, rotulo: "Comentar", exigeMensagem: true },
 });
 
-const KIND_POR_ACAO = { submeter: "submissao", solicitar_ajuste: "ajuste_solicitado", aprovar: "validado", reprovar: "reprovado", comentar: "comentario" };
+const KIND_POR_ACAO = { submeter: "submissao", solicitar_ajuste: "ajuste_solicitado", aprovar: "validado", reprovar: "reprovado", marcar_assinado: "assinatura", arquivar: "arquivamento", comentar: "comentario" };
 
 export function acoesJuridicasDisponiveis(situacao, { juridico = false } = {}) {
   return Object.entries(ACOES_JURIDICAS)
@@ -96,6 +101,27 @@ export function resolverAcaoJuridica(situacao, acaoId, { juridico = false, temTe
 
 const soData = (valor) => String(valor || "").slice(0, 10);
 
+// Quantos dias faltam para o fim da vigência (negativo = já venceu, null = sem
+// data). Conta em dias de calendário, em UTC, para não oscilar por fuso.
+export const diasParaVencer = (fim, agora = Date.now()) => {
+  const f = soData(fim);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return null;
+  const alvo = Date.parse(`${f}T00:00:00Z`);
+  const base = Date.parse(`${soData(new Date(agora).toISOString())}T00:00:00Z`);
+  if (Number.isNaN(alvo) || Number.isNaN(base)) return null;
+  return Math.round((alvo - base) / 86400000);
+};
+
+// Documentos EM ABERTO que vencem dentro de `dias` (inclui os já vencidos, com
+// dias negativos), ordenados do mais urgente para o menos. É o que alimenta o
+// painel de alerta "renove antes de vencer".
+export const documentosVencendo = (registros = [], { dias = 30 } = {}, agora = Date.now()) =>
+  registros
+    .filter((r) => !situacaoJuridicaEncerrada(r.situacao || r.status))
+    .map((r) => ({ ...r, diasParaVencer: diasParaVencer(r.fimVigencia || r.effectiveEnd, agora) }))
+    .filter((r) => r.diasParaVencer !== null && r.diasParaVencer <= dias)
+    .sort((a, b) => a.diasParaVencer - b.diasParaVencer);
+
 // Resumo da carteira jurídica: em análise, aguardando assinatura (aprovados que
 // ainda não foram assinados), risco alto em aberto, vencidos (vigência já
 // terminada e documento ainda não encerrado) e assinados. É o que a tela mostra
@@ -111,6 +137,12 @@ export const resumoJuridico = (registros = [], agora = Date.now()) => {
     vencidos: abertos.filter((r) => {
       const fim = soData(r.fimVigencia || r.effectiveEnd);
       return Boolean(fim) && fim < hoje;
+    }).length,
+    // Vencendo em até 30 dias (ainda dentro da vigência) — o aviso que evita
+    // perder a renovação. Não inclui os já vencidos (esses estão em `vencidos`).
+    vencendo: abertos.filter((r) => {
+      const d = diasParaVencer(r.fimVigencia || r.effectiveEnd, agora);
+      return d !== null && d >= 0 && d <= 30;
     }).length,
     assinados: registros.filter((r) => (r.situacao || r.status) === "assinado").length,
   };
