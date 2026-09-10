@@ -2334,6 +2334,26 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   return { evento, tipo, titulo, descricao, atualizada };
 };
 
+// Ponte de ingest → ledger (N.4): carrega a operação pelo id e aplica o evento
+// pelo caminho canônico. É a generalização do que o webhook do TMS já fazia à
+// mão — toda porta externa (webhook, projeção, API) converge para cá, para o
+// efeito de um fato nunca depender da porta. NÃO decide efeito (isso é do
+// contrato único) e NÃO devolve Response: devolve dados, para o chamador
+// (interno ou externo) formatar a resposta como precisar. Operação inexistente
+// ou arquivada não é erro — devolve { aplicado: false, motivo }.
+export const aplicarEventoNaOperacaoPorId = async (env, { ownerId, userId, operationId, corpo, origem = "" }) => {
+  const id = texto(operationId, 120);
+  if (!id) return { aplicado: false, motivo: "operação não informada" };
+  const operacao = await env.DB.prepare(
+    `SELECT * FROM todogreen_client_operations
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(id, TENANT_ID, ownerId).first();
+  if (!operacao) return { aplicado: false, motivo: "operação inexistente neste espaço" };
+  const resultado = await aplicarEventoOperacional(env, { ownerId, operacao, userId, corpo, origem });
+  if (resultado?.erro) return { aplicado: false, motivo: resultado.erro };
+  return { aplicado: true, operationId: id, resultado };
+};
+
 const registrarEventoOperacao = async (env, access, user, operationId, corpo, origem = "") => {
   if (!(await noAlcanceDaCarteira(env, COLECOES.operations, access, user.email, operationId)))
     return json({ error: "Operação não encontrada." }, 404);

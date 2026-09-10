@@ -21,7 +21,7 @@
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
 import { sameHash } from "../auth/credenciais.js";
 import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
-import { aplicarEventoOperacional } from "./todogreen-vertical-records.js";
+import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
 import {
   PERGUNTAS_AO_TRACK3R,
   casarEmbarcador,
@@ -764,16 +764,15 @@ const aplicarOcorrenciaNaOperacao = async (env, { ownerId, userId, doc }) => {
   const operationId = await operacaoDaRemessa(env, ownerId, doc);
   if (!operationId) return { aplicado: false, motivo: "remessa ainda sem operação projetada" };
 
-  const operacao = await env.DB.prepare(
-    `SELECT * FROM todogreen_client_operations
-      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
-  ).bind(operationId, TENANT_ID, ownerId).first();
-  if (!operacao) return { aplicado: false, motivo: "operação não encontrada neste espaço" };
-
-  const resultado = await aplicarEventoOperacional(env, {
+  // Converge para a ponte canônica (N.4): a operação é carregada lá, e o evento
+  // ganha a MESMA chave de idempotência de ledger que as outras portas — a
+  // identidade estável da ocorrência (hashDaOcorrencia) que o staging já usa.
+  // Antes o evento do webhook entrava sem chave: reenviar a mesma ocorrência
+  // gravava um segundo evento na linha do tempo.
+  return aplicarEventoNaOperacaoPorId(env, {
     ownerId,
-    operacao,
     userId,
+    operationId,
     origem: "track3r-webhook",
     corpo: {
       tipo,
@@ -784,10 +783,9 @@ const aplicarOcorrenciaNaOperacao = async (env, { ownerId, userId, doc }) => {
       // Só a entrega carrega comprovante e recebedor — é o que destrava o POD.
       comprovanteUrl: texto(doc.proofUrl, 800),
       recebedor: texto(doc.receiverName, 200),
+      idempotencyKey: `ocr:${hashDaOcorrencia(doc)}`,
     },
   });
-  if (resultado?.erro) return { aplicado: false, motivo: resultado.erro };
-  return { aplicado: true, operationId };
 };
 
 export async function receberOcorrenciaTrack3r(request, env) {

@@ -265,6 +265,37 @@ describe("gravação da ocorrência", () => {
     expect((linhas.results || []).map((item) => item.occurrence_code)).toEqual(["01", "03"]);
   });
 
+  it("N.4a: a ocorrência aplicada à operação ganha chave de idempotência e não duplica evento no ledger", async () => {
+    const opId = `n4a-op-${crypto.randomUUID()}`;
+    const agora = new Date().toISOString();
+    // Operação já existente (o webhook não abre operação — só vira evento de uma
+    // que já foi projetada). Colunas reais, espelhando o INSERT da projeção.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id,tenant_id,workspace_owner_id,client_id,product_id,contract_id,reference,status,service_date,
+          origin,destination,fields_json,sla_status,incident_count,promised_at,delivered_at,eta_at,
+          vehicle_plate,driver_name,distance_km,revision,created_by,updated_by,created_at,updated_at,archived_at)
+       VALUES (?, 'todogreen', ?, 'tmw-embarcador','','','OP-N4A','active','2026-03-01','A','B','{}','',0,NULL,NULL,NULL,'','',0,1,?,?,?,?,NULL)`,
+    ).bind(opId, gestora.id, gestora.id, gestora.id, agora, agora).run();
+
+    const oc = ocorrencia({ encomenda: "N4A-DEDUP", codigo: "07", descricao: "Em trânsito", data: "01/03/2024 09:00:00" });
+    // 1ª: cria o staging, mas a remessa ainda não tem operação projetada → evento não entra.
+    await chamarWebhook(integracao, oc);
+    // Liga o documento à operação (o que a projeção faria).
+    await env.DB.prepare(
+      "UPDATE todogreen_tms_documents SET operation_id = ? WHERE workspace_owner_id = ? AND order_ref = 'N4A-DEDUP'",
+    ).bind(opId, gestora.id).run();
+    // 2ª e 3ª da MESMA ocorrência: aplica UMA vez; a repetição dedup pela chave 'ocr:<hash>'.
+    await chamarWebhook(integracao, oc);
+    await chamarWebhook(integracao, oc);
+
+    const { results } = await env.DB.prepare(
+      "SELECT idempotency_key FROM todogreen_client_operation_events WHERE operation_id = ?",
+    ).bind(opId).all();
+    expect((results || []).length).toBe(1);
+    expect(String(results[0].idempotency_key)).toMatch(/^ocr:/);
+  });
+
   it("embarcador sem conta no espaço entra na fila, sem inventar cliente", async () => {
     await chamarWebhook(integracao, ocorrencia({
       encomenda: "99001122", cnpjEmbarcador: "11444777000161", codigo: "03",
