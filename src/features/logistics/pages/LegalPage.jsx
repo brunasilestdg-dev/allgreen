@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlarmClock, Building2, CalendarClock, FileCheck2, MessagesSquare, Paperclip, PenLine, Plus, ScrollText, ShieldAlert } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
+import AnexosContexto from "./AnexosContexto.jsx";
 import {
   JURIDICO_RISCOS,
   JURIDICO_TIPOS,
@@ -262,6 +263,11 @@ export default function LegalPage({ registros = [], clients = [], criar, setToas
                   {ev.anexoUrl && <a href={ev.anexoUrl} target="_blank" rel="noreferrer noopener"><Paperclip size={13} />{ev.anexoNome || "Anexo"}</a>}
                 </article>
               ))}
+            </div>
+            {/* Contrato de verdade: arquivo no cofre interno, versionado por nome.
+                Reenviar o mesmo nome cria uma nova versão (v2, v3…). */}
+            <div className="tdg-legal-arquivos">
+              <AnexosContexto contextType="legal" contextId={fluxo.id} titulo="Contrato e anexos (arquivos)" setToast={setToast} />
             </div>
             {situacaoJuridicaEncerrada(situacaoFluxo) ? (
               <p className="tdg-legal-fluxo-fim">Documento encerrado ({rotuloSituacaoJuridica(situacaoFluxo)}). Não há mais tratativa em aberto.</p>

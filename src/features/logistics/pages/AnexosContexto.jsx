@@ -95,7 +95,10 @@ export default function AnexosContexto({ contextType, contextId, titulo = "Anexo
               <button type="button" className="tdg-anexo-nome" onClick={() => baixar(a)} title="Baixar">
                 <Download size={13} /> {a.fileName}
               </button>
-              <small>{a.source === "client_reference" ? "link" : `${Math.max(1, Math.round(a.byteSize / 1024))} KB`}</small>
+              <small>
+                {a.version > 1 && <span className="tdg-anexo-versao" title={`Versão ${a.version} deste documento`}>v{a.version}</span>}
+                {a.source === "client_reference" ? "link" : `${Math.max(1, Math.round(a.byteSize / 1024))} KB`}
+              </small>
               <button type="button" className="tdg-anexo-remover" onClick={() => remover(a)} aria-label={`Remover ${a.fileName}`}>
                 <Trash2 size={13} />
               </button>

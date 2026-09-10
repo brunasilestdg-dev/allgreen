@@ -3734,7 +3734,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tdg-anexos-lista li > small { color: var(--tdg-muted, var(--tdg-muted)); font-size: 11.5px; flex: 0 0 auto; }
+.tdg-anexos-lista li > small { align-items: center; color: var(--tdg-muted, var(--tdg-muted)); display: inline-flex; font-size: 11.5px; flex: 0 0 auto; gap: 6px; }
+.tdg-anexo-versao { background: color-mix(in srgb, var(--tdg-green, #075c45) 14%, transparent); border-radius: 999px; color: var(--tdg-green, #075c45); font-weight: 700; padding: 1px 7px; }
+.tdg-legal-arquivos { border-top: 1px solid var(--tdg-line, #d7e0dc); padding-top: 14px; }
 .tdg-anexo-remover {
   background: transparent;
   border: 0;
