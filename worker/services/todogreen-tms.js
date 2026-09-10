@@ -451,10 +451,19 @@ const listarDocumentos = async (env, access, url) => {
   const base = `FROM todogreen_tms_documents
       WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL ${filtros}`;
 
-  const [{ results }, totalRow] = await Promise.all([
+  const [{ results }, totalRow, summaryRow] = await Promise.all([
     env.DB.prepare(`SELECT * ${base} ORDER BY occurred_at DESC, created_at DESC LIMIT ? OFFSET ?`)
       .bind(...params, limit, offset).all(),
     env.DB.prepare(`SELECT COUNT(*) AS total ${base}`).bind(...params).first(),
+    // Totais globais da torre. Não usar a página de 100 documentos como se
+    // fosse a operação inteira.
+    env.DB.prepare(
+      `SELECT
+         SUM(CASE WHEN COALESCE(client_id,'') = '' OR COALESCE(operation_id,'') = '' THEN 1 ELSE 0 END) AS sem_vinculo,
+         SUM(CASE WHEN lower(COALESCE(status,'')) NOT IN ('completed','concluida','delivered','entregue','cancelled','canceled','cancelado') THEN 1 ELSE 0 END) AS abertas
+       FROM todogreen_tms_documents
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+    ).bind(TENANT_ID, access.ownerId).first(),
   ]);
 
   const registros = (results || []).map(documentoDaLinha);
@@ -462,7 +471,12 @@ const listarDocumentos = async (env, access, url) => {
     registros,
     // O retrato do que falta casar. Sem ele a integração parece completa
     // enquanto metade dos documentos não chegou a lugar nenhum.
-    resumo: resumoDaImportacao(registros),
+    resumo: {
+      ...resumoDaImportacao(registros),
+      total: Number(totalRow?.total || 0),
+      semVinculo: Number(summaryRow?.sem_vinculo || 0),
+      abertas: Number(summaryRow?.abertas || 0),
+    },
     total: totalRow?.total || 0,
     limit,
     offset,

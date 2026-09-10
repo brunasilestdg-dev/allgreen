@@ -157,6 +157,8 @@ const orderView = (row) => ({
   quantity: row.quantity, chargeUnit: row.charge_unit, unitPrice: row.unit_price,
   grossAmount: row.gross_amount, discountAmount: row.discount_amount, taxAmount: row.tax_amount,
   netAmount: row.net_amount, precoOrigem: parseJson(row.fields_json).precoOrigem || "",
+  origin: parseJson(row.origin_json), destination: parseJson(row.destination_json),
+  sla: parseJson(row.sla_json), fields: parseJson(row.fields_json),
   revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at,
 });
 
@@ -265,11 +267,42 @@ async function listOrders(env, access, url) {
   const contractId = text(url.searchParams.get("contractId"), 120);
   const filters = `${status ? "AND status=?" : ""} ${contractId ? "AND contract_id=?" : ""}`;
   const params = [TENANT_ID, access.ownerId, ...(status ? [status] : []), ...(contractId ? [contractId] : [])];
-  const { results } = await env.DB.prepare(
-    `SELECT * FROM todogreen_service_orders WHERE tenant_id=? AND workspace_owner_id=?
-      AND archived_at IS NULL ${filters} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-  ).bind(...params, limit, offset).all();
-  return json({ records: (results || []).map(orderView), limit, offset });
+  const now = new Date().toISOString();
+  const [rows, totalRow, summaryRow] = await Promise.all([
+    env.DB.prepare(
+      `SELECT * FROM todogreen_service_orders WHERE tenant_id=? AND workspace_owner_id=?
+        AND archived_at IS NULL ${filters} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    ).bind(...params, limit, offset).all(),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM todogreen_service_orders WHERE tenant_id=? AND workspace_owner_id=?
+        AND archived_at IS NULL ${filters}`,
+    ).bind(...params).first(),
+    // O resumo não depende da página carregada. Sem ele, o contador da torre
+    // parava em 100 registros e parecia saudável numa operação maior.
+    env.DB.prepare(
+      `SELECT
+         SUM(CASE WHEN status NOT IN ('completed','cancelled') THEN 1 ELSE 0 END) AS abertas,
+         SUM(CASE WHEN status NOT IN ('completed','cancelled') AND scheduled_end_at IS NOT NULL
+                   AND datetime(scheduled_end_at) < datetime(?) THEN 1 ELSE 0 END) AS atrasadas,
+         SUM(CASE WHEN status NOT IN ('completed','cancelled') AND scheduled_end_at IS NOT NULL
+                   AND datetime(scheduled_end_at) >= datetime(?)
+                   AND datetime(scheduled_end_at) <= datetime(?, '+24 hours') THEN 1 ELSE 0 END) AS em_risco,
+         SUM(CASE WHEN status NOT IN ('completed','cancelled') AND COALESCE(scheduled_end_at,'') = '' THEN 1 ELSE 0 END) AS sem_prazo,
+         SUM(CASE WHEN status NOT IN ('completed','cancelled') AND scheduled_end_at IS NOT NULL
+                   AND datetime(scheduled_end_at) <= datetime(?, '+24 hours') THEN net_amount ELSE 0 END) AS receita_em_risco
+       FROM todogreen_service_orders
+      WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+    ).bind(now, now, now, now, TENANT_ID, access.ownerId).first(),
+  ]);
+  return json({
+    records: (rows.results || []).map(orderView), limit, offset,
+    total: Number(totalRow?.total || 0),
+    summary: {
+      open: Number(summaryRow?.abertas || 0), delayed: Number(summaryRow?.atrasadas || 0),
+      risk: Number(summaryRow?.em_risco || 0), noDeadline: Number(summaryRow?.sem_prazo || 0),
+      revenueAtRisk: Number(summaryRow?.receita_em_risco || 0),
+    },
+  });
 }
 
 async function createOrder(env, access, user, body) {
@@ -794,12 +827,19 @@ async function issueCiot(env, access, user, id, body) {
 
 async function listBilling(env, access, url) {
   const status = text(url.searchParams.get("status"), 30) || "eligible";
-  const { results } = await env.DB.prepare(
-    `SELECT b.*,s.number AS service_order_number FROM todogreen_billing_items b
-      JOIN todogreen_service_orders s ON s.id=b.service_order_id
-      WHERE b.tenant_id=? AND b.workspace_owner_id=? AND b.status=? ORDER BY b.competence_date,b.created_at`,
-  ).bind(TENANT_ID, access.ownerId, status).all();
-  return json({ records: results || [] });
+  const [rows, summary] = await Promise.all([
+    env.DB.prepare(
+      `SELECT b.*,s.number AS service_order_number FROM todogreen_billing_items b
+        JOIN todogreen_service_orders s ON s.id=b.service_order_id
+        WHERE b.tenant_id=? AND b.workspace_owner_id=? AND b.status=? ORDER BY b.competence_date,b.created_at`,
+    ).bind(TENANT_ID, access.ownerId, status).all(),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total,COALESCE(SUM(amount),0) AS amount
+         FROM todogreen_billing_items
+        WHERE tenant_id=? AND workspace_owner_id=? AND status=?`,
+    ).bind(TENANT_ID, access.ownerId, status).first(),
+  ]);
+  return json({ records: rows.results || [], summary: { total: Number(summary?.total || 0), amount: Number(summary?.amount || 0) } });
 }
 
 // ===== A ponte que faltava (#120): entrega com POD → fila de faturamento =====

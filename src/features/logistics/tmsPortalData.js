@@ -46,6 +46,14 @@ export const createTmsShipmentManual = (input) =>
 export const listTmsFleetPositions = () => fetchJson("/api/todogreen/tms-manual/positions");
 export const registerTmsPodManual = (shipmentId, input) =>
   fetchJson(`/api/todogreen/tms-manual/shipments/${encodeURIComponent(shipmentId)}/pod`, { method: "POST", body: input });
+export const transitionTmsOrder = (shipmentId, revision, status) =>
+  fetchJson(`/api/todogreen/transactions/service-orders/${encodeURIComponent(shipmentId)}/transition`, {
+    method: "POST", body: { revision, status },
+  });
+export const checkTmsBillingItem = (itemId, revision, approved = true, reason = "") =>
+  fetchJson(`/api/todogreen/transactions/billing-items/${encodeURIComponent(itemId)}/check`, {
+    method: "POST", body: { revision, approved, reason },
+  });
 
 // Bipagem: leitor físico (digita o código + Enter, como um teclado), câmera
 // do celular ou digitação manual — os três chamam esta mesma função.
@@ -69,8 +77,19 @@ const order = (row) => ({
   quantity: Number(row.quantity || 0),
   chargeUnit: row.chargeUnit || "",
   netAmount: Number(row.netAmount || 0),
+  unitPrice: Number(row.unitPrice || 0),
+  grossAmount: Number(row.grossAmount || 0),
+  discountAmount: Number(row.discountAmount || 0),
+  taxAmount: Number(row.taxAmount || 0),
   origin: row.origin || {},
   destination: row.destination || {},
+  completedAt: row.completedAt || "",
+  requestedAt: row.requestedAt || "",
+  createdAt: row.createdAt || "",
+  updatedAt: row.updatedAt || "",
+  revision: Number(row.revision || 0),
+  sla: row.sla || {},
+  fields: row.fields || {},
 });
 
 const operationFromTmsDocument = (row) => ({
@@ -82,11 +101,32 @@ const operationFromTmsDocument = (row) => ({
   destination: row.currentUnit || "",
   vehiclePlate: row.vehiclePlate || "",
   driverName: row.driverName || "",
+  clientId: row.clientId || "",
+  operationId: row.operationId || "",
+  occurrence: row.occurrence || "",
+  invoiceNumber: row.invoiceNumber || "",
+  packages: Number(row.packages || 0),
+  weightKg: Number(row.weightKg || 0),
   distanceKm: Number(row.distanceKm || 0),
   promisedAt: row.promisedAt || "",
   deliveredAt: ["completed", "delivered", "entregue", "concluida"].includes(String(row.status || "").toLowerCase())
     ? row.occurredAt || ""
     : "",
+  occurredAt: row.occurredAt || "",
+  updatedAt: row.atualizadoEm || "",
+});
+
+const billing = (row) => ({
+  id: row.id,
+  orderId: row.service_order_id || "",
+  orderNumber: row.service_order_number || "",
+  clientId: row.client_id || "",
+  contractId: row.contract_id || "",
+  status: row.status || "",
+  amount: Number(row.amount || 0),
+  competenceDate: row.competence_date || "",
+  createdAt: row.created_at || "",
+  revision: Number(row.revision || 0),
 });
 
 const fiscal = (row) => ({
@@ -145,6 +185,7 @@ export async function loadTmsPortalData() {
   const fiscalDocuments = (fiscalData?.registros || []).map(fiscal);
   const ciots = (ciotData?.records || []).map(ciot);
   const billingItems = billingData?.records || [];
+  const billingRecords = billingItems.map(billing);
   const apiKeys = apiKeysData?.keys || [];
   const activeApiKeys = apiKeys.filter((item) => !item.revokedAt);
 
@@ -152,10 +193,15 @@ export async function loadTmsPortalData() {
     generatedAt: new Date().toISOString(),
     access,
     indicators: {
-      ordersOpen: orders.filter((item) => openStatus(item.status)).length,
-      operationsInTransit: operations.filter((item) => openStatus(item.status)).length,
-      unlinkedExternalDocs: externalDocuments.filter((item) => !item.clientId || !item.operationId).length,
-      billingPending: billingItems.length,
+      ordersOpen: Number(ordersData?.summary?.open ?? orders.filter((item) => openStatus(item.status)).length),
+      ordersDelayed: Number(ordersData?.summary?.delayed || 0),
+      ordersAtRisk: Number(ordersData?.summary?.risk || 0),
+      ordersWithoutDeadline: Number(ordersData?.summary?.noDeadline || 0),
+      revenueAtRisk: Number(ordersData?.summary?.revenueAtRisk || 0),
+      operationsInTransit: Number(tmsData?.resumo?.abertas ?? operations.filter((item) => openStatus(item.status)).length),
+      unlinkedExternalDocs: Number(tmsData?.resumo?.semVinculo ?? externalDocuments.filter((item) => !item.clientId || !item.operationId).length),
+      billingPending: Number(billingData?.summary?.total ?? billingItems.length),
+      billingPendingAmount: Number(billingData?.summary?.amount ?? billingRecords.reduce((sum, item) => sum + item.amount, 0)),
       ctePending: fiscalDocuments.filter((item) => item.docType === "cte" && pendingFiscal(item.status)).length,
       mdfePending: fiscalDocuments.filter((item) => item.docType === "mdfe" && pendingFiscal(item.status)).length,
       ciotPending: ciots.filter((item) => pendingCiot(item.status)).length,
@@ -199,5 +245,10 @@ export async function loadTmsPortalData() {
       fiscal: fiscalDocuments.slice(0, 8),
       ciots: ciots.slice(0, 8),
     },
+    totals: {
+      orders: Number(ordersData?.total ?? orders.length),
+      operations: Number(tmsData?.total ?? operations.length),
+    },
+    all: { orders, operations, fiscal: fiscalDocuments, ciots, billing: billingRecords },
   };
 }

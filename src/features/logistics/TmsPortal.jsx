@@ -8,23 +8,35 @@ import {
   BatteryCharging,
   Boxes,
   Cable,
+  CalendarClock,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Copy,
+  Download,
+  Eye,
   FileCheck2,
   Gauge,
   KeyRound,
   MapPinned,
   PackageSearch,
+  Play,
   RefreshCw,
   Route,
   ScanLine,
+  Search,
+  ShieldCheck,
+  Siren,
   Trash2,
   Truck,
   Waypoints,
   Zap,
 } from "lucide-react";
+import Modal from "../../components/Modal.jsx";
 import {
   authHeaders,
+  checkTmsBillingItem,
   createTmsApiKey,
   createTmsShipmentManual,
   listTmsFleetPositions,
@@ -34,7 +46,17 @@ import {
   registerTmsPodManual,
   revokeTmsApiKey,
   scanTmsTrackId,
+  transitionTmsOrder,
 } from "./tmsPortalData.js";
+import { SERVICE_ORDER_TRANSITIONS } from "./transactionalSpineDomain.js";
+import {
+  buildTmsActionQueue,
+  filterTmsRecords,
+  paginateTmsRecords,
+  slaState,
+  summarizeTms,
+  tmsCsv,
+} from "./tmsCommandCenterDomain.js";
 import "./TmsPortal.css";
 import "./TmsApiManager.css";
 // Reaproveita o estilo do pino (divIcon) e do container do mapa já validados
@@ -63,9 +85,100 @@ const SECTIONS = [
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
-const labelStatus = (value) => String(value || "—")
+const STATUS_LABELS = {
+  active: "Ativa", available: "Disponível", blocked: "Bloqueada", cancelled: "Cancelada",
+  canceled: "Cancelada", checked: "Conferida", completed: "Concluída", draft: "Rascunho",
+  eligible: "Elegível", failed: "Falha", in_progress: "Em execução", issued: "Emitido",
+  maintenance: "Manutenção", ready: "Operacional", released: "Liberada", reserved: "Reservada",
+};
+
+const labelStatus = (value) => STATUS_LABELS[String(value || "").toLowerCase()] || String(value || "—")
   .replaceAll("_", " ")
   .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const dateTime = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+};
+
+const place = (value) => value?.city || value?.cidade || value?.name || value?.address || value?.endereco || "—";
+
+const elapsed = (minutes) => {
+  if (!Number.isFinite(minutes)) return "";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h${minutes % 60 ? ` ${minutes % 60}min` : ""}`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+};
+
+const hasAccess = (access, permissions) => {
+  if (["owner", "admin"].includes(access?.role)) return true;
+  const grants = Array.isArray(access?.permissions) ? access.permissions : [];
+  return grants.includes("*") || permissions.some((permission) => grants.includes(permission));
+};
+
+function SlaPill({ row }) {
+  const sla = slaState(row);
+  const complement = sla.level === "late" ? ` · ${elapsed(sla.minutes)}`
+    : ["risk", "attention"].includes(sla.level) ? ` · ${elapsed(sla.minutes)}` : "";
+  return <span className={`tms-sla ${sla.level}`} title={sla.deadline ? `Prazo: ${dateTime(sla.deadline)}` : "Prazo não informado"}>{sla.label}{complement}</span>;
+}
+
+const baixarCsv = (filename, columns, rows) => {
+  const blob = new Blob([tmsCsv(columns, rows)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+function WorkbenchToolbar({ rows, query, onQuery, status, onStatus, risk, onRisk, onExport, noun = "registros" }) {
+  const statuses = [...new Set(rows.map((row) => String(row.status || "")).filter(Boolean))].sort();
+  return (
+    <div className="tms-workbench-toolbar">
+      <label className="tms-search-field">
+        <Search size={16} />
+        <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder={`Buscar em ${noun}`} aria-label={`Buscar em ${noun}`} />
+      </label>
+      <label>
+        <span>Situação</span>
+        <select value={status} onChange={(event) => onStatus(event.target.value)}>
+          <option value="">Todas</option>
+          {statuses.map((item) => <option key={item} value={item}>{labelStatus(item)}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>SLA</span>
+        <select value={risk} onChange={(event) => onRisk(event.target.value)}>
+          <option value="">Todos</option>
+          <option value="late">Atrasado</option>
+          <option value="risk">Risco em até 2h</option>
+          <option value="attention">Vence em 24h</option>
+          <option value="on_time">No prazo</option>
+          <option value="no_deadline">Sem prazo</option>
+          <option value="completed">Concluído</option>
+        </select>
+      </label>
+      <button type="button" className="tms-secondary-action" onClick={onExport}><Download size={15} /> Exportar CSV</button>
+    </div>
+  );
+}
+
+function Pagination({ page, pages, total, onPage }) {
+  if (total <= 20) return <p className="tms-result-count">{total} registro(s)</p>;
+  return (
+    <div className="tms-pagination">
+      <span>{total} registros · página {page} de {pages}</span>
+      <div>
+        <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Página anterior"><ChevronLeft size={16} /></button>
+        <button type="button" onClick={() => onPage(page + 1)} disabled={page >= pages} aria-label="Próxima página"><ChevronRight size={16} /></button>
+      </div>
+    </div>
+  );
+}
 
 const pathSection = () => {
   if (typeof window === "undefined") return "controle";
@@ -84,7 +197,8 @@ function StatusPill({ value }) {
 }
 
 function Metric({ label, value, detail, alert = false, onClick, acao }) {
-  const classe = `tms-metric ${alert && Number(value) > 0 ? "is-alert" : ""}${onClick ? " is-acao" : ""}`;
+  const alertOn = alert && value != null && (typeof value === "number" ? value > 0 : String(value) !== money.format(0));
+  const classe = `tms-metric ${alertOn ? "is-alert" : ""}${onClick ? " is-acao" : ""}`;
   // Central de ação: o indicador não é só número, é a porta pra resolver. Quando
   // tem para onde levar, vira botão que navega direto pra seção que trata a fila.
   if (onClick) {
@@ -223,8 +337,6 @@ function FleetMap() {
   );
 }
 
-const ENTREGUE_OU_CANCELADA = new Set(["completed", "concluida", "delivered", "entregue", "cancelled", "canceled", "cancelado"]);
-
 // Rótulos em português dos tipos de evento relevantes pra bipagem (o núcleo
 // aceita mais tipos — CREATED/CANCELLED não fazem sentido bipados numa
 // esteira, ficam só na API/tela de detalhe).
@@ -344,25 +456,21 @@ function ScanSection() {
   );
 }
 
-function OrdersTable({ rows = [], onRegistrarPod }) {
+function OrdersTable({ rows = [], onOpen }) {
   if (!rows.length) return <Empty>Nenhuma ordem de serviço registrada.</Empty>;
   return (
     <div className="tms-table-wrap">
       <table className="tms-table">
-        <thead><tr><th>OS</th><th>Origem</th><th>Destino</th><th>Quantidade</th><th>Valor</th><th>Status</th>{onRegistrarPod ? <th /> : null}</tr></thead>
+        <thead><tr><th>OS</th><th>Rota</th><th>Prazo</th><th>Quantidade</th><th>Valor</th><th>Status</th><th /></tr></thead>
         <tbody>{rows.map((row) => (
           <tr key={row.id}>
-            <td><strong>{row.number || row.id}</strong></td>
-            <td>{row.origin?.city || row.origin?.cidade || row.origin?.name || row.origin?.address || "—"}</td>
-            <td>{row.destination?.city || row.destination?.cidade || row.destination?.name || row.destination?.address || "—"}</td>
+            <td><strong>{row.number || row.id}</strong><small>{row.clientId || "Cliente não informado"}</small></td>
+            <td><strong>{place(row.origin)} <span className="tms-arrow">→</span> {place(row.destination)}</strong><small>{row.requestedAt ? `Solicitada em ${dateTime(row.requestedAt)}` : ""}</small></td>
+            <td><SlaPill row={row} /></td>
             <td>{number.format(row.quantity || 0)} {row.chargeUnit || ""}</td>
             <td>{money.format(row.netAmount || 0)}</td>
             <td><StatusPill value={row.status} /></td>
-            {onRegistrarPod ? (
-              <td>{!ENTREGUE_OU_CANCELADA.has(String(row.status || "").toLowerCase()) ? (
-                <button type="button" className="tms-api-mini-button" onClick={() => onRegistrarPod(row)}>Registrar entrega</button>
-              ) : null}</td>
-            ) : null}
+            <td><button type="button" className="tms-icon-action" onClick={() => onOpen(row)} aria-label={`Abrir ${row.number || row.id}`}><Eye size={16} /></button></td>
           </tr>
         ))}</tbody>
       </table>
@@ -370,23 +478,191 @@ function OrdersTable({ rows = [], onRegistrarPod }) {
   );
 }
 
-function OperationsTable({ rows = [] }) {
+function OperationsTable({ rows = [], onOpen }) {
   if (!rows.length) return <Empty>Nenhuma movimentação do TMS registrada.</Empty>;
   return (
     <div className="tms-table-wrap">
       <table className="tms-table">
-        <thead><tr><th>Referência</th><th>Trecho</th><th>Veículo</th><th>Motorista</th><th>Status</th></tr></thead>
+        <thead><tr><th>Referência</th><th>Trecho</th><th>Prazo</th><th>Volumes</th><th>Veículo</th><th>Motorista</th><th>Status</th>{onOpen ? <th /> : null}</tr></thead>
         <tbody>{rows.map((row) => (
           <tr key={row.id}>
-            <td><strong>{row.reference || row.id}</strong><small>{row.serviceDate || ""}</small></td>
+            <td><strong>{row.reference || row.id}</strong><small>{row.invoiceNumber ? `NF ${row.invoiceNumber}` : row.serviceDate || ""}</small></td>
             <td>{row.origin || "—"} <span className="tms-arrow">→</span> {row.destination || "—"}</td>
+            <td><SlaPill row={row} /></td>
+            <td>{number.format(row.packages || 0)}<small>{row.weightKg ? `${number.format(row.weightKg)} kg` : ""}</small></td>
             <td>{row.vehiclePlate || "—"}</td>
             <td>{row.driverName || "—"}</td>
             <td><StatusPill value={row.status} /></td>
+            {onOpen ? <td><button type="button" className="tms-icon-action" onClick={() => onOpen(row)} aria-label={`Abrir ${row.reference || row.id}`}><Eye size={16} /></button></td> : null}
           </tr>
         ))}</tbody>
       </table>
     </div>
+  );
+}
+
+const ORDER_ACTION_LABELS = {
+  released: "Liberar OS",
+  in_progress: "Iniciar execução",
+  completed: "Concluir",
+  cancelled: "Cancelar OS",
+};
+
+function OrderDetailsModal({ row, onClose, onTransition, onPod, busy, error, canPlan, canOperate }) {
+  const nextStatuses = (SERVICE_ORDER_TRANSITIONS[row.status] || []).filter(() => (
+    row.status === "draft" ? canPlan : canOperate
+  ));
+  return (
+    <Modal title={`Ordem ${row.number || row.id}`} onClose={onClose} wide>
+      <div className="tms-detail-grid">
+        <div><span>Situação</span><StatusPill value={row.status} /></div>
+        <div><span>SLA</span><SlaPill row={row} /></div>
+        <div><span>Solicitada</span><strong>{dateTime(row.requestedAt)}</strong></div>
+        <div><span>Prazo</span><strong>{dateTime(row.scheduledEndAt)}</strong></div>
+        <div className="wide"><span>Rota</span><strong>{place(row.origin)} → {place(row.destination)}</strong></div>
+        <div><span>Quantidade</span><strong>{number.format(row.quantity || 0)} {row.chargeUnit || ""}</strong></div>
+        <div><span>Valor líquido</span><strong>{money.format(row.netAmount || 0)}</strong></div>
+        <div><span>Cliente</span><strong>{row.clientId || "—"}</strong></div>
+        <div><span>Operação</span><strong>{row.operationId || "—"}</strong></div>
+      </div>
+      <div className="tms-financial-strip">
+        <span>Unitário <strong>{money.format(row.unitPrice || 0)}</strong></span>
+        <span>Bruto <strong>{money.format(row.grossAmount || 0)}</strong></span>
+        <span>Desconto <strong>{money.format(row.discountAmount || 0)}</strong></span>
+        <span>Impostos <strong>{money.format(row.taxAmount || 0)}</strong></span>
+      </div>
+      {error ? <p className="tms-api-inline-error" role="alert">{error}</p> : null}
+      <div className="tms-detail-actions">
+        {nextStatuses.filter((status) => status !== "completed").map((status) => (
+          <button key={status} type="button" className={status === "cancelled" ? "tms-danger-action" : "tms-primary-action"} onClick={() => onTransition(status)} disabled={busy}>
+            {status === "in_progress" ? <Play size={16} /> : status === "cancelled" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+            {busy ? "Salvando..." : ORDER_ACTION_LABELS[status]}
+          </button>
+        ))}
+        {row.status === "in_progress" ? <button type="button" className="tms-primary-action" onClick={onPod} disabled={busy}><CheckCircle2 size={16} /> Registrar entrega e POD</button> : null}
+        <button type="button" className="tms-secondary-action" onClick={onClose}>Fechar</button>
+      </div>
+    </Modal>
+  );
+}
+
+function OperationDetailsModal({ row, onClose }) {
+  return (
+    <Modal title={`Movimentação ${row.reference || row.id}`} onClose={onClose} wide>
+      <div className="tms-detail-grid">
+        <div><span>Situação</span><StatusPill value={row.status} /></div>
+        <div><span>SLA</span><SlaPill row={row} /></div>
+        <div><span>Evento mais recente</span><strong>{dateTime(row.occurredAt)}</strong></div>
+        <div><span>Prazo prometido</span><strong>{dateTime(row.promisedAt)}</strong></div>
+        <div className="wide"><span>Trecho</span><strong>{row.origin || "—"} → {row.destination || "—"}</strong></div>
+        <div><span>Volumes</span><strong>{number.format(row.packages || 0)}</strong></div>
+        <div><span>Peso</span><strong>{number.format(row.weightKg || 0)} kg</strong></div>
+        <div><span>Distância</span><strong>{number.format(row.distanceKm || 0)} km</strong></div>
+        <div><span>Veículo</span><strong>{row.vehiclePlate || "—"}</strong></div>
+        <div><span>Motorista</span><strong>{row.driverName || "—"}</strong></div>
+        <div><span>Cliente</span><strong>{row.clientId || "Não vinculado"}</strong></div>
+        <div><span>Operação</span><strong>{row.operationId || "Não projetada"}</strong></div>
+        {row.occurrence ? <div className="wide"><span>Ocorrência</span><strong>{row.occurrence}</strong></div> : null}
+      </div>
+      <div className="tms-detail-actions"><button type="button" className="tms-secondary-action" onClick={onClose}>Fechar</button></div>
+    </Modal>
+  );
+}
+
+function OrdersWorkbench({ rows = [], onReload, access }) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [risk, setRisk] = useState("");
+  const [page, setPage] = useState(1);
+  const [detail, setDetail] = useState(null);
+  const [podOrder, setPodOrder] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const filtered = useMemo(() => filterTmsRecords(rows, { query, status, risk }), [rows, query, status, risk]);
+  const paged = useMemo(() => paginateTmsRecords(filtered, page, 20), [filtered, page]);
+
+  const transition = async (nextStatus) => {
+    if (!detail) return;
+    if (nextStatus === "cancelled" && !window.confirm(`Cancelar a OS ${detail.number || detail.id}? O histórico será preservado.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await transitionTmsOrder(detail.id, detail.revision, nextStatus);
+      setDetail(null);
+      await onReload();
+    } catch (reason) {
+      setError(reason?.message || "Não foi possível atualizar a ordem.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <WorkbenchToolbar
+        rows={rows}
+        query={query}
+        onQuery={(value) => { setQuery(value); setPage(1); }}
+        status={status}
+        onStatus={(value) => { setStatus(value); setPage(1); }}
+        risk={risk}
+        onRisk={(value) => { setRisk(value); setPage(1); }}
+        noun="cargas, clientes e rotas"
+        onExport={() => baixarCsv("cargas-tms.csv", [
+        { label: "OS", value: "number" }, { label: "Cliente", value: "clientId" },
+        { label: "Origem", value: (row) => place(row.origin) }, { label: "Destino", value: (row) => place(row.destination) },
+        { label: "Prazo", value: "scheduledEndAt" }, { label: "Quantidade", value: "quantity" },
+        { label: "Unidade", value: "chargeUnit" }, { label: "Valor", value: "netAmount" }, { label: "Status", value: "status" },
+        ], filtered)}
+      />
+      <OrdersTable rows={paged.rows} onOpen={setDetail} />
+      <Pagination {...paged} onPage={setPage} />
+      {detail ? <OrderDetailsModal
+        row={detail}
+        onClose={() => { setDetail(null); setError(""); }}
+        onTransition={transition}
+        onPod={() => { setPodOrder(detail); setDetail(null); }}
+        busy={busy}
+        error={error}
+        canPlan={hasAccess(access, ["planning:manage", "product:manage"])}
+        canOperate={hasAccess(access, ["operations:manage", "operation:manage"])}
+      /> : null}
+      {podOrder ? <div className="tms-workbench-pod"><PodCaptureForm pedido={podOrder} onClose={() => setPodOrder(null)} onReload={onReload} /></div> : null}
+    </>
+  );
+}
+
+function OperationsWorkbench({ rows = [] }) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [risk, setRisk] = useState("");
+  const [page, setPage] = useState(1);
+  const [detail, setDetail] = useState(null);
+  const filtered = useMemo(() => filterTmsRecords(rows, { query, status, risk }), [rows, query, status, risk]);
+  const paged = useMemo(() => paginateTmsRecords(filtered, page, 20), [filtered, page]);
+  return (
+    <>
+      <WorkbenchToolbar
+        rows={rows}
+        query={query}
+        onQuery={(value) => { setQuery(value); setPage(1); }}
+        status={status}
+        onStatus={(value) => { setStatus(value); setPage(1); }}
+        risk={risk}
+        onRisk={(value) => { setRisk(value); setPage(1); }}
+        noun="viagens, NF, placas e motoristas"
+        onExport={() => baixarCsv("viagens-tms.csv", [
+        { label: "Referência", value: "reference" }, { label: "Cliente", value: "clientId" },
+        { label: "Origem", value: "origin" }, { label: "Destino", value: "destination" },
+        { label: "Prazo", value: "promisedAt" }, { label: "Volumes", value: "packages" },
+        { label: "Peso kg", value: "weightKg" }, { label: "Placa", value: "vehiclePlate" },
+        { label: "Motorista", value: "driverName" }, { label: "Status", value: "status" },
+        ], filtered)}
+      />
+      <OperationsTable rows={paged.rows} onOpen={setDetail} />
+      <Pagination {...paged} onPage={setPage} />
+      {detail ? <OperationDetailsModal row={detail} onClose={() => setDetail(null)} /> : null}
+    </>
   );
 }
 
@@ -431,45 +707,136 @@ function CiotTable({ rows = [] }) {
   );
 }
 
+function BillingSection({ data, onReload }) {
+  const rows = useMemo(() => data?.all?.billing || [], [data?.all?.billing]);
+  const canCheck = hasAccess(data?.access, ["finance:manage"]);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [busyId, setBusyId] = useState("");
+  const [error, setError] = useState("");
+  const filtered = useMemo(() => {
+    const term = query.trim().toLocaleLowerCase("pt-BR");
+    if (!term) return rows;
+    return rows.filter((row) => Object.values(row).join(" ").toLocaleLowerCase("pt-BR").includes(term));
+  }, [rows, query]);
+  const paged = useMemo(() => paginateTmsRecords(filtered, page, 20), [filtered, page]);
+
+  const check = async (row) => {
+    setBusyId(row.id);
+    setError("");
+    try {
+      await checkTmsBillingItem(row.id, row.revision, true);
+      await onReload();
+    } catch (reason) {
+      setError(reason?.message || "Não foi possível conferir o item.");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  return (
+    <div className="tms-stack">
+      <div className="tms-metrics tms-metrics-compact">
+        <Metric label="Itens elegíveis" value={data?.indicators?.billingPending || 0} detail="com execução e POD" />
+        <Metric label="Valor da fila" value={money.format(data?.indicators?.billingPendingAmount || 0)} detail="aguardando conferência" />
+      </div>
+      <section className="tms-panel">
+        <div className="tms-panel-head"><div><span>Receita operacional</span><h2>Fila de faturamento</h2></div></div>
+        <div className="tms-simple-toolbar">
+          <label className="tms-search-field"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Buscar OS, cliente ou competência" aria-label="Buscar faturamento" /></label>
+          <button type="button" className="tms-secondary-action" onClick={() => baixarCsv("faturamento-tms.csv", [
+            { label: "OS", value: "orderNumber" }, { label: "Cliente", value: "clientId" },
+            { label: "Competência", value: "competenceDate" }, { label: "Valor", value: "amount" },
+            { label: "Status", value: "status" },
+          ], filtered)}><Download size={15} /> Exportar CSV</button>
+        </div>
+        {error ? <p className="tms-api-inline-error" role="alert">{error}</p> : null}
+        {!paged.rows.length ? <Empty>Nenhum item elegível para faturamento.</Empty> : (
+          <div className="tms-table-wrap">
+            <table className="tms-table">
+              <thead><tr><th>OS</th><th>Cliente</th><th>Competência</th><th>Valor</th><th>Status</th><th /></tr></thead>
+              <tbody>{paged.rows.map((row) => <tr key={row.id}>
+                <td><strong>{row.orderNumber || row.orderId || "—"}</strong></td>
+                <td>{row.clientId || "—"}</td>
+                <td>{row.competenceDate || "—"}</td>
+                <td><strong>{money.format(row.amount || 0)}</strong></td>
+                <td><StatusPill value={row.status} /></td>
+                <td>{canCheck
+                  ? <button type="button" className="tms-primary-action tms-table-action" onClick={() => check(row)} disabled={busyId === row.id}><CheckCircle2 size={14} /> {busyId === row.id ? "Conferindo..." : "Conferir"}</button>
+                  : <span className="tms-permission-note">Somente Financeiro</span>}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        )}
+        <Pagination {...paged} onPage={setPage} />
+      </section>
+    </div>
+  );
+}
+
 function ControlTower({ data, onSection }) {
   const indicators = data?.indicators || {};
+  const calculated = summarizeTms(data);
+  const actions = buildTmsActionQueue(data);
+  const readiness = [
+    ["Roteirização", data?.readiness?.routing], ["API TMS", data?.readiness?.api],
+    ["Faturamento", data?.readiness?.billing], ["Fiscal", data?.readiness?.fiscalProfile],
+    ["CIOT", data?.readiness?.ciot], ["TRACK3R", data?.readiness?.track3r],
+  ];
   return (
     <>
+      <section className="tms-command-hero">
+        <div>
+          <span><span className="tms-live-dot" /> OPERAÇÃO MONITORADA</span>
+          <h2>Visão operacional em tempo real</h2>
+          <p>Prioridade por SLA, execução, pendência fiscal e faturamento. Os indicadores consideram a operação inteira, não apenas a página visível.</p>
+        </div>
+        <div className="tms-command-stamp"><CalendarClock size={18} /><span>Atualizado</span><strong>{dateTime(data?.generatedAt)}</strong></div>
+      </section>
       <div className="tms-metrics">
-        <Metric label="OS abertas" value={indicators.ordersOpen} detail="pedidos ainda em execução" acao="Abrir cargas e pedidos →" onClick={() => onSection("cargas")} />
-        <Metric label="Em trânsito" value={indicators.operationsInTransit} detail="movimentações sem conclusão" acao="Acompanhar viagens →" onClick={() => onSection("viagens")} />
-        <Metric label="TMS sem vínculo" value={indicators.unlinkedExternalDocs} detail="documentos para tratar" alert acao="Tratar em cargas e pedidos →" onClick={() => onSection("cargas")} />
-        <Metric label="Faturar" value={indicators.billingPending} detail="itens elegíveis" acao="Ir para faturamento →" onClick={() => onSection("faturamento")} />
-        <Metric label="CT-e pendente" value={indicators.ctePending} detail="ainda não autorizado" alert acao="Emitir no fiscal →" onClick={() => onSection("fiscal")} />
-        <Metric label="MDF-e pendente" value={indicators.mdfePending} detail="ainda não autorizado" alert acao="Emitir no fiscal →" onClick={() => onSection("fiscal")} />
-        <Metric label="CIOT pendente" value={indicators.ciotPending} detail="ainda não emitido" alert acao="Emitir no fiscal →" onClick={() => onSection("fiscal")} />
+        <Metric label="OS abertas" value={indicators.ordersOpen} detail={`${data?.totals?.orders || calculated.orders} ordens no total`} acao="Gerenciar cargas →" onClick={() => onSection("cargas")} />
+        <Metric label="Atrasadas" value={indicators.ordersDelayed} detail="SLA vencido" alert acao="Tratar agora →" onClick={() => onSection("cargas")} />
+        <Metric label="Em risco" value={indicators.ordersAtRisk} detail="vencem em até 24h" alert acao="Priorizar →" onClick={() => onSection("cargas")} />
+        <Metric label="Em trânsito" value={indicators.operationsInTransit} detail="movimentações abertas" acao="Acompanhar viagens →" onClick={() => onSection("viagens")} />
+        <Metric label="Receita em risco" value={money.format(indicators.revenueAtRisk || 0)} detail="cargas atrasadas ou próximas do SLA" alert acao="Abrir fila crítica →" onClick={() => onSection("cargas")} />
+        <Metric label="Pronto para faturar" value={money.format(indicators.billingPendingAmount || calculated.billingValue)} detail={`${indicators.billingPending || 0} itens elegíveis`} acao="Abrir faturamento →" onClick={() => onSection("faturamento")} />
+      </div>
+
+      <div className="tms-command-grid">
+        <section className="tms-panel">
+          <div className="tms-panel-head"><div><span>Fila prioritária</span><h2>O que exige ação</h2></div><strong className="tms-queue-count">{actions.length}</strong></div>
+          <div className="tms-action-queue">
+            {actions.map((action) => (
+              <button type="button" key={action.id} className={`tms-action-item ${action.tone}`} onClick={() => onSection(action.section)}>
+                <span className="tms-action-icon">{action.tone === "critical" ? <Siren size={18} /> : action.tone === "warning" ? <AlertTriangle size={18} /> : action.tone === "ok" ? <ShieldCheck size={18} /> : <CalendarClock size={18} />}</span>
+                <span><strong>{action.title}</strong><small>{action.detail}</small></span>
+                <ArrowRight size={17} />
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="tms-panel">
+          <div className="tms-panel-head"><div><span>Saúde do ecossistema</span><h2>Serviços operacionais</h2></div></div>
+          <div className="tms-system-health">
+            {readiness.map(([label, ready]) => <div key={label} className={ready ? "ready" : "pending"}><span>{ready ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}{label}</span><strong>{ready ? "Operacional" : "Configuração pendente"}</strong></div>)}
+          </div>
+          <button type="button" className="tms-secondary-action tms-health-link" onClick={() => onSection("integracoes")}>Ver integrações <ArrowRight size={15} /></button>
+        </section>
       </div>
 
       <section className="tms-panel">
-        <div className="tms-panel-head"><div><span>Esteira operacional</span><h2>First, middle e last mile em uma só execução</h2></div></div>
+        <div className="tms-panel-head"><div><span>Esteira operacional</span><h2>Coleta, transferência e entrega conectadas</h2></div></div>
         <div className="tms-flow">
           {[
             ["Pedido", "Portal, arquivo ou API", ScanLine, "cargas"],
-            ["First mile", "Coleta e chegada à base", MapPinned, "viagens"],
+            ["Coleta inicial", "Coleta e chegada à base", MapPinned, "viagens"],
             ["Consolidação", "Agrupamento para transferência", Boxes, "fracionada"],
-            ["Middle mile", "Transferência entre bases", Waypoints, "viagens"],
+            ["Transferência", "Movimentação entre bases", Waypoints, "viagens"],
             ["Desconsolidação", "Separação para distribuição", Boxes, "fracionada"],
-            ["Last mile", "Roteiro, entrega e POD", Truck, "roteirizacao"],
+            ["Última milha", "Roteiro, entrega e comprovante", Truck, "roteirizacao"],
             ["Fiscal", "CT-e, MDF-e e CIOT", FileCheck2, "fiscal"],
             ["Faturamento", "Cobrança após execução", CircleDollarSign, "faturamento"],
-          ].map(([title, detail, Icon, destino]) => (
-            <button
-              type="button"
-              className="tms-flow-step"
-              key={title}
-              onClick={() => onSection(destino)}
-              title={`Abrir ${title}`}
-            >
-              <div className="tms-flow-icon"><Icon size={19} /></div>
-              <div><strong>{title}</strong><small>{detail}</small></div>
-              <ArrowRight size={15} className="tms-flow-go" aria-hidden="true" />
-            </button>
-          ))}
+          ].map(([title, detail, Icon, destino]) => <button type="button" className="tms-flow-step" key={title} onClick={() => onSection(destino)} title={`Abrir ${title}`}><div className="tms-flow-icon"><Icon size={19} /></div><div><strong>{title}</strong><small>{detail}</small></div><ArrowRight size={15} className="tms-flow-go" aria-hidden="true" /></button>)}
         </div>
       </section>
 
@@ -510,17 +877,31 @@ function ElectricRouting({ setToast }) {
   );
 }
 
-function FractionalCargo() {
+function FractionalCargo({ data, onSection }) {
+  const operations = data?.all?.operations || [];
+  const withVolume = operations.filter((item) => Number(item.packages) > 0 || Number(item.weightKg) > 0);
+  const volumes = withVolume.reduce((sum, item) => sum + Number(item.packages || 0), 0);
+  const weight = withVolume.reduce((sum, item) => sum + Number(item.weightKg || 0), 0);
+  const unlinked = operations.filter((item) => !item.clientId || !item.operationId).length;
   return (
-    <div className="tms-two-columns">
+    <div className="tms-stack">
+      <div className="tms-metrics tms-metrics-compact">
+        <Metric label="Volumes monitorados" value={number.format(volumes)} detail="nos registros carregados" />
+        <Metric label="Peso movimentado" value={`${number.format(weight)} kg`} detail="carga declarada" />
+        <Metric label="Remessas fracionadas" value={withVolume.length} detail="com volume ou peso" />
+        <Metric label="Sem vínculo" value={unlinked} detail="exigem reconciliação" alert onClick={() => onSection("integracoes")} acao="Tratar integração →" />
+      </div>
       <section className="tms-panel">
-        <div className="tms-panel-head"><div><span>Modelo operacional</span><h2>Carga fracionada</h2></div></div>
-        <div className="tms-feature-list">
-          <div><Boxes size={20} /><span><strong>Volumes e unidades logísticas</strong><small>Track ID, peso, dimensões, NF-e, código de barras, pallet, gaiola ou mala.</small></span></div>
-          <div><Waypoints size={20} /><span><strong>Consolidação por trecho</strong><small>Agrupa remessas em uma transferência sem perder o vínculo de cada volume.</small></span></div>
-          <div><ScanLine size={20} /><span><strong>Cross-docking e leitura</strong><small>Entrada, triagem, transferência, desconsolidação e saída por evento.</small></span></div>
-          <div><Route size={20} /><span><strong>Última milha</strong><small>Após a desconsolidação, os volumes entram na roteirização local e seguem até o POD.</small></span></div>
+        <div className="tms-panel-head"><div><span>Operação por volume</span><h2>Triagem e rastreabilidade</h2></div></div>
+        <div className="tms-quick-actions">
+          <button type="button" className="tms-primary-action" onClick={() => onSection("bipagem")}><ScanLine size={17} /> Bipar entrada, transferência ou entrega</button>
+          <button type="button" className="tms-secondary-action" onClick={() => onSection("roteirizacao")}><Route size={17} /> Roteirizar última milha</button>
+          <button type="button" className="tms-secondary-action" onClick={() => onSection("cargas")}><PackageSearch size={17} /> Criar nova carga</button>
         </div>
+      </section>
+      <section className="tms-panel">
+        <div className="tms-panel-head"><div><span>Remessas reais</span><h2>Fluxo fracionado</h2></div></div>
+        <OperationsWorkbench rows={withVolume} />
       </section>
     </div>
   );
@@ -552,15 +933,21 @@ function NewOrderForm({ onReload }) {
   }, []);
 
   useEffect(() => {
+    if (!clientId) return undefined;
+    let active = true;
+    listTmsManualContracts(clientId)
+      .then((result) => { if (active) setContratos(result?.contratos || []); })
+      .catch(() => { if (active) setContratos([]); })
+      .finally(() => { if (active) setCarregandoContratos(false); });
+    return () => { active = false; };
+  }, [clientId]);
+
+  const selectClient = (value) => {
+    setClientId(value);
     setContractId("");
     setContratos([]);
-    if (!clientId) return;
-    setCarregandoContratos(true);
-    listTmsManualContracts(clientId)
-      .then((result) => setContratos(result?.contratos || []))
-      .catch(() => setContratos([]))
-      .finally(() => setCarregandoContratos(false));
-  }, [clientId]);
+    setCarregandoContratos(Boolean(value));
+  };
 
   const criar = async (event) => {
     event.preventDefault();
@@ -596,7 +983,7 @@ function NewOrderForm({ onReload }) {
       <form className="tms-api-form" onSubmit={criar}>
         <label>
           <span>Cliente</span>
-          <select className="tms-api-input" value={clientId} onChange={(event) => setClientId(event.target.value)} required>
+          <select className="tms-api-input" value={clientId} onChange={(event) => selectClient(event.target.value)} required>
             <option value="">Selecione</option>
             {clientes.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
           </select>
@@ -706,16 +1093,10 @@ function PodCaptureForm({ pedido, onClose, onReload }) {
 // Seção "cargas": cadastro manual + lista + registro de entrega, com o
 // controle de qual OS está com o modal de POD aberto.
 function CargasSection({ data, onReload }) {
-  const [pedidoParaPod, setPedidoParaPod] = useState(null);
   return (
     <div className="tms-stack">
       <section className="tms-panel"><div className="tms-panel-head"><div><span>Cadastro</span><h2>Nova carga</h2></div></div><NewOrderForm onReload={onReload} /></section>
-      {pedidoParaPod ? (
-        <section className="tms-panel">
-          <PodCaptureForm pedido={pedidoParaPod} onClose={() => setPedidoParaPod(null)} onReload={onReload} />
-        </section>
-      ) : null}
-      <section className="tms-panel"><div className="tms-panel-head"><div><span>Entrada operacional</span><h2>Cargas e ordens de serviço</h2></div></div><OrdersTable rows={data?.recent?.orders} onRegistrarPod={setPedidoParaPod} /></section>
+      <section className="tms-panel"><div className="tms-panel-head"><div><span>Entrada operacional</span><h2>Cargas e ordens de serviço</h2></div><strong className="tms-queue-count">{data?.totals?.orders || 0}</strong></div><OrdersWorkbench rows={data?.all?.orders || []} onReload={onReload} access={data?.access} /></section>
     </div>
   );
 }
@@ -879,7 +1260,7 @@ function Integrations({ data, onReload }) {
       <div className="tms-api-note">
         <div>
           <strong>API TMS externa ativa</strong>
-          <p>Clientes e parceiros podem criar shipments, consultar cargas, enviar tracking/POD e consultar CT-e, MDF-e, CIOT e faturamento sem entrar no ERP. A autenticação usa chaves próprias `tdg_live_`, com isolamento por cliente e escopo.</p>
+          <p>Clientes e parceiros podem criar cargas, consultar pedidos, enviar rastreamento e comprovante de entrega, além de consultar CT-e, MDF-e, CIOT e faturamento sem entrar no ERP. A autenticação usa chaves próprias `tdg_live_`, com isolamento por cliente e escopo.</p>
         </div>
       </div>
       <ApiManager api={data?.integrations?.api} onReload={onReload} />
@@ -915,7 +1296,16 @@ export default function TmsPortal() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const id = window.setTimeout(load, 0);
+    return () => window.clearTimeout(id);
+  }, [load]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 60000);
+    return () => clearInterval(id);
+  }, [load]);
   useEffect(() => {
     const onPopState = () => setSection(pathSection());
     window.addEventListener("popstate", onPopState);
@@ -934,17 +1324,17 @@ export default function TmsPortal() {
   if (section === "mapa") content = <FleetMap />;
   if (section === "bipagem") content = <ScanSection />;
   if (section === "cargas") content = <CargasSection data={data} onReload={load} />;
-  if (section === "fracionada") content = <FractionalCargo />;
+  if (section === "fracionada") content = <FractionalCargo data={data} onSection={navigate} />;
   if (section === "roteirizacao") content = <ElectricRouting setToast={mostrarToast} />;
-  if (section === "viagens") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Execução</span><h2>Viagens e movimentações</h2></div></div><OperationsTable rows={data?.recent?.operations} /></section>;
+  if (section === "viagens") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Execução</span><h2>Viagens e movimentações</h2></div><strong className="tms-queue-count">{data?.totals?.operations || 0}</strong></div><OperationsWorkbench rows={data?.all?.operations || []} /></section>;
   if (section === "fiscal") content = <div className="tms-stack"><section className="tms-panel"><div className="tms-panel-head"><div><span>Documentos fiscais</span><h2>CT-e e MDF-e</h2></div></div><FiscalTable rows={data?.recent?.fiscal} /></section><section className="tms-panel"><div className="tms-panel-head"><div><span>ANTT</span><h2>CIOT</h2></div></div><CiotTable rows={data?.recent?.ciots} /></section></div>;
-  if (section === "faturamento") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Receita operacional</span><h2>Faturamento</h2></div></div><div className="tms-billing-highlight"><CircleDollarSign size={30} /><div><strong>{data?.indicators?.billingPending || 0} item(ns) elegível(is)</strong><p>A OS concluída com POD entra na régua de faturamento já existente na Vertical. O TMS mantém o vínculo entre execução, documento fiscal e cobrança.</p></div></div></section>;
+  if (section === "faturamento") content = <BillingSection data={data} onReload={load} />;
   if (section === "integracoes") content = <Integrations data={data} onReload={load} />;
 
   return (
     <div className="tms-portal">
       <aside className="tms-sidebar">
-        <div className="tms-brand"><div className="tms-brand-mark">TDG</div><div><strong>TO DO GREEN</strong><span>Transportation Management</span></div></div>
+        <div className="tms-brand"><div className="tms-brand-mark">TDG</div><div><strong>TO DO GREEN</strong><span>Gestão de Transportes</span></div></div>
         <nav aria-label="Navegação do TMS">
           {SECTIONS.map((item) => {
             const Icon = item.icon;
@@ -955,8 +1345,8 @@ export default function TmsPortal() {
       </aside>
       <main className="tms-main">
         <header className="tms-topbar">
-          <div><span>PORTAL TMS</span><h1>{active.label}</h1></div>
-          <button type="button" className="tms-refresh" onClick={load} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} />{loading ? "Atualizando" : "Atualizar"}</button>
+          <div><span>PORTAL TMS · ATUALIZAÇÃO AUTOMÁTICA</span><h1>{active.label}</h1></div>
+          <div className="tms-topbar-actions"><small>{data?.generatedAt ? `Última leitura ${dateTime(data.generatedAt)}` : ""}</small><button type="button" className="tms-refresh" onClick={load} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} />{loading ? "Atualizando" : "Atualizar"}</button></div>
         </header>
         {error ? <div className="tms-error" role="alert"><AlertTriangle size={18} /><span>{error}</span></div> : null}
         {loading && !data ? <div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Carregando torre de controle...</span></div> : content}
