@@ -143,3 +143,139 @@ describe("relatórios do lado interno", () => {
     expect(screen.getByText(/Não substitui o relatório por cliente/)).toBeInTheDocument();
   });
 });
+
+// O mock por URL não enxerga o corpo do POST; este registra método e corpo para
+// provar que o fechamento vai com o cliente e o mês certos. A ordem das chaves
+// importa: a URL da listagem (`fechamentos?cliente`) também contém a do POST
+// (`esg/fechamento`), então a chave mais específica precisa vir primeiro.
+const montarFetchComCorpo = (mapa) => {
+  const chamadas = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url, opts) => {
+      const texto = String(url);
+      const corpo = opts?.body ? JSON.parse(opts.body) : null;
+      chamadas.push({ url: texto, method: opts?.method || "GET", corpo });
+      const chave = Object.keys(mapa).find((k) => texto.includes(k));
+      const resposta = chave ? mapa[chave] : null;
+      return Promise.resolve({
+        ok: resposta?.ok !== false,
+        json: () => Promise.resolve(resposta?.dados ?? { error: "não encontrado" }),
+      });
+    }),
+  );
+  return chamadas;
+};
+
+const fechamentoComIntensidade = {
+  dados: {
+    cliente: { nome: "Distribuidora Norte" },
+    fechamentos: [
+      {
+        mes: "2026-08",
+        versaoFatores: "2026.2",
+        qualidade: 82,
+        status: "fechado",
+        revisao: 1,
+        resumo: {
+          co2EmitidoKg: 120.5,
+          co2EvitadoKg: 340,
+          toneladasKm: 250,
+          intensidadeGCo2ePorTkm: 482,
+        },
+        atividade: { intensidadeDisponivel: true },
+      },
+    ],
+  },
+};
+
+describe("fechamento mensal (GLEC) na tela", () => {
+  it("sem cliente, a listagem não é pedida e o convite aparece", async () => {
+    const chamadas = montarFetchComCorpo({ "clientes-relatorio": carteira });
+    render(<ReportsPage dashboard={dashboard} data={dados} authHeaders={authHeaders} />);
+    await screen.findByRole("option", { name: "Distribuidora Norte" });
+
+    expect(
+      screen.getByRole("heading", { name: /Fechamento mensal \(GLEC/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Selecione o cliente acima para fechar/)).toBeInTheDocument();
+    expect(chamadas.some((c) => c.url.includes("esg/fechamentos"))).toBe(false);
+    expect(screen.getByRole("button", { name: /Fechar mês/ })).toBeDisabled();
+  });
+
+  it("com cliente, lista os meses fechados com a intensidade GLEC", async () => {
+    montarFetchComCorpo({
+      // mais específica primeiro
+      "esg/fechamentos": fechamentoComIntensidade,
+      "clientes-relatorio": carteira,
+    });
+    render(<ReportsPage dashboard={dashboard} data={dados} authHeaders={authHeaders} />);
+    await screen.findByRole("option", { name: "Distribuidora Norte" });
+
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-a" } });
+
+    expect(await screen.findByText("2026-08")).toBeInTheDocument();
+    expect(screen.getByText(/482\s?g\/t·km/)).toBeInTheDocument();
+    expect(screen.getByText(/250\s?t·km/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Fechar mês/ })).toBeEnabled();
+  });
+
+  it("sem peso da carga, a intensidade fica indisponível e avisa — não finge zero", async () => {
+    montarFetchComCorpo({
+      "esg/fechamentos": {
+        dados: {
+          cliente: { nome: "Distribuidora Norte" },
+          fechamentos: [
+            {
+              mes: "2026-07",
+              versaoFatores: "2026.2",
+              qualidade: 40,
+              status: "fechado",
+              revisao: 1,
+              resumo: {
+                co2EmitidoKg: 90,
+                co2EvitadoKg: 200,
+                toneladasKm: 0,
+                intensidadeGCo2ePorTkm: null,
+              },
+              atividade: {
+                intensidadeDisponivel: false,
+                aviso: "Sem peso de carga nas operações do período: a intensidade GLEC fica indisponível.",
+              },
+            },
+          ],
+        },
+      },
+      "clientes-relatorio": carteira,
+    });
+    render(<ReportsPage dashboard={dashboard} data={dados} authHeaders={authHeaders} />);
+    await screen.findByRole("option", { name: "Distribuidora Norte" });
+
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-a" } });
+
+    await screen.findByText("2026-07");
+    expect(screen.getByText("indisponível")).toBeInTheDocument();
+    expect(screen.getByText(/Sem peso de carga/)).toBeInTheDocument();
+  });
+
+  it("fechar o mês manda o cliente e o mês escolhidos ao servidor", async () => {
+    const chamadas = montarFetchComCorpo({
+      "esg/fechamentos": { dados: { cliente: { nome: "Distribuidora Norte" }, fechamentos: [] } },
+      "clientes-relatorio": carteira,
+    });
+    render(<ReportsPage dashboard={dashboard} data={dados} authHeaders={authHeaders} />);
+    await screen.findByRole("option", { name: "Distribuidora Norte" });
+
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-a" } });
+    fireEvent.change(screen.getByLabelText("Mês"), { target: { value: "2026-06" } });
+    fireEvent.click(screen.getByRole("button", { name: /Fechar mês/ }));
+
+    await waitFor(() => {
+      const post = chamadas.find(
+        (c) => c.method === "POST" && c.url.endsWith("esg/fechamento"),
+      );
+      expect(post).toBeTruthy();
+      expect(post.corpo).toEqual({ clienteId: "cli-a", mes: "2026-06" });
+    });
+  });
+});

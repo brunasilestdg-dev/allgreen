@@ -427,9 +427,27 @@
 .tdg-rel-numeros small { color: var(--tdg-muted); font-size: 12px; }
 .tdg-rel-numeros strong { font-size: 1.25rem; overflow-wrap: anywhere; }
 
+.tdg-rel-fechar { align-items: end; display: flex; flex-wrap: wrap; gap: 12px; }
+.tdg-rel-fechar label { display: grid; gap: 6px; min-width: 0; }
+.tdg-rel-fechar label > span { color: var(--tdg-muted); font-size: 12px; font-weight: 750; }
+.tdg-rel-fechar input { background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 12px; color: var(--tdg-text); font: inherit; min-height: 44px; padding: 10px 12px; }
+.tdg-rel-fechar button:disabled { cursor: not-allowed; opacity: .5; }
+.tdg-rel-fechados { display: grid; gap: 12px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.tdg-rel-fechado { background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 16px; display: grid; gap: 10px; min-width: 0; padding: 14px; }
+.tdg-rel-fechado > header { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
+.tdg-rel-fechado > header strong { font-size: 1.05rem; }
+.tdg-rel-selo { background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 999px; color: var(--tdg-muted); font-size: 11.5px; font-weight: 700; padding: 3px 10px; }
+.tdg-rel-fechado-numeros { display: grid; gap: 10px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.tdg-rel-fechado-numeros div { display: grid; gap: 3px; min-width: 0; }
+.tdg-rel-fechado-numeros small { align-items: center; color: var(--tdg-muted); display: flex; font-size: 11.5px; gap: 4px; }
+.tdg-rel-fechado-numeros strong { font-size: 1.05rem; overflow-wrap: anywhere; }
+.tdg-rel-fechado-aviso { align-items: flex-start; color: #8a5b00; display: flex; font-size: 12px; gap: 7px; line-height: 1.45; margin: 0; }
+.tdg-rel-fechado-aviso svg { flex: none; margin-top: 2px; }
+
 @media (max-width: 900px) {
   .tdg-rel-form { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .tdg-rel-numeros { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .tdg-rel-fechados { grid-template-columns: minmax(0,1fr); }
 }
 @media (max-width: 560px) {
   .tdg-rel-form, .tdg-rel-numeros { grid-template-columns: minmax(0,1fr); }

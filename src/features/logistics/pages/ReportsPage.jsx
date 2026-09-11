@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Download, FileText } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Download, FileText, Gauge, Lock } from "lucide-react";
 import { ESCOPOS_RELATORIO, PERIODOS } from "../esgReportDomain.js";
 import "./TodoGreenPages.css";
 
@@ -19,10 +19,22 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 const NUM = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
+const NUM2 = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
 
 const api = async (caminho, authHeaders) => {
   const resultado = await fetch(`/api/todogreen/${caminho}`, {
     headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+  });
+  const payload = await resultado.json().catch(() => ({}));
+  if (!resultado.ok) throw new Error(payload.error || "Não foi possível concluir a ação.");
+  return payload;
+};
+
+const apiPost = async (caminho, corpo, authHeaders) => {
+  const resultado = await fetch(`/api/todogreen/${caminho}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+    body: JSON.stringify(corpo),
   });
   const payload = await resultado.json().catch(() => ({}));
   if (!resultado.ok) throw new Error(payload.error || "Não foi possível concluir a ação.");
@@ -41,6 +53,9 @@ const periodoPadrao = () => {
   };
 };
 
+// O mês corrente é o que quase sempre se quer fechar; abre já preenchido.
+const mesPadrao = () => new Date().toISOString().slice(0, 7);
+
 const FORMATOS_OFERECIDOS = [
   { id: "pdf", rotulo: "PDF" },
   { id: "xlsx", rotulo: "Planilha" },
@@ -58,6 +73,10 @@ export default function ReportsPage({ dashboard, data, authHeaders, setToast }) 
   const [gerando, setGerando] = useState("");
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
+  const [mesFechamento, setMesFechamento] = useState(mesPadrao);
+  const [fechando, setFechando] = useState(false);
+  const [fechamentos, setFechamentos] = useState([]);
+  const [carregandoFechamentos, setCarregandoFechamentos] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -76,6 +95,52 @@ export default function ReportsPage({ dashboard, data, authHeaders, setToast }) 
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // A série de meses fechados é sempre de UM cliente — número sem dono não se
+  // fecha. Recarrega quando muda o cliente selecionado.
+  const carregarFechamentos = useCallback(async () => {
+    if (!clienteId) {
+      setFechamentos([]);
+      return;
+    }
+    setCarregandoFechamentos(true);
+    try {
+      const d = await api(
+        `esg/fechamentos?cliente=${encodeURIComponent(clienteId)}`,
+        authHeaders,
+      );
+      setFechamentos(d.fechamentos || []);
+    } catch (razao) {
+      setErro(razao.message);
+    } finally {
+      setCarregandoFechamentos(false);
+    }
+  }, [clienteId, authHeaders]);
+
+  useEffect(() => {
+    carregarFechamentos();
+  }, [carregarFechamentos]);
+
+  const fecharMes = async () => {
+    setErro("");
+    setFechando(true);
+    try {
+      const d = await apiPost(
+        "esg/fechamento",
+        { clienteId, mes: mesFechamento },
+        authHeaders,
+      );
+      setToast?.(d.refechado ? "Mês refechado." : "Mês fechado (GLEC).");
+      await carregarFechamentos();
+    } catch (razao) {
+      setErro(razao.message);
+    } finally {
+      setFechando(false);
+    }
+  };
+
+  const mesFechamentoValido = /^\d{4}-\d{2}$/.test(mesFechamento);
+  const podeFechar = Boolean(clienteId) && mesFechamentoValido && !fechando;
 
   const periodoInvalido = periodo.inicio > periodo.fim;
 
@@ -233,6 +298,104 @@ export default function ReportsPage({ dashboard, data, authHeaders, setToast }) 
           período — número sem dono não se defende em auditoria.
         </p>
       )}
+
+      <div className="tdg-rel-consolidado">
+        <h3>
+          <CalendarCheck size={16} />
+          Fechamento mensal (GLEC / ISO 14083)
+        </h3>
+        <p className="tdg-rel-ressalva">
+          Congela o mês num retrato só — como o fechamento da folha — na moldura que o
+          mercado reconhece: emissão de transporte por atividade (tonelada-quilômetro),
+          com a versão da metodologia carimbada para o número não andar depois. Refechar o
+          mesmo mês atualiza o retrato, não duplica.
+        </p>
+        <div className="tdg-rel-fechar">
+          <label>
+            <span>Mês</span>
+            <input
+              type="month"
+              value={mesFechamento}
+              onChange={(e) => setMesFechamento(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="tdg-action"
+            disabled={!podeFechar}
+            onClick={fecharMes}
+          >
+            <Lock size={15} />
+            {fechando ? "Fechando..." : "Fechar mês (GLEC)"}
+          </button>
+        </div>
+        {!clienteId && (
+          <p className="tdg-rel-ressalva">
+            Selecione o cliente acima para fechar o mês. O fechamento é sempre de um cliente.
+          </p>
+        )}
+
+        {clienteId && carregandoFechamentos && (
+          <p className="tdg-rel-ressalva">Carregando meses fechados…</p>
+        )}
+        {clienteId && !carregandoFechamentos && fechamentos.length === 0 && (
+          <p className="tdg-rel-ressalva">
+            Nenhum mês fechado ainda para este cliente. Feche o primeiro acima.
+          </p>
+        )}
+        {fechamentos.length > 0 && (
+          <div className="tdg-rel-fechados">
+            {fechamentos.map((f) => {
+              const r = f.resumo || {};
+              const intensidadeOk = r.intensidadeGCo2ePorTkm != null;
+              return (
+                <article key={f.mes} className="tdg-rel-fechado">
+                  <header>
+                    <strong>{f.mes}</strong>
+                    <span className="tdg-rel-selo">
+                      {f.status === "reaberto" ? "reaberto" : "fechado"}
+                      {f.revisao > 1 ? ` · rev. ${f.revisao}` : ""}
+                    </span>
+                  </header>
+                  <div className="tdg-rel-fechado-numeros">
+                    <div>
+                      <small>CO₂ emitido</small>
+                      <strong>{NUM.format(r.co2EmitidoKg || 0)} kg</strong>
+                    </div>
+                    <div>
+                      <small>CO₂ evitado</small>
+                      <strong>{NUM.format(r.co2EvitadoKg || 0)} kg</strong>
+                    </div>
+                    <div>
+                      <small>Atividade</small>
+                      <strong>{NUM.format(r.toneladasKm || 0)} t·km</strong>
+                    </div>
+                    <div>
+                      <small>
+                        <Gauge size={12} /> Intensidade
+                      </small>
+                      <strong>
+                        {intensidadeOk
+                          ? `${NUM2.format(r.intensidadeGCo2ePorTkm)} g/t·km`
+                          : "indisponível"}
+                      </strong>
+                    </div>
+                  </div>
+                  {!intensidadeOk && f.atividade?.aviso && (
+                    <p className="tdg-rel-fechado-aviso">
+                      <AlertTriangle size={13} />
+                      {f.atividade.aviso}
+                    </p>
+                  )}
+                  <small className="tdg-rel-ressalva">
+                    Metodologia {f.versaoFatores || "—"} · qualidade dos dados {f.qualidade || 0}%
+                  </small>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="tdg-rel-consolidado">
         <h3>
