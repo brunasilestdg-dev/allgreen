@@ -268,6 +268,10 @@ export async function handleTodoGreenEsg(request, env) {
           viagens: num(operacao.viagens),
           tipoVeiculo: clean(operacao.tipoVeiculo, 60),
           classeVeiculo: clean(operacao.classeVeiculo, 40),
+          // Energia medida da operação (N.2): quando informada, o motor a
+          // prefere à derivada. Ausente, deriva como antes.
+          energiaKwhMedida: operacao.energiaKwhMedida,
+          energiaOrigem: clean(operacao.energiaOrigem, 20),
           origens: operacao.origens || {},
           calculadoEm: agora,
         }, conjunto);

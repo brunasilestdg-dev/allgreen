@@ -326,3 +326,71 @@ describe("régua editável no motor auditável (conjuntoDaRegua)", () => {
     expect(FATORES_PADRAO.fatores.arvore_kgco2_ano.valor).toBe(arvoreAntes);
   });
 });
+
+// N.2 deu lar à energia no ledger; N.3 fatia 3 faz o motor auditável PREFERIR
+// essa energia medida à derivada de distância × consumo. Dado real > premissa.
+describe("energia medida entra no motor auditável (N.3 fatia 3)", () => {
+  it("prefere a energia medida à derivada de distância × consumo", () => {
+    const derivado = calcularImpactoAmbiental(entradaVan); // van → 300 kWh derivado
+    const medido = calcularImpactoAmbiental({ ...entradaVan, energiaKwhMedida: 500 });
+    expect(derivado.impacto.energiaKwh).toBe(300);
+    expect(medido.impacto.energiaKwh).toBe(500);
+    // 500 kWh (medido) emite mais que 300 (derivado): executado sobe, evitado cai.
+    expect(medido.impacto.co2ExecutadoKg).toBeGreaterThan(derivado.impacto.co2ExecutadoKg);
+    expect(medido.impacto.co2AvoidedKg).toBeLessThan(derivado.impacto.co2AvoidedKg);
+  });
+
+  it("energia medida menor que a derivada aumenta o CO2 evitado", () => {
+    const derivado = calcularImpactoAmbiental(entradaVan);
+    const medido = calcularImpactoAmbiental({ ...entradaVan, energiaKwhMedida: 200 });
+    expect(medido.impacto.energiaKwh).toBe(200);
+    expect(medido.impacto.co2AvoidedKg).toBeGreaterThan(derivado.impacto.co2AvoidedKg);
+  });
+
+  it("valor inválido, zero ou negativo cai na energia derivada, sem quebrar", () => {
+    for (const ruim of [0, -50, "abc", "", null, undefined]) {
+      const r = calcularImpactoAmbiental({ ...entradaVan, energiaKwhMedida: ruim });
+      expect(r.impacto.energiaKwh).toBe(300);
+    }
+  });
+
+  it("a memória fica honesta: passo 'medida', fator energia_medida, sem o consumo derivado", () => {
+    const r = calcularImpactoAmbiental({ ...entradaVan, energiaKwhMedida: 500 });
+    expect(r.memoria.passos.some((p) => /Energia medida/.test(p.descricao))).toBe(true);
+    expect(r.memoria.fatoresUsados.some((f) => f.chave === "energia_medida")).toBe(true);
+    // o consumo derivado NÃO entra quando a energia é medida — não foi usado.
+    expect(r.memoria.fatoresUsados.some((f) => /consumo_eletrico/.test(f.chave))).toBe(false);
+    expect(r.memoria.premissas.some((p) => /MEDIDA/.test(p))).toBe(true);
+    expect(r.memoria.entradas.energiaKwhMedida).toBe(500);
+    expect(r.memoria.entradas.energiaDerivada).toBe(false);
+  });
+
+  it("energia derivada declara que é premissa e mantém o consumo na memória", () => {
+    const r = calcularImpactoAmbiental(entradaVan);
+    expect(r.memoria.premissas.some((p) => /DERIVADA/.test(p))).toBe(true);
+    expect(r.memoria.fatoresUsados.some((f) => /consumo_eletrico/.test(f.chave))).toBe(true);
+    expect(r.memoria.entradas.energiaDerivada).toBe(true);
+    expect(r.memoria.entradas.energiaKwhMedida).toBeNull();
+  });
+
+  it("energia medida melhora a qualidade do dado (real vale mais que chute)", () => {
+    const derivado = calcularImpactoAmbiental(entradaVan);
+    const medido = calcularImpactoAmbiental({ ...entradaVan, energiaKwhMedida: 500 });
+    expect(medido.qualidadeDados).toBeGreaterThan(derivado.qualidadeDados);
+  });
+
+  it("respeita a origem informada da medição", () => {
+    const r = calcularImpactoAmbiental({ ...entradaVan, energiaKwhMedida: 500, energiaOrigem: "documentado" });
+    const fator = r.memoria.fatoresUsados.find((f) => f.chave === "energia_medida");
+    expect(fator.fonte).toMatch(/documentado/);
+    const passo = r.memoria.passos.find((p) => /Energia medida/.test(p.descricao));
+    expect(passo.entradas.origem).toBe("documentado");
+  });
+
+  it("operação diesel ignora energia medida — ela é da execução elétrica", () => {
+    const r = calcularImpactoAmbiental({ ...entradaVan, tipoVeiculo: "diesel", energiaKwhMedida: 500 });
+    expect(r.impacto.energiaKwh).toBeNull();
+    expect(r.impacto.co2AvoidedKg).toBe(0);
+    expect(r.memoria.fatoresUsados.some((f) => f.chave === "energia_medida")).toBe(false);
+  });
+});

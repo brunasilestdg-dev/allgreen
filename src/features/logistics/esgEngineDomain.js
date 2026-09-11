@@ -172,6 +172,23 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
   const eletrico = /eletric|elétric|ev\b/.test(tipoVeiculo);
   const classeId = String(entradas.classeVeiculo || "").toLowerCase().trim() || null;
 
+  // Energia MEDIDA da operação. N.2 deu lar à energia no ledger de eventos;
+  // aqui o motor auditável a PREFERE à energia derivada (distância × consumo por
+  // classe). Dado real vale mais que premissa. Ausente ou inválida — a maioria
+  // dos casos —, o cálculo segue derivando exatamente como antes.
+  const nKwhMedido = Number(entradas.energiaKwhMedida);
+  const energiaMedidaKwh =
+    entradas.energiaKwhMedida != null &&
+    entradas.energiaKwhMedida !== "" &&
+    Number.isFinite(nKwhMedido) &&
+    nKwhMedido > 0
+      ? nKwhMedido
+      : null;
+  const origemEnergiaMedida =
+    QUALIDADE[String(entradas.energiaOrigem || "").toLowerCase()] != null
+      ? String(entradas.energiaOrigem).toLowerCase()
+      : "medido";
+
   const fc = resolverFatoresDeClasse(classeId, conjunto);
   const fatorRede = fatorEmUso(conjunto, "rede_eletrica_kgco2e_por_kwh");
 
@@ -221,18 +238,30 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
   let energia = null;
   if (eletrico) {
     const consumoKwhPorKm = fc.consumoEletricoKwhPorKm ?? 0.30;
-    const kwh = distanciaTotal * consumoKwhPorKm;
+    const kwh = energiaMedidaKwh != null ? energiaMedidaKwh : distanciaTotal * consumoKwhPorKm;
     co2Executado = kwh * fatorRede.valor;
     energia = arredondar(kwh, 2);
-    passos.push({
-      ordem: passos.length + 1,
-      descricao: "Energia consumida pela operação executada",
-      formula: "distância total x consumo (kWh/km)",
-      entradas: { distanciaTotal, consumoKwhPorKm },
-      resultado: energia,
-      unidade: "kWh",
-      fator: classeId ? `consumo_eletrico_${classeId}` : "eletrico_kwh_por_km_generico",
-    });
+    passos.push(
+      energiaMedidaKwh != null
+        ? {
+            ordem: passos.length + 1,
+            descricao: "Energia medida da operação executada",
+            formula: "energia medida informada (kWh)",
+            entradas: { energiaKwhMedida: energia, origem: origemEnergiaMedida },
+            resultado: energia,
+            unidade: "kWh",
+            fator: "energia_medida",
+          }
+        : {
+            ordem: passos.length + 1,
+            descricao: "Energia consumida pela operação executada",
+            formula: "distância total x consumo (kWh/km)",
+            entradas: { distanciaTotal, consumoKwhPorKm },
+            resultado: energia,
+            unidade: "kWh",
+            fator: classeId ? `consumo_eletrico_${classeId}` : "eletrico_kwh_por_km_generico",
+          },
+    );
     passos.push({
       ordem: passos.length + 1,
       descricao: "Emissão da operação executada",
@@ -272,7 +301,13 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
     fator: null,
   });
 
-  const qualidade = qualidadeDoCalculo(entradas.origens);
+  // Energia medida entra na qualidade: um cálculo com energia real vale mais
+  // que um com energia chutada da distância.
+  const origensParaQualidade =
+    energiaMedidaKwh != null
+      ? { ...(entradas.origens || {}), energia: origemEnergiaMedida }
+      : entradas.origens;
+  const qualidade = qualidadeDoCalculo(origensParaQualidade);
 
   const premissas = [
     "O cenário de referência assume a mesma operação executada por frota diesel/gasolina convencional.",
@@ -295,6 +330,13 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
       ? "A emissão da eletricidade usa o fator médio anual do SIN (MCTI), não contrato de energia renovável específico."
       : "A operação executada é diesel; não há redução sobre a própria referência.",
   );
+  if (eletrico) {
+    premissas.push(
+      energiaMedidaKwh != null
+        ? `Energia da operação executada MEDIDA (${arredondar(energiaMedidaKwh, 2)} kWh, origem ${origemEnergiaMedida}), não derivada da distância.`
+        : "Energia da operação executada DERIVADA da distância × consumo por classe — informe a energia medida para um número mais fiel.",
+    );
+  }
 
   const fatoresUsados = [];
   if (fc.porClasse) {
@@ -306,7 +348,7 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
       versao: conjunto.versao,
       responsavel: conjunto.responsavel,
     });
-    if (eletrico && fc.consumoEletricoKwhPorKm != null) {
+    if (eletrico && energiaMedidaKwh == null && fc.consumoEletricoKwhPorKm != null) {
       fatoresUsados.push({
         chave: `consumo_eletrico_${classeId}`,
         valor: fc.consumoEletricoKwhPorKm,
@@ -341,7 +383,7 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
       versao: conjunto.versao,
       responsavel: conjunto.responsavel,
     });
-    if (eletrico) {
+    if (eletrico && energiaMedidaKwh == null) {
       fatoresUsados.push({
         chave: "consumo_eletrico_generico",
         valor: fc.consumoEletricoKwhPorKm,
@@ -356,6 +398,16 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
     fatoresUsados.push({
       chave: "rede_eletrica_kgco2e_por_kwh",
       ...fatorRede,
+      versao: conjunto.versao,
+      responsavel: conjunto.responsavel,
+    });
+  }
+  if (eletrico && energiaMedidaKwh != null) {
+    fatoresUsados.push({
+      chave: "energia_medida",
+      valor: arredondar(energiaMedidaKwh, 2),
+      unidade: "kWh",
+      fonte: `Energia medida da operação (origem ${origemEnergiaMedida})`,
       versao: conjunto.versao,
       responsavel: conjunto.responsavel,
     });
@@ -381,6 +433,8 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
         distanciaTotal: arredondar(distanciaTotal, 2),
         tipoVeiculo,
         classeVeiculo: classeId,
+        energiaKwhMedida: energiaMedidaKwh,
+        energiaDerivada: energiaMedidaKwh == null,
       },
       fatoresUsados,
       passos,

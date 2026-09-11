@@ -148,3 +148,37 @@ describe("a régua editável entra no motor auditável (N.3 fatia 1)", () => {
     expect(fatores.fatores.fatores.diesel_b14_kgco2e_por_litro.valor).toBe(2.68);
   });
 });
+
+describe("energia medida flui pelo /calcular (N.3 fatia 3)", () => {
+  it("operação com energia medida grava a energia real, não a derivada", async () => {
+    const d = await (
+      await pedir("/api/todogreen/esg/calcular", {
+        method: "POST",
+        token: admin.token,
+        body: {
+          clienteId: "esg-regua-cli",
+          operacoes: [
+            { referencia: "DERIVADA", distanciaKm: 100, viagens: 10, tipoVeiculo: "Furgão elétrico", origens: { distancia: "medido" } },
+            { referencia: "MEDIDA", distanciaKm: 100, viagens: 10, tipoVeiculo: "Furgão elétrico", energiaKwhMedida: 500, energiaOrigem: "medido", origens: { distancia: "medido" } },
+          ],
+          ocupacaoPercent: 80,
+          frotaLimpaPercent: 70,
+          ocorrencias: 0,
+        },
+      })
+    ).json();
+    const derivada = d.calculos.find((c) => c.referencia === "DERIVADA");
+    const medida = d.calculos.find((c) => c.referencia === "MEDIDA");
+    expect(derivada.impacto.energiaKwh).toBe(300);
+    expect(medida.impacto.energiaKwh).toBe(500);
+
+    // O gravado carrega a energia medida e a memória diz que não foi derivada.
+    const gravado = await env.DB.prepare(
+      "SELECT inputs_json, result_json FROM environmental_calculations WHERE id = ?",
+    ).bind(medida.id).first();
+    const resultado = JSON.parse(gravado.result_json);
+    expect(resultado.memoria.entradas.energiaKwhMedida).toBe(500);
+    expect(resultado.memoria.entradas.energiaDerivada).toBe(false);
+    expect(resultado.memoria.fatoresUsados.some((f) => f.chave === "energia_medida")).toBe(true);
+  });
+});
