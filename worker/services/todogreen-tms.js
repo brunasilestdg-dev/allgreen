@@ -134,6 +134,28 @@ const modoDisponivel = (integracao, env) => ({
   webhook: Boolean(env?.[integracao?.webhookSecretEnvKey]),
 });
 
+// Estado honesto do motor de roteirização. O planejador elétrico nativo
+// (planElectricRoute) roda sempre — é JavaScript, sem dependência externa. Já o
+// OTIMIZADOR de rotas (VROOM) só existe quando TDG_ROUTING_URL aponta para um
+// servidor auto-hospedado válido. A tela não pode dizer "roteirização
+// operacional" quando o otimizador está desligado: código existente não é motor
+// no ar. Este é o sinal mínimo; o health-check com versão e tempo de resposta
+// entra na onda do motor próprio.
+const estadoRoteirizacao = (env) => {
+  const bruto = String(env?.TDG_ROUTING_URL || "").trim();
+  let motorConfigurado = false;
+  try {
+    motorConfigurado = bruto ? ["https:", "http:"].includes(new URL(bruto).protocol) : false;
+  } catch {
+    motorConfigurado = false;
+  }
+  return {
+    plannerNativo: true,
+    motorConfigurado,
+    engine: motorConfigurado ? "vroom" : "",
+  };
+};
+
 const lerIntegracao = async (env, ownerId) => {
   const row = await env.DB.prepare(
     `SELECT * FROM todogreen_tms_integrations
@@ -152,6 +174,8 @@ const verConfiguracao = async (env, access) => {
   return json({
     integracao,
     modos: modoDisponivel(integracao, env),
+    // Estado real do otimizador de rotas, para a tela não fingir motor no ar.
+    roteirizacao: estadoRoteirizacao(env),
     // Enquanto o fornecedor não responder, é isto que a tela mostra como
     // próximo passo concreto.
     perguntasAoFornecedor: PERGUNTAS_AO_TRACK3R,
