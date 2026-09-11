@@ -3,6 +3,7 @@ import {
   FATORES_PADRAO,
   QUALIDADE,
   calcularImpactoAmbiental,
+  conjuntoDaRegua,
   fatorEmUso,
   qualidadeDoCalculo,
   traduzirParaProposta,
@@ -236,5 +237,92 @@ describe("entrada inválida", () => {
     const r = calcularImpactoAmbiental({ distanciaKm: 100, tipoVeiculo: "eletrico" });
     expect(r.memoria.entradas.viagens).toBe(1);
     expect(r.memoria.entradas.distanciaTotal).toBe(100);
+  });
+});
+
+// A régua editável do espaço fala o formato plano `tdg-env`; conjuntoDaRegua
+// traduz para o formato nested que o motor auditável lê. É o que faz o número
+// gravado no relatório obedecer ao fator de emissão editado na tela.
+const reguaFlat = (over = {}, extra = {}) => ({
+  versao: "esg-2026-09-10",
+  deFabrica: false,
+  responsavel: "Sustentabilidade To Do Green",
+  vigenciaInicio: "2026-09-01",
+  fatores: {
+    methodologyVersion: "tdg-env-v2",
+    dieselKgCo2ePerLiter: 2.68,
+    gasolineKgCo2ePerLiter: 2.12,
+    dieselKmPerLiter: 4.2,
+    electricKgCo2ePerKwh: 0.0385,
+    electricKwhPerKm: 0.30,
+    treeKgCo2eYear: 22,
+    ...over,
+  },
+  ...extra,
+});
+
+describe("régua editável no motor auditável (conjuntoDaRegua)", () => {
+  it("sem régua ou régua de fábrica devolve os fatores de fábrica — a mesma referência", () => {
+    expect(conjuntoDaRegua(null)).toBe(FATORES_PADRAO);
+    expect(conjuntoDaRegua(undefined)).toBe(FATORES_PADRAO);
+    expect(conjuntoDaRegua({ deFabrica: true, versao: "padrao-de-fabrica" })).toBe(FATORES_PADRAO);
+  });
+
+  it("régua de fábrica: o cálculo é idêntico ao de antes desta feature", () => {
+    const semRegua = calcularImpactoAmbiental(entradaVan);
+    const comFabrica = calcularImpactoAmbiental(entradaVan, conjuntoDaRegua({ deFabrica: true }));
+    expect(comFabrica).toEqual(semRegua);
+  });
+
+  it("editar o fator da rede elétrica sobe a emissão executada e derruba o CO2 evitado", () => {
+    const base = calcularImpactoAmbiental(entradaVan);
+    const conjunto = conjuntoDaRegua(reguaFlat({ electricKgCo2ePerKwh: 0.08 }));
+    const comRegua = calcularImpactoAmbiental(entradaVan, conjunto);
+    expect(comRegua.impacto.co2ExecutadoKg).toBeGreaterThan(base.impacto.co2ExecutadoKg);
+    expect(comRegua.impacto.co2AvoidedKg).toBeLessThan(base.impacto.co2AvoidedKg);
+    expect(comRegua.versaoFatores).toBe("esg-2026-09-10");
+  });
+
+  it("editar o fator do diesel muda a referência no caminho genérico (sem classe)", () => {
+    const base = calcularImpactoAmbiental(entradaSemClasse);
+    const comRegua = calcularImpactoAmbiental(
+      entradaSemClasse,
+      conjuntoDaRegua(reguaFlat({ dieselKgCo2ePerLiter: 3.5 })),
+    );
+    expect(comRegua.impacto.co2ReferenciaKg).toBeGreaterThan(base.impacto.co2ReferenciaKg);
+  });
+
+  it("mapeia gasolina e árvore para as chaves nested", () => {
+    const conjunto = conjuntoDaRegua(reguaFlat({ gasolineKgCo2ePerLiter: 3.0, treeKgCo2eYear: 10 }));
+    expect(conjunto.fatores.gasolina_e27_kgco2e_por_litro.valor).toBe(3.0);
+    expect(conjunto.fatores.arvore_kgco2_ano.valor).toBe(10);
+  });
+
+  it("régua parcial não deixa fator ausente — os não editados ficam no de fábrica", () => {
+    const conjunto = conjuntoDaRegua(reguaFlat({ electricKgCo2ePerKwh: 0.08 }));
+    expect(conjunto.versao).toBe("esg-2026-09-10");
+    expect(conjunto.fatores.rede_eletrica_kgco2e_por_kwh.valor).toBe(0.08);
+    expect(conjunto.fatores.rede_eletrica_kgco2e_por_kwh.fonte).toBeTruthy();
+    expect(conjunto.fatores.diesel_b14_kgco2e_por_litro.valor).toBe(2.68);
+    expect(conjunto.fatores.gasolina_e27_kgco2e_por_litro.valor).toBe(2.12);
+    expect(conjunto.fatores.arvore_kgco2_ano.valor).toBe(22);
+    // não lança em fatorEmUso: o cálculo genérico completa e traz a versão da régua.
+    const r = calcularImpactoAmbiental(entradaSemClasse, conjunto);
+    expect(r.versaoFatores).toBe("esg-2026-09-10");
+    expect(r.impacto.co2ReferenciaKg).toBeGreaterThan(0);
+  });
+
+  it("valor inválido ou não-positivo na régua cai no fator de fábrica, nunca em lixo", () => {
+    const conjunto = conjuntoDaRegua(reguaFlat({ electricKgCo2ePerKwh: -1, dieselKgCo2ePerLiter: "abc" }));
+    expect(conjunto.fatores.rede_eletrica_kgco2e_por_kwh.valor).toBe(0.0385);
+    expect(conjunto.fatores.diesel_b14_kgco2e_por_litro.valor).toBe(2.68);
+  });
+
+  it("aplicar a régua não corrompe os fatores de fábrica do módulo (cópia profunda)", () => {
+    const redeAntes = FATORES_PADRAO.fatores.rede_eletrica_kgco2e_por_kwh.valor;
+    const arvoreAntes = FATORES_PADRAO.fatores.arvore_kgco2_ano.valor;
+    conjuntoDaRegua(reguaFlat({ electricKgCo2ePerKwh: 0.08, treeKgCo2eYear: 10 }));
+    expect(FATORES_PADRAO.fatores.rede_eletrica_kgco2e_por_kwh.valor).toBe(redeAntes);
+    expect(FATORES_PADRAO.fatores.arvore_kgco2_ano.valor).toBe(arvoreAntes);
   });
 });

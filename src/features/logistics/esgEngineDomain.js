@@ -48,6 +48,41 @@ export const FATORES_PADRAO = {
   },
 };
 
+// Ponte da régua editável para o conjunto que este motor lê.
+//
+// A régua ESG do espaço (`reguaEsgEmVigor`) fala o formato plano `tdg-env`
+// (electricKgCo2ePerKwh, dieselKgCo2ePerLiter…); este motor lê o formato nested
+// (rede_eletrica_kgco2e_por_kwh.valor…). Sem esta tradução, editar o fator de
+// emissão na tela não muda o número que vai gravado no relatório do cliente —
+// o motor auditável ficava preso aos fatores de fábrica.
+//
+// Enquanto ninguém edita a régua (`deFabrica`), devolve FATORES_PADRAO como
+// está: o resultado é byte-a-byte o de antes desta feature. Havendo régua,
+// mescla os fatores conhecidos POR CIMA de uma CÓPIA PROFUNDA dos defaults —
+// FATORES_PADRAO não é congelado, então copiar raso corromperia o default do
+// módulo para as próximas requisições do mesmo isolate. Só sobrescreve o que
+// veio como número positivo válido; nenhum fator fica ausente, então
+// `fatorEmUso` nunca lança.
+export const conjuntoDaRegua = (regua) => {
+  if (!regua || regua.deFabrica) return FATORES_PADRAO;
+  const f = regua.fatores && typeof regua.fatores === "object" ? regua.fatores : {};
+  const base = JSON.parse(JSON.stringify(FATORES_PADRAO.fatores));
+  const aplicar = (chave, valor) => {
+    const n = Number(valor);
+    if (Number.isFinite(n) && n > 0 && base[chave]) base[chave].valor = n;
+  };
+  aplicar("rede_eletrica_kgco2e_por_kwh", f.electricKgCo2ePerKwh);
+  aplicar("diesel_b14_kgco2e_por_litro", f.dieselKgCo2ePerLiter);
+  aplicar("gasolina_e27_kgco2e_por_litro", f.gasolineKgCo2ePerLiter);
+  aplicar("arvore_kgco2_ano", f.treeKgCo2eYear);
+  return {
+    versao: regua.versao || FATOR_PADRAO_VERSAO,
+    vigenciaInicio: regua.vigenciaInicio || FATORES_PADRAO.vigenciaInicio,
+    responsavel: regua.responsavel || FATORES_PADRAO.responsavel,
+    fatores: base,
+  };
+};
+
 const num = (valor) => {
   const n = Number(valor);
   return Number.isFinite(n) ? n : 0;

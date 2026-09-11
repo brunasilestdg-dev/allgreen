@@ -13,9 +13,10 @@ import {
   recorteDeCarteira as recorteDeCarteiraCentral,
 } from "./todogreen-access.js";
 import {
-  FATORES_PADRAO,
   calcularImpactoAmbiental,
+  conjuntoDaRegua,
 } from "../../src/features/logistics/esgEngineDomain.js";
+import { reguaEsgEmVigor } from "./todogreen-environmental-parameters.js";
 import {
   PESOS_PADRAO,
   calcularGreenScore,
@@ -114,12 +115,17 @@ export async function handleTodoGreenEsg(request, env) {
   const { user, access } = porta;
 
   // ---- Fatores em uso ----
+  // Os fatores que o motor de fato usa: a régua do espaço quando existe, os de
+  // fábrica quando não. Antes esta tela mostrava sempre o de fábrica, então
+  // editar a régua não se refletia aqui — passava a mentir sobre o que estava
+  // em uso.
   if (request.method === "GET" && recurso === "fatores") {
     if (!podeLerEsg(access))
       return response({ error: "Sem permissão para ver os fatores." }, 403);
     const pesos = await pesosEmVigor(env, access);
+    const regua = await reguaEsgEmVigor(env, access.ownerId);
     return response({
-      fatores: FATORES_PADRAO,
+      fatores: conjuntoDaRegua(regua),
       pesos: { versao: pesos.versao, pesos: pesos.pesos, metodologia: pesos.metodologia, responsavel: pesos.responsavel },
     });
   }
@@ -233,6 +239,13 @@ export async function handleTodoGreenEsg(request, env) {
     if (!numeroInformado(body.ocorrencias) || Number(body.ocorrencias) < 0)
       return response({ error: "Informe a quantidade de ocorrências, mesmo quando for zero." }, 400);
 
+    // A régua ESG do espaço, resolvida UMA vez para o lote inteiro (não por
+    // operação — são até 200). É ela que faz o motor auditável obedecer ao
+    // fator de emissão editado na tela; sem régua, cai nos fatores de fábrica e
+    // o número é idêntico ao de antes desta feature.
+    const regua = await reguaEsgEmVigor(env, access.ownerId);
+    const conjunto = conjuntoDaRegua(regua);
+
     const agora = new Date().toISOString();
     const calculos = [];
     for (const operacao of operacoes.slice(0, 200)) {
@@ -254,9 +267,10 @@ export async function handleTodoGreenEsg(request, env) {
           distanciaKm: num(operacao.distanciaKm),
           viagens: num(operacao.viagens),
           tipoVeiculo: clean(operacao.tipoVeiculo, 60),
+          classeVeiculo: clean(operacao.classeVeiculo, 40),
           origens: operacao.origens || {},
           calculadoEm: agora,
-        });
+        }, conjunto);
       } catch (erro) {
         // Uma operação inválida não derruba o lote inteiro; ela é reportada e
         // as outras seguem.
