@@ -211,6 +211,35 @@ export const atualizacoesDePosicao = (operacoes = [], posicoesPorPlaca = {}) => 
   return updates;
 };
 
+// Telemetria ELÉTRICA do veículo (SOC/carga e autonomia estimada ao vivo).
+// Prepared-and-off: a maioria dos rastreadores hoje só manda posição, então
+// sem SOC nem autonomia no payload isto devolve null e nada é refletido. Quando
+// o feed passar a mandar (é só apontar o field map), o snapshot acende. SOC é
+// coado para 0–100; autonomia é não-negativa.
+export const leituraDeTelemetriaEletrica = (item = {}) => {
+  // Vazio ("" / null / undefined) é AUSÊNCIA, não zero — Number("") daria 0 e um
+  // campo em branco viraria "0% de carga", que é diferente de "não informou".
+  const temSoc = item.soc != null && item.soc !== "" && Number.isFinite(Number(item.soc));
+  const soc = temSoc ? Math.min(100, Math.max(0, Number(item.soc))) : null;
+  const temRange = item.rangeKm != null && item.rangeKm !== "" && Number.isFinite(Number(item.rangeKm));
+  const rangeBruto = temRange ? Number(item.rangeKm) : null;
+  const rangeKm = rangeBruto != null && rangeBruto >= 0 ? rangeBruto : null;
+  if (soc === null && rangeKm === null) return null;
+  return { soc, rangeKm, recordedAt: String(item.recordedAt || "") };
+};
+
+// Mesma guarda anti-regressão da posição: só atualiza quando a leitura é mais
+// nova que o snapshot atual do veículo. Leitura sem horário, ou mais velha que
+// a gravada, é ignorada. Devolve null quando não há o que atualizar.
+export const atualizacaoDeTelemetria = (veiculoAtual = {}, leitura = null) => {
+  if (!leitura) return null;
+  const nova = String(leitura.recordedAt || "");
+  if (!nova) return null;
+  const atual = String(veiculoAtual.lastTelemetryAt || "");
+  if (atual && nova <= atual) return null;
+  return { socPercent: leitura.soc, rangeKm: leitura.rangeKm, telemetriaEm: nova };
+};
+
 export const buildFleetAiPrompt = ({ vehicles = [], question = "" } = {}) => {
   const summary = summarizeFleet(vehicles);
   return [

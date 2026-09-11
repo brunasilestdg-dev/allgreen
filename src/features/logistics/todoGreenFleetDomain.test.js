@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   FLEET_ENERGY_DEFAULTS,
+  atualizacaoDeTelemetria,
   atualizacoesDePosicao,
   consolidarEconomiaFrota,
+  leituraDeTelemetriaEletrica,
   fleetAlerts,
   fleetVehicleMetrics,
   normalizePlate,
@@ -156,5 +158,39 @@ describe("ponte rastreador → operação", () => {
       { ABC1D23: { latitude: null, longitude: "x", recordedAt: "2026-08-28T12:00:00Z" } },
     );
     expect(ups).toEqual([]);
+  });
+});
+
+describe("telemetria elétrica ao vivo (prepared-and-off)", () => {
+  it("sem SOC nem autonomia no feed, não há leitura — nada reflete", () => {
+    expect(leituraDeTelemetriaEletrica({})).toBeNull();
+    expect(leituraDeTelemetriaEletrica({ soc: undefined, rangeKm: undefined })).toBeNull();
+    expect(leituraDeTelemetriaEletrica({ soc: "", rangeKm: "" })).toBeNull();
+    expect(leituraDeTelemetriaEletrica({ soc: "abc" })).toBeNull();
+  });
+
+  it("SOC é coado para 0–100 e a autonomia é não-negativa", () => {
+    expect(leituraDeTelemetriaEletrica({ soc: 73.5, rangeKm: 180, recordedAt: "t" })).toEqual({
+      soc: 73.5, rangeKm: 180, recordedAt: "t",
+    });
+    expect(leituraDeTelemetriaEletrica({ soc: 140 }).soc).toBe(100);
+    expect(leituraDeTelemetriaEletrica({ soc: -10 }).soc).toBe(0);
+    expect(leituraDeTelemetriaEletrica({ rangeKm: -5 })).toBeNull();
+    // só autonomia (sem SOC) ainda vale
+    expect(leituraDeTelemetriaEletrica({ rangeKm: 90 })).toEqual({ soc: null, rangeKm: 90, recordedAt: "" });
+  });
+
+  it("só atualiza o snapshot quando a leitura é mais nova — nunca regride", () => {
+    const leitura = { soc: 60, rangeKm: 120, recordedAt: "2026-09-11T10:00:00Z" };
+    expect(atualizacaoDeTelemetria({ lastTelemetryAt: "" }, leitura)).toEqual({
+      socPercent: 60, rangeKm: 120, telemetriaEm: "2026-09-11T10:00:00Z",
+    });
+    // leitura mais velha que o snapshot é ignorada
+    expect(atualizacaoDeTelemetria({ lastTelemetryAt: "2026-09-11T11:00:00Z" }, leitura)).toBeNull();
+    // mesma hora não reescreve
+    expect(atualizacaoDeTelemetria({ lastTelemetryAt: "2026-09-11T10:00:00Z" }, leitura)).toBeNull();
+    // leitura sem horário não vira atualização
+    expect(atualizacaoDeTelemetria({ lastTelemetryAt: "" }, { soc: 50, recordedAt: "" })).toBeNull();
+    expect(atualizacaoDeTelemetria({}, null)).toBeNull();
   });
 });

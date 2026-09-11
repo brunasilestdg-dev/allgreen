@@ -2,7 +2,12 @@ import {
   authenticatedUser,
 } from "./todogreen-work-center.js";
 import { resolveTodoGreenAccess } from "./todogreen-access.js";
-import { atualizacoesDePosicao, normalizePlate } from "../../src/features/logistics/todoGreenFleetDomain.js";
+import {
+  atualizacaoDeTelemetria,
+  atualizacoesDePosicao,
+  leituraDeTelemetriaEletrica,
+  normalizePlate,
+} from "../../src/features/logistics/todoGreenFleetDomain.js";
 
 const TENANT_ID = "todogreen";
 const MAX_PROVIDER_ITEMS = 1000;
@@ -58,6 +63,10 @@ const DEFAULT_FIELD_MAP = {
   heading: "heading",
   ignition: "ignition",
   odometer: "odometer",
+  // Telemetria elétrica — prepared-and-off: só vira snapshot quando o feed
+  // mandar. Aponte para o campo do rastreador que traz carga (%) e autonomia.
+  soc: "soc",
+  range: "range",
   address: "address",
   recordedAt: "recordedAt",
   eventId: "eventId",
@@ -223,6 +232,9 @@ const normalizeVehicle = (raw, config, source = "api") => {
     heading: clamp(valueAt(raw, map.heading), 0, 360, 0),
     ignition: boolValue(valueAt(raw, map.ignition)),
     odometer: Number.isFinite(odometer) && odometer >= 0 ? odometer : null,
+    // Telemetria elétrica ao vivo (crua; a validação/coação é do domínio).
+    soc: valueAt(raw, map.soc),
+    rangeKm: valueAt(raw, map.range),
     address: clean(valueAt(raw, map.address), 500),
     recordedAt: dateValue(valueAt(raw, map.recordedAt)),
     eventId: clean(valueAt(raw, map.eventId), 180),
@@ -298,6 +310,34 @@ async function upsertVehicleLink(env, integration, item) {
   ).run();
   return env.DB.prepare("SELECT * FROM todogreen_tracker_vehicle_links WHERE id = ?")
     .bind(id).first();
+}
+
+// Snapshot de telemetria elétrica (SOC/autonomia) no veículo da frota. Só age
+// quando o feed trouxe SOC ou autonomia (prepared-and-off) E o veículo do
+// tracker está casado com um da frota E a leitura é mais nova. Enriquecimento de
+// sistema: não incrementa revision nem carimba updated_at (telemetria é
+// frequente e não pode reordenar a lista da frota a cada ping).
+async function refletirTelemetriaEletrica(env, integration, link, item, source) {
+  const vehicleId = link?.vehicle_id;
+  if (!vehicleId) return false;
+  const leitura = leituraDeTelemetriaEletrica(item);
+  if (!leitura) return false;
+  const veiculo = await env.DB.prepare(
+    `SELECT last_telemetry_at FROM todogreen_fleet_vehicles
+      WHERE id = ? AND workspace_owner_id = ? AND archived_at IS NULL LIMIT 1`,
+  ).bind(vehicleId, integration.workspace_owner_id).first();
+  if (!veiculo) return false;
+  const upd = atualizacaoDeTelemetria({ lastTelemetryAt: veiculo.last_telemetry_at || "" }, leitura);
+  if (!upd) return false;
+  await env.DB.prepare(
+    `UPDATE todogreen_fleet_vehicles
+        SET last_soc_percent = ?, last_range_km = ?, last_telemetry_at = ?, last_telemetry_source = ?
+      WHERE id = ? AND workspace_owner_id = ?`,
+  ).bind(
+    upd.socPercent, upd.rangeKm, upd.telemetriaEm, `sistemas_tracker:${source}`,
+    vehicleId, integration.workspace_owner_id,
+  ).run();
+  return true;
 }
 
 async function storePosition(env, integration, link, item, source) {
@@ -397,6 +437,7 @@ async function syncIntegration(env, integration, triggerType = "manual") {
         if (await storePosition(env, integration, link, item, "api")) imported += 1;
         else ignored += 1;
         if (await storeEvent(env, integration, link, item)) imported += 1;
+        await refletirTelemetriaEletrica(env, integration, link, item, "api");
       } catch {
         errors += 1;
       }
@@ -742,6 +783,7 @@ async function receiveWebhook(request, env, integrationId) {
     const link = await upsertVehicleLink(env, integration, item);
     const position = await storePosition(env, integration, link, item, "webhook");
     const event = await storeEvent(env, integration, link, item);
+    await refletirTelemetriaEletrica(env, integration, link, item, "webhook");
     if (position || event) accepted += 1;
     else ignored += 1;
   }
