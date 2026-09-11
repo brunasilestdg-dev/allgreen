@@ -2079,6 +2079,14 @@
 }
 .tdg-driver-rodape-nota { color: #6d8377; font-size: .8rem; line-height: 1.5; margin: 2px 4px; }
 
+/* ── Produtividade do motorista (bloco 03) ────────────────────────────── */
+.tdg-prod { display: grid; gap: 10px; }
+.tdg-prod-grid { display: grid; gap: 8px; grid-template-columns: repeat(4, 1fr); }
+.tdg-prod-grid div { background: var(--tdg-bg, #f2f7f4); border-radius: 12px; display: grid; gap: 2px; padding: 10px 6px; text-align: center; }
+.tdg-prod-grid strong { color: #173d31; font-size: 1.2rem; overflow-wrap: anywhere; }
+.tdg-prod-grid small { color: #6d8377; font-size: .68rem; }
+@media (max-width: 360px) { .tdg-prod-grid { grid-template-columns: repeat(2, 1fr); } }
+
 /* ── Score do motorista (bloco 03) ────────────────────────────────────── */
 .tdg-score { display: grid; gap: 10px; }
 .tdg-score-nota { align-items: baseline; display: flex; gap: 10px; }

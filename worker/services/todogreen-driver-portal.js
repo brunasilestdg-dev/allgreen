@@ -58,6 +58,7 @@ const viagemDaLinha = (row) => ({
   prometidoEm: row.promised_at || "",
   entregueEm: row.delivered_at || "",
   placa: row.vehicle_plate || "",
+  distanciaKm: Number(row.distance_km || 0),
   rotaId: row.route_id || "",
   ordemNaRota: row.route_stop_order,
   comprovanteRegistrado: Boolean(row.proof_url),

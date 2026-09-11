@@ -156,3 +156,28 @@ describe("app do motorista — score", () => {
     expect(await screen.findByText(/Ainda sem entregas concluídas/)).toBeInTheDocument();
   });
 });
+
+describe("app do motorista — produtividade (meu dia)", () => {
+  it("na Hoje, cruza entregas e horas do turno", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    const hoje = new Date().toISOString().slice(0, 10);
+    const iniciado = new Date(Date.now() - 5 * 3600000).toISOString(); // turno de 5h
+    montarFetch({
+      viagens: {
+        viagens: [
+          { id: "v1", entregueEm: `${hoje}T10:00:00Z`, distanciaKm: 30, comprovanteRegistrado: true },
+          { id: "v2", entregueEm: `${hoje}T11:00:00Z`, distanciaKm: 20, comprovanteRegistrado: true },
+        ],
+      },
+      jornada: { turnos: [{ id: "t1", status: "aberto", iniciadoEm: iniciado, encerradoEm: "", dataServico: hoje }] },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+
+    // O cartão "Meu dia" aparece na aba Hoje (padrão).
+    expect(await screen.findByText("Meu dia")).toBeInTheDocument();
+    // 50 km hoje e a semana no rodapé.
+    expect(screen.getByText("50")).toBeInTheDocument();
+    expect(screen.getByText(/Na semana: 2 entregas · 50 km/)).toBeInTheDocument();
+  });
+});

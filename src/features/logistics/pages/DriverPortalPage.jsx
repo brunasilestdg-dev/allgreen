@@ -7,6 +7,7 @@ import { ROTULO_STATUS_ROTA, linkNavegacao, progressoDaRota, resumoDaRota } from
 import { avaliarChecklist, GRUPOS_CHECKLIST, ITENS_CHECKLIST } from "../driverChecklistDomain.js";
 import { formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
 import { calcularScoreMotorista, ROTULO_FAIXA } from "../driverScoreDomain.js";
+import { resumoDeProdutividade } from "../driverProductivityDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
@@ -471,8 +472,10 @@ export default function DriverPortalPage() {
   const primeiroNome = String(sessao.motorista.nome || "").split(" ")[0];
 
   const rotasAtivas = rotas.filter((rota) => rota.status !== "concluida");
-  const jornada = resumoDaJornada(turnos, new Date().toISOString());
+  const agoraISO = new Date().toISOString();
+  const jornada = resumoDaJornada(turnos, agoraISO);
   const score = calcularScoreMotorista(viagens);
+  const produtividade = resumoDeProdutividade(viagens, { minutosHoje: jornada.minutosHoje, agora: agoraISO });
   const vistoriaHoje = checklists.find((c) => String(c.dataServico).slice(0, 10) === hojeISO) || null;
   const vistoriaParcial = avaliarChecklist(respostasVistoria);
   const abas = [
@@ -531,6 +534,22 @@ export default function DriverPortalPage() {
             <article className="ok"><strong>{entreguesHoje}</strong><span>hoje</span></article>
             <article className={ocorrenciasTotal ? "alerta" : ""}><strong>{ocorrenciasTotal}</strong><span>ocorrências</span></article>
           </div>
+
+          {/* Produtividade: cruza a jornada (horas) com as entregas. */}
+          <article className="tdg-driver-cartao tdg-prod">
+            <div className="tdg-driver-info-linha"><Award size={16} /><span>Meu dia</span></div>
+            <div className="tdg-prod-grid">
+              <div><strong>{produtividade.entregasHoje}</strong><small>entregas</small></div>
+              <div><strong>{produtividade.kmHoje}</strong><small>km</small></div>
+              <div><strong>{produtividade.horasHoje > 0 ? formatarDuracao(jornada.minutosHoje) : "—"}</strong><small>na estrada</small></div>
+              <div><strong>{produtividade.entregasPorHora != null ? produtividade.entregasPorHora : "—"}</strong><small>por hora</small></div>
+            </div>
+            <small className="tdg-driver-rodape-nota">
+              {produtividade.entregasPorHora != null
+                ? `Na semana: ${produtividade.entregasSemana} entregas · ${produtividade.kmSemana} km.`
+                : `Na semana: ${produtividade.entregasSemana} entregas · ${produtividade.kmSemana} km. Inicie o turno para ver entregas por hora.`}
+            </small>
+          </article>
 
           {pendentes.map((viagem) => (
             <article className="tdg-driver-cartao" key={viagem.id}>
