@@ -863,8 +863,7 @@ const render = () => {
   if (active) { renderWorkCenter(); if (!state.boards.length && !state.loading) sync(); }
 };
 
-// Ver o comentário equivalente em LogisticsVerticalFleet.js: esperar só por
-// `main.tdg` não bastava, porque `[data-tdg-page-content]` — o que `render()`
+// Esperar só por `main.tdg` não bastava, porque `[data-tdg-page-content]` — o que `render()`
 // de fato precisa achar pra esconder o conteúdo do dashboard — pode chegar num
 // commit do React posterior. Espera o elemento certo, com um observer de um
 // disparo só.
