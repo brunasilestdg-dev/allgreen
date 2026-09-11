@@ -17,6 +17,7 @@ import {
   conjuntoDaRegua,
 } from "../../src/features/logistics/esgEngineDomain.js";
 import { reguaEsgEmVigor } from "./todogreen-environmental-parameters.js";
+import { fechamentoMensalEsg } from "../../src/features/logistics/esgFechamentoDomain.js";
 import {
   PESOS_PADRAO,
   calcularGreenScore,
@@ -527,6 +528,123 @@ export async function handleTodoGreenEsg(request, env) {
           }
         : null,
       geradoPor: user?.email || "",
+    });
+  }
+
+  // ---- Fechar o mês (GLEC / ISO 14083) ----
+  //
+  // Congela o mês num retrato imutável, na moldura GLEC. Lê os cálculos e as
+  // operações do período e consolida pelo domínio puro; refechar o mesmo mês
+  // atualiza o registro (revision++), não duplica.
+  if (request.method === "POST" && recurso === "fechamento") {
+    if (!podeGerenciarEsg(access))
+      return response({ error: "Sem permissão para fechar o mês de ESG." }, 403);
+    let body = {};
+    try {
+      body = await request.json();
+    } catch {
+      return response({ error: "Corpo JSON inválido." }, 400);
+    }
+    const clientId = clean(body.clienteId ?? body.clientId, 60);
+    const mes = clean(body.mes ?? body.periodo, 7);
+    if (!clientId) return response({ error: "Informe o cliente." }, 400);
+    if (!/^\d{4}-\d{2}$/.test(mes))
+      return response({ error: "Informe o mês no formato AAAA-MM." }, 400);
+
+    const cliente = await clienteNoAlcance(env, access, user, clientId);
+    if (!cliente) return response({ error: "Cliente não encontrado." }, 404);
+
+    const [operacoes, calculos] = await Promise.all([
+      env.DB.prepare(
+        `SELECT distance_km, fields_json
+           FROM todogreen_client_operations
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ? AND archived_at IS NULL
+            AND substr(service_date, 1, 7) = ?`,
+      ).bind(TENANT_ID, access.ownerId, clientId, mes).all().catch(() => ({ results: [] })),
+      env.DB.prepare(
+        `SELECT result_json, methodology_version, data_quality
+           FROM environmental_calculations
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ?
+            AND substr(created_at, 1, 7) = ?`,
+      ).bind(TENANT_ID, access.ownerId, clientId, mes).all().catch(() => ({ results: [] })),
+    ]);
+
+    const calcs = (calculos.results || []).map((l) => ({
+      ...parse(l.result_json, {}),
+      qualidadeDados: l.data_quality,
+      versaoFatores: l.methodology_version,
+    }));
+    const ops = (operacoes.results || []).map((l) => ({
+      distanciaKm: l.distance_km,
+      campos: parse(l.fields_json, {}),
+    }));
+
+    const fechamento = fechamentoMensalEsg(calcs, ops, mes);
+    const agora = new Date().toISOString();
+
+    const existente = await env.DB.prepare(
+      `SELECT id FROM todogreen_esg_monthly_closes
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ? AND period_month = ?
+          AND archived_at IS NULL`,
+    ).bind(TENANT_ID, access.ownerId, clientId, mes).first();
+
+    if (existente) {
+      await env.DB.prepare(
+        `UPDATE todogreen_esg_monthly_closes
+            SET summary_json = ?, methodology_version = ?, data_quality = ?, status = 'fechado',
+                closed_by = ?, closed_at = ?, revision = revision + 1, updated_at = ?
+          WHERE id = ?`,
+      ).bind(
+        JSON.stringify(fechamento), fechamento.versaoFatores, fechamento.resumo.qualidadeMedia,
+        user.id, agora, agora, existente.id,
+      ).run();
+      return response({ ok: true, refechado: true, fechamento });
+    }
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_esg_monthly_closes
+         (id, tenant_id, workspace_owner_id, client_id, period_month, summary_json,
+          methodology_version, data_quality, status, closed_by, closed_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'fechado', ?, ?, ?, ?)`,
+    ).bind(
+      id, TENANT_ID, access.ownerId, clientId, mes, JSON.stringify(fechamento),
+      fechamento.versaoFatores, fechamento.resumo.qualidadeMedia, user.id, agora, agora, agora,
+    ).run();
+    return response({ ok: true, fechamento }, 201);
+  }
+
+  // ---- Meses fechados de um cliente ----
+  if (request.method === "GET" && recurso === "fechamentos") {
+    if (!podeLerEsg(access))
+      return response({ error: "Sem permissão para ver os fechamentos." }, 403);
+    const clientId = clean(url.searchParams.get("cliente"), 60);
+    if (!clientId) return response({ error: "Informe o cliente." }, 400);
+    const cliente = await clienteNoAlcance(env, access, user, clientId);
+    if (!cliente) return response({ error: "Cliente não encontrado." }, 404);
+
+    const rows = await env.DB.prepare(
+      `SELECT period_month, summary_json, methodology_version, data_quality, status, closed_at, revision
+         FROM todogreen_esg_monthly_closes
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND client_id = ? AND archived_at IS NULL
+        ORDER BY period_month DESC LIMIT 36`,
+    ).bind(TENANT_ID, access.ownerId, clientId).all().catch(() => ({ results: [] }));
+
+    return response({
+      cliente: { nome: cliente.name },
+      fechamentos: (rows.results || []).map((l) => {
+        const resumo = parse(l.summary_json, {});
+        return {
+          mes: l.period_month,
+          versaoFatores: l.methodology_version,
+          qualidade: l.data_quality,
+          status: l.status,
+          fechadoEm: l.closed_at,
+          revisao: l.revision,
+          resumo: resumo.resumo || {},
+          atividade: resumo.atividade || {},
+        };
+      }),
     });
   }
 

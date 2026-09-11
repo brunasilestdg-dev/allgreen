@@ -182,3 +182,58 @@ describe("energia medida flui pelo /calcular (N.3 fatia 3)", () => {
     expect(resultado.memoria.fatoresUsados.some((f) => f.chave === "energia_medida")).toBe(true);
   });
 });
+
+describe("fechamento mensal GLEC / ISO 14083 (bloco 08)", () => {
+  it("fecha o mês: consolida cálculos + atividade tonne-km, e não duplica ao refechar", async () => {
+    const agora = new Date().toISOString();
+    const mes = agora.slice(0, 7);
+    const hoje = agora.slice(0, 10);
+
+    // Uma operação com peso (2 t) e distância (100 km) no mês corrente = 200 tkm.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, service_date, distance_km, fields_json,
+          created_by, updated_by, created_at, updated_at)
+       VALUES (?, 'todogreen', 'esg-regua-cli', ?, ?, 100, ?, 'seed', 'seed', ?, ?)`,
+    ).bind(crypto.randomUUID(), admin.id, hoje, JSON.stringify({ weightKg: 2000 }), agora, agora).run();
+
+    // Garante ao menos um cálculo no mês (o motor auditável grava co2ExecutadoKg).
+    await calcular(admin.token, "FECHA");
+
+    const r = await pedir("/api/todogreen/esg/fechamento", {
+      method: "POST",
+      token: admin.token,
+      body: { clienteId: "esg-regua-cli", mes },
+    });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    expect(d.fechamento.mes).toBe(mes);
+    expect(d.fechamento.metodologia).toMatch(/GLEC|14083/);
+    // Prova que o endpoint leu a chave `impact` do cálculo gravado.
+    expect(d.fechamento.resumo.co2EmitidoKg).toBeGreaterThan(0);
+    expect(d.fechamento.resumo.toneladasKm).toBe(200);
+    expect(d.fechamento.resumo.intensidadeGCo2ePorTkm).toBeGreaterThan(0);
+
+    // O registro ficou gravado.
+    const gravado = await env.DB.prepare(
+      "SELECT status, methodology_version FROM todogreen_esg_monthly_closes WHERE client_id = 'esg-regua-cli' AND period_month = ?",
+    ).bind(mes).first();
+    expect(gravado.status).toBe("fechado");
+
+    // Refechar o mesmo mês atualiza, não duplica.
+    const r2 = await pedir("/api/todogreen/esg/fechamento", {
+      method: "POST",
+      token: admin.token,
+      body: { clienteId: "esg-regua-cli", mes },
+    });
+    expect((await r2.json()).refechado).toBe(true);
+    const contagem = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_esg_monthly_closes WHERE client_id = 'esg-regua-cli' AND period_month = ?",
+    ).bind(mes).first();
+    expect(contagem.n).toBe(1);
+
+    // A listagem traz o mês fechado.
+    const lista = await (await pedir("/api/todogreen/esg/fechamentos?cliente=esg-regua-cli", { token: admin.token })).json();
+    expect(lista.fechamentos.some((f) => f.mes === mes)).toBe(true);
+  });
+});
