@@ -873,6 +873,7 @@ describe("a vertical inteira numa chamada só", () => {
       "operations",
       "opportunities",
       "parties",
+      "pontosRecarga",
       "proposals",
       "quality",
       "rfq",
