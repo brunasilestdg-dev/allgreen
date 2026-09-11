@@ -24,6 +24,9 @@ const montarFetch = (over = {}) => {
     const resp = (dados, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(dados) });
     if (u.includes("/driver-portal/checklist") && options?.method === "POST") return resp({ checklist: { id: "c1", status: "aprovado" }, veredito: { status: "aprovado" } }, 201);
     if (u.includes("/driver-portal/checklist")) return resp(over.checklist || { checklists: [], itens: ITENS_CHECKLIST });
+    if (u.includes("/driver-portal/jornada/inicio")) return resp(over.aposInicio || { turnos: [{ id: "t1", status: "aberto", iniciadoEm: new Date().toISOString(), encerradoEm: "", dataServico: new Date().toISOString().slice(0, 10) }] }, 201);
+    if (u.includes("/driver-portal/jornada/fim")) return resp({ turnos: [{ id: "t1", status: "fechado", iniciadoEm: "2020-01-01T08:00:00Z", encerradoEm: "2020-01-01T12:00:00Z", dataServico: "2020-01-01" }] });
+    if (u.includes("/driver-portal/jornada")) return resp(over.jornada || { turnos: [] });
     if (u.includes("/driver-portal/viagens")) return resp({ viagens: [] });
     if (u.includes("/driver-portal/rotas")) return resp({ rotas: [] });
     if (u.includes("/driver-portal/sessao") || u.endsWith("/driver-portal") || u.includes("/driver-portal?")) return resp(sessao);
@@ -91,5 +94,33 @@ describe("app do motorista — vistoria de pré-viagem", () => {
     fireEvent.click(screen.getByRole("button", { name: /Vistoria/ }));
 
     expect(await screen.findByText(/Vistoria de hoje: Reprovada/)).toBeInTheDocument();
+  });
+});
+
+describe("app do motorista — jornada (turno)", () => {
+  it("fora de turno mostra iniciar; ao iniciar, passa a mostrar em turno", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    const chamadas = montarFetch();
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+
+    // Começa fora de turno.
+    expect(await screen.findByText("Fora de turno")).toBeInTheDocument();
+    const iniciar = screen.getByRole("button", { name: /Iniciar turno/ });
+    fireEvent.click(iniciar);
+
+    // Depois de iniciar (mock devolve um turno aberto), mostra "Em turno".
+    expect(await screen.findByText("Em turno")).toBeInTheDocument();
+    expect(chamadas.some((c) => c.method === "POST" && c.url.includes("/jornada/inicio"))).toBe(true);
+  });
+
+  it("com um turno aberto vindo do servidor, mostra o botão de encerrar", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({ jornada: { turnos: [{ id: "t1", status: "aberto", iniciadoEm: new Date().toISOString(), encerradoEm: "", dataServico: new Date().toISOString().slice(0, 10) }] } });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+
+    expect(await screen.findByText("Em turno")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Encerrar turno/ })).toBeInTheDocument();
   });
 });

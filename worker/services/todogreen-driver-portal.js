@@ -14,6 +14,7 @@ import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { aplicarEventoOperacional } from "./todogreen-vertical-records.js";
 import { marcarParadaConcluida, statusPelaConclusao } from "../../src/features/logistics/routePlanDomain.js";
 import { avaliarChecklist, ITENS_CHECKLIST } from "../../src/features/logistics/driverChecklistDomain.js";
+import { duracaoMinutos, resumoDaJornada } from "../../src/features/logistics/driverJourneyDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -66,6 +67,17 @@ const viagemDaLinha = (row) => ({
 const parseJson = (valor, padrao) => {
   try { return JSON.parse(valor || ""); } catch { return padrao; }
 };
+
+const turnoDaLinha = (row) => ({
+  id: row.id,
+  dataServico: row.service_date || "",
+  iniciadoEm: row.started_at || "",
+  encerradoEm: row.ended_at || "",
+  duracaoMin: Number(row.duration_min || 0),
+  status: row.status || "aberto",
+  posicaoInicio: row.start_position || "",
+  posicaoFim: row.end_position || "",
+});
 
 const checklistDaLinha = (row) => ({
   id: row.id,
@@ -227,6 +239,71 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
          FROM todogreen_driver_checklists WHERE id = ?`,
     ).bind(idNovo).first();
     return json({ checklist: checklistDaLinha(row), veredito }, 201);
+  }
+
+  // ===== Jornada de trabalho (bloco 03) =====
+  // Os turnos deste motorista + o retrato (em turno, horas de hoje). O `agora`
+  // vai ao domínio para a duração do turno aberto ser determinística.
+  if (recurso === "jornada") {
+    const carregarTurnos = async () => {
+      const { results } = await env.DB.prepare(
+        `SELECT id, service_date, started_at, ended_at, duration_min, status, start_position, end_position
+           FROM todogreen_driver_shifts
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND archived_at IS NULL
+          ORDER BY started_at DESC LIMIT 30`,
+      ).bind(TENANT_ID, access.ownerId, motorista.id).all();
+      return (results || []).map(turnoDaLinha);
+    };
+
+    if (request.method === "GET") {
+      const turnos = await carregarTurnos();
+      return json({ turnos, resumo: resumoDaJornada(turnos, new Date().toISOString()) });
+    }
+
+    // Iniciar turno. Recusa (409) se já houver um aberto — a base também trava,
+    // mas a mensagem clara é melhor que um erro de índice único.
+    if (request.method === "POST" && id === "inicio") {
+      const corpo = await request.json().catch(() => ({}));
+      const aberto = await env.DB.prepare(
+        `SELECT id FROM todogreen_driver_shifts
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND ended_at IS NULL AND archived_at IS NULL`,
+      ).bind(TENANT_ID, access.ownerId, motorista.id).first();
+      if (aberto) return json({ error: "Você já tem um turno aberto. Encerre antes de iniciar outro." }, 409);
+
+      const idNovo = crypto.randomUUID();
+      const agora = new Date().toISOString();
+      await env.DB.prepare(
+        `INSERT INTO todogreen_driver_shifts
+           (id, tenant_id, workspace_owner_id, driver_id, service_date, started_at, status, start_position, start_odometer_km, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'aberto', ?, ?, ?, ?, ?)`,
+      ).bind(idNovo, TENANT_ID, access.ownerId, motorista.id, agora.slice(0, 10), agora, texto(corpo.local, 120),
+        Number.isFinite(Number(corpo.odometroKm)) ? Number(corpo.odometroKm) : null, user.id, agora, agora).run();
+      const turnos = await carregarTurnos();
+      return json({ turnos, resumo: resumoDaJornada(turnos, agora) }, 201);
+    }
+
+    // Encerrar turno. Sem um aberto, 400 — não se encerra o que não começou.
+    if (request.method === "POST" && id === "fim") {
+      const corpo = await request.json().catch(() => ({}));
+      const aberto = await env.DB.prepare(
+        `SELECT * FROM todogreen_driver_shifts
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND ended_at IS NULL AND archived_at IS NULL`,
+      ).bind(TENANT_ID, access.ownerId, motorista.id).first();
+      if (!aberto) return json({ error: "Você não tem turno aberto para encerrar." }, 400);
+
+      const agora = new Date().toISOString();
+      await env.DB.prepare(
+        `UPDATE todogreen_driver_shifts
+            SET ended_at = ?, duration_min = ?, status = 'fechado', end_position = ?, end_odometer_km = ?,
+                revision = revision + 1, updated_at = ?
+          WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+      ).bind(agora, duracaoMinutos(aberto.started_at, agora), texto(corpo.local, 120),
+        Number.isFinite(Number(corpo.odometroKm)) ? Number(corpo.odometroKm) : null, agora, aberto.id, TENANT_ID, access.ownerId).run();
+      const turnos = await carregarTurnos();
+      return json({ turnos, resumo: resumoDaJornada(turnos, agora) });
+    }
+
+    return json({ error: "Ação de jornada não encontrada." }, 404);
   }
 
   if (request.method === "GET" && recurso === "viagens") {

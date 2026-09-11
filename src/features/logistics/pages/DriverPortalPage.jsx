@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Route, Truck, User } from "lucide-react";
+import { AlertTriangle, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 import { ROTULO_STATUS_ROTA, linkNavegacao, progressoDaRota, resumoDaRota } from "../routePlanDomain.js";
 import { avaliarChecklist, GRUPOS_CHECKLIST, ITENS_CHECKLIST } from "../driverChecklistDomain.js";
+import { formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
@@ -153,6 +154,8 @@ export default function DriverPortalPage() {
   const [respostasVistoria, setRespostasVistoria] = useState({});
   const [obsVistoria, setObsVistoria] = useState("");
   const [enviandoVistoria, setEnviandoVistoria] = useState(false);
+  const [turnos, setTurnos] = useState([]);
+  const [turnoOcupado, setTurnoOcupado] = useState(false);
   const avatarInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
@@ -221,6 +224,9 @@ export default function DriverPortalPage() {
         try {
           setChecklists((await pedir("/checklist")).checklists || []);
         } catch { /* segue com a lista anterior */ }
+        try {
+          setTurnos((await pedir("/jornada")).turnos || []);
+        } catch { /* segue com os turnos anteriores */ }
       }
       setErro("");
     } catch (motivo) {
@@ -373,6 +379,22 @@ export default function DriverPortalPage() {
     }
   };
 
+  // Jornada: iniciar/encerrar turno. A posição vai junto, se o celular deixar.
+  const acaoTurno = async (acao, mensagem) => {
+    setTurnoOcupado(true);
+    try {
+      const gps = await posicaoAtual();
+      const local = gps ? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}` : "";
+      const { turnos: novos } = await pedir(`/jornada/${acao}`, { method: "POST", body: JSON.stringify({ local }) });
+      setTurnos(novos || []);
+      setAviso(mensagem);
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui registrar o turno agora.");
+    } finally {
+      setTurnoOcupado(false);
+    }
+  };
+
   const zerarFormulario = () =>
     setDados({ recebedor: "", comprovanteUrl: "", descricao: "", fotoBase64: "", assinaturaBase64: "" });
 
@@ -448,6 +470,7 @@ export default function DriverPortalPage() {
   const primeiroNome = String(sessao.motorista.nome || "").split(" ")[0];
 
   const rotasAtivas = rotas.filter((rota) => rota.status !== "concluida");
+  const jornada = resumoDaJornada(turnos, new Date().toISOString());
   const vistoriaHoje = checklists.find((c) => String(c.dataServico).slice(0, 10) === hojeISO) || null;
   const vistoriaParcial = avaliarChecklist(respostasVistoria);
   const abas = [
@@ -488,6 +511,19 @@ export default function DriverPortalPage() {
       {/* ===== HOJE: resumo da jornada + viagens pendentes com ação ===== */}
       {secao === "hoje" && (
         <>
+          {/* Turno: iniciar/encerrar. As horas do dia saem da diferença. */}
+          <article className={`tdg-driver-cartao tdg-turno ${jornada.emTurno ? "aberto" : ""}`}>
+            <div className="tdg-turno-info">
+              <Clock size={18} />
+              {jornada.emTurno
+                ? <span><strong>Em turno</strong><small>há {formatarDuracao(jornada.turnoAtual.minutosDecorridos)} · hoje {formatarDuracao(jornada.minutosHoje)}</small></span>
+                : <span><strong>Fora de turno</strong><small>{jornada.minutosHoje > 0 ? `hoje você já rodou ${formatarDuracao(jornada.minutosHoje)}` : "inicie o turno para começar o dia"}</small></span>}
+            </div>
+            {jornada.emTurno
+              ? <button type="button" className="tdg-turno-btn encerrar" disabled={turnoOcupado} onClick={() => acaoTurno("fim", "Turno encerrado. Bom descanso!")}><Square size={16} /> Encerrar turno</button>
+              : <button type="button" className="tdg-turno-btn iniciar" disabled={turnoOcupado} onClick={() => acaoTurno("inicio", "Turno iniciado. Boa jornada!")}><Play size={16} /> Iniciar turno</button>}
+          </article>
+
           <div className="tdg-driver-jornada">
             <article><strong>{pendentes.length}</strong><span>a fazer</span></article>
             <article className="ok"><strong>{entreguesHoje}</strong><span>hoje</span></article>

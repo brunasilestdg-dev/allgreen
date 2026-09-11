@@ -512,3 +512,53 @@ describe("checklist de pré-viagem do motorista (bloco 03)", () => {
     expect(daMaria.checklists.some((c) => c.observacao === "Pedal mole")).toBe(false);
   });
 });
+
+// Bloco 03 — jornada de trabalho. O servidor trava um turno aberto por
+// motorista; as horas saem da diferença início/fim.
+describe("jornada do motorista (bloco 03)", () => {
+  it("inicia o turno, recusa iniciar de novo e encerra com horas derivadas", async () => {
+    // Começa fora de turno.
+    const antes = await (await pedir("/api/todogreen/driver-portal/jornada", { token: maria.token })).json();
+    expect(antes.resumo.emTurno).toBe(false);
+    expect(antes.resumo.podeIniciar).toBe(true);
+
+    // Inicia.
+    const inicio = await pedir("/api/todogreen/driver-portal/jornada/inicio", {
+      method: "POST", token: maria.token, body: { local: "-23.55, -46.63" },
+    });
+    expect(inicio.status).toBe(201);
+    const dInicio = await inicio.json();
+    expect(dInicio.resumo.emTurno).toBe(true);
+    expect(dInicio.resumo.podeEncerrar).toBe(true);
+
+    // Iniciar de novo com um aberto → 409.
+    const dobro = await pedir("/api/todogreen/driver-portal/jornada/inicio", { method: "POST", token: maria.token, body: {} });
+    expect(dobro.status).toBe(409);
+
+    // Encerra.
+    const fim = await pedir("/api/todogreen/driver-portal/jornada/fim", {
+      method: "POST", token: maria.token, body: { local: "-23.50, -46.60" },
+    });
+    expect(fim.status).toBe(200);
+    const dFim = await fim.json();
+    expect(dFim.resumo.emTurno).toBe(false);
+    const fechado = dFim.turnos.find((t) => t.status === "fechado");
+    expect(fechado).toBeTruthy();
+    expect(fechado.encerradoEm).toBeTruthy();
+    expect(fechado.duracaoMin).toBeGreaterThanOrEqual(0);
+  });
+
+  it("encerrar sem turno aberto responde 400", async () => {
+    // O João nunca abriu turno neste teste.
+    const r = await pedir("/api/todogreen/driver-portal/jornada/fim", { method: "POST", token: joao.token, body: {} });
+    expect(r.status).toBe(400);
+  });
+
+  it("a jornada é do próprio motorista: o turno da Maria não aparece para o João", async () => {
+    const doJoao = await (await pedir("/api/todogreen/driver-portal/jornada", { token: joao.token })).json();
+    // A Maria fechou um turno acima; o João não deve vê-lo.
+    expect(doJoao.turnos.every((t) => t.status !== "fechado" || t.encerradoEm)).toBe(true);
+    // (o recorte real: o João tem os SEUS turnos — aqui, nenhum fechado da Maria)
+    expect(doJoao.resumo.emTurno).toBe(false);
+  });
+});

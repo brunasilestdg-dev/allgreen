@@ -2079,6 +2079,21 @@
 }
 .tdg-driver-rodape-nota { color: #6d8377; font-size: .8rem; line-height: 1.5; margin: 2px 4px; }
 
+/* ── Jornada / turno do motorista (bloco 03) ──────────────────────────── */
+.tdg-turno { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.tdg-turno.aberto { border-left: 4px solid #0b9f8f; }
+.tdg-turno-info { align-items: center; color: #173d31; display: flex; gap: 9px; }
+.tdg-turno-info span { display: grid; gap: 1px; }
+.tdg-turno-info strong { font-size: .95rem; }
+.tdg-turno-info small { color: #6d8377; font-size: .78rem; }
+.tdg-turno-btn {
+  align-items: center; border: 0; border-radius: 10px; color: #fff; cursor: pointer; display: flex;
+  font-size: .88rem; font-weight: 700; gap: 6px; min-height: 44px; padding: 8px 16px;
+}
+.tdg-turno-btn.iniciar { background: #0b9f8f; }
+.tdg-turno-btn.encerrar { background: #c0392b; }
+.tdg-turno-btn:disabled { cursor: not-allowed; opacity: .6; }
+
 /* ── Vistoria de pré-viagem (bloco 03) ────────────────────────────────── */
 .tdg-vistoria-selo { align-items: center; display: flex; gap: 12px; }
 .tdg-vistoria-selo div { display: grid; gap: 2px; }
