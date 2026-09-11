@@ -533,6 +533,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Extrato bancário OFX, conciliação, saldo por conta, cobrança com aging e fechamento de competência.",
     permissions: ["read", "finance:manage"],
   }),
+  module("greenpay", "GreenPay", "financeiro", "/todogreen/greenpay", {
+    icon: "Wallet",
+    order: 39.5,
+    description: "Carteira dos motoristas: régua de ganhos por entrega e por km, e aprovação/pagamento — derivado das entregas, não da folha.",
+    permissions: ["read", "finance:manage"],
+  }),
   module("fiscal", "Fiscal", "financeiro", "/todogreen/fiscal", {
     icon: "ReceiptText",
     order: 39.5,

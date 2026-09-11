@@ -159,6 +159,7 @@ const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
 const RoteirizacaoPage = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
 const OperationEnginePage = lazy(() => import("./pages/OperationEnginePage.jsx"));
+const GreenPayAdminPage = lazy(() => import("./pages/GreenPayAdminPage.jsx"));
 const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
 const QualityPage = lazy(() => import("./pages/QualityPage.jsx"));
 const LegalPage = lazy(() => import("./pages/LegalPage.jsx"));
@@ -322,6 +323,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "administracao",
   "fiscal",
   "tesouraria",
+  "greenpay",
   "cte",
   "mdfe",
   "nfse",
@@ -718,6 +720,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: "finance:manage",
     description: "Extrato OFX, conciliação, saldo por conta, cobrança com aging e fechamento de competência.",
   },
+  greenpay: {
+    title: "GreenPay — carteira dos motoristas",
+    navLabel: "GreenPay",
+    route: "/todogreen/greenpay",
+    area: "financeiro",
+    status: "functional",
+    permission: "finance:manage",
+    description: "Régua de ganhos por entrega e por km, sincronização das entregas e aprovação/pagamento da carteira de cada motorista.",
+  },
   fiscal: {
     title: "Fiscal — CT-e, MDF-e e NFS-e",
     navLabel: "Fiscal",
@@ -974,7 +985,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "suprimentos", label: "Compras", route: "/todogreen/compras", pages: ["compras", "estoque"], extras: [["Cadastro · Materiais", "/todogreen/cadastros?secao=items"], ["Cadastro · Depósitos", "/todogreen/cadastros?secao=warehouses"], ["Cadastro · Fornecedores e parceiros", "/todogreen/cadastros?secao=parties"]] },
   { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "ciot"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
   { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
-  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
+  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "greenpay"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
   { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "motor-operacao"] },
@@ -3443,6 +3454,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
       {page === "tesouraria" && <Suspense fallback={<section className="tdg-panel">Carregando a tesouraria...</section>}><TreasuryPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "greenpay" && <Suspense fallback={<section className="tdg-panel">Carregando o GreenPay...</section>}><GreenPayAdminPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "central-rfq" && (
         <Suspense fallback={<section className="tdg-panel">Carregando a Central de RFQ...</section>}>
           <CentralRfqPage

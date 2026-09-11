@@ -2168,11 +2168,11 @@
 .tdg-ganhos-topo .tdg-driver-kicker { color: #b8f0dc; font-size: .66rem; letter-spacing: .16em; }
 .tdg-ganhos-hoje { display: block; font-size: 2.4rem; font-weight: 800; line-height: 1.05; margin: 8px 0 2px; }
 .tdg-ganhos-topo > small { color: #cdeee0; font-size: .82rem; }
-.tdg-ganhos-periodos { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 16px; }
+.tdg-ganhos-periodos { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
 .tdg-ganhos-periodos > div { background: rgba(255,255,255,.12); border-radius: 11px; padding: 9px 6px; }
 .tdg-ganhos-periodos span { color: #cdeee0; display: block; font-size: .68rem; }
 .tdg-ganhos-periodos strong { font-size: 1.02rem; }
-.tdg-ganhos-saldos { display: grid; gap: 8px; grid-template-columns: repeat(2, 1fr); margin: 12px 12px 0; }
+.tdg-ganhos-saldos { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 12px 0; }
 .tdg-ganhos-saldos article { background: var(--tdg-card, #fff); border: 1px solid #dce4dd; border-radius: 12px; padding: 11px 12px; }
 .tdg-ganhos-saldos span { color: #5c6b62; display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
 .tdg-ganhos-saldos strong { font-size: 1.1rem; }
@@ -2191,6 +2191,18 @@
 .tdg-ganhos-status.aprovado { background: #e6f1f8; color: #0b6fa8; }
 .tdg-ganhos-status.pago { background: #e7f5ec; color: #1f7a44; }
 .tdg-driver-nota { color: #7a8a80; font-size: .74rem; margin: 10px 0 0; }
+
+/* GreenPay — tela do gestor */
+.tdg-greenpay-form { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 12px 0 4px; }
+.tdg-greenpay-form label { display: flex; flex-direction: column; font-size: .78rem; font-weight: 600; gap: 5px; }
+.tdg-greenpay-form input { border: 1px solid #ccd8ce; border-radius: 9px; font-size: .95rem; padding: 8px 10px; }
+.tdg-greenpay-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tdg-greenpay-acoes button:not(.tdg-action) { align-items: center; background: #eef4f0; border: 1px solid #cfe0d5; border-radius: 9px; color: #0e6f52; cursor: pointer; display: inline-flex; font-size: .84rem; font-weight: 600; gap: 6px; padding: 8px 12px; }
+.tdg-greenpay-tabela td { font-variant-numeric: tabular-nums; }
+.tdg-greenpay-linha-acoes { display: flex; gap: 6px; }
+.tdg-greenpay-linha-acoes button { align-items: center; background: #eef4f0; border: 1px solid #cfe0d5; border-radius: 8px; color: #0e6f52; cursor: pointer; display: inline-flex; font-size: .78rem; font-weight: 600; gap: 4px; padding: 5px 9px; }
+.tdg-greenpay-linha-acoes button:disabled { color: #9fb0a5; cursor: not-allowed; opacity: .6; }
+@media (max-width: 640px) { .tdg-greenpay-form { grid-template-columns: minmax(0, 1fr); } }
 
 .tdg-driver-nav {
   background: var(--tdg-card); border-top: 1px solid #d3e3db;
