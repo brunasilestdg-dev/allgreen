@@ -20,6 +20,7 @@ import { handleTodoGreenRequests } from "./todogreen-requests.js";
 import { handleTodoGreenVerticalRecords } from "./todogreen-vertical-records.js";
 import { handleTodoGreenStock } from "./todogreen-stock.js";
 import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
+import { handleTodoGreenPurchasingParams } from "./todogreen-purchasing-params.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
 import { handleTodoGreenDriverPortal } from "./todogreen-driver-portal.js";
@@ -256,6 +257,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenStock(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Alçadas de compras (régua versionada). Vem ANTES de /purchasing porque
+  // `/purchasing-params` também começa com `/purchasing` — o genérico engoliria a rota.
+  if (path.startsWith("/api/todogreen/purchasing-params")) {
+    return guarded("To Do Green purchasing params error", "Não foi possível carregar as alçadas de compras.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPurchasingParams(request, env, resolved.access, resolved.user);
     });
   }
 

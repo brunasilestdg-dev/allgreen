@@ -14,6 +14,11 @@ const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 // A matriz fica no servidor. Quem pede a compra não escolhe o próprio teto.
 // Cada clique aprova UMA etapa, deixando explícito quem ainda precisa decidir.
+//
+// Esta é a régua "de fábrica". A partir da 0111 cada espaço pode versioná-la
+// (todogreen_purchase_approval_params) — `bandasDoEspaco` carrega a do espaço e
+// cai nesta quando não há uma. `max: null` no topo = faixa sem teto (é o
+// catch-all); usar `null` em vez de Infinity mantém a régua serializável em JSON.
 export const PURCHASE_APPROVAL_BANDS = Object.freeze([
   { max: 5000, steps: [{ id: "gestor", label: "Gestor / Suprimentos", permission: "purchase:manage" }] },
   { max: 25000, steps: [
@@ -25,7 +30,7 @@ export const PURCHASE_APPROVAL_BANDS = Object.freeze([
     { id: "financeiro", label: "Financeiro", permission: "finance:manage" },
     { id: "head", label: "Head / Liderança", permission: "deal:approve" },
   ] },
-  { max: Infinity, steps: [
+  { max: null, steps: [
     { id: "gestor", label: "Gestor / Suprimentos", permission: "purchase:manage" },
     { id: "financeiro", label: "Financeiro", permission: "finance:manage" },
     { id: "head", label: "Head / Liderança", permission: "deal:approve" },
@@ -33,10 +38,64 @@ export const PURCHASE_APPROVAL_BANDS = Object.freeze([
   ] },
 ]);
 
-export const purchaseApprovalPlan = (total) => {
+// Papéis de aprovação permitidos numa faixa configurada. A régua é editável,
+// mas só entre papéis conhecidos — um permission fora do catálogo viraria etapa
+// que ninguém (ou todo mundo) satisfaz, furando a alçada por digitação.
+export const PURCHASE_APPROVAL_STEP_PERMISSIONS = Object.freeze([
+  "purchase:manage", "finance:manage", "deal:approve",
+]);
+
+const slugPasso = (value) => String(value ?? "").trim().toLowerCase().slice(0, 40);
+
+// Valida e normaliza a régua vinda do banco. Devolve a matriz utilizável ou
+// `null` quando algo está fora do contrato (o chamador então cai na régua de
+// fábrica, e o endpoint recusa a gravação). Ordena por teto e força a última
+// faixa a ser o catch-all (max=null), para nunca sobrar valor sem faixa.
+export const normalizarBandas = (config) => {
+  const bruto = Array.isArray(config?.bands) ? config.bands : Array.isArray(config) ? config : null;
+  if (!bruto || !bruto.length || bruto.length > 10) return null;
+  const bandas = [];
+  for (const item of bruto) {
+    const maxBruto = item?.max;
+    const max = maxBruto === null || maxBruto === undefined
+      ? null
+      : (Number.isFinite(Number(maxBruto)) && Number(maxBruto) > 0 ? Number(maxBruto) : NaN);
+    if (Number.isNaN(max)) return null;
+    const passos = Array.isArray(item?.steps) ? item.steps : null;
+    if (!passos || !passos.length || passos.length > 8) return null;
+    const steps = [];
+    for (const passo of passos) {
+      const id = slugPasso(passo?.id);
+      const label = String(passo?.label ?? "").trim().slice(0, 80);
+      if (!id || !label) return null;
+      const ownerOnly = passo?.ownerOnly === true;
+      const permission = String(passo?.permission ?? "").trim();
+      if (!ownerOnly && !PURCHASE_APPROVAL_STEP_PERMISSIONS.includes(permission)) return null;
+      steps.push(ownerOnly ? { id, label, ownerOnly: true } : { id, label, permission });
+    }
+    bandas.push({ max, steps });
+  }
+  bandas.sort((a, b) => (a.max ?? Infinity) - (b.max ?? Infinity));
+  bandas[bandas.length - 1] = { ...bandas[bandas.length - 1], max: null };
+  return bandas;
+};
+
+export const purchaseApprovalPlan = (total, bands = PURCHASE_APPROVAL_BANDS) => {
   const value = Math.max(0, num(total));
-  const band = PURCHASE_APPROVAL_BANDS.find((item) => value <= item.max) || PURCHASE_APPROVAL_BANDS.at(-1);
+  const usadas = Array.isArray(bands) && bands.length ? bands : PURCHASE_APPROVAL_BANDS;
+  const band = usadas.find((item) => value <= (item.max ?? Infinity)) || usadas.at(-1);
   return { total: value, steps: band.steps.map((step) => ({ ...step })) };
+};
+
+// A régua do espaço, carregada do banco e normalizada; cai na de fábrica quando
+// não há linha ou a config gravada não passa na validação.
+export const bandasDoEspaco = async (env, ownerId) => {
+  if (!env?.DB) return PURCHASE_APPROVAL_BANDS;
+  const linha = await env.DB.prepare(
+    "SELECT config_json FROM todogreen_purchase_approval_params WHERE tenant_id=? AND workspace_owner_id=?",
+  ).bind(TENANT_ID, ownerId).first().catch(() => null);
+  if (!linha) return PURCHASE_APPROVAL_BANDS;
+  return normalizarBandas(parse(linha.config_json, null)) || PURCHASE_APPROVAL_BANDS;
 };
 
 const canApproveStep = (access, step) => {
@@ -45,8 +104,8 @@ const canApproveStep = (access, step) => {
   return podeNaVertical(access, step.permission);
 };
 
-export const normalizedPurchaseApprovalFlow = (total, fields = {}) => {
-  const plan = purchaseApprovalPlan(total);
+export const normalizedPurchaseApprovalFlow = (total, fields = {}, bands = PURCHASE_APPROVAL_BANDS) => {
+  const plan = purchaseApprovalPlan(total, bands);
   const saved = parse(fields?.purchaseApprovalFlow, {});
   const approvals = Array.isArray(saved.approvals)
     ? saved.approvals.filter((item) => plan.steps.some((step) => step.id === item.stepId) && item.decision === "approved")
@@ -78,8 +137,10 @@ const approve = async (request, env, access, user, resource, id, body) => {
   const total = resource === "requisicoes" ? estimatedRequestTotal(row) : await orderTotal(env, access, row);
   // Item sem preço estimado ainda precisa passar por gestor. Quando virar pedido,
   // o preço real recalcula a alçada e pode exigir níveis adicionais.
+  // A régua é a versionada do espaço (ou a de fábrica), nunca escolhida por quem pede.
+  const bands = await bandasDoEspaco(env, access.ownerId);
   const fields = parse(row.fields_json, {});
-  const flow = normalizedPurchaseApprovalFlow(total, fields);
+  const flow = normalizedPurchaseApprovalFlow(total, fields, bands);
   const next = flow.next;
   if (!next) {
     const forwarded = new Request(request.url, {
@@ -111,7 +172,7 @@ const approve = async (request, env, access, user, resource, id, body) => {
     actorUserId: user.id,
     decidedAt: now,
   }];
-  const nextFlow = normalizedPurchaseApprovalFlow(total, { purchaseApprovalFlow: { approvals } });
+  const nextFlow = normalizedPurchaseApprovalFlow(total, { purchaseApprovalFlow: { approvals } }, bands);
   const newFields = {
     ...fields,
     purchaseApprovalFlow: {

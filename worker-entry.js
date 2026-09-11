@@ -9,6 +9,7 @@ import {
   runTodoGreenEnterpriseWorkflowScheduled,
 } from "./worker/services/todogreen-enterprise-workflows.js";
 import { handleTodoGreenPurchasingEnterprise } from "./worker/services/todogreen-purchasing-enterprise.js";
+import { handleTodoGreenPurchasingParams } from "./worker/services/todogreen-purchasing-params.js";
 import { handleTodoGreenFileVault } from "./worker/services/todogreen-file-vault.js";
 import { handleTodoGreenTmsLocalBridge } from "./worker/services/todogreen-tms-local-bridge.js";
 import { handleTodoGreenTmsApiKeys } from "./worker/services/todogreen-tms-api-keys.js";
@@ -150,6 +151,13 @@ export default {
       const resolved = await resolveInternal(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenEnterpriseWorkflows(request, env, resolved.access, resolved.user);
+    }
+    // Alçadas versionadas: vem ANTES de /purchasing porque `/purchasing-params`
+    // também começa com `/purchasing` — senão o handler de compras o engole.
+    if (url.pathname.startsWith("/api/todogreen/purchasing-params")) {
+      const resolved = await resolveInternal(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPurchasingParams(request, env, resolved.access, resolved.user);
     }
     if (url.pathname.startsWith("/api/todogreen/purchasing")) {
       const resolved = await resolveInternal(request, env);
