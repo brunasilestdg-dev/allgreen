@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User } from "lucide-react";
+import { AlertTriangle, Award, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 import { ROTULO_STATUS_ROTA, linkNavegacao, progressoDaRota, resumoDaRota } from "../routePlanDomain.js";
 import { avaliarChecklist, GRUPOS_CHECKLIST, ITENS_CHECKLIST } from "../driverChecklistDomain.js";
 import { formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
+import { calcularScoreMotorista, ROTULO_FAIXA } from "../driverScoreDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
@@ -471,6 +472,7 @@ export default function DriverPortalPage() {
 
   const rotasAtivas = rotas.filter((rota) => rota.status !== "concluida");
   const jornada = resumoDaJornada(turnos, new Date().toISOString());
+  const score = calcularScoreMotorista(viagens);
   const vistoriaHoje = checklists.find((c) => String(c.dataServico).slice(0, 10) === hojeISO) || null;
   const vistoriaParcial = avaliarChecklist(respostasVistoria);
   const abas = [
@@ -777,6 +779,31 @@ export default function DriverPortalPage() {
               </button>
             </div>
           </article>
+          {/* Score do motorista: derivado das entregas (pontualidade, POD, ocorrências). */}
+          <article className="tdg-driver-cartao tdg-score">
+            <div className="tdg-driver-info-linha"><Award size={16} /><span>Meu score</span></div>
+            {score.disponivel ? (
+              <>
+                <div className={`tdg-score-nota ${score.faixa}`}>
+                  <strong>{score.nota}</strong>
+                  <span>{ROTULO_FAIXA[score.faixa]} · {score.totalEntregues} entrega(s)</span>
+                </div>
+                <div className="tdg-score-componentes">
+                  {score.componentes.map((c) => (
+                    <div className="tdg-score-item" key={c.chave}>
+                      <span>{c.rotulo}</span>
+                      <div className="tdg-score-barra"><i style={{ width: `${c.valor}%` }} /></div>
+                      <b>{c.valor}</b>
+                    </div>
+                  ))}
+                </div>
+                <small className="tdg-driver-rodape-nota">A nota vem do que você registra: entregar no prazo, com comprovante e sem ocorrência.</small>
+              </>
+            ) : (
+              <small className="tdg-driver-rodape-nota">{score.aviso}</small>
+            )}
+          </article>
+
           <article className="tdg-driver-cartao">
             <div className="tdg-driver-info-linha"><Truck size={16} /><span>Viagens no total</span><b>{viagens.length}</b></div>
             <div className="tdg-driver-info-linha"><PackageCheck size={16} /><span>Entregues</span><b>{feitas.length}</b></div>

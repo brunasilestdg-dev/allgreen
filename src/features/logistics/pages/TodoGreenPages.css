@@ -2079,6 +2079,22 @@
 }
 .tdg-driver-rodape-nota { color: #6d8377; font-size: .8rem; line-height: 1.5; margin: 2px 4px; }
 
+/* ── Score do motorista (bloco 03) ────────────────────────────────────── */
+.tdg-score { display: grid; gap: 10px; }
+.tdg-score-nota { align-items: baseline; display: flex; gap: 10px; }
+.tdg-score-nota strong { font-size: 2.4rem; line-height: 1; }
+.tdg-score-nota span { color: #6d8377; font-size: .82rem; }
+.tdg-score-nota.excelente strong { color: #1f7a44; }
+.tdg-score-nota.bom strong { color: #0b9f8f; }
+.tdg-score-nota.atencao strong { color: #b8860b; }
+.tdg-score-nota.critico strong { color: #c0392b; }
+.tdg-score-componentes { display: grid; gap: 8px; }
+.tdg-score-item { align-items: center; display: grid; gap: 8px; grid-template-columns: 1fr 90px 30px; }
+.tdg-score-item > span { color: #4a5f54; font-size: .82rem; }
+.tdg-score-item b { color: #173d31; font-size: .82rem; text-align: right; }
+.tdg-score-barra { background: #eef3f0; border-radius: 999px; height: 8px; overflow: hidden; }
+.tdg-score-barra i { background: #0b9f8f; border-radius: 999px; display: block; height: 100%; }
+
 /* ── Jornada / turno do motorista (bloco 03) ──────────────────────────── */
 .tdg-turno { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
 .tdg-turno.aberto { border-left: 4px solid #0b9f8f; }

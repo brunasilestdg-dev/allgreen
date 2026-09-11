@@ -27,7 +27,7 @@ const montarFetch = (over = {}) => {
     if (u.includes("/driver-portal/jornada/inicio")) return resp(over.aposInicio || { turnos: [{ id: "t1", status: "aberto", iniciadoEm: new Date().toISOString(), encerradoEm: "", dataServico: new Date().toISOString().slice(0, 10) }] }, 201);
     if (u.includes("/driver-portal/jornada/fim")) return resp({ turnos: [{ id: "t1", status: "fechado", iniciadoEm: "2020-01-01T08:00:00Z", encerradoEm: "2020-01-01T12:00:00Z", dataServico: "2020-01-01" }] });
     if (u.includes("/driver-portal/jornada")) return resp(over.jornada || { turnos: [] });
-    if (u.includes("/driver-portal/viagens")) return resp({ viagens: [] });
+    if (u.includes("/driver-portal/viagens")) return resp(over.viagens || { viagens: [] });
     if (u.includes("/driver-portal/rotas")) return resp({ rotas: [] });
     if (u.includes("/driver-portal/sessao") || u.endsWith("/driver-portal") || u.includes("/driver-portal?")) return resp(sessao);
     if (u.includes("/driver-portal")) return resp(sessao);
@@ -122,5 +122,37 @@ describe("app do motorista — jornada (turno)", () => {
 
     expect(await screen.findByText("Em turno")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Encerrar turno/ })).toBeInTheDocument();
+  });
+});
+
+describe("app do motorista — score", () => {
+  it("no perfil, mostra a nota derivada das entregas", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({
+      viagens: {
+        viagens: [
+          { id: "v1", entregueEm: "2026-09-11T12:00:00Z", prometidoEm: "2026-09-11T14:00:00Z", comprovanteRegistrado: true, ocorrencias: 0 },
+          { id: "v2", entregueEm: "2026-09-11T12:00:00Z", prometidoEm: "2026-09-11T14:00:00Z", comprovanteRegistrado: true, ocorrencias: 0 },
+        ],
+      },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    fireEvent.click(screen.getByRole("button", { name: /Perfil/ }));
+
+    expect(await screen.findByText("Meu score")).toBeInTheDocument();
+    // Tudo no prazo, com POD, sem ocorrência → 100 (Excelente).
+    const faixa = screen.getByText(/Excelente · 2 entrega/);
+    expect(within(faixa.closest(".tdg-score-nota")).getByText("100")).toBeInTheDocument();
+  });
+
+  it("sem entregas, convida em vez de mostrar zero", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch();
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    fireEvent.click(screen.getByRole("button", { name: /Perfil/ }));
+
+    expect(await screen.findByText(/Ainda sem entregas concluídas/)).toBeInTheDocument();
   });
 });
