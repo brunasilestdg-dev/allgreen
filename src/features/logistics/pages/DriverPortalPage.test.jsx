@@ -28,6 +28,7 @@ const montarFetch = (over = {}) => {
     if (u.includes("/driver-portal/jornada/fim")) return resp({ turnos: [{ id: "t1", status: "fechado", iniciadoEm: "2020-01-01T08:00:00Z", encerradoEm: "2020-01-01T12:00:00Z", dataServico: "2020-01-01" }] });
     if (u.includes("/driver-portal/jornada")) return resp(over.jornada || { turnos: [] });
     if (u.includes("/driver-portal/viagens")) return resp(over.viagens || { viagens: [] });
+    if (u.includes("/driver-portal/veiculo")) return resp(over.veiculo || { temVeiculo: false });
     if (u.includes("/driver-portal/ganhos")) return resp(over.ganhos || { configurada: false, extrato: [] });
     if (u.includes("/driver-portal/rotas")) return resp({ rotas: [] });
     if (u.includes("/driver-portal/sessao") || u.endsWith("/driver-portal") || u.includes("/driver-portal?")) return resp(sessao);
@@ -155,6 +156,28 @@ describe("app do motorista — score", () => {
     fireEvent.click(screen.getByRole("button", { name: /Perfil/ }));
 
     expect(await screen.findByText(/Ainda sem entregas concluídas/)).toBeInTheDocument();
+  });
+});
+
+describe("app do motorista — telemetria do veículo", () => {
+  it("com leitura, mostra bateria e autonomia e a idade da leitura", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({ veiculo: { temVeiculo: true, placa: "ABC1D23", prefixo: "V-01", temLeitura: true, socPercent: 62, autonomiaKm: 140, minutosAtras: 8, frescor: "recente" } });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    // A aba Hoje é a padrão.
+    expect(await screen.findByText("62%")).toBeInTheDocument();
+    expect(screen.getByText("140 km")).toBeInTheDocument();
+    expect(screen.getByText(/lida há 8 min/)).toBeInTheDocument();
+  });
+
+  it("sem leitura elétrica, diz 'sem leitura' — nunca 0%", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({ veiculo: { temVeiculo: true, placa: "ABC1D23", prefixo: "V-01", temLeitura: false, frescor: "sem-leitura" } });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    expect(await screen.findByText(/Sem leitura elétrica deste veículo/)).toBeInTheDocument();
+    expect(screen.queryByText("0%")).toBeNull();
   });
 });
 

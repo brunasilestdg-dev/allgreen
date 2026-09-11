@@ -2156,6 +2156,19 @@
 .tdg-vistoria-historico b.ressalva { color: #8a5b00; }
 .tdg-vistoria-historico b.reprovado { color: #a3352f; }
 
+/* Telemetria elétrica do veículo (app do motorista) */
+.tdg-veiculo { display: block; }
+.tdg-veiculo-head { align-items: center; display: flex; gap: 10px; }
+.tdg-veiculo-head > svg { color: #0b9f8f; }
+.tdg-veiculo.sem-leitura .tdg-veiculo-head > svg { color: #9fb0a5; }
+.tdg-veiculo-head strong { display: block; font-size: .96rem; }
+.tdg-veiculo-head small { color: #6d8377; font-size: .74rem; }
+.tdg-veiculo-leitura { align-items: center; display: flex; gap: 18px; margin-top: 12px; }
+.tdg-veiculo-metrica strong { display: block; font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.tdg-veiculo-metrica span { color: #6d8377; font-size: .72rem; }
+.tdg-veiculo-idade { color: #7a8a80; font-size: .72rem; margin-left: auto; }
+.tdg-veiculo-vazio { color: #7a8a80; font-size: .82rem; margin: 10px 0 0; }
+
 /* GreenPay — carteira do motorista */
 .tdg-ganhos-vazio { align-items: flex-start; gap: 12px; }
 .tdg-ganhos-vazio > svg { color: #0b9f8f; flex: 0 0 auto; margin-top: 2px; }

@@ -159,6 +159,7 @@ export default function DriverPortalPage() {
   const [turnos, setTurnos] = useState([]);
   const [turnoOcupado, setTurnoOcupado] = useState(false);
   const [ganhos, setGanhos] = useState(null); // carteira GreenPay (lazy)
+  const [veiculo, setVeiculo] = useState(null); // telemetria elétrica do veículo do dia
   const avatarInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
@@ -230,6 +231,10 @@ export default function DriverPortalPage() {
         try {
           setTurnos((await pedir("/jornada")).turnos || []);
         } catch { /* segue com os turnos anteriores */ }
+        // Telemetria do veículo do dia: nunca derruba o app, mantém a última.
+        try {
+          setVeiculo(await pedir("/veiculo"));
+        } catch { /* segue com a leitura anterior */ }
       }
       setErro("");
     } catch (motivo) {
@@ -497,6 +502,7 @@ export default function DriverPortalPage() {
     { id: "perfil", rotulo: "Perfil", icone: User },
   ];
   const reais = (v) => `R$ ${Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const idadeLeitura = (min) => (min == null ? "" : min < 1 ? "lida agora" : min < 60 ? `lida há ${min} min` : `lida há ${Math.floor(min / 60)}h`);
   const rotuloTipoGanho = { entrega: "Entrega", km: "Distância", bonus: "Bônus", ajuste: "Ajuste", desconto: "Desconto" };
   const rotuloStatusGanho = { pendente: "Pendente", aprovado: "Aprovado", pago: "Pago" };
   const SELO_VISTORIA = { aprovado: "Aprovada", ressalva: "Aprovada com ressalva", reprovado: "Reprovada" };
@@ -542,6 +548,26 @@ export default function DriverPortalPage() {
               ? <button type="button" className="tdg-turno-btn encerrar" disabled={turnoOcupado} onClick={() => acaoTurno("fim", "Turno encerrado. Bom descanso!")}><Square size={16} /> Encerrar turno</button>
               : <button type="button" className="tdg-turno-btn iniciar" disabled={turnoOcupado} onClick={() => acaoTurno("inicio", "Turno iniciado. Boa jornada!")}><Play size={16} /> Iniciar turno</button>}
           </article>
+
+          {/* Telemetria elétrica ao vivo do veículo do dia. Nunca "0%" quando
+              não há leitura — mostra "sem leitura" honesto. */}
+          {veiculo?.temVeiculo && (
+            <article className={`tdg-driver-cartao tdg-veiculo ${veiculo.temLeitura ? "" : "sem-leitura"}`}>
+              <div className="tdg-veiculo-head">
+                <BatteryCharging size={18} />
+                <span><strong>{veiculo.prefixo || veiculo.placa}</strong><small>{veiculo.placa}</small></span>
+              </div>
+              {veiculo.temLeitura ? (
+                <div className="tdg-veiculo-leitura">
+                  <div className="tdg-veiculo-metrica"><strong>{veiculo.socPercent != null ? `${Math.round(veiculo.socPercent)}%` : "—"}</strong><span>bateria</span></div>
+                  <div className="tdg-veiculo-metrica"><strong>{veiculo.autonomiaKm != null ? `${Math.round(veiculo.autonomiaKm)} km` : "—"}</strong><span>autonomia</span></div>
+                  <small className="tdg-veiculo-idade">{idadeLeitura(veiculo.minutosAtras)}</small>
+                </div>
+              ) : (
+                <p className="tdg-veiculo-vazio">Sem leitura elétrica deste veículo ainda. Quando o rastreador enviar a carga, ela aparece aqui.</p>
+              )}
+            </article>
+          )}
 
           <div className="tdg-driver-jornada">
             <article><strong>{pendentes.length}</strong><span>a fazer</span></article>

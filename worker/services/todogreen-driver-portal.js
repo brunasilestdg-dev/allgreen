@@ -16,6 +16,7 @@ import { marcarParadaConcluida, statusPelaConclusao } from "../../src/features/l
 import { avaliarChecklist, ITENS_CHECKLIST } from "../../src/features/logistics/driverChecklistDomain.js";
 import { duracaoMinutos, resumoDaJornada } from "../../src/features/logistics/driverJourneyDomain.js";
 import { carteiraDoMotorista, gerarGanhosDaEntrega } from "./todogreen-greenpay.js";
+import { resumoTelemetriaVeiculo } from "../../src/features/logistics/driverVehicleDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -324,6 +325,47 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
   // "não configurada" em vez de mostrar zero.
   if (request.method === "GET" && recurso === "ganhos") {
     return json(await carteiraDoMotorista(env, access.ownerId, motorista.id));
+  }
+
+  // Telemetria elétrica ao vivo do veículo do motorista hoje. A placa vem da
+  // vistoria do dia ou da viagem mais recente; a leitura, da frota (0107). Se
+  // não há leitura, devolve honesto (temLeitura=false) — a tela mostra "sem
+  // leitura", nunca 0%.
+  if (request.method === "GET" && recurso === "veiculo") {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const placaRow = await env.DB.prepare(
+      `SELECT placa, ts FROM (
+         SELECT vehicle_plate AS placa, created_at AS ts
+           FROM todogreen_driver_checklists
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND service_date = ?
+            AND vehicle_plate != '' AND archived_at IS NULL
+         UNION ALL
+         SELECT vehicle_plate AS placa, updated_at AS ts
+           FROM todogreen_client_operations
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND service_date = ?
+            AND vehicle_plate != '' AND archived_at IS NULL
+       ) ORDER BY ts DESC LIMIT 1`,
+    ).bind(TENANT_ID, access.ownerId, motorista.id, hoje, TENANT_ID, access.ownerId, motorista.id, hoje).first();
+
+    if (!placaRow?.placa) return json({ temVeiculo: false });
+
+    const v = await env.DB.prepare(
+      `SELECT plate, prefix, last_soc_percent, last_range_km, last_telemetry_at, last_telemetry_source
+         FROM todogreen_fleet_vehicles
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND plate = ? AND archived_at IS NULL
+        LIMIT 1`,
+    ).bind(TENANT_ID, access.ownerId, placaRow.placa).first();
+
+    if (!v) return json({ temVeiculo: true, placa: placaRow.placa, temLeitura: false, frescor: "sem-leitura" });
+
+    return json(resumoTelemetriaVeiculo({
+      placa: v.plate,
+      prefixo: v.prefix || "",
+      socPercent: v.last_soc_percent,
+      autonomiaKm: v.last_range_km,
+      lidoEm: v.last_telemetry_at || "",
+      fonte: v.last_telemetry_source || "",
+    }, new Date().toISOString()));
   }
 
   if (request.method === "POST" && recurso === "viagens" && id && acao === "evento") {
