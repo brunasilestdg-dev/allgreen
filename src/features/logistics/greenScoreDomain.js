@@ -35,6 +35,26 @@ export const PESOS_PADRAO = {
   },
 };
 
+// Perfil de projeção: numa simulação de precificação (pré-venda) NÃO existe
+// histórico de ocorrências — a operação ainda nem começou. Em vez de manter um
+// segundo motor de Green Score, projeta-se pelo MESMO motor canônico com um
+// conjunto de pesos que redistribui os 10 pontos de "ocorrências" nos quatro
+// componentes que a projeção de fato conhece. Mesma definição, mesma versão de
+// método, mesma ressalva — só o perfil de pesos muda, e ele soma 100.
+export const PESOS_PROJECAO = {
+  versao: PESOS_VERSAO_PADRAO,
+  vigenciaInicio: "2026-01-01",
+  responsavel: "Sustentabilidade To Do Green",
+  metodologia:
+    "Projeção pré-venda pelo motor canônico: quatro componentes conhecidos na simulação, com as ocorrências (ainda inexistentes) redistribuídas.",
+  pesos: {
+    reducaoEmissoes: 44,
+    ocupacao: 22,
+    eficienciaEnergetica: 17,
+    qualidadeDados: 17,
+  },
+};
+
 const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;

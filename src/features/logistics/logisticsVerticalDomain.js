@@ -1,4 +1,5 @@
 import { ALCADAS } from "./dealDeskDomain.js";
+import { calcularGreenScore, PESOS_PROJECAO } from "./greenScoreDomain.js";
 
 const n = (value) => {
   const parsed = Number(value);
@@ -984,6 +985,10 @@ export const calculateEnvironmentalImpact = (inputs = {}, factors = {}) => {
 
 // Pesos padrão do Green Score — fonte única, para o motor e a régua ESG
 // editável (todogreen_environmental_parameters) partirem do mesmo lugar.
+// Pesos de fábrica da régua ESG editável (worker todogreen-environmental-
+// parameters). NÃO alimenta mais o cálculo do Green Score — este passou a ser
+// só do motor canônico (calcularGreenScore). Fica como o default histórico da
+// régua até a régua ser reescrita sobre os componentes canônicos.
 export const DEFAULT_GREEN_SCORE_WEIGHTS = Object.freeze({
   reduction: 35,
   lowEmissionKm: 20,
@@ -993,28 +998,36 @@ export const DEFAULT_GREEN_SCORE_WEIGHTS = Object.freeze({
   dataQuality: 10,
 });
 
-export const calculateGreenScore = (impact = {}, metrics = {}, weights = {}) => {
-  const w = { ...DEFAULT_GREEN_SCORE_WEIGHTS, ...weights };
-  const parts = {
-    reduction: Math.min(100, n(impact.reductionPercent)),
-    lowEmissionKm: Math.min(100, (n(impact.lowEmissionKm) / Math.max(1, n(metrics.lowEmissionKmTarget || 1000))) * 100),
-    cleanEnergy: Math.min(100, n(metrics.cleanEnergyPercent ?? 80)),
-    efficiency: Math.min(100, (n(metrics.occupancyPercent || 75) + n(metrics.productivityPercent || 75)) / 2),
-    targetEvolution: Math.min(100, n(metrics.targetEvolutionPercent || impact.reductionPercent || 0)),
-    dataQuality: Math.min(100, n(impact.dataQuality || metrics.dataQuality || 70)),
+// Unificado: o Green Score é SEMPRE calculado pelo motor canônico versionado
+// (greenScoreDomain.calcularGreenScore) — a mesma definição usada na Central
+// ESG. Antes havia um segundo cálculo aqui, com componentes e versão próprios,
+// e o mesmo cliente via um número no simulador e outro na operação. Agora a
+// projeção de precificação mapeia o seu contexto para as entradas canônicas e
+// usa o perfil de projeção (sem ocorrências, que ainda não existem na pré-venda).
+// A forma de retorno é preservada para o simulador, as propostas e o Deal Desk.
+export const calculateGreenScore = (impact = {}, metrics = {}) => {
+  const entradas = {
+    reducaoPercent: Math.min(100, n(impact.reductionPercent)),
+    ocupacaoPercent: Math.min(100, (n(metrics.occupancyPercent || 75) + n(metrics.productivityPercent || 75)) / 2),
+    frotaLimpaPercent: Math.min(100, n(metrics.cleanEnergyPercent ?? 80)),
+    qualidadeDados: Math.min(100, n(impact.dataQuality || metrics.dataQuality || 70)),
   };
-  const totalWeight = Object.values(w).reduce((sum, item) => sum + n(item), 0) || 1;
-  const score = Object.entries(parts).reduce(
-    (sum, [key, value]) => sum + value * n(w[key]),
-    0,
-  ) / totalWeight;
+  const canonico = calcularGreenScore(entradas, PESOS_PROJECAO);
+  const parts = Object.fromEntries(
+    Object.entries(canonico.componentes).map(([chave, componente]) => [chave, componente.valor]),
+  );
+  const weights = Object.fromEntries(
+    Object.entries(canonico.componentes).map(([chave, componente]) => [chave, componente.peso]),
+  );
   return {
-    score: Math.max(0, Math.min(100, roundMoney(score, 1))),
-    weights: w,
+    score: canonico.score,
+    weights,
     parts,
-    version: "green-score-v1",
-    disclaimer:
-      "Indicador proprietário da To Do Green. Não é certificação oficial e deve ser validado conforme a metodologia aplicada.",
+    version: canonico.versaoPesos,
+    weightsVersion: canonico.versaoPesos,
+    versaoPesos: canonico.versaoPesos,
+    componentes: canonico.componentes,
+    disclaimer: canonico.ressalva,
   };
 };
 
