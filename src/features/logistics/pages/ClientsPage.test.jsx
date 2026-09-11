@@ -327,7 +327,7 @@ describe("página de clientes", () => {
     render(<ClientsPage authHeaders={() => ({})} />);
     fireEvent.click(await screen.findByRole("button", { name: /Adidas/ }));
     expect(await screen.findByText("1 contato(s) cadastrado(s); nenhum de Procurement logístico confirmado.")).toBeInTheDocument();
-    expect(screen.getAllByText(/Pedir a Thiago Souza a indicação/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Confirmar com Thiago Souza se é quem responde/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Thiago Souza").length).toBeGreaterThan(0);
     expect(screen.queryByText("Contato ainda não mapeado")).not.toBeInTheDocument();
     expect(screen.getByText(/Fonte pública · adidas-group.com/)).toBeInTheDocument();
@@ -396,7 +396,7 @@ describe("página de clientes", () => {
 
     render(<ClientsPage authHeaders={() => ({})} />);
     fireEvent.click(await screen.findByRole("button", { name: /Conta Um/ }));
-    expect(await screen.findAllByText(/Pedir a Marina a indicação/i)).not.toHaveLength(0);
+    expect(await screen.findAllByText(/Confirmar com Marina se é quem responde/i)).not.toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Marcar feita e ver próxima" }));
 
     expect(await screen.findAllByText(/Não há próxima ação confiável/i)).not.toHaveLength(0);

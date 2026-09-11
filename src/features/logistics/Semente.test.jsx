@@ -53,7 +53,10 @@ describe("ela não ocupa a tela sem ser chamada", () => {
 
   it("não pergunta nada ao servidor enquanto ninguém abriu", () => {
     render(<Semente pagina="precificacao" authHeaders={authHeaders} />);
-    expect(global.fetch).not.toHaveBeenCalled();
+    // A pauta do dia (briefing) é buscada ao montar para acender o selo de
+    // pendências — de propósito. O que não pode sair antes de abrir é PERGUNTA
+    // de conversa: essa só nasce quando alguém abre e escreve.
+    expect(chamadasDePergunta()).toHaveLength(0);
   });
 
   it("quem fechou não a encontra aberta de novo na próxima tela", async () => {

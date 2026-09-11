@@ -68,7 +68,10 @@ const preencherMiddleMile = () => {
   digitar(/^Destino/, "Hub Campinas");
   digitar(/^Distância km/, "120");
   digitar(/^Viagens\/mês/, "40");
-  digitar(/^Tipo de veículo/, "VUC elétrico");
+  // "Tipo de veículo" virou um <select> com lista fixa (VEHICLE_TYPES); o valor
+  // precisa ser uma opção existente, senão o select ignora e a premissa fica
+  // incompleta. "VUC elétrico" saiu da lista — a opção atual é "VUC".
+  digitar(/^Tipo de veículo/, "VUC");
   digitar(/^Ocupação/, "78");
   digitar(/^Quanto podemos confiar/, "80");
 };
@@ -816,7 +819,9 @@ describe("LogisticsVertical", () => {
     fireEvent.click(screen.getByRole("button", { name: /Autorizar/ }));
 
     await waitFor(() => expect(chamadas.mock.calls.some(([, options]) => options?.method === "POST")).toBe(true));
-    const [, options] = chamadas.mock.calls.find(([, requestOptions]) => requestOptions?.method === "POST");
+    // Filtra pelo POST de access-list: a página hoje dispara POSTs auxiliares
+    // (ex.: briefing do Plantû) e "o primeiro POST" já não é o salvamento.
+    const [, options] = chamadas.mock.calls.find(([url, requestOptions]) => requestOptions?.method === "POST" && String(url).includes("/api/todogreen/access-list"));
     expect(JSON.parse(options.body).permissions).toEqual(["read", "market:read", "market:research"]);
   });
 
