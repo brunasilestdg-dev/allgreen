@@ -3894,6 +3894,21 @@
 }
 .tdg-mapa-pin-carregador span.pesado { background: #0b9f8f; }
 .tdg-mapa-pin-carregador span.leve { background: #9aa8a3; }
+/* Ponto PRÓPRIO: mesmo símbolo, anel dourado, para distinguir do público. */
+.tdg-mapa-pin-proprio span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+  border: 3px solid #f2b807;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  color: #fff;
+}
+.tdg-mapa-pin-proprio span.pesado { background: #0b7d70; }
+.tdg-mapa-pin-proprio span.leve { background: #6a7d77; }
 .tdg-roteirizacao-carregadores-info {
   display: flex;
   align-items: center;
