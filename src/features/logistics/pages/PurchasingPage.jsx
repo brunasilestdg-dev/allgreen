@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ClipboardCheck, FileText, PackageCheck, Paperclip, RefreshCw } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import AnexosContexto from "./AnexosContexto.jsx";
+import PurchaseApprovalPanel from "../PurchaseApprovalPanel.jsx";
 import {
   ORDER_STATUSES,
   REQUEST_STATUSES,
@@ -333,6 +334,10 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
       </header>
 
       {erro && <div className="tdg-alert" role="alert"><AlertTriangle size={18} /><span>{erro}</span></div>}
+
+      {/* Régua de alçadas versionada (recolhida por padrão para o fluxo diário
+          aparecer primeiro). Editável só por owner/admin; os demais leem. */}
+      <PurchaseApprovalPanel authHeaders={authHeaders} setToast={setToast} />
 
       <section className="tdg-metrics">
         <article className={`tdg-metric ${indicadores.aguardando ? "warn" : ""}`}>
