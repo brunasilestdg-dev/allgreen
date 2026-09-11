@@ -808,6 +808,12 @@ export const getProductPricingBlueprint = (productId) =>
   };
 
 import { consumoReferencia } from "./vehicleClassDomain.js";
+import {
+  conjuntoDaRegua,
+  fatorEmUso,
+  nucleoImpactoCO2,
+  resolverFatoresDeClasse,
+} from "./esgEngineDomain.js";
 
 export const DEFAULT_ENVIRONMENTAL_FACTORS = {
   methodologyVersion: "tdg-env-v2",
@@ -933,18 +939,35 @@ export const buildCostBreakdown = (inputs = {}, assumptions = {}) => {
   };
 };
 
+// O motor ambiental do simulador delega a FÓRMULA ao motor auditável
+// (`calcularImpactoAmbiental`, via núcleo comum) — uma conta só, sem segunda
+// cópia que possa divergir. Aqui fica só o preparo das entradas e o formato de
+// saída do simulador (intensidades e equivalências, que o auditável não tem).
+// O núcleo bruto (sem arredondar) é reaproveitado e arredondado com roundMoney
+// exatamente como antes, então nenhum número muda.
 export const calculateEnvironmentalImpact = (inputs = {}, factors = {}) => {
   const f = { ...DEFAULT_ENVIRONMENTAL_FACTORS, ...factors };
-  const classRef = inputs.vehicleClass ? consumoReferencia(inputs.vehicleClass) : null;
-  const distanceKm = Math.max(0, n(inputs.distanceKm || inputs.kmPerRoute) * Math.max(1, n(inputs.tripsPerMonth || inputs.frequencyPerMonth || inputs.routesPerDay * inputs.daysPerMonth || 1)));
-  const refKmPerL = n(inputs.referenceKmPerLiter || (classRef?.convencionalKmPorL) || f.dieselKmPerLiter);
-  const refKgCO2ePerL = classRef?.convencionalKgCO2ePorL ?? f.dieselKgCo2ePerLiter;
-  const referenceLiters = distanceKm / Math.max(0.1, refKmPerL);
-  const referenceKg = referenceLiters * refKgCO2ePerL;
-  const evKwhPerKm = classRef?.eletricoKwhPorKm ?? f.electricKwhPerKm;
-  const electricKwh = n(inputs.energyKwh) || distanceKm * evKwhPerKm;
-  const actualKg = electricKwh * f.electricKgCo2ePerKwh;
-  const avoidedKg = Math.max(0, referenceKg - actualKg);
+  const trips = Math.max(1, n(inputs.tripsPerMonth || inputs.frequencyPerMonth || inputs.routesPerDay * inputs.daysPerMonth || 1));
+  const distanceKm = Math.max(0, n(inputs.distanceKm || inputs.kmPerRoute) * trips);
+
+  // Resolução dos fatores (por classe ou genérica da régua) e a fórmula vêm do
+  // motor auditável — os mesmos `resolverFatoresDeClasse` e `nucleoImpactoCO2`.
+  // O simulador sempre compara contra a execução elétrica (é o produto da casa).
+  const conjunto = conjuntoDaRegua({ deFabrica: false, versao: f.methodologyVersion, fatores: f });
+  const classeId = String(inputs.vehicleClass || "").toLowerCase().trim() || null;
+  const fc = resolverFatoresDeClasse(classeId, conjunto);
+  const fatorRede = fatorEmUso(conjunto, "rede_eletrica_kgco2e_por_kwh");
+  const energiaMedida = n(inputs.energyKwh);
+  const bruto = nucleoImpactoCO2({
+    distanciaTotal: distanceKm,
+    refKmPorL: n(inputs.referenceKmPerLiter || fc.consumoConvencionalKmPorL),
+    refKgCO2ePorL: fc.emissaoConvencionalKgCO2ePorL,
+    evKwhPorKm: fc.consumoEletricoKwhPorKm ?? conjunto.consumo.electricKwhPerKm ?? 0.3,
+    energiaKwhMedida: energiaMedida ? energiaMedida : null,
+    fatorRedeValor: fatorRede.valor,
+    eletrico: true,
+  });
+  const { referenceLiters, referenceKg, electricKwh, actualKg, avoidedKg } = bruto;
   const packages = Math.max(0, n(inputs.packages || inputs.deliveries));
   const tons = Math.max(0, n(inputs.tons || inputs.weightKg / 1000));
   return {

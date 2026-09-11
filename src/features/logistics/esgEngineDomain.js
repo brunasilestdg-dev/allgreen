@@ -46,6 +46,13 @@ export const FATORES_PADRAO = {
       tipo: "equivalencia",
     },
   },
+  // Consumo de referência do caminho GENÉRICO (sem classe de veículo). A régua
+  // pode editá-los como edita os fatores de emissão; classe informada usa
+  // sempre o dado por classe (CONSUMO_REFERENCIA), que é mais fiel.
+  consumo: {
+    dieselKmPerLiter: 4.2,
+    electricKwhPerKm: 0.3,
+  },
 };
 
 // Ponte da régua editável para o conjunto que este motor lê.
@@ -75,11 +82,18 @@ export const conjuntoDaRegua = (regua) => {
   aplicar("diesel_b14_kgco2e_por_litro", f.dieselKgCo2ePerLiter);
   aplicar("gasolina_e27_kgco2e_por_litro", f.gasolineKgCo2ePerLiter);
   aplicar("arvore_kgco2_ano", f.treeKgCo2eYear);
+  // Consumo de referência do caminho genérico também obedece à régua.
+  const consumo = { ...FATORES_PADRAO.consumo };
+  const consumoDiesel = Number(f.dieselKmPerLiter);
+  const consumoEletrico = Number(f.electricKwhPerKm);
+  if (Number.isFinite(consumoDiesel) && consumoDiesel > 0) consumo.dieselKmPerLiter = consumoDiesel;
+  if (Number.isFinite(consumoEletrico) && consumoEletrico > 0) consumo.electricKwhPerKm = consumoEletrico;
   return {
     versao: regua.versao || FATOR_PADRAO_VERSAO,
     vigenciaInicio: regua.vigenciaInicio || FATORES_PADRAO.vigenciaInicio,
     responsavel: regua.responsavel || FATORES_PADRAO.responsavel,
     fatores: base,
+    consumo,
   };
 };
 
@@ -91,6 +105,28 @@ const num = (valor) => {
 const arredondar = (valor, casas = 2) => {
   const f = 10 ** casas;
   return Math.round(num(valor) * f) / f;
+};
+
+// Núcleo da conta de CO₂ — a fórmula, uma vez só. Devolve tudo SEM arredondar;
+// quem chama arredonda no seu próprio limite. Os dois motores (o auditável, aqui,
+// e o do simulador em logisticsVerticalDomain) partem daqui, para não existirem
+// duas cópias da mesma conta que possam divergir. `eletrico` decide se a
+// execução é elétrica (emite pela rede) ou convencional (igual à referência).
+export const nucleoImpactoCO2 = ({
+  distanciaTotal,
+  refKmPorL,
+  refKgCO2ePorL,
+  evKwhPorKm,
+  energiaKwhMedida = null,
+  fatorRedeValor,
+  eletrico = true,
+}) => {
+  const referenceLiters = num(distanciaTotal) / Math.max(0.1, num(refKmPorL));
+  const referenceKg = referenceLiters * num(refKgCO2ePorL);
+  const electricKwh = energiaKwhMedida != null ? num(energiaKwhMedida) : num(distanciaTotal) * num(evKwhPorKm);
+  const actualKg = eletrico ? electricKwh * num(fatorRedeValor) : referenceKg;
+  const avoidedKg = Math.max(0, referenceKg - actualKg);
+  return { referenceLiters, referenceKg, electricKwh, actualKg, avoidedKg };
 };
 
 export const fatorEmUso = (conjunto, chave) => {
@@ -121,7 +157,7 @@ export const qualidadeDoCalculo = (origens = {}) => {
 // classe é informada, usa os dados reais de CONSUMO_REFERENCIA — que variam de
 // 0.04 kWh/km (moto) a null (carreta, que não tem versão elétrica). Quando a
 // classe não é informada, usa médias genéricas com qualidade menor.
-const resolverFatoresDeClasse = (classeId, conjunto) => {
+export const resolverFatoresDeClasse = (classeId, conjunto) => {
   const ref = classeId ? consumoReferencia(classeId) : null;
   const classe = classeId ? vehicleClass(classeId) : null;
 
@@ -139,11 +175,14 @@ const resolverFatoresDeClasse = (classeId, conjunto) => {
   }
 
   const fatorCO2 = fatorEmUso(conjunto, "diesel_b14_kgco2e_por_litro");
+  // Consumo genérico vem da régua (conjunto.consumo), não mais de constantes
+  // fixas — assim o mesmo motor respeita o consumo editável. Default 4.2/0.30.
+  const consumo = conjunto?.consumo || FATORES_PADRAO.consumo;
   return {
-    consumoConvencionalKmPorL: 4.2,
+    consumoConvencionalKmPorL: consumo.dieselKmPerLiter ?? 4.2,
     emissaoConvencionalKgCO2ePorL: fatorCO2.valor,
     combustivelConvencional: "diesel_b14",
-    consumoEletricoKwhPorKm: 0.30,
+    consumoEletricoKwhPorKm: consumo.electricKwhPerKm ?? 0.3,
     fonteConvencional: "Média genérica de frota diesel de carga urbana",
     fonteEletrico: "Média genérica de veículo elétrico de carga leve (van)",
     nomeClasse: null,
@@ -212,7 +251,22 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
     });
   }
 
-  const litrosReferencia = distanciaTotal / fc.consumoConvencionalKmPorL;
+  // A conta em si vem do NÚCLEO comum (uma fórmula só, compartilhada com o motor
+  // do simulador). `referenceKmPerLiter` sobrepõe o consumo de referência; sem
+  // ele, usa o da classe (ou o genérico da régua).
+  const refKmPorL = num(entradas.referenceKmPerLiter || fc.consumoConvencionalKmPorL);
+  const consumoKwhPorKm = fc.consumoEletricoKwhPorKm ?? conjunto?.consumo?.electricKwhPerKm ?? 0.3;
+  const bruto = nucleoImpactoCO2({
+    distanciaTotal,
+    refKmPorL,
+    refKgCO2ePorL: fc.emissaoConvencionalKgCO2ePorL,
+    evKwhPorKm: consumoKwhPorKm,
+    energiaKwhMedida: eletrico ? energiaMedidaKwh : null,
+    fatorRedeValor: fatorRede.valor,
+    eletrico,
+  });
+
+  const litrosReferencia = bruto.referenceLiters;
   passos.push({
     ordem: passos.length + 1,
     descricao: `Litros de ${fc.combustivelConvencional} que a operação de referência consumiria`,
@@ -223,7 +277,7 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
     fator: fc.combustivelConvencional,
   });
 
-  const co2Referencia = litrosReferencia * fc.emissaoConvencionalKgCO2ePorL;
+  const co2Referencia = bruto.referenceKg;
   passos.push({
     ordem: passos.length + 1,
     descricao: "Emissão do cenário de referência",
@@ -234,13 +288,10 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
     fator: `${fc.combustivelConvencional}_kgco2e_por_litro`,
   });
 
-  let co2Executado;
+  const co2Executado = bruto.actualKg;
   let energia = null;
   if (eletrico) {
-    const consumoKwhPorKm = fc.consumoEletricoKwhPorKm ?? 0.30;
-    const kwh = energiaMedidaKwh != null ? energiaMedidaKwh : distanciaTotal * consumoKwhPorKm;
-    co2Executado = kwh * fatorRede.valor;
-    energia = arredondar(kwh, 2);
+    energia = arredondar(bruto.electricKwh, 2);
     passos.push(
       energiaMedidaKwh != null
         ? {
@@ -272,7 +323,6 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
       fator: "rede_eletrica_kgco2e_por_kwh",
     });
   } else {
-    co2Executado = co2Referencia;
     passos.push({
       ordem: passos.length + 1,
       descricao: "Operação executada com convencional: igual à referência",
@@ -417,6 +467,9 @@ export const calcularImpactoAmbiental = (entradas = {}, conjunto = FATORES_PADRA
     versaoFatores: conjunto.versao,
     calculadoEm: entradas.calculadoEm || new Date().toISOString(),
     classeVeiculo: classeId,
+    // Núcleo SEM arredondar — o motor do simulador consome isto e arredonda no
+    // próprio limite (roundMoney), preservando byte a byte o número dele.
+    bruto,
     impacto: {
       co2ReferenciaKg: arredondar(co2Referencia, 2),
       co2ExecutadoKg: arredondar(co2Executado, 2),
