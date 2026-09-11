@@ -28,6 +28,7 @@ const montarFetch = (over = {}) => {
     if (u.includes("/driver-portal/jornada/fim")) return resp({ turnos: [{ id: "t1", status: "fechado", iniciadoEm: "2020-01-01T08:00:00Z", encerradoEm: "2020-01-01T12:00:00Z", dataServico: "2020-01-01" }] });
     if (u.includes("/driver-portal/jornada")) return resp(over.jornada || { turnos: [] });
     if (u.includes("/driver-portal/viagens")) return resp(over.viagens || { viagens: [] });
+    if (u.includes("/driver-portal/ganhos")) return resp(over.ganhos || { configurada: false, extrato: [] });
     if (u.includes("/driver-portal/rotas")) return resp({ rotas: [] });
     if (u.includes("/driver-portal/sessao") || u.endsWith("/driver-portal") || u.includes("/driver-portal?")) return resp(sessao);
     if (u.includes("/driver-portal")) return resp(sessao);
@@ -154,6 +155,40 @@ describe("app do motorista — score", () => {
     fireEvent.click(screen.getByRole("button", { name: /Perfil/ }));
 
     expect(await screen.findByText(/Ainda sem entregas concluídas/)).toBeInTheDocument();
+  });
+});
+
+describe("app do motorista — GreenPay (ganhos)", () => {
+  it("sem régua configurada, convida em vez de mostrar R$ 0", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch();
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    fireEvent.click(screen.getByRole("button", { name: /Ganhos/ }));
+    expect(await screen.findByText(/Ganhos ainda não configurados/)).toBeInTheDocument();
+  });
+
+  it("com régua, mostra ganhos do dia, saldos e extrato com memória", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({
+      ganhos: {
+        configurada: true,
+        regra: { valorPorEntrega: 8, valorPorKm: 0.9 },
+        resumo: { dia: 29, semana: 46, mes: 46, saldos: { pendente: 46, aprovado: 0, pago: 0, aReceber: 46 } },
+        extrato: [
+          { id: "e1", tipo: "km", valor: 18, referencia: "ROTA-1", dataServico: "2026-09-11", status: "pendente", memoria: { km: 20 }, operacaoId: "op1", observacao: "" },
+          { id: "e2", tipo: "entrega", valor: 8, referencia: "ROTA-1", dataServico: "2026-09-11", status: "pendente", memoria: {}, operacaoId: "op1", observacao: "" },
+        ],
+      },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    fireEvent.click(screen.getByRole("button", { name: /Ganhos/ }));
+
+    expect(await screen.findByText("R$ 29,00")).toBeInTheDocument(); // ganhos de hoje
+    expect(screen.getByText("Extrato")).toBeInTheDocument();
+    expect(screen.getByText(/Distância · ROTA-1/)).toBeInTheDocument();
+    expect(screen.getByText(/20 km/)).toBeInTheDocument();
   });
 });
 

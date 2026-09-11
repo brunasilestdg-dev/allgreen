@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Award, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User } from "lucide-react";
+import { AlertTriangle, Award, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User, Wallet } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
@@ -158,6 +158,7 @@ export default function DriverPortalPage() {
   const [enviandoVistoria, setEnviandoVistoria] = useState(false);
   const [turnos, setTurnos] = useState([]);
   const [turnoOcupado, setTurnoOcupado] = useState(false);
+  const [ganhos, setGanhos] = useState(null); // carteira GreenPay (lazy)
   const avatarInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
@@ -249,6 +250,13 @@ export default function DriverPortalPage() {
     } catch { /* offline: mantém o placeholder */ }
   }, []);
   useEffect(() => { carregarPerfil(); }, [carregarPerfil]);
+
+  // Carteira GreenPay: carrega ao abrir a aba Ganhos. Fica em cache até a
+  // pessoa registrar uma entrega (que recarrega tudo) ou reabrir o app.
+  const carregarGanhos = useCallback(async () => {
+    try { setGanhos(await pedir("/ganhos")); } catch { setGanhos({ configurada: false, erro: true }); }
+  }, []);
+  useEffect(() => { if (secao === "ganhos" && !ganhos) carregarGanhos(); }, [secao, ganhos, carregarGanhos]);
 
   const enviarFotoPerfil = async (event) => {
     const arquivo = event.target.files?.[0];
@@ -429,6 +437,8 @@ export default function DriverPortalPage() {
       setAviso(formulario.tipo === "entrega" ? "Entrega registrada com comprovante. Boa estrada!" : "Registrado.");
       setFormulario(null);
       zerarFormulario();
+      // A entrega gera ganho (GreenPay): invalida a carteira para recarregar.
+      if (formulario.tipo === "entrega") setGanhos(null);
       await carregar();
     } catch (motivo) {
       if (motivo.rejeitadoPeloServidor) {
@@ -482,9 +492,13 @@ export default function DriverPortalPage() {
     { id: "hoje", rotulo: "Hoje", icone: Home },
     { id: "rota", rotulo: "Rota", icone: Route },
     { id: "vistoria", rotulo: "Vistoria", icone: ClipboardCheck },
+    { id: "ganhos", rotulo: "Ganhos", icone: Wallet },
     { id: "entregas", rotulo: "Entregas", icone: PackageCheck },
     { id: "perfil", rotulo: "Perfil", icone: User },
   ];
+  const reais = (v) => `R$ ${Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const rotuloTipoGanho = { entrega: "Entrega", km: "Distância", bonus: "Bônus", ajuste: "Ajuste", desconto: "Desconto" };
+  const rotuloStatusGanho = { pendente: "Pendente", aprovado: "Aprovado", pago: "Pago" };
   const SELO_VISTORIA = { aprovado: "Aprovada", ressalva: "Aprovada com ressalva", reprovado: "Reprovada" };
 
   return (
@@ -726,6 +740,65 @@ export default function DriverPortalPage() {
                 </div>
               ))}
             </article>
+          )}
+        </>
+      )}
+
+      {/* ===== GANHOS: carteira GreenPay, derivada das entregas ===== */}
+      {secao === "ganhos" && (
+        <>
+          {!ganhos ? (
+            <div className="tdg-driver-cartao"><p>Carregando seus ganhos…</p></div>
+          ) : !ganhos.configurada ? (
+            <div className="tdg-driver-cartao tdg-ganhos-vazio">
+              <Wallet size={22} />
+              <div>
+                <strong>Ganhos ainda não configurados</strong>
+                <p>A operação ainda não definiu a régua de ganhos. Assim que definir, seus ganhos aparecem aqui — calculados automaticamente das suas entregas, sem você precisar digitar nada.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <section className="tdg-ganhos-topo">
+                <span className="tdg-driver-kicker">GREENPAY · SEUS GANHOS</span>
+                <strong className="tdg-ganhos-hoje">{reais(ganhos.resumo.dia)}</strong>
+                <small>ganhos de hoje</small>
+                <div className="tdg-ganhos-periodos">
+                  <div><span>Na semana</span><strong>{reais(ganhos.resumo.semana)}</strong></div>
+                  <div><span>No mês</span><strong>{reais(ganhos.resumo.mes)}</strong></div>
+                </div>
+              </section>
+
+              <section className="tdg-ganhos-saldos">
+                <article className="pendente"><span>Pendente</span><strong>{reais(ganhos.resumo.saldos.pendente)}</strong></article>
+                <article className="aprovado"><span>Aprovado</span><strong>{reais(ganhos.resumo.saldos.aprovado)}</strong></article>
+                <article className="pago"><span>Pago</span><strong>{reais(ganhos.resumo.saldos.pago)}</strong></article>
+                <article className="receber"><span>A receber</span><strong>{reais(ganhos.resumo.saldos.aReceber)}</strong></article>
+              </section>
+
+              <section className="tdg-driver-cartao">
+                <h2 className="tdg-driver-secao-titulo">Extrato</h2>
+                {ganhos.extrato.length === 0 ? (
+                  <p className="tdg-driver-vazio">Ainda sem ganhos. Conclua entregas para começar a somar.</p>
+                ) : (
+                  <ul className="tdg-ganhos-extrato">
+                    {ganhos.extrato.map((l) => (
+                      <li key={l.id} className={l.valor < 0 ? "negativo" : ""}>
+                        <div className="tdg-ganhos-linha-topo">
+                          <span className="tdg-ganhos-tipo">{rotuloTipoGanho[l.tipo] || l.tipo}{l.referencia ? ` · ${l.referencia}` : ""}</span>
+                          <strong>{l.valor < 0 ? "−" : ""}{reais(Math.abs(l.valor))}</strong>
+                        </div>
+                        <div className="tdg-ganhos-linha-baixo">
+                          <small>{l.dataServico ? l.dataServico.split("-").reverse().join("/") : ""}{l.memoria?.km ? ` · ${l.memoria.km} km` : ""}{l.observacao ? ` · ${l.observacao}` : ""}</small>
+                          <span className={`tdg-ganhos-status ${l.status}`}>{rotuloStatusGanho[l.status] || l.status}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="tdg-driver-nota">Cada valor vem das suas entregas, pela régua da operação. Ganho não é digitado — é calculado.</p>
+              </section>
+            </>
           )}
         </>
       )}
