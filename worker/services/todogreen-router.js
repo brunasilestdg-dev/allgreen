@@ -24,6 +24,7 @@ import { handleTodoGreenPurchasingParams } from "./todogreen-purchasing-params.j
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
 import { handleTodoGreenDriverPortal } from "./todogreen-driver-portal.js";
+import { handleTodoGreenGreenPay } from "./todogreen-greenpay.js";
 import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
 import { handleTodoGreenPlanner } from "./todogreen-planner.js";
@@ -293,6 +294,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenDriverPortal(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  if (path.startsWith("/api/todogreen/greenpay")) {
+    return guarded("To Do Green GreenPay error", "Não foi possível abrir o GreenPay.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenGreenPay(request, env, resolved.access, resolved.user);
     });
   }
 

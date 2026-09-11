@@ -15,6 +15,7 @@ import { aplicarEventoOperacional } from "./todogreen-vertical-records.js";
 import { marcarParadaConcluida, statusPelaConclusao } from "../../src/features/logistics/routePlanDomain.js";
 import { avaliarChecklist, ITENS_CHECKLIST } from "../../src/features/logistics/driverChecklistDomain.js";
 import { duracaoMinutos, resumoDaJornada } from "../../src/features/logistics/driverJourneyDomain.js";
+import { carteiraDoMotorista, gerarGanhosDaEntrega } from "./todogreen-greenpay.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -317,6 +318,14 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
     return json({ viagens: (results || []).map(viagemDaLinha) });
   }
 
+  // Carteira GreenPay do próprio motorista: ganhos do dia/semana/mês, saldos
+  // (pendente/aprovado/pago) e extrato com a memória de cada valor. Derivado
+  // das viagens entregues — o motorista não digita nada. Sem régua, a tela diz
+  // "não configurada" em vez de mostrar zero.
+  if (request.method === "GET" && recurso === "ganhos") {
+    return json(await carteiraDoMotorista(env, access.ownerId, motorista.id));
+  }
+
   if (request.method === "POST" && recurso === "viagens" && id && acao === "evento") {
     const corpo = await request.json().catch(() => ({}));
     // O recorte é o vínculo: a operação precisa ser DESTE motorista. Operação
@@ -349,6 +358,18 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
       origem: url.origin,
     });
     if (resultado.erro) return json({ error: resultado.erro }, 400);
+    // Entrega concluída gera o ganho do motorista (GreenPay), derivado da
+    // viagem pela régua vigente. Idempotente por (operação, tipo): a fila
+    // offline reenviando não dobra o ganho. Sem régua configurada, não gera
+    // nada — não inventa número. Nunca deixa o registro da entrega falhar por
+    // causa do GreenPay.
+    if (texto(corpo.tipo, 40) === "entrega") {
+      try {
+        await gerarGanhosDaEntrega(env, access.ownerId, resultado.atualizada, user.id);
+      } catch (erro) {
+        console.error("To Do Green GreenPay earning generation error", erro);
+      }
+    }
     // Reenvio da fila offline com a mesma chave: devolve o que já ficou (200),
     // não um segundo "criado" (201). Ou seja: a entrega não se perde e não dobra.
     return json(
