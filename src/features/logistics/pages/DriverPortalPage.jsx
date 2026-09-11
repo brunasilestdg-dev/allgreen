@@ -5,7 +5,7 @@ import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 import { ROTULO_STATUS_ROTA, linkNavegacao, progressoDaRota, resumoDaRota } from "../routePlanDomain.js";
 import { avaliarChecklist, GRUPOS_CHECKLIST, ITENS_CHECKLIST } from "../driverChecklistDomain.js";
-import { formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
+import { avaliarConformidadeJornada, formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
 import { calcularScoreMotorista, ROTULO_FAIXA } from "../driverScoreDomain.js";
 import { resumoDeProdutividade } from "../driverProductivityDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
@@ -489,6 +489,9 @@ export default function DriverPortalPage() {
   const rotasAtivas = rotas.filter((rota) => rota.status !== "concluida");
   const agoraISO = new Date().toISOString();
   const jornada = resumoDaJornada(turnos, agoraISO);
+  // Conformidade da jornada (fadiga · Lei do Motorista): alertas derivados dos
+  // turnos que já existem. Acende ao vivo enquanto o motorista dirige.
+  const conformidade = avaliarConformidadeJornada(turnos, agoraISO);
   const score = calcularScoreMotorista(viagens);
   const produtividade = resumoDeProdutividade(viagens, { minutosHoje: jornada.minutosHoje, agora: agoraISO });
   const vistoriaHoje = checklists.find((c) => String(c.dataServico).slice(0, 10) === hojeISO) || null;
@@ -548,6 +551,19 @@ export default function DriverPortalPage() {
               ? <button type="button" className="tdg-turno-btn encerrar" disabled={turnoOcupado} onClick={() => acaoTurno("fim", "Turno encerrado. Bom descanso!")}><Square size={16} /> Encerrar turno</button>
               : <button type="button" className="tdg-turno-btn iniciar" disabled={turnoOcupado} onClick={() => acaoTurno("inicio", "Turno iniciado. Boa jornada!")}><Play size={16} /> Iniciar turno</button>}
           </article>
+
+          {/* Fadiga (Lei do Motorista): alertas derivados da própria jornada.
+              Só aparece quando há algo a corrigir — nunca ruído. */}
+          {!conformidade.conforme && (
+            <article className="tdg-driver-cartao tdg-fadiga">
+              <div className="tdg-fadiga-head"><AlertTriangle size={18} /><strong>Atenção à jornada</strong></div>
+              <ul className="tdg-fadiga-lista">
+                {conformidade.alertas.map((a, i) => (
+                  <li key={`${a.tipo}-${i}`} className={`grav-${a.gravidade}`}>{a.mensagem}</li>
+                ))}
+              </ul>
+            </article>
+          )}
 
           {/* Telemetria elétrica ao vivo do veículo do dia. Nunca "0%" quando
               não há leitura — mostra "sem leitura" honesto. */}

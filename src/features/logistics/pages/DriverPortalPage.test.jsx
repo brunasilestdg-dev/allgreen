@@ -239,3 +239,31 @@ describe("app do motorista — produtividade (meu dia)", () => {
     expect(screen.getByText(/Na semana: 2 entregas · 50 km/)).toBeInTheDocument();
   });
 });
+
+describe("app do motorista — fadiga na jornada (Lei do Motorista)", () => {
+  it("turno longo em aberto acende o alerta de direção contínua", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    const hoje = new Date().toISOString().slice(0, 10);
+    const iniciado = new Date(Date.now() - 7 * 3600000).toISOString(); // 7h rodando, sem parar
+    montarFetch({
+      jornada: { turnos: [{ id: "t1", status: "aberto", iniciadoEm: iniciado, encerradoEm: "", dataServico: hoje }] },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    expect(await screen.findByText("Atenção à jornada")).toBeInTheDocument();
+    expect(screen.getByText(/Direção contínua/)).toBeInTheDocument();
+  });
+
+  it("jornada curta não mostra alerta de fadiga", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    const hoje = new Date().toISOString().slice(0, 10);
+    const iniciado = new Date(Date.now() - 2 * 3600000).toISOString(); // 2h
+    montarFetch({
+      jornada: { turnos: [{ id: "t1", status: "aberto", iniciadoEm: iniciado, encerradoEm: "", dataServico: hoje }] },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    await screen.findByText("Em turno");
+    expect(screen.queryByText("Atenção à jornada")).not.toBeInTheDocument();
+  });
+});

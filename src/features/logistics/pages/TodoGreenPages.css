@@ -4633,3 +4633,12 @@
 .tdg-recarga-acoes { align-items: center; display: flex; gap: 8px; }
 .tdg-recarga-acoes select { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; padding: 6px 8px; }
 .tdg-recarga-remover { align-items: center; background: none; border: 1px solid var(--tdg-line); border-radius: 8px; color: var(--tdg-danger, #b3261e); cursor: pointer; display: inline-flex; padding: 7px; }
+
+/* Fadiga na jornada do motorista (Lei do Motorista): cartão de alerta no app,
+   só aparece quando há algo a corrigir. */
+.tdg-fadiga { border-left: 4px solid var(--tdg-danger, #b3261e); }
+.tdg-fadiga-head { align-items: center; color: var(--tdg-danger, #b3261e); display: flex; gap: 8px; font-weight: 700; }
+.tdg-fadiga-lista { display: grid; gap: 8px; list-style: none; margin: 10px 0 0; padding: 0; }
+.tdg-fadiga-lista li { border-left: 3px solid var(--tdg-line); font-size: .86rem; line-height: 1.45; padding-left: 10px; }
+.tdg-fadiga-lista li.grav-critica { border-left-color: var(--tdg-danger, #b3261e); }
+.tdg-fadiga-lista li.grav-alta { border-left-color: #c98a00; }

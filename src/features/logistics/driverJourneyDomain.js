@@ -63,3 +63,96 @@ export const resumoDaJornada = (turnos = [], agora = "") => {
     podeEncerrar: Boolean(aberto),
   };
 };
+
+// ===== Conformidade da jornada (fadiga · Lei 13.103/2015) =====
+//
+// A jornada crua já é gravada (par início/fim). Aqui entra a camada de
+// compliance: os limites da Lei do Motorista viram alertas SOBRE os turnos que
+// já existem — sem tabela nova, sem telemetria. É prevenção de fadiga e risco
+// trabalhista, derivada, não gravada.
+//
+// Os limites são referências da lei, editáveis (a empresa pode ser mais
+// rígida), nunca custo/verdade gravada. Um turno aberto usa `agora` como fim,
+// para o alerta acender AO VIVO enquanto o motorista ainda dirige.
+export const LIMITES_JORNADA_PADRAO = Object.freeze({
+  direcaoContinuaMaxMin: 330, // 5h30 de direção contínua antes do intervalo
+  intervaloMinimoMin: 30, // intervalo mínimo dentro da jornada
+  interjornadaMinimaMin: 660, // 11h de descanso entre jornadas
+  jornadaDiariaMaxMin: 600, // teto diário de direção (8h + 2h extra)
+});
+
+// Recebe os turnos e `agora`; devolve os alertas de conformidade e se está
+// conforme. Sem turnos → conforme, sem inventar alerta.
+export const avaliarConformidadeJornada = (turnos = [], agora = "", limitesEntrada = {}) => {
+  const limites = { ...LIMITES_JORNADA_PADRAO, ...(limitesEntrada || {}) };
+  const lista = (Array.isArray(turnos) ? turnos : [])
+    .filter((t) => t && t.iniciadoEm)
+    .slice()
+    .sort((a, b) => String(a.iniciadoEm).localeCompare(String(b.iniciadoEm)));
+  const agoraMs = parseMs(agora);
+  const agoraIso = agoraMs != null ? agora : "";
+  const alertas = [];
+
+  // 1) Direção contínua acima do limite: um turno sem intervalo é direção
+  //    contínua por definição; passou do teto, precisava ter parado.
+  for (const t of lista) {
+    const fim = t.encerradoEm || agoraIso;
+    if (!fim) continue;
+    const min = duracaoMinutos(t.iniciadoEm, fim);
+    if (min > limites.direcaoContinuaMaxMin) {
+      const aberto = !t.encerradoEm;
+      alertas.push({
+        tipo: "direcao_continua",
+        gravidade: "critica",
+        turnoId: t.id || "",
+        minutos: min,
+        mensagem: `Direção contínua de ${formatarDuracao(min)}${aberto ? " (turno em aberto)" : ""} — acima do limite de ${formatarDuracao(limites.direcaoContinuaMaxMin)}. É preciso um intervalo de ${limites.intervaloMinimoMin} min.`,
+      });
+    }
+  }
+
+  // 2) Interjornada abaixo de 11h: o descanso entre o fim de um turno e o
+  //    início do próximo. Só entre turnos encerrados e o seguinte.
+  for (let i = 1; i < lista.length; i += 1) {
+    const anterior = lista[i - 1];
+    const atual = lista[i];
+    if (!anterior.encerradoEm || !atual.iniciadoEm) continue;
+    const descanso = duracaoMinutos(anterior.encerradoEm, atual.iniciadoEm);
+    if (descanso < limites.interjornadaMinimaMin) {
+      alertas.push({
+        tipo: "interjornada",
+        gravidade: "alta",
+        turnoId: atual.id || "",
+        minutos: descanso,
+        mensagem: `Descanso de apenas ${formatarDuracao(descanso)} entre jornadas — abaixo das ${formatarDuracao(limites.interjornadaMinimaMin)} exigidas.`,
+      });
+    }
+  }
+
+  // 3) Jornada diária excedida: soma da direção no dia acima do teto.
+  const porDia = {};
+  for (const t of lista) {
+    const fim = t.encerradoEm || agoraIso;
+    if (!fim) continue;
+    const dia = String(t.dataServico || t.iniciadoEm || "").slice(0, 10);
+    if (!dia) continue;
+    porDia[dia] = (porDia[dia] || 0) + duracaoMinutos(t.iniciadoEm, fim);
+  }
+  for (const [dia, min] of Object.entries(porDia)) {
+    if (min > limites.jornadaDiariaMaxMin) {
+      alertas.push({
+        tipo: "jornada_diaria",
+        gravidade: "alta",
+        dia,
+        minutos: min,
+        mensagem: `Direção de ${formatarDuracao(min)} no dia ${dia} — acima do teto diário de ${formatarDuracao(limites.jornadaDiariaMaxMin)}.`,
+      });
+    }
+  }
+
+  return {
+    conforme: alertas.length === 0,
+    alertas,
+    limites,
+  };
+};
