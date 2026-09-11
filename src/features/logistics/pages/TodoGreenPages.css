@@ -1235,6 +1235,42 @@
   .df-sizing-numeros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* Comparar diesel × elétrico (bloco 01 · fatia 3) */
+.df-compare { display: grid; gap: 14px; }
+.df-compare-form { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.df-compare-form label { display: grid; gap: 6px; min-width: 0; }
+.df-compare-form label > span { color: var(--tdg-muted); font-size: 12px; font-weight: 700; }
+.df-compare-premissas { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.df-compare-premissa-grupo { display: grid; gap: 10px; align-content: start; }
+.df-compare-premissa-grupo h4 { margin: 0; font-size: 13px; }
+.df-compare-premissa-grupo.eletrico h4 { color: #1f7a44; }
+.df-compare-premissa-grupo.diesel h4 { color: #8a5b00; }
+.df-compare-premissa-grupo label { display: grid; gap: 5px; }
+.df-compare-premissa-grupo label > span { color: var(--tdg-muted); font-size: 11.5px; font-weight: 700; }
+.df-compare-lados { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.df-compare-lado { border: 1px solid var(--tdg-line); border-radius: 16px; display: grid; gap: 8px; padding: 14px; }
+.df-compare-lado.diesel { background: #fff8ec; border-color: #e6cf9c; }
+.df-compare-lado.eletrico { background: #e9f7ee; border-color: #a9d8b8; }
+.df-compare-lado h4 { margin: 0 0 2px; font-size: 14px; }
+.df-compare-lado.diesel h4 { color: #8a5b00; }
+.df-compare-lado.eletrico h4 { color: #145a30; }
+.df-compare-lado > div { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.df-compare-lado small { color: var(--tdg-muted); font-size: 12px; }
+.df-compare-lado strong { font-size: 14px; overflow-wrap: anywhere; }
+.df-compare-lado .op { border-top: 1px dashed var(--tdg-line); margin-top: 2px; padding-top: 8px; }
+.df-compare-lado .op strong { font-size: 1.05rem; }
+.df-compare-destaques { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.df-compare-destaques .ganho {
+  background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 16px;
+  display: grid; gap: 3px; padding: 14px; text-align: center;
+}
+.df-compare-destaques small { color: var(--tdg-muted); font-size: 12px; font-weight: 700; }
+.df-compare-destaques strong { color: #145a30; font-size: 1.35rem; line-height: 1.1; overflow-wrap: anywhere; }
+.df-compare-destaques span { color: var(--tdg-muted); font-size: 12px; }
+@media (max-width: 720px) {
+  .df-compare-form, .df-compare-premissas, .df-compare-lados, .df-compare-destaques { grid-template-columns: minmax(0, 1fr); }
+}
+
 .df-metric,
 .df-command article,
 .df-driver-card,

@@ -141,4 +141,24 @@ describe("Gestão operacional de frota", () => {
     expect(await screen.findByText(/3 para a demanda \+ 1 de reserva/)).toBeInTheDocument();
     expect(screen.getByText("O que aperta primeiro").closest("div")).toHaveTextContent(/Autonomia/);
   });
+
+  it("compara diesel × elétrico: economia, CO₂ e payback", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify(fleetPayload), { status: 200 }))));
+    render(<DriverFleetCenterPage authHeaders={() => ({ authorization: "Bearer teste" })} operations={operations} />);
+    await screen.findByText("TG-001");
+
+    fireEvent.click(screen.getByRole("button", { name: /Diesel × elétrico/i }));
+    fireEvent.change(screen.getByPlaceholderText("ex.: 5000"), { target: { value: "5000" } });
+
+    // Economia operacional aparece já sem os valores de compra.
+    expect(await screen.findByText("Economia operacional")).toBeInTheDocument();
+    // Sem CAPEX, o payback fica indisponível e pede os valores.
+    expect(screen.getByText(/informe o valor dos dois veículos/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("ex.: 800000"), { target: { value: "800000" } });
+    fireEvent.change(screen.getByPlaceholderText("ex.: 500000"), { target: { value: "500000" } });
+
+    // 300.000 ÷ 7.262,86/mês ≈ 41,3 meses.
+    expect(await screen.findByText(/41,3 meses/)).toBeInTheDocument();
+  });
 });

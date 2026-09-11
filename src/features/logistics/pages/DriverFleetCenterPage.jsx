@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Route,
+  Scale,
   ShieldCheck,
   Trash2,
   Truck,
@@ -24,6 +25,11 @@ import {
   PREMISSAS_DIMENSIONAMENTO_FIELDS,
   PREMISSAS_DIMENSIONAMENTO_PADRAO,
 } from "../fleetSizingDomain.js";
+import {
+  compararDieselEletrico,
+  PREMISSAS_COMPARACAO_FIELDS,
+  PREMISSAS_COMPARACAO_PADRAO,
+} from "../fleetComparisonDomain.js";
 import "./TodoGreenPages.css";
 import { comRotulo } from "../rotulosDomain.js";
 
@@ -233,6 +239,7 @@ export default function DriverFleetCenterPage({
   const [editing, setEditing] = useState(null); // null | {} (novo) | veículo (editar)
   const [importando, setImportando] = useState(false);
   const [dimensionando, setDimensionando] = useState(false);
+  const [comparando, setComparando] = useState(false);
   const isPortal = mode === "driver-portal";
   const operations = providedOperations || operationsFromApi;
 
@@ -344,6 +351,11 @@ export default function DriverFleetCenterPage({
             </button>
           )}
           {!isPortal && (
+            <button type="button" className="tdg-secondary-action" onClick={() => setComparando(true)}>
+              <Scale size={17} />Diesel × elétrico
+            </button>
+          )}
+          {!isPortal && (
             <button type="button" className="tdg-secondary-action" onClick={() => go("/portal-motorista")}>
               <UserRoundCheck size={17} />Abrir portal motorista
             </button>
@@ -435,6 +447,8 @@ export default function DriverFleetCenterPage({
           onClose={() => setDimensionando(false)}
         />
       )}
+
+      {comparando && <FleetComparisonModal onClose={() => setComparando(false)} />}
     </section>
   );
 }
@@ -521,6 +535,123 @@ function FleetSizingModal({ autonomiaSugerida = 0, onClose }) {
         ) : (
           <div className="df-sizing-avisos">
             {resultado.avisos.map((a) => (
+              <p key={a} className="tdg-rel-aviso"><AlertTriangle size={16} />{a}</p>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// Comparar diesel × elétrico lado a lado: custo operacional mensal, CO₂ e o
+// payback do que o elétrico custa a mais na compra. Calculadora pura — o lado
+// diesel é referência de mercado a confirmar, nunca custo gravado.
+function FleetComparisonModal({ onClose }) {
+  const [kmMes, setKmMes] = useState("");
+  const [valorEletrico, setValorEletrico] = useState("");
+  const [valorDiesel, setValorDiesel] = useState("");
+  const [premissas, setPremissas] = useState(PREMISSAS_COMPARACAO_PADRAO);
+
+  const setPremissa = (chave, valor) =>
+    setPremissas((atual) => ({ ...atual, [chave]: valor === "" ? "" : Number(valor) }));
+
+  const c = useMemo(
+    () => compararDieselEletrico(
+      { kmMes: Number(kmMes) || 0, valorEletrico: Number(valorEletrico) || 0, valorDiesel: Number(valorDiesel) || 0 },
+      premissas,
+    ),
+    [kmMes, valorEletrico, valorDiesel, premissas],
+  );
+  const d = c.delta;
+
+  return (
+    <Modal onClose={onClose} title="Diesel × elétrico: custo, CO₂ e payback" wide>
+      <div className="df-compare">
+        <p className="tdg-rel-ressalva">
+          Os dois lado a lado. O lado elétrico usa os fatores do motor; o lado diesel é
+          <strong> referência de mercado a confirmar</strong> — a operação real manda.
+        </p>
+
+        <div className="df-compare-form">
+          <label>
+            <span>Quilometragem mensal da operação</span>
+            <div className="df-sizing-input"><input type="number" min="0" inputMode="decimal" value={kmMes} onChange={(e) => setKmMes(e.target.value)} placeholder="ex.: 5000" /><em>km/mês</em></div>
+          </label>
+          <label>
+            <span>Valor de compra — elétrico</span>
+            <div className="df-sizing-input"><input type="number" min="0" inputMode="decimal" value={valorEletrico} onChange={(e) => setValorEletrico(e.target.value)} placeholder="ex.: 800000" /><em>R$</em></div>
+          </label>
+          <label>
+            <span>Valor de compra — diesel</span>
+            <div className="df-sizing-input"><input type="number" min="0" inputMode="decimal" value={valorDiesel} onChange={(e) => setValorDiesel(e.target.value)} placeholder="ex.: 500000" /><em>R$</em></div>
+          </label>
+        </div>
+
+        <details className="df-sizing-premissas">
+          <summary>Premissas (elétrico do motor · diesel a confirmar)</summary>
+          <div className="df-compare-premissas">
+            {["eletrico", "diesel"].map((lado) => (
+              <div key={lado} className={`df-compare-premissa-grupo ${lado}`}>
+                <h4>{lado === "eletrico" ? "Elétrico" : "Diesel (referência)"}</h4>
+                {PREMISSAS_COMPARACAO_FIELDS.filter((f) => f.lado === lado).map((f) => (
+                  <label key={f.chave}>
+                    <span>{f.rotulo}</span>
+                    <div className="df-sizing-input">
+                      <input type="number" min={f.min} max={f.max} step="any" inputMode="decimal" value={premissas[f.chave]} onChange={(e) => setPremissa(f.chave, e.target.value)} />
+                      <em>{f.sufixo}</em>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+        </details>
+
+        {c.disponivel ? (
+          <>
+            <div className="df-compare-lados">
+              <div className="df-compare-lado diesel">
+                <h4>Diesel</h4>
+                <div><small>Combustível/mês</small><strong>{BRL.format(c.diesel.combustivelMes)}</strong></div>
+                <div><small>Manutenção/mês</small><strong>{BRL.format(c.diesel.manutencaoMes)}</strong></div>
+                <div className="op"><small>Operacional/mês</small><strong>{BRL.format(c.diesel.operacionalMes)}</strong></div>
+                <div><small>CO₂/mês</small><strong>{NUM.format(c.diesel.co2Mes)} kg</strong></div>
+              </div>
+              <div className="df-compare-lado eletrico">
+                <h4>Elétrico</h4>
+                <div><small>Energia/mês</small><strong>{BRL.format(c.eletrico.energiaMes)}</strong></div>
+                <div><small>Manutenção/mês</small><strong>{BRL.format(c.eletrico.manutencaoMes)}</strong></div>
+                <div className="op"><small>Operacional/mês</small><strong>{BRL.format(c.eletrico.operacionalMes)}</strong></div>
+                <div><small>CO₂/mês</small><strong>{NUM.format(c.eletrico.co2Mes)} kg</strong></div>
+              </div>
+            </div>
+
+            <div className="df-compare-destaques">
+              <div className="ganho">
+                <small>Economia operacional</small>
+                <strong>{BRL.format(d.economiaOperacionalMes)}/mês</strong>
+                <span>{BRL.format(d.economiaOperacionalAno)}/ano</span>
+              </div>
+              <div className="ganho">
+                <small>CO₂ evitado</small>
+                <strong>{NUM.format(d.co2EvitadoMesKg)} kg/mês</strong>
+                <span>{NUM.format(d.co2EvitadoAnoKg / 1000)} t/ano</span>
+              </div>
+              <div className="ganho">
+                <small>Payback do elétrico</small>
+                {d.paybackMeses != null
+                  ? <><strong>{d.paybackMeses === 0 ? "imediato" : `${NUM.format(d.paybackMeses)} meses`}</strong><span>{d.capexDelta > 0 ? `${BRL.format(d.capexDelta)} a mais na compra` : "não custa mais na compra"}</span></>
+                  : <><strong>—</strong><span>informe o valor dos dois veículos</span></>}
+              </div>
+            </div>
+            {c.avisos.length > 0 && c.avisos.map((a) => (
+              <p key={a} className="tdg-rel-ressalva">{a}</p>
+            ))}
+          </>
+        ) : (
+          <div className="df-sizing-avisos">
+            {c.avisos.map((a) => (
               <p key={a} className="tdg-rel-aviso"><AlertTriangle size={16} />{a}</p>
             ))}
           </div>
