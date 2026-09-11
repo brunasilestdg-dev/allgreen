@@ -13,6 +13,7 @@
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { aplicarEventoOperacional } from "./todogreen-vertical-records.js";
 import { marcarParadaConcluida, statusPelaConclusao } from "../../src/features/logistics/routePlanDomain.js";
+import { avaliarChecklist, ITENS_CHECKLIST } from "../../src/features/logistics/driverChecklistDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -60,6 +61,22 @@ const viagemDaLinha = (row) => ({
   ordemNaRota: row.route_stop_order,
   comprovanteRegistrado: Boolean(row.proof_url),
   ocorrencias: Number(row.incident_count || 0),
+});
+
+const parseJson = (valor, padrao) => {
+  try { return JSON.parse(valor || ""); } catch { return padrao; }
+};
+
+const checklistDaLinha = (row) => ({
+  id: row.id,
+  placa: row.vehicle_plate || "",
+  rotaId: row.route_id || "",
+  dataServico: row.service_date || "",
+  status: row.status || "aprovado",
+  criticosReprovados: Number(row.critical_failed || 0),
+  observacao: row.observation || "",
+  respostas: parseJson(row.answers_json, {}),
+  criadoEm: row.created_at || "",
 });
 
 const rotaDaLinha = (row) => {
@@ -165,6 +182,52 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
 
   if (!motorista)
     return json({ error: "Seu e-mail não está ligado a um cadastro de motorista." }, 403);
+
+  // ===== Checklist de pré-viagem (bloco 03) =====
+  // As vistorias recentes deste motorista + o catálogo de itens (a tela monta o
+  // formulário a partir dele, sem duplicar a lista).
+  if (request.method === "GET" && recurso === "checklist") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, vehicle_plate, route_id, service_date, answers_json, status, critical_failed, observation, created_at
+         FROM todogreen_driver_checklists
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND archived_at IS NULL
+        ORDER BY service_date DESC, created_at DESC LIMIT 30`,
+    ).bind(TENANT_ID, access.ownerId, motorista.id).all();
+    return json({ checklists: (results || []).map(checklistDaLinha), itens: ITENS_CHECKLIST });
+  }
+
+  // Registrar a vistoria. O servidor RE-AVALIA (nunca confia no status do
+  // cliente): recomputa aprovado/ressalva/reprovado das respostas e exige a
+  // vistoria completa. Fica o registro imutável do que valia ao sair.
+  if (request.method === "POST" && recurso === "checklist") {
+    const corpo = await request.json().catch(() => ({}));
+    const respostas = corpo.respostas && typeof corpo.respostas === "object" ? corpo.respostas : {};
+    const veredito = avaliarChecklist(respostas);
+    if (!veredito.completo)
+      return json({ error: "Responda todos os itens da vistoria antes de registrar.", veredito }, 400);
+    // Guarda só as respostas de itens conhecidos (limpa qualquer lixo do corpo).
+    const limpo = {};
+    for (const item of ITENS_CHECKLIST) if (respostas[item.id]) limpo[item.id] = String(respostas[item.id]);
+
+    const idNovo = crypto.randomUUID();
+    const agora = new Date().toISOString();
+    const dataServico = texto(corpo.dataServico, 10) || agora.slice(0, 10);
+    await env.DB.prepare(
+      `INSERT INTO todogreen_driver_checklists
+         (id, tenant_id, workspace_owner_id, driver_id, vehicle_id, vehicle_plate, route_id, service_date,
+          answers_json, status, critical_failed, observation, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      idNovo, TENANT_ID, access.ownerId, motorista.id, texto(corpo.veiculoId, 120), texto(corpo.veiculoPlaca, 20).toUpperCase(),
+      texto(corpo.rotaId, 120), dataServico, JSON.stringify(limpo), veredito.status, veredito.criticosReprovados.length,
+      texto(corpo.observacao, 1000), user.id, agora, agora,
+    ).run();
+    const row = await env.DB.prepare(
+      `SELECT id, vehicle_plate, route_id, service_date, answers_json, status, critical_failed, observation, created_at
+         FROM todogreen_driver_checklists WHERE id = ?`,
+    ).bind(idNovo).first();
+    return json({ checklist: checklistDaLinha(row), veredito }, 201);
+  }
 
   if (request.method === "GET" && recurso === "viagens") {
     const { results } = await env.DB.prepare(

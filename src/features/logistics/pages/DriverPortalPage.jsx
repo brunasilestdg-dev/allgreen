@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BatteryCharging, Camera, CheckCircle2, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Route, Truck, User } from "lucide-react";
+import { AlertTriangle, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Route, Truck, User } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 import { ROTULO_STATUS_ROTA, linkNavegacao, progressoDaRota, resumoDaRota } from "../routePlanDomain.js";
+import { avaliarChecklist, GRUPOS_CHECKLIST, ITENS_CHECKLIST } from "../driverChecklistDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
@@ -148,6 +149,10 @@ export default function DriverPortalPage() {
   // do canhoto (POD) e da CNH — esta é a cara da pessoa.
   const [perfil, setPerfil] = useState(null); // { name, avatarUrl }
   const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const [checklists, setChecklists] = useState([]);
+  const [respostasVistoria, setRespostasVistoria] = useState({});
+  const [obsVistoria, setObsVistoria] = useState("");
+  const [enviandoVistoria, setEnviandoVistoria] = useState(false);
   const avatarInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
@@ -212,6 +217,10 @@ export default function DriverPortalPage() {
         } catch {
           setRotasErro(true);
         }
+        // A vistoria não pode derrubar o app se falhar: mantém a lista conhecida.
+        try {
+          setChecklists((await pedir("/checklist")).checklists || []);
+        } catch { /* segue com a lista anterior */ }
       }
       setErro("");
     } catch (motivo) {
@@ -344,6 +353,26 @@ export default function DriverPortalPage() {
     }
   };
 
+  // Vistoria de pré-viagem: o motorista responde item a item e registra. Vai
+  // direto ao servidor (é no depósito, com sinal), que RE-AVALIA o status.
+  const enviarVistoria = async () => {
+    setEnviandoVistoria(true);
+    try {
+      await pedir("/checklist", {
+        method: "POST",
+        body: JSON.stringify({ respostas: respostasVistoria, observacao: obsVistoria }),
+      });
+      setAviso("Vistoria registrada. Boa estrada!");
+      setRespostasVistoria({});
+      setObsVistoria("");
+      await carregar();
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui registrar a vistoria agora.");
+    } finally {
+      setEnviandoVistoria(false);
+    }
+  };
+
   const zerarFormulario = () =>
     setDados({ recebedor: "", comprovanteUrl: "", descricao: "", fotoBase64: "", assinaturaBase64: "" });
 
@@ -419,12 +448,16 @@ export default function DriverPortalPage() {
   const primeiroNome = String(sessao.motorista.nome || "").split(" ")[0];
 
   const rotasAtivas = rotas.filter((rota) => rota.status !== "concluida");
+  const vistoriaHoje = checklists.find((c) => String(c.dataServico).slice(0, 10) === hojeISO) || null;
+  const vistoriaParcial = avaliarChecklist(respostasVistoria);
   const abas = [
     { id: "hoje", rotulo: "Hoje", icone: Home },
     { id: "rota", rotulo: "Rota", icone: Route },
+    { id: "vistoria", rotulo: "Vistoria", icone: ClipboardCheck },
     { id: "entregas", rotulo: "Entregas", icone: PackageCheck },
     { id: "perfil", rotulo: "Perfil", icone: User },
   ];
+  const SELO_VISTORIA = { aprovado: "Aprovada", ressalva: "Aprovada com ressalva", reprovado: "Reprovada" };
 
   return (
     <main className="tdg-driver-app">
@@ -555,6 +588,88 @@ export default function DriverPortalPage() {
               </article>
             );
           })}
+        </>
+      )}
+
+      {/* ===== VISTORIA: checklist de pré-viagem (bloco 03) ===== */}
+      {secao === "vistoria" && (
+        <>
+          <div className="tdg-driver-secao-titulo"><ClipboardCheck size={18} /><h2>Vistoria de pré-viagem</h2></div>
+
+          {vistoriaHoje && (
+            <article className={`tdg-driver-cartao tdg-vistoria-selo ${vistoriaHoje.status}`}>
+              {vistoriaHoje.status === "reprovado" ? <AlertTriangle size={20} /> : <CheckCircle2 size={20} />}
+              <div>
+                <strong>Vistoria de hoje: {SELO_VISTORIA[vistoriaHoje.status]}</strong>
+                <small>
+                  {vistoriaHoje.status === "reprovado"
+                    ? "Item crítico com problema. Não deve rodar assim — fale com a operação."
+                    : "Registrada. Pode refazer abaixo se algo mudou."}
+                </small>
+              </div>
+            </article>
+          )}
+
+          <p className="tdg-driver-rodape-nota">Antes de sair, confira o veículo. Um item crítico com problema reprova a vistoria — segurança em primeiro lugar.</p>
+
+          {GRUPOS_CHECKLIST.map((grupo) => (
+            <article className="tdg-driver-cartao tdg-vistoria-grupo" key={grupo}>
+              <h3>{grupo}</h3>
+              {ITENS_CHECKLIST.filter((item) => item.grupo === grupo).map((item) => {
+                const resposta = respostasVistoria[item.id] || "";
+                return (
+                  <div className="tdg-vistoria-item" key={item.id}>
+                    <span>{item.rotulo}{item.critico && <b className="tdg-vistoria-critico"> crítico</b>}</span>
+                    <div className="tdg-vistoria-opcoes" role="group" aria-label={item.rotulo}>
+                      {[["ok", "OK"], ["ressalva", "Ressalva"], ["problema", "Problema"]].map(([valor, rotulo]) => (
+                        <button
+                          key={valor}
+                          type="button"
+                          className={`${valor} ${resposta === valor ? "ativa" : ""}`}
+                          aria-pressed={resposta === valor}
+                          onClick={() => setRespostasVistoria((atual) => ({ ...atual, [item.id]: valor }))}
+                        >
+                          {rotulo}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </article>
+          ))}
+
+          <article className="tdg-driver-cartao">
+            <label className="tdg-vistoria-obs">
+              <span>Observação (opcional)</span>
+              <textarea value={obsVistoria} onChange={(e) => setObsVistoria(e.target.value)} rows={2} placeholder="Ex.: retrovisor direito frouxo" />
+            </label>
+            <div className={`tdg-vistoria-veredito ${vistoriaParcial.status}`}>
+              {vistoriaParcial.completo
+                ? vistoriaParcial.resumo
+                : `Faltam ${vistoriaParcial.pendentes} item(ns) para concluir.`}
+            </div>
+            <button
+              type="button"
+              className="tdg-driver-reenviar principal"
+              disabled={!vistoriaParcial.completo || enviandoVistoria}
+              onClick={enviarVistoria}
+            >
+              {enviandoVistoria ? "Registrando…" : "Registrar vistoria"}
+            </button>
+          </article>
+
+          {checklists.length > 0 && (
+            <article className="tdg-driver-cartao">
+              <h3>Vistorias recentes</h3>
+              {checklists.slice(0, 8).map((c) => (
+                <div className="tdg-vistoria-historico" key={c.id}>
+                  <span>{String(c.dataServico).slice(0, 10)}{c.placa ? ` · ${c.placa}` : ""}</span>
+                  <b className={c.status}>{SELO_VISTORIA[c.status]}</b>
+                </div>
+              ))}
+            </article>
+          )}
         </>
       )}
 

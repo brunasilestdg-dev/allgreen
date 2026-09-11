@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import worker from "../worker-entry.js";
+import { ITENS_CHECKLIST } from "../src/features/logistics/driverChecklistDomain.js";
 
 // O portal do motorista tem UMA pergunta de segurança: a pessoa logada
 // consegue ver ou tocar uma viagem que não é dela? A resposta precisa ser
@@ -445,5 +446,69 @@ describe("rota do dia atribuída ao motorista (#139)", () => {
       method: "POST", token: maria.token, body: { indice: 0, concluida: true },
     });
     expect(r.status).toBe(404);
+  });
+});
+
+// Bloco 03 — checklist de pré-viagem. O servidor RE-AVALIA e é a autoridade
+// sobre o status; a vistoria é do próprio motorista (driver_id).
+describe("checklist de pré-viagem do motorista (bloco 03)", () => {
+  const tudoOk = (over = {}) => {
+    const r = {};
+    for (const item of ITENS_CHECKLIST) r[item.id] = "ok";
+    return { ...r, ...over };
+  };
+
+  it("GET traz o catálogo de itens e a lista (começa vazia para a Maria)", async () => {
+    const r = await (await pedir("/api/todogreen/driver-portal/checklist", { token: maria.token })).json();
+    expect(Array.isArray(r.itens)).toBe(true);
+    expect(r.itens.length).toBe(ITENS_CHECKLIST.length);
+    expect(r.checklists).toEqual([]);
+  });
+
+  it("vistoria completa e conforme → 201 aprovado e apto", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/checklist", {
+      method: "POST", token: joao.token,
+      body: { respostas: tudoOk(), veiculoPlaca: "abc1d23", dataServico: "2026-08-26" },
+    });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    expect(d.veredito.status).toBe("aprovado");
+    expect(d.checklist.status).toBe("aprovado");
+    expect(d.checklist.placa).toBe("ABC1D23");
+    expect(d.checklist.criticosReprovados).toBe(0);
+  });
+
+  it("problema em item crítico → reprovado, com o crítico contado", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/checklist", {
+      method: "POST", token: joao.token,
+      body: { respostas: tudoOk({ freios: "problema" }), observacao: "Pedal mole" },
+    });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    expect(d.checklist.status).toBe("reprovado");
+    expect(d.checklist.criticosReprovados).toBeGreaterThan(0);
+    expect(d.checklist.observacao).toBe("Pedal mole");
+  });
+
+  it("vistoria incompleta é recusada (400) — não grava meia-vistoria", async () => {
+    const respostas = tudoOk();
+    delete respostas.cnh;
+    const r = await pedir("/api/todogreen/driver-portal/checklist", {
+      method: "POST", token: joao.token, body: { respostas },
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it("a lista é do próprio motorista: a Maria não vê as vistorias do João", async () => {
+    // João já registrou acima; a Maria registra a sua.
+    await pedir("/api/todogreen/driver-portal/checklist", {
+      method: "POST", token: maria.token, body: { respostas: tudoOk() },
+    });
+    const doJoao = await (await pedir("/api/todogreen/driver-portal/checklist", { token: joao.token })).json();
+    const daMaria = await (await pedir("/api/todogreen/driver-portal/checklist", { token: maria.token })).json();
+    expect(doJoao.checklists.length).toBeGreaterThanOrEqual(2);
+    expect(daMaria.checklists.length).toBe(1);
+    // Nenhuma vistoria da Maria carrega a observação "Pedal mole" do João.
+    expect(daMaria.checklists.some((c) => c.observacao === "Pedal mole")).toBe(false);
   });
 });
