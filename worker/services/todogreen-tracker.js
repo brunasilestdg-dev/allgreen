@@ -903,3 +903,40 @@ export async function runTodoGreenTrackerScheduled(env) {
     }
   }
 }
+
+// Retenção de posições do rastreador. `todogreen_tracker_positions` recebe uma
+// linha a cada polling de cada veículo — é a coleção de maior volume da vertical
+// e, sem teto, cresce indefinidamente no D1. O portal do cliente só lê a janela
+// de 6h e o cockpit usa a posição mais recente, então posição além da janela de
+// retenção é histórico puro que só ocupa espaço.
+//
+// Apaga em LOTE limitado por disparo, para que um backlog grande drene ao longo
+// de vários crons sem estourar o orçamento de CPU/subrequests do Worker — um
+// DELETE sem teto sobre uma tabela de milhões de linhas é a limpeza que derruba
+// justamente quando é mais necessária. A limpeza corre em todos os espaços de
+// uma vez (filtro por `recorded_at`, sem `workspace_owner_id`): é manutenção da
+// plataforma, não uma operação de negócio de um espaço.
+//
+// Piso de 7 dias: um env var mal configurado não pode apagar dado quase vivo.
+export const TRACKER_RETENCAO_DIAS_PADRAO = 90;
+const MAX_EXPURGO_POR_DISPARO = 5000;
+
+export async function expurgarPosicoesAntigasDoTracker(env, now = new Date()) {
+  if (!env.DB) return { removidas: 0 };
+  // Sem valor (ou não numérico) usa o padrão; com valor, o piso de 7 dias age
+  // sobre ele — um `|| padrão` faria "0" cair no padrão em vez de bater no piso.
+  const bruto = String(env.TODOGREEN_TRACKER_RETENTION_DAYS ?? "").trim();
+  const configurado = bruto && Number.isFinite(Number(bruto)) ? Number(bruto) : TRACKER_RETENCAO_DIAS_PADRAO;
+  const dias = Math.max(7, Math.trunc(configurado));
+  const limite = new Date(now.getTime() - dias * 86_400_000).toISOString();
+  const resultado = await env.DB.prepare(
+    `DELETE FROM todogreen_tracker_positions
+      WHERE id IN (
+        SELECT id FROM todogreen_tracker_positions
+         WHERE recorded_at < ?
+         ORDER BY recorded_at ASC
+         LIMIT ?
+      )`,
+  ).bind(limite, MAX_EXPURGO_POR_DISPARO).run();
+  return { removidas: resultado?.meta?.changes || 0, limite, dias };
+}

@@ -84,7 +84,7 @@ import { createWebhookHandlers } from "./worker/services/webhooks.js";
 import { runTodoGreenScheduledWorkAutomations } from "./worker/services/todogreen-work-center.js";
 import { runTodoGreenIntelligenceWatches } from "./worker/services/todogreen-client-intelligence.js";
 import { runTodoGreenMarketIntelligenceScheduled } from "./worker/services/todogreen-market-intelligence.js";
-import { runTodoGreenTrackerScheduled } from "./worker/services/todogreen-tracker.js";
+import { runTodoGreenTrackerScheduled, expurgarPosicoesAntigasDoTracker } from "./worker/services/todogreen-tracker.js";
 import { runTodoGreenPendenciaAvisos } from "./worker/services/todogreen-semente.js";
 
 
@@ -4273,6 +4273,14 @@ export default {
     ctx.waitUntil(
       runTodoGreenTrackerScheduled(env).catch((error) =>
         console.error("scheduled To Do Green tracker", error),
+      ),
+    );
+    // Retenção: expurga posições do rastreador além da janela (padrão 90 dias,
+    // configurável por TODOGREEN_TRACKER_RETENTION_DAYS). É a coleção de maior
+    // volume da vertical; sem esta limpeza no cron ela cresce sem teto no D1.
+    ctx.waitUntil(
+      expurgarPosicoesAntigasDoTracker(env, now).catch((error) =>
+        console.error("scheduled To Do Green tracker retention", error),
       ),
     );
     // Aviso de pendências novas (push + e-mail), só o que surgiu desde o último
