@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
-import { handleTodoGreenDispatch, paradasDaTour } from "../worker/services/todogreen-dispatch.js";
+import { handleTodoGreenDispatch, paradasDaTour, maxTimeDoSolver, MAX_SEGUNDOS_SOLVER_CONTINGENCIA } from "../worker/services/todogreen-dispatch.js";
 import { handleTodoGreenDriverPortal } from "../worker/services/todogreen-driver-portal.js";
 import { aplicarEventoOperacional } from "../worker/services/todogreen-vertical-records.js";
 
@@ -150,5 +150,20 @@ describe("despacho como cadeia transacional", () => {
     expect(JSON.parse(rota.stops_json).every((p) => p.concluida)).toBe(true);
     expect((await env.DB.prepare("SELECT availability_status FROM todogreen_drivers WHERE id='dispatch-driver'").first()).availability_status).toBe("available");
     expect((await env.DB.prepare("SELECT status FROM todogreen_fleet_vehicles WHERE id='dispatch-vehicle'").first()).status).toBe("available");
+  });
+});
+
+describe("tempo do solver de contingência (maxTimeDoSolver)", () => {
+  it("escala pelo tamanho do problema e nunca passa do teto", () => {
+    expect(maxTimeDoSolver(3)).toBe(2); // piso: problema minúsculo
+    expect(maxTimeDoSolver(40)).toBe(5); // ~1s por 8 jobs
+    expect(maxTimeDoSolver(200)).toBe(MAX_SEGUNDOS_SOLVER_CONTINGENCIA); // teto (10s)
+    expect(MAX_SEGUNDOS_SOLVER_CONTINGENCIA).toBe(10);
+  });
+
+  it("respeita um pedido explícito só dentro do teto", () => {
+    expect(maxTimeDoSolver(3, 7)).toBe(7);
+    expect(maxTimeDoSolver(3, 99)).toBe(10); // clampa ao teto — CPU do Worker é limitada
+    expect(maxTimeDoSolver(3, 0)).toBe(2); // 0/inválido volta a escalar por tamanho
   });
 });

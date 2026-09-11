@@ -62,6 +62,22 @@ const texto = (valor, max = 500) => String(valor ?? "").trim().slice(0, max);
 const coordenada = (valor) => valor === null || valor === undefined || valor === "" ? null : numero(valor);
 const parse = (valor, fallback) => { try { return JSON.parse(valor || ""); } catch { return fallback; } };
 
+// Tempo do solver WASM de CONTINGÊNCIA. O VROOM é o caminho primário; este solver
+// só entra quando o gateway não está configurado ou cai. Ele é CPU-bound —
+// `maxTime` vira tempo de CPU quase 1:1 dentro do Worker, cujo orçamento de CPU é
+// limitado. O teto anterior de 30s arriscava estourar esse orçamento e derrubar o
+// cálculo inteiro (pior que uma rota só razoável). Por isso: teto conservador de
+// 10s, tempo escalando pelo tamanho do problema (problema pequeno não precisa
+// ficar 10s convergindo) e um pedido explícito respeitado só dentro do teto.
+export const MAX_SEGUNDOS_SOLVER_CONTINGENCIA = 10;
+export const maxTimeDoSolver = (jobsCount, pedidoSegundos) => {
+  const pedido = Number(pedidoSegundos);
+  const base = Number.isFinite(pedido) && pedido > 0
+    ? pedido
+    : Math.ceil(Math.max(1, Number(jobsCount) || 0) / 8);
+  return Math.min(MAX_SEGUNDOS_SOLVER_CONTINGENCIA, Math.max(2, base));
+};
+
 const DEFAULT_SPEED_MS = 40 / 3.6; // 40 km/h em m/s — velocidade média urbana/mista, ajustável depois por perfil
 const DEFAULT_SHIFT_HOURS = 8;
 const DEFAULT_STOP_DURATION_S = 600; // 10 min por parada — coleta ou entrega
@@ -317,7 +333,7 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
     // Contingência sem dependência de rede: preserva o solver WASM quando o
     // host VROOM não estiver configurado ou ficar temporariamente indisponível.
     const problema = montarProblema({ operacoes, veiculos, depot, agora });
-    const maxTime = Math.min(Math.max(numero(corpo.maxTimeSeconds) || 8, 2), 30);
+    const maxTime = maxTimeDoSolver(problema.plan.jobs.length, corpo.maxTimeSeconds);
 
     let solucao;
     try {
