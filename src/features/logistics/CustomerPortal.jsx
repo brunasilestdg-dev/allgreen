@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Banknote,
+  BatteryCharging,
   Download,
   FileText,
   Gauge,
@@ -20,6 +21,7 @@ import {
   AssistenteCliente,
   GreenScoreDetalhado,
   ImpactoAmbiental,
+  PlanejarEletrificacao,
 } from "./CustomerPortalInsights.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 
@@ -28,6 +30,7 @@ const ICONES = {
   operacoes: Route,
   "green-score": Gauge,
   esg: Leaf,
+  planejar: BatteryCharging,
   relatorios: FileText,
   financeiro: Banknote,
   documentos: FileText,
@@ -600,6 +603,7 @@ export default function CustomerPortal() {
         {aba === "operacoes" && <Operacoes pedir={pedir} enviar={enviar} setAviso={setAviso} />}
         {aba === "green-score" && <GreenScoreDetalhado resumo={resumo} />}
         {aba === "esg" && <ImpactoAmbiental resumo={resumo} />}
+        {aba === "planejar" && <PlanejarEletrificacao />}
         {aba === "relatorios" && <Relatorios setAviso={setAviso} />}
         {aba === "financeiro" && <Faturas setAviso={setAviso} />}
         {aba === "documentos" && <Evidencias evidencias={evidencias} carregando={carregandoEvidencias} aoAvisar={setAviso} />}

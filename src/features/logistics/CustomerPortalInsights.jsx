@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, BarChart3, Leaf, Loader2, MessageSquare, Send, ShieldCheck } from "lucide-react";
+import { AlertTriangle, BarChart3, BatteryCharging, Leaf, Loader2, MessageSquare, Route, Send, ShieldCheck, Truck } from "lucide-react";
+import { planejarCenario, PORTES_REFERENCIA } from "./planejarDomain.js";
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const moedaExata = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 
 const estilo = {
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14 },
@@ -158,6 +161,129 @@ export function ImpactoAmbiental({ resumo }) {
 
       {Number(ambiental.qualidadeDados || 0) < 70 && Number(ambiental.qualidadeDados || 0) > 0 && (
         <div className="cp-alerta" style={{ marginTop: 16 }}><AlertTriangle size={18} /><span>A qualidade atual permite acompanhar tendência, mas ainda exige cautela para uso regulatório ou divulgação externa.</span></div>
+      )}
+    </section>
+  );
+}
+
+export function PlanejarEletrificacao() {
+  // Tudo aqui é cálculo puro (planejarDomain), no navegador do cliente: não há
+  // rede, não há dado de outro cliente. O cliente informa a operação dele e vê
+  // o cenário. Os números são estimativa a partir de referências — a tela diz.
+  const [modo, setModo] = useState("km"); // "km" | "entregas"
+  const [kmPorDia, setKmPorDia] = useState("");
+  const [entregasPorDia, setEntregasPorDia] = useState("");
+  const [kmPorEntrega, setKmPorEntrega] = useState("");
+  const [porte, setPorte] = useState("medio");
+  const [autonomiaKm, setAutonomiaKm] = useState("");
+  const [valorEletrico, setValorEletrico] = useState("");
+  const [valorDiesel, setValorDiesel] = useState("");
+
+  const cenario = useMemo(
+    () => planejarCenario({
+      porte,
+      kmPorDia: modo === "km" ? Number(kmPorDia) || 0 : 0,
+      entregasPorDia: modo === "entregas" ? Number(entregasPorDia) || 0 : 0,
+      kmPorEntrega: modo === "entregas" ? Number(kmPorEntrega) || 0 : 0,
+      autonomiaKm: autonomiaKm ? Number(autonomiaKm) : null,
+      valorEletrico: Number(valorEletrico) || 0,
+      valorDiesel: Number(valorDiesel) || 0,
+    }),
+    [modo, kmPorDia, entregasPorDia, kmPorEntrega, porte, autonomiaKm, valorEletrico, valorDiesel],
+  );
+
+  const { frota, comparacao, carregadores, custoPorEntrega, demanda, veiculo, disponivel } = cenario;
+
+  return (
+    <section>
+      <div style={estilo.cabecalho}>
+        <div>
+          <span style={estilo.selo}><Route size={15} /> Simulação da sua operação</span>
+          <h2 style={{ ...estilo.titulo, fontSize: 26, marginTop: 12 }}>Planejar a eletrificação</h2>
+          <p style={estilo.texto}>Informe a sua operação e veja quantos veículos e carregadores ela pede, quanto economiza por mês, quanto CO₂ evita e em quanto tempo o investimento se paga. Os valores são estimativa a partir de referências técnicas — a operação real confirma.</p>
+        </div>
+      </div>
+
+      <div style={{ ...estilo.card, marginBottom: 16 }}>
+        <div className="cp-plan-modo" role="tablist" aria-label="Como informar a demanda">
+          <button type="button" role="tab" aria-selected={modo === "km"} className={modo === "km" ? "ativo" : ""} onClick={() => setModo("km")}>Por quilometragem</button>
+          <button type="button" role="tab" aria-selected={modo === "entregas"} className={modo === "entregas" ? "ativo" : ""} onClick={() => setModo("entregas")}>Por entregas</button>
+        </div>
+
+        <div className="cp-plan-form">
+          {modo === "km" ? (
+            <label>Quilometragem diária<div className="cp-plan-input"><input type="number" min="0" inputMode="decimal" value={kmPorDia} onChange={(e) => setKmPorDia(e.target.value)} placeholder="ex.: 1000" /><em>km/dia</em></div></label>
+          ) : (
+            <>
+              <label>Entregas por dia<div className="cp-plan-input"><input type="number" min="0" inputMode="decimal" value={entregasPorDia} onChange={(e) => setEntregasPorDia(e.target.value)} placeholder="ex.: 50" /><em>entregas</em></div></label>
+              <label>Distância por entrega<div className="cp-plan-input"><input type="number" min="0" inputMode="decimal" value={kmPorEntrega} onChange={(e) => setKmPorEntrega(e.target.value)} placeholder="ex.: 12" /><em>km</em></div></label>
+            </>
+          )}
+          <label>Porte do veículo<select value={porte} onChange={(e) => setPorte(e.target.value)}>{PORTES_REFERENCIA.map((p) => <option key={p.id} value={p.id}>{p.rotulo}</option>)}</select></label>
+          <label>Autonomia real <small>(opcional)</small><div className="cp-plan-input"><input type="number" min="0" inputMode="decimal" value={autonomiaKm} onChange={(e) => setAutonomiaKm(e.target.value)} placeholder={`ref.: ${veiculo.autonomiaKm}`} /><em>km</em></div></label>
+          <label>Preço do elétrico <small>(opcional)</small><div className="cp-plan-input"><input type="number" min="0" inputMode="decimal" value={valorEletrico} onChange={(e) => setValorEletrico(e.target.value)} placeholder="ex.: 500000" /><em>R$</em></div></label>
+          <label>Preço do diesel <small>(opcional)</small><div className="cp-plan-input"><input type="number" min="0" inputMode="decimal" value={valorDiesel} onChange={(e) => setValorDiesel(e.target.value)} placeholder="ex.: 280000" /><em>R$</em></div></label>
+        </div>
+        {veiculo.referencia && (
+          <p style={{ ...estilo.texto, marginTop: 12, fontSize: 13 }}>Usando a referência do porte {veiculo.porteRotulo}: autonomia {veiculo.autonomiaKm} km, consumo {numero.format(veiculo.kwhPorKm)} kWh/km. Informe a autonomia real para ajustar.</p>
+        )}
+      </div>
+
+      {!disponivel ? (
+        <EstadoVazio
+          titulo="Preencha a operação para simular"
+          texto="Informe a quilometragem diária — direta ou por entregas — para montar o cenário. O restante são referências que você pode ajustar."
+        />
+      ) : (
+        <>
+          <div className="cp-indicadores">
+            <div className="cp-indicador"><span>Veículos elétricos</span><strong>{inteiro.format(frota.resumo.veiculosTotal)}</strong><small>{inteiro.format(frota.resumo.veiculosPorDemanda)} na operação + {inteiro.format(frota.resumo.veiculosReserva)} de reserva</small></div>
+            <div className="cp-indicador"><span>Carregadores</span><strong>{inteiro.format(carregadores.carregadores)}</strong><small>{inteiro.format(carregadores.pontosNoturnos)} noturnos · {inteiro.format(carregadores.pontosDiurnos)} de oportunidade</small></div>
+            <div className={comparacao.delta.economiaOperacionalMes >= 0 ? "cp-indicador bom" : "cp-indicador"}><span>Economia operacional</span><strong>{moeda.format(comparacao.delta.economiaOperacionalMes)}</strong><small>por mês · {moeda.format(comparacao.delta.economiaOperacionalAno)}/ano</small></div>
+            <div className="cp-indicador bom"><span>CO₂ evitado</span><strong>{numero.format(comparacao.delta.co2EvitadoMesKg / 1000)} t</strong><small>por mês · {numero.format(comparacao.delta.co2EvitadoAnoKg / 1000)} t/ano</small></div>
+          </div>
+
+          <div style={estilo.grid}>
+            <div style={estilo.card}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Truck size={15} /> Frota necessária</span>
+              <ul style={estilo.lista}>
+                <li style={estilo.linha}><span>Quilometragem diária</span><strong>{inteiro.format(demanda.kmPorDia)} km</strong></li>
+                <li style={estilo.linha}><span>Km por veículo/dia</span><strong>{inteiro.format(frota.resumo.kmPorVeiculoDia)} km</strong></li>
+                <li style={estilo.linha}><span>Recargas por dia</span><strong>{inteiro.format(frota.resumo.recargasPorVeiculoDia)}</strong></li>
+                <li style={estilo.linha}><span>Gargalo</span><strong>{frota.resumo.gargalo === "autonomia" ? "Autonomia / recarga" : "Quilometragem"}</strong></li>
+              </ul>
+            </div>
+
+            <div style={estilo.card}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><BatteryCharging size={15} /> Custo mensal (energia + manutenção)</span>
+              <ul style={estilo.lista}>
+                <li style={estilo.linha}><span>Elétrico</span><strong>{moeda.format(comparacao.eletrico.operacionalMes)}</strong></li>
+                <li style={estilo.linha}><span>Diesel</span><strong>{moeda.format(comparacao.diesel.operacionalMes)}</strong></li>
+                <li style={estilo.linha}><span>Diferença mensal</span><strong>{moeda.format(comparacao.delta.economiaOperacionalMes)}</strong></li>
+                {custoPorEntrega && <li style={estilo.linha}><span>Custo por entrega (elétrico)</span><strong>{moedaExata.format(custoPorEntrega.eletrico)}</strong></li>}
+                {custoPorEntrega && <li style={estilo.linha}><span>Economia por entrega</span><strong>{moedaExata.format(custoPorEntrega.economia)}</strong></li>}
+              </ul>
+            </div>
+
+            <div style={estilo.card}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><BarChart3 size={15} /> Retorno do investimento</span>
+              {comparacao.delta.paybackMeses != null ? (
+                <>
+                  <strong style={{ display: "block", fontSize: 30, marginTop: 10 }}>{comparacao.delta.paybackMeses === 0 ? "Imediato" : `${numero.format(comparacao.delta.paybackMeses)} meses`}</strong>
+                  <p style={estilo.texto}>Tempo para a economia operacional cobrir o quanto o elétrico custa a mais na compra{comparacao.delta.capexDelta != null ? ` (${moeda.format(comparacao.delta.capexDelta)})` : ""}.</p>
+                </>
+              ) : (
+                <p style={{ ...estilo.texto, marginTop: 10 }}>Informe o preço de compra do elétrico e do diesel para calcular o payback. Sem eles, a economia operacional acima já vale.</p>
+              )}
+            </div>
+          </div>
+
+          {cenario.avisos.length > 0 && (
+            <div className="cp-alerta" style={{ marginTop: 16 }}><AlertTriangle size={18} /><span>{cenario.avisos.join(" ")}</span></div>
+          )}
+
+          <p style={{ ...estilo.texto, display: "flex", alignItems: "center", gap: 7, marginTop: 16 }}><ShieldCheck size={15} /> Estimativa de planejamento. Autonomia, consumo, preços e premissas são referências editáveis — a operação e o fornecedor confirmam os números finais.</p>
+        </>
       )}
     </section>
   );
