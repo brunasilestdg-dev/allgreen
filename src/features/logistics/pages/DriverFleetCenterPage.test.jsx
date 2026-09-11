@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DriverFleetCenterPage from "./DriverFleetCenterPage.jsx";
 
@@ -79,5 +79,49 @@ describe("Gestão operacional de frota", () => {
     expect(await screen.findByRole("heading", { name: "Portal do motorista" })).toBeInTheDocument();
     expect((await screen.findAllByText(/Rota SP-01/)).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Abrir portal motorista/i })).not.toBeInTheDocument();
+  });
+
+  it("importa a frota em massa: analisa a planilha e envia só os novos ao servidor", async () => {
+    const chamadas = [];
+    vi.stubGlobal("fetch", vi.fn((url, opts) => {
+      const texto = String(url);
+      chamadas.push({ url: texto, method: opts?.method || "GET", body: opts?.body });
+      if (texto.includes("/fleet/importar")) {
+        return Promise.resolve(new Response(JSON.stringify({ criados: 1, ignorados: [], total: 1 }), { status: 201 }));
+      }
+      if (texto.includes("/records/operations")) {
+        return Promise.resolve(new Response(JSON.stringify({ registros: operations }), { status: 200 }));
+      }
+      if (texto.includes("/fleet/economics")) {
+        return Promise.resolve(new Response(JSON.stringify({ economics: [] }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(fleetPayload), { status: 200 }));
+    }));
+
+    render(<DriverFleetCenterPage authHeaders={() => ({ authorization: "Bearer teste" })} operations={operations} />);
+    await screen.findByText("TG-001");
+
+    fireEvent.click(screen.getByRole("button", { name: /Importar frota/i }));
+    // A placa ABC1D23 já existe na frota carregada; GHI4J56 é nova.
+    const csv = "Prefixo,Placa,Classe,Autonomia (km)\nTDG-050,GHI4J56,van,200\nTDG-051,ABC1D23,van,180";
+    fireEvent.change(screen.getByPlaceholderText(/Prefixo,Placa,Classe/), { target: { value: csv } });
+    fireEvent.click(screen.getByRole("button", { name: /^Analisar$/ }));
+
+    // Um novo, um duplicado (placa já na frota).
+    expect(await screen.findByText(/1 novos/)).toBeInTheDocument();
+    expect(screen.getByText(/1 duplicados/)).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Importar 1 ve/i }));
+
+    await waitFor(() => {
+      const post = chamadas.find((c) => c.method === "POST" && c.url.includes("/fleet/importar"));
+      expect(post).toBeTruthy();
+      const enviado = JSON.parse(post.body);
+      // Só o novo foi enviado; o duplicado ficou de fora.
+      expect(enviado.veiculos).toHaveLength(1);
+      expect(enviado.veiculos[0].plate).toBe("GHI4J56");
+      expect(enviado.veiculos[0].vehicleClass).toBe("van");
+      expect(enviado.veiculos[0].energyType).toBe("electric");
+    });
   });
 });

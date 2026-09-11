@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Trash2,
   Truck,
+  Upload,
   UserRoundCheck,
   Wrench,
 } from "lucide-react";
@@ -224,6 +225,7 @@ export default function DriverFleetCenterPage({
   const [error, setError] = useState("");
   const [canWrite, setCanWrite] = useState(false);
   const [editing, setEditing] = useState(null); // null | {} (novo) | veículo (editar)
+  const [importando, setImportando] = useState(false);
   const isPortal = mode === "driver-portal";
   const operations = providedOperations || operationsFromApi;
 
@@ -324,6 +326,11 @@ export default function DriverFleetCenterPage({
               <Plus size={17} />Novo veículo
             </button>
           )}
+          {!isPortal && canWrite && (
+            <button type="button" className="tdg-secondary-action" onClick={() => setImportando(true)}>
+              <Upload size={17} />Importar frota
+            </button>
+          )}
           {!isPortal && (
             <button type="button" className="tdg-secondary-action" onClick={() => go("/portal-motorista")}>
               <UserRoundCheck size={17} />Abrir portal motorista
@@ -399,7 +406,141 @@ export default function DriverFleetCenterPage({
           setToast={setToast}
         />
       )}
+
+      {importando && (
+        <FleetImportModal
+          authHeaders={authHeaders}
+          placasExistentes={fleet.map((v) => v.plate)}
+          onClose={() => setImportando(false)}
+          onDone={async () => { setImportando(false); await load(); }}
+          setToast={setToast}
+        />
+      )}
     </section>
+  );
+}
+
+// Importar a frota em massa: cola a planilha, vê o retrato (novos/duplicados/
+// inválidos) e confirma. A análise é a mesma camada pura do servidor; aqui é só
+// a prévia. O servidor RE-VALIDA e é a autoridade sobre a deduplicação.
+function FleetImportModal({ authHeaders, placasExistentes, onClose, onDone, setToast }) {
+  const [texto, setTexto] = useState("");
+  const [analise, setAnalise] = useState(null);
+  const [analisando, setAnalisando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+
+  const analisar = async () => {
+    setAnalisando(true);
+    setResultado(null);
+    try {
+      const { analisarPlanilhaDeFrota } = await import("../fleetImportDomain.js");
+      setAnalise(await analisarPlanilhaDeFrota(texto, { placasExistentes }));
+    } catch (reason) {
+      setToast?.(reason.message || "Não foi possível ler a planilha.");
+    } finally {
+      setAnalisando(false);
+    }
+  };
+
+  const usarModelo = async () => {
+    const { MODELO_CSV_FROTA } = await import("../fleetImportDomain.js");
+    setTexto(MODELO_CSV_FROTA);
+    setAnalise(null);
+    setResultado(null);
+  };
+
+  const importar = async () => {
+    if (!analise?.importaveis?.length) return;
+    setEnviando(true);
+    try {
+      const r = await fleetApi("/importar", authHeaders, {
+        method: "POST",
+        body: JSON.stringify({ veiculos: analise.importaveis }),
+      });
+      setResultado(r);
+      setToast?.(r.criados === 1 ? "1 veículo importado." : `${r.criados} veículos importados.`);
+      if (r.criados > 0 && (!r.ignorados || r.ignorados.length === 0)) {
+        await onDone();
+        return;
+      }
+    } catch (reason) {
+      setToast?.(reason.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const resumo = analise?.resumo;
+  return (
+    <Modal onClose={onClose} title="Importar frota (planilha)">
+      <div className="df-import">
+        <p className="tdg-rel-ressalva">
+          Cole as linhas da planilha (CSV: valores separados por vírgula ou ponto e vírgula, com
+          cabeçalho). Colunas reconhecidas: <strong>Prefixo, Placa, Classe, Fabricante, Modelo,
+          Ano, Unidade, Capacidade (kg), Bateria (kWh), Consumo (kWh/km), Autonomia (km),
+          Hodômetro (km), Valor de aquisição</strong>. A frota é cadastrada como elétrica.
+        </p>
+        <textarea
+          className="df-import-text"
+          rows={7}
+          placeholder="Prefixo,Placa,Classe,Autonomia (km)&#10;TDG-001,ABC1D23,VUC,240"
+          value={texto}
+          onChange={(e) => { setTexto(e.target.value); setAnalise(null); setResultado(null); }}
+        />
+        <div className="df-import-actions">
+          <button type="button" className="tdg-secondary-action" onClick={usarModelo}>Usar modelo</button>
+          <button type="button" className="tdg-action" onClick={analisar} disabled={!texto.trim() || analisando}>
+            {analisando ? "Analisando..." : "Analisar"}
+          </button>
+        </div>
+
+        {resumo && (
+          <>
+            <div className="df-import-resumo">
+              <span className="ok">{resumo.novos} novos</span>
+              <span>{resumo.duplicados} duplicados</span>
+              <span className={resumo.invalidos ? "erro" : ""}>{resumo.invalidos} inválidos</span>
+              <span className="total">{resumo.total} linhas</span>
+            </div>
+            {resumo.total > 0 && (
+              <div className="df-import-lista">
+                {analise.linhas.map((l) => (
+                  <div key={l.numero} className={`df-import-linha ${l.status}`}>
+                    <strong>{l.veiculo.plate || "(sem placa)"}</strong>
+                    <span>{l.veiculo.prefix}</span>
+                    <span>{l.status === "novo" ? (l.classeNome || l.veiculo.vehicleClass) : (l.erro || l.status)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {resultado && (
+          <div className="df-import-resultado">
+            <p><strong>{resultado.criados}</strong> veículo(s) cadastrado(s).</p>
+            {resultado.ignorados?.length > 0 && (
+              <ul>
+                {resultado.ignorados.map((ig, i) => (
+                  <li key={`${ig.placa}-${i}`}>{ig.placa}: {ig.motivo}</li>
+                ))}
+              </ul>
+            )}
+            <button type="button" className="tdg-action" onClick={onDone}>Concluir</button>
+          </div>
+        )}
+
+        {resumo && !resultado && (
+          <div className="df-import-confirmar">
+            <button type="button" className="tdg-secondary-action" onClick={onClose}>Cancelar</button>
+            <button type="button" className="tdg-action" onClick={importar} disabled={!resumo.novos || enviando}>
+              {enviando ? "Importando..." : `Importar ${resumo.novos} veículo(s)`}
+            </button>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

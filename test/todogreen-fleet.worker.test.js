@@ -180,3 +180,67 @@ describe("economia real da frota", () => {
     expect(Array.isArray((await res.json()).economics)).toBe(true);
   });
 });
+
+describe("importar frota em massa (bloco 01)", () => {
+  let dono;
+  beforeAll(async () => {
+    dono = await criarUsuario("frota-imp", "imp@frota.test");
+    await vincular(dono, "operacoes", ["read", "fleet:manage"], dono.id);
+  });
+
+  it("cria os válidos, ignora inválido e placa repetida no mesmo lote", async () => {
+    const r = await pedir("/api/todogreen/fleet/importar", {
+      metodo: "POST", token: dono.token,
+      corpo: {
+        veiculos: [
+          { prefix: "IMP-1", plate: "GHI4J56", vehicleClass: "van", energyType: "electric", nominalRangeKm: 200 },
+          { prefix: "IMP-2", plate: "KLM7N89", vehicleClass: "vuc", energyType: "electric", payloadKg: 3000 },
+          { prefix: "IMP-3", plate: "OPQ1R23", vehicleClass: "foguete" },
+          { prefix: "IMP-4", plate: "GHI4J56", vehicleClass: "van" },
+        ],
+      },
+    });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    expect(d.criados).toBe(2);
+    expect(d.total).toBe(4);
+    expect(d.ignorados).toHaveLength(2);
+    expect(d.ignorados.find((i) => /R23/.test(i.placa)).motivo).toMatch(/classe/i);
+    expect(d.ignorados.find((i) => /repetida/i.test(i.motivo))).toBeTruthy();
+
+    const lista = await (await pedir("/api/todogreen/fleet", { token: dono.token })).json();
+    const placas = lista.vehicles.map((v) => v.plate);
+    expect(placas).toContain("GHI4J56");
+    expect(placas).toContain("KLM7N89");
+    // O que entrou é elétrico e classificado.
+    const van = lista.vehicles.find((v) => v.plate === "GHI4J56");
+    expect(van.energyType).toBe("electric");
+    expect(van.vehicleClass).toBe("van");
+  });
+
+  it("reimportar uma placa já cadastrada não duplica", async () => {
+    const r = await pedir("/api/todogreen/fleet/importar", {
+      metodo: "POST", token: dono.token,
+      corpo: { veiculos: [{ prefix: "IMP-1b", plate: "ghi4j56", vehicleClass: "van", energyType: "electric" }] },
+    });
+    expect(r.status).toBe(200);
+    const d = await r.json();
+    expect(d.criados).toBe(0);
+    expect(d.ignorados[0].motivo).toMatch(/já cadastrada/i);
+  });
+
+  it("auditor (só leitura) não importa: 403", async () => {
+    const r = await pedir("/api/todogreen/fleet/importar", {
+      metodo: "POST", token: auditor.token,
+      corpo: { veiculos: [{ prefix: "X", plate: "STU4V56", vehicleClass: "van" }] },
+    });
+    expect(r.status).toBe(403);
+  });
+
+  it("lote vazio é recusado com 400", async () => {
+    const r = await pedir("/api/todogreen/fleet/importar", {
+      metodo: "POST", token: dono.token, corpo: { veiculos: [] },
+    });
+    expect(r.status).toBe(400);
+  });
+});

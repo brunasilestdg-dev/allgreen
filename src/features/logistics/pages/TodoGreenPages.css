@@ -1168,6 +1168,40 @@
   justify-content: flex-end;
 }
 
+/* Importar frota em massa (bloco 01) */
+.df-import { display: grid; gap: 12px; }
+.df-import-text {
+  background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 12px;
+  color: var(--tdg-text); font: inherit; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 12.5px; padding: 10px 12px; resize: vertical; width: 100%;
+}
+.df-import-actions, .df-import-confirmar { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+.df-import-resumo { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.df-import-resumo span {
+  background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 999px;
+  font-size: 12px; font-weight: 700; padding: 4px 11px;
+}
+.df-import-resumo .ok { background: #e8f6ec; border-color: #a9d8b8; color: #1f7a44; }
+.df-import-resumo .erro { background: #fdecec; border-color: #e5aeae; color: #a3352f; }
+.df-import-resumo .total { margin-left: auto; color: var(--tdg-muted); }
+.df-import-lista { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
+.df-import-linha {
+  align-items: center; background: var(--tdg-bg); border: 1px solid var(--tdg-line);
+  border-left-width: 3px; border-radius: 10px; display: grid; gap: 10px;
+  grid-template-columns: 90px 1fr 1.4fr; padding: 8px 11px;
+}
+.df-import-linha strong { font-size: 13px; }
+.df-import-linha span { color: var(--tdg-muted); font-size: 12px; overflow-wrap: anywhere; }
+.df-import-linha.novo { border-left-color: #2f9e57; }
+.df-import-linha.duplicado { border-left-color: #c99a1e; }
+.df-import-linha.invalido { border-left-color: #c0392b; }
+.df-import-resultado { display: grid; gap: 8px; }
+.df-import-resultado ul { margin: 0; padding-left: 18px; color: var(--tdg-muted); font-size: 12.5px; }
+@media (max-width: 560px) {
+  .df-import-linha { grid-template-columns: 74px 1fr; }
+  .df-import-linha span:last-child { grid-column: 1 / -1; }
+}
+
 .df-metric,
 .df-command article,
 .df-driver-card,

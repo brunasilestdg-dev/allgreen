@@ -152,6 +152,64 @@ export async function handleTodoGreenFleet(request, env, access, user) {
     return json({ vehicle: mapVehicle(row) }, 201);
   }
 
+  // Importação em massa da frota real (bloco 01). O cliente manda os veículos já
+  // parseados e pré-validados pela prévia; aqui o servidor é a AUTORIDADE: revalida
+  // prefixo, placa, classe e energia elétrica, e deduplica por placa contra o que
+  // já existe e dentro do próprio lote. Novos entram num único DB.batch; o resto
+  // volta como ignorado com o motivo, para a tela mostrar sem inventar sucesso.
+  if (request.method === "POST" && vehicleId === "importar" && !subresource) {
+    const body = await request.json().catch(() => ({}));
+    const entrada = Array.isArray(body.veiculos) ? body.veiculos : [];
+    if (entrada.length === 0) return json({ error: "Nenhum veículo para importar." }, 400);
+    if (entrada.length > 500) return json({ error: "Importe no máximo 500 veículos por vez." }, 400);
+
+    const existentes = await env.DB.prepare(
+      "SELECT plate FROM todogreen_fleet_vehicles WHERE workspace_owner_id = ? AND archived_at IS NULL",
+    ).bind(access.ownerId).all().catch(() => ({ results: [] }));
+    const jaExistem = new Set((existentes.results || []).map((r) => normalizePlate(r.plate)).filter(Boolean));
+    const noLote = new Set();
+    const placaValida = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+
+    const now = new Date().toISOString();
+    const inserts = [];
+    const ignorados = [];
+    for (const v of entrada) {
+      const prefix = clean(v.prefix, 50);
+      const placaNorm = normalizePlate(v.plate);
+      const rotulo = clean(v.plate, 20) || prefix || "(sem placa)";
+      if (!prefix) { ignorados.push({ placa: rotulo, motivo: "Sem prefixo." }); continue; }
+      if (!placaNorm || !placaValida.test(placaNorm)) { ignorados.push({ placa: rotulo, motivo: "Placa inválida." }); continue; }
+      const classe = isVehicleClass(v.vehicleClass)
+        ? clean(v.vehicleClass, 40).toLowerCase()
+        : normalizeVehicleClass(v.category);
+      if (!classe) { ignorados.push({ placa: rotulo, motivo: "Classe não reconhecida." }); continue; }
+      const erroClasse = validateVehicleClass({ vehicleClass: classe, energyType: v.energyType });
+      if (erroClasse) { ignorados.push({ placa: rotulo, motivo: erroClasse }); continue; }
+      if (jaExistem.has(placaNorm)) { ignorados.push({ placa: rotulo, motivo: "Placa já cadastrada." }); continue; }
+      if (noLote.has(placaNorm)) { ignorados.push({ placa: rotulo, motivo: "Placa repetida na planilha." }); continue; }
+      noLote.add(placaNorm);
+
+      const id = crypto.randomUUID();
+      inserts.push(
+        env.DB.prepare(`INSERT INTO todogreen_fleet_vehicles
+          (id, tenant_id, workspace_owner_id, prefix, plate, manufacturer, model, model_year, category, vehicle_class, energy_type, status,
+           operational_unit, cost_center, payload_kg, volume_m3, pallet_capacity, odometer_km, acquisition_value, monthly_fixed_cost,
+           revenue_accumulated, cost_accumulated, energy_consumption_kwh_per_km, emission_factor_kgco2e_per_kwh, battery_capacity_kwh,
+           battery_soh_percent, nominal_range_km, real_range_km, next_maintenance_at, next_document_due_at, fields_json, revision,
+           created_by, updated_by, created_at, updated_at, archived_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)`)
+          .bind(id, TENANT_ID, access.ownerId, prefix, placaNorm, clean(v.manufacturer, 100), clean(v.model, 100), Number(v.modelYear) || null,
+            clean(v.category, 80), classe, "electric", clean(v.status, 40) || "available", clean(v.operationalUnit, 120), clean(v.costCenter, 120),
+            num(v.payloadKg), num(v.volumeM3), num(v.palletCapacity), num(v.odometerKm), num(v.acquisitionValue), num(v.monthlyFixedCost), num(v.revenueAccumulated),
+            num(v.costAccumulated), num(v.energyConsumptionKwhPerKm), num(v.emissionFactorKgCo2ePerKwh), num(v.batteryCapacityKwh), Math.min(100, num(v.batterySohPercent || 100)),
+            num(v.nominalRangeKm), num(v.realRangeKm), clean(v.nextMaintenanceAt, 20) || null, clean(v.nextDocumentDueAt, 20) || null, JSON.stringify(vehicleFields(v)), user.id, user.id, now, now),
+      );
+    }
+
+    if (inserts.length > 0) await env.DB.batch(inserts);
+    return json({ criados: inserts.length, ignorados, total: entrada.length }, inserts.length > 0 ? 201 : 200);
+  }
+
   if (request.method === "PATCH" && vehicleId && !subresource) {
     const body = await request.json().catch(() => ({}));
     const current = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ? AND workspace_owner_id = ? AND archived_at IS NULL").bind(vehicleId, access.ownerId).first();
