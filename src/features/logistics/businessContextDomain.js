@@ -185,7 +185,7 @@ ATENÇÃO — o número de veículos DIVERGE entre documentos: a apresentação 
 Roteirização própria — algoritmo por volume, janela de entrega, densidade e autonomia de cada veículo elétrico.
 Rastreamento em tempo real do seller ao comprador, com evidência de entrega.
 Torre de controle: gestão ativa de exceções e relatórios operacionais e de CO2 integráveis ao sistema do parceiro.
-No ERP: o TMS operacional é o TRACK3R (ocorrências chegam por webhook) e a posição do veículo vem da Sistemas Tracker. São fornecedores diferentes e não se substituem.`,
+No ERP: o TMS próprio é a fonte de verdade para operação, rotas, eventos, POD e faturamento. Track3r e provedores de telemetria são conectores opcionais de entrada, sem substituir o núcleo operacional.`,
     fonte: "Apresentação Comercial VF2 + docs/todogreen-tms-track3r.md",
     vigenteEm: "2026-08-15",
     sigilo: "interno",

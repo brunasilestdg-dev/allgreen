@@ -26,7 +26,7 @@ const CHECK_LINKS = {
   // A Central de Integrações virou dev-only; o status de integração do go-live
   // é ajustado aqui mesmo, no painel "Integração e tracking" ao lado. Sem
   // atalho para uma tela restrita.
-  tracking: ["TMS Tracker", "/todogreen/rastreamento"],
+  tracking: ["Mapa da frota", "/portal-tms/mapa"],
   esg: ["Central ESG", "/todogreen/central-esg"],
   dashboard: ["Painéis", "/todogreen/dashboards"],
 };

@@ -161,7 +161,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     operations: "/todogreen/operacoes",
     occupancy: "/todogreen/operacoes",
     deliveries: "/todogreen/operacoes",
-    distance: "/todogreen/rastreamento",
+    distance: "/portal-tms/mapa",
     impact: "/todogreen/central-esg",
     greenScore: "/todogreen/central-esg",
   };
@@ -255,7 +255,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
       </div>
       <div className="tdg-home-identity">
         <span>{comRotulo(ROLE_LABEL, role)}</span>
-        <button type="button" onClick={() => onNavigate?.("/todogreen/rastreamento")}><MapPinned size={16} />Abrir TMS Tracker</button>
+        <button type="button" onClick={() => onNavigate?.("/portal-tms")}><MapPinned size={16} />Abrir Torre TMS</button>
         <button type="button" onClick={() => { setDraft(profile); setEditing(true); }}><Settings2 size={16} />Configurar meu início</button>
       </div>
     </header>

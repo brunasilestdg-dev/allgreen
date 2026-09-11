@@ -560,12 +560,6 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Cadastro operacional de veículos, telemetria, autonomia, custo, disponibilidade e manutenção.",
     permissions: ["read", "fleet:manage", "operations:manage"],
   }),
-  module("rastreamento", "TMS Tracker", "operacao", "/todogreen/rastreamento", {
-    icon: "Route",
-    order: 44.5,
-    description: "Receba posições e eventos da frota conectada ao Tracker.",
-    permissions: ["read", "fleet:manage", "integration:manage"],
-  }),
   module("motoristas", "Motoristas", "operacao", "/todogreen/motorista-frota", {
     icon: "UserRound",
     order: 45,

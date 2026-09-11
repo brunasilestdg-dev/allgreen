@@ -359,8 +359,8 @@ export default function DriverFleetCenterPage({
         </article>
         <article>
           <ShieldCheck size={20} />
-          <span><strong>Rastreamento Tracker</strong><small>Conecte posições, eventos e última leitura quando a credencial estiver ativa.</small></span>
-          <button type="button" onClick={() => go("/todogreen/rastreamento")}>Abrir Tracker</button>
+          <span><strong>Torre TMS</strong><small>Acompanhe rotas, posições recebidas, SLA e exceções na operação própria.</small></span>
+          <button type="button" onClick={() => go("/portal-tms/mapa")}>Abrir mapa da frota</button>
         </article>
       </section>
 
@@ -383,7 +383,7 @@ export default function DriverFleetCenterPage({
       <section className="df-readiness">
         <header><AlertTriangle size={18} /><strong>O que ainda depende de integração real</strong></header>
         <div>
-          <span><MapPin size={15} /> Localização em tempo real, trajeto, velocidade, deslocamento/parada e cerca virtual dependem do Tracker enviar esses eventos.</span>
+          <span><MapPin size={15} /> Localização em tempo real, trajeto, velocidade, deslocamento/parada e cerca virtual dependem da integração telemática enviar esses eventos.</span>
           <span><Truck size={15} /> Bloqueio remoto, RFID, horímetro e voltagem exigem suporte do hardware/API contratada.</span>
           <span><UserRoundCheck size={15} /> Jornada do motorista fica operacional com check-in/check-out e app dedicado numa próxima etapa.</span>
         </div>
