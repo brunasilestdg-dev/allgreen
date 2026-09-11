@@ -44,6 +44,11 @@ import {
   bloqueioPorFechamento,
   validateBankAccount,
 } from "../../src/features/logistics/treasuryDomain.js";
+import {
+  normalizarPontoRecarga,
+  servePesado as pontoServePesado,
+  validarPontoRecarga,
+} from "../../src/features/logistics/chargingPointsDomain.js";
 import { doBanco as pedidoDoBanco } from "./todogreen-deal-desk.js";
 import { liberacaoDaProposta } from "../../src/features/logistics/dealDeskDomain.js";
 import {
@@ -988,6 +993,56 @@ const COLECOES = {
         return "A rota precisa de pelo menos duas paradas (origem e destino).";
       return "";
     },
+  },
+
+  // Pontos de recarga próprios (Ground/GreenOn/pátio próprio). Cadastro da
+  // EMPRESA — escopoDeCarteira:false — usado pelo roteirizador para desenhar a
+  // infra real junto aos carregadores públicos. A validação e o "serve pesado"
+  // vêm de chargingPointsDomain, a mesma régua da tela.
+  pontosRecarga: {
+    tabela: "todogreen_charging_points",
+    permissao: "operations:manage",
+    permissoesLeitura: ["operations:manage", "planning:manage", "tms:manage", "fleet:manage", "audit:read"],
+    escopoDeCarteira: false,
+    ordem: "name ASC",
+    daLinha: (row) => {
+      const tipoCorrente = row.current_type || "AC";
+      const potenciaKw = numero(row.power_kw);
+      return {
+        id: row.id,
+        nome: row.name || "",
+        operador: row.operator || "",
+        tipoCorrente,
+        conector: row.connector || "",
+        potenciaKw,
+        latitude: row.latitude ?? null,
+        longitude: row.longitude ?? null,
+        endereco: row.address || "",
+        status: row.status || "ativo",
+        // Derivado, nunca gravado: potência muda, verdade acompanha.
+        servePesado: pontoServePesado({ tipoCorrente, potenciaKw }),
+        campos: parse(row.fields_json, {}),
+        revision: row.revision,
+        criadoEm: row.created_at,
+        atualizadoEm: row.updated_at,
+      };
+    },
+    colunas: (corpo) => {
+      const p = normalizarPontoRecarga(corpo);
+      return {
+        name: p.nome,
+        operator: p.operador,
+        current_type: p.tipoCorrente,
+        connector: p.conector,
+        power_kw: p.potenciaKw,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        address: p.endereco,
+        status: p.status,
+        fields_json: JSON.stringify(objeto(corpo.campos)),
+      };
+    },
+    exigido: (corpo) => validarPontoRecarga(corpo),
   },
 
   financial: {

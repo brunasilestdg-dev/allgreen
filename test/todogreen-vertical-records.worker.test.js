@@ -1623,3 +1623,57 @@ describe("jurídico: minutas e contratos saem da página de orientação para da
     expect(criada.status).toBe(403);
   });
 });
+
+describe("pontos de recarga próprios (cadastro da eletrificação)", () => {
+  it("grava o ponto e deriva 'serve pesado' de corrente + potência", async () => {
+    const criada = await pedir("/api/todogreen/records/pontosRecarga", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: {
+        nome: "Pátio Guarulhos", operador: "GreenOn", tipoCorrente: "dc",
+        conector: "CCS2", potenciaKw: 150, latitude: -23.43, longitude: -46.47, status: "ativo",
+      },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+    expect(registro.nome).toBe("Pátio Guarulhos");
+    expect(registro.tipoCorrente).toBe("DC");
+    expect(registro.servePesado).toBe(true);
+    expect(registro.latitude).toBe(-23.43);
+  });
+
+  it("AC potente não serve pesado; coordenada (0,0) não é gravada", async () => {
+    const criada = await pedir("/api/todogreen/records/pontosRecarga", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { nome: "Doca AC", tipoCorrente: "AC", potenciaKw: 300, latitude: 0, longitude: 0 },
+    });
+    const { registro } = await criada.json();
+    expect(registro.servePesado).toBe(false);
+    expect(registro.latitude).toBeNull();
+    expect(registro.longitude).toBeNull();
+  });
+
+  it("recusa ponto sem nome", async () => {
+    const criada = await pedir("/api/todogreen/records/pontosRecarga", {
+      metodo: "POST", token: gestora.token, corpo: { nome: "", potenciaKw: 50 },
+    });
+    expect(criada.status).toBe(400);
+  });
+
+  it("ponto de um espaço não aparece no outro", async () => {
+    await pedir("/api/todogreen/records/pontosRecarga", {
+      metodo: "POST", token: gestora.token, corpo: { nome: "Só da gestora", potenciaKw: 60, tipoCorrente: "DC" },
+    });
+    const lista = await pedir("/api/todogreen/records/pontosRecarga", { token: colega.token });
+    const { registros } = await lista.json();
+    expect(registros.some((r) => r.nome === "Só da gestora")).toBe(false);
+  });
+
+  it("quem só lê não cria ponto de recarga", async () => {
+    const criada = await pedir("/api/todogreen/records/pontosRecarga", {
+      metodo: "POST", token: auditor.token, corpo: { nome: "Auditor não grava" },
+    });
+    expect(criada.status).toBe(403);
+  });
+});
