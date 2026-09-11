@@ -251,10 +251,7 @@ const friendlyCommercialText = (value) =>
 const IMPLEMENTED_MODULE_IDS = new Set([
   "dashboard",
   "dashboard-esg",
-  "green-score",
-  "calculadora-ambiental",
-  "tradutor-esg",
-  "escopo-3",
+  "central-esg",
   "relatorios-esg",
   "metodologia",
   "cofre-evidencias",
@@ -3487,7 +3484,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "mapa-ideias" && <Suspense fallback={<section className="tdg-panel">Carregando o mapa...</section>}><div className="tdg-page tdg-estudio"><MindMapStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
       {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
       {page === "precificacao" && <PricingPanel key={`${produtoDaRota(path) || "nova"}:${new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"}`} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
-      {["esg", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3"].includes(page) && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}
+      {page === "esg" && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}
       {page === "regua" && (
         <Suspense fallback={<section className="tdg-panel">Carregando parâmetros do simulador...</section>}>
           <PricingParametersPanel authHeaders={authHeaders} setToast={setToast} />
@@ -3575,7 +3572,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "auditoria" && <Suspense fallback={<section className="tdg-panel">Carregando auditoria...</section>}><GovernancePage role={role} permissions={remoteAccess.permissions || []} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
       {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "green-score", "calculadora-ambiental", "tradutor-esg", "escopo-3", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
+      {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 
       {isOverview && (
         <details className="tdg-tool-catalog" open={catalogRequested || undefined}>

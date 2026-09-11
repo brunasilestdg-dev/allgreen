@@ -374,25 +374,16 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Indicadores mensais e anuais de impacto por cliente, contrato e operação.",
     permissions: ["read", "esg:manage"],
   }),
-  module("green-score", "Green Score", "esg", "/todogreen/green-score", {
+  // Consolidado: Green Score, Calculadora Ambiental, Tradutor ESG e Emissões da
+  // cadeia eram quatro cards que abriam o MESMO painel genérico. Agora há uma só
+  // porta — a Central ESG (EsgCenter) —, que de fato calcula o impacto, apura o
+  // Green Score com pesos versionados, guarda memória de cálculo e gera o texto
+  // para proposta. Uma fonte de verdade, sem card que promete o que não entrega.
+  module("central-esg", "Central ESG", "esg", "/todogreen/central-esg", {
     icon: "Gauge",
     order: 2,
-    description: "Nota proprietária de 0 a 100 com pesos versionados.",
-  }),
-  module("calculadora-ambiental", "Calculadora Ambiental", "esg", "/todogreen/calculadora-ambiental", {
-    icon: "Calculator",
-    order: 3,
-    description: "Simule CO2 evitado, diesel não consumido e equivalências ambientais.",
-  }),
-  module("tradutor-esg", "Tradutor ESG", "esg", "/todogreen/tradutor-esg", {
-    icon: "Languages",
-    order: 4,
-    description: "Converte números ambientais em textos auditáveis para propostas e relatórios.",
-  }),
-  module("escopo-3", "Emissões da cadeia logística", "esg", "/todogreen/escopo-3", {
-    icon: "Network",
-    order: 5,
-    description: "Memória de cálculo para apoiar inventários e governança da cadeia logística.",
+    description: "Green Score versionado, cálculo de CO2 evitado, texto auditável para proposta e memória da cadeia — num só lugar.",
+    permissions: ["read", "esg:manage"],
   }),
   module("relatorios-esg", "Relatórios ESG", "esg", "/todogreen/relatorios", {
     icon: "FileText",
