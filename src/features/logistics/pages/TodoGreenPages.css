@@ -4537,3 +4537,84 @@
 .tdg-dispatch-motor { margin: 0 0 8px; font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
 .tdg-dispatch-motor.ok { color: #1f7a44; background: rgba(31,122,68,.08); border-color: rgba(31,122,68,.22); }
 .tdg-dispatch-motor.aprox { color: #9a6a00; background: rgba(154,106,0,.08); border-color: rgba(154,106,0,.22); }
+
+/* Pontos de recarga próprios (cadastro da eletrificação). Espelha o padrão da
+   Qualidade: métricas no topo, formulário em grade e cartões por ponto. */
+.tdg-recarga-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 14px;
+}
+.tdg-recarga-metrics article {
+  background: var(--tdg-bg);
+  border: 1px solid var(--tdg-line);
+  border-radius: 9px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+.tdg-recarga-metrics small { color: var(--tdg-muted); font-size: .7rem; }
+.tdg-recarga-metrics strong { font-size: 1.35rem; }
+.tdg-recarga-metrics article.risk strong { color: var(--tdg-danger, #b3261e); }
+
+.tdg-recarga-form {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 14px;
+}
+.tdg-recarga-form label { display: grid; gap: 4px; min-width: 0; }
+.tdg-recarga-form label span { color: var(--tdg-muted); font-size: .72rem; font-weight: 700; }
+.tdg-recarga-form input,
+.tdg-recarga-form select {
+  border: 1px solid var(--tdg-line);
+  border-radius: 8px;
+  font: inherit;
+  padding: 8px 10px;
+  width: 100%;
+}
+.tdg-recarga-wide { grid-column: 1 / -1; }
+.tdg-recarga-dica { color: var(--tdg-muted); font-size: .74rem; grid-column: 1 / -1; margin: 0; }
+.tdg-recarga-form-actions { align-items: center; display: flex; gap: 8px; grid-column: 1 / -1; justify-content: flex-end; }
+.tdg-recarga-form-actions button { border-radius: 8px; cursor: pointer; padding: 8px 14px; }
+.tdg-recarga-form-actions button:not(.tdg-action) { background: none; border: 1px solid var(--tdg-line); }
+
+.tdg-recarga-filtros { display: flex; gap: 6px; margin-bottom: 10px; }
+.tdg-recarga-filtros button {
+  background: var(--tdg-bg);
+  border: 1px solid var(--tdg-line);
+  border-radius: 999px;
+  color: var(--tdg-muted);
+  cursor: pointer;
+  font-size: .74rem;
+  font-weight: 700;
+  padding: 5px 12px;
+}
+.tdg-recarga-filtros button.active { background: var(--tdg-green); border-color: var(--tdg-green); color: #fff; }
+
+.tdg-recarga-lista { display: grid; gap: 10px; }
+.tdg-recarga-card {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-left: 4px solid var(--tdg-green);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.tdg-recarga-card.status-manutencao { border-left-color: #c98a00; }
+.tdg-recarga-card.status-inativo { border-left-color: var(--tdg-muted); opacity: .72; }
+.tdg-recarga-card header { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
+.tdg-recarga-nome { display: grid; gap: 3px; min-width: 0; }
+.tdg-recarga-nome strong { align-items: center; display: flex; gap: 6px; }
+.tdg-recarga-nome small { color: var(--tdg-muted); font-size: .76rem; }
+.tdg-recarga-tag { border-radius: 999px; flex-shrink: 0; font-size: .7rem; font-weight: 700; padding: 4px 9px; white-space: nowrap; }
+.tdg-recarga-tag.pesado { background: rgba(23, 98, 79, .12); color: var(--tdg-green); }
+.tdg-recarga-tag.leve { background: var(--tdg-bg); color: var(--tdg-muted); }
+.tdg-recarga-endereco { align-items: center; color: var(--tdg-muted); display: flex; font-size: .78rem; gap: 5px; margin: 8px 0 0; }
+.tdg-recarga-card footer { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-top: 10px; }
+.tdg-recarga-mapa { font-size: .74rem; font-weight: 700; }
+.tdg-recarga-mapa.ok { color: var(--tdg-green); }
+.tdg-recarga-mapa.off { color: var(--tdg-muted); }
+.tdg-recarga-acoes { align-items: center; display: flex; gap: 8px; }
+.tdg-recarga-acoes select { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; padding: 6px 8px; }
+.tdg-recarga-remover { align-items: center; background: none; border: 1px solid var(--tdg-line); border-radius: 8px; color: var(--tdg-danger, #b3261e); cursor: pointer; display: inline-flex; padding: 7px; }
