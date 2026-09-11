@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BatteryCharging,
+  Calculator,
   Clock3,
   Gauge,
   MapPin,
@@ -18,6 +19,11 @@ import {
 import Modal from "../../../components/Modal.jsx";
 import { VEHICLE_CLASSES, vehicleClass } from "../vehicleClassDomain.js";
 import { fleetAlerts, fleetVehicleMetrics, summarizeFleet } from "../todoGreenFleetDomain.js";
+import {
+  dimensionarFrota,
+  PREMISSAS_DIMENSIONAMENTO_FIELDS,
+  PREMISSAS_DIMENSIONAMENTO_PADRAO,
+} from "../fleetSizingDomain.js";
 import "./TodoGreenPages.css";
 import { comRotulo } from "../rotulosDomain.js";
 
@@ -226,6 +232,7 @@ export default function DriverFleetCenterPage({
   const [canWrite, setCanWrite] = useState(false);
   const [editing, setEditing] = useState(null); // null | {} (novo) | veículo (editar)
   const [importando, setImportando] = useState(false);
+  const [dimensionando, setDimensionando] = useState(false);
   const isPortal = mode === "driver-portal";
   const operations = providedOperations || operationsFromApi;
 
@@ -332,6 +339,11 @@ export default function DriverFleetCenterPage({
             </button>
           )}
           {!isPortal && (
+            <button type="button" className="tdg-secondary-action" onClick={() => setDimensionando(true)}>
+              <Calculator size={17} />Dimensionar
+            </button>
+          )}
+          {!isPortal && (
             <button type="button" className="tdg-secondary-action" onClick={() => go("/portal-motorista")}>
               <UserRoundCheck size={17} />Abrir portal motorista
             </button>
@@ -416,7 +428,105 @@ export default function DriverFleetCenterPage({
           setToast={setToast}
         />
       )}
+
+      {dimensionando && (
+        <FleetSizingModal
+          autonomiaSugerida={autonomiaMediaFrota(fleet)}
+          onClose={() => setDimensionando(false)}
+        />
+      )}
     </section>
+  );
+}
+
+// Autonomia de referência a partir da frota já cadastrada: média das autonomias
+// reais (senão nominais) dos elétricos. Só uma sugestão editável; 0 quando não há.
+function autonomiaMediaFrota(fleet = []) {
+  const valores = fleet
+    .filter((v) => (v.energyType || "electric") === "electric")
+    .map((v) => Number(v.realRangeKm) || Number(v.nominalRangeKm) || 0)
+    .filter((n) => n > 0);
+  if (!valores.length) return 0;
+  return Math.round(valores.reduce((a, b) => a + b, 0) / valores.length);
+}
+
+// Dimensionar frota: quantos elétricos cobrem a operação, dada a demanda diária
+// e a autonomia/janela de recarga. Calculadora pura — recalcula ao digitar,
+// nada é gravado. As premissas são referências a confirmar; a operação manda.
+function FleetSizingModal({ autonomiaSugerida = 0, onClose }) {
+  const [kmPorDia, setKmPorDia] = useState("");
+  const [autonomiaKm, setAutonomiaKm] = useState(autonomiaSugerida ? String(autonomiaSugerida) : "");
+  const [premissas, setPremissas] = useState(PREMISSAS_DIMENSIONAMENTO_PADRAO);
+
+  const setPremissa = (chave, valor) =>
+    setPremissas((atual) => ({ ...atual, [chave]: valor === "" ? "" : Number(valor) }));
+
+  const resultado = useMemo(
+    () => dimensionarFrota({ kmPorDia: Number(kmPorDia) || 0 }, { autonomiaKm: Number(autonomiaKm) || 0 }, premissas),
+    [kmPorDia, autonomiaKm, premissas],
+  );
+  const r = resultado.resumo;
+  const gargaloRotulo = { autonomia: "Autonomia e recarga", demanda: "Quilometragem" };
+
+  return (
+    <Modal onClose={onClose} title="Dimensionar frota elétrica" wide>
+      <div className="df-sizing">
+        <p className="tdg-rel-ressalva">
+          Quantos elétricos cobrem a operação — contando a autonomia por ciclo e a janela de
+          recarga (o que o diesel não tem). As premissas são referências; a operação real manda.
+        </p>
+
+        <div className="df-sizing-form">
+          <label>
+            <span>Quilometragem diária da operação (todos os veículos)</span>
+            <div className="df-sizing-input"><input type="number" min="0" inputMode="decimal" value={kmPorDia} onChange={(e) => setKmPorDia(e.target.value)} placeholder="ex.: 1000" /><em>km/dia</em></div>
+          </label>
+          <label>
+            <span>Autonomia real do veículo{autonomiaSugerida ? ` (média da frota: ${autonomiaSugerida} km)` : ""}</span>
+            <div className="df-sizing-input"><input type="number" min="0" inputMode="decimal" value={autonomiaKm} onChange={(e) => setAutonomiaKm(e.target.value)} placeholder="ex.: 235" /><em>km</em></div>
+          </label>
+        </div>
+
+        <details className="df-sizing-premissas">
+          <summary>Premissas (referências a confirmar)</summary>
+          <div className="df-sizing-form">
+            {PREMISSAS_DIMENSIONAMENTO_FIELDS.map((f) => (
+              <label key={f.chave}>
+                <span>{f.rotulo}</span>
+                <div className="df-sizing-input">
+                  <input type="number" min={f.min} max={f.max} inputMode="decimal" value={premissas[f.chave]} onChange={(e) => setPremissa(f.chave, e.target.value)} />
+                  <em>{f.sufixo}</em>
+                </div>
+              </label>
+            ))}
+          </div>
+        </details>
+
+        {resultado.disponivel ? (
+          <div className="df-sizing-resultado">
+            <div className="df-sizing-destaque">
+              <small>Frota necessária</small>
+              <strong>{r.veiculosTotal}</strong>
+              <span>{r.veiculosPorDemanda} para a demanda + {r.veiculosReserva} de reserva</span>
+            </div>
+            <div className="df-sizing-numeros">
+              <div><small>Km por veículo/dia</small><strong>{NUM.format(r.kmPorVeiculoDia)} km</strong></div>
+              <div><small>Recargas por veículo/dia</small><strong>{r.recargasPorVeiculoDia}</strong></div>
+              <div><small>Horas dirigindo</small><strong>{NUM.format(r.horasDirigindoPorVeiculo)} h</strong></div>
+              <div><small>Horas em recarga</small><strong>{NUM.format(r.horasRecargaPorVeiculo)} h</strong></div>
+              <div><small>Autonomia útil (com folga)</small><strong>{NUM.format(r.autonomiaUtilKm)} km</strong></div>
+              <div><small>O que aperta primeiro</small><strong>{gargaloRotulo[r.gargalo] || "—"}</strong></div>
+            </div>
+          </div>
+        ) : (
+          <div className="df-sizing-avisos">
+            {resultado.avisos.map((a) => (
+              <p key={a} className="tdg-rel-aviso"><AlertTriangle size={16} />{a}</p>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

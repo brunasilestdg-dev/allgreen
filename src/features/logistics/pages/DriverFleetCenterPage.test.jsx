@@ -124,4 +124,21 @@ describe("Gestão operacional de frota", () => {
       expect(enviado.veiculos[0].energyType).toBe("electric");
     });
   });
+
+  it("dimensiona a frota: calcula quantos elétricos cobrem a operação", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify(fleetPayload), { status: 200 }))));
+    render(<DriverFleetCenterPage authHeaders={() => ({ authorization: "Bearer teste" })} operations={operations} />);
+    await screen.findByText("TG-001");
+
+    fireEvent.click(screen.getByRole("button", { name: /Dimensionar/i }));
+    // Sem demanda ainda: avisa em vez de chutar (a autonomia vem prefilada da frota).
+    expect(await screen.findByText(/Informe a quilometragem/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("ex.: 1000"), { target: { value: "1000" } });
+    fireEvent.change(screen.getByPlaceholderText("ex.: 235"), { target: { value: "200" } });
+
+    // 340 km/veículo/dia com as premissas padrão → 3 para a demanda + 1 reserva = 4.
+    expect(await screen.findByText(/3 para a demanda \+ 1 de reserva/)).toBeInTheDocument();
+    expect(screen.getByText("O que aperta primeiro").closest("div")).toHaveTextContent(/Autonomia/);
+  });
 });
