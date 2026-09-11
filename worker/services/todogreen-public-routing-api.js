@@ -104,7 +104,7 @@ async function electricPlan(request) {
   }, 200, { "x-tdg-routing-engine": "tdg-electric-routing-v1" });
 }
 
-async function optimize(request, env) {
+export async function optimizeTodoGreenRouting(body, env) {
   const endpoint = routingEndpoint(env);
   if (!endpoint)
     return apiJson({
@@ -112,7 +112,6 @@ async function optimize(request, env) {
       message: "O motor de roteirização auto-hospedado ainda não está conectado ao TMS.",
     }, 503);
 
-  const body = await request.json().catch(() => null);
   const sanitized = sanitizeOptimizationInput(body);
   if (sanitized.error)
     return apiJson({ error: "invalid_routing_request", message: sanitized.error }, 400);
@@ -154,6 +153,11 @@ async function optimize(request, env) {
     generatedAt: new Date().toISOString(),
     ...result,
   }, 200, { "x-tdg-routing-engine": "vroom" });
+}
+
+async function optimize(request, env) {
+  const body = await request.json().catch(() => null);
+  return optimizeTodoGreenRouting(body, env);
 }
 
 export async function handlePublicTodoGreenRoutingApi(request, env) {

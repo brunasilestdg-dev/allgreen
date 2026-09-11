@@ -9,6 +9,10 @@ import {
   tracarRota,
 } from "../distanciaRodoviariaDomain.js";
 import { estimarTotalPedagios } from "../pedagiosDomain.js";
+import {
+  interpretarSolucaoVroom,
+  montarProblemaVroom,
+} from "../routingOptimizationDomain.js";
 import DispatchPanel from "./DispatchPanel.jsx";
 import {
   ROTULO_STATUS_ROTA,
@@ -103,6 +107,7 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [restricoes, setRestricoes] = useState("");
   const [iaEstado, setIaEstado] = useState({ fase: "idle" });
   const [estado, setEstado] = useState({ fase: "parado" });
+  const [otimizando, setOtimizando] = useState(false);
   const [sugestoes, setSugestoes] = useState({});
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
   const [pedagios, setPedagios] = useState({ fase: "idle" });
@@ -169,7 +174,9 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
       return;
     }
     timerSugestaoRef.current = setTimeout(async () => {
-      const lista = await sugerirEnderecos(termo);
+      const lista = await sugerirEnderecos(termo, {
+        headers: authHeaders?.() || {},
+      });
       setSugestoes((atual) => ({ ...atual, [indice]: lista }));
     }, 350);
   };
@@ -261,7 +268,10 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
       endereco,
       coord: coordsResolvidasRef.current[String(endereco).trim()] || null,
     }));
-    const resultado = await tracarRota({ paradas: comCoords });
+    const resultado = await tracarRota(
+      { paradas: comCoords },
+      { headers: authHeaders?.() || {} },
+    );
     if (resultado.ok) {
       setEstado({ fase: "pronto", resultado: { ...resultado, enderecos: lista } });
       desenhar(resultado);
@@ -308,21 +318,70 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
     await tracar(validas);
   };
 
-  // #92: reordena as paradas do meio por proximidade (a origem e o destino
-  // ficam fixos) e traça de novo. Usa as coordenadas já resolvidas na última
-  // rota, então é instantâneo.
   const otimizar = async () => {
     const r = estado.resultado;
     if (!r?.paradas || !r.enderecos) return;
-    const comCoord = r.enderecos.map((endereco, i) => ({ endereco, coord: r.paradas[i]?.coord }));
-    const nova = otimizarOrdemDeParadas(comCoord);
-    if (nova.join("|") === r.enderecos.join("|")) {
-      setToast?.("A ordem já está otimizada.");
+    if (r.paradas.length <= 2) {
+      setToast?.("Não há paradas intermediárias para otimizar.");
       return;
     }
-    reordenarEstado(r.enderecos, nova);
-    await tracar(nova);
-    setToast?.("Ordem das paradas otimizada.");
+
+    const fallbackLocal = async (motivo = "") => {
+      const comCoord = r.enderecos.map((endereco, i) => ({ endereco, coord: r.paradas[i]?.coord }));
+      const nova = otimizarOrdemDeParadas(comCoord);
+      if (nova.join("|") === r.enderecos.join("|")) {
+        setToast?.(motivo ? motivo + " A ordem atual foi mantida." : "A ordem já está otimizada.");
+        return;
+      }
+      reordenarEstado(r.enderecos, nova);
+      await tracar(nova);
+      setToast?.(motivo ? motivo + " Usei o otimizador local como contingência." : "Ordem das paradas otimizada.");
+    };
+
+    const indicesValidos = paradas
+      .map((p, i) => ({ valor: p.trim(), i }))
+      .filter((item) => item.valor.length >= 3)
+      .map((item) => item.i);
+    const janelasValidas = indicesValidos.map((i) => janelas[i] || { inicio: "", fim: "" });
+    const problema = montarProblemaVroom({ resultado: r, janelas: janelasValidas, partida });
+    if (!problema.ok) {
+      setToast?.(problema.motivo);
+      return;
+    }
+
+    setOtimizando(true);
+    try {
+      const resposta = await fetch("/api/todogreen/routing/optimize", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify(problema.payload),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+
+      if (!resposta.ok) {
+        if ([502, 503, 504].includes(resposta.status)) {
+          await fallbackLocal("Motor VROOM indisponível.");
+          return;
+        }
+        throw new Error(dados.message || dados.error || "Não foi possível otimizar a rota.");
+      }
+
+      const interpretada = interpretarSolucaoVroom({ resultadoAtual: r, resposta: dados });
+      if (!interpretada.ok) {
+        setToast?.(interpretada.motivo);
+        return;
+      }
+
+      reordenarEstado(r.enderecos, interpretada.ordem);
+      setEstado({ fase: "pronto", resultado: interpretada.resultado });
+      desenhar(interpretada.resultado);
+      setPedagios({ fase: "idle" });
+      setToast?.("Rota otimizada pelo motor VROOM.");
+    } catch (erro) {
+      await fallbackLocal(erro?.message ? "VROOM não respondeu." : "Motor VROOM indisponível.");
+    } finally {
+      setOtimizando(false);
+    }
   };
 
   // Reordena paradas + janelas + recargas para bater com `novos` (uma
@@ -627,8 +686,14 @@ Regras:
             <Plus size={16} /> Adicionar parada
           </button>
           {estado.fase === "pronto" && (
-            <button type="button" className="tdg-action tdg-action-ghost" onClick={otimizar}>
-              <Shuffle size={16} /> Otimizar ordem
+            <button
+              type="button"
+              className="tdg-action tdg-action-ghost"
+              onClick={otimizar}
+              disabled={otimizando}
+              aria-busy={otimizando}
+            >
+              <Shuffle size={16} /> {otimizando ? "Otimizando…" : "Otimizar ordem"}
             </button>
           )}
           {paradas.filter((p) => p.trim().length >= 3).length >= 4 && (

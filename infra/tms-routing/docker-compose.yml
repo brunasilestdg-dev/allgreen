@@ -8,6 +8,23 @@ services:
       - "127.0.0.1:5000:5000"
     restart: unless-stopped
 
+  nominatim:
+    image: mediagis/nominatim:5.3.2
+    environment:
+      PBF_PATH: /nominatim/data/sudeste-latest.osm.pbf
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:?defina NOMINATIM_PASSWORD no arquivo .env}
+      IMPORT_WIKIPEDIA: "false"
+      THREADS: ${NOMINATIM_THREADS:-4}
+      UPDATE_MODE: none
+    volumes:
+      - ./data/sudeste-latest.osm.pbf:/nominatim/data/sudeste-latest.osm.pbf:ro
+      - nominatim-db:/var/lib/postgresql/16/main
+      - nominatim-flatnode:/nominatim/flatnode
+    ports:
+      - "127.0.0.1:8080:8080"
+    shm_size: 1gb
+    restart: unless-stopped
+
   vroom:
     image: ghcr.io/vroom-project/vroom-docker:v1.15.0
     environment:
@@ -30,4 +47,9 @@ services:
       - "127.0.0.1:3100:8080"
     depends_on:
       - vroom
+      - nominatim
     restart: unless-stopped
+
+volumes:
+  nominatim-db:
+  nominatim-flatnode:

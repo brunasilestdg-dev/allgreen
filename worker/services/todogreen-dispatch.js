@@ -13,6 +13,11 @@
 // serviço pago, zero dependência de rede.
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
+import { optimizeTodoGreenRouting } from "./todogreen-public-routing-api.js";
+import {
+  interpretarDespachoVroom,
+  montarProblemaVroomDespacho,
+} from "./todogreen-dispatch-vroom.js";
 
 // Import dinâmico de propósito: o `.wasm` (2,7MB) só deve entrar em memória
 // quando o despacho é de fato chamado. Estático, ele é resolvido no import
@@ -79,7 +84,7 @@ const carregarCandidatos = async (env, access) => {
         ORDER BY full_name ASC LIMIT 100`,
     ).bind(access.ownerId).all(),
     env.DB.prepare(
-      `SELECT id, prefix, plate, pallet_capacity, payload_kg FROM todogreen_fleet_vehicles
+      `SELECT id, prefix, plate, pallet_capacity, payload_kg, volume_m3 FROM todogreen_fleet_vehicles
         WHERE workspace_owner_id = ? AND status = 'available' AND archived_at IS NULL
         ORDER BY prefix ASC LIMIT 100`,
     ).bind(access.ownerId).all(),
@@ -264,7 +269,7 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
     const { operacoes: todasOperacoes, motoristas, veiculos } = await carregarCandidatos(env, access);
     const idsFiltro = Array.isArray(corpo.operationIds) && corpo.operationIds.length
       ? new Set(corpo.operationIds.map(String)) : null;
-    const operacoes = idsFiltro ? todasOperacoes.filter((op) => idsFiltro.has(op.id)) : todasOperacoes;
+    const operacoes = idsFiltro ? todasOperacoes.filter((op) => idsFiltro.has(String(op.id))) : todasOperacoes;
 
     if (!operacoes.length) return json({ error: "Nenhuma operação pendente com coordenada de entrega para despachar." }, 400);
     if (!veiculos.length) return json({ error: "Nenhum veículo disponível para o despacho." }, 400);
@@ -273,7 +278,45 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
       ? { lat: numero(corpo.depot.lat), lng: numero(corpo.depot.lng) }
       : calcularDepotPadrao(operacoes);
 
-    const problema = montarProblema({ operacoes, veiculos, depot, agora: new Date() });
+    const agora = new Date();
+    const problemaVroom = montarProblemaVroomDespacho({
+      operacoes,
+      veiculos,
+      depot,
+      agora,
+    });
+
+    if (problemaVroom.ok) {
+      try {
+        const respostaVroom = await optimizeTodoGreenRouting(problemaVroom.payload, env);
+        const corpoVroom = await respostaVroom.json().catch(() => null);
+        if (respostaVroom.ok && corpoVroom) {
+          const interpretada = interpretarDespachoVroom({
+            resposta: corpoVroom,
+            contexto: problemaVroom.contexto,
+            motoristas,
+          });
+          if (interpretada.ok) {
+            return json({ ...interpretada, planId: crypto.randomUUID() });
+          }
+          console.warn("To Do Green VROOM dispatch invalid solution", interpretada.motivo);
+        } else {
+          console.warn(
+            "To Do Green VROOM dispatch unavailable",
+            respostaVroom.status,
+            corpoVroom?.error || corpoVroom?.message || "",
+          );
+        }
+      } catch (erro) {
+        console.warn("To Do Green VROOM dispatch fallback", erro);
+      }
+    } else {
+      console.warn("To Do Green VROOM dispatch input fallback", problemaVroom.motivo);
+    }
+
+    // Contingência sem dependência de rede: preserva o solver WASM quando o
+    // host VROOM não estiver configurado ou ficar temporariamente indisponível.
+    const problema = montarProblema({ operacoes, veiculos, depot, agora });
     const maxTime = Math.min(Math.max(numero(corpo.maxTimeSeconds) || 8, 2), 30);
 
     let solucao;
@@ -310,6 +353,8 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
       tours,
       naoAtribuidas: (solucao.unassigned || []).map((u) => u.jobId),
       estatistica: solucao.statistic,
+      motor: "worker_vrp_fallback",
+      provider: "native",
     });
   }
 

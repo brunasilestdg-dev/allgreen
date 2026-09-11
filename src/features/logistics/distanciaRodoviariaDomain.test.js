@@ -54,6 +54,19 @@ describe("geocodificar", () => {
     expect(opcoes.headers["user-agent"]).toMatch(/SeuFuncionario/);
   });
 
+  it("usa o gateway interno quando há sessão autenticada", async () => {
+    const fetcher = vi.fn(async () => resposta([SANTOS]));
+    const ponto = await geocodificar("Santos", {
+      fetcher,
+      headers: { authorization: "Bearer teste" },
+    });
+    const [url, options] = fetcher.mock.calls[0];
+    expect(url).toBe("/api/todogreen/maps/geocode");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ q: "Santos", limit: 5 });
+    expect(ponto.latitude).toBe(-23.96);
+  });
+
   it("devolve null quando não acha, em vez de lançar", async () => {
     const fetcher = fetchFalso({ geo: {} });
     expect(await geocodificar("xyzabc inexistente", { fetcher })).toBeNull();
@@ -204,6 +217,24 @@ describe("tracarRota (geometria para o mapa)", () => {
     expect(r.destino.coord).toEqual([-23.53, -46.79]);
   });
 
+  it("usa o OSRM pelo gateway interno quando autenticada", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(resposta([SANTOS]))
+      .mockResolvedValueOnce(resposta([OSASCO]))
+      .mockResolvedValueOnce(resposta({ routes: [ROTA_GEO] }));
+    const r = await tracarRota(
+      { origem: "Santos", destino: "Osasco" },
+      { fetcher, headers: { authorization: "Bearer teste" } },
+    );
+    expect(r.ok).toBe(true);
+    expect(fetcher.mock.calls[0][0]).toBe("/api/todogreen/maps/geocode");
+    expect(fetcher.mock.calls[2][0]).toBe("/api/todogreen/maps/route");
+    expect(JSON.parse(fetcher.mock.calls[2][1].body).coordinates).toEqual([
+      [-46.33, -23.96],
+      [-46.79, -23.53],
+    ]);
+  });
+
   it("sem geometria, informa que não há rota — não trava", async () => {
     const fetcher = fetchFalso({ geo: { Santos: SANTOS, Osasco: OSASCO }, rota: { distance: 80000, duration: 5400 } });
     const r = await tracarRota({ origem: "Santos", destino: "Osasco" }, { fetcher });
@@ -319,6 +350,18 @@ describe("sugerirEnderecos (autocompletar endereço)", () => {
     expect(url.searchParams.get("limit")).toBe("5");
     expect(lista).toHaveLength(2);
     expect(lista[0]).toEqual({ rotulo: "Santos, SP, Brasil", latitude: -23.9, longitude: -46.3 });
+  });
+
+  it("autocomplete autenticado passa pelo gateway interno", async () => {
+    const fetcher = vi.fn(async () => resposta([
+      { lat: "-23.9", lon: "-46.3", display_name: "Santos, SP, Brasil" },
+    ]));
+    const lista = await sugerirEnderecos("Sant", {
+      fetcher,
+      headers: { authorization: "Bearer teste" },
+    });
+    expect(fetcher.mock.calls[0][0]).toBe("/api/todogreen/maps/geocode");
+    expect(lista).toHaveLength(1);
   });
 
   it("termo curto não gasta chamada", async () => {

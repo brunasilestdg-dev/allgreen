@@ -3,8 +3,8 @@
 // A calculadora pede `distanceKm` como campo obrigatório digitado à mão em
 // Middle Mile, Last Mile, Transferência e Coleta em fornecedores. Enquanto
 // isso, o app já sabe traçar rota: o `RouterModal` usa Nominatim (endereço →
-// coordenada) e OSRM (coordenadas → rota), os dois do OpenStreetMap, sem chave,
-// sem cota e sem cartão.
+// coordenada) e OSRM (coordenadas → rota). Com sessão autenticada, ambos passam
+// pelo gateway próprio; os endpoints públicos ficam apenas como contingência.
 //
 // Km digitado à mão é a premissa mais frágil da conta inteira: ele multiplica
 // custo de combustível, pedágio, tempo de motorista e emissão de CO2. Errar
@@ -34,6 +34,34 @@ const IDENTIFICACAO = "SeuFuncionario/1.0 (ERP logistico; contato via app)";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 const OSRM = "https://router.project-osrm.org/route/v1/driving";
+const MAPS_GEOCODE = "/api/todogreen/maps/geocode";
+const MAPS_ROUTE = "/api/todogreen/maps/route";
+
+const usarGatewayInterno = (headers) =>
+  Boolean(headers?.authorization || headers?.Authorization);
+
+async function consultarOSRM(coordenadas, {
+  fetcher = fetch,
+  sinal,
+  headers = {},
+  geometria = false,
+} = {}) {
+  if (usarGatewayInterno(headers)) {
+    return fetcher(MAPS_ROUTE, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json", ...headers },
+      body: JSON.stringify({ coordinates: coordenadas, geometry: geometria }),
+      signal: sinal,
+    });
+  }
+
+  const textoCoords = coordenadas.map(([lon, lat]) => `${lon},${lat}`).join(";");
+  const params = geometria ? "?overview=full&geometries=geojson" : "?overview=false";
+  return fetcher(`${OSRM}/${textoCoords}${params}`, {
+    headers: { accept: "application/json" },
+    signal: sinal,
+  });
+}
 
 export const MOTIVOS = Object.freeze({
   incompleto: "Informe origem e destino para calcular a distância.",
@@ -48,23 +76,33 @@ export const MOTIVOS = Object.freeze({
  * Endereço → coordenada. Devolve `null` quando não acha, nunca lança:
  * quem chama precisa distinguir origem de destino na mensagem.
  */
-export async function geocodificar(endereco, { fetcher = fetch, sinal } = {}) {
+export async function geocodificar(
+  endereco,
+  { fetcher = fetch, sinal, headers = {} } = {},
+) {
   const termo = texto(endereco);
   if (termo.length < 3) return null;
-  const url = new URL(NOMINATIM);
-  url.searchParams.set("format", "json");
-  // Vários candidatos e pega o primeiro válido: um endereço de rua completo
-  // ("Rua Aberaldo de Oliveira, Osasco") muitas vezes não é o 1º resultado do
-  // texto livre; com limit=1 a rota falhava e só cidade x cidade funcionava.
-  url.searchParams.set("limit", "5");
-  // A operação é brasileira. Restringir o país evita o caso clássico de
-  // "Santos" virar Santos de Portugal e a rota sair com 9.000 km.
-  url.searchParams.set("countrycodes", "br");
-  url.searchParams.set("q", termo);
-  const resposta = await fetcher(url, {
-    headers: { accept: "application/json", "user-agent": IDENTIFICACAO },
-    signal: sinal,
-  });
+
+  let resposta;
+  if (usarGatewayInterno(headers)) {
+    resposta = await fetcher(MAPS_GEOCODE, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json", ...headers },
+      body: JSON.stringify({ q: termo, limit: 5 }),
+      signal: sinal,
+    });
+  } else {
+    const url = new URL(NOMINATIM);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("limit", "5");
+    url.searchParams.set("countrycodes", "br");
+    url.searchParams.set("q", termo);
+    resposta = await fetcher(url, {
+      headers: { accept: "application/json", "user-agent": IDENTIFICACAO },
+      signal: sinal,
+    });
+  }
+
   if (!resposta.ok) throw new Error(`Nominatim indisponível (${resposta.status})`);
   const lista = await resposta.json();
   const primeiro = (Array.isArray(lista) ? lista : []).find((item) => item?.lat && item?.lon);
@@ -87,7 +125,7 @@ export async function geocodificar(endereco, { fetcher = fetch, sinal } = {}) {
  */
 export async function calcularDistancia(
   { origem, destino, idaEVolta = false } = {},
-  { fetcher = fetch, sinal } = {},
+  { fetcher = fetch, sinal, headers = {} } = {},
 ) {
   const de = texto(origem);
   const para = texto(destino);
@@ -95,20 +133,19 @@ export async function calcularDistancia(
   if (de.length < 3 || para.length < 3) return { ok: false, motivo: MOTIVOS.curto };
 
   try {
-    // Sequencial, não em paralelo: o Nominatim público pede no máximo uma
-    // consulta por segundo, e disparar as duas juntas é o caminho para o 429.
-    const pontoOrigem = await geocodificar(de, { fetcher, sinal });
+    // Mantemos sequência para funcionar também no fallback público e evitar
+    // rajadas desnecessárias de geocodificação.
+    const pontoOrigem = await geocodificar(de, { fetcher, sinal, headers });
     if (!pontoOrigem) return { ok: false, motivo: MOTIVOS.origemNaoEncontrada };
-    const pontoDestino = await geocodificar(para, { fetcher, sinal });
+    const pontoDestino = await geocodificar(para, { fetcher, sinal, headers });
     if (!pontoDestino) return { ok: false, motivo: MOTIVOS.destinoNaoEncontrado };
 
     const coordenadas = [
-      `${pontoOrigem.longitude},${pontoOrigem.latitude}`,
-      `${pontoDestino.longitude},${pontoDestino.latitude}`,
-    ].join(";");
-    const resposta = await fetcher(`${OSRM}/${coordenadas}?overview=false`, {
-      headers: { accept: "application/json" },
-      signal: sinal,
+      [pontoOrigem.longitude, pontoOrigem.latitude],
+      [pontoDestino.longitude, pontoDestino.latitude],
+    ];
+    const resposta = await consultarOSRM(coordenadas, {
+      fetcher, sinal, headers, geometria: false,
     });
     if (!resposta.ok) throw new Error(`OSRM indisponível (${resposta.status})`);
     const dados = await resposta.json();
@@ -130,7 +167,7 @@ export async function calcularDistancia(
       destino: pontoDestino.rotulo,
       // Sem trânsito: o OSRM devolve tempo livre. Dizer isso evita a tela
       // prometer previsão de chegada que ela não tem como cumprir.
-      fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito)",
+      fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito ao vivo)",
     };
   } catch (erro) {
     if (erro?.name === "AbortError") return { ok: false, motivo: MOTIVOS.indisponivel, cancelado: true };
@@ -150,7 +187,7 @@ export async function calcularDistancia(
  */
 export async function tracarRota(
   { origem, destino, paradas } = {},
-  { fetcher = fetch, sinal } = {},
+  { fetcher = fetch, sinal, headers = {} } = {},
 ) {
   // Normaliza para uma lista de {endereco, coord?}. Cada parada pode ser uma
   // string ou um objeto com a coordenada já resolvida pela sugestão escolhida —
@@ -172,7 +209,7 @@ export async function tracarRota(
   if (lista.some((p) => p.endereco.length < 3)) return { ok: false, motivo: MOTIVOS.curto };
 
   try {
-    // Sequencial, nunca em paralelo: o Nominatim público aceita ~1/s.
+    // Sequencial para preservar compatibilidade com o fallback público.
     const pontos = [];
     for (let i = 0; i < lista.length; i += 1) {
       const item = lista[i];
@@ -180,7 +217,7 @@ export async function tracarRota(
       if (item.coord) {
         ponto = { latitude: item.coord[0], longitude: item.coord[1], rotulo: item.endereco };
       } else {
-        ponto = await geocodificar(item.endereco, { fetcher, sinal });
+        ponto = await geocodificar(item.endereco, { fetcher, sinal, headers });
       }
       if (!ponto) {
         const motivo = i === 0
@@ -193,10 +230,9 @@ export async function tracarRota(
       pontos.push({ ...ponto, coord: [ponto.latitude, ponto.longitude] });
     }
 
-    const coordenadas = pontos.map((p) => `${p.longitude},${p.latitude}`).join(";");
-    const resposta = await fetcher(`${OSRM}/${coordenadas}?overview=full&geometries=geojson`, {
-      headers: { accept: "application/json" },
-      signal: sinal,
+    const coordenadas = pontos.map((p) => [p.longitude, p.latitude]);
+    const resposta = await consultarOSRM(coordenadas, {
+      fetcher, sinal, headers, geometria: true,
     });
     if (!resposta.ok) throw new Error(`OSRM indisponível (${resposta.status})`);
     const dados = await resposta.json();
@@ -220,7 +256,7 @@ export async function tracarRota(
       destino: pontos[pontos.length - 1],
       distanciaKm: Math.round((Number(rota.distance || 0) / 1000) * 10) / 10,
       minutos: Math.round(Number(rota.duration || 0) / 60),
-      fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito)",
+      fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito ao vivo)",
     };
   } catch (erro) {
     if (erro?.name === "AbortError") return { ok: false, motivo: MOTIVOS.indisponivel, cancelado: true };
@@ -306,20 +342,33 @@ export function otimizarOrdemDeParadas(paradas) {
  * Nunca lança: em erro ou consulta curta devolve lista vazia, então digitar
  * à mão continua funcionando exatamente como antes.
  */
-export async function sugerirEnderecos(termo, { fetcher = fetch, sinal, limite = 5 } = {}) {
+export async function sugerirEnderecos(
+  termo,
+  { fetcher = fetch, sinal, limite = 5, headers = {} } = {},
+) {
   const busca = texto(termo);
   if (busca.length < 3) return [];
   try {
-    const url = new URL(NOMINATIM);
-    url.searchParams.set("format", "json");
-    url.searchParams.set("limit", String(Math.min(10, Math.max(1, limite))));
-    url.searchParams.set("countrycodes", "br");
-    url.searchParams.set("addressdetails", "0");
-    url.searchParams.set("q", busca);
-    const resposta = await fetcher(url, {
-      headers: { accept: "application/json", "user-agent": IDENTIFICACAO },
-      signal: sinal,
-    });
+    let resposta;
+    if (usarGatewayInterno(headers)) {
+      resposta = await fetcher(MAPS_GEOCODE, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json", ...headers },
+        body: JSON.stringify({ q: busca, limit: Math.min(10, Math.max(1, limite)) }),
+        signal: sinal,
+      });
+    } else {
+      const url = new URL(NOMINATIM);
+      url.searchParams.set("format", "json");
+      url.searchParams.set("limit", String(Math.min(10, Math.max(1, limite))));
+      url.searchParams.set("countrycodes", "br");
+      url.searchParams.set("addressdetails", "0");
+      url.searchParams.set("q", busca);
+      resposta = await fetcher(url, {
+        headers: { accept: "application/json", "user-agent": IDENTIFICACAO },
+        signal: sinal,
+      });
+    }
     if (!resposta.ok) return [];
     const lista = await resposta.json();
     if (!Array.isArray(lista)) return [];

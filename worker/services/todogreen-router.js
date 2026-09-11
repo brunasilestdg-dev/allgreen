@@ -43,6 +43,8 @@ import { handleTodoGreenTmsManual } from "./todogreen-tms-manual.js";
 import { consultarCepNormalizado } from "./todogreen-integration-gateway.js";
 import { consultarPedagiosDaRota } from "./todogreen-pedagios.js";
 import { consultarCarregadores } from "./todogreen-carregadores.js";
+import { optimizeTodoGreenRouting } from "./todogreen-public-routing-api.js";
+import { handleTodoGreenRoutingMaps } from "./todogreen-routing-maps.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -94,6 +96,25 @@ export async function routeTodoGreenApi(request, env, ctx) {
     return guarded("To Do Green access request error", "Não foi possível registrar o pedido de acesso.", () =>
       receberSolicitacaoDeAcesso(request, env),
     );
+  }
+
+  if (path.startsWith("/api/todogreen/maps/")) {
+    return guarded("To Do Green maps error", "Não foi possível consultar o motor de mapas.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenRoutingMaps(request, env);
+    });
+  }
+
+  if (path === "/api/todogreen/routing/optimize") {
+    return guarded("To Do Green routing error", "Não foi possível otimizar a rota.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      if (request.method !== "POST")
+        return json({ error: "Use POST para otimizar a rota." }, 405);
+      const body = await request.json().catch(() => null);
+      return optimizeTodoGreenRouting(body, env);
+    });
   }
 
   if (path.startsWith("/api/todogreen/evidencias")) {

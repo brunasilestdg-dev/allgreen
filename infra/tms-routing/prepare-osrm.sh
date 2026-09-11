@@ -34,4 +34,5 @@ docker run --rm -t \
   "${OSRM_IMAGE}" \
   osrm-customize /data/sudeste-latest.osrm
 
-echo "OSRM preparado. Agora execute: docker compose up -d"
+echo "OSRM preparado. O mesmo PBF será usado pelo Nominatim/PostGIS."
+echo "Agora execute: docker compose up -d"

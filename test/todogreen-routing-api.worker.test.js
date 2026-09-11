@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handlePublicTodoGreenRoutingApi } from "../worker/services/todogreen-public-routing-api.js";
+import {
+  handlePublicTodoGreenRoutingApi,
+  optimizeTodoGreenRouting,
+} from "../worker/services/todogreen-public-routing-api.js";
 
 async function hash(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -69,6 +72,32 @@ describe("To Do Green routing API", () => {
     );
     expect(response.status).toBe(503);
     expect((await response.json()).error).toBe("routing_not_configured");
+  });
+
+  it("reaproveita o mesmo VROOM na rota interna sem exigir chave TMS", async () => {
+    const upstream = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      summary: { cost: 4321, routes: 1, unassigned: 0 },
+      routes: [{ vehicle: 1, cost: 4321, steps: [{ type: "start" }, { type: "job", job: 1 }, { type: "end" }] }],
+      unassigned: [],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const response = await optimizeTodoGreenRouting({
+      vehicles: [{ id: 1, start: [-46.8, -23.5], end: [-46.3, -23.9] }],
+      jobs: [{ id: 1, location: [-46.63, -23.55] }],
+      geometry: true,
+    }, {
+      TDG_ROUTING_URL: "https://routing.test/optimize",
+      TDG_ROUTING_TOKEN: "segredo-interno",
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).engine).toBe("vroom");
+    expect(upstream).toHaveBeenCalledTimes(1);
+    const [url, options] = upstream.mock.calls[0];
+    expect(url).toBe("https://routing.test/optimize");
+    expect(options.headers.authorization).toBe("Bearer segredo-interno");
+    expect(JSON.parse(options.body).options).toEqual({ g: true });
   });
 
   it("encaminha o problema ao VROOM auto-hospedado e preserva o resultado", async () => {
