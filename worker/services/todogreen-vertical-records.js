@@ -62,6 +62,7 @@ import {
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { normalizarFato } from "../../src/features/logistics/businessContextDomain.js";
 import { efeitosDoEvento, medicaoDoEvento, normalizarTipoEvento } from "../../src/features/logistics/operationTrackingDomain.js";
+import { concluirParadasDaOperacao, statusPelaConclusao } from "../../src/features/logistics/routePlanDomain.js";
 import {
   criaCiclo,
   nomeDisponivel,
@@ -875,6 +876,8 @@ const COLECOES = {
       placa: row.vehicle_plate || "",
       motorista: row.driver_name || "",
       motoristaId: row.driver_id || "",
+      rotaId: row.route_id || "",
+      ordemNaRota: row.route_stop_order,
       sla: row.sla_status || "",
       comprovanteUrl: row.proof_url || "",
       comprovanteHash: row.proof_hash || "",
@@ -913,6 +916,8 @@ const COLECOES = {
       // O motorista como dado: o id liga a operação ao cadastro (0070) e é o
       // recorte do portal do motorista. O nome continua como rótulo.
       driver_id: texto(corpo.motoristaId, 120),
+      route_id: texto(corpo.rotaId, 120),
+      route_stop_order: corpo.ordemNaRota === "" || corpo.ordemNaRota == null ? null : numero(corpo.ordemNaRota),
       distance_km: numero(corpo.distanciaKm),
       incident_count: numero(corpo.ocorrencias),
       sla_status: texto(corpo.sla, 40),
@@ -2138,6 +2143,43 @@ const eventoPelaChave = async (env, ownerId, operationId, idempotencyKey) => {
   };
 };
 
+// A rota é uma projeção do ledger operacional, nunca uma segunda verdade.
+// Coleta/entrega avançam as paradas ligadas à operação no mesmo batch do
+// evento. Ao concluir a última parada, os recursos voltam a ficar disponíveis.
+const instrucoesDaProjecaoNaRota = async (env, { ownerId, operacao, tipo, userId, agora }) => {
+  const routeId = texto(operacao.route_id, 120);
+  if (!routeId || !["coleta", "entrega"].includes(tipo)) return [];
+  const rota = await env.DB.prepare(
+    `SELECT * FROM todogreen_routes
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(routeId, TENANT_ID, ownerId).first();
+  if (!rota) return [];
+  const paradas = parse(rota.stops_json, []);
+  if (!Array.isArray(paradas)) return [];
+  const atualizadas = concluirParadasDaOperacao(paradas, operacao.id, tipo);
+  if (JSON.stringify(atualizadas) === JSON.stringify(paradas)) return [];
+  const status = statusPelaConclusao(atualizadas);
+  const instrucoes = [env.DB.prepare(
+    `UPDATE todogreen_routes
+        SET stops_json = ?, status = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(JSON.stringify(atualizadas), status, userId, agora, routeId, TENANT_ID, ownerId)];
+  if (status === "concluida") {
+    instrucoes.push(env.DB.prepare(
+      `UPDATE todogreen_drivers
+          SET availability_status = 'available', revision = revision + 1, updated_by = ?, updated_at = ?
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND availability_status = 'allocated'`,
+    ).bind(userId, agora, rota.driver_id, TENANT_ID, ownerId));
+    instrucoes.push(env.DB.prepare(
+      `UPDATE todogreen_fleet_vehicles
+          SET status = 'available', revision = revision + 1, updated_by = ?, updated_at = ?
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND plate = ? AND status = 'in-operation'
+          AND archived_at IS NULL`,
+    ).bind(userId, agora, TENANT_ID, ownerId, rota.vehicle_plate));
+  }
+  return instrucoes;
+};
+
 export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId, corpo, origem = "" }) => {
   // Tipo e efeitos vêm do contrato único (operationTrackingDomain), não mais de
   // um Set copiado aqui. É a mesma verdade que a projeção do TMS lê.
@@ -2247,6 +2289,9 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
       + ", energy_kwh_quality = CASE WHEN energy_kwh IS NULL THEN ? ELSE energy_kwh_quality END";
     paramsMedicao.push(medicao.energiaKwh, medicao.energiaOrigem);
   }
+  const instrucoesRota = await instrucoesDaProjecaoNaRota(env, {
+    ownerId, operacao, tipo, userId, agora,
+  });
   const instrucoes = [
     env.DB.prepare(
       `INSERT INTO todogreen_client_operation_events
@@ -2264,6 +2309,7 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
           SET updated_at=?, updated_by=?, revision=revision+1${atualizacaoIncidente}${atualizacaoEntrega}${atualizacaoPosicao}${atualizacaoMedicao}
         WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
     ).bind(agora, userId, ...paramsEntrega, ...paramsPosicao, ...paramsMedicao, operationId, TENANT_ID, ownerId),
+    ...instrucoesRota,
   ];
   if (efeitos.concluiEntrega) {
     // POD para toda OS amarrada a esta operação. INSERT direto com subselect:

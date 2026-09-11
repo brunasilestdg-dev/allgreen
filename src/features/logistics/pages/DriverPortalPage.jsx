@@ -509,19 +509,36 @@ export default function DriverPortalPage() {
                 <ol className="tdg-driver-rota-paradas">
                   {(rota.paradas || []).map((parada, indice) => {
                     const link = linkNavegacao(parada);
+                    const vinculada = Boolean(parada.operationId && ["coleta", "entrega"].includes(parada.tipo));
+                    const viagemVinculada = vinculada ? viagens.find((viagem) => viagem.id === parada.operationId) : null;
+                    const aoMarcar = (event) => {
+                      if (!vinculada) {
+                        marcarParada(rota.id, indice, event.target.checked);
+                        return;
+                      }
+                      if (parada.concluida) return;
+                      if (!viagemVinculada) {
+                        setAviso("A viagem vinculada não está disponível. Atualize o app antes de continuar.");
+                        return;
+                      }
+                      setAviso("");
+                      setFormulario({ viagem: viagemVinculada, tipo: parada.tipo });
+                    };
                     return (
                       <li key={indice} className={parada.concluida ? "concluida" : ""}>
                         <label className="tdg-driver-rota-check">
                           <input
                             type="checkbox"
                             checked={Boolean(parada.concluida)}
-                            onChange={(event) => marcarParada(rota.id, indice, event.target.checked)}
+                            disabled={Boolean(vinculada && parada.concluida)}
+                            onChange={aoMarcar}
                           />
                           <span className="tdg-driver-rota-ordem">{parada.ordem || indice + 1}</span>
                         </label>
                         <div className="tdg-driver-rota-parada-info">
                           <span className="tdg-driver-rota-endereco">{parada.rotulo || parada.endereco || "Parada"}</span>
                           <small>
+                            {vinculada && !parada.concluida && <span>{parada.tipo === "coleta" ? "confirme a coleta" : "confirme a entrega com POD"}</span>}
                             {parada.recarga && <em className="tdg-driver-rota-recarga"><BatteryCharging size={12} /> recarga</em>}
                             {(parada.janelaInicio || parada.janelaFim) && <span><Clock size={11} /> {parada.janelaInicio || "—"}{parada.janelaFim ? `–${parada.janelaFim}` : ""}</span>}
                           </small>

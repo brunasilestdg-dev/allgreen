@@ -12,7 +12,7 @@
 // calcula distância por Haversine a partir das coordenadas dos jobs. Zero
 // serviço pago, zero dependência de rede.
 
-import { podeNaVertical } from "./todogreen-access.js";
+import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 
 // Import dinâmico de propósito: o `.wasm` (2,7MB) só deve entrar em memória
 // quando o despacho é de fato chamado. Estático, ele é resolvido no import
@@ -53,6 +53,8 @@ const numero = (valor) => {
   const n = Number(valor);
   return Number.isFinite(n) ? n : null;
 };
+const texto = (valor, max = 500) => String(valor ?? "").trim().slice(0, max);
+const coordenada = (valor) => valor === null || valor === undefined || valor === "" ? null : numero(valor);
 const parse = (valor, fallback) => { try { return JSON.parse(valor || ""); } catch { return fallback; } };
 
 const DEFAULT_SPEED_MS = 40 / 3.6; // 40 km/h em m/s — velocidade média urbana/mista, ajustável depois por perfil
@@ -63,7 +65,8 @@ const carregarCandidatos = async (env, access) => {
   const [operacoes, motoristas, veiculos] = await Promise.all([
     env.DB.prepare(
       `SELECT o.id, o.client_id, o.driver_id, o.vehicle_plate, o.delivery_lat, o.delivery_lng,
-              o.pickup_lat, o.pickup_lng, o.fields_json, c.name AS client_name
+              o.pickup_lat, o.pickup_lng, o.reference, o.service_date, o.origin, o.destination,
+              o.fields_json, c.name AS client_name
          FROM todogreen_client_operations o
          LEFT JOIN todogreen_clients c ON c.id = o.client_id AND c.workspace_owner_id = o.workspace_owner_id
         WHERE o.workspace_owner_id = ? AND o.archived_at IS NULL AND o.delivered_at IS NULL
@@ -100,7 +103,8 @@ const carregarCandidatos = async (env, access) => {
 // decidindo entre dois caminhões que na prática têm capacidades diferentes).
 const montarProblema = ({ operacoes, veiculos, depot, agora }) => {
   const jobs = operacoes.map((op) => {
-    const demanda = Math.max(1, Number(parse(op.fields_json, {}).pacotes) || 1);
+    const campos = parse(op.fields_json, {});
+    const demanda = Math.max(1, Number(campos.packages ?? campos.pacotes) || 1);
     const job = { id: op.id, deliveries: [{
       places: [{ location: { lat: op.delivery_lat, lng: op.delivery_lng }, duration: DEFAULT_STOP_DURATION_S }],
       demand: [demanda],
@@ -146,6 +150,91 @@ const calcularDepotPadrao = (operacoes) => {
   return { lat: soma.lat / total, lng: soma.lng / total };
 };
 
+const tipoDaAtividade = (atividade) => {
+  const tipo = texto(atividade?.type, 30).toLowerCase();
+  if (tipo.includes("pickup")) return "coleta";
+  if (tipo.includes("delivery")) return "entrega";
+  return "entrega";
+};
+
+// Preserva a sequência real devolvida pelo solver. Antes ela era achatada em
+// ids de operação e perdia a diferença entre coleta e entrega, o que tornava
+// impossível a rota acompanhar os eventos feitos pelo motorista.
+export const paradasDaTour = (tour, operacoes = []) => {
+  const porId = new Map(operacoes.map((op) => [String(op.id), op]));
+  const paradas = [];
+  for (const stop of tour?.stops || []) {
+    for (const atividade of stop?.activities || []) {
+      const operationId = texto(atividade?.jobId, 120);
+      const operacao = porId.get(operationId);
+      if (!operationId || !operacao) continue;
+      const tipo = tipoDaAtividade(atividade);
+      const coleta = tipo === "coleta";
+      const lat = coordenada(coleta ? operacao.pickup_lat : operacao.delivery_lat);
+      const lng = coordenada(coleta ? operacao.pickup_lng : operacao.delivery_lng);
+      const referencia = texto(operacao.reference || operacao.client_name || operationId, 200);
+      const endereco = texto(coleta ? operacao.origin : operacao.destination, 300);
+      paradas.push({
+        ordem: paradas.length + 1,
+        operationId,
+        tipo,
+        rotulo: `${coleta ? "Coleta" : "Entrega"} · ${referencia}`,
+        endereco: endereco || referencia,
+        lat,
+        lng,
+        recarga: false,
+        concluida: false,
+      });
+    }
+  }
+  return paradas;
+};
+
+const idsDaTour = (tour) => [...new Set([
+  ...(Array.isArray(tour?.operacoes) ? tour.operacoes : []),
+  ...(Array.isArray(tour?.paradas) ? tour.paradas.map((p) => p?.operationId) : []),
+].map((id) => texto(id, 120)).filter(Boolean))];
+
+const idDaRota = async (ownerId, planId, indice) => {
+  const bytes = new TextEncoder().encode(`${ownerId}:${planId}:${indice}`);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `dispatch-${hex.slice(0, 32)}`;
+};
+
+const paradasAutoritativas = (tour, operacoes) => {
+  const porId = new Map(operacoes.map((op) => [String(op.id), op]));
+  const vistas = new Set();
+  const candidatas = Array.isArray(tour?.paradas) ? tour.paradas : [];
+  const origem = candidatas.length
+    ? candidatas
+    : idsDaTour(tour).map((operationId) => ({ operationId, tipo: "entrega" }));
+  const paradas = [];
+  for (const candidata of origem) {
+    const operationId = texto(candidata?.operationId, 120);
+    const operacao = porId.get(operationId);
+    const tipo = texto(candidata?.tipo, 30).toLowerCase() === "coleta" ? "coleta" : "entrega";
+    const chave = `${operationId}:${tipo}`;
+    if (!operacao || vistas.has(chave)) continue;
+    vistas.add(chave);
+    const coleta = tipo === "coleta";
+    const referencia = texto(operacao.reference || operacao.client_name || operationId, 200);
+    const endereco = texto(coleta ? operacao.origin : operacao.destination, 300);
+    paradas.push({
+      ordem: paradas.length + 1,
+      operationId,
+      tipo,
+      rotulo: `${coleta ? "Coleta" : "Entrega"} · ${referencia}`,
+      endereco: endereco || referencia,
+      lat: coordenada(coleta ? operacao.pickup_lat : operacao.delivery_lat),
+      lng: coordenada(coleta ? operacao.pickup_lng : operacao.delivery_lng),
+      recarga: false,
+      concluida: false,
+    });
+  }
+  return paradas;
+};
+
 export async function handleTodoGreenDispatch(request, env, access, user) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/todogreen/dispatch")) return null;
@@ -159,6 +248,8 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
     return json({
       operacoes: operacoes.map((op) => ({
         id: op.id, clienteId: op.client_id, cliente: op.client_name || op.client_id || "",
+        referencia: op.reference || "", dataServico: op.service_date || "",
+        origem: op.origin || "", destino: op.destination || "",
         entregaLat: op.delivery_lat, entregaLng: op.delivery_lng,
         coletaLat: op.pickup_lat, coletaLng: op.pickup_lng,
       })),
@@ -200,17 +291,22 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
       const veiculoId = tour.vehicleId;
       const veiculo = veiculos.find((v) => v.id === veiculoId);
       const motorista = filaMotoristas.shift() || null;
-      const paradas = (tour.stops || [])
-        .flatMap((stop) => (stop.activities || []).map((a) => a.jobId))
-        .filter((jobId) => jobId && jobId !== "departure" && jobId !== "arrival");
+      const paradas = paradasDaTour(tour, operacoes);
+      const ids = [...new Set(paradas.map((parada) => parada.operationId))];
+      const distanciaMetros = Math.max(0, numero(tour.statistic?.distance) || 0);
+      const duracaoSegundos = Math.max(0, numero(tour.statistic?.duration) || 0);
       return {
         veiculoId, placa: veiculo?.plate || "", prefixo: veiculo?.prefix || "",
         motoristaId: motorista?.id || "", motoristaNome: motorista?.full_name || "",
-        operacoes: [...new Set(paradas)],
+        operacoes: ids,
+        paradas,
+        distanciaKm: Math.round((distanciaMetros / 1000) * 100) / 100,
+        duracaoMin: Math.round(duracaoSegundos / 60),
       };
     });
 
     return json({
+      planId: crypto.randomUUID(),
       tours,
       naoAtribuidas: (solucao.unassigned || []).map((u) => u.jobId),
       estatistica: solucao.statistic,
@@ -219,6 +315,149 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
 
   if (request.method === "POST" && acao === "aplicar") {
     const corpo = await request.json().catch(() => ({}));
+    const tours = Array.isArray(corpo.tours)
+      ? corpo.tours.filter((tour) => texto(tour?.motoristaId, 120) && idsDaTour(tour).length)
+      : [];
+
+    // Fluxo novo: o plano vira rota persistida e reserva motorista + veículo
+    // no MESMO batch que liga as operações. A UI antiga ainda pode mandar
+    // `atribuicoes` logo abaixo, para uma atualização sem janela de quebra.
+    if (tours.length) {
+      const planId = texto(corpo.planId, 80);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(planId))
+        return json({ error: "Plano de despacho inválido. Otimize as rotas novamente." }, 400);
+
+      const rotasIds = await Promise.all(tours.map((_, indice) => idDaRota(access.ownerId, planId, indice)));
+      const existentes = [];
+      for (const rotaId of rotasIds) {
+        existentes.push(await env.DB.prepare(
+          "SELECT id, workspace_owner_id FROM todogreen_routes WHERE id = ?",
+        ).bind(rotaId).first());
+      }
+      const existentesNoEspaco = existentes.filter((rota) => rota?.workspace_owner_id === access.ownerId);
+      if (existentesNoEspaco.length === tours.length) {
+        return json({
+          aplicados: tours.reduce((total, tour) => total + idsDaTour(tour).length, 0),
+          rotasCriadas: 0,
+          rotas: rotasIds,
+          reaplicado: true,
+        });
+      }
+      if (existentes.some(Boolean))
+        return json({ error: "O plano ficou inconsistente. Otimize as rotas novamente." }, 409);
+
+      const motoristasUsados = new Set();
+      const veiculosUsados = new Set();
+      const operacoesUsadas = new Set();
+      const preparadas = [];
+
+      for (let indice = 0; indice < tours.length; indice += 1) {
+        const tour = tours[indice];
+        const motoristaId = texto(tour.motoristaId, 120);
+        const veiculoId = texto(tour.veiculoId, 120);
+        if (motoristasUsados.has(motoristaId) || veiculosUsados.has(veiculoId))
+          return json({ error: "Motorista ou veículo repetido em mais de uma rota do plano." }, 409);
+        motoristasUsados.add(motoristaId);
+        veiculosUsados.add(veiculoId);
+
+        const motorista = await env.DB.prepare(
+          `SELECT id, full_name FROM todogreen_drivers
+            WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND status = 'active'
+              AND availability_status = 'available' AND archived_at IS NULL`,
+        ).bind(motoristaId, TENANT_ID, access.ownerId).first();
+        if (!motorista) return json({ error: "Um motorista do plano não está mais disponível. Otimize novamente." }, 409);
+
+        const veiculo = await env.DB.prepare(
+          `SELECT id, prefix, plate FROM todogreen_fleet_vehicles
+            WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND status = 'available'
+              AND archived_at IS NULL`,
+        ).bind(veiculoId, TENANT_ID, access.ownerId).first();
+        if (!veiculo) return json({ error: "Um veículo do plano não está mais disponível. Otimize novamente." }, 409);
+
+        const ids = idsDaTour(tour);
+        const operacoes = [];
+        for (const operationId of ids) {
+          if (operacoesUsadas.has(operationId))
+            return json({ error: "A mesma operação apareceu em mais de uma rota do plano." }, 409);
+          operacoesUsadas.add(operationId);
+          const operacao = await env.DB.prepare(
+            `SELECT o.*, c.name AS client_name FROM todogreen_client_operations o
+              LEFT JOIN todogreen_clients c ON c.id = o.client_id AND c.workspace_owner_id = o.workspace_owner_id
+              WHERE o.id = ? AND o.tenant_id = ? AND o.workspace_owner_id = ? AND o.archived_at IS NULL
+                AND o.delivered_at IS NULL AND (o.driver_id = '' OR o.driver_id IS NULL)
+                AND (o.route_id = '' OR o.route_id IS NULL)`,
+          ).bind(operationId, TENANT_ID, access.ownerId).first();
+          if (!operacao)
+            return json({ error: "Uma operação do plano já foi atribuída ou não está mais disponível. Otimize novamente." }, 409);
+          operacoes.push(operacao);
+        }
+
+        const paradas = paradasAutoritativas(tour, operacoes);
+        if (!paradas.length || ids.some((operationId) => !paradas.some((p) => p.operationId === operationId)))
+          return json({ error: "A sequência de uma rota não corresponde às operações do plano." }, 400);
+        const datas = operacoes.map((op) => texto(op.service_date, 10)).filter(Boolean).sort();
+        preparadas.push({
+          id: rotasIds[indice],
+          motorista,
+          veiculo,
+          operacoes,
+          paradas,
+          dataServico: datas[0] || new Date().toISOString().slice(0, 10),
+          distanciaKm: Math.max(0, numero(tour.distanciaKm) || 0),
+          duracaoMin: Math.max(0, numero(tour.duracaoMin) || 0),
+        });
+      }
+
+      const agora = new Date().toISOString();
+      const instrucoes = [];
+      for (const rota of preparadas) {
+        const primeira = rota.paradas[0];
+        const ultima = rota.paradas[rota.paradas.length - 1];
+        instrucoes.push(env.DB.prepare(
+          `INSERT INTO todogreen_routes
+             (id,tenant_id,workspace_owner_id,name,driver_id,driver_name,vehicle_plate,service_date,status,
+              origin,destination,distance_km,duration_min,toll_total,stops_json,notes,revision,
+              created_by,updated_by,created_at,updated_at,archived_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',1,?,?,?,?,NULL)`,
+        ).bind(
+          rota.id, TENANT_ID, access.ownerId,
+          `Despacho ${rota.dataServico} · ${rota.motorista.full_name}`,
+          rota.motorista.id, rota.motorista.full_name, rota.veiculo.plate, rota.dataServico, "planejada",
+          primeira.endereco, ultima.endereco, rota.distanciaKm, rota.duracaoMin, 0,
+          JSON.stringify(rota.paradas), user.id, user.id, agora, agora,
+        ));
+        for (const operacao of rota.operacoes) {
+          const ordem = rota.paradas.find((parada) => parada.operationId === operacao.id)?.ordem || null;
+          instrucoes.push(env.DB.prepare(
+            `UPDATE todogreen_client_operations
+                SET route_id = ?, route_stop_order = ?, driver_id = ?, driver_name = ?, vehicle_plate = ?,
+                    revision = revision + 1, updated_by = ?, updated_at = ?
+              WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL
+                AND (driver_id = '' OR driver_id IS NULL) AND (route_id = '' OR route_id IS NULL)`,
+          ).bind(
+            rota.id, ordem, rota.motorista.id, rota.motorista.full_name, rota.veiculo.plate,
+            user.id, agora, operacao.id, TENANT_ID, access.ownerId,
+          ));
+        }
+        instrucoes.push(env.DB.prepare(
+          `UPDATE todogreen_drivers
+              SET availability_status = 'allocated', revision = revision + 1, updated_by = ?, updated_at = ?
+            WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND availability_status = 'available'`,
+        ).bind(user.id, agora, rota.motorista.id, TENANT_ID, access.ownerId));
+        instrucoes.push(env.DB.prepare(
+          `UPDATE todogreen_fleet_vehicles
+              SET status = 'in-operation', revision = revision + 1, updated_by = ?, updated_at = ?
+            WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND status = 'available'`,
+        ).bind(user.id, agora, rota.veiculo.id, TENANT_ID, access.ownerId));
+      }
+      await env.DB.batch(instrucoes);
+      return json({
+        aplicados: operacoesUsadas.size,
+        rotasCriadas: preparadas.length,
+        rotas: preparadas.map((rota) => rota.id),
+      });
+    }
+
     const atribuicoes = Array.isArray(corpo.atribuicoes) ? corpo.atribuicoes : [];
     if (!atribuicoes.length) return json({ error: "Nenhuma atribuição para aplicar." }, 400);
 
@@ -229,11 +468,12 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
       if (!operationId) continue;
       const resultado = await env.DB.prepare(
         `UPDATE todogreen_client_operations
-            SET driver_id = ?, driver_name = ?, vehicle_plate = ?, updated_at = ?
+            SET driver_id = ?, driver_name = ?, vehicle_plate = ?, revision = revision + 1,
+                updated_by = ?, updated_at = ?
           WHERE id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
       ).bind(
         String(item.driverId || ""), String(item.driverName || ""), String(item.vehiclePlate || ""),
-        agora, operationId, access.ownerId,
+        user.id, agora, operationId, access.ownerId,
       ).run();
       if (resultado.meta.changes > 0) aplicados += 1;
     }

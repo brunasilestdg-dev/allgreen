@@ -260,6 +260,14 @@ quantos resultados vieram.
   jornada: o status da rota (`planejada → em_rota → concluida`) é derivado das
   paradas concluídas, nunca marcado por clique solto. Não criar segunda tabela
   de rota nem ligar rota ao motorista por nome — o elo é o `driver_id` (0070).
+  O Despacho Inteligente fecha a cadeia na migração `0106`: um plano aplicado
+  cria uma `todogreen_routes` por veículo, grava `route_id`/`route_stop_order`
+  na operação canônica e ocupa motorista + veículo no mesmo `DB.batch`. A
+  aplicação é idempotente por `planId`; não voltar a reduzi-la a copiar nome e
+  placa. Paradas com `operationId`/`tipo` são projeções do ledger: coleta e
+  entrega avançam a rota dentro de `aplicarEventoOperacional`; a última entrega
+  libera os recursos. O checkbox manual fica só para rota legada sem operação,
+  pois concluir uma entrega por fora do evento burlaria o POD e o faturamento.
 - **Módulos de ERP da vertical (NÃO confundir com os homônimos do monólito)**:
   cada um tem núcleo puro testado + tela lazy, e escreve em tabela própria
   `todogreen_*` (nunca no blob do workspace). Saldo/valor é sempre `SUM` de

@@ -81,6 +81,22 @@ export function marcarParadaConcluida(stops = [], indice, concluida) {
   return lista.map((parada, i) => (i === indice ? { ...parada, concluida: Boolean(concluida) } : parada));
 }
 
+// Projeta um fato da operação na rota otimizada. A operação é a verdade: a
+// coleta conclui apenas a parada de coleta; a entrega conclui coleta + entrega
+// da mesma operação, porque uma carga entregue necessariamente foi coletada.
+// Paradas manuais, sem operationId, continuam intocadas.
+export function concluirParadasDaOperacao(stops = [], operationId, tipoEvento) {
+  const id = texto(operationId);
+  const tipo = texto(tipoEvento).toLowerCase();
+  if (!id || !["coleta", "entrega"].includes(tipo)) return Array.isArray(stops) ? stops : [];
+  const tiposConcluidos = tipo === "entrega" ? new Set(["coleta", "entrega"]) : new Set(["coleta"]);
+  return (Array.isArray(stops) ? stops : []).map((parada) => (
+    texto(parada?.operationId) === id && tiposConcluidos.has(texto(parada?.tipo).toLowerCase())
+      ? { ...parada, concluida: true }
+      : parada
+  ));
+}
+
 // Link de navegação para o motorista: usa a coordenada quando há (mais preciso),
 // senão o endereço em texto. Abre no Google Maps, que todo celular tem.
 export function linkNavegacao(stop = {}) {

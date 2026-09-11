@@ -22,12 +22,17 @@ export function toursSemMotorista(tours) {
   return (tours || []).filter((tour) => !tour.motoristaId).length;
 }
 
+export function toursAplicaveis(tours) {
+  return (tours || []).filter((tour) => tour.motoristaId && (tour.operacoes || []).length);
+}
+
 // Despacho inteligente: liga o motor VRP (solver genético no Worker) que estava
 // órfão — pronto no back, sem tela nenhuma. Carrega as operações pendentes com
 // coordenada, os motoristas e veículos disponíveis, otimiza as rotas de VÁRIOS
 // veículos de uma vez (capacidade + turno), mostra a prévia e, se a operação
-// aprovar, aplica motorista + veículo às operações. É a roteirização "de
-// verdade" (não o vizinho-mais-próximo de uma rota só).
+// aprovar, cria as rotas e liga motorista + veículo + operações numa cadeia
+// executável. É a roteirização "de verdade" (não o vizinho-mais-próximo de
+// uma rota só).
 export default function DispatchPanel({ authHeaders, setToast }) {
   const [cand, setCand] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -70,9 +75,9 @@ export default function DispatchPanel({ authHeaders, setToast }) {
 
   const aplicar = async () => {
     const tours = resultado?.tours || [];
-    const atribuicoes = atribuicoesDeTours(tours);
+    const aplicaveis = toursAplicaveis(tours);
     const semMotorista = toursSemMotorista(tours);
-    if (!atribuicoes.length) {
+    if (!aplicaveis.length) {
       setToast?.(semMotorista
         ? "Nenhuma rota tem motorista livre para aplicar — libere um motorista e otimize de novo."
         : "Nada para aplicar.");
@@ -81,13 +86,17 @@ export default function DispatchPanel({ authHeaders, setToast }) {
     setAplicando(true);
     try {
       const headers = { ...(authHeaders?.() || {}), "content-type": "application/json" };
-      const r = await fetch("/api/todogreen/dispatch/aplicar", { method: "POST", headers, body: JSON.stringify({ atribuicoes }) });
+      const r = await fetch("/api/todogreen/dispatch/aplicar", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ planId: resultado.planId, tours: aplicaveis }),
+      });
       const p = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(p.error || "Não foi possível aplicar as atribuições.");
       const aviso = semMotorista
         ? ` ${semMotorista} rota(s) sem motorista livre ficou(aram) pendente(s).`
         : "";
-      setToast?.(`${p.aplicados || 0} operação(ões) atribuída(s) a motorista e veículo.${aviso}`);
+      setToast?.(`${p.rotasCriadas || 0} rota(s) criada(s) e ${p.aplicados || 0} operação(ões) despachada(s).${aviso}`);
       setResultado(null);
       setCand(null);
       carregar();
@@ -127,19 +136,21 @@ export default function DispatchPanel({ authHeaders, setToast }) {
               {(resultado.tours || []).map((tour) => (
                 <article className={`tdg-dispatch-tour${tour.motoristaId ? "" : " sem-motorista"}`} key={tour.veiculoId}>
                   <header><strong>{tour.prefixo || tour.placa || tour.veiculoId}</strong><small>{tour.motoristaNome || "sem motorista livre — não será aplicada"}{tour.placa ? ` · ${tour.placa}` : ""}</small></header>
-                  <span className="tdg-dispatch-tour-tot">{tour.operacoes?.length || 0} parada(s), na ordem:</span>
+                  <span className="tdg-dispatch-tour-tot">{tour.paradas?.length || tour.operacoes?.length || 0} parada(s), na ordem:</span>
                   {/* A sequência de paradas que o motor escolheu — não só a
                       contagem. O operador precisa ver a ordem antes de aplicar. */}
                   <ol className="tdg-dispatch-sequencia">
-                    {(tour.operacoes || []).map((opId) => (
-                      <li key={opId}>{nomeDaOperacao(opId)}</li>
+                    {(tour.paradas?.length ? tour.paradas : (tour.operacoes || []).map((operationId) => ({ operationId }))).map((parada, indice) => (
+                      <li key={`${parada.operationId}-${parada.tipo || "entrega"}-${indice}`}>
+                        {parada.tipo ? `${parada.tipo === "coleta" ? "Coleta" : "Entrega"} · ` : ""}{nomeDaOperacao(parada.operationId)}
+                      </li>
                     ))}
                   </ol>
                 </article>
               ))}
               {(resultado.naoAtribuidas || []).length > 0 && <p className="tdg-dispatch-nao">{resultado.naoAtribuidas.length} operação(ões) não coube(ram) na frota/turno disponível.</p>}
               {(resultado.tours || []).length > 0 && (
-                <button type="button" className="tdg-action" onClick={aplicar} disabled={aplicando}>{aplicando ? "Aplicando…" : "Aplicar atribuições"}</button>
+                <button type="button" className="tdg-action" onClick={aplicar} disabled={aplicando}>{aplicando ? "Criando rotas…" : "Aplicar plano e criar rotas"}</button>
               )}
             </div>
           )}

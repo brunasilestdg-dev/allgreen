@@ -56,6 +56,8 @@ const viagemDaLinha = (row) => ({
   prometidoEm: row.promised_at || "",
   entregueEm: row.delivered_at || "",
   placa: row.vehicle_plate || "",
+  rotaId: row.route_id || "",
+  ordemNaRota: row.route_stop_order,
   comprovanteRegistrado: Boolean(row.proof_url),
   ocorrencias: Number(row.incident_count || 0),
 });
@@ -246,6 +248,12 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
       if (Array.isArray(bruto)) paradas = bruto;
     } catch { /* segue com lista vazia */ }
     if (indice >= paradas.length) return json({ error: "Parada não existe nesta rota." }, 400);
+    // Parada do despacho inteligente é projeção da operação. Marcá-la por este
+    // endpoint criaria uma segunda verdade e poderia concluir entrega sem POD.
+    // A tela abre o gesto correspondente na viagem; esta guarda protege também
+    // clientes antigos ou chamadas diretas à API.
+    if (texto(paradas[indice]?.operationId, 120))
+      return json({ error: "Registre a coleta ou a entrega pela viagem. A rota avança automaticamente." }, 409);
     const atualizadas = marcarParadaConcluida(paradas, indice, corpo.concluida !== false);
     const status = statusPelaConclusao(atualizadas);
     const agora = new Date().toISOString();

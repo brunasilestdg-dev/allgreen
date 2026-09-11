@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atribuicoesDeTours, toursSemMotorista } from "./DispatchPanel.jsx";
+import { atribuicoesDeTours, toursAplicaveis, toursSemMotorista } from "./DispatchPanel.jsx";
 
 // A regra que protege o despacho: uma rota sem motorista livre NUNCA é aplicada
 // (gravaria um veículo comprometido sem condutor, e a operação reapareceria como
@@ -37,5 +37,12 @@ describe("toursSemMotorista", () => {
     ])).toBe(2);
     expect(toursSemMotorista([])).toBe(0);
     expect(toursSemMotorista(undefined)).toBe(0);
+  });
+});
+
+describe("toursAplicaveis", () => {
+  it("leva ao servidor somente rotas com motorista e operação", () => {
+    const pronta = { motoristaId: "m1", operacoes: ["op1"], paradas: [{ operationId: "op1" }] };
+    expect(toursAplicaveis([pronta, { motoristaId: "", operacoes: ["op2"] }, { motoristaId: "m2" }])).toEqual([pronta]);
   });
 });

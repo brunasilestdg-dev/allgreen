@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ROTULO_STATUS_ROTA,
+  concluirParadasDaOperacao,
   linkNavegacao,
   marcarParadaConcluida,
   montarParadasDaRota,
@@ -9,6 +10,30 @@ import {
   rotaValidaParaAtribuir,
   statusPelaConclusao,
 } from "./routePlanDomain.js";
+
+describe("concluirParadasDaOperacao", () => {
+  const paradas = [
+    { operationId: "op-1", tipo: "coleta", concluida: false },
+    { operationId: "op-1", tipo: "entrega", concluida: false },
+    { operationId: "op-2", tipo: "entrega", concluida: false },
+    { rotulo: "Parada manual", concluida: false },
+  ];
+
+  it("projeta coleta somente na coleta da operação certa", () => {
+    const atualizadas = concluirParadasDaOperacao(paradas, "op-1", "coleta");
+    expect(atualizadas.map((p) => p.concluida)).toEqual([true, false, false, false]);
+  });
+
+  it("entrega conclui coleta e entrega da mesma operação", () => {
+    const atualizadas = concluirParadasDaOperacao(paradas, "op-1", "entrega");
+    expect(atualizadas.map((p) => p.concluida)).toEqual([true, true, false, false]);
+  });
+
+  it("ignora ocorrência e não muta a lista original", () => {
+    expect(concluirParadasDaOperacao(paradas, "op-1", "ocorrencia")).toBe(paradas);
+    expect(paradas.every((p) => !p.concluida)).toBe(true);
+  });
+});
 
 describe("montar paradas da rota", () => {
   const paradas = [
