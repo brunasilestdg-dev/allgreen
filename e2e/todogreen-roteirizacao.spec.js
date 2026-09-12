@@ -3,8 +3,8 @@ import { contaNova, criarConta, habilitarTodoGreen } from "./apoio.js";
 
 // Debug/verificação do #81: o mapa REALMENTE renderiza e a rota é desenhada?
 // jsdom não tem layout nem canvas, então isto só se prova no navegador. A rede
-// externa (tiles, Nominatim, OSRM) é dublada para o teste ser determinístico e
-// não depender de sair para a internet.
+// externa é dublada no gateway canônico do backend para o teste ser
+// determinístico e não depender de sair para a internet.
 test("roteirização mostra o mapa e desenha a rota com várias paradas", async ({ page }) => {
   // Tiles do OSM → um PNG 1x1 transparente.
   const pngVazio = Buffer.from(
@@ -13,8 +13,8 @@ test("roteirização mostra o mapa e desenha a rota com várias paradas", async 
   );
   await page.route(/tile\.openstreetmap\.org/, (rota) =>
     rota.fulfill({ status: 200, contentType: "image/png", body: pngVazio }));
-  await page.route(/nominatim\.openstreetmap\.org/, (rota) => {
-    const q = new URL(rota.request().url()).searchParams.get("q") || "";
+  await page.route(/\/api\/todogreen\/maps\/geocode$/, (rota) => {
+    const q = rota.request().postDataJSON()?.q || "";
     const mapa = {
       Santos: { lat: "-23.96", lon: "-46.33" },
       Osasco: { lat: "-23.53", lon: "-46.79" },
@@ -24,7 +24,7 @@ test("roteirização mostra o mapa e desenha a rota com várias paradas", async 
     const ponto = chave ? [{ ...mapa[chave], display_name: `${chave}, São Paulo, Brasil` }] : [];
     return rota.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ponto) });
   });
-  await page.route(/router\.project-osrm\.org/, (rota) =>
+  await page.route(/\/api\/todogreen\/maps\/route$/, (rota) =>
     rota.fulfill({
       status: 200,
       contentType: "application/json",
