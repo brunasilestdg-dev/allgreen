@@ -30,6 +30,9 @@ export const PARAMETROS_GREENPAY_PADRAO = Object.freeze({
   valorPorEntrega: 0,
   valorPorKm: 0,
   bonusEntregaSemOcorrencia: 0,
+  // Meta de ganho do mês, em reais. Zero = sem meta (a carteira não inventa
+  // uma). É um alvo motivacional, não um teto nem uma garantia.
+  metaMensal: 0,
 });
 
 // Uma régua está "configurada" quando de fato paga algo por entrega ou por km.
@@ -40,7 +43,48 @@ export const normalizarRegua = (bruto = {}) => ({
   valorPorEntrega: Math.max(0, arredondarReais(bruto.valorPorEntrega)),
   valorPorKm: Math.max(0, arredondarReais(bruto.valorPorKm)),
   bonusEntregaSemOcorrencia: Math.max(0, arredondarReais(bruto.bonusEntregaSemOcorrencia)),
+  metaMensal: Math.max(0, arredondarReais(bruto.metaMensal)),
 });
+
+// Meta do mês e projeção do fechamento pelo ritmo atual. `mesAcumulado` é o que
+// o motorista já ganhou no mês (resumoCarteira.mes); `metaMensal` vem da régua;
+// `hojeYmd` dá os dias decorridos e os dias do mês. Sem meta, devolve null —
+// não se inventa alvo. A projeção precisa de ao menos um dia decorrido com
+// ganho; senão fica null (sem ritmo não se projeta).
+export const metaEProjecaoMes = (mesAcumulado, metaMensal, hojeYmd) => {
+  const meta = Math.max(0, arredondarReais(metaMensal));
+  if (!(meta > 0)) return null;
+
+  const hoje = String(hojeYmd || "").slice(0, 10);
+  const dataHoje = new Date(`${hoje}T00:00:00Z`);
+  if (Number.isNaN(dataHoje.getTime())) {
+    return { meta, atingido: arredondarReais(mesAcumulado), faltam: arredondarReais(Math.max(0, meta - num(mesAcumulado))), percentual: pct(mesAcumulado, meta), projecao: null, projecaoPercentual: null, faixa: faixaMeta(pct(mesAcumulado, meta)) };
+  }
+
+  const atingido = arredondarReais(mesAcumulado);
+  const diaDoMes = dataHoje.getUTCDate();
+  const ano = dataHoje.getUTCFullYear();
+  const mes = dataHoje.getUTCMonth();
+  const diasNoMes = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+  // Projeção só com ritmo: média diária × dias do mês. Sem ganho no mês, null.
+  const projecao = atingido > 0 && diaDoMes > 0
+    ? arredondarReais((atingido / diaDoMes) * diasNoMes)
+    : null;
+
+  return {
+    meta,
+    atingido,
+    faltam: arredondarReais(Math.max(0, meta - atingido)),
+    percentual: pct(atingido, meta),
+    projecao,
+    projecaoPercentual: projecao != null ? pct(projecao, meta) : null,
+    faixa: faixaMeta(pct(atingido, meta)),
+  };
+};
+
+const pct = (parte, total) => (num(total) > 0 ? Math.round((num(parte) / num(total)) * 100) : 0);
+const faixaMeta = (percentual) =>
+  percentual >= 100 ? "batida" : percentual >= 70 ? "no-caminho" : percentual >= 40 ? "atras" : "longe";
 
 // Deriva os lançamentos de UMA viagem. Só a entrega concluída paga: viagem sem
 // `entregueEm` não gera ganho. Cada componente carrega a memória de cálculo,

@@ -5,6 +5,7 @@ import {
   derivarGanhosDaViagem,
   saldos,
   resumoCarteira,
+  metaEProjecaoMes,
   arredondarReais,
   PARAMETROS_GREENPAY_PADRAO,
 } from "./greenPayDomain.js";
@@ -21,7 +22,7 @@ describe("GreenPay — régua configurada", () => {
   });
   it("normalizar não deixa valor negativo nem casas soltas", () => {
     expect(normalizarRegua({ valorPorEntrega: -5, valorPorKm: 0.905, bonusEntregaSemOcorrencia: 2.1 }))
-      .toEqual({ valorPorEntrega: 0, valorPorKm: 0.91, bonusEntregaSemOcorrencia: 2.1 });
+      .toEqual({ valorPorEntrega: 0, valorPorKm: 0.91, bonusEntregaSemOcorrencia: 2.1, metaMensal: 0 });
   });
 });
 
@@ -116,5 +117,43 @@ describe("GreenPay — arredondamento", () => {
   it("arredonda para centavos", () => {
     expect(arredondarReais(0.905)).toBe(0.91);
     expect(arredondarReais(27.004)).toBe(27);
+  });
+});
+
+describe("GreenPay — meta e projeção do mês", () => {
+  it("sem meta, devolve null (não inventa alvo)", () => {
+    expect(metaEProjecaoMes(500, 0, "2026-09-15")).toBeNull();
+    expect(metaEProjecaoMes(500, undefined, "2026-09-15")).toBeNull();
+  });
+
+  it("meta na régua carrega na normalização", () => {
+    expect(normalizarRegua({ valorPorEntrega: 5, metaMensal: 3000 }).metaMensal).toBe(3000);
+    expect(normalizarRegua({ valorPorEntrega: 5 }).metaMensal).toBe(0);
+  });
+
+  it("progresso e projeção pelo ritmo do mês", () => {
+    // Dia 15 de setembro (30 dias), R$ 1.500 no mês → 50% da meta 3.000.
+    // Ritmo: 1500/15 = 100/dia → projeção 100×30 = 3.000 (100%).
+    const r = metaEProjecaoMes(1500, 3000, "2026-09-15");
+    expect(r.meta).toBe(3000);
+    expect(r.atingido).toBe(1500);
+    expect(r.faltam).toBe(1500);
+    expect(r.percentual).toBe(50);
+    expect(r.projecao).toBe(3000);
+    expect(r.projecaoPercentual).toBe(100);
+    expect(r.faixa).toBe("atras"); // 50% do atingido ainda é "atras" (<70)
+  });
+
+  it("meta batida é reconhecida", () => {
+    const r = metaEProjecaoMes(3200, 3000, "2026-09-20");
+    expect(r.faixa).toBe("batida");
+    expect(r.faltam).toBe(0);
+  });
+
+  it("sem ganho no mês, não projeta (sem ritmo)", () => {
+    const r = metaEProjecaoMes(0, 3000, "2026-09-10");
+    expect(r.projecao).toBeNull();
+    expect(r.projecaoPercentual).toBeNull();
+    expect(r.percentual).toBe(0);
   });
 });

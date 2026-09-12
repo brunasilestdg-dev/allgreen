@@ -12,7 +12,7 @@ const reais = (v) => `R$ ${Number(v || 0).toLocaleString("pt-BR", { minimumFract
 export default function GreenPayAdminPage({ authHeaders, setToast }) {
   const [regua, setRegua] = useState(null);
   const [motoristas, setMotoristas] = useState([]);
-  const [form, setForm] = useState({ valorPorEntrega: "", valorPorKm: "", bonusEntregaSemOcorrencia: "" });
+  const [form, setForm] = useState({ valorPorEntrega: "", valorPorKm: "", bonusEntregaSemOcorrencia: "", metaMensal: "" });
   const [ocupado, setOcupado] = useState(false);
   const [carregando, setCarregando] = useState(true);
 
@@ -34,6 +34,7 @@ export default function GreenPayAdminPage({ authHeaders, setToast }) {
         valorPorEntrega: String(rg.regra?.valorPorEntrega ?? ""),
         valorPorKm: String(rg.regra?.valorPorKm ?? ""),
         bonusEntregaSemOcorrencia: String(rg.regra?.bonusEntregaSemOcorrencia ?? ""),
+        metaMensal: rg.regra?.metaMensal ? String(rg.regra.metaMensal) : "",
       });
       setMotoristas(mt.motoristas || []);
     } catch (e) { setToast?.(e.message); }
@@ -50,6 +51,7 @@ export default function GreenPayAdminPage({ authHeaders, setToast }) {
           valorPorEntrega: Number(form.valorPorEntrega) || 0,
           valorPorKm: Number(form.valorPorKm) || 0,
           bonusEntregaSemOcorrencia: Number(form.bonusEntregaSemOcorrencia) || 0,
+          metaMensal: Number(form.metaMensal) || 0,
         }),
       });
       setToast?.("Régua de ganhos salva. Sincronize para aplicar às entregas já feitas.");
@@ -95,6 +97,7 @@ export default function GreenPayAdminPage({ authHeaders, setToast }) {
           <label>Por entrega (R$)<input type="number" min="0" step="0.01" value={form.valorPorEntrega} onChange={(e) => setForm((f) => ({ ...f, valorPorEntrega: e.target.value }))} /></label>
           <label>Por km (R$)<input type="number" min="0" step="0.01" value={form.valorPorKm} onChange={(e) => setForm((f) => ({ ...f, valorPorKm: e.target.value }))} /></label>
           <label>Bônus sem ocorrência (R$)<input type="number" min="0" step="0.01" value={form.bonusEntregaSemOcorrencia} onChange={(e) => setForm((f) => ({ ...f, bonusEntregaSemOcorrencia: e.target.value }))} /></label>
+          <label>Meta de ganho do mês (R$)<input type="number" min="0" step="0.01" value={form.metaMensal} onChange={(e) => setForm((f) => ({ ...f, metaMensal: e.target.value }))} placeholder="opcional" /></label>
         </div>
         <div className="tdg-greenpay-acoes">
           <button type="button" className="tdg-action" onClick={salvarRegua} disabled={ocupado}>Salvar régua</button>

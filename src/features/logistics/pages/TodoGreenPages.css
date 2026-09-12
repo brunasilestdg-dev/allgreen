@@ -2198,6 +2198,21 @@
 .tdg-ganhos-periodos > div { background: rgba(255,255,255,.12); border-radius: 11px; padding: 9px 6px; }
 .tdg-ganhos-periodos span { color: #cdeee0; display: block; font-size: .68rem; }
 .tdg-ganhos-periodos strong { font-size: 1.02rem; }
+.tdg-ganhos-meta { background: var(--tdg-card, #fff); border: 1px solid #dce4dd; border-left: 4px solid #0e6f52; border-radius: 12px; margin: 12px 12px 0; padding: 12px 14px; }
+.tdg-ganhos-meta.f-batida { border-left-color: #1f7a44; }
+.tdg-ganhos-meta.f-no-caminho { border-left-color: #0b9f8f; }
+.tdg-ganhos-meta.f-atras { border-left-color: #b8860b; }
+.tdg-ganhos-meta.f-longe { border-left-color: #c0392b; }
+.tdg-ganhos-meta-topo { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; }
+.tdg-ganhos-meta-topo span { color: #5c6b62; font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.tdg-ganhos-meta-topo strong { font-size: 1.05rem; }
+.tdg-ganhos-meta-topo em { color: #5c6b62; font-size: .82rem; font-style: normal; font-weight: 400; }
+.tdg-ganhos-meta-barra { background: #eef3f0; border-radius: 999px; height: 9px; margin: 8px 0 6px; overflow: hidden; }
+.tdg-ganhos-meta-barra i { background: #0e6f52; border-radius: 999px; display: block; height: 100%; }
+.tdg-ganhos-meta.f-atras .tdg-ganhos-meta-barra i { background: #b8860b; }
+.tdg-ganhos-meta.f-longe .tdg-ganhos-meta-barra i { background: #c0392b; }
+.tdg-ganhos-meta small { color: #5c6b62; font-size: .78rem; }
+
 .tdg-ganhos-saldos { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 12px 0; }
 .tdg-ganhos-saldos article { background: var(--tdg-card, #fff); border: 1px solid #dce4dd; border-radius: 12px; padding: 11px 12px; }
 .tdg-ganhos-saldos span { color: #5c6b62; display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }

@@ -8,6 +8,7 @@ import { avaliarChecklist, GRUPOS_CHECKLIST, ITENS_CHECKLIST } from "../driverCh
 import { avaliarConformidadeJornada, formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
 import { calcularScoreMotorista, ROTULO_FAIXA } from "../driverScoreDomain.js";
 import { resumoDeProdutividade } from "../driverProductivityDomain.js";
+import { metaEProjecaoMes } from "../greenPayDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
@@ -829,6 +830,26 @@ export default function DriverPortalPage() {
                   <div><span>No mês</span><strong>{reais(ganhos.resumo.mes)}</strong></div>
                 </div>
               </section>
+
+              {(() => {
+                const meta = metaEProjecaoMes(ganhos.resumo.mes, ganhos.regra?.metaMensal, hojeISO);
+                if (!meta) return null;
+                const largura = Math.min(100, Math.max(2, meta.percentual));
+                return (
+                  <section className={`tdg-ganhos-meta f-${meta.faixa}`}>
+                    <div className="tdg-ganhos-meta-topo">
+                      <span>Meta do mês</span>
+                      <strong>{reais(meta.atingido)} <em>de {reais(meta.meta)}</em></strong>
+                    </div>
+                    <div className="tdg-ganhos-meta-barra"><i style={{ width: `${largura}%` }} /></div>
+                    <small>
+                      {meta.percentual}% da meta
+                      {meta.faltam > 0 ? ` · faltam ${reais(meta.faltam)}` : " · meta batida!"}
+                      {meta.projecao != null ? ` · no ritmo atual você fecha o mês em ~${reais(meta.projecao)}` : ""}
+                    </small>
+                  </section>
+                );
+              })()}
 
               <section className="tdg-ganhos-saldos">
                 <article className="pendente"><span>Pendente</span><strong>{reais(ganhos.resumo.saldos.pendente)}</strong></article>
