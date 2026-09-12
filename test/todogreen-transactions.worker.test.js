@@ -50,6 +50,11 @@ describe("espinha transacional", () => {
     order = (await response.json()).record;
     expect(order.number).toMatch(/^OS-/);
     expect(order.netAmount).toBe(250);
+    expect(order.operationId).toBeTruthy();
+    const operation = await env.DB.prepare(
+      "SELECT client_id,contract_id FROM todogreen_client_operations WHERE id=?",
+    ).bind(order.operationId).first();
+    expect(operation).toMatchObject({ client_id: "txn-client", contract_id: "txn-contract" });
   });
 
   it("prepara CIOT e bloqueia frete abaixo do piso mínimo", async () => {
@@ -118,7 +123,7 @@ describe("espinha transacional", () => {
     expect((await issued.json()).record).toMatchObject({ status: "issued", ciotCode: "123456789012" });
   });
 
-  it("não pula etapas e só gera elegibilidade depois do POD e da conclusão", async () => {
+  it("não pula etapas e a entrega com POD conclui e gera elegibilidade", async () => {
     const skipped = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", { status: "completed", revision: 1 });
     expect(skipped.status).toBe(409);
 
@@ -128,13 +133,13 @@ describe("espinha transacional", () => {
       order = (await response.json()).record;
     }
 
-    // Sem POD, concluir é recusado com 409 LEGÍVEL (antes era um 500 opaco do
-    // trigger) e nada muda na OS.
-    const semPod = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", {
+    // A OS não aceita conclusão administrativa: só o evento canônico de
+    // entrega com POD encerra operação + OS e libera faturamento.
+    const semEntrega = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", {
       status: "completed", revision: order.revision,
     });
-    expect(semPod.status).toBe(409);
-    expect((await semPod.json()).code).toBe("pod_required");
+    expect(semEntrega.status).toBe(409);
+    expect((await semEntrega.json()).code).toBe("canonical_delivery_required");
 
     const beforePod = await request("/api/todogreen/transactions/billing-items?status=eligible");
     expect((await beforePod.json()).records).toHaveLength(0);
@@ -147,15 +152,15 @@ describe("espinha transacional", () => {
       recipientName: "Recebedor", documentUrl: "https://exemplo.test/canhoto.jpg",
     });
     expect(pod.status).toBe(201);
-    expect((await pod.json()).record.recipientName).toBe("Recebedor");
+    const podCriado = await pod.json();
+    expect(podCriado.record.recipientName).toBe("Recebedor");
+    expect(podCriado).toMatchObject({ serviceOrderStatus: "completed", billingEligible: true });
     const listaPod = await request(`/api/todogreen/transactions/service-orders/${order.id}/pod`);
     expect((await listaPod.json()).records).toHaveLength(1);
 
-    const completed = await request(`/api/todogreen/transactions/service-orders/${order.id}/transition`, "POST", {
-      status: "completed", revision: order.revision,
-    });
-    expect(completed.status).toBe(200);
-    order = (await completed.json()).record;
+    const concluidas = await request("/api/todogreen/transactions/service-orders?status=completed");
+    order = (await concluidas.json()).records.find((registro) => registro.id === order.id);
+    expect(order.status).toBe("completed");
 
     const queue = await request("/api/todogreen/transactions/billing-items?status=eligible");
     const records = (await queue.json()).records;
@@ -307,18 +312,25 @@ describe("evento de entrega fecha o ciclo da operação", () => {
     expect(lista[0].recipientName).toBe("Portaria");
   });
 
-  it("a entrega com POD, mas com OS ainda não concluída, aparece na ponte de faturamento (#120)", async () => {
-    // txn-op foi entregue com comprovante no teste anterior; a OS vinculada
-    // segue em 'draft' (sem item de faturamento). A ponte precisa mostrá-la.
+  it("a entrega com POD conclui a OS e não fica presa na ponte manual (#120)", async () => {
+    // txn-op foi entregue com comprovante no teste anterior. O comando
+    // canônico conclui a OS e cria o item elegível, então não sobra trabalho
+    // manual na antiga ponte.
     const resposta = await request("/api/todogreen/transactions/entregas-a-faturar");
     expect(resposta.status).toBe(200);
     const registros = (await resposta.json()).records;
     const entrega = registros.find((item) => item.id === "txn-op");
-    expect(entrega).toBeTruthy();
-    expect(entrega.estado).toBe("os_pendente");
-    expect(entrega.serviceOrderStatus).toBe("draft");
-    expect(entrega.clientName).toBe("Cliente Transacional");
-    expect(entrega.proximoPasso).toMatch(/conclua a os/i);
+    expect(entrega).toBeUndefined();
+    const os = await env.DB.prepare(
+      "SELECT status FROM todogreen_service_orders WHERE operation_id='txn-op'",
+    ).first();
+    expect(os.status).toBe("completed");
+    const item = await env.DB.prepare(
+      `SELECT b.status FROM todogreen_billing_items b
+        JOIN todogreen_service_orders s ON s.id=b.service_order_id
+       WHERE s.operation_id='txn-op'`,
+    ).first();
+    expect(item.status).toBe("eligible");
   });
 
   it("não lista entrega sem comprovante nem operação sem entrega", async () => {

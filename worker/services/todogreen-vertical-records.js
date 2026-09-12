@@ -2270,6 +2270,12 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   let comprovanteHash = efeitos.concluiEntrega ? texto(corpo.comprovanteHash, 200) : "";
   let assinaturaUrl = efeitos.concluiEntrega ? texto(corpo.assinaturaUrl, 800) : "";
   let assinaturaHash = efeitos.concluiEntrega ? texto(corpo.assinaturaHash, 200) : "";
+  // Entrega sem prova não encerra execução. O mesmo gate vale para a tela
+  // interna, Portal do Motorista, Portal TMS, API e integrações: mudar a porta
+  // de entrada não pode mudar a regra de negócio.
+  if (efeitos.concluiEntrega && !recebedor && !comprovanteUrl && !corpo.comprovanteBase64
+      && !assinaturaUrl && !corpo.assinaturaBase64)
+    return { erro: "Informe quem recebeu ou anexe o comprovante/assinatura da entrega." };
   // Ids das imagens guardadas no cofre — para limpar se o evento não entrar.
   const arquivosGuardados = [];
   if (efeitos.concluiEntrega) {
@@ -2296,7 +2302,7 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
     }
   }
   const atualizacaoEntrega = efeitos.concluiEntrega
-    ? `, delivered_at = COALESCE(delivered_at, ?)${comprovanteUrl ? ", proof_url = ?, proof_hash = ?" : ""}${assinaturaUrl ? ", signature_url = ?, signature_hash = ?" : ""}`
+    ? `, status = 'concluida', delivered_at = COALESCE(delivered_at, ?)${comprovanteUrl ? ", proof_url = ?, proof_hash = ?" : ""}${assinaturaUrl ? ", signature_url = ?, signature_hash = ?" : ""}`
     : "";
   const paramsEntrega = efeitos.concluiEntrega
     ? [ocorridoEm, ...(comprovanteUrl ? [comprovanteUrl, comprovanteHash] : []), ...(assinaturaUrl ? [assinaturaUrl, assinaturaHash] : [])]
@@ -2394,6 +2400,27 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
       operationId, eventoId, userId, agora,
       TENANT_ID, ownerId, operationId,
     ));
+    // A entrega com POD é a autoridade da execução. Ela conclui toda OS
+    // vinculada e libera a fila de faturamento no MESMO batch. Assim não há
+    // mais o passo manual "motorista entregou, alguém conclui a OS" nem
+    // comportamentos diferentes entre Portal do Motorista e Portal TMS.
+    instrucoes.push(env.DB.prepare(
+      `UPDATE todogreen_service_orders
+          SET status = 'completed', completed_at = COALESCE(completed_at, ?),
+              revision = revision + 1, updated_by = ?, updated_at = ?
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND operation_id = ?
+          AND archived_at IS NULL AND status NOT IN ('completed','cancelled')`,
+    ).bind(ocorridoEm, userId, agora, TENANT_ID, ownerId, operationId));
+    instrucoes.push(env.DB.prepare(
+      `INSERT OR IGNORE INTO todogreen_billing_items
+         (id,tenant_id,workspace_owner_id,service_order_id,client_id,contract_id,status,amount,
+          competence_date,created_by,updated_by,created_at,updated_at)
+       SELECT lower(hex(randomblob(16))), os.tenant_id, os.workspace_owner_id, os.id,
+              os.client_id, os.contract_id, 'eligible', os.net_amount, ?, ?, ?, ?, ?
+         FROM todogreen_service_orders os
+        WHERE os.tenant_id = ? AND os.workspace_owner_id = ? AND os.operation_id = ?
+          AND os.archived_at IS NULL AND os.status = 'completed'`,
+    ).bind(ocorridoEm.slice(0, 10), userId, userId, agora, agora, TENANT_ID, ownerId, operationId));
   }
   try {
     await env.DB.batch(instrucoes);

@@ -95,19 +95,12 @@ export function validateAllocation(total, allocations = [], tolerance = 0.01) {
   return { valid: true, allocated };
 }
 
-// ===== A ponte que faltava: entrega com POD → faturamento =====
+// ===== Saneamento legado: entrega antiga com POD → faturamento =====
 //
-// O motorista entrega, registra o comprovante (POD) e a operação é carimbada
-// `delivered_at`/`proof_url`. Daí para a frente o ciclo é MANUAL e desconexo:
-// alguém precisa ter criado a OS do aceite e concluí-la para o item entrar na
-// fila de faturamento. Sem isso, a entrega com comprovante fica invisível ao
-// Financeiro — o dinheiro nunca é sinalizado.
-//
-// Esta função é a LEITURA da lacuna, não a correção automática. Ela só nomeia
-// em que estado a entrega parou e qual é o próximo passo manual. Não decide
-// preço nem cria OS: faturar um valor adivinhado é pior do que faturar à mão
-// (operação sem contrato/OS vinculada não tem valor definido). O painel que a
-// usa é uma lista de trabalho, não um gatilho de cobrança.
+// Entregas novas passam pelo comando canônico, que conclui operação + OS e
+// cria o item faturável de forma atômica. Esta classificação existe somente
+// para localizar registros históricos/importados que nasceram antes da regra
+// ou sem uma OS vinculada. Ela não é um segundo fluxo de execução.
 export function classificarEntregaAFaturar(row = {}) {
   const temOs = Boolean(row.serviceOrderId || row.service_order_id);
   if (!temOs) {

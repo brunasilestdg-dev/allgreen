@@ -134,7 +134,7 @@ describe("despacho como cadeia transacional", () => {
     const op1 = await env.DB.prepare("SELECT * FROM todogreen_client_operations WHERE id='dispatch-op-1'").first();
     await aplicarEventoOperacional(env, {
       ownerId, operacao: op1, userId: ownerId,
-      corpo: { tipo: "entrega", titulo: "Primeira entrega", idempotencyKey: "dispatch-event-1" },
+      corpo: { tipo: "entrega", titulo: "Primeira entrega", recebedor: "Loja 1", idempotencyKey: "dispatch-event-1" },
     });
     let rota = await env.DB.prepare("SELECT status,stops_json FROM todogreen_routes WHERE id = ?").bind(routeId).first();
     expect(rota.status).toBe("em_rota");
@@ -143,7 +143,7 @@ describe("despacho como cadeia transacional", () => {
     const op2 = await env.DB.prepare("SELECT * FROM todogreen_client_operations WHERE id='dispatch-op-2'").first();
     await aplicarEventoOperacional(env, {
       ownerId, operacao: op2, userId: ownerId,
-      corpo: { tipo: "entrega", titulo: "Segunda entrega", idempotencyKey: "dispatch-event-2" },
+      corpo: { tipo: "entrega", titulo: "Segunda entrega", recebedor: "Loja 2", idempotencyKey: "dispatch-event-2" },
     });
     rota = await env.DB.prepare("SELECT status,stops_json FROM todogreen_routes WHERE id = ?").bind(routeId).first();
     expect(rota.status).toBe("concluida");

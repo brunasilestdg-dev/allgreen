@@ -150,7 +150,7 @@ describe("Cadastro manual de carga no Portal TMS", () => {
     const podCorpo = await pod.json();
     expect(podCorpo.shipmentStatus).toBe("completed");
     expect(podCorpo.billingEligible).toBe(true);
-    expect(podCorpo.pod.documentUrl).toBe("data:image/png;base64,AAAA");
+    expect(podCorpo.pod.documentUrl).toMatch(/^\/api\/todogreen\/file-vault\/[^/]+\/download$/);
 
     const osFinal = await env.DB.prepare("SELECT status FROM todogreen_service_orders WHERE id=?").bind(registro.id).first();
     expect(osFinal.status).toBe("completed");
