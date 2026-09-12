@@ -15,6 +15,33 @@ só abrir conta no Mercado Pago (aceita Pix) ou Stripe, cadastrar a credencial
 com `npx wrangler secret put PAGAMENTO_TOKEN` e me avisar — eu ligo o botão ao
 checkout e a confirmação passa a mudar o plano da conta sozinha.
 
+### Ligar o R2 para a mídia do cofre (POD, CNH, comprovantes) — alívio de escala
+
+O código já grava e lê a mídia do R2 (object storage da Cloudflare) **assim que
+o binding existir**; sem ele, tudo continua no D1 como antes (nada quebra). Hoje
+cada foto vira ~40 linhas de base64 no D1 — o R2 tira esse peso. Passos, uma vez:
+
+```bash
+# 1. Criar o bucket (nome livre; use este para casar com o exemplo):
+npx wrangler r2 bucket create seu-funcionario-midia
+```
+
+2. Adicionar o binding no `wrangler.jsonc` (o **binding TEM que se chamar
+   `MEDIA_BUCKET`**, que é o nome que o código procura):
+
+```jsonc
+"r2_buckets": [
+  { "binding": "MEDIA_BUCKET", "bucket_name": "seu-funcionario-midia" }
+]
+```
+
+3. Publicar (`npm run deploy` ou o push na `main`). A partir daí, **toda mídia
+   nova vai para o R2**; a antiga continua sendo servida do D1 normalmente
+   (migração é aditiva, retrocompatível). Não precisa migrar o histórico — se
+   quiser, dá para fazer isso depois num passo separado.
+
+Enquanto o binding não existir, não há erro: a mídia só continua no D1.
+
 ### 0. Destravar a publicação do site (5 minutos, uma vez só)
 
 Verificado em 30/07/2026: o site no ar responde **v138**, mas o código no GitHub

@@ -12,6 +12,14 @@ import { validarImagemDataUrl, BYTES_MAXIMOS_IMAGEM } from "../../src/features/l
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const CHUNK_BYTES = 320 * 1024;
 
+// Object storage da Cloudflare (R2). "Prepared-and-off": só é usado quando o
+// binding existir no Worker; sem ele, a mídia continua no D1 (chunks base64),
+// que é o teto de escala que isto vem aliviar. A chave é determinística e
+// escopada ao dono para nunca colidir entre espaços.
+export const R2_BUCKET_BINDING = "MEDIA_BUCKET";
+export const chaveR2 = (ownerId, id) => `todogreen/${String(ownerId || "sem-dono")}/${id}`;
+const bucketR2 = (env) => env?.[R2_BUCKET_BINDING] || null;
+
 export const sha256 = async (bytes) => {
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -41,6 +49,31 @@ export const armazenarArquivoInterno = async (env, {
   const id = crypto.randomUUID();
   const digest = await sha256(bytes);
   const now = new Date().toISOString();
+  const bucket = bucketR2(env);
+  const tipo = contentType || "application/octet-stream";
+
+  // Caminho R2 (quando o binding existe): grava os bytes no object storage
+  // PRIMEIRO — se falhar, nem chega a criar a linha órfã — e a metadata (com o
+  // r2_key) numa única inserção, sem chunks. É aqui que a mídia deixa de pesar
+  // no D1. A leitura casa pelo r2_key (ver o download do file-vault).
+  if (bucket) {
+    const r2Key = chaveR2(ownerId, id);
+    await bucket.put(r2Key, bytes, { httpMetadata: { contentType: tipo } });
+    await env.DB.prepare(
+      `INSERT INTO todogreen_internal_files
+         (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,
+          file_name,content_type,byte_size,sha256,version,source,external_url,folder_id,
+          created_by,created_at,archived_at,r2_key)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)`,
+    ).bind(
+      id, TENANT_ID, ownerId, clientId || null, workflowId || null, contextType || null,
+      contextId || null, fileName, tipo, bytes.length,
+      digest, version, source, externalUrl || "", folderId || "", createdBy, now, r2Key,
+    ).run();
+    return { id, sha256: digest, byteSize: bytes.length, r2Key };
+  }
+
+  // Caminho legado (sem R2): metadata + chunks base64 no D1, numa transação.
   const statements = [
     env.DB.prepare(
       `INSERT INTO todogreen_internal_files
@@ -50,7 +83,7 @@ export const armazenarArquivoInterno = async (env, {
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
     ).bind(
       id, TENANT_ID, ownerId, clientId || null, workflowId || null, contextType || null,
-      contextId || null, fileName, contentType || "application/octet-stream", bytes.length,
+      contextId || null, fileName, tipo, bytes.length,
       digest, version, source, externalUrl || "", folderId || "", createdBy, now,
     ),
   ];
@@ -74,6 +107,11 @@ export const armazenarArquivoInterno = async (env, {
 export const descartarArquivos = async (env, ownerId, ids = []) => {
   const lista = (ids || []).filter(Boolean);
   if (!lista.length) return;
+  // Objeto no R2 primeiro (chave determinística; apagar chave de arquivo legado
+  // que nunca existiu no R2 é no-op idempotente). Melhor-esforço: um R2 fora do
+  // ar não pode travar a limpeza da metadata/chunks no D1.
+  const bucket = bucketR2(env);
+  if (bucket) await Promise.all(lista.map((id) => bucket.delete(chaveR2(ownerId, id)).catch(() => {})));
   const marcadores = lista.map(() => "?").join(",");
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM todogreen_internal_file_chunks WHERE file_id IN (${marcadores})`).bind(...lista),

@@ -3,6 +3,7 @@ import {
   capacidadeDoVeiculo,
   demandaDaOperacao,
   interpretarDespachoVroom,
+  janelaDeEntrega,
   montarProblemaVroomDespacho,
 } from "../worker/services/todogreen-dispatch-vroom.js";
 
@@ -125,6 +126,32 @@ describe("To Do Green dispatch VROOM adapter", () => {
       { operationId: "op2", tipo: "coleta" },
       { operationId: "op2", tipo: "entrega" },
     ]);
+  });
+
+  it("leva o prazo de entrega (promised_at) como janela de tempo por parada", () => {
+    const agora = new Date("2026-09-10T12:00:00Z");
+    const inicio = Math.floor(agora.getTime() / 1000);
+    const fim = inicio + 8 * 3600;
+
+    // Prazo dentro do turno → janela [início, prazo]. Sem prazo → sem janela.
+    const built = montarProblemaVroomDespacho({
+      operacoes: [
+        { id: "com-prazo", delivery_lat: -23.55, delivery_lng: -46.63, fields_json: "{}", promised_at: "2026-09-10T14:00:00Z" },
+        { id: "sem-prazo", delivery_lat: -23.50, delivery_lng: -46.60, fields_json: "{}" },
+      ],
+      veiculos: [{ id: "v1" }],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora,
+    });
+    const comPrazo = built.payload.jobs.find((j) => j.description === "com-prazo");
+    const semPrazo = built.payload.jobs.find((j) => j.description === "sem-prazo");
+    expect(comPrazo.time_windows).toEqual([[inicio, Math.floor(new Date("2026-09-10T14:00:00Z").getTime() / 1000)]]);
+    expect(semPrazo.time_windows).toBeUndefined();
+
+    // Unitário do helper: prazo além do turno é limitado ao fim; prazo vencido não restringe.
+    expect(janelaDeEntrega({ promised_at: "2026-09-11T00:00:00Z" }, inicio, fim)).toEqual([[inicio, fim]]);
+    expect(janelaDeEntrega({ promised_at: "2026-09-10T10:00:00Z" }, inicio, fim)).toBeNull();
+    expect(janelaDeEntrega({}, inicio, fim)).toBeNull();
   });
 
   it("converte tarefas não atribuídas de volta para operação", () => {

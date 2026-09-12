@@ -81,6 +81,21 @@ const coord = (lat, lng) => {
 
 const epochSeconds = (date) => Math.floor(date.getTime() / 1000);
 
+// O prazo de entrega (promised_at) vira uma JANELA DE TEMPO por parada:
+// [início do turno, prazo], limitada ao fim do turno. Sem prazo — ou prazo já
+// vencido em relação ao início — não impõe janela (a parada continua
+// roteirizável, em vez de sumir do plano). É o que faz "entregar até as 12h"
+// ser respeitado no despacho, em vez de ignorado.
+export const janelaDeEntrega = (op, inicio, fim) => {
+  const bruto = op?.promised_at ?? op?.promisedAt;
+  if (!bruto) return null;
+  const prazo = new Date(bruto);
+  if (!Number.isFinite(prazo.getTime())) return null;
+  const limite = epochSeconds(prazo);
+  if (limite <= inicio) return null;
+  return [[inicio, Math.min(limite, fim)]];
+};
+
 export function montarProblemaVroomDespacho({
   operacoes = [],
   veiculos = [],
@@ -126,6 +141,7 @@ export function montarProblemaVroomDespacho({
     const operationId = String(operation.id || "");
     const demand = demandaDaOperacao(operation);
     const pickup = coord(operation.pickup_lat, operation.pickup_lng);
+    const janela = janelaDeEntrega(operation, inicio, fim);
 
     if (pickup) {
       const pickupId = taskId++;
@@ -145,6 +161,7 @@ export function montarProblemaVroomDespacho({
           location: delivery,
           service: DEFAULT_STOP_DURATION_S,
           description: operationId,
+          ...(janela ? { time_windows: janela } : {}),
         },
       });
     } else {
@@ -156,6 +173,7 @@ export function montarProblemaVroomDespacho({
         service: DEFAULT_STOP_DURATION_S,
         delivery: demand,
         description: operationId,
+        ...(janela ? { time_windows: janela } : {}),
       });
     }
   }
