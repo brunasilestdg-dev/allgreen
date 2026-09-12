@@ -57,6 +57,12 @@ import {
   summarizeTms,
   tmsCsv,
 } from "./tmsCommandCenterDomain.js";
+import {
+  ehDuplicada,
+  normalizarTrackId,
+  registrarRecente,
+  resumoDaLeva,
+} from "./tmsBipagemDomain.js";
 import "./TmsPortal.css";
 import "./TmsApiManager.css";
 // Reaproveita o estilo do pino (divIcon) e do container do mapa já validados
@@ -360,36 +366,143 @@ function ScanSection() {
   const [eventType, setEventType] = useState("PICKED_UP");
   const [codigo, setCodigo] = useState("");
   const [historico, setHistorico] = useState([]);
-  const [enviando, setEnviando] = useState(false);
+  const [processando, setProcessando] = useState(false);
+  const [naFila, setNaFila] = useState(0);
   const [usandoCamera, setUsandoCamera] = useState(false);
   const [erroCamera, setErroCamera] = useState("");
+  const [somLigado, setSomLigado] = useState(true);
+  const [flash, setFlash] = useState(null); // { tipo: 'ok'|'erro'|'dup', texto }
   const inputRef = useRef(null);
   const videoRef = useRef(null);
   const controlesRef = useRef(null);
+  const ultimaCameraRef = useRef({ valor: "", quando: 0 });
+  const filaRef = useRef([]);
+  const processandoRef = useRef(false);
+  const recentesRef = useRef([]);
+  const audioRef = useRef(null);
+  const somRef = useRef(true);
+  const eventTypeRef = useRef(eventType);
+  const flashTimerRef = useRef(null);
 
+  useEffect(() => { eventTypeRef.current = eventType; }, [eventType]);
+  useEffect(() => { somRef.current = somLigado; }, [somLigado]);
   useEffect(() => { inputRef.current?.focus(); }, [usandoCamera]);
+  useEffect(() => () => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    audioRef.current?.close?.();
+  }, []);
 
-  const confirmarCodigo = useCallback(async (trackId) => {
-    const valor = String(trackId || "").trim();
-    if (!valor || enviando) return;
-    setEnviando(true);
+  // Beep via WebAudio — o operador de esteira trabalha quase sem olhar a tela e
+  // precisa ouvir se a leitura passou. Três tons distintos: sucesso (agudo
+  // curto), repetição (dois toques médios) e erro (grave longo). Sem
+  // dependência externa; se o áudio não abrir, segue sem beep.
+  const beep = useCallback((tipo) => {
+    if (!somRef.current) return;
     try {
-      const resultado = await scanTmsTrackId({ trackId: valor, eventType });
-      setHistorico((atual) => [{
-        ok: true, trackId: valor, quando: new Date(),
-        mensagem: `${resultado.pacote?.descricao || resultado.pacote?.trackId} — OS ${resultado.pedido?.numero}`,
-      }, ...atual].slice(0, 30));
-    } catch (reason) {
-      setHistorico((atual) => [{ ok: false, trackId: valor, quando: new Date(), mensagem: reason?.message || "Falha ao bipar." }, ...atual].slice(0, 30));
+      let ctx = audioRef.current;
+      if (!ctx) {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return;
+        ctx = new Ctor();
+        audioRef.current = ctx;
+      }
+      if (ctx.state === "suspended") ctx.resume();
+      const tocar = (freq, inicio, duracao) => {
+        const osc = ctx.createOscillator();
+        const ganho = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.value = freq;
+        const t0 = ctx.currentTime + inicio;
+        ganho.gain.setValueAtTime(0.0001, t0);
+        ganho.gain.exponentialRampToValueAtTime(0.18, t0 + 0.01);
+        ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + duracao);
+        osc.connect(ganho);
+        ganho.connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + duracao + 0.02);
+      };
+      if (tipo === "ok") tocar(1040, 0, 0.12);
+      else if (tipo === "dup") { tocar(720, 0, 0.09); tocar(720, 0.13, 0.09); }
+      else tocar(240, 0, 0.34);
+    } catch {
+      // ambiente sem áudio (ou bloqueado) — a bipagem continua funcionando
+    }
+  }, []);
+
+  const mostrarFlash = useCallback((tipo, texto) => {
+    setFlash({ tipo, texto });
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlash(null), 1400);
+  }, []);
+
+  // Esvazia a fila de leituras uma a uma. Nunca perde um bip: o coletor
+  // físico dispara Enter rápido demais, então cada leitura só é enfileirada e
+  // este laço processa em série mesmo que a rede esteja lenta.
+  const processarFila = useCallback(async () => {
+    if (processandoRef.current) return;
+    processandoRef.current = true;
+    setProcessando(true);
+    try {
+      while (filaRef.current.length) {
+        const valor = filaRef.current.shift();
+        setNaFila(filaRef.current.length);
+        const agora = Date.now();
+        if (ehDuplicada(valor, recentesRef.current, agora)) {
+          beep("dup");
+          mostrarFlash("dup", valor);
+          setHistorico((atual) => [{
+            ok: false, duplicada: true, trackId: valor, quando: new Date(),
+            mensagem: "Volume já bipado agora há pouco — leitura repetida ignorada.",
+          }, ...atual].slice(0, 40));
+          continue;
+        }
+        recentesRef.current = registrarRecente(recentesRef.current, valor, agora);
+        try {
+          const resultado = await scanTmsTrackId({ trackId: valor, eventType: eventTypeRef.current });
+          beep("ok");
+          mostrarFlash("ok", valor);
+          setHistorico((atual) => [{
+            ok: true, trackId: valor, quando: new Date(),
+            mensagem: `${resultado.pacote?.descricao || resultado.pacote?.trackId} — OS ${resultado.pedido?.numero}`,
+          }, ...atual].slice(0, 40));
+        } catch (reason) {
+          beep("erro");
+          mostrarFlash("erro", valor);
+          setHistorico((atual) => [{
+            ok: false, trackId: valor, quando: new Date(),
+            mensagem: reason?.message || "Falha ao bipar.",
+          }, ...atual].slice(0, 40));
+        }
+      }
     } finally {
-      setEnviando(false);
-      setCodigo("");
+      processandoRef.current = false;
+      setProcessando(false);
+      setNaFila(0);
       inputRef.current?.focus();
     }
-  }, [eventType, enviando]);
+  }, [beep, mostrarFlash]);
+
+  const enfileirar = useCallback((trackId) => {
+    const valor = normalizarTrackId(trackId);
+    if (!valor) return;
+    filaRef.current.push(valor);
+    setNaFila(filaRef.current.length);
+    setCodigo("");
+    processarFila();
+  }, [processarFila]);
 
   const aoTeclar = (event) => {
-    if (event.key === "Enter") { event.preventDefault(); confirmarCodigo(codigo); }
+    if (event.key === "Enter") { event.preventDefault(); enfileirar(codigo); }
+  };
+
+  // Mantém o foco no campo: se o operador (ou o próprio coletor) tira o foco,
+  // os próximos bips iriam para o vazio. Devolve o foco no próximo tick, exceto
+  // quando a câmera está aberta ou o toque foi num controle de verdade.
+  const aoPerderFoco = (event) => {
+    if (usandoCamera) return;
+    const proximo = event.relatedTarget;
+    if (proximo && (proximo.tagName === "BUTTON" || proximo.tagName === "SELECT" || proximo.tagName === "A")) return;
+    setTimeout(() => { if (!usandoCamera) inputRef.current?.focus(); }, 0);
   };
 
   useEffect(() => {
@@ -399,7 +512,17 @@ function ScanSection() {
       if (cancelado || !videoRef.current) return;
       const leitor = new BrowserMultiFormatReader();
       leitor.decodeFromVideoDevice(undefined, videoRef.current, (resultado) => {
-        if (resultado) confirmarCodigo(resultado.getText());
+        if (!resultado) return;
+        // A câmera decodifica o mesmo quadro dezenas de vezes por segundo. Só
+        // enfileira quando o código muda ou já passou a janela — senão o mesmo
+        // volume viraria uma enxurrada de "repetido". O bip duplo do coletor
+        // físico (evento discreto) continua sendo pego pela deduplicação da fila.
+        const texto = normalizarTrackId(resultado.getText());
+        const agora = Date.now();
+        const ultima = ultimaCameraRef.current;
+        if (texto === ultima.valor && agora - ultima.quando < 4000) return;
+        ultimaCameraRef.current = { valor: texto, quando: agora };
+        enfileirar(texto);
       }).then((controles) => { controlesRef.current = controles; })
         .catch((erro) => setErroCamera(erro?.message || "Não foi possível abrir a câmera."));
     });
@@ -407,11 +530,36 @@ function ScanSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usandoCamera]);
 
+  const resumo = resumoDaLeva(historico);
+
   return (
     <section className="tms-panel">
-      <div className="tms-panel-head"><div><span>Leitura de volume</span><h2>Bipagem</h2></div></div>
-      <div className="tms-api-card">
-        <p>Escolha o evento uma vez e bipe os volumes em sequência — leitor físico (USB/Bluetooth), câmera do celular ou digite o Track ID à mão.</p>
+      <div className="tms-panel-head">
+        <div><span>Leitura de volume</span><h2>Bipagem</h2></div>
+        <button
+          type="button"
+          className="tms-api-mini-button"
+          onClick={() => setSomLigado((atual) => !atual)}
+          title={somLigado ? "Silenciar o beep" : "Ligar o beep"}
+        >
+          {somLigado ? "🔊 Som ligado" : "🔇 Som mudo"}
+        </button>
+      </div>
+
+      <div className="tms-bipagem-station">
+        <div className={`tms-bipagem-flash ${flash ? `is-${flash.tipo}` : "is-idle"}`} aria-live="polite">
+          {flash ? (
+            <>
+              <strong>
+                {flash.tipo === "ok" ? "✓ Bipado" : flash.tipo === "dup" ? "↺ Repetido" : "✕ Falhou"}
+              </strong>
+              <span>{flash.texto}</span>
+            </>
+          ) : (
+            <span className="tms-bipagem-flash-idle">Aguardando o próximo volume…</span>
+          )}
+        </div>
+
         <div className="tms-api-form">
           <label>
             <span>Evento desta leva</span>
@@ -422,15 +570,22 @@ function ScanSection() {
           <label>
             <span>Track ID</span>
             <input
-              ref={inputRef} className="tms-api-input" value={codigo} disabled={enviando}
-              onChange={(event) => setCodigo(event.target.value)} onKeyDown={aoTeclar}
-              placeholder="Bipe com o leitor ou digite e pressione Enter" autoFocus
+              ref={inputRef} className="tms-api-input tms-bipagem-input" value={codigo}
+              onChange={(event) => setCodigo(event.target.value)} onKeyDown={aoTeclar} onBlur={aoPerderFoco}
+              placeholder="Bipe com o leitor ou digite e pressione Enter"
+              autoFocus autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              inputMode="text"
             />
           </label>
-          <div style={{ display: "flex", gap: 8 }}>
+          <p className="tms-bipagem-hint">
+            Aponte o leitor físico (USB/Bluetooth) e bipe: o coletor digita o código e dá Enter sozinho.
+            Sem leitor, use a câmera do celular ou digite à mão. Beep confirma cada leitura sem precisar olhar a tela.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button type="button" className="tms-api-mini-button" onClick={() => setUsandoCamera((atual) => !atual)}>
               {usandoCamera ? "Fechar câmera" : "Usar câmera do celular"}
             </button>
+            {processando ? <span className="tms-bipagem-status">Registrando…{naFila > 0 ? ` (${naFila} na fila)` : ""}</span> : null}
           </div>
           {usandoCamera ? (
             <div>
@@ -440,12 +595,18 @@ function ScanSection() {
           ) : null}
         </div>
       </div>
+
       <div className="tms-api-card">
+        <div className="tms-bipagem-placar">
+          <span className="ok">{resumo.ok} bipados</span>
+          {resumo.duplicadas > 0 ? <span className="dup">{resumo.duplicadas} repetidos</span> : null}
+          {resumo.erros > 0 ? <span className="erro">{resumo.erros} com erro</span> : null}
+        </div>
         <h3>Últimas leituras</h3>
         {!historico.length ? <Empty>Nenhuma leitura ainda.</Empty> : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
             {historico.map((item, indice) => (
-              <li key={`${item.trackId}-${indice}`} style={{ color: item.ok ? "var(--tms-accent, #0b9f8f)" : "#dc2626", fontSize: 13 }}>
+              <li key={`${item.trackId}-${indice}`} style={{ color: item.ok ? "var(--tms-accent, #0b9f8f)" : item.duplicada ? "#b45309" : "#dc2626", fontSize: 13 }}>
                 <strong>{item.trackId}</strong> — {item.mensagem} <small>{item.quando.toLocaleTimeString("pt-BR")}</small>
               </li>
             ))}
