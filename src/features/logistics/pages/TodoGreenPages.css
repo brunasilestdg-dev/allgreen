@@ -2102,6 +2102,8 @@
 .tdg-score-item b { color: #173d31; font-size: .82rem; text-align: right; }
 .tdg-score-barra { background: #eef3f0; border-radius: 999px; height: 8px; overflow: hidden; }
 .tdg-score-barra i { background: #0b9f8f; border-radius: 999px; display: block; height: 100%; }
+.tdg-score-time { align-items: center; background: #eef6f1; border-radius: 10px; color: #1f5c46; display: flex; gap: 8px; font-size: .82rem; padding: 8px 10px; }
+.tdg-score-time svg { flex-shrink: 0; }
 
 /* ── Jornada / turno do motorista (bloco 03) ──────────────────────────── */
 .tdg-turno { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
