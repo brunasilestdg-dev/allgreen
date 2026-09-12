@@ -17,6 +17,8 @@ describe("roteador principal", () => {
     expect(resolvePrimaryRoute("/central-motorista", true).kind).toBe("driver-portal");
     expect(resolvePrimaryRoute("/motorista-frota", true).kind).toBe("driver-fleet-portal");
     expect(resolvePrimaryRoute("/central-frota", true).kind).toBe("driver-fleet-portal");
+    expect(resolvePrimaryRoute("/portal-colaborador", true).kind).toBe("colaborador-portal");
+    expect(resolvePrimaryRoute("/portal-colaborador/notas", true).kind).toBe("colaborador-portal");
     expect(resolvePrimaryRoute("/todogreen/precificacao", true).kind).toBe("todogreen");
   });
 
@@ -24,6 +26,7 @@ describe("roteador principal", () => {
     expect(resolvePrimaryRoute("/", false).kind).toBe("todogreen-login");
     expect(resolvePrimaryRoute("/portal-cliente", false).kind).toBe("customer-login");
     expect(resolvePrimaryRoute("/portal-motorista", false).kind).toBe("driver-login");
+    expect(resolvePrimaryRoute("/portal-colaborador", false).kind).toBe("colaborador-login");
     // O TMS tem a própria entrada no login (aba "Portal TMS"), como cliente e
     // motorista — para quem entra pelo TMS voltar ao TMS depois de autenticar.
     expect(resolvePrimaryRoute("/portal-tms", false).kind).toBe("tms-login");

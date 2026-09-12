@@ -7,6 +7,7 @@ const ClientActivationPage = lazy(() => import("../features/logistics/ClientActi
 const TodoGreenAccessInvite = lazy(() => import("../features/logistics/TodoGreenAccessInvite.jsx"));
 const DriverFleetCenterPage = lazy(() => import("../features/logistics/pages/DriverFleetCenterPage.jsx"));
 const DriverPortalPage = lazy(() => import("../features/logistics/pages/DriverPortalPage.jsx"));
+const ColaboradorPortalPage = lazy(() => import("../features/logistics/pages/ColaboradorPortalPage.jsx"));
 // Galeria viva do design system (Onda 1 do redesign) — referência dos
 // componentes novos antes de adotá-los nas telas.
 const DesignSystemGallery = lazy(() => import("../design-system/DesignSystemGallery.jsx"));
@@ -28,6 +29,7 @@ export function resolvePrimaryRoute(pathname, authenticated) {
     if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-login" };
     if (/^\/(?:portal-motorista|central-motorista)(?:\/|$)/.test(path))
       return { kind: "driver-login" };
+    if (/^\/portal-colaborador(?:\/|$)/.test(path)) return { kind: "colaborador-login" };
     return { kind: "login" };
   }
   if (/^\/portal-cliente(?:\/|$)/.test(path)) return { kind: "customer-portal" };
@@ -39,6 +41,7 @@ export function resolvePrimaryRoute(pathname, authenticated) {
     return { kind: "driver-portal" };
   if (/^\/(?:motorista-frota|central-frota)(?:\/|$)/.test(path))
     return { kind: "driver-fleet-portal" };
+  if (/^\/portal-colaborador(?:\/|$)/.test(path)) return { kind: "colaborador-portal" };
   if (/^\/todogreen\/ativacao(?:\/|$)/.test(path)) return { kind: "todogreen-activation" };
   if (/^\/design-system(?:\/|$)/.test(path)) return { kind: "design-system" };
   if (/^\/todogreen(?:\/|$)/.test(path)) return { kind: "todogreen" };
@@ -68,6 +71,8 @@ export default function PrimaryAppRouter({
     return <Login update={update} entryPortal="cliente" onAuthenticated={onAuthenticated} />;
   if (route.kind === "driver-login")
     return <Login update={update} entryPortal="motorista" onAuthenticated={onAuthenticated} />;
+  if (route.kind === "colaborador-login")
+    return <Login update={update} entryPortal="colaborador" onAuthenticated={onAuthenticated} />;
   if (route.kind === "todogreen-access-invite")
     return (
       <Suspense fallback={<div className="inbox-loading">Abrindo seu convite...</div>}>
@@ -96,6 +101,12 @@ export default function PrimaryAppRouter({
     return (
       <Suspense fallback={<div className="inbox-loading">Abrindo Central do Motorista/Frota...</div>}>
         <DriverFleetCenterPage authHeaders={authHeaders} setToast={setToast} mode="driver-portal" />
+      </Suspense>
+    );
+  if (route.kind === "colaborador-portal")
+    return (
+      <Suspense fallback={<div className="inbox-loading">Abrindo seu portal...</div>}>
+        <ColaboradorPortalPage />
       </Suspense>
     );
   if (route.kind === "todogreen-activation")

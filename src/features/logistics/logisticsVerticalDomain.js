@@ -50,6 +50,11 @@ export const TODO_GREEN_ROLES = [
   // vertical inteira — só o portal dele, que recorta as viagens pelo próprio
   // vínculo (driver:self). Registrar entrega e ocorrência da rua é driver:event.
   "motorista",
+  // Prestador PJ ou colaborador CLT que só usa o PRÓPRIO portal: informa a chave
+  // PIX e imputa a nota (PJ), ou vê os próprios dados e abre chamado (CLT).
+  // Deliberadamente SEM "read" — não enxerga a vertical, só o portal dele
+  // (colaborador:self), recortado pelo e-mail do cadastro.
+  "colaborador",
   // Perfil técnico. É o ÚNICO papel que enxerga a Central de Integrações
   // (cascata de IA, automações auto-hospedadas, chaves por ambiente). A titular
   // pediu essa tela invisível para todos e visível só no perfil de dev — por
@@ -126,6 +131,7 @@ export const TODO_GREEN_PERMISSION_CATALOG = Object.freeze([
     group: "Pessoas, ESG e gestão",
     items: [
       ["hr:manage", "Gerenciar pessoas e folha"],
+      ["colaborador:self", "Portal do colaborador (ver e imputar os próprios dados)"],
       ["marketing:manage", "Gerenciar marketing"],
       ["esg:manage", "Calcular e administrar ESG"],
       ["goal:read", "Consultar metas"],
@@ -190,6 +196,9 @@ export const TODO_GREEN_PERMISSIONS = {
   // de folha depende.
   rh: ["read", "hr:manage", "goal:read", "goal:checkin", "planner:manage", "work:manage"],
   motorista: ["driver:self", "driver:event"],
+  // Colaborador (PJ/CLT): só o próprio portal. `colaborador:self` dá acesso à
+  // vertical apenas para o portal do colaborador — sem `read`, sem gestão.
+  colaborador: ["colaborador:self"],
   // Desenvolvedor: acessa tudo (para testar) e carrega `dev:access`, o marcador
   // que abre a Central de Integrações. Owner/admin também têm "*", mas NÃO têm
   // `dev:access` nem o papel — por isso a tela some para eles, como a titular

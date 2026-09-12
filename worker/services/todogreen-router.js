@@ -24,6 +24,7 @@ import { handleTodoGreenPurchasingParams } from "./todogreen-purchasing-params.j
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
 import { handleTodoGreenDriverPortal } from "./todogreen-driver-portal.js";
+import { handleTodoGreenEmployeePortal } from "./todogreen-employee-portal.js";
 import { handleTodoGreenGreenPay } from "./todogreen-greenpay.js";
 import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
@@ -302,6 +303,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenGreenPay(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  // Portal do colaborador: sessão pelo e-mail do cadastro. PJ imputa NF e chave
+  // PIX; CLT só lê. Gestão (RH/financeiro) analisa e paga em /gestao/*.
+  if (path.startsWith("/api/todogreen/employee-portal")) {
+    return guarded("To Do Green employee portal error", "Não foi possível abrir o portal do colaborador.", async () => {
+      const resolved = await internalAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenEmployeePortal(request, env, resolved.access, resolved.user);
     });
   }
 

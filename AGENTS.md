@@ -290,6 +290,37 @@ quantos resultados vieram.
   o razão interno de sempre e não exige chave. Não inventar segundo cadastro de
   chave, não gravar a chave sem validar pelo tipo, não marcar pago quando o
   repasse externo falhou.
+- **Portal do colaborador (PJ e CLT) + nota fiscal do PJ** (`todogreen-employee-portal.js`
+  + `pjInvoiceDomain.js`; nota em `todogreen_pj_invoices`, migração `0117`; papel
+  `colaborador` = `["colaborador:self"]`): resolve QUEM é a pessoa pelo e-mail da
+  sessão (`todogreen_employees.work_email`/`personal_email`) e entrega só os dados
+  dela — o espaço é resolvido em `todogreen-access.js` por `espacosDeColaborador`
+  (espelho de `espacosDeMotorista`). **PJ** (`employment_type='pj'`) é self-service:
+  informa a PRÓPRIA chave PIX (gravada em `todogreen_bank_accounts`,
+  `owner_type='employee'`, via `POST /pix`) e IMPUTA a própria nota (`POST /nota`:
+  número, competência AAAA-MM, valor, anexo). O valor da NF é CONFERIDO contra o
+  valor esperado — o `salario_base` (contrato PJ), copiado para a nota e AJUSTÁVEL
+  na análise (`conferirNota`, `valorEsperadoProporcional` para entrada no meio do
+  mês). **CLT** (demais vínculos) só LÊ os próprios dados; banco/PIX é do RH
+  (`CONFIG["bank-accounts"]`, `hr:manage`) — `POST /pix` responde 403. A gestão
+  (`/gestao/*`, `finance:manage` ou `hr:manage`) analisa, ajusta o esperado,
+  aprova (cria `todogreen_financial_entries kind='cost'` — a nota vira conta a
+  pagar, `financial_entry_id` é o elo), recusa (com motivo, o PJ reenvia a mesma
+  competência) e paga (dispara `enviarPagamentoSyspag` dormente; conexão ligada e
+  disparo falhando → não marca paga, mesma honestidade do GreenPay; quita a conta
+  a pagar ligada). Não recriar cadastro de colaborador (é `todogreen_employees`,
+  0062/0066), não guardar PIX fora de `todogreen_bank_accounts`, não deixar PJ ver
+  a vertical (`colaborador` é SEM `read`), não pagar nota sem conferência humana.
+- **Chamado do colaborador** (`employeeTicketDomain.js`; `todogreen_employee_tickets`,
+  migração `0118`; no mesmo `todogreen-employee-portal.js`): o CLT vê os próprios
+  dados mas NÃO edita (banco/PIX/salário são do RH) — quando há divergência, abre
+  um CHAMADO (`POST /chamado`: categoria, assunto, descrição) em vez de corrigir.
+  Registro próprio (não é `todogreen_client_requests`, que é do cliente): o dono é
+  o `employee_id`. Ciclo `aberto → em_andamento → resolvido` (ou `cancelado`); a
+  equipe (`finance:manage`/`hr:manage`) atende e resolve com resposta em
+  `/gestao/chamados/*`, e o colaborador vê a resposta na própria sessão. PJ também
+  abre chamado (ex.: nota atrasada). Recorte pelo `employee_id` — ninguém vê o
+  chamado de outro.
 - **Módulos de ERP da vertical (NÃO confundir com os homônimos do monólito)**:
   cada um tem núcleo puro testado + tela lazy, e escreve em tabela própria
   `todogreen_*` (nunca no blob do workspace). Saldo/valor é sempre `SUM` de

@@ -186,13 +186,25 @@ Não é mais necessário `wrangler secret put` para isso. As variáveis de ambie
 antigas (`SEARCH_API_KEY`, `SEARXNG_BASE_URL` no cofre) continuam funcionando
 como padrão para todos os espaços, mas a tela acima é o caminho recomendado.
 
-### D. SysPag — repasse PIX do GreenPay ao motorista
+### D. SysPag — repasse PIX (motorista GreenPay e prestador PJ)
 
 O adaptador **já está pronto e desligado** (igual ao fiscal e ao WhatsApp): hoje,
-quando você PAGA um lote aprovado do motorista, o valor vira "pago" no razão
-interno; com a SysPag ligada, ele pode SAIR de fato por PIX. A tela do GreenPay
-(gestão) mostra o status "Repasse SysPag (PIX): Não configurado" até a credencial
-existir. **Nada aqui obriga serviço pago** — só liga quando você quiser.
+quando você PAGA um lote aprovado do motorista **ou uma nota aprovada de prestador
+PJ** (Portal do Colaborador → gestão), o valor vira "pago" no razão interno; com a
+SysPag ligada, ele pode SAIR de fato por PIX para a chave que a pessoa informou. A
+mesma credencial serve para os dois fluxos. **Nada aqui obriga serviço pago** — só
+liga quando você quiser.
+
+Sobre o **prestador PJ**: ele acessa o Portal do Colaborador (`/portal-colaborador`),
+informa a própria chave PIX e imputa a nota fiscal do mês (número, competência,
+valor, anexo). O valor é conferido contra o "salário"/contrato cadastrado no
+colaborador — que o financeiro pode ajustar (ex.: entrada no meio do mês). Nota
+aprovada vira conta a pagar; o repasse sai por PIX quando a SysPag estiver ligada.
+O **CLT** vê os próprios dados nesse mesmo portal, mas o banco/PIX é cadastrado pelo
+RH (Cadastros → Contas bancárias); em caso de divergência, o CLT **abre um chamado**
+ali mesmo (categoria, assunto, descrição) — a equipe (RH/financeiro) atende e
+responde, e o CLT vê a resposta. Para o PJ prestador ter login sem enxergar o resto
+do ERP, use o papel **"Colaborador"** ao liberar o acesso dele.
 
 Para ligar, preciso que você levante com a SysPag e cadastre no cofre:
 

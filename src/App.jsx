@@ -1653,9 +1653,11 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
         ? "/portal-motorista"
         : entryPortal === "tms"
           ? "/portal-tms"
-          : entradaToDoGreen
-            ? "/todogreen"
-            : "";
+          : entryPortal === "colaborador"
+            ? "/portal-colaborador"
+            : entradaToDoGreen
+              ? "/todogreen"
+              : "";
   const tituloDoAcesso =
     entryPortal === "cliente"
       ? "Entre no Portal do Cliente"
@@ -1663,7 +1665,9 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
         ? "Entre no Portal do Motorista"
         : entryPortal === "tms"
           ? "Entre no Portal TMS"
-          : "Entre no ambiente To Do Green";
+          : entryPortal === "colaborador"
+            ? "Entre no Portal do Colaborador"
+            : "Entre no ambiente To Do Green";
   const [mode, setMode] = useState("login");
   // Simulador de impacto ESG: público, aberto por um botão na tela de entrada,
   // sem exigir login (pedido da titular).
@@ -1677,7 +1681,9 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
             ? "To Do Green | Portal do Motorista"
             : entryPortal === "tms"
               ? "To Do Green | Portal TMS"
-              : "To Do Green";
+              : entryPortal === "colaborador"
+                ? "To Do Green | Portal do Colaborador"
+                : "To Do Green";
   }, [entradaToDoGreen, entryPortal]);
 
   const [form, setForm] = useState({ name: "", email: "", password: "" });

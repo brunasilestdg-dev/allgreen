@@ -166,6 +166,20 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     .all()
     .then((resultado) => (resultado.results || []).map((item) => item.workspace_owner_id).filter(Boolean))
     .catch(() => []);
+  // Mesma lógica do motorista para o colaborador (PJ/CLT): o vínculo dele com o
+  // espaço é o cadastro de pessoal com e-mail (todogreen_employees, work/personal
+  // email). Sem este caminho, o portal do colaborador cairia num espaço próprio
+  // vazio e não acharia os próprios dados.
+  const espacosDeColaborador = await env.DB
+    .prepare(
+      `SELECT DISTINCT workspace_owner_id FROM todogreen_employees
+        WHERE tenant_id = ? AND archived_at IS NULL
+          AND (lower(work_email) = ? OR lower(personal_email) = ?)`,
+    )
+    .bind(TENANT_ID, email, email)
+    .all()
+    .then((resultado) => (resultado.results || []).map((item) => item.workspace_owner_id).filter(Boolean))
+    .catch(() => []);
   // O espaço gravado na liberação por e-mail (0071). É o que resolve o caso
   // normal de quem foi autorizado ANTES de ter conta: sem ele, a pessoa criava
   // a conta, entrava, e caía no próprio espaço vazio — com todas as permissões
@@ -178,6 +192,7 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     ...donosDasLiberacoes,
     ...donosDaCarteira,
     ...espacosDeMotorista,
+    ...espacosDeColaborador,
   ].filter(Boolean);
   // Registros anteriores à 0071 podem não ter espaço. Só nesse legado a conta
   // própria é usada como fallback; depois que existe um dono explícito, ela
@@ -191,6 +206,7 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     || donosDasLiberacoes[0]
     || donosDaCarteira[0]
     || espacosDeMotorista[0]
+    || espacosDeColaborador[0]
     || user.id;
   const autorizado = autorizacoes.find((item) => clean(item.workspace_owner_id, 100) === espacoPadrao)
     || autorizacoes.find((item) => !clean(item.workspace_owner_id, 100))
