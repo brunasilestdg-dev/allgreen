@@ -1470,6 +1470,17 @@
   padding: 3px 12px;
 }
 
+.df-manut-prev {
+  border-radius: 8px;
+  flex-basis: 100%;
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 6px 10px;
+}
+.df-manut-prev.f-critico { background: color-mix(in srgb, #c0392b 12%, transparent); color: #922b21; }
+.df-manut-prev.f-atencao { background: color-mix(in srgb, #b8860b 14%, transparent); color: #7a5c08; }
+.df-manut-prev.f-sem-ritmo { background: color-mix(in srgb, #5b6f68 12%, transparent); color: #46564f; }
+
 .df-alerts {
   display: flex;
   flex-wrap: wrap;

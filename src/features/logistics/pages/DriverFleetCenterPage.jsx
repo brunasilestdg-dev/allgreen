@@ -20,6 +20,7 @@ import {
 import Modal from "../../../components/Modal.jsx";
 import { VEHICLE_CLASSES, vehicleClass } from "../vehicleClassDomain.js";
 import { fleetAlerts, fleetVehicleMetrics, summarizeFleet } from "../todoGreenFleetDomain.js";
+import { preverManutencao, taxaKmPorDia } from "../predictiveMaintenanceDomain.js";
 import {
   dimensionarFrota,
   PREMISSAS_DIMENSIONAMENTO_FIELDS,
@@ -166,15 +167,27 @@ function DriverCard({ row }) {
 
 const statusLabel = (id) => STATUS_OPTIONS.find((s) => s.id === id)?.label || id;
 
+const ROTULO_FAIXA_MANUT = { critico: "Revisão iminente", atencao: "Revisão se aproximando", "sem-ritmo": "Revisão prevista", ok: "" };
+
 function FleetCard({ vehicle, operations, economia, onEdit, onApplyStatus }) {
   const metrics = fleetVehicleMetrics(vehicle);
   const alerts = fleetAlerts(vehicle);
   const fields = vehicle.fields || {};
   const latest = latestOperationForVehicle(operations, vehicle);
   const sugestao = economia?.statusSugerido;
+  // Manutenção preditiva: o ritmo de km vem das operações reais da placa; a
+  // previsão cruza o marco de km com a data agendada. Sem hodômetro, some.
+  const plate = String(vehicle.plate || "").toUpperCase();
+  const opsDaPlaca = operations.filter((o) => String(o.placa || "").toUpperCase() === plate);
+  const previsao = preverManutencao({
+    odometerKm: vehicle.odometerKm || fields.odometerKm,
+    kmPorDia: taxaKmPorDia(opsDaPlaca),
+    nextMaintenanceAt: vehicle.nextMaintenanceAt,
+  });
+  const mostrarPrevisao = previsao.disponivel && previsao.faixa !== "ok";
   return (
     <article
-      className={`df-fleet-card ${alerts.length ? "risk" : ""}${onEdit ? " df-clickable" : ""}`}
+      className={`df-fleet-card ${alerts.length || previsao.faixa === "critico" ? "risk" : ""}${onEdit ? " df-clickable" : ""}`}
       onClick={onEdit ? () => onEdit(vehicle) : undefined}
       role={onEdit ? "button" : undefined}
       tabIndex={onEdit ? 0 : undefined}
@@ -206,6 +219,11 @@ function FleetCard({ vehicle, operations, economia, onEdit, onApplyStatus }) {
             {" · "}{economia.operacoes.operacoes} viagem(ns), {NUM.format(economia.operacoes.kmTotal)} km
             {economia.manutencaoPorKm != null ? ` · ${BRL.format(economia.manutencaoPorKm)}/km manut.` : ""}
           </small>
+        )}
+        {mostrarPrevisao && (
+          <span className={`df-manut-prev f-${previsao.faixa}`}>
+            <strong>{ROTULO_FAIXA_MANUT[previsao.faixa]}:</strong> {previsao.mensagem}
+          </span>
         )}
         {sugestao && (
           <span className="df-status-suggest">
