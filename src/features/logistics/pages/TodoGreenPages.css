@@ -2243,6 +2243,11 @@
 .tdg-greenpay-linha-acoes { display: flex; gap: 6px; }
 .tdg-greenpay-linha-acoes button { align-items: center; background: #eef4f0; border: 1px solid #cfe0d5; border-radius: 8px; color: #0e6f52; cursor: pointer; display: inline-flex; font-size: .78rem; font-weight: 600; gap: 4px; padding: 5px 9px; }
 .tdg-greenpay-linha-acoes button:disabled { color: #9fb0a5; cursor: not-allowed; opacity: .6; }
+.tdg-syspag-on { color: #1f7a44; font-weight: 700; }
+.tdg-syspag-off { color: #b8860b; font-weight: 700; }
+.tdg-syspag-faltando { color: #5c6b62; font-size: .82rem; margin: 6px 0 0; padding-left: 18px; }
+.tdg-syspag-faltando li { margin: 2px 0; }
+
 @media (max-width: 640px) { .tdg-greenpay-form { grid-template-columns: minmax(0, 1fr); } }
 
 .tdg-driver-nav {
