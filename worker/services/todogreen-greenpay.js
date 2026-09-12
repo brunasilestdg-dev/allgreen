@@ -43,10 +43,14 @@ export const lerRegua = async (env, ownerId) => {
       WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
   ).bind(TENANT_ID, ownerId).first();
   if (!row) return null;
+  let extra = {};
+  try { extra = JSON.parse(row.config_json || "{}") || {}; } catch { extra = {}; }
   return {
     valorPorEntrega: numero(row.value_per_delivery),
     valorPorKm: numero(row.value_per_km),
     bonusEntregaSemOcorrencia: numero(row.bonus_no_incident),
+    // Meta mensal fica em config_json (coluna já existente) — sem migração.
+    metaMensal: numero(extra.metaMensal),
     revision: numero(row.revision) || 1,
     atualizadoEm: row.updated_at || "",
   };
@@ -58,23 +62,25 @@ const salvarRegua = async (env, ownerId, userId, corpo) => {
     valorPorEntrega: corpo.valorPorEntrega,
     valorPorKm: corpo.valorPorKm,
     bonusEntregaSemOcorrencia: corpo.bonusEntregaSemOcorrencia,
+    metaMensal: corpo.metaMensal,
   });
+  const configJson = JSON.stringify({ metaMensal: regra.metaMensal });
   const agora = new Date().toISOString();
   if (!atual) {
     await env.DB.prepare(
       `INSERT INTO todogreen_driver_earning_rules
          (id, tenant_id, workspace_owner_id, value_per_delivery, value_per_km,
           bonus_no_incident, config_json, revision, updated_by, created_at, updated_at, archived_at)
-       VALUES (?, ?, ?, ?, ?, ?, '{}', 1, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)`,
     ).bind(crypto.randomUUID(), TENANT_ID, ownerId, regra.valorPorEntrega, regra.valorPorKm,
-      regra.bonusEntregaSemOcorrencia, userId, agora, agora).run();
+      regra.bonusEntregaSemOcorrencia, configJson, userId, agora, agora).run();
   } else {
     await env.DB.prepare(
       `UPDATE todogreen_driver_earning_rules
-         SET value_per_delivery = ?, value_per_km = ?, bonus_no_incident = ?,
+         SET value_per_delivery = ?, value_per_km = ?, bonus_no_incident = ?, config_json = ?,
              revision = revision + 1, updated_by = ?, updated_at = ?
        WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
-    ).bind(regra.valorPorEntrega, regra.valorPorKm, regra.bonusEntregaSemOcorrencia,
+    ).bind(regra.valorPorEntrega, regra.valorPorKm, regra.bonusEntregaSemOcorrencia, configJson,
       userId, agora, TENANT_ID, ownerId).run();
   }
   return lerRegua(env, ownerId);

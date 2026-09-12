@@ -114,6 +114,18 @@ describe("GreenPay — régua, geração e carteira", () => {
     expect(r.regra.valorPorEntrega).toBe(8);
   });
 
+  it("a meta mensal é gravada (config_json, sem migração) e volta na leitura e na carteira", async () => {
+    await pedir("/api/todogreen/greenpay/regua", {
+      method: "PUT", token: dona.token,
+      body: { valorPorEntrega: 8, valorPorKm: 0.9, bonusEntregaSemOcorrencia: 3, metaMensal: 3000 },
+    });
+    const regua = await (await pedir("/api/todogreen/greenpay/regua", { token: dona.token })).json();
+    expect(regua.regra.metaMensal).toBe(3000);
+    // O motorista vê a meta na própria carteira (para a barra de progresso).
+    const carteira = await (await pedir("/api/todogreen/driver-portal/ganhos", { token: joao.token })).json();
+    expect(carteira.regra.metaMensal).toBe(3000);
+  });
+
   it("sincronizar deriva o ganho das entregas já feitas (idempotente)", async () => {
     const r1 = await (await pedir("/api/todogreen/greenpay/sincronizar", { method: "POST", token: dona.token })).json();
     expect(r1.lancamentosCriados).toBeGreaterThan(0);
