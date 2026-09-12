@@ -12,6 +12,7 @@ import { metaEProjecaoMes } from "../greenPayDomain.js";
 import { TIPOS_CHAVE_PIX, rotuloTipoPix } from "../pixDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
+import { assignMissingIds, prepareDrainBatch, removeProcessedByKey, eventKey } from "../driverOfflineQueueDomain.js";
 
 // ===== Portal do Motorista =====
 //
@@ -188,28 +189,34 @@ export default function DriverPortalPage() {
     // Itens gravados pela versão anterior não têm id. Atribui um e persiste AGORA
     // (síncrono, antes de qualquer await, então nenhum enfileiramento se mistura),
     // para o dreno conseguir removê-los individualmente ao final pela mesma chave.
-    if (fila.some((item) => !item.id)) {
-      fila = fila.map((item) => (item.id ? item : { ...item, id: novaChave() }));
+    const comIds = assignMissingIds(fila, novaChave);
+    if (comIds.changed) {
+      fila = comIds.list;
       gravarFila(fila);
     }
     escoandoRef.current = true;
     try {
       let enviados = 0;
-      const processados = new Set();
-      for (const item of fila) {
+      // Marcamos por CHAVE de idempotência (não por id): assim as duplicatas que
+      // o dreno colapsou e não enviou saem da fila junto — senão ficariam presas
+      // reaparecendo a cada dreno.
+      const processadas = new Set();
+      // Dedupe por chave de idempotência + colapso de singletons + ordem
+      // cronológica: um clique repetido não vira dois envios (seção 24).
+      for (const item of prepareDrainBatch(fila)) {
         try {
           await pedir(`/viagens/${item.viagemId}/evento`, { method: "POST", body: JSON.stringify(item.payload) });
-          processados.add(item.id);
+          processadas.add(eventKey(item));
           enviados += 1;
         } catch (motivo) {
           // Rejeição definitiva do servidor (4xx): sai da fila (não vai passar
           // nunca). Falha de rede ou 5xx transitório: fica para tentar de novo.
-          if (motivo.rejeitadoPeloServidor) processados.add(item.id);
+          if (motivo.rejeitadoPeloServidor) processadas.add(eventKey(item));
         }
       }
       // Relê a fila atual (pode ter crescido durante os awaits) e tira só o que
       // foi processado — em vez de sobrescrever com o snapshot inicial.
-      const atual = lerFila().filter((item) => !processados.has(item.id));
+      const atual = removeProcessedByKey(lerFila(), processadas);
       gravarFila(atual);
       setPendentesFila(atual.length);
       return { enviados };
