@@ -569,7 +569,7 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("pacotes", "Pacotes", "operacao", "/todogreen/operacoes", { icon: "Boxes", order: 47 }),
   module("ocupacao", "Ocupação", "indicadores", "/todogreen/indicadores", { icon: "Gauge", order: 48 }),
   module("produtividade", "Produtividade", "indicadores", "/todogreen/indicadores", { icon: "Activity", order: 49 }),
-  module("energia", "Energia", "esg", "/todogreen/esg", { icon: "Zap", order: 50 }),
+  module("energia", "Energia", "esg", "/todogreen/energia", { icon: "Zap", order: 50 }),
   module("ocorrencias", "Ocorrências", "ocorrencias", "/todogreen/ocorrencias", { icon: "AlertTriangle", order: 51 }),
   module("dp-rh", "Departamento Pessoal", "dp", "/todogreen/dp", {
     icon: "Users",

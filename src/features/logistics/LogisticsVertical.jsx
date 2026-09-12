@@ -159,6 +159,7 @@ const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
 const RoteirizacaoPage = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
 const ChargingPointsPage = lazy(() => import("./pages/ChargingPointsPage.jsx"));
+const EnergyPage = lazy(() => import("./pages/EnergyPage.jsx"));
 const OperationEnginePage = lazy(() => import("./pages/OperationEnginePage.jsx"));
 const GreenPayAdminPage = lazy(() => import("./pages/GreenPayAdminPage.jsx"));
 const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
@@ -641,6 +642,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["esg:manage", "audit:read", "deal:review"],
     description: "Calcula e grava o impacto com memória de cálculo, apura o Green Score com a régua em vigor e guarda a explicação de cada variação.",
   },
+  energia: {
+    title: "Gestão de Energia",
+    navLabel: "Energia",
+    route: "/todogreen/energia",
+    area: "esg",
+    status: "functional",
+    permission: ["esg:manage", "fleet:manage", "audit:read"],
+    description: "Consumo estimado, custo e emissões da frota cruzados com a capacidade da rede de recarga própria.",
+  },
   solicitacoes: {
     title: "Solicitações de clientes",
     navLabel: "Solicitações",
@@ -979,7 +989,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // indicadores) existia no menu. Um nome, um lugar.
   { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "rastreamento", "roteirizacao", "pontos-recarga"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
-  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "metodologia"] },
+  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
   // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
   // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
@@ -3513,6 +3523,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
           <PricingParametersPanel authHeaders={authHeaders} setToast={setToast} />
         </Suspense>
       )}
+      {page === "energia" && <Suspense fallback={<section className="tdg-panel">Carregando energia...</section>}><EnergyPage authHeaders={authHeaders} /></Suspense>}
       {page === "central-esg" && (
         <Suspense fallback={<section className="tdg-panel">Carregando Central ESG...</section>}>
           <EsgCenter authHeaders={authHeaders} setToast={setToast} />

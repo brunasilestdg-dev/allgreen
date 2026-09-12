@@ -41,7 +41,6 @@ export const TODO_GREEN_ROUTE_ALIASES = Object.freeze({
   pacotes: "operacoes",
   ocupacao: "dashboard",
   produtividade: "dashboard",
-  energia: "esg",
   tarefas: "dashboard",
   notificacoes: "dashboard",
   inbox: "dashboard",

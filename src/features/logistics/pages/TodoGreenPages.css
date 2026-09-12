@@ -4642,3 +4642,51 @@
 .tdg-fadiga-lista li { border-left: 3px solid var(--tdg-line); font-size: .86rem; line-height: 1.45; padding-left: 10px; }
 .tdg-fadiga-lista li.grav-critica { border-left-color: var(--tdg-danger, #b3261e); }
 .tdg-fadiga-lista li.grav-alta { border-left-color: #c98a00; }
+
+/* Painel de Energia (página própria e embutido na Central ESG). */
+.tdg-energia-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 14px 0;
+}
+.tdg-energia-metrics article {
+  background: var(--tdg-bg);
+  border: 1px solid var(--tdg-line);
+  border-radius: 9px;
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+}
+.tdg-energia-metrics small { color: var(--tdg-muted); font-size: .72rem; font-weight: 700; }
+.tdg-energia-metrics strong { font-size: 1.3rem; }
+.tdg-energia-cols {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+}
+.tdg-energia-rede, .tdg-energia-top {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.tdg-energia-rede h3, .tdg-energia-top h3 {
+  align-items: center;
+  display: flex;
+  font-size: .9rem;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.tdg-energia-rede ul, .tdg-energia-top ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.tdg-energia-rede li { align-items: center; display: flex; justify-content: space-between; gap: 10px; }
+.tdg-energia-rede li span { color: var(--tdg-muted); font-size: .84rem; }
+.tdg-energia-top li {
+  align-items: baseline;
+  border-bottom: 1px solid var(--tdg-line);
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 7px;
+}
+.tdg-energia-top li em { color: var(--tdg-muted); font-size: .78rem; font-style: normal; grid-column: 2; text-align: right; }
