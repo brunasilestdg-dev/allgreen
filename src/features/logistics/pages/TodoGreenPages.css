@@ -4696,3 +4696,19 @@
   padding-bottom: 7px;
 }
 .tdg-energia-top li em { color: var(--tdg-muted); font-size: .78rem; font-style: normal; grid-column: 2; text-align: right; }
+
+/* ── Recarga inteligente (energia · quando puxar custa menos) ──────────── */
+.tdg-recarga { border-top: 1px solid var(--tdg-line); margin-top: 18px; padding-top: 16px; }
+.tdg-recarga h3 { align-items: center; display: flex; gap: 8px; font-size: .96rem; margin: 0 0 4px; }
+.tdg-recarga-nota { color: var(--tdg-muted); font-size: .8rem; margin: 0 0 12px; }
+.tdg-recarga-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); margin-bottom: 14px; }
+.tdg-recarga-card { background: var(--tdg-surface, #fff); border: 1px solid var(--tdg-line); border-radius: 12px; display: grid; gap: 3px; padding: 12px 14px; }
+.tdg-recarga-card.destaque { background: #eef6f1; border-color: #cfe6d9; }
+.tdg-recarga-card small { align-items: center; color: var(--tdg-muted); display: flex; font-size: .74rem; font-weight: 700; gap: 5px; }
+.tdg-recarga-card strong { font-size: 1.35rem; line-height: 1.1; }
+.tdg-recarga-card.destaque strong { color: #1f7a44; }
+.tdg-recarga-card em { color: var(--tdg-muted); font-size: .76rem; font-style: normal; }
+.tdg-tarifa-svg { display: block; height: auto; max-width: 100%; width: 100%; }
+.tdg-tarifa-legenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; }
+.tdg-tarifa-legenda span { align-items: center; color: var(--tdg-muted); display: flex; font-size: .78rem; gap: 6px; }
+.tdg-tarifa-legenda i { border-radius: 3px; height: 11px; width: 11px; }
