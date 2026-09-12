@@ -100,7 +100,7 @@ const carregarCandidatos = async (env, access) => {
         ORDER BY full_name ASC LIMIT 100`,
     ).bind(access.ownerId).all(),
     env.DB.prepare(
-      `SELECT id, prefix, plate, category, pallet_capacity, payload_kg, volume_m3, fields_json
+      `SELECT id, prefix, plate, category, vehicle_class, pallet_capacity, payload_kg, volume_m3, fields_json
          FROM todogreen_fleet_vehicles
         WHERE workspace_owner_id = ? AND status = 'available' AND archived_at IS NULL
         ORDER BY prefix ASC LIMIT 100`,
