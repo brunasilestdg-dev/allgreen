@@ -36,11 +36,15 @@ test.describe("jornadas críticas da To Do Green", () => {
       "/todogreen/faturamento",
       "/todogreen/espaco",
       "/todogreen/integracoes",
-      "/todogreen/rastreamento",
     ]) await test.step(rota, () => rotaDaJornada(page, rota));
 
     // A URL legada é resolvida para a única tela dona do trabalho.
     await rotaDaJornada(page, "/todogreen/central-trabalho");
     await expect(page.getByRole("heading", { name: /Espaço de trabalho/i })).toBeVisible();
+
+    // A URL antiga de rastreamento continua compatível, mas não expõe mais
+    // a tela do fornecedor: cai na experiência própria de frota.
+    await rotaDaJornada(page, "/todogreen/rastreamento");
+    await expect(page.getByText("Integração com o TMS Tracker")).toHaveCount(0);
   });
 });

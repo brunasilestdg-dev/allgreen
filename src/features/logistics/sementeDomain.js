@@ -50,7 +50,7 @@ export const ESPECIALISTA_POR_TELA = Object.freeze({
   metodologia: "Especialista ESG",
 
   operacoes: "Especialista em Operações Logísticas",
-  rastreamento: "Especialista em Operações Logísticas",
+  "motorista-frota": "Especialista em Operações Logísticas",
   solicitacoes: "Especialista em Operações Logísticas",
 
   receita: "Especialista Financeiro",

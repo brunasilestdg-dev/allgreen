@@ -113,7 +113,6 @@ const DashboardBuilderPage = lazy(() => import("./pages/DashboardBuilderPage.jsx
 const GoalsPage = lazy(() => import("./pages/GoalsPage.jsx"));
 const SalesPerformancePage = lazy(() => import("./pages/SalesPerformancePage.jsx"));
 const ClientsPage = lazy(() => import("./pages/ClientsPage.jsx"));
-const TrackerPage = lazy(() => import("./pages/TrackerPage.jsx"));
 const StockPage = lazy(() => import("./pages/StockPage.jsx"));
 const ErpRegistriesPage = lazy(() => import("./pages/ErpRegistriesPage.jsx"));
 const PurchasingPage = lazy(() => import("./pages/PurchasingPage.jsx"));
@@ -309,7 +308,6 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "metas",
   "performance-comercial",
   "playbook-comercial",
-  "rastreamento",
   "solicitacoes",
   "estoque",
   "compras",
@@ -678,15 +676,6 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["operations:manage", "planning:manage"],
     description: "Planejamento e Produtos liberam o frete; Operação executa; Financeiro só entra quando há elegibilidade de faturamento.",
   },
-  rastreamento: {
-    title: "TMS Tracker",
-    navLabel: "TMS Tracker",
-    route: "/todogreen/rastreamento",
-    area: "operacao",
-    status: "functional",
-    permission: ["tms:manage", "operations:manage"],
-    description: "Configuração, teste e sincronização segura de posições e eventos da frota em modo somente leitura.",
-  },
   roteirizacao: {
     title: "Roteirização no mapa",
     navLabel: "Roteirização",
@@ -987,7 +976,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
   // indicadores) existia no menu. Um nome, um lugar.
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "rastreamento", "roteirizacao", "pontos-recarga"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
@@ -3543,7 +3532,6 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "ocorrencias" && <Suspense fallback={<section className="tdg-panel">Carregando ocorrências...</section>}><OccurrencesPage operations={registros.operations} clients={clientes} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
       {page === "ordens-servico" && <Suspense fallback={<section className="tdg-panel">Carregando ordens de serviço...</section>}><TransactionalSpinePage mode="service-orders" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
       {page === "ciot" && <Suspense fallback={<section className="tdg-panel">Carregando CIOT...</section>}><TransactionalSpinePage mode="ciot" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
-      {page === "rastreamento" && <Suspense fallback={<section className="tdg-panel">Carregando TMS Tracker...</section>}><TrackerPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "receita" && <Suspense fallback={<section className="tdg-panel">Carregando contas a receber...</section>}><FinancePage type="revenue" entries={registros.financial.filter((item) => item.tipo === "revenue")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
       {page === "faturamento" && <Suspense fallback={<section className="tdg-panel">Carregando faturamento...</section>}><TransactionalSpinePage mode="billing" authHeaders={authHeaders} clients={clientes} setToast={setToast} /></Suspense>}
       {page === "titulos" && <Suspense fallback={<section className="tdg-panel">Carregando títulos...</section>}><TransactionalSpinePage mode="titles" authHeaders={authHeaders} clients={clientes} setToast={setToast} /></Suspense>}

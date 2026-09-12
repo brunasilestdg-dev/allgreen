@@ -3,6 +3,7 @@
   "name": "seufuncionario-expo",
   "main": "worker-entry.js",
   "compatibility_date": "2026-07-14",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

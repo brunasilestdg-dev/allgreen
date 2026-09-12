@@ -33,6 +33,9 @@ export const TODO_GREEN_ROUTE_ALIASES = Object.freeze({
   rotas: "operacoes",
   viagens: "operacoes",
   veiculos: "motorista-frota",
+  // A rota antiga de rastreamento não expõe mais a tela do fornecedor.
+  // Telemetria continua no backend e a operação consulta frota/posição na experiência própria.
+  rastreamento: "motorista-frota",
   motoristas: "motorista-frota",
   dp: "dp-rh",
   escalas: "rh",

@@ -63,7 +63,7 @@ describe("quem responde por cada tela", () => {
     expect(especialistaDaTela("precificacao")).toBe("Especialista em Precificação Logística");
     expect(especialistaDaTela("deal-desk")).toBe("Especialista em Precificação Logística");
     expect(especialistaDaTela("central-esg")).toBe("Especialista ESG");
-    expect(especialistaDaTela("rastreamento")).toBe("Especialista em Operações Logísticas");
+    expect(especialistaDaTela("motorista-frota")).toBe("Especialista em Operações Logísticas");
     expect(especialistaDaTela("receita")).toBe("Especialista Financeiro");
   });
 

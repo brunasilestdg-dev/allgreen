@@ -15,6 +15,7 @@ describe("propriedade de rota da To Do Green", () => {
     expect(todoGreenCanonicalPage("/todogreen/comercial")).toBe("clientes");
     expect(todoGreenCanonicalPage("/todogreen/parametros-simulador")).toBe("regua");
     expect(todoGreenCanonicalPage("/todogreen/agentes")).toBe("agentes-funcoes");
+    expect(todoGreenCanonicalPage("/todogreen/rastreamento")).toBe("motorista-frota");
   });
 
   it("recusa duas telas donas da mesma rota", () => {
