@@ -125,6 +125,9 @@ export const CLIENT_PORTAL_MENU = [
   { id: "financeiro", label: "Faturas", permission: "portal:document:download" },
   { id: "documentos", label: "Documentos", permission: "portal:document:download" },
   { id: "solicitacoes", label: "Solicitações", permission: "portal:request:create" },
+  // A voz do cliente que fecha ciclo: ele dá a nota, e a nota baixa vira
+  // ocorrência com prazo do lado da equipe. Leitura basta — responder é POST.
+  { id: "nps", label: "Sua avaliação", permission: "portal:read" },
   { id: "assistente", label: "Assistente", permission: "portal:read" },
 ];
 

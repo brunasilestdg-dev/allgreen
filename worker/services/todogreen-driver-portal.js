@@ -14,7 +14,8 @@ import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { aplicarEventoOperacional } from "./todogreen-vertical-records.js";
 import { marcarParadaConcluida, statusPelaConclusao } from "../../src/features/logistics/routePlanDomain.js";
 import { avaliarChecklist, ITENS_CHECKLIST } from "../../src/features/logistics/driverChecklistDomain.js";
-import { duracaoMinutos, resumoDaJornada } from "../../src/features/logistics/driverJourneyDomain.js";
+import { avaliarConformidadeJornada, duracaoMinutos, resumoDaJornada } from "../../src/features/logistics/driverJourneyDomain.js";
+import { calcularScoreMotorista, compararScoreMotorista } from "../../src/features/logistics/driverScoreDomain.js";
 import { carteiraDoMotorista, gerarGanhosDaEntrega } from "./todogreen-greenpay.js";
 import { resumoTelemetriaVeiculo } from "../../src/features/logistics/driverVehicleDomain.js";
 
@@ -317,6 +318,80 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
         LIMIT 50`,
     ).bind(TENANT_ID, access.ownerId, motorista.id).all();
     return json({ viagens: (results || []).map(viagemDaLinha) });
+  }
+
+  // Minha nota × a régua do time. Computa a nota de CADA motorista do espaço com
+  // o MESMO domínio (não há duas contas de "quem está melhor") e devolve a minha
+  // mais a comparação — anônima: só o percentil e a mediana, nunca o nome ou a
+  // nota de outro motorista.
+  if (request.method === "GET" && recurso === "score") {
+    if (!motorista) return json({ error: "Seu e-mail não está ligado a um cadastro de motorista." }, 403);
+    const agora = new Date().toISOString();
+
+    // Três leituras do espaço, agrupadas por motorista em memória — sem uma
+    // consulta por motorista.
+    const [ops, turnos, vistorias] = await Promise.all([
+      env.DB.prepare(
+        `SELECT id, driver_id, reference, status, service_date, promised_at, delivered_at,
+                vehicle_plate, distance_km, route_id, proof_url, incident_count
+           FROM todogreen_client_operations
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id IS NOT NULL
+            AND driver_id != '' AND archived_at IS NULL
+          LIMIT 5000`,
+      ).bind(TENANT_ID, access.ownerId).all(),
+      env.DB.prepare(
+        `SELECT id, driver_id, service_date, started_at, ended_at, duration_min, status
+           FROM todogreen_driver_shifts
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id IS NOT NULL
+            AND driver_id != '' AND archived_at IS NULL
+          LIMIT 5000`,
+      ).bind(TENANT_ID, access.ownerId).all(),
+      env.DB.prepare(
+        `SELECT driver_id, answers_json, created_at
+           FROM todogreen_driver_checklists
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id IS NOT NULL
+            AND driver_id != '' AND archived_at IS NULL
+          ORDER BY created_at DESC
+          LIMIT 5000`,
+      ).bind(TENANT_ID, access.ownerId).all(),
+    ]);
+
+    const porMotorista = new Map();
+    const balde = (did) => {
+      if (!porMotorista.has(did)) porMotorista.set(did, { viagens: [], turnos: [], vistoria: null });
+      return porMotorista.get(did);
+    };
+    for (const r of ops.results || []) balde(r.driver_id).viagens.push(viagemDaLinha(r));
+    for (const r of turnos.results || []) balde(r.driver_id).turnos.push(turnoDaLinha(r));
+    // A vistoria mais recente por motorista (a lista já vem por created_at DESC).
+    for (const r of vistorias.results || []) {
+      const b = balde(r.driver_id);
+      if (b.vistoria == null) b.vistoria = avaliarChecklist(parseJson(r.answers_json, {}));
+    }
+
+    const scoreDe = (dados) =>
+      calcularScoreMotorista(dados.viagens, {
+        temJornada: dados.turnos.length > 0,
+        conformidade: avaliarConformidadeJornada(dados.turnos, agora),
+        vistoria: dados.vistoria,
+      });
+
+    const meuScore = scoreDe(porMotorista.get(motorista.id) || { viagens: [], turnos: [], vistoria: null });
+
+    // As notas dos DEMAIS motoristas com score disponível — sem id, sem nome.
+    const outrasNotas = [];
+    for (const [did, dados] of porMotorista) {
+      if (did === motorista.id) continue;
+      const s = scoreDe(dados);
+      if (s.disponivel) outrasNotas.push(s.nota);
+    }
+
+    return json({
+      score: meuScore,
+      comparacao: meuScore.disponivel
+        ? compararScoreMotorista(meuScore.nota, outrasNotas)
+        : { posicao: null, total: outrasNotas.length, mediana: null, melhores: null, texto: "Feche sua primeira entrega para entrar na régua do time." },
+    });
   }
 
   // Carteira GreenPay do próprio motorista: ganhos do dia/semana/mês, saldos

@@ -13,6 +13,7 @@ import {
   PackageCheck,
   Route,
   Sparkles,
+  Star,
 } from "lucide-react";
 import "./CustomerPortal.css";
 import { tamanhoLegivel } from "./documentVaultDomain.js";
@@ -24,6 +25,7 @@ import {
   PlanejarEletrificacao,
 } from "./CustomerPortalInsights.jsx";
 import { comRotulo } from "./rotulosDomain.js";
+import { classificarNPS, precisaOcorrencia } from "./npsDomain.js";
 
 const ICONES = {
   inicio: Home,
@@ -35,6 +37,7 @@ const ICONES = {
   financeiro: Banknote,
   documentos: FileText,
   solicitacoes: PackageCheck,
+  nps: Star,
   assistente: MessageSquare,
 };
 
@@ -496,6 +499,196 @@ function Solicitacoes({ podeAbrir, setAviso }) {
   );
 }
 
+const ROTULO_CLASSE = {
+  promotor: "Promotor",
+  neutro: "Neutro",
+  detrator: "Detrator",
+};
+
+const ROTULO_FAIXA = {
+  "sem-dados": "Sem avaliações ainda",
+  excelente: "Excelente",
+  "muito-bom": "Muito bom",
+  razoavel: "Razoável",
+  critico: "Crítico",
+};
+
+// Motivos de uma nota baixa — o mesmo vocabulário que a operação usa nas
+// ocorrências, para o ranking de causas de insatisfação fazer sentido.
+const MOTIVOS_INSATISFACAO = [
+  "Atraso na entrega",
+  "Avaria da carga",
+  "Extravio",
+  "Comunicação",
+  "Atendimento",
+  "Documentação",
+  "Outro",
+];
+
+// Sua avaliação (NPS). A nota vira número que fecha ciclo: uma nota de detrator
+// (0..6) abre automaticamente uma ocorrência com prazo do lado da equipe. A
+// leitura mostra a última nota e a série do próprio cliente — nunca a de outro.
+function Avaliacao({ setAviso }) {
+  const [dados, setDados] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [nota, setNota] = useState(null);
+  const [motivo, setMotivo] = useState("");
+  const [comentario, setComentario] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [novaAvaliacao, setNovaAvaliacao] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      setDados(await pedir("nps"));
+    } catch (erro) {
+      setAviso(erro.message);
+    } finally {
+      setCarregando(false);
+    }
+  }, [setAviso]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const classe = nota == null ? null : classificarNPS(nota);
+  const detrator = nota != null && precisaOcorrencia(nota);
+
+  const enviarNota = async (evento) => {
+    evento.preventDefault();
+    if (nota == null) { setAviso("Escolha uma nota de 0 a 10."); return; }
+    if (detrator && !motivo) { setAviso("Conte o que motivou a nota para abrirmos a ocorrência."); return; }
+    setEnviando(true);
+    try {
+      const retorno = await enviar("nps", { nota, motivo, comentario });
+      setNota(null); setMotivo(""); setComentario(""); setNovaAvaliacao(false);
+      await carregar();
+      setAviso(retorno.ocorrenciaId
+        ? "Recebemos sua nota. Abrimos uma ocorrência com prazo — a equipe já vai te procurar."
+        : "Obrigado! Sua avaliação foi registrada.");
+    } catch (erro) { setAviso(erro.message); } finally { setEnviando(false); }
+  };
+
+  if (carregando && !dados) return <p className="cp-carregando"><Loader2 className="girando" size={20} /> Carregando sua avaliação...</p>;
+
+  const resumo = dados?.resumo || {};
+  const ultima = dados?.ultima || null;
+  const causas = dados?.causas || [];
+  const respostas = dados?.respostas || [];
+  const jaAvaliou = Boolean(ultima);
+  const mostrarForm = !jaAvaliou || novaAvaliacao;
+
+  return (
+    <div className="cp-nps">
+      <div className="cp-sol-topo">
+        <div>
+          <h2>Sua avaliação</h2>
+          <p>De 0 a 10, o quanto você indicaria a To Do Green a um parceiro? Sua nota orienta o que melhoramos.</p>
+        </div>
+        {jaAvaliou && !novaAvaliacao && (
+          <button type="button" className="cp-botao" onClick={() => setNovaAvaliacao(true)}>Avaliar de novo</button>
+        )}
+      </div>
+
+      {jaAvaliou && (
+        <div className="cp-nps-resumo">
+          <Indicador
+            rotulo="Seu NPS"
+            valor={resumo.nps == null ? "—" : String(resumo.nps)}
+            detalhe={ROTULO_FAIXA[resumo.faixa] || "—"}
+            tom={resumo.nps == null ? "neutro" : resumo.nps >= 0 ? "bom" : "alerta"}
+          />
+          <Indicador rotulo="Avaliações" valor={inteiro.format(resumo.respondidos || 0)} detalhe={`${inteiro.format(resumo.promotores || 0)} promotoras · ${inteiro.format(resumo.detratores || 0)} detratoras`} />
+          {ultima && (
+            <Indicador
+              rotulo="Última nota"
+              valor={String(ultima.nota)}
+              detalhe={`${ROTULO_CLASSE[ultima.classe] || ultima.classe} · ${new Date(ultima.respondidoEm).toLocaleDateString("pt-BR")}`}
+              tom={ultima.classe === "detrator" ? "alerta" : ultima.classe === "promotor" ? "bom" : "neutro"}
+            />
+          )}
+        </div>
+      )}
+
+      {ultima?.ocorrenciaId && !novaAvaliacao && (
+        <div className="cp-alerta cp-alerta-acao" role="status">
+          <AlertTriangle size={18} />
+          <span>Sua última nota abriu uma ocorrência com prazo. Acompanhe em <strong>Solicitações</strong>.</span>
+        </div>
+      )}
+
+      {mostrarForm && (
+        <form className="cp-nps-form" onSubmit={enviarNota}>
+          <fieldset className="cp-nps-escala">
+            <legend>Sua nota</legend>
+            <div className="cp-nps-notas" role="radiogroup" aria-label="Nota de 0 a 10">
+              {Array.from({ length: 11 }, (_, valor) => {
+                const c = classificarNPS(valor);
+                return (
+                  <button
+                    key={valor}
+                    type="button"
+                    role="radio"
+                    aria-checked={nota === valor}
+                    className={`cp-nps-nota ${nota === valor ? "escolhida" : ""} c-${c}`}
+                    onClick={() => setNota(valor)}
+                  >
+                    {valor}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="cp-nps-legenda"><span>Não indicaria</span><span>Indicaria com certeza</span></div>
+          </fieldset>
+
+          {classe && (
+            <p className={`cp-nps-classe c-${classe}`}>{ROTULO_CLASSE[classe]}</p>
+          )}
+
+          {detrator && (
+            <label>
+              <span>O que mais pesou? (abrimos uma ocorrência com prazo)</span>
+              <select required value={motivo} onChange={(e) => setMotivo(e.target.value)}>
+                <option value="">Selecione o motivo</option>
+                {MOTIVOS_INSATISFACAO.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+          )}
+
+          <label className="cp-sol-larga">
+            <span>Quer comentar? (opcional)</span>
+            <textarea rows={3} value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Um detalhe ajuda a equipe a entender sua nota." />
+          </label>
+
+          <button type="submit" className="cp-botao" disabled={enviando || nota == null}>{enviando ? "Enviando..." : "Enviar avaliação"}</button>
+        </form>
+      )}
+
+      {causas.length > 0 && (
+        <div className="cp-nps-causas">
+          <h3>O que puxou suas notas baixas</h3>
+          <ul>{causas.map((c) => <li key={c.causa}><span>{c.causa}</span><strong>{inteiro.format(c.total)}</strong></li>)}</ul>
+        </div>
+      )}
+
+      {respostas.length > 1 && (
+        <div className="cp-nps-historico">
+          <h3>Suas avaliações</h3>
+          <ul>{respostas.map((r) => (
+            <li key={r.id}>
+              <span className={`cp-nps-badge c-${r.classe}`}>{r.nota}</span>
+              <span className="cp-nps-hist-info">
+                <strong>{ROTULO_CLASSE[r.classe] || r.classe}</strong>
+                {r.motivo ? <small>{r.motivo}</small> : null}
+              </span>
+              <time>{new Date(r.respondidoEm).toLocaleDateString("pt-BR")}</time>
+            </li>
+          ))}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CustomerPortal() {
   const [sessao, setSessao] = useState(null);
   const [resumo, setResumo] = useState(null);
@@ -608,6 +801,7 @@ export default function CustomerPortal() {
         {aba === "financeiro" && <Faturas setAviso={setAviso} />}
         {aba === "documentos" && <Evidencias evidencias={evidencias} carregando={carregandoEvidencias} aoAvisar={setAviso} />}
         {aba === "solicitacoes" && <Solicitacoes podeAbrir={(sessao?.permissoes || []).includes("portal:request:create")} setAviso={setAviso} />}
+        {aba === "nps" && <Avaliacao setAviso={setAviso} />}
         {aba === "assistente" && <AssistenteCliente enviar={enviar} setAviso={setAviso} />}
       </section>
       <footer className="cp-rodape">Green Score e indicadores ambientais são estimativas próprias da To Do Green, com metodologia e memória de cálculo nos relatórios. Não constituem certificação.</footer>

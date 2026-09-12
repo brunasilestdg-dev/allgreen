@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Award, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User, Wallet } from "lucide-react";
+import { AlertTriangle, Award, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User, Users, Wallet } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
@@ -160,6 +160,7 @@ export default function DriverPortalPage() {
   const [turnoOcupado, setTurnoOcupado] = useState(false);
   const [ganhos, setGanhos] = useState(null); // carteira GreenPay (lazy)
   const [veiculo, setVeiculo] = useState(null); // telemetria elétrica do veículo do dia
+  const [scoreRemoto, setScoreRemoto] = useState(null); // nota + comparação com o time (lazy)
   const avatarInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
@@ -262,6 +263,14 @@ export default function DriverPortalPage() {
     try { setGanhos(await pedir("/ganhos")); } catch { setGanhos({ configurada: false, erro: true }); }
   }, []);
   useEffect(() => { if (secao === "ganhos" && !ganhos) carregarGanhos(); }, [secao, ganhos, carregarGanhos]);
+
+  // Nota + comparação com o time: o servidor computa a nota de cada motorista
+  // com o mesmo domínio e devolve a minha e o percentil (anônimo). Só na aba
+  // Perfil, onde o card aparece — sem peso na abertura do app.
+  const carregarScore = useCallback(async () => {
+    try { setScoreRemoto(await pedir("/score")); } catch { /* fica no cálculo local */ }
+  }, []);
+  useEffect(() => { if (secao === "perfil" && !scoreRemoto) carregarScore(); }, [secao, scoreRemoto, carregarScore]);
 
   const enviarFotoPerfil = async (event) => {
     const arquivo = event.target.files?.[0];
@@ -492,10 +501,20 @@ export default function DriverPortalPage() {
   // Conformidade da jornada (fadiga · Lei do Motorista): alertas derivados dos
   // turnos que já existem. Acende ao vivo enquanto o motorista dirige.
   const conformidade = avaliarConformidadeJornada(turnos, agoraISO);
-  const score = calcularScoreMotorista(viagens);
   const produtividade = resumoDeProdutividade(viagens, { minutosHoje: jornada.minutosHoje, agora: agoraISO });
   const vistoriaHoje = checklists.find((c) => String(c.dataServico).slice(0, 10) === hojeISO) || null;
   const vistoriaParcial = avaliarChecklist(respostasVistoria);
+  // A nota do motorista agora cruza entregas com jornada e vistoria (aprofundada).
+  // O servidor devolve a mesma nota + a comparação com o time; até chegar, este
+  // cálculo local rende a tela na hora. A vistoria do componente é a do dia.
+  const vistoriaAvaliada = vistoriaHoje ? avaliarChecklist(vistoriaHoje.respostas) : null;
+  const scoreLocal = calcularScoreMotorista(viagens, {
+    temJornada: turnos.length > 0,
+    conformidade,
+    vistoria: vistoriaAvaliada,
+  });
+  const score = scoreRemoto?.score || scoreLocal;
+  const comparacaoScore = scoreRemoto?.comparacao || null;
   const abas = [
     { id: "hoje", rotulo: "Hoje", icone: Home },
     { id: "rota", rotulo: "Rota", icone: Route },
@@ -913,7 +932,8 @@ export default function DriverPortalPage() {
               </button>
             </div>
           </article>
-          {/* Score do motorista: derivado das entregas (pontualidade, POD, ocorrências). */}
+          {/* Score do motorista: cruza entregas (prazo, POD, ocorrências) com
+              jornada e vistoria. O servidor devolve a comparação com o time. */}
           <article className="tdg-driver-cartao tdg-score">
             <div className="tdg-driver-info-linha"><Award size={16} /><span>Meu score</span></div>
             {score.disponivel ? (
@@ -922,6 +942,12 @@ export default function DriverPortalPage() {
                   <strong>{score.nota}</strong>
                   <span>{ROTULO_FAIXA[score.faixa]} · {score.totalEntregues} entrega(s)</span>
                 </div>
+                {comparacaoScore && comparacaoScore.posicao != null && (
+                  <div className="tdg-score-time">
+                    <Users size={15} />
+                    <span>{comparacaoScore.texto}</span>
+                  </div>
+                )}
                 <div className="tdg-score-componentes">
                   {score.componentes.map((c) => (
                     <div className="tdg-score-item" key={c.chave}>
@@ -931,7 +957,7 @@ export default function DriverPortalPage() {
                     </div>
                   ))}
                 </div>
-                <small className="tdg-driver-rodape-nota">A nota vem do que você registra: entregar no prazo, com comprovante e sem ocorrência.</small>
+                <small className="tdg-driver-rodape-nota">A nota vem do que você registra: entregar no prazo, com comprovante, sem ocorrência, jornada em dia e a vistoria feita.</small>
               </>
             ) : (
               <small className="tdg-driver-rodape-nota">{score.aviso}</small>
