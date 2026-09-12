@@ -2,6 +2,7 @@ import { sha256 } from "../auth/credenciais.js";
 import { allowed } from "../lib/http.js";
 import { TENANT_ID } from "./todogreen-access.js";
 import { planElectricRoute } from "./todogreen-electric-routing.js";
+import { estimateRouteEnergy } from "../../src/features/logistics/energyEstimationDomain.js";
 
 const cors = {
   "access-control-allow-origin": "*",
@@ -96,11 +97,19 @@ async function electricPlan(request) {
   if (result.status === "invalid")
     return apiJson({ error: "invalid_electric_request", message: result.reason, plan: result }, 400);
 
+  // Estimativa de energia ESTRUTURADA, VERSIONADA e com PROVENIÊNCIA sobre o
+  // mesmo par veículo/rota. Não altera o plano de recarga (campo `plan`); é o
+  // resultado auditável (elevação, temperatura, SoH, SOC de chegada/mínimo,
+  // confiança) que a viabilidade e o pré-flight consomem. `status:"invalid"`
+  // aqui não invalida o plano — só significa que faltou dado para a estimativa.
+  const energyEstimate = estimateRouteEnergy(body);
+
   return apiJson({
     engine: "tdg-electric-routing-v1",
     provider: "native",
     generatedAt: new Date().toISOString(),
     plan: result,
+    energyEstimate,
   }, 200, { "x-tdg-routing-engine": "tdg-electric-routing-v1" });
 }
 
