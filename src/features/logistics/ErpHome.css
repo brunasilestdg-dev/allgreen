@@ -124,3 +124,18 @@
 .tdg-home-portal-link strong { display: block; font-size: .9rem; }
 .tdg-home-portal-link small { color: var(--tdg-muted); font-size: .74rem; }
 .tdg-home-portal-link > svg { color: var(--tdg-green); flex: 0 0 auto; }
+
+
+/* Meu Dia recuperado da branch antiga, adaptado à home atual. */
+.tdg-workday-routes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.tdg-workday-routes > button { display:grid; align-content:start; gap:10px; padding:18px; min-height:112px; border:1px solid var(--tdg-line); border-radius:13px; background:var(--tdg-card); color:var(--tdg-ink); cursor:pointer; text-align:left; box-shadow:0 1px 3px rgba(10,40,30,.04); }
+.tdg-workday-routes > button:hover { border-color:var(--tdg-green); }
+.tdg-workday-routes > button:focus-visible,.tdg-workday-filters button:focus-visible { outline:3px solid var(--tdg-green); outline-offset:3px; }
+.tdg-workday-routes strong { display:flex; justify-content:space-between; gap:12px; font-size:.94rem; }
+.tdg-workday-routes span { color:var(--tdg-muted); font-size:.78rem; line-height:1.5; }
+.tdg-workday-filters { display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 10px; border-bottom:1px solid var(--tdg-line); }
+.tdg-home-queue > .tdg-workday-filters button { display:inline-flex; align-items:center; gap:6px; width:auto; min-height:36px; padding:7px 10px; border:1px solid var(--tdg-line); border-radius:9px; background:var(--tdg-card); color:var(--tdg-ink); cursor:pointer; font-size:.72rem; font-weight:750; }
+.tdg-home-queue > .tdg-workday-filters button span { color:inherit; font-size:.7rem; }
+.tdg-home-queue > .tdg-workday-filters button[aria-pressed="true"] { background:var(--tdg-green); color:#fff; border-color:var(--tdg-green); }
+.tdg-home-queue > .tdg-workday-all { display:flex; grid-template-columns:none; justify-content:space-between; margin-top:10px; border:0; color:var(--tdg-green); font-weight:800; }
+@media(max-width:760px) { .tdg-workday-routes { grid-template-columns:minmax(0,1fr); } .tdg-workday-routes > button { min-height:0; padding:15px; } }

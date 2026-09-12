@@ -18,6 +18,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import "./ErpHome.css";
 import { comRotulo } from "./rotulosDomain.js";
 import WidgetChart from "./pages/DashboardCharts.jsx";
+import { WORKDAY_FILTERS, WORKDAY_ROUTES, workdayTasks } from "./workdayDomain.js";
 
 // Os gráficos do painel da home: puro SVG (CSP-safe), alimentados pelos mesmos
 // dados da vertical. Dão o "dashboard" e o dinamismo que faltavam — um número
@@ -75,6 +76,7 @@ const dueLabel = (task) => {
 export default function ErpHome({ role, user, data, dashboard, tasks, products = [], preferences, onSave, onNavigate }) {
   const profile = useMemo(() => normalizeHomePreferences(role, preferences), [role, preferences]);
   const [editing, setEditing] = useState(false);
+  const [taskFilter, setTaskFilter] = useState("all");
   const [draft, setDraft] = useState(profile);
   const area = homeArea(profile.areaId);
   const decision = useMemo(() => buildTodoGreenDecisionCenter({ data, dashboard, tasks }), [data, dashboard, tasks]);
@@ -103,8 +105,9 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
   const contextualAlerts = ["owner", "admin"].includes(role)
     ? [...operationalRisks, ...decision.alerts]
     : [...operationalRisks, ...alerts].filter((alert) => alertsForArea([alert], area.id).length);
+  const focusedTasks = workdayTasks(myTasks, taskFilter);
   const queue = [
-    ...myTasks.slice(0, 5).map((task) => ({
+    ...focusedTasks.slice(0, 5).map((task) => ({
       // Abre a ferramenta de tarefas do Espaço, não /central-trabalho — esse
       // alias é sequestrado pela Central de Implantação e abria uma tela vazia.
       id: `task-${task.id}`, tone: "task", title: task.title || "Tarefa sem título",
@@ -113,7 +116,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
       detail: `${task.status || "Pendente"} · ${dueLabel(task)}`, action: "Abrir tarefa",
       route: `/todogreen/espaco?ferramenta=tarefas&task=${encodeURIComponent(task.id)}`,
     })),
-    ...contextualAlerts.slice(0, Math.max(0, 6 - myTasks.length)).map((alert) => ({
+    ...contextualAlerts.slice(0, Math.max(0, 6 - focusedTasks.length)).map((alert) => ({
       id: `alert-${alert.id}`, tone: alert.tone, title: alert.title, detail: alert.detail, action: alert.action, route: alert.route,
     })),
   ];
@@ -219,11 +222,17 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     if (id === "queue") {
       return <div className="tdg-home-grid" key="queue">
         <section className="tdg-home-section tdg-home-queue">
-          <header><div><span>TRABALHO</span><h3>Minha fila</h3></div><small>{queue.length} item(ns)</small></header>
+          <header><div><span>MEU DIA</span><h3>Minha fila</h3></div><small>{focusedTasks.length} tarefa(s) no filtro</small></header>
+          <div className="tdg-workday-filters" role="group" aria-label="Filtrar minhas tarefas por prazo">
+            {WORKDAY_FILTERS.map((filter) => <button type="button" key={filter.id} aria-pressed={taskFilter === filter.id} onClick={() => setTaskFilter(filter.id)}>
+              {filter.label} <span>{workdayTasks(myTasks, filter.id).length}</span>
+            </button>)}
+          </div>
           {queue.length ? queue.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>
             <span className={item.tone === "risk" ? "risk" : ""}>{item.tone === "risk" ? <AlertTriangle size={17} /> : <ClipboardCheck size={17} />}</span>
             <span><strong>{item.title}</strong><small>{item.detail}</small></span><b>{item.action}<ArrowRight size={14} /></b>
-          </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>Nenhuma pendência atribuída</strong><small>Itens da sua área aparecem aqui quando exigem ação.</small></span></div>}
+          </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>{myTasks.length ? "Nenhuma tarefa neste filtro" : "Nenhuma pendência atribuída"}</strong><small>{myTasks.length ? "Escolha outro prazo para continuar." : "Itens da sua área aparecem aqui quando exigem ação."}</small></span></div>}
+          <button type="button" className="tdg-workday-all" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")}>Abrir quadro de tarefas<ArrowRight size={16} /></button>
         </section>
       </div>;
     }
@@ -259,6 +268,12 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
         <button type="button" onClick={() => { setDraft(profile); setEditing(true); }}><Settings2 size={16} />Configurar meu início</button>
       </div>
     </header>
+
+    <nav className="tdg-workday-routes" aria-label="Onde você quer trabalhar?">
+      {WORKDAY_ROUTES.map((item) => <button type="button" key={item.id} onClick={() => onNavigate?.(item.route)}>
+        <strong>{item.title}<ArrowRight size={17} /></strong><span>{item.description}</span>
+      </button>)}
+    </nav>
 
     {!hasOperationalData && <div className="tdg-home-empty tdg-home-empty-operational" role="status" aria-live="polite"><CheckCircle2 size={20} /><span><strong>Sem dados operacionais</strong><small>Cadastre clientes, oportunidades ou simulações para alimentar o painel.</small></span></div>}
 

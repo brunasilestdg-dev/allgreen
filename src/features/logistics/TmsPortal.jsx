@@ -781,7 +781,7 @@ function ControlTower({ data, onSection }) {
   const readiness = [
     ["Roteirização", data?.readiness?.routing], ["API TMS", data?.readiness?.api],
     ["Faturamento", data?.readiness?.billing], ["Fiscal", data?.readiness?.fiscalProfile],
-    ["CIOT", data?.readiness?.ciot], ["TRACK3R", data?.readiness?.track3r],
+    ["CIOT", data?.readiness?.ciot],
   ];
   return (
     <>
@@ -1240,7 +1240,6 @@ function ApiManager({ api, onReload }) {
 
 function Integrations({ data, onReload }) {
   const rows = [
-    { name: "TRACK3R", detail: "Importação, documentos e ocorrências", value: data?.integrations?.track3r },
     { name: "CIOT / ANTT", detail: "Integração direta e certificado", value: data?.integrations?.ciot },
     { name: "Fiscal / SEFAZ", detail: "CT-e e MDF-e", value: data?.integrations?.fiscal },
     { name: "API TMS", detail: "API externa própria para clientes e parceiros", value: data?.integrations?.api },
