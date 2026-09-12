@@ -28,6 +28,8 @@ const montarFetch = (over = {}) => {
     if (u.includes("/driver-portal/jornada/fim")) return resp({ turnos: [{ id: "t1", status: "fechado", iniciadoEm: "2020-01-01T08:00:00Z", encerradoEm: "2020-01-01T12:00:00Z", dataServico: "2020-01-01" }] });
     if (u.includes("/driver-portal/jornada")) return resp(over.jornada || { turnos: [] });
     if (u.includes("/driver-portal/viagens")) return resp(over.viagens || { viagens: [] });
+    if (u.includes("/driver-portal/veiculo")) return resp(over.veiculo || { temVeiculo: false });
+    if (u.includes("/driver-portal/ganhos")) return resp(over.ganhos || { configurada: false, extrato: [] });
     if (u.includes("/driver-portal/rotas")) return resp({ rotas: [] });
     if (u.includes("/driver-portal/sessao") || u.endsWith("/driver-portal") || u.includes("/driver-portal?")) return resp(sessao);
     if (u.includes("/driver-portal")) return resp(sessao);
@@ -157,6 +159,62 @@ describe("app do motorista — score", () => {
   });
 });
 
+describe("app do motorista — telemetria do veículo", () => {
+  it("com leitura, mostra bateria e autonomia e a idade da leitura", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({ veiculo: { temVeiculo: true, placa: "ABC1D23", prefixo: "V-01", temLeitura: true, socPercent: 62, autonomiaKm: 140, minutosAtras: 8, frescor: "recente" } });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    // A aba Hoje é a padrão.
+    expect(await screen.findByText("62%")).toBeInTheDocument();
+    expect(screen.getByText("140 km")).toBeInTheDocument();
+    expect(screen.getByText(/lida há 8 min/)).toBeInTheDocument();
+  });
+
+  it("sem leitura elétrica, diz 'sem leitura' — nunca 0%", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({ veiculo: { temVeiculo: true, placa: "ABC1D23", prefixo: "V-01", temLeitura: false, frescor: "sem-leitura" } });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    expect(await screen.findByText(/Sem leitura elétrica deste veículo/)).toBeInTheDocument();
+    expect(screen.queryByText("0%")).toBeNull();
+  });
+});
+
+describe("app do motorista — GreenPay (ganhos)", () => {
+  it("sem régua configurada, convida em vez de mostrar R$ 0", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch();
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    fireEvent.click(screen.getByRole("button", { name: /Ganhos/ }));
+    expect(await screen.findByText(/Ganhos ainda não configurados/)).toBeInTheDocument();
+  });
+
+  it("com régua, mostra ganhos do dia, saldos e extrato com memória", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    montarFetch({
+      ganhos: {
+        configurada: true,
+        regra: { valorPorEntrega: 8, valorPorKm: 0.9 },
+        resumo: { dia: 29, semana: 46, mes: 46, saldos: { pendente: 46, aprovado: 0, pago: 0, aReceber: 46 } },
+        extrato: [
+          { id: "e1", tipo: "km", valor: 18, referencia: "ROTA-1", dataServico: "2026-09-11", status: "pendente", memoria: { km: 20 }, operacaoId: "op1", observacao: "" },
+          { id: "e2", tipo: "entrega", valor: 8, referencia: "ROTA-1", dataServico: "2026-09-11", status: "pendente", memoria: {}, operacaoId: "op1", observacao: "" },
+        ],
+      },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    fireEvent.click(screen.getByRole("button", { name: /Ganhos/ }));
+
+    expect(await screen.findByText("R$ 29,00")).toBeInTheDocument(); // ganhos de hoje
+    expect(screen.getByText("Extrato")).toBeInTheDocument();
+    expect(screen.getByText(/Distância · ROTA-1/)).toBeInTheDocument();
+    expect(screen.getByText(/20 km/)).toBeInTheDocument();
+  });
+});
+
 describe("app do motorista — produtividade (meu dia)", () => {
   it("na Hoje, cruza entregas e horas do turno", async () => {
     localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
@@ -179,5 +237,33 @@ describe("app do motorista — produtividade (meu dia)", () => {
     // 50 km hoje e a semana no rodapé.
     expect(screen.getByText("50")).toBeInTheDocument();
     expect(screen.getByText(/Na semana: 2 entregas · 50 km/)).toBeInTheDocument();
+  });
+});
+
+describe("app do motorista — fadiga na jornada (Lei do Motorista)", () => {
+  it("turno longo em aberto acende o alerta de direção contínua", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    const hoje = new Date().toISOString().slice(0, 10);
+    const iniciado = new Date(Date.now() - 7 * 3600000).toISOString(); // 7h rodando, sem parar
+    montarFetch({
+      jornada: { turnos: [{ id: "t1", status: "aberto", iniciadoEm: iniciado, encerradoEm: "", dataServico: hoje }] },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    expect(await screen.findByText("Atenção à jornada")).toBeInTheDocument();
+    expect(screen.getByText(/Direção contínua/)).toBeInTheDocument();
+  });
+
+  it("jornada curta não mostra alerta de fadiga", async () => {
+    localStorage.setItem("seu-funcionario-auth-token", "tok-joao");
+    const hoje = new Date().toISOString().slice(0, 10);
+    const iniciado = new Date(Date.now() - 2 * 3600000).toISOString(); // 2h
+    montarFetch({
+      jornada: { turnos: [{ id: "t1", status: "aberto", iniciadoEm: iniciado, encerradoEm: "", dataServico: hoje }] },
+    });
+    render(<DriverPortalPage />);
+    await screen.findByText(/Olá, João/);
+    await screen.findByText("Em turno");
+    expect(screen.queryByText("Atenção à jornada")).not.toBeInTheDocument();
   });
 });

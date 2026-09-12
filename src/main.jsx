@@ -13,7 +13,6 @@ import "./features/logistics/LogisticsVerticalRecovery.css";
 import "./features/logistics/LogisticsVerticalRecovery.js";
 import "./features/logistics/LogisticsVerticalCredentials.js";
 // WorkCenterV2 é lazy-loaded quando acessado (ARQ-01 otimização)
-import "./features/logistics/LogisticsVerticalFleet.js";
 
 const reportError = (message, stack, componentStack) => {
   try {

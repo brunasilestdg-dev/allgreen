@@ -1259,7 +1259,7 @@ function Integrations({ data, onReload }) {
       </div>
       <div className="tms-api-note">
         <div>
-          <strong>API TMS externa ativa</strong>
+          <strong>API TMS externa {(data?.integrations?.api?.activeKeys || 0) > 0 ? "ativa" : "pronta — gere uma chave para ativar"}</strong>
           <p>Clientes e parceiros podem criar cargas, consultar pedidos, enviar rastreamento e comprovante de entrega, além de consultar CT-e, MDF-e, CIOT e faturamento sem entrar no ERP. A autenticação usa chaves próprias `tdg_live_`, com isolamento por cliente e escopo.</p>
         </div>
       </div>

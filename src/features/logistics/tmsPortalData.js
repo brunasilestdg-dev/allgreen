@@ -207,8 +207,12 @@ export async function loadTmsPortalData() {
       ciotPending: ciots.filter((item) => pendingCiot(item.status)).length,
     },
     readiness: {
-      routing: true,
-      api: true,
+      // Honesto: só é "operacional" quando o otimizador de rotas está de fato
+      // conectado (TDG_ROUTING_URL), e a API externa só quando há chave ativa
+      // para chamá-la. Antes ambos vinham fixos em true — um motor desligado
+      // aparecia como no ar.
+      routing: Boolean(tmsConfig?.roteirizacao?.motorConfigurado),
+      api: activeApiKeys.length > 0,
       billing: Boolean(billingData),
       cte: Boolean(fiscalData),
       mdfe: Boolean(fiscalData),
@@ -231,7 +235,7 @@ export async function loadTmsPortalData() {
         certificateStatus: fiscalProfile.certificadoStatus || "",
       } : null,
       api: {
-        status: "ativa",
+        status: activeApiKeys.length > 0 ? "ativa" : "configurar",
         basePath: "/api/tms/v1",
         documentationPath: "/api/tms/v1/openapi.json",
         activeKeys: activeApiKeys.length,

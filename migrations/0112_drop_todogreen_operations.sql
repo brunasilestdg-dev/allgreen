@@ -1,0 +1,13 @@
+-- Onda C0.2 (consolidação All Green): remover a tabela morta todogreen_operations.
+--
+-- A 0041 criou todogreen_operations como painel operacional. A 0047 migrou os
+-- dados para todogreen_client_operations — fonte canônica compartilhada com o
+-- Portal do Cliente — e desde então NADA lê ou escreve em todogreen_operations:
+-- a coleção "operations" (todogreen-vertical-records.js) aponta para
+-- todogreen_client_operations, e o único vestígio no código é um comentário
+-- histórico. A tabela ficou órfã, ocupando espaço e confundindo o mapa de dados.
+--
+-- Migração aditiva e idempotente (IF EXISTS): o índice
+-- idx_todogreen_operations_scope some junto com a tabela. Não editar migração
+-- antiga — a 0041 e a 0047 permanecem como registro histórico do caminho.
+DROP TABLE IF EXISTS todogreen_operations;

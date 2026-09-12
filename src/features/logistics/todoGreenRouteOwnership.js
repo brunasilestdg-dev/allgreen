@@ -4,6 +4,12 @@ export const TODO_GREEN_ROUTE_ALIASES = Object.freeze({
   comercial: "clientes",
   "central-trabalho": "espaco",
   "dashboard-esg": "esg",
+  // Os quatro cards de ESG colapsaram na Central ESG (uma fonte de verdade).
+  // Links antigos continuam resolvendo para lá em vez de 404.
+  "green-score": "central-esg",
+  "calculadora-ambiental": "central-esg",
+  "tradutor-esg": "central-esg",
+  "escopo-3": "central-esg",
   "relatorios-esg": "relatorios",
   "cofre-evidencias": "auditoria",
   certificados: "relatorios",
@@ -35,7 +41,6 @@ export const TODO_GREEN_ROUTE_ALIASES = Object.freeze({
   pacotes: "operacoes",
   ocupacao: "dashboard",
   produtividade: "dashboard",
-  energia: "esg",
   tarefas: "dashboard",
   notificacoes: "dashboard",
   inbox: "dashboard",

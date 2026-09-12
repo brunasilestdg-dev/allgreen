@@ -58,6 +58,10 @@ const VAZIO = Object.freeze({
   // buscando sob demanda; declará-las só fecha a inconsistência.
   documentFolders: [],
   rotas: [],
+  // Pontos de recarga próprios (migração 0114). Cadastro da empresa; a tela dona
+  // (ChargingPointsPage) e o roteirizador buscam sob demanda, mas declarar aqui
+  // evita que o gancho descarte calado o que vier na carga inicial.
+  pontosRecarga: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {

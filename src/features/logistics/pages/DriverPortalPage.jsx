@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Award, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User } from "lucide-react";
+import { AlertTriangle, Award, BatteryCharging, Camera, CheckCircle2, ClipboardCheck, Clock, CreditCard, Home, MapPin, Navigation, PackageCheck, Play, Route, Square, Truck, User, Wallet } from "lucide-react";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
 import { ROTULO_STATUS_ROTA, linkNavegacao, progressoDaRota, resumoDaRota } from "../routePlanDomain.js";
 import { avaliarChecklist, GRUPOS_CHECKLIST, ITENS_CHECKLIST } from "../driverChecklistDomain.js";
-import { formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
+import { avaliarConformidadeJornada, formatarDuracao, resumoDaJornada } from "../driverJourneyDomain.js";
 import { calcularScoreMotorista, ROTULO_FAIXA } from "../driverScoreDomain.js";
 import { resumoDeProdutividade } from "../driverProductivityDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
@@ -158,6 +158,8 @@ export default function DriverPortalPage() {
   const [enviandoVistoria, setEnviandoVistoria] = useState(false);
   const [turnos, setTurnos] = useState([]);
   const [turnoOcupado, setTurnoOcupado] = useState(false);
+  const [ganhos, setGanhos] = useState(null); // carteira GreenPay (lazy)
+  const [veiculo, setVeiculo] = useState(null); // telemetria elétrica do veículo do dia
   const avatarInputRef = useRef(null);
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
@@ -229,6 +231,10 @@ export default function DriverPortalPage() {
         try {
           setTurnos((await pedir("/jornada")).turnos || []);
         } catch { /* segue com os turnos anteriores */ }
+        // Telemetria do veículo do dia: nunca derruba o app, mantém a última.
+        try {
+          setVeiculo(await pedir("/veiculo"));
+        } catch { /* segue com a leitura anterior */ }
       }
       setErro("");
     } catch (motivo) {
@@ -249,6 +255,13 @@ export default function DriverPortalPage() {
     } catch { /* offline: mantém o placeholder */ }
   }, []);
   useEffect(() => { carregarPerfil(); }, [carregarPerfil]);
+
+  // Carteira GreenPay: carrega ao abrir a aba Ganhos. Fica em cache até a
+  // pessoa registrar uma entrega (que recarrega tudo) ou reabrir o app.
+  const carregarGanhos = useCallback(async () => {
+    try { setGanhos(await pedir("/ganhos")); } catch { setGanhos({ configurada: false, erro: true }); }
+  }, []);
+  useEffect(() => { if (secao === "ganhos" && !ganhos) carregarGanhos(); }, [secao, ganhos, carregarGanhos]);
 
   const enviarFotoPerfil = async (event) => {
     const arquivo = event.target.files?.[0];
@@ -429,6 +442,8 @@ export default function DriverPortalPage() {
       setAviso(formulario.tipo === "entrega" ? "Entrega registrada com comprovante. Boa estrada!" : "Registrado.");
       setFormulario(null);
       zerarFormulario();
+      // A entrega gera ganho (GreenPay): invalida a carteira para recarregar.
+      if (formulario.tipo === "entrega") setGanhos(null);
       await carregar();
     } catch (motivo) {
       if (motivo.rejeitadoPeloServidor) {
@@ -474,6 +489,9 @@ export default function DriverPortalPage() {
   const rotasAtivas = rotas.filter((rota) => rota.status !== "concluida");
   const agoraISO = new Date().toISOString();
   const jornada = resumoDaJornada(turnos, agoraISO);
+  // Conformidade da jornada (fadiga · Lei do Motorista): alertas derivados dos
+  // turnos que já existem. Acende ao vivo enquanto o motorista dirige.
+  const conformidade = avaliarConformidadeJornada(turnos, agoraISO);
   const score = calcularScoreMotorista(viagens);
   const produtividade = resumoDeProdutividade(viagens, { minutosHoje: jornada.minutosHoje, agora: agoraISO });
   const vistoriaHoje = checklists.find((c) => String(c.dataServico).slice(0, 10) === hojeISO) || null;
@@ -482,9 +500,14 @@ export default function DriverPortalPage() {
     { id: "hoje", rotulo: "Hoje", icone: Home },
     { id: "rota", rotulo: "Rota", icone: Route },
     { id: "vistoria", rotulo: "Vistoria", icone: ClipboardCheck },
+    { id: "ganhos", rotulo: "Ganhos", icone: Wallet },
     { id: "entregas", rotulo: "Entregas", icone: PackageCheck },
     { id: "perfil", rotulo: "Perfil", icone: User },
   ];
+  const reais = (v) => `R$ ${Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const idadeLeitura = (min) => (min == null ? "" : min < 1 ? "lida agora" : min < 60 ? `lida há ${min} min` : `lida há ${Math.floor(min / 60)}h`);
+  const rotuloTipoGanho = { entrega: "Entrega", km: "Distância", bonus: "Bônus", ajuste: "Ajuste", desconto: "Desconto" };
+  const rotuloStatusGanho = { pendente: "Pendente", aprovado: "Aprovado", pago: "Pago" };
   const SELO_VISTORIA = { aprovado: "Aprovada", ressalva: "Aprovada com ressalva", reprovado: "Reprovada" };
 
   return (
@@ -528,6 +551,39 @@ export default function DriverPortalPage() {
               ? <button type="button" className="tdg-turno-btn encerrar" disabled={turnoOcupado} onClick={() => acaoTurno("fim", "Turno encerrado. Bom descanso!")}><Square size={16} /> Encerrar turno</button>
               : <button type="button" className="tdg-turno-btn iniciar" disabled={turnoOcupado} onClick={() => acaoTurno("inicio", "Turno iniciado. Boa jornada!")}><Play size={16} /> Iniciar turno</button>}
           </article>
+
+          {/* Fadiga (Lei do Motorista): alertas derivados da própria jornada.
+              Só aparece quando há algo a corrigir — nunca ruído. */}
+          {!conformidade.conforme && (
+            <article className="tdg-driver-cartao tdg-fadiga">
+              <div className="tdg-fadiga-head"><AlertTriangle size={18} /><strong>Atenção à jornada</strong></div>
+              <ul className="tdg-fadiga-lista">
+                {conformidade.alertas.map((a, i) => (
+                  <li key={`${a.tipo}-${i}`} className={`grav-${a.gravidade}`}>{a.mensagem}</li>
+                ))}
+              </ul>
+            </article>
+          )}
+
+          {/* Telemetria elétrica ao vivo do veículo do dia. Nunca "0%" quando
+              não há leitura — mostra "sem leitura" honesto. */}
+          {veiculo?.temVeiculo && (
+            <article className={`tdg-driver-cartao tdg-veiculo ${veiculo.temLeitura ? "" : "sem-leitura"}`}>
+              <div className="tdg-veiculo-head">
+                <BatteryCharging size={18} />
+                <span><strong>{veiculo.prefixo || veiculo.placa}</strong><small>{veiculo.placa}</small></span>
+              </div>
+              {veiculo.temLeitura ? (
+                <div className="tdg-veiculo-leitura">
+                  <div className="tdg-veiculo-metrica"><strong>{veiculo.socPercent != null ? `${Math.round(veiculo.socPercent)}%` : "—"}</strong><span>bateria</span></div>
+                  <div className="tdg-veiculo-metrica"><strong>{veiculo.autonomiaKm != null ? `${Math.round(veiculo.autonomiaKm)} km` : "—"}</strong><span>autonomia</span></div>
+                  <small className="tdg-veiculo-idade">{idadeLeitura(veiculo.minutosAtras)}</small>
+                </div>
+              ) : (
+                <p className="tdg-veiculo-vazio">Sem leitura elétrica deste veículo ainda. Quando o rastreador enviar a carga, ela aparece aqui.</p>
+              )}
+            </article>
+          )}
 
           <div className="tdg-driver-jornada">
             <article><strong>{pendentes.length}</strong><span>a fazer</span></article>
@@ -726,6 +782,65 @@ export default function DriverPortalPage() {
                 </div>
               ))}
             </article>
+          )}
+        </>
+      )}
+
+      {/* ===== GANHOS: carteira GreenPay, derivada das entregas ===== */}
+      {secao === "ganhos" && (
+        <>
+          {!ganhos ? (
+            <div className="tdg-driver-cartao"><p>Carregando seus ganhos…</p></div>
+          ) : !ganhos.configurada ? (
+            <div className="tdg-driver-cartao tdg-ganhos-vazio">
+              <Wallet size={22} />
+              <div>
+                <strong>Ganhos ainda não configurados</strong>
+                <p>A operação ainda não definiu a régua de ganhos. Assim que definir, seus ganhos aparecem aqui — calculados automaticamente das suas entregas, sem você precisar digitar nada.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <section className="tdg-ganhos-topo">
+                <span className="tdg-driver-kicker">GREENPAY · SEUS GANHOS</span>
+                <strong className="tdg-ganhos-hoje">{reais(ganhos.resumo.dia)}</strong>
+                <small>ganhos de hoje</small>
+                <div className="tdg-ganhos-periodos">
+                  <div><span>Na semana</span><strong>{reais(ganhos.resumo.semana)}</strong></div>
+                  <div><span>No mês</span><strong>{reais(ganhos.resumo.mes)}</strong></div>
+                </div>
+              </section>
+
+              <section className="tdg-ganhos-saldos">
+                <article className="pendente"><span>Pendente</span><strong>{reais(ganhos.resumo.saldos.pendente)}</strong></article>
+                <article className="aprovado"><span>Aprovado</span><strong>{reais(ganhos.resumo.saldos.aprovado)}</strong></article>
+                <article className="pago"><span>Pago</span><strong>{reais(ganhos.resumo.saldos.pago)}</strong></article>
+                <article className="receber"><span>A receber</span><strong>{reais(ganhos.resumo.saldos.aReceber)}</strong></article>
+              </section>
+
+              <section className="tdg-driver-cartao">
+                <h2 className="tdg-driver-secao-titulo">Extrato</h2>
+                {ganhos.extrato.length === 0 ? (
+                  <p className="tdg-driver-vazio">Ainda sem ganhos. Conclua entregas para começar a somar.</p>
+                ) : (
+                  <ul className="tdg-ganhos-extrato">
+                    {ganhos.extrato.map((l) => (
+                      <li key={l.id} className={l.valor < 0 ? "negativo" : ""}>
+                        <div className="tdg-ganhos-linha-topo">
+                          <span className="tdg-ganhos-tipo">{rotuloTipoGanho[l.tipo] || l.tipo}{l.referencia ? ` · ${l.referencia}` : ""}</span>
+                          <strong>{l.valor < 0 ? "−" : ""}{reais(Math.abs(l.valor))}</strong>
+                        </div>
+                        <div className="tdg-ganhos-linha-baixo">
+                          <small>{l.dataServico ? l.dataServico.split("-").reverse().join("/") : ""}{l.memoria?.km ? ` · ${l.memoria.km} km` : ""}{l.observacao ? ` · ${l.observacao}` : ""}</small>
+                          <span className={`tdg-ganhos-status ${l.status}`}>{rotuloStatusGanho[l.status] || l.status}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="tdg-driver-nota">Cada valor vem das suas entregas, pela régua da operação. Ganho não é digitado — é calculado.</p>
+              </section>
+            </>
           )}
         </>
       )}

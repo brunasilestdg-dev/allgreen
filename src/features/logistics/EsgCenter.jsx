@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Leaf, Loader2, Scale } from "lucide-react";
+import EnergyPanel from "./pages/EnergyPanel.jsx";
 
 // ===== Central ESG (lado interno) =====
 //
@@ -281,6 +282,10 @@ export default function EsgCenter({ authHeaders, setToast }) {
           <span>{aviso}</span>
         </div>
       ) : null}
+
+      {/* Energia da frota, embutida na Central ESG — a mesma visão da página
+          própria de Energia, num componente só. */}
+      <EnergyPanel authHeaders={authHeaders} />
 
       <section className="tdg-panel">
         <div className="tdg-section-head">

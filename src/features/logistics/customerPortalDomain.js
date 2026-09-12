@@ -115,6 +115,9 @@ export const CLIENT_PORTAL_MENU = [
   { id: "operacoes", label: "Operações", permission: "portal:read" },
   { id: "green-score", label: "Green Score", permission: "portal:read" },
   { id: "esg", label: "Emissões e impacto ambiental", permission: "portal:read" },
+  // Simulação da eletrificação da própria operação: só cálculo, no navegador do
+  // cliente, com referências que ele ajusta. Nenhum dado interno passa por aqui.
+  { id: "planejar", label: "Planejar", permission: "portal:read" },
   { id: "relatorios", label: "Relatórios", permission: "portal:report:export" },
   // Fatura é assunto do próprio cliente: o que ele deve, quando vence e a
   // 2ª via do documento. Nada do financeiro INTERNO (margem, custo, comissão)

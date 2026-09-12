@@ -47,7 +47,6 @@ describe("as folhas da vertical não posicionam os próprios asides", () => {
   const verticais = [
     "features/logistics/LogisticsVertical.css",
     "features/logistics/LogisticsVerticalWorkCenter.css",
-    "features/logistics/LogisticsVerticalFleet.css",
   ];
 
   for (const arquivo of verticais) {

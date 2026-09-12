@@ -2156,10 +2156,71 @@
 .tdg-vistoria-historico b.ressalva { color: #8a5b00; }
 .tdg-vistoria-historico b.reprovado { color: #a3352f; }
 
+/* Telemetria elétrica do veículo (app do motorista) */
+.tdg-veiculo { display: block; }
+.tdg-veiculo-head { align-items: center; display: flex; gap: 10px; }
+.tdg-veiculo-head > svg { color: #0b9f8f; }
+.tdg-veiculo.sem-leitura .tdg-veiculo-head > svg { color: #9fb0a5; }
+.tdg-veiculo-head strong { display: block; font-size: .96rem; }
+.tdg-veiculo-head small { color: #6d8377; font-size: .74rem; }
+.tdg-veiculo-leitura { align-items: center; display: flex; gap: 18px; margin-top: 12px; }
+.tdg-veiculo-metrica strong { display: block; font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.tdg-veiculo-metrica span { color: #6d8377; font-size: .72rem; }
+.tdg-veiculo-idade { color: #7a8a80; font-size: .72rem; margin-left: auto; }
+.tdg-veiculo-vazio { color: #7a8a80; font-size: .82rem; margin: 10px 0 0; }
+
+/* GreenPay — carteira do motorista */
+.tdg-ganhos-vazio { align-items: flex-start; gap: 12px; }
+.tdg-ganhos-vazio > svg { color: #0b9f8f; flex: 0 0 auto; margin-top: 2px; }
+.tdg-ganhos-vazio strong { display: block; font-size: 1rem; margin-bottom: 4px; }
+.tdg-ganhos-vazio p { color: #5c6b62; font-size: .86rem; margin: 0; }
+.tdg-ganhos-topo {
+  background: linear-gradient(150deg, #0e6f52, #0b9f8f); border-radius: 16px; color: #eafaf3;
+  margin: 12px 12px 0; padding: 20px 20px 18px; text-align: center;
+}
+.tdg-ganhos-topo .tdg-driver-kicker { color: #b8f0dc; font-size: .66rem; letter-spacing: .16em; }
+.tdg-ganhos-hoje { display: block; font-size: 2.4rem; font-weight: 800; line-height: 1.05; margin: 8px 0 2px; }
+.tdg-ganhos-topo > small { color: #cdeee0; font-size: .82rem; }
+.tdg-ganhos-periodos { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+.tdg-ganhos-periodos > div { background: rgba(255,255,255,.12); border-radius: 11px; padding: 9px 6px; }
+.tdg-ganhos-periodos span { color: #cdeee0; display: block; font-size: .68rem; }
+.tdg-ganhos-periodos strong { font-size: 1.02rem; }
+.tdg-ganhos-saldos { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 12px 0; }
+.tdg-ganhos-saldos article { background: var(--tdg-card, #fff); border: 1px solid #dce4dd; border-radius: 12px; padding: 11px 12px; }
+.tdg-ganhos-saldos span { color: #5c6b62; display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+.tdg-ganhos-saldos strong { font-size: 1.1rem; }
+.tdg-ganhos-saldos .receber strong { color: #0e6f52; }
+.tdg-ganhos-extrato { display: grid; gap: 2px; list-style: none; margin: 6px 0 0; padding: 0; }
+.tdg-ganhos-extrato li { border-bottom: 1px solid #eef2ee; padding: 10px 2px; }
+.tdg-ganhos-extrato li:last-child { border-bottom: none; }
+.tdg-ganhos-linha-topo { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; }
+.tdg-ganhos-tipo { font-size: .9rem; font-weight: 600; }
+.tdg-ganhos-linha-topo strong { font-size: .96rem; font-variant-numeric: tabular-nums; }
+.tdg-ganhos-extrato li.negativo .tdg-ganhos-linha-topo strong { color: #b23a2c; }
+.tdg-ganhos-linha-baixo { align-items: center; display: flex; gap: 10px; justify-content: space-between; margin-top: 3px; }
+.tdg-ganhos-linha-baixo small { color: #5c6b62; font-size: .74rem; }
+.tdg-ganhos-status { border-radius: 999px; font-size: .64rem; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; text-transform: uppercase; }
+.tdg-ganhos-status.pendente { background: #fbf1dd; color: #9a6a00; }
+.tdg-ganhos-status.aprovado { background: #e6f1f8; color: #0b6fa8; }
+.tdg-ganhos-status.pago { background: #e7f5ec; color: #1f7a44; }
+.tdg-driver-nota { color: #7a8a80; font-size: .74rem; margin: 10px 0 0; }
+
+/* GreenPay — tela do gestor */
+.tdg-greenpay-form { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 12px 0 4px; }
+.tdg-greenpay-form label { display: flex; flex-direction: column; font-size: .78rem; font-weight: 600; gap: 5px; }
+.tdg-greenpay-form input { border: 1px solid #ccd8ce; border-radius: 9px; font-size: .95rem; padding: 8px 10px; }
+.tdg-greenpay-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tdg-greenpay-acoes button:not(.tdg-action) { align-items: center; background: #eef4f0; border: 1px solid #cfe0d5; border-radius: 9px; color: #0e6f52; cursor: pointer; display: inline-flex; font-size: .84rem; font-weight: 600; gap: 6px; padding: 8px 12px; }
+.tdg-greenpay-tabela td { font-variant-numeric: tabular-nums; }
+.tdg-greenpay-linha-acoes { display: flex; gap: 6px; }
+.tdg-greenpay-linha-acoes button { align-items: center; background: #eef4f0; border: 1px solid #cfe0d5; border-radius: 8px; color: #0e6f52; cursor: pointer; display: inline-flex; font-size: .78rem; font-weight: 600; gap: 4px; padding: 5px 9px; }
+.tdg-greenpay-linha-acoes button:disabled { color: #9fb0a5; cursor: not-allowed; opacity: .6; }
+@media (max-width: 640px) { .tdg-greenpay-form { grid-template-columns: minmax(0, 1fr); } }
+
 .tdg-driver-nav {
   background: var(--tdg-card); border-top: 1px solid #d3e3db;
   bottom: 0; box-shadow: 0 -4px 16px rgba(20, 45, 36, .08);
-  display: grid; gap: 2px; grid-template-columns: repeat(5, 1fr);
+  display: grid; gap: 2px; grid-template-columns: repeat(6, 1fr);
   left: 50%; margin: 0 auto; max-width: 560px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
   position: fixed; transform: translateX(-50%); width: 100%; z-index: 40;
 }
@@ -3833,6 +3894,21 @@
 }
 .tdg-mapa-pin-carregador span.pesado { background: #0b9f8f; }
 .tdg-mapa-pin-carregador span.leve { background: #9aa8a3; }
+/* Ponto PRÓPRIO: mesmo símbolo, anel dourado, para distinguir do público. */
+.tdg-mapa-pin-proprio span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+  border: 3px solid #f2b807;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  color: #fff;
+}
+.tdg-mapa-pin-proprio span.pesado { background: #0b7d70; }
+.tdg-mapa-pin-proprio span.leve { background: #6a7d77; }
 .tdg-roteirizacao-carregadores-info {
   display: flex;
   align-items: center;
@@ -4477,3 +4553,144 @@
 .tdg-dispatch-nao p { margin: 0 0 4px; }
 .tdg-dispatch-nao-lista { margin: 0; padding-left: 20px; display: grid; gap: 2px; }
 .tdg-dispatch-nao-lista li { font-size: 13px; }
+.tdg-dispatch-motor { margin: 0 0 8px; font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
+.tdg-dispatch-motor.ok { color: #1f7a44; background: rgba(31,122,68,.08); border-color: rgba(31,122,68,.22); }
+.tdg-dispatch-motor.aprox { color: #9a6a00; background: rgba(154,106,0,.08); border-color: rgba(154,106,0,.22); }
+
+/* Pontos de recarga próprios (cadastro da eletrificação). Espelha o padrão da
+   Qualidade: métricas no topo, formulário em grade e cartões por ponto. */
+.tdg-recarga-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 14px;
+}
+.tdg-recarga-metrics article {
+  background: var(--tdg-bg);
+  border: 1px solid var(--tdg-line);
+  border-radius: 9px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+.tdg-recarga-metrics small { color: var(--tdg-muted); font-size: .7rem; }
+.tdg-recarga-metrics strong { font-size: 1.35rem; }
+.tdg-recarga-metrics article.risk strong { color: var(--tdg-danger, #b3261e); }
+
+.tdg-recarga-form {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 14px;
+}
+.tdg-recarga-form label { display: grid; gap: 4px; min-width: 0; }
+.tdg-recarga-form label span { color: var(--tdg-muted); font-size: .72rem; font-weight: 700; }
+.tdg-recarga-form input,
+.tdg-recarga-form select {
+  border: 1px solid var(--tdg-line);
+  border-radius: 8px;
+  font: inherit;
+  padding: 8px 10px;
+  width: 100%;
+}
+.tdg-recarga-wide { grid-column: 1 / -1; }
+.tdg-recarga-dica { color: var(--tdg-muted); font-size: .74rem; grid-column: 1 / -1; margin: 0; }
+.tdg-recarga-form-actions { align-items: center; display: flex; gap: 8px; grid-column: 1 / -1; justify-content: flex-end; }
+.tdg-recarga-form-actions button { border-radius: 8px; cursor: pointer; padding: 8px 14px; }
+.tdg-recarga-form-actions button:not(.tdg-action) { background: none; border: 1px solid var(--tdg-line); }
+
+.tdg-recarga-filtros { display: flex; gap: 6px; margin-bottom: 10px; }
+.tdg-recarga-filtros button {
+  background: var(--tdg-bg);
+  border: 1px solid var(--tdg-line);
+  border-radius: 999px;
+  color: var(--tdg-muted);
+  cursor: pointer;
+  font-size: .74rem;
+  font-weight: 700;
+  padding: 5px 12px;
+}
+.tdg-recarga-filtros button.active { background: var(--tdg-green); border-color: var(--tdg-green); color: #fff; }
+
+.tdg-recarga-lista { display: grid; gap: 10px; }
+.tdg-recarga-card {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-left: 4px solid var(--tdg-green);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.tdg-recarga-card.status-manutencao { border-left-color: #c98a00; }
+.tdg-recarga-card.status-inativo { border-left-color: var(--tdg-muted); opacity: .72; }
+.tdg-recarga-card header { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
+.tdg-recarga-nome { display: grid; gap: 3px; min-width: 0; }
+.tdg-recarga-nome strong { align-items: center; display: flex; gap: 6px; }
+.tdg-recarga-nome small { color: var(--tdg-muted); font-size: .76rem; }
+.tdg-recarga-tag { border-radius: 999px; flex-shrink: 0; font-size: .7rem; font-weight: 700; padding: 4px 9px; white-space: nowrap; }
+.tdg-recarga-tag.pesado { background: rgba(23, 98, 79, .12); color: var(--tdg-green); }
+.tdg-recarga-tag.leve { background: var(--tdg-bg); color: var(--tdg-muted); }
+.tdg-recarga-endereco { align-items: center; color: var(--tdg-muted); display: flex; font-size: .78rem; gap: 5px; margin: 8px 0 0; }
+.tdg-recarga-card footer { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-top: 10px; }
+.tdg-recarga-mapa { font-size: .74rem; font-weight: 700; }
+.tdg-recarga-mapa.ok { color: var(--tdg-green); }
+.tdg-recarga-mapa.off { color: var(--tdg-muted); }
+.tdg-recarga-acoes { align-items: center; display: flex; gap: 8px; }
+.tdg-recarga-acoes select { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; padding: 6px 8px; }
+.tdg-recarga-remover { align-items: center; background: none; border: 1px solid var(--tdg-line); border-radius: 8px; color: var(--tdg-danger, #b3261e); cursor: pointer; display: inline-flex; padding: 7px; }
+
+/* Fadiga na jornada do motorista (Lei do Motorista): cartão de alerta no app,
+   só aparece quando há algo a corrigir. */
+.tdg-fadiga { border-left: 4px solid var(--tdg-danger, #b3261e); }
+.tdg-fadiga-head { align-items: center; color: var(--tdg-danger, #b3261e); display: flex; gap: 8px; font-weight: 700; }
+.tdg-fadiga-lista { display: grid; gap: 8px; list-style: none; margin: 10px 0 0; padding: 0; }
+.tdg-fadiga-lista li { border-left: 3px solid var(--tdg-line); font-size: .86rem; line-height: 1.45; padding-left: 10px; }
+.tdg-fadiga-lista li.grav-critica { border-left-color: var(--tdg-danger, #b3261e); }
+.tdg-fadiga-lista li.grav-alta { border-left-color: #c98a00; }
+
+/* Painel de Energia (página própria e embutido na Central ESG). */
+.tdg-energia-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 14px 0;
+}
+.tdg-energia-metrics article {
+  background: var(--tdg-bg);
+  border: 1px solid var(--tdg-line);
+  border-radius: 9px;
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+}
+.tdg-energia-metrics small { color: var(--tdg-muted); font-size: .72rem; font-weight: 700; }
+.tdg-energia-metrics strong { font-size: 1.3rem; }
+.tdg-energia-cols {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+}
+.tdg-energia-rede, .tdg-energia-top {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.tdg-energia-rede h3, .tdg-energia-top h3 {
+  align-items: center;
+  display: flex;
+  font-size: .9rem;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.tdg-energia-rede ul, .tdg-energia-top ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.tdg-energia-rede li { align-items: center; display: flex; justify-content: space-between; gap: 10px; }
+.tdg-energia-rede li span { color: var(--tdg-muted); font-size: .84rem; }
+.tdg-energia-top li {
+  align-items: baseline;
+  border-bottom: 1px solid var(--tdg-line);
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 7px;
+}
+.tdg-energia-top li em { color: var(--tdg-muted); font-size: .78rem; font-style: normal; grid-column: 2; text-align: right; }

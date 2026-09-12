@@ -45,11 +45,8 @@ export const ESPECIALISTA_POR_TELA = Object.freeze({
   "deal-desk": "Especialista em Precificação Logística",
 
   esg: "Especialista ESG",
-  "green-score": "Especialista ESG",
+  // Green Score, Calculadora, Tradutor e Escopo 3 colapsaram na Central ESG.
   "central-esg": "Especialista ESG",
-  "calculadora-ambiental": "Especialista ESG",
-  "tradutor-esg": "Especialista ESG",
-  "escopo-3": "Especialista ESG",
   metodologia: "Especialista ESG",
 
   operacoes: "Especialista em Operações Logísticas",

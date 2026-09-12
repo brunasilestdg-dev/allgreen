@@ -20,6 +20,7 @@ import {
   resumoDaRota,
   rotaValidaParaAtribuir,
 } from "../routePlanDomain.js";
+import { pontosParaMapa } from "../chargingPointsDomain.js";
 import "./TodoGreenPages.css";
 
 const formatarReais = (valor) =>
@@ -56,6 +57,17 @@ const pinoCarregador = (coord, pesados) =>
       html: `<span class="${pesados ? "pesado" : "leve"}">⚡</span>`,
       iconSize: [22, 22],
       iconAnchor: [11, 11],
+    }),
+  });
+
+// Pino do ponto PRÓPRIO: anel destacado para não confundir com o público.
+const pinoProprio = (coord, pesado) =>
+  L.marker(coord, {
+    icon: L.divIcon({
+      className: "tdg-mapa-pin-proprio",
+      html: `<span class="${pesado ? "pesado" : "leve"}">⚡</span>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
     }),
   });
 
@@ -98,7 +110,7 @@ const horaMais = (partidaISO, minutos) => {
   return `${String(fim.getHours()).padStart(2, "0")}:${String(fim.getMinutes()).padStart(2, "0")}`;
 };
 
-export default function RoteirizacaoPage({ setToast, authHeaders }) {
+export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios = [] }) {
   const [paradas, setParadas] = useState(["", ""]);
   const [recargas, setRecargas] = useState(() => new Set());
   // Janela de horário por parada (paralelo a `paradas`): { inicio, fim } em
@@ -110,6 +122,7 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const [otimizando, setOtimizando] = useState(false);
   const [sugestoes, setSugestoes] = useState({});
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
+  const [mostrarProprios, setMostrarProprios] = useState(false);
   const [pedagios, setPedagios] = useState({ fase: "idle" });
   const [tarifaMedia, setTarifaMedia] = useState("");
   // Trânsito: horário de partida + fator de pico (estimativa transparente; o
@@ -129,6 +142,7 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
   const mapaRef = useRef(null);
   const camadaRef = useRef(null);
   const camadaCarregadoresRef = useRef(null);
+  const camadaPropriosRef = useRef(null);
   const timerSugestaoRef = useRef(null);
   // Endereço (texto exato) → coordenada já resolvida pela sugestão escolhida.
   // Com isso a rota usa o ponto exato do endereço completo, sem depender de o
@@ -257,6 +271,27 @@ export default function RoteirizacaoPage({ setToast, authHeaders }) {
     });
     grupo.addTo(mapa);
     camadaCarregadoresRef.current = grupo;
+  };
+
+  // Pontos de recarga PRÓPRIOS (cadastro), desenhados numa camada à parte, com
+  // pino destacado. pontosParaMapa já filtra os ativos e georreferenciados.
+  const desenharProprios = (lista) => {
+    const mapa = mapaRef.current;
+    if (!mapa) return;
+    if (camadaPropriosRef.current) {
+      mapa.removeLayer(camadaPropriosRef.current);
+      camadaPropriosRef.current = null;
+    }
+    if (!lista.length) return;
+    const grupo = L.layerGroup();
+    lista.forEach((ponto) => {
+      const potencia = ponto.potenciaKw ? `${ponto.potenciaKw} kW` : "potência não informada";
+      pinoProprio([ponto.latitude, ponto.longitude], ponto.servePesado)
+        .bindPopup(`<strong>${ponto.nome}</strong><br>${ponto.operador || "próprio"}<br>${potencia} · ${ponto.tipoCorrente}${ponto.servePesado ? "<br><b>Serve pesado (DC rápido)</b>" : ""}<br><em>Ponto próprio</em>`)
+        .addTo(grupo);
+    });
+    grupo.addTo(mapa);
+    camadaPropriosRef.current = grupo;
   };
 
   const tracar = async (lista) => {
@@ -505,6 +540,30 @@ Regras:
     }
   };
 
+  // Pontos PRÓPRIOS: já vêm carregados (cadastro), então é só desenhar — sem
+  // rede, sem raio. Distintos dos públicos pelo pino destacado.
+  const propriosNoMapa = pontosParaMapa(pontosProprios);
+  const alternarProprios = () => {
+    if (mostrarProprios) {
+      desenharProprios([]);
+      setMostrarProprios(false);
+      return;
+    }
+    if (!propriosNoMapa.length) {
+      setToast?.("Nenhum ponto próprio ativo com coordenada para mostrar no mapa.");
+      return;
+    }
+    desenharProprios(propriosNoMapa);
+    setMostrarProprios(true);
+    setToast?.(`${propriosNoMapa.length} ponto(s) próprio(s) no mapa.`);
+  };
+
+  // Se o cadastro mudar enquanto a camada está visível, redesenha.
+  useEffect(() => {
+    if (mostrarProprios) desenharProprios(propriosNoMapa);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pontosProprios]);
+
   // Motoristas do cadastro mestre (0070) e rotas já salvas do espaço. A rota
   // liga-se ao motorista pelo id — é o mesmo recorte que leva a rota ao app dele.
   const carregarRotas = async () => {
@@ -714,6 +773,15 @@ Regras:
           >
             <Plug size={16} />{carregadores.fase === "buscando" ? "Buscando…" : carregadores.fase === "on" ? "Ocultar carregadores" : "Carregadores"}
           </button>
+          {propriosNoMapa.length > 0 && (
+            <button
+              type="button"
+              className={`tdg-action tdg-action-ghost${mostrarProprios ? " ativa" : ""}`}
+              onClick={alternarProprios}
+            >
+              <BatteryCharging size={16} />{mostrarProprios ? "Ocultar meus pontos" : `Meus pontos (${propriosNoMapa.length})`}
+            </button>
+          )}
           {estado.fase === "pronto" && (
             <button
               type="button"

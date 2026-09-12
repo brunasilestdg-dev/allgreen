@@ -1,4 +1,5 @@
 import { ALCADAS } from "./dealDeskDomain.js";
+import { calcularGreenScore, PESOS_PROJECAO } from "./greenScoreDomain.js";
 
 const n = (value) => {
   const parsed = Number(value);
@@ -374,25 +375,16 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Indicadores mensais e anuais de impacto por cliente, contrato e operação.",
     permissions: ["read", "esg:manage"],
   }),
-  module("green-score", "Green Score", "esg", "/todogreen/green-score", {
+  // Consolidado: Green Score, Calculadora Ambiental, Tradutor ESG e Emissões da
+  // cadeia eram quatro cards que abriam o MESMO painel genérico. Agora há uma só
+  // porta — a Central ESG (EsgCenter) —, que de fato calcula o impacto, apura o
+  // Green Score com pesos versionados, guarda memória de cálculo e gera o texto
+  // para proposta. Uma fonte de verdade, sem card que promete o que não entrega.
+  module("central-esg", "Central ESG", "esg", "/todogreen/central-esg", {
     icon: "Gauge",
     order: 2,
-    description: "Nota proprietária de 0 a 100 com pesos versionados.",
-  }),
-  module("calculadora-ambiental", "Calculadora Ambiental", "esg", "/todogreen/calculadora-ambiental", {
-    icon: "Calculator",
-    order: 3,
-    description: "Simule CO2 evitado, diesel não consumido e equivalências ambientais.",
-  }),
-  module("tradutor-esg", "Tradutor ESG", "esg", "/todogreen/tradutor-esg", {
-    icon: "Languages",
-    order: 4,
-    description: "Converte números ambientais em textos auditáveis para propostas e relatórios.",
-  }),
-  module("escopo-3", "Emissões da cadeia logística", "esg", "/todogreen/escopo-3", {
-    icon: "Network",
-    order: 5,
-    description: "Memória de cálculo para apoiar inventários e governança da cadeia logística.",
+    description: "Green Score versionado, cálculo de CO2 evitado, texto auditável para proposta e memória da cadeia — num só lugar.",
+    permissions: ["read", "esg:manage"],
   }),
   module("relatorios-esg", "Relatórios ESG", "esg", "/todogreen/relatorios", {
     icon: "FileText",
@@ -541,6 +533,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Extrato bancário OFX, conciliação, saldo por conta, cobrança com aging e fechamento de competência.",
     permissions: ["read", "finance:manage"],
   }),
+  module("greenpay", "GreenPay", "financeiro", "/todogreen/greenpay", {
+    icon: "Wallet",
+    order: 39.5,
+    description: "Carteira dos motoristas: régua de ganhos por entrega e por km, e aprovação/pagamento — derivado das entregas, não da folha.",
+    permissions: ["read", "finance:manage"],
+  }),
   module("fiscal", "Fiscal", "financeiro", "/todogreen/fiscal", {
     icon: "ReceiptText",
     order: 39.5,
@@ -553,6 +551,7 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("operacoes", "Fretes", "operacao", "/todogreen/operacoes", { icon: "Workflow", order: 40 }),
   module("rotas", "Rotas", "operacao", "/todogreen/operacoes", { icon: "Route", order: 42 }),
   module("roteirizacao", "Roteirização", "operacao", "/todogreen/roteirizacao", { icon: "Route", order: 42.5 }),
+  module("pontos-recarga", "Pontos de recarga", "operacao", "/todogreen/pontos-recarga", { icon: "Zap", order: 42.6 }),
   module("viagens", "Viagens", "operacao", "/todogreen/operacoes", { icon: "Navigation", order: 43 }),
   module("veiculos", "Veículos e frota", "operacao", "/todogreen/motorista-frota", {
     icon: "Truck",
@@ -570,7 +569,7 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("pacotes", "Pacotes", "operacao", "/todogreen/operacoes", { icon: "Boxes", order: 47 }),
   module("ocupacao", "Ocupação", "indicadores", "/todogreen/indicadores", { icon: "Gauge", order: 48 }),
   module("produtividade", "Produtividade", "indicadores", "/todogreen/indicadores", { icon: "Activity", order: 49 }),
-  module("energia", "Energia", "esg", "/todogreen/esg", { icon: "Zap", order: 50 }),
+  module("energia", "Energia", "esg", "/todogreen/energia", { icon: "Zap", order: 50 }),
   module("ocorrencias", "Ocorrências", "ocorrencias", "/todogreen/ocorrencias", { icon: "AlertTriangle", order: 51 }),
   module("dp-rh", "Departamento Pessoal", "dp", "/todogreen/dp", {
     icon: "Users",
@@ -993,6 +992,10 @@ export const calculateEnvironmentalImpact = (inputs = {}, factors = {}) => {
 
 // Pesos padrão do Green Score — fonte única, para o motor e a régua ESG
 // editável (todogreen_environmental_parameters) partirem do mesmo lugar.
+// Pesos de fábrica da régua ESG editável (worker todogreen-environmental-
+// parameters). NÃO alimenta mais o cálculo do Green Score — este passou a ser
+// só do motor canônico (calcularGreenScore). Fica como o default histórico da
+// régua até a régua ser reescrita sobre os componentes canônicos.
 export const DEFAULT_GREEN_SCORE_WEIGHTS = Object.freeze({
   reduction: 35,
   lowEmissionKm: 20,
@@ -1002,28 +1005,36 @@ export const DEFAULT_GREEN_SCORE_WEIGHTS = Object.freeze({
   dataQuality: 10,
 });
 
-export const calculateGreenScore = (impact = {}, metrics = {}, weights = {}) => {
-  const w = { ...DEFAULT_GREEN_SCORE_WEIGHTS, ...weights };
-  const parts = {
-    reduction: Math.min(100, n(impact.reductionPercent)),
-    lowEmissionKm: Math.min(100, (n(impact.lowEmissionKm) / Math.max(1, n(metrics.lowEmissionKmTarget || 1000))) * 100),
-    cleanEnergy: Math.min(100, n(metrics.cleanEnergyPercent ?? 80)),
-    efficiency: Math.min(100, (n(metrics.occupancyPercent || 75) + n(metrics.productivityPercent || 75)) / 2),
-    targetEvolution: Math.min(100, n(metrics.targetEvolutionPercent || impact.reductionPercent || 0)),
-    dataQuality: Math.min(100, n(impact.dataQuality || metrics.dataQuality || 70)),
+// Unificado: o Green Score é SEMPRE calculado pelo motor canônico versionado
+// (greenScoreDomain.calcularGreenScore) — a mesma definição usada na Central
+// ESG. Antes havia um segundo cálculo aqui, com componentes e versão próprios,
+// e o mesmo cliente via um número no simulador e outro na operação. Agora a
+// projeção de precificação mapeia o seu contexto para as entradas canônicas e
+// usa o perfil de projeção (sem ocorrências, que ainda não existem na pré-venda).
+// A forma de retorno é preservada para o simulador, as propostas e o Deal Desk.
+export const calculateGreenScore = (impact = {}, metrics = {}) => {
+  const entradas = {
+    reducaoPercent: Math.min(100, n(impact.reductionPercent)),
+    ocupacaoPercent: Math.min(100, (n(metrics.occupancyPercent || 75) + n(metrics.productivityPercent || 75)) / 2),
+    frotaLimpaPercent: Math.min(100, n(metrics.cleanEnergyPercent ?? 80)),
+    qualidadeDados: Math.min(100, n(impact.dataQuality || metrics.dataQuality || 70)),
   };
-  const totalWeight = Object.values(w).reduce((sum, item) => sum + n(item), 0) || 1;
-  const score = Object.entries(parts).reduce(
-    (sum, [key, value]) => sum + value * n(w[key]),
-    0,
-  ) / totalWeight;
+  const canonico = calcularGreenScore(entradas, PESOS_PROJECAO);
+  const parts = Object.fromEntries(
+    Object.entries(canonico.componentes).map(([chave, componente]) => [chave, componente.valor]),
+  );
+  const weights = Object.fromEntries(
+    Object.entries(canonico.componentes).map(([chave, componente]) => [chave, componente.peso]),
+  );
   return {
-    score: Math.max(0, Math.min(100, roundMoney(score, 1))),
-    weights: w,
+    score: canonico.score,
+    weights,
     parts,
-    version: "green-score-v1",
-    disclaimer:
-      "Indicador proprietário da To Do Green. Não é certificação oficial e deve ser validado conforme a metodologia aplicada.",
+    version: canonico.versaoPesos,
+    weightsVersion: canonico.versaoPesos,
+    versaoPesos: canonico.versaoPesos,
+    componentes: canonico.componentes,
+    disclaimer: canonico.ressalva,
   };
 };
 

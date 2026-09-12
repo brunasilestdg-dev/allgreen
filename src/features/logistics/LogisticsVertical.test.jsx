@@ -771,10 +771,12 @@ describe("LogisticsVertical", () => {
 
   it("filters functions while preserving real workflow navigation", async () => {
     await renderarAutorizada();
+    // O Green Score deixou de ser um card próprio: colapsou na Central ESG, que
+    // o cita na descrição. A busca continua achando a rotina de ESG.
     fireEvent.change(screen.getByLabelText("Buscar rotinas To Do Green"), {
-      target: { value: "Green Score" },
+      target: { value: "Central ESG" },
     });
-    expect(screen.getAllByText("Green Score").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Central ESG").length).toBeGreaterThan(0);
     expect(screen.getByText("Pipeline")).toBeTruthy();
     expect(screen.queryByText("Remuneração Variável")).toBeNull();
   });

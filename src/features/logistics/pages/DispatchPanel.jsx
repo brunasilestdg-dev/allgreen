@@ -159,6 +159,19 @@ export default function DispatchPanel({ authHeaders, setToast }) {
           )}
           {resultado && (
             <div className="tdg-dispatch-resultado">
+              {/* Honestidade do motor: o operador precisa saber COMO a rota foi
+                  calculada. VROOM usa a rede viária real; o solver de
+                  contingência (nativo, sem dependência de rede) estima por
+                  distância em linha reta — bom para sequência, aproximado para
+                  quilometragem. Nunca apresentar a contingência como se fosse
+                  otimização por estrada. */}
+              {(resultado.tours || []).length > 0 && (
+                resultado.motor === "vroom" ? (
+                  <p className="tdg-dispatch-motor ok">Otimizado pelo motor VROOM · rede viária real.</p>
+                ) : (
+                  <p className="tdg-dispatch-motor aprox">Motor de contingência (solver nativo) · sequência otimizada com distância em linha reta, sem rede viária. As quilometragens são estimativas — conecte o motor de rotas próprio para cálculo por estrada.</p>
+                )
+              )}
               {(resultado.tours || []).map((tour) => (
                 <article className={`tdg-dispatch-tour${tour.motoristaId ? "" : " sem-motorista"}`} key={tour.veiculoId}>
                   <header><strong>{tour.prefixo || tour.placa || tour.veiculoId}</strong><small>{tour.motoristaNome || "sem motorista livre — não será aplicada"}{tour.placa ? ` · ${tour.placa}` : ""}</small></header>

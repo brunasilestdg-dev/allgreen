@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { duracaoMinutos, formatarDuracao, resumoDaJornada, turnoAberto } from "./driverJourneyDomain.js";
+import {
+  avaliarConformidadeJornada,
+  duracaoMinutos,
+  formatarDuracao,
+  resumoDaJornada,
+  turnoAberto,
+} from "./driverJourneyDomain.js";
 
 describe("jornada do motorista", () => {
   it("duração em minutos, sem negativo nem NaN", () => {
@@ -60,5 +66,79 @@ describe("jornada do motorista", () => {
     expect(r.minutosHoje).toBe(0);
     expect(r.podeIniciar).toBe(true);
     expect(r.podeEncerrar).toBe(false);
+  });
+});
+
+describe("conformidade da jornada (fadiga · Lei 13.103/2015)", () => {
+  it("sem turnos: conforme, sem inventar alerta", () => {
+    const r = avaliarConformidadeJornada([], "2026-09-11T20:00:00Z");
+    expect(r.conforme).toBe(true);
+    expect(r.alertas).toHaveLength(0);
+  });
+
+  it("jornada curta e normal: conforme", () => {
+    const r = avaliarConformidadeJornada(
+      [{ id: "1", dataServico: "2026-09-11", iniciadoEm: "2026-09-11T08:00:00Z", encerradoEm: "2026-09-11T12:00:00Z" }],
+      "2026-09-11T20:00:00Z",
+    );
+    expect(r.conforme).toBe(true);
+  });
+
+  it("direção contínua acima de 5h30 dispara alerta crítico", () => {
+    const r = avaliarConformidadeJornada(
+      [{ id: "1", dataServico: "2026-09-11", iniciadoEm: "2026-09-11T06:00:00Z", encerradoEm: "2026-09-11T12:00:00Z" }], // 6h
+      "2026-09-11T20:00:00Z",
+    );
+    const a = r.alertas.find((x) => x.tipo === "direcao_continua");
+    expect(a).toBeTruthy();
+    expect(a.gravidade).toBe("critica");
+    expect(r.conforme).toBe(false);
+  });
+
+  it("turno aberto que já passou do limite acende ao vivo com 'agora'", () => {
+    const r = avaliarConformidadeJornada(
+      [{ id: "1", dataServico: "2026-09-11", iniciadoEm: "2026-09-11T06:00:00Z" }], // sem fim
+      "2026-09-11T12:30:00Z", // 6h30 rodando
+    );
+    const a = r.alertas.find((x) => x.tipo === "direcao_continua");
+    expect(a).toBeTruthy();
+    expect(a.mensagem).toMatch(/em aberto/i);
+  });
+
+  it("interjornada abaixo de 11h entre dois turnos", () => {
+    const r = avaliarConformidadeJornada(
+      [
+        { id: "1", dataServico: "2026-09-10", iniciadoEm: "2026-09-10T08:00:00Z", encerradoEm: "2026-09-10T16:00:00Z" },
+        // só 8h de descanso até o próximo
+        { id: "2", dataServico: "2026-09-11", iniciadoEm: "2026-09-11T00:00:00Z", encerradoEm: "2026-09-11T03:00:00Z" },
+      ],
+      "2026-09-11T20:00:00Z",
+    );
+    const a = r.alertas.find((x) => x.tipo === "interjornada");
+    expect(a).toBeTruthy();
+    expect(a.gravidade).toBe("alta");
+  });
+
+  it("jornada diária somada acima do teto de 10h", () => {
+    const r = avaliarConformidadeJornada(
+      [
+        { id: "1", dataServico: "2026-09-11", iniciadoEm: "2026-09-11T05:00:00Z", encerradoEm: "2026-09-11T10:00:00Z" }, // 5h
+        { id: "2", dataServico: "2026-09-11", iniciadoEm: "2026-09-11T12:00:00Z", encerradoEm: "2026-09-11T18:00:00Z" }, // 6h
+      ],
+      "2026-09-11T20:00:00Z",
+    );
+    const a = r.alertas.find((x) => x.tipo === "jornada_diaria");
+    expect(a).toBeTruthy();
+    expect(a.minutos).toBe(660); // 11h
+  });
+
+  it("limites editáveis: empresa mais rígida", () => {
+    const r = avaliarConformidadeJornada(
+      [{ id: "1", dataServico: "2026-09-11", iniciadoEm: "2026-09-11T08:00:00Z", encerradoEm: "2026-09-11T12:00:00Z" }], // 4h
+      "2026-09-11T20:00:00Z",
+      { direcaoContinuaMaxMin: 180 }, // 3h
+    );
+    expect(r.conforme).toBe(false);
+    expect(r.alertas.some((x) => x.tipo === "direcao_continua")).toBe(true);
   });
 });

@@ -43,7 +43,10 @@ describe("perfil de desenvolvedor (Central de Integrações dev-only)", () => {
 describe("logistics vertical domain", () => {
   it("catalogs To Do Green modules and product-specific calculators", () => {
     expect(TODO_GREEN_FEATURE_COUNT).toBeGreaterThanOrEqual(53);
-    expect(TODO_GREEN_MODULE_CATALOG.some((item) => item.id === "green-score")).toBe(true);
+    // Os cards de ESG colapsaram na Central ESG (uma fonte de verdade): não há
+    // mais um card "green-score" separado que abria o painel genérico.
+    expect(TODO_GREEN_MODULE_CATALOG.some((item) => item.id === "central-esg")).toBe(true);
+    expect(TODO_GREEN_MODULE_CATALOG.some((item) => item.id === "green-score")).toBe(false);
     expect(LOGISTICS_PRODUCTS.map((item) => item.id)).toEqual([
       "middle-mile",
       "middle-mile-spot",
