@@ -18,6 +18,7 @@ import {
   PARAMETROS_GREENPAY_PADRAO,
   arredondarReais,
 } from "../../src/features/logistics/greenPayDomain.js";
+import { syspagProntidao } from "./todogreen-syspag.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -197,7 +198,13 @@ export async function handleTodoGreenGreenPay(request, env, access, user) {
 
   if (request.method === "GET" && recurso === "regua") {
     const regra = await lerRegua(env, ownerId);
-    return json({ configurada: reguaConfigurada(regra), regra: regra || PARAMETROS_GREENPAY_PADRAO });
+    // Prontidão da conexão SysPag (repasse PIX): só o status, nunca o segredo.
+    // Enquanto não configurada, o pagamento fica no razão interno.
+    return json({
+      configurada: reguaConfigurada(regra),
+      regra: regra || PARAMETROS_GREENPAY_PADRAO,
+      syspag: syspagProntidao(env),
+    });
   }
 
   if (request.method === "PUT" && recurso === "regua") {

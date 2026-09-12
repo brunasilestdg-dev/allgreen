@@ -114,6 +114,18 @@ describe("GreenPay — régua, geração e carteira", () => {
     expect(r.regra.valorPorEntrega).toBe(8);
   });
 
+  it("a régua expõe a prontidão SysPag DORMENTE por padrão, sem vazar segredo", async () => {
+    const r = await (await pedir("/api/todogreen/greenpay/regua", { token: dona.token })).json();
+    expect(r.syspag).toBeTruthy();
+    // Sem SYSPAG_API_TOKEN/SYSPAG_BASE_URL no ambiente de teste, fica desligado.
+    expect(r.syspag.habilitado).toBe(false);
+    expect(r.syspag.faltando.length).toBeGreaterThan(0);
+    // O status carrega o NOME da variável, nunca um valor de segredo.
+    const bruto = JSON.stringify(r.syspag);
+    expect(bruto).toContain("SYSPAG_API_TOKEN");
+    expect(bruto).not.toMatch(/token["']?\s*[:=]\s*["'][A-Za-z0-9]{8,}/);
+  });
+
   it("a meta mensal é gravada (config_json, sem migração) e volta na leitura e na carteira", async () => {
     await pedir("/api/todogreen/greenpay/regua", {
       method: "PUT", token: dona.token,

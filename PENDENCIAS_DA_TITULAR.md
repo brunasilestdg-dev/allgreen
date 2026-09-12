@@ -186,6 +186,32 @@ Não é mais necessário `wrangler secret put` para isso. As variáveis de ambie
 antigas (`SEARCH_API_KEY`, `SEARXNG_BASE_URL` no cofre) continuam funcionando
 como padrão para todos os espaços, mas a tela acima é o caminho recomendado.
 
+### D. SysPag — repasse PIX do GreenPay ao motorista
+
+O adaptador **já está pronto e desligado** (igual ao fiscal e ao WhatsApp): hoje,
+quando você PAGA um lote aprovado do motorista, o valor vira "pago" no razão
+interno; com a SysPag ligada, ele pode SAIR de fato por PIX. A tela do GreenPay
+(gestão) mostra o status "Repasse SysPag (PIX): Não configurado" até a credencial
+existir. **Nada aqui obriga serviço pago** — só liga quando você quiser.
+
+Para ligar, preciso que você levante com a SysPag e cadastre no cofre:
+
+1. `npx wrangler secret put SYSPAG_API_TOKEN` — a credencial de acesso (o valor
+   fica **só** no cofre da Cloudflare; nunca no código nem no banco).
+2. `npx wrangler secret put SYSPAG_BASE_URL` — a URL base da API (produção).
+3. (Se a SysPag usar outro caminho/cabeçalho) `SYSPAG_PAGAMENTO_PATH`,
+   `SYSPAG_AUTH_HEADER`, `SYSPAG_AUTH_SCHEME` — opcionais, com padrões sensatos.
+
+Perguntas a levar à SysPag (para eu terminar de ligar sem retrabalho):
+
+- Qual a URL base da API (produção e homologação)?
+- Como se emite a credencial e qual o cabeçalho de autenticação (Bearer?)?
+- Qual o endpoint e o corpo para criar um pagamento/repasse PIX?
+- Há webhook de confirmação de liquidação do pagamento?
+- A chave PIX é do motorista: onde a operação captura e valida essa chave?
+  (hoje o cadastro do motorista não guarda chave PIX — é o campo que falta para
+  o repasse sair; posso adicioná-lo quando você confirmar o fluxo.)
+
 
 ## 🚫 O que não é possível construir, e por quê
 

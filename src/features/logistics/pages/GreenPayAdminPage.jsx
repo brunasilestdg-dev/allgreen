@@ -106,6 +106,28 @@ export default function GreenPayAdminPage({ authHeaders, setToast }) {
         {!regua?.configurada && <p className="tdg-driver-nota">Sem régua com valor, a carteira do motorista aparece como "não configurada" — não mostramos R$ 0 como se fosse ganho.</p>}
       </article>
 
+      {/* Conexão SysPag (repasse PIX). Só status — o segredo mora no cofre.
+          Enquanto não configurada, pagar mantém o valor no razão interno. */}
+      {regua?.syspag && (
+        <article className="tdg-work-area">
+          <div className="tdg-work-area-heading">
+            <span><Wallet size={20} /></span>
+            <div>
+              <strong>Repasse SysPag (PIX)</strong>
+              <small className={regua.syspag.habilitado ? "tdg-syspag-on" : "tdg-syspag-off"}>
+                {regua.syspag.habilitado ? "Conectado — pronto para repassar" : "Não configurado"}
+              </small>
+            </div>
+          </div>
+          <p className="tdg-driver-nota">{regua.syspag.mensagem}</p>
+          {regua.syspag.faltando?.length > 0 && (
+            <ul className="tdg-syspag-faltando">
+              {regua.syspag.faltando.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+          )}
+        </article>
+      )}
+
       <article className="tdg-work-area">
         <div className="tdg-work-area-heading"><span><Wallet size={20} /></span><div><strong>Por motorista</strong><small>saldo, aprovação e pagamento</small></div></div>
         {carregando ? (
