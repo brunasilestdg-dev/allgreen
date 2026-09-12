@@ -133,6 +133,90 @@ describe("sessão do motorista", () => {
   });
 });
 
+// Chave PIX do repasse (GreenPay): o motorista informa a PRÓPRIA no portal. O
+// recorte é o vínculo — ele só toca o próprio cadastro. A chave é validada pelo
+// tipo antes de gravar: nada de dinheiro para destino malformado.
+describe("chave PIX self-service do motorista", () => {
+  it("grava a PRÓPRIA chave (validada e normalizada) e a sessão passa a mostrá-la", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/pix", {
+      method: "POST", token: joao.token, body: { tipo: "telefone", chave: "(11) 98765-4321" },
+    });
+    expect(r.status).toBe(200);
+    const d = await r.json();
+    expect(d.ok).toBe(true);
+    expect(d.pixChave).toBe("5511987654321"); // normalizada (DDI 55 + dígitos)
+    expect(d.pixTipo).toBe("telefone");
+
+    // Gravou no cadastro do João, com a marca de que foi ELE quem atualizou.
+    const linha = await env.DB.prepare(
+      "SELECT pix_key, pix_key_type, pix_self_updated_at FROM todogreen_drivers WHERE id='drv-joao'",
+    ).first();
+    expect(linha.pix_key).toBe("5511987654321");
+    expect(linha.pix_key_type).toBe("telefone");
+    expect(linha.pix_self_updated_at).toBeTruthy();
+
+    // A sessão do João reflete a chave; a da Maria não foi tocada (recorte).
+    const sJoao = await (await pedir("/api/todogreen/driver-portal/sessao", { token: joao.token })).json();
+    expect(sJoao.motorista.pixChave).toBe("5511987654321");
+    const sMaria = await (await pedir("/api/todogreen/driver-portal/sessao", { token: maria.token })).json();
+    expect(sMaria.motorista.pixChave).toBe("");
+  });
+
+  it("chave malformada é recusada (400) e nada é gravado", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/pix", {
+      method: "POST", token: maria.token, body: { tipo: "cpf", chave: "111.111.111-11" },
+    });
+    expect(r.status).toBe(400);
+    const linha = await env.DB.prepare("SELECT pix_key FROM todogreen_drivers WHERE id='drv-maria'").first();
+    expect(linha.pix_key).toBe("");
+  });
+
+  it("sem cadastro ligado ao e-mail, não grava chave PIX (403)", async () => {
+    const r = await pedir("/api/todogreen/driver-portal/pix", {
+      method: "POST", token: semCadastro.token, body: { tipo: "email", chave: "x@y.com" },
+    });
+    expect(r.status).toBe(403);
+  });
+});
+
+// A operação vê e corrige a chave PIX no cadastro do ERP (master-data). Mesma
+// regra de honestidade do portal: correção malformada é recusada. E a marca
+// pix_self_updated_at (do próprio motorista) NÃO é tocada por uma correção da
+// equipe — a operação distingue o que ela mesma corrigiu do que o motorista deu.
+describe("chave PIX visível e corrigível pela operação no ERP", () => {
+  it("o cadastro expõe a chave e a operação a corrige (validada, sem carimbar self)", async () => {
+    const antes = await (await pedir("/api/todogreen/master-data/drivers/drv-maria", { token: dona.token })).json();
+    expect(antes.record.pixKey).toBe("");
+    expect(antes.record.pixKeyType).toBe("");
+
+    const r = await pedir("/api/todogreen/master-data/drivers/drv-maria", {
+      method: "PATCH", token: dona.token,
+      body: { revision: antes.record.revision, pixKey: "529.982.247-25", pixKeyType: "cpf" },
+    });
+    expect(r.status).toBe(200);
+    const d = await r.json();
+    expect(d.record.pixKey).toBe("52998224725"); // normalizada
+    expect(d.record.pixKeyType).toBe("cpf");
+
+    const linha = await env.DB.prepare(
+      "SELECT pix_key, pix_self_updated_at FROM todogreen_drivers WHERE id='drv-maria'",
+    ).first();
+    expect(linha.pix_key).toBe("52998224725");
+    expect(linha.pix_self_updated_at).toBeFalsy(); // correção da equipe não é "self"
+  });
+
+  it("correção com chave malformada é recusada (400) e não sobrescreve a boa", async () => {
+    const atual = await (await pedir("/api/todogreen/master-data/drivers/drv-maria", { token: dona.token })).json();
+    const r = await pedir("/api/todogreen/master-data/drivers/drv-maria", {
+      method: "PATCH", token: dona.token,
+      body: { revision: atual.record.revision, pixKey: "111.111.111-11", pixKeyType: "cpf" },
+    });
+    expect(r.status).toBe(400);
+    const linha = await env.DB.prepare("SELECT pix_key FROM todogreen_drivers WHERE id='drv-maria'").first();
+    expect(linha.pix_key).toBe("52998224725"); // a boa continua lá
+  });
+});
+
 describe("minhas viagens são só as minhas", () => {
   it("cada motorista vê o próprio recorte", async () => {
     const doJoao = await (await pedir("/api/todogreen/driver-portal/viagens", { token: joao.token })).json();

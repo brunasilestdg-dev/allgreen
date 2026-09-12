@@ -202,15 +202,24 @@ Para ligar, preciso que você levante com a SysPag e cadastre no cofre:
 3. (Se a SysPag usar outro caminho/cabeçalho) `SYSPAG_PAGAMENTO_PATH`,
    `SYSPAG_AUTH_HEADER`, `SYSPAG_AUTH_SCHEME` — opcionais, com padrões sensatos.
 
+**Chave PIX do motorista — já resolvida (é o destino do repasse).** O motorista
+informa a PRÓPRIA chave no portal dele (aba Perfil → "Chave PIX do repasse"),
+escolhendo o tipo (CPF, e-mail, telefone ou aleatória); o sistema valida a chave
+pelo tipo antes de gravar (chave torta é recusada, nunca "consertada" às
+escondidas). A operação **vê e corrige** a mesma chave no cadastro do ERP
+(Cadastros → Motoristas), com a mesma validação. Quando a SysPag estiver ligada,
+o "Pagar" lê essa chave e dispara o repasse; se o motorista ainda não informou a
+chave, o pagamento **não** é marcado como pago — o dinheiro não sai sem destino.
+
 Perguntas a levar à SysPag (para eu terminar de ligar sem retrabalho):
 
 - Qual a URL base da API (produção e homologação)?
 - Como se emite a credencial e qual o cabeçalho de autenticação (Bearer?)?
 - Qual o endpoint e o corpo para criar um pagamento/repasse PIX?
-- Há webhook de confirmação de liquidação do pagamento?
-- A chave PIX é do motorista: onde a operação captura e valida essa chave?
-  (hoje o cadastro do motorista não guarda chave PIX — é o campo que falta para
-  o repasse sair; posso adicioná-lo quando você confirmar o fluxo.)
+- Há webhook de confirmação de liquidação do pagamento? (Hoje eu registro o lote
+  como pago quando a SysPag aceita o disparo; o id externo do pagamento volta na
+  resposta. Guardar esse id junto ao lote é um acréscimo pequeno que faço quando
+  o contrato da API estiver confirmado.)
 
 
 ## 🚫 O que não é possível construir, e por quê

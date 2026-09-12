@@ -16,6 +16,7 @@ import { marcarParadaConcluida, statusPelaConclusao } from "../../src/features/l
 import { avaliarChecklist, ITENS_CHECKLIST } from "../../src/features/logistics/driverChecklistDomain.js";
 import { avaliarConformidadeJornada, duracaoMinutos, resumoDaJornada } from "../../src/features/logistics/driverJourneyDomain.js";
 import { calcularScoreMotorista, compararScoreMotorista } from "../../src/features/logistics/driverScoreDomain.js";
+import { validarChavePix } from "../../src/features/logistics/pixDomain.js";
 import { carteiraDoMotorista, gerarGanhosDaEntrega } from "./todogreen-greenpay.js";
 import { resumoTelemetriaVeiculo } from "../../src/features/logistics/driverVehicleDomain.js";
 
@@ -155,8 +156,31 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
         // Imagem da CNH que o motorista subiu (fica disponível à operação).
         cnhImagemUrl: motorista.cnh_image_url || "",
         disponibilidade: motorista.availability_status || "",
+        // Chave PIX do repasse: o motorista informa e vê a própria aqui; a
+        // operação vê/corrige no cadastro do ERP.
+        pixChave: motorista.pix_key || "",
+        pixTipo: motorista.pix_key_type || "",
+        pixAtualizadaEm: motorista.pix_self_updated_at || "",
       },
     });
+  }
+
+  // O motorista informa a PRÓPRIA chave PIX (destino do repasse GreenPay). Só a
+  // dele — o recorte é o vínculo. A chave é validada pelo tipo antes de gravar;
+  // chave malformada não entra (dinheiro não vai para destino inválido).
+  if (request.method === "POST" && recurso === "pix") {
+    if (!motorista) return json({ error: "Seu e-mail não está ligado a um cadastro de motorista." }, 403);
+    const corpo = await request.json().catch(() => ({}));
+    const tipo = texto(corpo.tipo, 20);
+    const validacao = validarChavePix(tipo, corpo.chave);
+    if (!validacao.valido) return json({ error: validacao.erro }, 400);
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `UPDATE todogreen_drivers
+        SET pix_key = ?, pix_key_type = ?, pix_self_updated_at = ?, updated_at = ?
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+    ).bind(validacao.chave, tipo, agora, agora, motorista.id, TENANT_ID, access.ownerId).run();
+    return json({ ok: true, pixChave: validacao.chave, pixTipo: tipo, pixAtualizadaEm: agora });
   }
 
   // O motorista sobe a foto da CNH e confirma a validade pelo próprio app; a
