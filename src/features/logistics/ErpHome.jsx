@@ -63,7 +63,7 @@ const ROLE_LABEL = {
   vendedor: "Comercial", pricing: "Precificação", produtos: "Produtos", planejamento: "Planejamento",
   financeiro: "Financeiro", operacoes: "Operações", marketing: "Marketing",
   sustentabilidade: "Sustentabilidade", auditor: "Auditoria", rh: "DP/RH",
-  desenvolvedor: "Desenvolvedor",
+  colaborador: "Colaborador", desenvolvedor: "Desenvolvedor",
 };
 
 const dueLabel = (task) => {

@@ -2089,6 +2089,23 @@
 .tdg-driver-pix-campo > span { color: #173d31; font-size: .8rem; font-weight: 700; }
 .tdg-driver-pix-campo select,
 .tdg-driver-pix-campo input { border: 1px solid #b9d3c5; border-radius: 9px; font-size: 1rem; min-height: 44px; padding: 8px 12px; width: 100%; }
+.tdg-colab-cabecalho { align-items: center; display: flex; gap: 12px; margin-bottom: 4px; }
+.tdg-colab-cabecalho strong { display: block; font-size: 1.05rem; }
+.tdg-colab-cabecalho small { color: #6d8377; }
+.tdg-colab-nota { display: grid; gap: 10px; }
+.tdg-colab-confere { border-radius: 8px; padding: 6px 10px; }
+.tdg-colab-confere.confere { background: #e7f5ee; color: #1c6b47; }
+.tdg-colab-confere.acima, .tdg-colab-confere.abaixo { background: #fdf2e3; color: #94631a; }
+.tdg-colab-notas { display: grid; gap: 10px; list-style: none; margin: 6px 0 0; padding: 0; }
+.tdg-colab-notas li { border: 1px solid #e0ece6; border-radius: 10px; display: grid; gap: 4px; padding: 10px 12px; }
+.tdg-colab-notas-valor { color: #173d31; font-weight: 700; }
+.tdg-colab-notas-valor em { color: #94631a; font-style: normal; font-weight: 500; }
+.tdg-colab-status { border-radius: 999px; font-size: .72rem; font-weight: 700; margin-left: 8px; padding: 2px 9px; text-transform: uppercase; }
+.tdg-colab-status.em_analise { background: #eaf1fb; color: #2b5fb0; }
+.tdg-colab-status.aprovada { background: #e7f5ee; color: #1c6b47; }
+.tdg-colab-status.paga { background: #dff3e6; color: #14683f; }
+.tdg-colab-status.recusada { background: #fdeaea; color: #a12d2d; }
+.tdg-colab-status.cancelada { background: #eee; color: #666; }
 .tdg-driver-reenviar {
   background: #0b9f8f; border: 0; border-radius: 10px; color: #fff; cursor: pointer;
   font-size: .9rem; font-weight: 700; margin-top: 4px; min-height: 44px; width: 100%;
