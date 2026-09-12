@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   capacidadeDoVeiculo,
   demandaDaOperacao,
+  habilidadesDoVeiculo,
+  habilidadesExigidas,
   interpretarDespachoVroom,
   janelaDeEntrega,
   montarProblemaVroomDespacho,
@@ -152,6 +154,76 @@ describe("To Do Green dispatch VROOM adapter", () => {
     expect(janelaDeEntrega({ promised_at: "2026-09-11T00:00:00Z" }, inicio, fim)).toEqual([[inicio, fim]]);
     expect(janelaDeEntrega({ promised_at: "2026-09-10T10:00:00Z" }, inicio, fim)).toBeNull();
     expect(janelaDeEntrega({}, inicio, fim)).toBeNull();
+  });
+
+  it("extrai habilidades exigidas da carga e capacidades do veículo, sem acento e normalizadas", () => {
+    expect(habilidadesExigidas({ fields_json: JSON.stringify({ requiredVehicleClass: "Refrigerado" }) }))
+      .toEqual(["refrigerado"]);
+    expect(habilidadesExigidas({ fields_json: JSON.stringify({ requiredSkills: ["Baú", "Munck"] }) }))
+      .toEqual(["bau", "munck"]);
+    expect(habilidadesExigidas({ fields_json: JSON.stringify({ refrigerado: true }) }))
+      .toEqual(["refrigerado"]);
+    // Sem exigência declarada ⇒ nenhuma habilidade (dormente).
+    expect(habilidadesExigidas({ fields_json: "{}" })).toEqual([]);
+
+    expect(habilidadesDoVeiculo({ category: "Refrigerado" })).toEqual(["refrigerado"]);
+    expect(habilidadesDoVeiculo({ fields_json: JSON.stringify({ skills: ["Baú", "Munck"] }), category: "" }))
+      .toEqual(["bau", "munck"]);
+  });
+
+  it("dormente: sem exigência declarada, nenhum job/veículo recebe skills (zero regressão)", () => {
+    const built = montarProblemaVroomDespacho({
+      operacoes: [{ id: "op1", delivery_lat: -23.55, delivery_lng: -46.63, fields_json: "{}" }],
+      veiculos: [{ id: "v1", plate: "ABC1D23" }],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora: new Date("2026-09-10T12:00:00Z"),
+    });
+    expect(built.ok).toBe(true);
+    expect(built.payload.jobs[0].skills).toBeUndefined();
+    expect(built.payload.vehicles[0].skills).toBeUndefined();
+  });
+
+  it("casa carga↔veículo: a parada e o veículo apto compartilham o mesmo id de skill; o inapto não o tem", () => {
+    const built = montarProblemaVroomDespacho({
+      operacoes: [{
+        id: "op-frio",
+        delivery_lat: -23.55, delivery_lng: -46.63,
+        fields_json: JSON.stringify({ requiredVehicleClass: "refrigerado" }),
+      }],
+      veiculos: [
+        { id: "v-seco", plate: "SEC0A00", category: "baú" },
+        { id: "v-frio", plate: "FRI0A00", category: "Refrigerado" },
+      ],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora: new Date("2026-09-10T12:00:00Z"),
+    });
+    expect(built.ok).toBe(true);
+    const skillFrio = built.payload.jobs[0].skills;
+    expect(Array.isArray(skillFrio) && skillFrio.length).toBe(1);
+    const veiculoFrio = built.payload.vehicles.find((v) => v.description === "v-frio");
+    const veiculoSeco = built.payload.vehicles.find((v) => v.description === "v-seco");
+    // O apto contém a skill exigida; o inapto não — é isso que faz o VROOM só
+    // atribuir carga refrigerada a veículo refrigerado.
+    expect(veiculoFrio.skills).toContain(skillFrio[0]);
+    expect(veiculoSeco.skills || []).not.toContain(skillFrio[0]);
+  });
+
+  it("aplica a exigência de skill também a shipments (coleta+entrega) no nível do envio", () => {
+    const built = montarProblemaVroomDespacho({
+      operacoes: [{
+        id: "op-munck",
+        pickup_lat: -23.60, pickup_lng: -46.70,
+        delivery_lat: -23.50, delivery_lng: -46.80,
+        fields_json: JSON.stringify({ requiredSkills: ["munck"] }),
+      }],
+      veiculos: [{ id: "v-munck", plate: "MNK0A00", fields_json: JSON.stringify({ skills: ["munck"] }) }],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora: new Date("2026-09-10T12:00:00Z"),
+    });
+    expect(built.ok).toBe(true);
+    const skills = built.payload.shipments[0].skills;
+    expect(Array.isArray(skills) && skills.length).toBe(1);
+    expect(built.payload.vehicles[0].skills).toContain(skills[0]);
   });
 
   it("converte tarefas não atribuídas de volta para operação", () => {

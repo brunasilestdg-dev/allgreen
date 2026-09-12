@@ -72,6 +72,65 @@ export function capacidadeDoVeiculo(vehicle) {
   ];
 }
 
+// ===== Habilidades (skills): casar veículo ↔ carga =====
+//
+// Capacidade (peso/volume/pallets) já barra carga grande demais. Mas muita
+// carga exige um TIPO de veículo — refrigerado, baú, moto para expresso — que
+// nenhuma dimensão numérica captura. O VROOM resolve isso com `skills`
+// inteiras: um veículo só atende uma parada se possuir TODAS as habilidades
+// que a parada exige. Aqui a restrição é DORMENTE: só entra quando a operação
+// declara explicitamente uma exigência (nada declarado ⇒ qualquer veículo
+// serve, sem regressão). Assim não depende de migração nem de recadastro —
+// a exigência vive no fields_json que já existe, e a habilidade do veículo sai
+// da `category` cadastrada + fields_json.skills.
+
+const semAcento = (valor) =>
+  String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase();
+
+const tokensDeLista = (valor) => {
+  if (Array.isArray(valor)) return valor.map(semAcento).filter(Boolean);
+  if (typeof valor === "string") return valor.split(/[,;/|]+/).map(semAcento).filter(Boolean);
+  return [];
+};
+
+// O que a CARGA exige — apenas exigências explícitas nos campos da operação.
+export function habilidadesExigidas(op) {
+  const fields = parseFields(op?.fields_json ?? op?.fields);
+  const tokens = new Set([
+    ...tokensDeLista(fields.requiredSkills ?? fields.habilidadesExigidas),
+    ...tokensDeLista(fields.requiredVehicleClass ?? fields.vehicleClass ?? fields.classeVeiculo),
+  ]);
+  if (fields.requiresRefrigeration === true || fields.refrigerado === true) tokens.add("refrigerado");
+  return [...tokens];
+}
+
+// O que o VEÍCULO sabe fazer — união da categoria cadastrada com as skills
+// declaradas no fields_json. Ser generoso aqui é seguro: skill sobrando no
+// veículo não muda nada; skill faltando é o que restringe.
+export function habilidadesDoVeiculo(vehicle) {
+  const fields = parseFields(vehicle?.fields_json ?? vehicle?.fields);
+  const tokens = new Set([
+    ...tokensDeLista(fields.skills ?? fields.habilidades),
+    ...tokensDeLista(vehicle?.category),
+  ]);
+  return [...tokens];
+}
+
+// Registro string→inteiro compartilhado no MESMO problema: o VROOM exige ids
+// inteiros e o casamento só funciona se veículo e parada usarem o mesmo id
+// para o mesmo token. Ordem de atribuição não importa — só a consistência.
+const criarRegistroHabilidades = () => {
+  const mapa = new Map();
+  return (token) => {
+    if (!mapa.has(token)) mapa.set(token, mapa.size + 1);
+    return mapa.get(token);
+  };
+};
+
 const coord = (lat, lng) => {
   const latitude = Number(lat);
   const longitude = Number(lng);
@@ -115,11 +174,14 @@ export function montarProblemaVroomDespacho({
   const inicio = epochSeconds(startAt);
   const fim = inicio + DEFAULT_SHIFT_HOURS * 3600;
 
+  const idDaHabilidade = criarRegistroHabilidades();
+
   const vehicleByVroomId = new Map();
   const operationByTaskId = new Map();
   const vehicles = veiculos.map((vehicle, index) => {
     const id = index + 1;
     vehicleByVroomId.set(id, vehicle);
+    const skills = habilidadesDoVeiculo(vehicle).map(idDaHabilidade);
     return {
       id,
       description: String(vehicle.id || vehicle.plate || id),
@@ -127,6 +189,7 @@ export function montarProblemaVroomDespacho({
       end: depotCoord,
       capacity: capacidadeDoVeiculo(vehicle),
       time_window: [inicio, fim],
+      ...(skills.length ? { skills } : {}),
     };
   });
 
@@ -142,6 +205,8 @@ export function montarProblemaVroomDespacho({
     const demand = demandaDaOperacao(operation);
     const pickup = coord(operation.pickup_lat, operation.pickup_lng);
     const janela = janelaDeEntrega(operation, inicio, fim);
+    const skills = habilidadesExigidas(operation).map(idDaHabilidade);
+    const restricao = skills.length ? { skills } : {};
 
     if (pickup) {
       const pickupId = taskId++;
@@ -150,6 +215,7 @@ export function montarProblemaVroomDespacho({
       operationByTaskId.set(deliveryId, { operationId, tipo: "entrega" });
       shipments.push({
         amount: demand,
+        ...restricao,
         pickup: {
           id: pickupId,
           location: pickup,
@@ -173,6 +239,7 @@ export function montarProblemaVroomDespacho({
         service: DEFAULT_STOP_DURATION_S,
         delivery: demand,
         description: operationId,
+        ...restricao,
         ...(janela ? { time_windows: janela } : {}),
       });
     }
