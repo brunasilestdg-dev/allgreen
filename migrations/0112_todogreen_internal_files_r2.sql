@@ -1,0 +1,11 @@
+-- Mídia do cofre (POD, CNH, comprovantes) em R2 em vez de base64 no D1.
+--
+-- Hoje cada arquivo vira ~40 linhas de base64 em todogreen_internal_file_chunks
+-- (overhead de 33% e consumo do D1). Esta coluna marca os arquivos guardados no
+-- R2 (object storage da Cloudflare): quando preenchida, o download vem do R2 e
+-- não há chunks no D1. Nula = arquivo legado no D1 (chunks), que continua sendo
+-- servido normalmente. Migração aditiva e retrocompatível.
+--
+-- O R2 é "prepared-and-off": só entra em uso quando o binding MEDIA_BUCKET
+-- existir no Worker (ver PENDENCIAS_DA_TITULAR.md); sem ele, tudo segue no D1.
+ALTER TABLE todogreen_internal_files ADD COLUMN r2_key TEXT;

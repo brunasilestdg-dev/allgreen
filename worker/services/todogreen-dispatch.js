@@ -87,7 +87,7 @@ const carregarCandidatos = async (env, access) => {
     env.DB.prepare(
       `SELECT o.id, o.client_id, o.driver_id, o.vehicle_plate, o.delivery_lat, o.delivery_lng,
               o.pickup_lat, o.pickup_lng, o.reference, o.service_date, o.origin, o.destination,
-              o.fields_json, c.name AS client_name
+              o.promised_at, o.fields_json, c.name AS client_name
          FROM todogreen_client_operations o
          LEFT JOIN todogreen_clients c ON c.id = o.client_id AND c.workspace_owner_id = o.workspace_owner_id
         WHERE o.workspace_owner_id = ? AND o.archived_at IS NULL AND o.delivered_at IS NULL
@@ -100,7 +100,8 @@ const carregarCandidatos = async (env, access) => {
         ORDER BY full_name ASC LIMIT 100`,
     ).bind(access.ownerId).all(),
     env.DB.prepare(
-      `SELECT id, prefix, plate, pallet_capacity, payload_kg, volume_m3 FROM todogreen_fleet_vehicles
+      `SELECT id, prefix, plate, category, pallet_capacity, payload_kg, volume_m3, fields_json
+         FROM todogreen_fleet_vehicles
         WHERE workspace_owner_id = ? AND status = 'available' AND archived_at IS NULL
         ORDER BY prefix ASC LIMIT 100`,
     ).bind(access.ownerId).all(),

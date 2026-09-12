@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   capacidadeDoVeiculo,
   demandaDaOperacao,
+  habilidadesDoVeiculo,
+  habilidadesExigidas,
   interpretarDespachoVroom,
+  janelaDeEntrega,
   montarProblemaVroomDespacho,
 } from "../worker/services/todogreen-dispatch-vroom.js";
 
@@ -125,6 +128,102 @@ describe("To Do Green dispatch VROOM adapter", () => {
       { operationId: "op2", tipo: "coleta" },
       { operationId: "op2", tipo: "entrega" },
     ]);
+  });
+
+  it("leva o prazo de entrega (promised_at) como janela de tempo por parada", () => {
+    const agora = new Date("2026-09-10T12:00:00Z");
+    const inicio = Math.floor(agora.getTime() / 1000);
+    const fim = inicio + 8 * 3600;
+
+    // Prazo dentro do turno → janela [início, prazo]. Sem prazo → sem janela.
+    const built = montarProblemaVroomDespacho({
+      operacoes: [
+        { id: "com-prazo", delivery_lat: -23.55, delivery_lng: -46.63, fields_json: "{}", promised_at: "2026-09-10T14:00:00Z" },
+        { id: "sem-prazo", delivery_lat: -23.50, delivery_lng: -46.60, fields_json: "{}" },
+      ],
+      veiculos: [{ id: "v1" }],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora,
+    });
+    const comPrazo = built.payload.jobs.find((j) => j.description === "com-prazo");
+    const semPrazo = built.payload.jobs.find((j) => j.description === "sem-prazo");
+    expect(comPrazo.time_windows).toEqual([[inicio, Math.floor(new Date("2026-09-10T14:00:00Z").getTime() / 1000)]]);
+    expect(semPrazo.time_windows).toBeUndefined();
+
+    // Unitário do helper: prazo além do turno é limitado ao fim; prazo vencido não restringe.
+    expect(janelaDeEntrega({ promised_at: "2026-09-11T00:00:00Z" }, inicio, fim)).toEqual([[inicio, fim]]);
+    expect(janelaDeEntrega({ promised_at: "2026-09-10T10:00:00Z" }, inicio, fim)).toBeNull();
+    expect(janelaDeEntrega({}, inicio, fim)).toBeNull();
+  });
+
+  it("extrai habilidades exigidas da carga e capacidades do veículo, sem acento e normalizadas", () => {
+    expect(habilidadesExigidas({ fields_json: JSON.stringify({ requiredVehicleClass: "Refrigerado" }) }))
+      .toEqual(["refrigerado"]);
+    expect(habilidadesExigidas({ fields_json: JSON.stringify({ requiredSkills: ["Baú", "Munck"] }) }))
+      .toEqual(["bau", "munck"]);
+    expect(habilidadesExigidas({ fields_json: JSON.stringify({ refrigerado: true }) }))
+      .toEqual(["refrigerado"]);
+    // Sem exigência declarada ⇒ nenhuma habilidade (dormente).
+    expect(habilidadesExigidas({ fields_json: "{}" })).toEqual([]);
+
+    expect(habilidadesDoVeiculo({ category: "Refrigerado" })).toEqual(["refrigerado"]);
+    expect(habilidadesDoVeiculo({ fields_json: JSON.stringify({ skills: ["Baú", "Munck"] }), category: "" }))
+      .toEqual(["bau", "munck"]);
+  });
+
+  it("dormente: sem exigência declarada, nenhum job/veículo recebe skills (zero regressão)", () => {
+    const built = montarProblemaVroomDespacho({
+      operacoes: [{ id: "op1", delivery_lat: -23.55, delivery_lng: -46.63, fields_json: "{}" }],
+      veiculos: [{ id: "v1", plate: "ABC1D23" }],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora: new Date("2026-09-10T12:00:00Z"),
+    });
+    expect(built.ok).toBe(true);
+    expect(built.payload.jobs[0].skills).toBeUndefined();
+    expect(built.payload.vehicles[0].skills).toBeUndefined();
+  });
+
+  it("casa carga↔veículo: a parada e o veículo apto compartilham o mesmo id de skill; o inapto não o tem", () => {
+    const built = montarProblemaVroomDespacho({
+      operacoes: [{
+        id: "op-frio",
+        delivery_lat: -23.55, delivery_lng: -46.63,
+        fields_json: JSON.stringify({ requiredVehicleClass: "refrigerado" }),
+      }],
+      veiculos: [
+        { id: "v-seco", plate: "SEC0A00", category: "baú" },
+        { id: "v-frio", plate: "FRI0A00", category: "Refrigerado" },
+      ],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora: new Date("2026-09-10T12:00:00Z"),
+    });
+    expect(built.ok).toBe(true);
+    const skillFrio = built.payload.jobs[0].skills;
+    expect(Array.isArray(skillFrio) && skillFrio.length).toBe(1);
+    const veiculoFrio = built.payload.vehicles.find((v) => v.description === "v-frio");
+    const veiculoSeco = built.payload.vehicles.find((v) => v.description === "v-seco");
+    // O apto contém a skill exigida; o inapto não — é isso que faz o VROOM só
+    // atribuir carga refrigerada a veículo refrigerado.
+    expect(veiculoFrio.skills).toContain(skillFrio[0]);
+    expect(veiculoSeco.skills || []).not.toContain(skillFrio[0]);
+  });
+
+  it("aplica a exigência de skill também a shipments (coleta+entrega) no nível do envio", () => {
+    const built = montarProblemaVroomDespacho({
+      operacoes: [{
+        id: "op-munck",
+        pickup_lat: -23.60, pickup_lng: -46.70,
+        delivery_lat: -23.50, delivery_lng: -46.80,
+        fields_json: JSON.stringify({ requiredSkills: ["munck"] }),
+      }],
+      veiculos: [{ id: "v-munck", plate: "MNK0A00", fields_json: JSON.stringify({ skills: ["munck"] }) }],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora: new Date("2026-09-10T12:00:00Z"),
+    });
+    expect(built.ok).toBe(true);
+    const skills = built.payload.shipments[0].skills;
+    expect(Array.isArray(skills) && skills.length).toBe(1);
+    expect(built.payload.vehicles[0].skills).toContain(skills[0]);
   });
 
   it("converte tarefas não atribuídas de volta para operação", () => {
