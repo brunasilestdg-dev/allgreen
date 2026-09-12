@@ -26,6 +26,32 @@ export function toursAplicaveis(tours) {
   return (tours || []).filter((tour) => tour.motoristaId && (tour.operacoes || []).length);
 }
 
+// Resumo curto de uma rota da prévia: quilometragem e tempo que o motor
+// calculou. O número vem do solver (VROOM = malha viária real quando o gateway
+// está ligado; contingência WASM = aproximado). Sem número, devolve "" — a
+// tela não inventa ETA. Ver a distância/tempo ANTES de aplicar é o que deixa o
+// planejador comparar rotas e pegar um plano ruim antes de gravar.
+export function resumoDaRota(tour) {
+  const km = Number(tour?.distanciaKm);
+  const min = Number(tour?.duracaoMin);
+  const partes = [];
+  if (Number.isFinite(km) && km > 0) partes.push(`${km} km`);
+  if (Number.isFinite(min) && min > 0) {
+    const horas = Math.floor(min / 60);
+    const minutos = min % 60;
+    partes.push(horas > 0 ? `${horas}h${String(minutos).padStart(2, "0")}` : `${minutos} min`);
+  }
+  return partes.join(" · ");
+}
+
+// Operações que o motor não conseguiu encaixar, já com nome legível. Enxergar
+// QUAIS (não só quantas) é o que deixa o planejador agir: liberar um veículo
+// com a habilidade exigida, rever capacidade/turno, ou tratar a parada à parte.
+export function nomesNaoAtribuidas(naoAtribuidas, operacoes) {
+  const porId = new Map((operacoes || []).map((o) => [o.id, o.cliente || o.referencia || o.id]));
+  return (naoAtribuidas || []).map((id) => porId.get(id) || id);
+}
+
 // Despacho inteligente: liga o motor VRP (solver genético no Worker) que estava
 // órfão — pronto no back, sem tela nenhuma. Carrega as operações pendentes com
 // coordenada, os motoristas e veículos disponíveis, otimiza as rotas de VÁRIOS
@@ -136,7 +162,10 @@ export default function DispatchPanel({ authHeaders, setToast }) {
               {(resultado.tours || []).map((tour) => (
                 <article className={`tdg-dispatch-tour${tour.motoristaId ? "" : " sem-motorista"}`} key={tour.veiculoId}>
                   <header><strong>{tour.prefixo || tour.placa || tour.veiculoId}</strong><small>{tour.motoristaNome || "sem motorista livre — não será aplicada"}{tour.placa ? ` · ${tour.placa}` : ""}</small></header>
-                  <span className="tdg-dispatch-tour-tot">{tour.paradas?.length || tour.operacoes?.length || 0} parada(s), na ordem:</span>
+                  <span className="tdg-dispatch-tour-tot">
+                    {tour.paradas?.length || tour.operacoes?.length || 0} parada(s), na ordem:
+                    {resumoDaRota(tour) && <em className="tdg-dispatch-tour-km"> {resumoDaRota(tour)}</em>}
+                  </span>
                   {/* A sequência de paradas que o motor escolheu — não só a
                       contagem. O operador precisa ver a ordem antes de aplicar. */}
                   <ol className="tdg-dispatch-sequencia">
@@ -148,7 +177,16 @@ export default function DispatchPanel({ authHeaders, setToast }) {
                   </ol>
                 </article>
               ))}
-              {(resultado.naoAtribuidas || []).length > 0 && <p className="tdg-dispatch-nao">{resultado.naoAtribuidas.length} operação(ões) não coube(ram) na frota/turno disponível.</p>}
+              {(resultado.naoAtribuidas || []).length > 0 && (
+                <div className="tdg-dispatch-nao">
+                  <p>{resultado.naoAtribuidas.length} operação(ões) não coube(ram) na frota/turno disponível (capacidade, janela de entrega ou tipo de veículo exigido):</p>
+                  <ul className="tdg-dispatch-nao-lista">
+                    {nomesNaoAtribuidas(resultado.naoAtribuidas, cand?.operacoes).map((nome, indice) => (
+                      <li key={`${resultado.naoAtribuidas[indice]}-${indice}`}>{nome}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {(resultado.tours || []).length > 0 && (
                 <button type="button" className="tdg-action" onClick={aplicar} disabled={aplicando}>{aplicando ? "Criando rotas…" : "Aplicar plano e criar rotas"}</button>
               )}
