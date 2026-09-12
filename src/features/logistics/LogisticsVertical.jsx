@@ -964,14 +964,17 @@ const MODULE_IMPLEMENTATION = Object.freeze({
 // Cultura Organizacional → Recursos Humanos; Melhoria Contínua → Qualidade;
 // Notícias → Workspace (hub de notícias e inteligência).
 const PRIMARY_NAVIGATION = Object.freeze([
-  // Workspace primeiro (pedido de 30/08): é a mesa de trabalho — planner,
-  // projetos e implantações moram aqui. Implantação é um TIPO de projeto,
-  // por isso vive dentro deste grupo sem perder o nome próprio.
-  // `jornadasInternas`: o menu não repete o que o Workspace já mostra dentro.
-  // "Espaço de trabalho", nunca "Workspace": o polidor apaga a palavra banida
-  // e o botão fica sem nome (31/08). Guarda: rotulosNaoBanidos.test.js.
-  { id: "espaco-trabalho", label: "Espaço de trabalho", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"], jornadasInternas: ["central-trabalho", "visualizacoes", "agentes-funcoes"] },
+  // Principal primeiro (pedido da titular): o painel abre a vertical. Depois o
+  // Espaço de trabalho (a mesa: planner, projetos, implantações) e o Comercial
+  // (CRM, pipeline, propostas) — o dia a dia comercial. "Espaço de trabalho",
+  // nunca "Workspace" (rotulosNaoBanidos). `jornadasInternas`: o menu não
+  // repete o que o Espaço já mostra dentro.
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
+  { id: "espaco-trabalho", label: "Espaço de trabalho", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"], jornadasInternas: ["central-trabalho", "visualizacoes", "agentes-funcoes"] },
+  // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
+  // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
+  // como atalho para a ferramenta do Espaço.
+  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "marketing", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   // Planejamento decide o que entra; Operação executa o que foi aceito. Antes
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
@@ -980,10 +983,6 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
-  // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
-  // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
-  // como atalho para a ferramenta do Espaço.
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "marketing", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
