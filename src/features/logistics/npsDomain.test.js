@@ -22,6 +22,18 @@ describe("classificação NPS", () => {
     expect(classificarNPS("abc")).toBeNull();
   });
 
+  it("nota em branco é ausência, nunca 0 (não vira detrator)", () => {
+    // Number(null) === 0 e Number("") === 0: sem guarda, uma resposta vazia
+    // entraria como detrator. Um formulário em branco não é uma nota baixa.
+    expect(classificarNPS(null)).toBeNull();
+    expect(classificarNPS(undefined)).toBeNull();
+    expect(classificarNPS("")).toBeNull();
+    expect(classificarNPS(true)).toBeNull();
+    // Já uma string numérica é uma nota legítima (vem de <input>/JSON).
+    expect(classificarNPS("0")).toBe("detrator");
+    expect(classificarNPS("9")).toBe("promotor");
+  });
+
   it("detrator precisa abrir ocorrência", () => {
     expect(precisaOcorrencia(6)).toBe(true);
     expect(precisaOcorrencia(0)).toBe(true);

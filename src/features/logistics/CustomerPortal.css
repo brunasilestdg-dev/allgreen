@@ -661,3 +661,54 @@
 }
 .cp-plan-input input:focus, .cp-plan-form select:focus { outline: 2px solid var(--cp-verde-claro); outline-offset: 1px; }
 .cp-plan-input em { color: var(--cp-suave); font-size: 0.82rem; font-style: normal; font-weight: 700; white-space: nowrap; }
+
+/* Sua avaliação (NPS). A nota é o gesto central: uma régua de 0 a 10 com as
+   três classes coloridas, para o cliente ver na hora se a nota é promotora,
+   neutra ou detratora. */
+.cp-nps { display: grid; gap: 16px; }
+.cp-nps-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; }
+.cp-indicador.alerta strong { color: #b3261e; }
+
+.cp-nps-form { display: grid; gap: 14px; border: 1px solid var(--cp-borda); border-radius: 16px; background: #fff; padding: 16px; }
+.cp-nps-form > label { display: grid; gap: 6px; }
+.cp-nps-form > label > span { color: var(--cp-suave); font-size: 0.86rem; font-weight: 700; }
+.cp-nps-form select, .cp-nps-form textarea { font: inherit; color: inherit; background: var(--cp-fundo); border: 1px solid var(--cp-borda); border-radius: 12px; min-height: 44px; padding: 10px 12px; width: 100%; }
+.cp-nps-form textarea { min-height: 76px; resize: vertical; }
+.cp-nps-form select:focus, .cp-nps-form textarea:focus { outline: 2px solid var(--cp-verde-claro); outline-offset: 1px; }
+
+.cp-nps-escala { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cp-nps-escala legend { color: var(--cp-suave); font-size: 0.86rem; font-weight: 700; padding: 0; }
+.cp-nps-notas { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 6px; }
+.cp-nps-nota { min-height: 44px; border: 1px solid var(--cp-borda); border-radius: 10px; background: #fff; color: var(--cp-tinta); font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+.cp-nps-nota:hover { border-color: var(--cp-verde-claro); }
+.cp-nps-nota:focus-visible { outline: 2px solid var(--cp-verde-claro); outline-offset: 1px; }
+.cp-nps-nota.escolhida { color: #fff; transform: translateY(-1px); }
+.cp-nps-nota.escolhida.c-detrator { background: #b3261e; border-color: #b3261e; }
+.cp-nps-nota.escolhida.c-neutro { background: #b58e2a; border-color: #b58e2a; }
+.cp-nps-nota.escolhida.c-promotor { background: var(--cp-verde); border-color: var(--cp-verde); }
+.cp-nps-legenda { display: flex; justify-content: space-between; color: var(--cp-suave); font-size: 0.78rem; }
+
+.cp-nps-classe { margin: 0; font-weight: 700; }
+.cp-nps-classe.c-detrator { color: #b3261e; }
+.cp-nps-classe.c-neutro { color: #b58e2a; }
+.cp-nps-classe.c-promotor { color: var(--cp-verde); }
+
+.cp-nps-causas, .cp-nps-historico { border: 1px solid var(--cp-borda); border-radius: 16px; background: #fff; padding: 16px; }
+.cp-nps-causas h3, .cp-nps-historico h3 { margin: 0 0 10px; font-size: 1rem; }
+.cp-nps-causas ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cp-nps-causas li { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 12px; background: var(--cp-fundo); border-radius: 10px; }
+.cp-nps-causas li strong { font-variant-numeric: tabular-nums; }
+
+.cp-nps-historico ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cp-nps-historico li { display: flex; align-items: center; gap: 12px; }
+.cp-nps-badge { display: inline-grid; place-content: center; min-width: 38px; min-height: 38px; border-radius: 10px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; background: var(--cp-suave); }
+.cp-nps-badge.c-detrator { background: #b3261e; }
+.cp-nps-badge.c-neutro { background: #b58e2a; }
+.cp-nps-badge.c-promotor { background: var(--cp-verde); }
+.cp-nps-hist-info { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.cp-nps-hist-info small { color: var(--cp-suave); }
+.cp-nps-historico time { color: var(--cp-suave); font-size: 0.82rem; white-space: nowrap; }
+
+@media (max-width: 700px) {
+  .cp-nps-notas { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}

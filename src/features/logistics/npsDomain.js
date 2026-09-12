@@ -11,6 +11,11 @@
 // seria uma leitura falsa de "neutro". Nota fora de 0..10 não conta.
 
 const inteiroValido = (valor) => {
+  // Nota em branco não é 0 — é ausência de resposta. Sem esta guarda, `null`,
+  // `undefined`, `""` e booleanos coagiriam para número (Number(null) === 0) e
+  // uma resposta vazia entraria como detrator. Só número ou string numérica passa.
+  if (valor === null || valor === undefined || valor === "" || typeof valor === "boolean")
+    return null;
   const n = Number(valor);
   return Number.isInteger(n) && n >= 0 && n <= 10 ? n : null;
 };
