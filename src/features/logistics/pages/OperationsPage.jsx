@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, MapPin, PackageCheck, Plus, Route, Truck } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
+import { VEHICLE_CLASSES } from "../vehicleClassDomain.js";
 
 const agoraLocal = () => new Date().toISOString().slice(0, 16);
 const EVENT_TYPES = ["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"];
@@ -33,8 +34,11 @@ export default function OperationsPage({ operations = [], clients = [], contract
       .catch(() => {});
   }, [authHeaders]);
 
-  const empty = { clientId: "", contractId: "", productId: "middle-mile", reference: "", serviceDate: "", origin: "", destination: "", promisedAt: "", etaAt: "", plate: "", driver: "", driverId: "", trips: "", deliveries: "", packages: "", distanceKm: "", occupancyPercent: "", status: "planned" };
+  const empty = { clientId: "", contractId: "", productId: "middle-mile", reference: "", serviceDate: "", origin: "", destination: "", promisedAt: "", etaAt: "", plate: "", driver: "", driverId: "", trips: "", deliveries: "", packages: "", distanceKm: "", occupancyPercent: "", status: "planned", requiredVehicleClass: "" };
   const [form, setForm] = useState(empty);
+  // Demais campos livres (fields_json) da operação em edição — preservados no
+  // save para a exigência de veículo não apagar o que outros fluxos gravaram.
+  const [camposBase, setCamposBase] = useState({});
   const [saving, setSaving] = useState(false);
   // Registro em janela própria (rodada "nada corta a tela", 30/08).
   const [novaAberta, setNovaAberta] = useState(false);
@@ -51,13 +55,15 @@ export default function OperationsPage({ operations = [], clients = [], contract
       driver: operation.motorista || "", driverId: operation.motoristaId || "",
       trips: operation.viagens || "", deliveries: operation.entregas || "", packages: operation.pacotes || "",
       distanceKm: operation.distanciaKm || "", occupancyPercent: operation.ocupacaoPercent || "",
+      requiredVehicleClass: operation.campos?.requiredVehicleClass || "",
       // Sai do rascunho: 'planned' é o começo natural de uma operação confirmada.
       status: "planned",
     });
+    setCamposBase(operation.campos && typeof operation.campos === "object" ? operation.campos : {});
     setConfirmando({ id: operation.id, revision: operation.revision });
     setNovaAberta(true);
   };
-  const fecharModal = () => { setNovaAberta(false); setConfirmando(null); setForm(empty); };
+  const fecharModal = () => { setNovaAberta(false); setConfirmando(null); setForm(empty); setCamposBase({}); };
   const [selected, setSelected] = useState(null);
   const [events, setEvents] = useState([]);
   const [event, setEvent] = useState({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal(), recebedor: "", comprovanteUrl: "" });
@@ -82,6 +88,9 @@ export default function OperationsPage({ operations = [], clients = [], contract
       prometidoEm: form.promisedAt, etaEm: form.etaAt, placa: form.plate, motorista: form.driver, motoristaId: form.driverId,
       viagens: Number(form.trips), entregas: Number(form.deliveries), pacotes: Number(form.packages),
       distanciaKm: Number(form.distanceKm), ocupacaoPercent: Number(form.occupancyPercent), situacao: form.status,
+      // Exigência de classe de veículo vai no fields_json (campos), preservando
+      // o que já estava lá. Vazio → remove a exigência (undefined some no JSON).
+      campos: { ...camposBase, requiredVehicleClass: form.requiredVehicleClass || undefined },
     };
     try {
       if (confirmando) {
@@ -143,6 +152,9 @@ export default function OperationsPage({ operations = [], clients = [], contract
         <label><span>Ocupação %</span><input type="number" min="0" max="100" value={form.occupancyPercent} onChange={(e) => setForm((v) => ({ ...v, occupancyPercent: e.target.value }))} /></label>
         <label><span>Situação</span><select value={form.status} onChange={(e) => setForm((v) => ({ ...v, status: e.target.value }))}>{STATUS.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label>
         <label><span>Produto</span><select value={form.productId} onChange={(e) => setForm((v) => ({ ...v, productId: e.target.value }))}>{LOGISTICS_PRODUCTS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        {/* Exigência de veículo: o roteirizador só atribui esta carga a um veículo
+            da classe escolhida (casamento por habilidade). Vazio = qualquer veículo. */}
+        <label><span>Tipo de veículo exigido</span><select value={form.requiredVehicleClass} onChange={(e) => setForm((v) => ({ ...v, requiredVehicleClass: e.target.value }))}><option value="">Qualquer veículo</option>{VEHICLE_CLASSES.map((classe) => <option key={classe.id} value={classe.id}>{classe.name}</option>)}</select></label>
         <div className="tdg-form-actions"><button type="button" onClick={fecharModal}>Cancelar</button><button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : confirmando ? "Confirmar operação" : "Registrar operação"}</button></div>
       </form></Modal>}
       <div className="tdg-operation-grid">{visibleOperations.length === 0 && <div className="tdg-empty-access">{isIncidents ? "Nenhuma ocorrência ou atraso em aberto." : "Nenhuma operação real registrada."}</div>}{visibleOperations.map((operation) => <article className="tdg-operation-card" key={operation.id}><div><Route size={18} /><span><strong>{operation.referencia || "Operação sem referência"}</strong><small>{operation.origem || "origem pendente"} → {operation.destino || "destino pendente"}</small></span><span className={`tdg-ledger-status ${ehRascunho(operation) || slaEfetivo(operation) === "atrasado" ? "overdue" : "pending"}`}>{(ehRascunho(operation) || slaEfetivo(operation) === "atrasado") && <AlertTriangle size={14} />}{ehRascunho(operation) ? "rascunho · confirmar" : slaEfetivo(operation)}</span></div><dl><div><dt><Truck size={14} /> Frota</dt><dd>{operation.placa || "sem placa"} · {operation.motorista || "sem motorista"}</dd></div><div><dt><Clock3 size={14} /> Prometido</dt><dd>{operation.prometidoEm || "não informado"}</dd></div><div><dt><PackageCheck size={14} /> Volume</dt><dd>{Number(operation.entregas || 0)} entregas · {Number(operation.pacotes || 0)} pacotes</dd></div><div><dt><MapPin size={14} /> Última posição</dt><dd>{operation.ultimaPosicaoEm || "não informada"}</dd></div></dl><div className="tdg-operation-card-actions">{!isIncidents && ehRascunho(operation) && <button type="button" className="tdg-action" onClick={() => abrirConfirmacao(operation)}>Confirmar operação</button>}<button type="button" onClick={() => openEvents(operation)}>{isIncidents ? "Tratar ocorrência" : "Linha do tempo"} · {Number(operation.ocorrencias || 0)} ocorrência(s)</button></div></article>)}</div>

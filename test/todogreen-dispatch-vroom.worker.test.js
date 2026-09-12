@@ -169,6 +169,32 @@ describe("To Do Green dispatch VROOM adapter", () => {
     expect(habilidadesDoVeiculo({ category: "Refrigerado" })).toEqual(["refrigerado"]);
     expect(habilidadesDoVeiculo({ fields_json: JSON.stringify({ skills: ["Baú", "Munck"] }), category: "" }))
       .toEqual(["bau", "munck"]);
+    // A classe validada (vehicle_class) é o token que casa com a exigência.
+    expect(habilidadesDoVeiculo({ vehicle_class: "truck" })).toEqual(["truck"]);
+    expect(habilidadesDoVeiculo({ vehicle_class: "vuc", category: "Baú refrigerado" }))
+      .toEqual(["vuc", "bau refrigerado"]);
+  });
+
+  it("casa a exigência de classe da operação com a classe validada do veículo (vehicle_class)", () => {
+    const built = montarProblemaVroomDespacho({
+      operacoes: [{
+        id: "op-truck",
+        delivery_lat: -23.55, delivery_lng: -46.63,
+        fields_json: JSON.stringify({ requiredVehicleClass: "truck" }),
+      }],
+      veiculos: [
+        { id: "v-vuc", plate: "VUC0A00", vehicle_class: "vuc" },
+        { id: "v-truck", plate: "TRK0A00", vehicle_class: "truck" },
+      ],
+      depot: { lat: -23.52, lng: -46.65 },
+      agora: new Date("2026-09-10T12:00:00Z"),
+    });
+    expect(built.ok).toBe(true);
+    const skill = built.payload.jobs[0].skills[0];
+    const vTruck = built.payload.vehicles.find((v) => v.description === "v-truck");
+    const vVuc = built.payload.vehicles.find((v) => v.description === "v-vuc");
+    expect(vTruck.skills).toContain(skill);
+    expect(vVuc.skills || []).not.toContain(skill);
   });
 
   it("dormente: sem exigência declarada, nenhum job/veículo recebe skills (zero regressão)", () => {

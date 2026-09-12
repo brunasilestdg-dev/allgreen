@@ -115,6 +115,10 @@ export function habilidadesDoVeiculo(vehicle) {
   const fields = parseFields(vehicle?.fields_json ?? vehicle?.fields);
   const tokens = new Set([
     ...tokensDeLista(fields.skills ?? fields.habilidades),
+    // `vehicle_class` é a classe VALIDADA (moto…carreta, id minúsculo) — o token
+    // limpo que casa com a exigência declarada na operação. `category` é o texto
+    // livre legado; entra também para não perder frota herdada não classificada.
+    ...tokensDeLista(vehicle?.vehicle_class ?? vehicle?.vehicleClass),
     ...tokensDeLista(vehicle?.category),
   ]);
   return [...tokens];
