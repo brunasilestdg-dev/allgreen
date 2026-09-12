@@ -938,7 +938,16 @@ Regras:
 
         </div>
         <div className="tdg-rot-mapa-col">
-          <div className="tdg-roteirizacao-mapa" ref={containerRef} aria-label="Mapa da rota" />
+          {/* O mínimo inline evita a janela de altura zero enquanto o CSS do
+              módulo lazy ainda está sendo aplicado. Leaflet mede o container
+              ao inicializar; se essa primeira medida for zero, o mapa nasce
+              em branco mesmo quando a folha de estilos chega logo depois. */}
+          <div
+            className="tdg-roteirizacao-mapa"
+            ref={containerRef}
+            aria-label="Mapa da rota"
+            style={{ minHeight: 320 }}
+          />
         </div>
       </div>
     </section>
