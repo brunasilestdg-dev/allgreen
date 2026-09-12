@@ -26,9 +26,11 @@ const respostaPorUrl = (url) => {
       { id: "microsoft-365", name: "Microsoft 365 · Outlook e Agenda", configured: false, status: "external_dependency" },
     ],
     operational: [
-      { id: "track3r", name: "Track3r / Sistemas Tracker", configured: false, status: "requires_setup" },
+      { id: "track3r", name: "TRACK3R · documentos e ocorrências", configured: false, status: "requires_setup" },
+      { id: "sistemas-tracker", name: "Sistemas Tracker · posição e telemetria", configured: false, status: "requires_setup" },
       { id: "sefaz-fiscal", name: "SEFAZ · CT-e e MDF-e", configured: false, status: "external_dependency" },
       { id: "antt-ciot-direct", name: "ANTT · CIOT direto", configured: false, status: "external_dependency" },
+      { id: "ocpp", name: "OCPP · recarga elétrica", configured: false, status: "external_dependency" },
     ],
     management: [
       { id: "monday", name: "monday.com", configured: false, status: "external_dependency" },
@@ -54,9 +56,11 @@ describe("integrações da vertical", () => {
     expect(await screen.findByRole("heading", { name: /Dados e gestão/i })).toBeInTheDocument();
 
     expect(screen.getByText(/LinkedIn · decisores e prospecção/i)).toBeInTheDocument();
-    expect(screen.getByText(/Track3r \/ Sistemas Tracker/i)).toBeInTheDocument();
+    expect(screen.getByText(/TRACK3R · documentos e ocorrências/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sistemas Tracker · posição e telemetria/i)).toBeInTheDocument();
     expect(screen.getByText(/SEFAZ · CT-e e MDF-e/i)).toBeInTheDocument();
     expect(screen.getByText(/ANTT · CIOT direto/i)).toBeInTheDocument();
+    expect(screen.getByText(/OCPP · recarga elétrica/i)).toBeInTheDocument();
     expect(screen.getByText(/monday.com/i)).toBeInTheDocument();
     expect(screen.getByText(/Power BI/i)).toBeInTheDocument();
     expect(screen.getByText(/Microsoft 365 · Outlook e Agenda/i)).toBeInTheDocument();

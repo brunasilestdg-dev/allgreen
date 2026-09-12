@@ -189,6 +189,14 @@ describe("To Do Green TMS API externa", () => {
     expect(tracked.status).toBe(201);
     expect(tracked.body.event.eventType).toBe("IN_TRANSIT");
     expect(tracked.body.shipmentStatus).toBe("in_progress");
+    const eventoCanonico = await env.DB.prepare(
+      `SELECT kind FROM todogreen_client_operation_events
+        WHERE operation_id=? AND idempotency_key=?`,
+    ).bind(
+      operacao.operation_id,
+      `tracking:external_api:${created.body.id}:evt-${suffix}`,
+    ).first();
+    expect(eventoCanonico.kind).toBe("transito");
 
     const pod = await json(await call(`/api/tms/v1/shipments/${created.body.id}/pod`, {
       method: "POST",
@@ -203,6 +211,13 @@ describe("To Do Green TMS API externa", () => {
     expect(pod.status).toBe(201);
     expect(pod.body.shipmentStatus).toBe("completed");
     expect(pod.body.billingEligible).toBe(true);
+
+    const operacaoEntregue = await env.DB.prepare(
+      "SELECT status,delivered_at,proof_url FROM todogreen_client_operations WHERE id=?",
+    ).bind(operacao.operation_id).first();
+    expect(operacaoEntregue.status).toBe("concluida");
+    expect(operacaoEntregue.delivered_at).toBeTruthy();
+    expect(operacaoEntregue.proof_url).toBe(`https://example.test/pod/${suffix}.jpg`);
 
     const detail = await json(await call(`/api/tms/v1/shipments/${created.body.id}`, { token: seeded.token }));
     expect(detail.status).toBe(200);

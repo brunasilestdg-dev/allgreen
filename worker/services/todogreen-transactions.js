@@ -7,6 +7,7 @@ import {
   settlementState,
   validateAllocation,
 } from "../../src/features/logistics/transactionalSpineDomain.js";
+import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -204,7 +205,11 @@ const ciotIntegrationView = (row, env = {}) => {
   }
   const storedCredential = Boolean(row.credential_ciphertext && row.credential_iv);
   const config = parseJson(row.config_json);
-  const connectorConfigured = Boolean(storedCredential || env[row.connector_url_env_key] || config.connectorUrl || (row.certificate_type === "A3" && (env[row.a3_connector_env_key] || config.a3ConnectorUrl)));
+  const connectorConfigured = Boolean(
+    env[row.connector_url_env_key]
+    || config.connectorUrl
+    || (row.certificate_type === "A3" && (env[row.a3_connector_env_key] || config.a3ConnectorUrl)),
+  );
   const certificateConfigured = storedCredential || (row.certificate_type === "A1"
     ? Boolean(env[row.certificate_env_key] && env[row.certificate_password_env_key])
     : Boolean(env[row.a3_connector_env_key]));
@@ -309,7 +314,9 @@ async function createOrder(env, access, user, body) {
   if (!canPlanOrder(access)) return json({ error: "Somente Planejamento/Produtos pode criar ordem de serviço para aceite." }, 403);
   const clientId = text(body.clientId, 120);
   const contractId = text(body.contractId, 120);
-  if (!clientId || !contractId) return json({ error: "Cliente e contrato são obrigatórios." }, 400);
+  let operationId = text(body.operationId, 120);
+  if (!clientId || !contractId)
+    return json({ error: "Cliente e contrato são obrigatórios." }, 400);
   const contract = await contractInScope(env, access.ownerId, contractId, clientId);
   if (!contract) return json({ error: "Contrato ativo não encontrado neste espaço." }, 409);
   if (contract.approval_status !== "approved" || contract.signature_status !== "signed")
@@ -322,6 +329,28 @@ async function createOrder(env, access, user, body) {
   ).bind(TENANT_ID, access.ownerId, clientId).first();
   if (text(implantacao?.status, 30).toLowerCase() !== "active")
     return json({ error: "A ordem de serviço exige a implantação do cliente ativa (go-live concluído)." }, 409);
+  const criaOperacao = !operationId;
+  if (criaOperacao) {
+    // Compatibilidade sem abrir exceção arquitetural: quando a OS nasce direto
+    // do aceite, o servidor cria a operação canônica junto. Nenhuma OS nova é
+    // persistida com operation_id vazio e ninguém precisa redigitar a demanda.
+    operationId = crypto.randomUUID();
+  } else {
+    const operacao = await env.DB.prepare(
+      `SELECT id,contract_id FROM todogreen_client_operations
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND client_id=?
+          AND (contract_id=? OR contract_id='')
+          AND archived_at IS NULL`,
+    ).bind(operationId, TENANT_ID, access.ownerId, clientId, contractId).first();
+    if (!operacao)
+      return json({ error: "A operação informada não pertence a este cliente e contrato no espaço atual." }, 409);
+    const osExistente = await env.DB.prepare(
+      `SELECT id FROM todogreen_service_orders
+        WHERE tenant_id=? AND workspace_owner_id=? AND operation_id=? AND archived_at IS NULL LIMIT 1`,
+    ).bind(TENANT_ID, access.ownerId, operationId).first();
+    if (osExistente)
+      return json({ error: "Esta operação já possui uma ordem de serviço." }, 409);
+  }
 
   // Preço herdado do aceite: quando não vem digitado, o contrato (valor
   // negociado) manda; na falta dele, o preço da simulação que gerou o contrato.
@@ -349,7 +378,33 @@ async function createOrder(env, access, user, body) {
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const number = await reserveNumber(env, access.ownerId, "ordem_servico", "OS-", now);
-  await env.DB.prepare(
+  const requestedAt = text(body.requestedAt, 40) || now;
+  const origem = object(body.origin);
+  const destino = object(body.destination);
+  const localDaRota = (ponto) => text(
+    ponto.name || ponto.address || [ponto.city, ponto.state].filter(Boolean).join(" / "),
+    240,
+  );
+  const statements = [];
+  if (criaOperacao) statements.push(env.DB.prepare(
+    `INSERT INTO todogreen_client_operations
+      (id,tenant_id,client_id,workspace_owner_id,contract_id,product_id,reference,status,
+       service_date,origin,destination,fields_json,incident_count,distance_km,revision,
+       created_by,updated_by,created_at,updated_at,archived_at)
+     VALUES (?,?,?,?,?,?,?,'planejada',?,?,?,?,0,0,1,?,?,?,?,NULL)`,
+  ).bind(
+    operationId, TENANT_ID, clientId, access.ownerId, contractId,
+    text(body.serviceId || contract.service_id, 120), number, requestedAt.slice(0, 10),
+    localDaRota(origem), localDaRota(destino),
+    JSON.stringify({ source: "erp_service_order", serviceOrderId: id, serviceOrderNumber: number }),
+    user.id, user.id, now, now,
+  ));
+  else statements.push(env.DB.prepare(
+    `UPDATE todogreen_client_operations
+        SET contract_id=?, updated_by=?, updated_at=?, revision=revision+1
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND contract_id=''`,
+  ).bind(contractId, user.id, now, operationId, TENANT_ID, access.ownerId));
+  statements.push(env.DB.prepare(
     `INSERT INTO todogreen_service_orders
       (id,tenant_id,workspace_owner_id,number,client_id,contract_id,operation_id,service_id,
        price_table_id,status,requested_at,scheduled_start_at,scheduled_end_at,origin_json,
@@ -357,15 +412,16 @@ async function createOrder(env, access, user, body) {
        net_amount,sla_json,fields_json,revision,created_by,updated_by,created_at,updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,'draft',?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
   ).bind(
-    id, TENANT_ID, access.ownerId, number, clientId, contractId, text(body.operationId, 120),
+    id, TENANT_ID, access.ownerId, number, clientId, contractId, operationId,
     text(body.serviceId || contract.service_id, 120), text(body.priceTableId || contract.price_table_id, 120),
-    text(body.requestedAt, 40) || now, text(body.scheduledStartAt, 40) || null,
-    text(body.scheduledEndAt, 40) || null, JSON.stringify(object(body.origin)),
-    JSON.stringify(object(body.destination)), amounts.quantity, text(body.chargeUnit, 30),
+    requestedAt, text(body.scheduledStartAt, 40) || null,
+    text(body.scheduledEndAt, 40) || null, JSON.stringify(origem),
+    JSON.stringify(destino), amounts.quantity, text(body.chargeUnit, 30),
     amounts.unitPrice, amounts.grossAmount, amounts.discountAmount, amounts.taxAmount, amounts.netAmount,
     JSON.stringify(object(body.sla || JSON.parse(contract.sla_json || "{}"))),
     JSON.stringify({ ...object(body.fields), precoOrigem: origemPreco, precoModo: modoPreco }), user.id, user.id, now, now,
-  ).run();
+  ));
+  await env.DB.batch(statements);
   const row = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
   return json({ record: orderView(row) }, 201);
 }
@@ -378,6 +434,11 @@ async function transitionOrder(env, access, user, id, body) {
   const next = text(body.status, 30);
   if (!canTransitionServiceOrder(row.status, next))
     return json({ error: `Transição inválida de ${row.status} para ${next}.` }, 409);
+  if (next === "completed")
+    return json({
+      error: "A OS é concluída automaticamente pelo evento de entrega com POD. Registre a entrega na operação, no Portal do Motorista ou pela API TMS.",
+      code: "canonical_delivery_required",
+    }, 409);
   if (row.status === "draft" && next === "released" && !canPlanOrder(access))
     return json({ error: "Somente Planejamento/Produtos pode aceitar ou liberar a OS." }, 403);
   if (row.status !== "draft" && !canOperateOrder(access))
@@ -385,31 +446,12 @@ async function transitionOrder(env, access, user, id, body) {
   const revision = Number(body.revision);
   if (!Number.isFinite(revision) || revision !== row.revision) return json({ error: "A ordem mudou. Recarregue antes de salvar." }, 409);
   const now = new Date().toISOString();
-  const completedAt = next === "completed" ? text(body.completedAt, 40) || now : row.completed_at;
+  const completedAt = row.completed_at;
   const statements = [env.DB.prepare(
     `UPDATE todogreen_service_orders SET status=?,completed_at=?,revision=revision+1,updated_by=?,updated_at=?
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`,
   ).bind(next, completedAt, user.id, now, id, TENANT_ID, access.ownerId, revision)];
-  if (next === "completed") statements.push(env.DB.prepare(
-    `INSERT OR IGNORE INTO todogreen_billing_items
-      (id,tenant_id,workspace_owner_id,service_order_id,client_id,contract_id,status,amount,
-       competence_date,created_by,updated_by,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,'eligible',?,?,?,?,?,?)`,
-  ).bind(crypto.randomUUID(), TENANT_ID, access.ownerId, id, row.client_id, row.contract_id,
-    row.net_amount, completedAt.slice(0, 10), user.id, user.id, now, now));
-  let results;
-  try {
-    results = await env.DB.batch(statements);
-  } catch (error) {
-    // O trigger da 0062 aborta o item faturável sem POD. Sem este catch o
-    // usuário recebia um 500 opaco e a OS ficava presa sem explicação.
-    if (String(error?.message || error).includes("POD_REQUIRED"))
-      return json({
-        error: "Registre o comprovante de entrega (POD) antes de concluir: sem ele a OS não vira item faturável. Use \"Registrar comprovante\" nesta tela ou o evento de entrega na operação.",
-        code: "pod_required",
-      }, 409);
-    throw error;
-  }
+  const results = await env.DB.batch(statements);
   // A checagem de `revision` acima não basta sob concorrência: dois PATCH que
   // leram a mesma revisão passam os dois, mas só o primeiro UPDATE casa a
   // linha. Sem conferir o `changes` do UPDATE, o segundo recebia 200 para uma
@@ -417,13 +459,12 @@ async function transitionOrder(env, access, user, id, body) {
   if (!results?.[0]?.meta?.changes)
     return json({ error: "A ordem mudou. Recarregue antes de salvar." }, 409);
   const updated = await env.DB.prepare("SELECT * FROM todogreen_service_orders WHERE id=?").bind(id).first();
-  return json({ record: orderView(updated), billingEligible: next === "completed" });
+  return json({ record: orderView(updated), billingEligible: false });
 }
 
 // ---------------------------------------------------------------------------
-// Comprovante de entrega (POD). É o dado que a régua de faturamento exige
-// (trigger da 0062) e, até aqui, não tinha NENHUM caminho de escrita no
-// produto: a tabela existia, o gate bloqueava, e a OS nunca faturava.
+// Comprovante de entrega (POD). Este endpoint também usa o comando operacional
+// canônico: um único fato conclui operação + OS e libera o item faturável.
 // ---------------------------------------------------------------------------
 
 const podView = (row) => ({
@@ -449,42 +490,39 @@ async function createPod(env, access, user, serviceOrderId, body) {
     return json({ error: "Somente Operação ou Planejamento registra comprovante de entrega." }, 403);
   const order = await serviceOrderInScope(env, access.ownerId, serviceOrderId);
   if (!order) return json({ error: "Ordem de serviço não encontrada." }, 404);
+  if (!order.operation_id)
+    return json({ error: "A OS não está vinculada à operação canônica do TMS." }, 409);
   const recipientName = text(body.recipientName ?? body.recebedor, 200);
   const documentUrl = text(body.documentUrl ?? body.comprovanteUrl, 800);
   if (!recipientName && !documentUrl)
     return json({ error: "Informe quem recebeu ou o link do comprovante — um dos dois é obrigatório." }, 400);
   const now = new Date().toISOString();
-  const id = crypto.randomUUID();
   const latitude = Number(body.latitude);
   const longitude = Number(body.longitude);
-  const statements = [env.DB.prepare(
-    `INSERT INTO todogreen_proofs_of_delivery
-       (id, tenant_id, workspace_owner_id, service_order_id, kind, occurred_at,
-        recipient_name, document_url, document_hash, latitude, longitude,
-        fields_json, created_by, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(
-    id, TENANT_ID, access.ownerId, serviceOrderId, text(body.kind, 30) || "delivery",
-    text(body.occurredAt, 40) || now, recipientName, documentUrl,
-    text(body.documentHash ?? body.comprovanteHash, 200),
-    Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null,
-    JSON.stringify(object(body.fields)), user.id, now,
-  )];
-  // Espelha o comprovante na operação vinculada: é de lá que o portal do
-  // cliente baixa o arquivo. Um comprovante em dois lugares seria dívida; um
-  // comprovante que o cliente não encontra é pior.
-  if (order.operation_id && documentUrl) statements.push(env.DB.prepare(
-    `UPDATE todogreen_client_operations
-        SET proof_url=?, proof_hash=?, delivered_at=COALESCE(delivered_at, ?),
-            updated_at=?, updated_by=?, revision=revision+1
-      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
-        AND COALESCE(proof_url,'')=''`,
-  ).bind(documentUrl, text(body.documentHash ?? body.comprovanteHash, 200),
-    text(body.occurredAt, 40) || now, now, user.id,
-    order.operation_id, TENANT_ID, access.ownerId));
-  await env.DB.batch(statements);
-  const row = await env.DB.prepare("SELECT * FROM todogreen_proofs_of_delivery WHERE id=?").bind(id).first();
-  return json({ record: podView(row) }, 201);
+  const aplicado = await aplicarEventoNaOperacaoPorId(env, {
+    ownerId: access.ownerId,
+    userId: user.id,
+    operationId: order.operation_id,
+    origem: "erp-os",
+    corpo: {
+      tipo: "entrega",
+      titulo: "Entrega concluída",
+      recebedor: recipientName,
+      comprovanteUrl: documentUrl,
+      comprovanteHash: text(body.documentHash ?? body.comprovanteHash, 200),
+      ocorridoEm: text(body.occurredAt, 40) || now,
+      latitude: Number.isFinite(latitude) ? latitude : undefined,
+      longitude: Number.isFinite(longitude) ? longitude : undefined,
+      idempotencyKey: text(body.idempotencyKey, 100) || `erp-pod:${serviceOrderId}`,
+    },
+  });
+  if (!aplicado.aplicado) return json({ error: aplicado.motivo }, 409);
+  const row = await env.DB.prepare(
+    `SELECT * FROM todogreen_proofs_of_delivery
+      WHERE tenant_id=? AND workspace_owner_id=? AND service_order_id=?
+      ORDER BY occurred_at DESC, created_at DESC LIMIT 1`,
+  ).bind(TENANT_ID, access.ownerId, serviceOrderId).first();
+  return json({ record: podView(row), serviceOrderStatus: "completed", billingEligible: true }, aplicado.resultado?.duplicada ? 200 : 201);
 }
 
 function ciotPayload(row, body, serviceOrder) {

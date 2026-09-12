@@ -274,6 +274,19 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
       ).bind(TENANT_ID, access.ownerId, motorista.id).first();
       if (aberto) return json({ error: "Você já tem um turno aberto. Encerre antes de iniciar outro." }, 409);
 
+      // A jornada operacional só começa depois de uma vistoria aprovada no
+      // dia. Registrar checklist reprovado sem consequência seria apenas
+      // guardar um formulário, não proteger motorista, veículo e carga.
+      const hoje = new Date().toISOString().slice(0, 10);
+      const vistoria = await env.DB.prepare(
+        `SELECT id FROM todogreen_driver_checklists
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ?
+            AND service_date = ? AND status = 'aprovado' AND archived_at IS NULL
+          ORDER BY created_at DESC LIMIT 1`,
+      ).bind(TENANT_ID, access.ownerId, motorista.id, hoje).first();
+      if (!vistoria)
+        return json({ error: "Faça e aprove a vistoria de pré-viagem de hoje antes de iniciar a jornada." }, 409);
+
       const idNovo = crypto.randomUUID();
       const agora = new Date().toISOString();
       await env.DB.prepare(
@@ -454,9 +467,35 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
     ).bind(id, TENANT_ID, access.ownerId, motorista.id).first();
     if (!operacao) return json({ error: "Viagem não encontrada." }, 404);
 
-    const tiposDaRua = new Set(["coleta", "chegada", "entrega", "ocorrencia"]);
+    // Em operação roteirizada, coleta/chegada/entrega só existem dentro de
+    // uma jornada aberta e após vistoria aprovada para a rota ou veículo. A
+    // rota é a fronteira em que o TMS assume a execução; operações legadas sem
+    // rota continuam acessíveis durante a consolidação.
+    if (operacao.route_id) {
+      const turno = await env.DB.prepare(
+        `SELECT id FROM todogreen_driver_shifts
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ?
+            AND ended_at IS NULL AND archived_at IS NULL LIMIT 1`,
+      ).bind(TENANT_ID, access.ownerId, motorista.id).first();
+      if (!turno)
+        return json({ error: "Inicie sua jornada antes de executar a rota." }, 409);
+      const vistoria = await env.DB.prepare(
+        `SELECT id FROM todogreen_driver_checklists
+          WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ?
+            AND status = 'aprovado' AND archived_at IS NULL
+            AND (route_id = ? OR (route_id = '' AND vehicle_plate = ? AND service_date = ?))
+          ORDER BY created_at DESC LIMIT 1`,
+      ).bind(
+        TENANT_ID, access.ownerId, motorista.id, operacao.route_id,
+        texto(operacao.vehicle_plate, 20), texto(operacao.service_date, 10),
+      ).first();
+      if (!vistoria)
+        return json({ error: "Esta rota exige uma vistoria aprovada do veículo antes da execução." }, 409);
+    }
+
+    const tiposDaRua = new Set(["coleta", "transito", "chegada", "entrega", "ocorrencia"]);
     if (!tiposDaRua.has(texto(corpo.tipo, 40)))
-      return json({ error: "Da rua se registra coleta, chegada, entrega ou ocorrência." }, 400);
+      return json({ error: "Da rua se registra coleta, trânsito, chegada, entrega ou ocorrência." }, 400);
 
     const resultado = await aplicarEventoOperacional(env, {
       ownerId: access.ownerId,
@@ -466,6 +505,7 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
         ...corpo,
         titulo: texto(corpo.titulo, 200) || {
           coleta: "Coleta realizada",
+          transito: "Carga em trânsito",
           chegada: "Chegada ao destino",
           entrega: "Entrega concluída",
           ocorrencia: "Ocorrência na rota",

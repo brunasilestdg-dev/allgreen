@@ -1,6 +1,7 @@
 import { sha256 } from "../auth/credenciais.js";
 import { allowed } from "../lib/http.js";
 import { TENANT_ID } from "./todogreen-access.js";
+import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
 
 const cors = {
   "access-control-allow-origin": "*",
@@ -408,6 +409,22 @@ const EVENT_TYPES = new Set([
   "DELIVERY_ATTEMPT", "EXCEPTION", "CANCELLED",
 ]);
 
+const eventoCanonicoDoTracking = (eventType) => ({
+  PICKED_UP: "coleta",
+  DEPARTED: "transito",
+  IN_TRANSIT: "transito",
+  REACHED_CHECKPOINT: "transito",
+  ARRIVED_AT_HUB: "chegada",
+  DEPARTED_FROM_HUB: "transito",
+  REACHED_DESTINATION: "chegada",
+  // DELIVERED sem POD informa chegada. A entrega canônica só nasce quando o
+  // comprovante chega em registrarPod.
+  DELIVERED: "chegada",
+  DELIVERY_ATTEMPT: "ocorrencia",
+  EXCEPTION: "ocorrencia",
+  CANCELLED: "ocorrencia",
+})[eventType] || "";
+
 // Núcleo do evento de rastreamento — reusado pela API pública e pela
 // bipagem manual (leitor físico ou câmera do celular) no Portal TMS.
 async function registrarTracking(env, { workspaceOwnerId, shipment, source, createdBy, body, externalEventId = "" }) {
@@ -444,6 +461,27 @@ async function registrarTracking(env, { workspaceOwnerId, shipment, source, crea
     if (externalEventId && String(error?.message || error).toLowerCase().includes("unique"))
       return { error: { status: 409, payload: { error: "duplicate_external_event", message: "externalEventId já registrado." } } };
     throw error;
+  }
+  const tipoCanonico = eventoCanonicoDoTracking(eventType);
+  if (tipoCanonico && shipment.operation_id) {
+    const aplicado = await aplicarEventoNaOperacaoPorId(env, {
+      ownerId: workspaceOwnerId,
+      userId: createdBy,
+      operationId: shipment.operation_id,
+      origem: source,
+      corpo: {
+        tipo: tipoCanonico,
+        titulo: eventType === "DELIVERED" ? "Entrega informada, aguardando POD" : text(body.title, 200) || eventType,
+        descricao: text(body.notes, 1000),
+        local: text(body.location || [body.city, body.state].filter(Boolean).join(" / "), 300),
+        ocorridoEm: occurredAt,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        idempotencyKey: `tracking:${source}:${shipment.id}:${externalEventId || eventId}`,
+      },
+    });
+    if (!aplicado.aplicado)
+      return { error: { status: 409, payload: { error: "operation_projection_failed", message: aplicado.motivo } } };
   }
   const row = await env.DB.prepare("SELECT * FROM todogreen_tms_tracking_events WHERE id=?").bind(eventId).first();
   return { payload: { event: trackingView(row), shipmentStatus: nextStatus, requiresPodToComplete: eventType === "DELIVERED" }, status: 201 };
@@ -485,7 +523,7 @@ async function listTracking(env, credential, identifier) {
 // API pública e pelo registro manual no Portal TMS. `documentUrl` aceita um
 // `data:image/...;base64,...` (assinatura capturada na hora) ou um link de
 // verdade — os dois cabem no mesmo campo, sem coluna nova.
-async function registrarPod(env, { workspaceOwnerId, shipment, createdBy, body }) {
+async function registrarPod(env, { workspaceOwnerId, shipment, createdBy, body, idempotencyKey = "" }) {
   const recipientName = text(body.recipientName, 200);
   const documentUrl = text(body.documentUrl, 200_000);
   if (!recipientName && !documentUrl)
@@ -497,6 +535,45 @@ async function registrarPod(env, { workspaceOwnerId, shipment, createdBy, body }
   const lng = Number(body.longitude);
   const podId = crypto.randomUUID();
   const complete = body.completeShipment !== false;
+  if (complete && !shipment.operation_id)
+    return { error: { status: 409, payload: { error: "operation_required", message: "A carga precisa estar vinculada à operação canônica antes da entrega." } } };
+
+  if (complete) {
+    const dataUrl = documentUrl.startsWith("data:image/") ? documentUrl : "";
+    const aplicado = await aplicarEventoNaOperacaoPorId(env, {
+      ownerId: workspaceOwnerId,
+      userId: createdBy,
+      operationId: shipment.operation_id,
+      origem: "tms-pod",
+      corpo: {
+        tipo: "entrega",
+        titulo: "Entrega concluída",
+        recebedor: recipientName,
+        comprovanteUrl: dataUrl ? "" : documentUrl,
+        comprovanteBase64: dataUrl,
+        comprovanteHash: text(body.documentHash, 200),
+        assinaturaUrl: text(body.signatureUrl, 800),
+        assinaturaBase64: text(body.signatureBase64, 12_000_000),
+        assinaturaHash: text(body.signatureHash, 200),
+        ocorridoEm: occurredAt,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        idempotencyKey: text(idempotencyKey || body.idempotencyKey, 100) || `pod:${shipment.id}:${occurredAt}`,
+      },
+    });
+    if (!aplicado.aplicado)
+      return { error: { status: 409, payload: { error: "delivery_not_applied", message: aplicado.motivo } } };
+    const row = await env.DB.prepare(
+      `SELECT * FROM todogreen_proofs_of_delivery
+        WHERE tenant_id=? AND workspace_owner_id=? AND service_order_id=?
+        ORDER BY occurred_at DESC, created_at DESC LIMIT 1`,
+    ).bind(TENANT_ID, workspaceOwnerId, shipment.id).first();
+    return {
+      payload: { pod: podView(row), operationId: shipment.operation_id, shipmentStatus: "completed", billingEligible: true },
+      status: aplicado.resultado?.duplicada ? 200 : 201,
+    };
+  }
+
   const statements = [env.DB.prepare(
     `INSERT INTO todogreen_proofs_of_delivery
       (id,tenant_id,workspace_owner_id,service_order_id,delivery_id,kind,occurred_at,recipient_name,
@@ -508,25 +585,9 @@ async function registrarPod(env, { workspaceOwnerId, shipment, createdBy, body }
     Number.isFinite(lat) ? lat : null, Number.isFinite(lng) ? lng : null,
     JSON.stringify(object(body.metadata)), createdBy, now,
   )];
-  if (complete && !["completed", "cancelled"].includes(shipment.status)) {
-    statements.push(env.DB.prepare(
-      `UPDATE todogreen_service_orders SET status='completed',completed_at=?,revision=revision+1,updated_by=?,updated_at=?
-        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND status NOT IN ('completed','cancelled')`,
-    ).bind(occurredAt, createdBy, now, shipment.id, TENANT_ID, workspaceOwnerId));
-    statements.push(env.DB.prepare(
-      `INSERT OR IGNORE INTO todogreen_billing_items
-        (id,tenant_id,workspace_owner_id,service_order_id,client_id,contract_id,status,amount,
-         competence_date,created_by,updated_by,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,'eligible',?,?,?,?,?,?)`,
-    ).bind(
-      crypto.randomUUID(), TENANT_ID, workspaceOwnerId, shipment.id, shipment.client_id,
-      shipment.contract_id, shipment.net_amount, occurredAt.slice(0, 10),
-      createdBy, createdBy, now, now,
-    ));
-  }
   await env.DB.batch(statements);
   const row = await env.DB.prepare("SELECT * FROM todogreen_proofs_of_delivery WHERE id=?").bind(podId).first();
-  return { payload: { pod: podView(row), shipmentStatus: complete ? "completed" : shipment.status, billingEligible: complete }, status: 201 };
+  return { payload: { pod: podView(row), shipmentStatus: shipment.status, billingEligible: false }, status: 201 };
 }
 
 async function addPod(request, env, credential, identifier) {
@@ -539,11 +600,17 @@ async function addPod(request, env, credential, identifier) {
   const body = await request.json().catch(() => null);
   if (!body) return apiJson({ error: "invalid_json", message: "Corpo JSON inválido." }, 400);
 
-  const resultado = await registrarPod(env, { workspaceOwnerId: credential.workspace_owner_id, shipment, createdBy: `api:${credential.id}`, body });
+  const resultado = await registrarPod(env, {
+    workspaceOwnerId: credential.workspace_owner_id,
+    shipment,
+    createdBy: `api:${credential.id}`,
+    body,
+    idempotencyKey: `api-pod:${credential.id}:${idem.key}`,
+  });
   if (resultado.error) return apiJson(resultado.error.payload, resultado.error.status);
 
-  await rememberIdempotency(env, credential, request, idem.key, 201, resultado.payload);
-  return apiJson(resultado.payload, 201);
+  await rememberIdempotency(env, credential, request, idem.key, resultado.status, resultado.payload);
+  return apiJson(resultado.payload, resultado.status);
 }
 
 async function listPods(env, credential, identifier) {

@@ -176,6 +176,12 @@ describe("a entrega da rua fecha o ciclo", () => {
     expect(pod.recipient_name).toBe("Portaria Central");
     expect(pod.latitude).toBeCloseTo(-23.55);
     expect(pod.document_url).toContain("canhoto-j1");
+    const os = await env.DB.prepare("SELECT status FROM todogreen_service_orders WHERE id = 'os-j1'").first();
+    expect(os.status).toBe("completed");
+    const faturavel = await env.DB.prepare(
+      "SELECT status FROM todogreen_billing_items WHERE service_order_id = 'os-j1'",
+    ).first();
+    expect(faturavel.status).toBe("eligible");
   });
 
   it("ocorrência incrementa o contador da operação", async () => {

@@ -176,6 +176,48 @@ const ciotStatus = (env = {}) => {
   }, { external: !configured });
 };
 
+async function ciotStatusForOwner(env, ownerId) {
+  if (!env.DB || !ownerId) return ciotStatus(env);
+  const row = await env.DB.prepare(
+    `SELECT certificate_type,certificate_env_key,certificate_password_env_key,
+            a3_connector_env_key,connector_url_env_key,base_url,status,last_test_at,
+            last_error,config_json,credential_ciphertext,credential_iv
+       FROM todogreen_ciot_integrations
+      WHERE tenant_id='todogreen' AND workspace_owner_id=? AND mode='direct_api'
+        AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 1`,
+  ).bind(ownerId).first().catch(() => null);
+  if (!row) return ciotStatus(env);
+
+  let config = {};
+  try { config = JSON.parse(row.config_json || "{}"); } catch { config = {}; }
+  const storedCertificate = Boolean(row.credential_ciphertext && row.credential_iv);
+  const certificate = row.certificate_type === "A3"
+    ? Boolean(env[row.a3_connector_env_key] || config.a3ConnectorUrl)
+    : Boolean(storedCertificate || (env[row.certificate_env_key] && env[row.certificate_password_env_key]));
+  const connector = Boolean(
+    env[row.connector_url_env_key]
+    || config.connectorUrl
+    || (row.certificate_type === "A3" && (env[row.a3_connector_env_key] || config.a3ConnectorUrl)),
+  );
+  const configured = Boolean(row.base_url && certificate && connector);
+  const failed = Boolean(row.last_error) || ["error", "failed"].includes(String(row.status || "").toLowerCase());
+  const connected = configured && Boolean(row.last_test_at) && !failed;
+  return withReadiness({
+    id: "antt-ciot-direct",
+    name: "ANTT · CIOT direto",
+    configured,
+    status: failed ? "error" : readiness({ configured, connected, external: !configured }),
+    detail: failed
+      ? `Configuração presente, mas o último teste registrou erro: ${String(row.last_error || row.status).slice(0, 140)}`
+      : connected
+        ? `Conector validado em ${row.last_test_at}. A emissão oficial ainda depende da homologação ANTT do ambiente selecionado.`
+        : configured
+          ? "Certificado, endpoint e conector disponíveis. Falta registrar um teste bem-sucedido antes de produção."
+          : "A integração foi cadastrada, mas ainda falta certificado, endpoint oficial ou conector Windows.",
+    requirement: configured ? "Teste real em homologação ANTT" : "Certificado ICP-Brasil + endpoint + conector Windows",
+  });
+}
+
 const sefazStatus = (env = {}) => {
   const certificate = Boolean(env.NFE_CERT_PFX && env.NFE_CERT_PASSWORD);
   return withReadiness({
@@ -189,16 +231,16 @@ const sefazStatus = (env = {}) => {
   }, { external: !certificate });
 };
 
-const trackerDefaultStatus = () => withReadiness({
-  id: "track3r",
-  name: "Track3r / Sistemas Tracker",
+const sistemasTrackerDefaultStatus = () => withReadiness({
+  id: "sistemas-tracker",
+  name: "Sistemas Tracker · posição e telemetria",
   configured: false,
-  detail: "A vertical possui camada própria de integração e sincronização, mas este workspace ainda não comprovou conexão ativa.",
+  detail: "A camada de posição e telemetria está pronta, mas este espaço ainda não comprovou conexão ativa com a Sistemas Tracker.",
   requirement: "Cadastro da integração + credencial de API/webhook + sincronização bem-sucedida",
 });
 
 async function trackerStatusForOwner(env, ownerId) {
-  if (!env.DB || !ownerId) return trackerDefaultStatus();
+  if (!env.DB || !ownerId) return sistemasTrackerDefaultStatus();
   const integration = await env.DB.prepare(
     `SELECT status, sync_mode, token_env_key, webhook_secret_env_key,
             last_success_at, last_error
@@ -209,7 +251,7 @@ async function trackerStatusForOwner(env, ownerId) {
       LIMIT 1`,
   ).bind(ownerId).first().catch(() => null);
 
-  if (!integration) return trackerDefaultStatus();
+  if (!integration) return sistemasTrackerDefaultStatus();
   const apiCredential = Boolean(integration.token_env_key && env[integration.token_env_key]);
   const webhookCredential = Boolean(
     integration.webhook_secret_env_key && env[integration.webhook_secret_env_key],
@@ -223,8 +265,8 @@ async function trackerStatusForOwner(env, ownerId) {
   const connected = credentialReady && Boolean(integration.last_success_at) && !failed;
 
   return withReadiness({
-    id: "track3r",
-    name: "Track3r / Sistemas Tracker",
+    id: "sistemas-tracker",
+    name: "Sistemas Tracker · posição e telemetria",
     configured: credentialReady,
     status: failed
       ? "error"
@@ -239,6 +281,53 @@ async function trackerStatusForOwner(env, ownerId) {
     requirement: "Credencial segura + sincronização bem-sucedida",
   });
 }
+
+const track3rDefaultStatus = () => withReadiness({
+  id: "track3r",
+  name: "TRACK3R · documentos e ocorrências",
+  configured: false,
+  detail: "A importação por arquivo funciona sem credencial. API e webhook exigem configuração própria do TRACK3R.",
+  requirement: "Integração cadastrada + arquivo validado ou credencial do modo API/webhook",
+});
+
+async function track3rStatusForOwner(env, ownerId) {
+  if (!env.DB || !ownerId) return track3rDefaultStatus();
+  const integration = await env.DB.prepare(
+    `SELECT sync_mode,token_env_key,webhook_secret_env_key,status,last_sync_at,last_error
+       FROM todogreen_tms_integrations
+      WHERE tenant_id='todogreen' AND workspace_owner_id=? AND provider='track3r'
+        AND archived_at IS NULL LIMIT 1`,
+  ).bind(ownerId).first().catch(() => null);
+  if (!integration) return track3rDefaultStatus();
+  const mode = String(integration.sync_mode || "arquivo");
+  const credentialReady = mode === "arquivo"
+    || (mode === "api" && Boolean(integration.token_env_key && env[integration.token_env_key]))
+    || (mode === "webhook" && Boolean(integration.webhook_secret_env_key && env[integration.webhook_secret_env_key]));
+  const failed = Boolean(integration.last_error) || integration.status === "erro";
+  const connected = credentialReady && Boolean(integration.last_sync_at) && !failed;
+  return withReadiness({
+    id: "track3r",
+    name: "TRACK3R · documentos e ocorrências",
+    configured: credentialReady,
+    status: failed ? "error" : readiness({ configured: credentialReady, connected }),
+    detail: failed
+      ? `Última sincronização com erro: ${String(integration.last_error).slice(0, 140)}`
+      : connected
+        ? `Modo ${mode} validado. Última sincronização: ${integration.last_sync_at}.`
+        : credentialReady
+          ? `Modo ${mode} configurado, aguardando uma sincronização bem-sucedida.`
+          : `Modo ${mode} cadastrado, mas a credencial correspondente não está no cofre.`,
+    requirement: mode === "arquivo" ? "Importar e validar um arquivo real" : `Credencial do modo ${mode} + teste real`,
+  });
+}
+
+const ocppStatus = () => withReadiness({
+  id: "ocpp",
+  name: "OCPP · recarga elétrica",
+  configured: false,
+  detail: "Os pontos de recarga podem ser cadastrados, mas não há sessão OCPP ativa para disponibilidade, medição e cobrança em tempo real.",
+  requirement: "Central OCPP ou API da rede de recarga + credenciais + mapeamento dos carregadores",
+}, { external: true });
 
 const dataExchangeIntegrations = (env, activeWebhooks) => [
   withReadiness({
@@ -278,7 +367,7 @@ export function todoGreenIntegrationStatus(env = {}, { activeWebhooks = 0 } = {}
     market: marketIntegrations(search),
     messaging: messagingIntegrations(env),
     communication: communicationIntegrations(env),
-    operational: [trackerDefaultStatus(), sefazStatus(env), ciotStatus(env)],
+    operational: [track3rDefaultStatus(), sistemasTrackerDefaultStatus(), sefazStatus(env), ciotStatus(env), ocppStatus()],
     management: managementIntegrations(),
     dataExchange: dataExchangeIntegrations(env, activeWebhooks),
     automation: nativeAutomations(env),
@@ -317,9 +406,11 @@ export async function handleTodoGreenIntegrations(request, env, access) {
     const status = todoGreenIntegrationStatus(envBusca, { activeWebhooks });
     status.health = await latestTodoGreenIntegrationHealth(envBusca, access.ownerId);
     status.operational = [
+      await track3rStatusForOwner(envBusca, access.ownerId),
       await trackerStatusForOwner(envBusca, access.ownerId),
       sefazStatus(envBusca),
-      ciotStatus(envBusca),
+      await ciotStatusForOwner(envBusca, access.ownerId),
+      ocppStatus(),
     ];
     return json(status);
   }

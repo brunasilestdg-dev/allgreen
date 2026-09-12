@@ -31,8 +31,10 @@ describe("integrações da vertical", () => {
 
     expect(status.operational).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "track3r", status: "requires_setup" }),
+      expect.objectContaining({ id: "sistemas-tracker", status: "requires_setup" }),
       expect.objectContaining({ id: "sefaz-fiscal", configured: true, status: "configured" }),
       expect.objectContaining({ id: "antt-ciot-direct" }),
+      expect.objectContaining({ id: "ocpp", status: "external_dependency" }),
     ]));
     expect(status.management).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "monday", status: "external_dependency" }),

@@ -17,8 +17,8 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 const today = () => new Date().toISOString().slice(0, 10);
 const apiPath = "/api/todogreen/transactions";
 const statusLabel = { draft: "Rascunho", ready: "Pronto", sending: "Enviando", issued: "Emitido", failed: "Falha", contingency: "Contingência", released: "Liberada", in_progress: "Em execução", completed: "Concluída", cancelled: "Cancelada", eligible: "Elegível", checked: "Conferido", blocked: "Bloqueado", billed: "Faturado", open: "Em aberto", partial: "Parcial", settled: "Liquidado", overdue: "Vencido" };
-const nextStatus = { draft: "released", released: "in_progress", in_progress: "completed" };
-const nextLabel = { draft: "Aceitar viagem", released: "Enviar à operação", in_progress: "Concluir execução" };
+const nextStatus = { draft: "released", released: "in_progress" };
+const nextLabel = { draft: "Aceitar viagem", released: "Enviar à operação" };
 
 const request = async (path, authHeaders, options = {}) => {
   const response = await fetch(`${apiPath}/${path}`, {
@@ -53,18 +53,19 @@ function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }
   };
   const transition = async (record) => {
     const status = nextStatus[record.status]; if (!status) return;
-    try { await request(`service-orders/${record.id}/transition`, authHeaders, { method: "POST", body: JSON.stringify({ status, revision: record.revision }) }); setToast?.(status === "completed" ? "OS concluída: item liberado para a fila de faturamento" : "Ordem atualizada"); await load(); } catch (error) { setToast?.(error.message); if (String(error.message).includes("comprovante")) setPodFor(record.id); }
+    try { await request(`service-orders/${record.id}/transition`, authHeaders, { method: "POST", body: JSON.stringify({ status, revision: record.revision }) }); setToast?.("Ordem atualizada"); await load(); } catch (error) { setToast?.(error.message); }
   };
-  // Registro do comprovante de entrega (POD): sem ele, a régua de faturamento
-  // recusa a conclusão da OS. Recebedor OU link do arquivo — um dos dois basta.
+  // O POD é o evento canônico de entrega: conclui operação e OS e cria o item
+  // faturável no mesmo comando. Recebedor OU arquivo é obrigatório.
   const [podFor, setPodFor] = useState("");
   const [pod, setPod] = useState({ recipientName: "", documentUrl: "" });
   const savePod = async (event) => {
     event.preventDefault();
     try {
       await request(`service-orders/${podFor}/pod`, authHeaders, { method: "POST", body: JSON.stringify(pod) });
-      setToast?.("Comprovante registrado — a OS já pode ser concluída");
+      setToast?.("Entrega concluída: POD registrado e item liberado para faturamento");
       setPodFor(""); setPod({ recipientName: "", documentUrl: "" });
+      await load();
     } catch (error) { setToast?.(error.message); }
   };
   return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">PLANEJAMENTO E PRODUTOS</span><h2>Aceite e ordens de serviço</h2><p>Planejamento/Produtos aceita a viagem e libera a OS. Operação executa depois; Financeiro entra com CT-e, documento fiscal, título e baixa.</p></div><div className="tdg-page-actions"><strong>{records.length} ordem(ns)</strong><button type="button" className="tdg-action" onClick={() => setNovaAberta(true)}><Plus size={16} />Nova OS</button></div></div>
@@ -96,8 +97,7 @@ function ServiceOrders({ authHeaders, clients, contracts, operations, setToast }
 
 function Billing({ authHeaders, clients, setToast }) {
   const [records, setRecords] = useState([]); const [selected, setSelected] = useState([]); const [dueDate, setDueDate] = useState(today()); const [documentType, setDocumentType] = useState("cte");
-  // Entregas com POD que ainda não chegaram à fila (#120): a ponte manual entre
-  // "entreguei com comprovante" e "a régua de faturamento enxerga". Só leitura.
+  // Saneamento de entregas legadas/importadas anteriores ao comando canônico.
   const [pendentes, setPendentes] = useState([]);
   const [gerarPara, setGerarPara] = useState(null); const [qtd, setQtd] = useState(""); const [gerando, setGerando] = useState(false);
   const load = useCallback(async () => { try { const [parts, entregas] = await Promise.all([Promise.all(["eligible", "checked", "blocked"].map((status) => request(`billing-items?status=${status}`, authHeaders))), request("entregas-a-faturar", authHeaders).catch(() => ({ records: [] }))]); setRecords(parts.flatMap((item) => item.records || [])); setPendentes(entregas.records || []); } catch (error) { setToast?.(error.message); } }, [authHeaders, setToast]);
@@ -109,7 +109,7 @@ function Billing({ authHeaders, clients, setToast }) {
   const checked = records.filter((item) => item.status === "checked");
   return <section className="tdg-panel tdg-txn-page"><div className="tdg-section-head"><div><span className="tdg-kicker">OPERAÇÃO → CT-E → TÍTULO</span><h2>Fila de faturamento</h2><p>Somente OS concluída entra no Financeiro. A conferência fiscal fecha CT-e/documento, faturamento e conta a receber.</p></div><strong>{records.length} item(ns)</strong></div>
     {pendentes.length > 0 && <div className="tdg-derivado">
-      <div className="tdg-derivado-head"><div><strong>Entregas com POD aguardando faturamento</strong><small>Comprovante registrado na rua, mas ainda sem item na fila: cada uma precisa de uma OS concluída para virar título. O valor não é gerado sozinho.</small></div><span className="tdg-derivado-count">{pendentes.length}</span></div>
+      <div className="tdg-derivado-head"><div><strong>Entregas legadas aguardando saneamento</strong><small>Registros antigos ou importados sem a ligação completa entre operação, OS e faturamento. Entregas novas são concluídas automaticamente pelo POD.</small></div><span className="tdg-derivado-count">{pendentes.length}</span></div>
       <div className="tdg-txn-list">{pendentes.map((item) => <article className="tdg-txn-row tdg-derivado-row" key={item.id}>
         <span><strong>{item.reference || "Operação"}</strong><small>{item.clientName || clientName(clients, item.clientId)}{item.deliveredAt ? ` · entregue ${item.deliveredAt.slice(0, 10)}` : ""}{item.driverName ? ` · ${item.driverName}` : ""}</small></span>
         <span className={`tdg-derivado-tag ${item.estado}`}>{item.estado === "sem_os" ? "Sem OS" : `OS ${comRotulo(statusLabel, item.serviceOrderStatus)}`}{item.serviceOrderNumber ? ` · ${item.serviceOrderNumber}` : ""}</span>

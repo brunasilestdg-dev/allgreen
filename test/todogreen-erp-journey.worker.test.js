@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import worker from "../worker-entry.js";
+import { ITENS_CHECKLIST } from "../src/features/logistics/driverChecklistDomain.js";
 
 // Jornada transversal do ERP.
 //
@@ -434,25 +435,132 @@ describe("jornada cliente → caixa", () => {
       os = (await mov.json()).record;
     }
 
-    // 14. Ocorrência fica na operação antes da entrega.
-    const ocorrencia = await pedir(`/api/todogreen/records/operations/${operacao.id}/events`, {
+    // 14. Cadastro operacional, despacho e rota. Identidade é infraestrutura
+    // do teste; motorista, veículo e alocação passam pelas APIs do produto.
+    const motoristaUsuario = await criarUsuario("journey-driver", "motorista@journey.test");
+    await autorizar(motoristaUsuario, {
+      role: "motorista",
+      permissions: ["driver:self", "driver:event"],
+      workspaceOwnerId: dona.id,
+    });
+    const motoristaResp = await pedir("/api/todogreen/master-data/drivers", {
       method: "POST", token: dona.token,
       body: {
-        tipo: "ocorrencia",
-        titulo: "Atraso no carregamento",
-        descricao: "Fila no embarcador, tratada pela operação.",
+        driverCode: "JRN-DRV-01",
+        fullName: "Motorista da Jornada",
+        document: "12345678901",
+        availabilityStatus: "available",
+        cnhNumber: "99999999999",
+        cnhCategory: "D",
+        cnhExpiresAt: "2030-01-01",
+        status: "active",
+        userEmail: motoristaUsuario.email,
       },
     });
-    expect(ocorrencia.status).toBe(201);
+    expect(motoristaResp.status).toBe(201);
+    const motorista = (await motoristaResp.json()).record;
 
-    // 15. Entrega com comprovante gera POD para a OS vinculada.
-    const entrega = await pedir(`/api/todogreen/records/operations/${operacao.id}/events`, {
+    const veiculoResp = await pedir("/api/todogreen/fleet", {
       method: "POST", token: dona.token,
+      body: {
+        prefix: "JRN-EV-01",
+        plate: "JRN1A23",
+        category: "VUC",
+        vehicleClass: "vuc",
+        energyType: "electric",
+        status: "available",
+        payloadKg: 1500,
+      },
+    });
+    expect(veiculoResp.status).toBe(201);
+    const veiculo = (await veiculoResp.json()).vehicle;
+
+    const despacho = await pedir("/api/todogreen/dispatch/aplicar", {
+      method: "POST", token: dona.token,
+      body: {
+        planId: crypto.randomUUID(),
+        tours: [{
+          veiculoId: veiculo.id,
+          motoristaId: motorista.id,
+          operacoes: [operacao.id],
+          distanciaKm: 100,
+          duracaoMin: 180,
+          paradas: [
+            { operationId: operacao.id, tipo: "coleta" },
+            { operationId: operacao.id, tipo: "entrega" },
+          ],
+        }],
+      },
+    });
+    expect(despacho.status).toBe(200);
+    const rotaId = (await despacho.json()).rotas[0];
+
+    // 15. O motorista não inicia sem vistoria. Uma vistoria reprovada também
+    // não libera a jornada; só a aprovada abre a execução da rota.
+    const inicioSemVistoria = await pedir("/api/todogreen/driver-portal/jornada/inicio", {
+      method: "POST", token: motoristaUsuario.token, body: {},
+    });
+    expect(inicioSemVistoria.status).toBe(409);
+
+    const respostas = Object.fromEntries(ITENS_CHECKLIST.map((item) => [item.id, "ok"]));
+    const vistoriaReprovada = await pedir("/api/todogreen/driver-portal/checklist", {
+      method: "POST", token: motoristaUsuario.token,
+      body: {
+        respostas: { ...respostas, freios: "problema" },
+        observacao: "Falha crítica corrigida antes da saída.",
+        rotaId,
+        veiculoId: veiculo.id,
+        veiculoPlaca: veiculo.plate,
+      },
+    });
+    expect(vistoriaReprovada.status).toBe(201);
+    expect((await vistoriaReprovada.json()).checklist.status).toBe("reprovado");
+    const inicioReprovado = await pedir("/api/todogreen/driver-portal/jornada/inicio", {
+      method: "POST", token: motoristaUsuario.token, body: {},
+    });
+    expect(inicioReprovado.status).toBe(409);
+
+    const vistoria = await pedir("/api/todogreen/driver-portal/checklist", {
+      method: "POST", token: motoristaUsuario.token,
+      body: { respostas, rotaId, veiculoId: veiculo.id, veiculoPlaca: veiculo.plate },
+    });
+    expect(vistoria.status).toBe(201);
+    expect((await vistoria.json()).checklist.status).toBe("aprovado");
+
+    const inicioJornada = await pedir("/api/todogreen/driver-portal/jornada/inicio", {
+      method: "POST", token: motoristaUsuario.token, body: { local: "CD São Paulo" },
+    });
+    expect(inicioJornada.status).toBe(201);
+
+    // 16. Coleta, trânsito e ocorrência são fatos do mesmo ledger que o
+    // cliente consulta. O motorista não atualiza uma cópia paralela.
+    for (const [tipo, titulo] of [
+      ["coleta", "Coleta confirmada"],
+      ["transito", "Carga em trânsito"],
+      ["ocorrencia", "Fila no embarcador"],
+    ]) {
+      const evento = await pedir(`/api/todogreen/driver-portal/viagens/${operacao.id}/evento`, {
+        method: "POST", token: motoristaUsuario.token,
+        body: {
+          tipo, titulo,
+          descricao: tipo === "ocorrencia" ? "Atraso tratado pela operação." : "",
+          latitude: -23.55, longitude: -46.63,
+          idempotencyKey: `journey-${tipo}`,
+        },
+      });
+      expect(evento.status).toBe(201);
+    }
+
+    // 17. A entrega com POD, feita pelo motorista, conclui operação + OS e
+    // libera faturamento no mesmo comando. Não há clique manual no ERP.
+    const entrega = await pedir(`/api/todogreen/driver-portal/viagens/${operacao.id}/evento`, {
+      method: "POST", token: motoristaUsuario.token,
       body: {
         tipo: "entrega",
         titulo: "Entrega concluída",
         recebedor: "Portaria Campinas",
         comprovanteUrl: "https://exemplo.test/pod-jornada.jpg",
+        idempotencyKey: "journey-entrega",
       },
     });
     expect(entrega.status).toBe(201);
@@ -460,13 +568,33 @@ describe("jornada cliente → caixa", () => {
     const pods = await pedir(`/api/todogreen/transactions/service-orders/${os.id}/pod`, { token: dona.token });
     expect((await pods.json()).records).toHaveLength(1);
 
-    const concluida = await pedir(`/api/todogreen/transactions/service-orders/${os.id}/transition`, {
-      method: "POST", token: dona.token, body: { status: "completed", revision: os.revision },
-    });
-    expect(concluida.status).toBe(200);
-    os = (await concluida.json()).record;
+    const osConcluida = await pedir(`/api/todogreen/transactions/service-orders?status=completed`, { token: dona.token });
+    os = (await osConcluida.json()).records.find((registro) => registro.id === os.id);
+    expect(os?.status).toBe("completed");
 
-    // 16. Faturamento cria fatura e contas a receber.
+    // O portal resolve o cliente pelo vínculo da sessão e enxerga a mesma
+    // operação entregue, ocorrência e POD, sem receber clientId na URL.
+    const clienteUsuario = await criarUsuario("journey-client", "gestor.cliente@journey.test");
+    const portalOperacoes = await pedir("/api/todogreen/portal/operacoes", { token: clienteUsuario.token });
+    expect(portalOperacoes.status).toBe(200);
+    const vistaCliente = (await portalOperacoes.json()).operacoes.find((registro) => registro.id === operacao.id);
+    expect(vistaCliente).toBeTruthy();
+    expect(vistaCliente.entregueEm).toBeTruthy();
+    expect(vistaCliente.ocorrencias).toBe(1);
+    const detalheCliente = await pedir(`/api/todogreen/portal/operacoes/${operacao.id}`, { token: clienteUsuario.token });
+    expect(detalheCliente.status).toBe(200);
+    const detalhe = await detalheCliente.json();
+    expect(detalhe.comprovante.disponivel).toBe(true);
+    expect(detalhe.linhaDoTempo.map((evento) => evento.tipo)).toEqual(
+      expect.arrayContaining(["coleta", "transito", "ocorrencia", "entrega"]),
+    );
+
+    const fimJornada = await pedir("/api/todogreen/driver-portal/jornada/fim", {
+      method: "POST", token: motoristaUsuario.token, body: { local: "Campinas" },
+    });
+    expect(fimJornada.status).toBe(200);
+
+    // 18. Faturamento cria fatura e contas a receber.
     const fila = await pedir("/api/todogreen/transactions/billing-items?status=eligible", { token: dona.token });
     const itens = (await fila.json()).records;
     const item = itens.find((registro) => registro.service_order_id === os.id || registro.serviceOrderId === os.id);
@@ -491,7 +619,7 @@ describe("jornada cliente → caixa", () => {
     expect(fatura.documentType).toBe("cte");
     expect(fatura.invoiceNumber).toMatch(/^CTE-/);
 
-    // 17. Fiscal interno prepara CT-e. Não confundir com autorização SEFAZ.
+    // 19. Fiscal interno prepara CT-e. Não confundir com autorização SEFAZ.
     const perfilFiscal = await pedir("/api/todogreen/fiscal/profile", {
       method: "POST", token: dona.token,
       body: {
@@ -516,7 +644,7 @@ describe("jornada cliente → caixa", () => {
     expect(documentoFiscal.status).toBe("rascunho");
     expect(documentoFiscal.invoiceId).toBe(fatura.invoiceId);
 
-    // 18. Recebimento fecha o financeiro e reflete no razão.
+    // 20. Recebimento fecha o financeiro e reflete no razão.
     const titulosResp = await pedir("/api/todogreen/transactions/titles?kind=receivable", { token: dona.token });
     const titulos = (await titulosResp.json()).records;
     const titulo = titulos.find((registro) => registro.client_id === clientId || registro.clientId === clientId);
