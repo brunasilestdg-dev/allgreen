@@ -3,6 +3,7 @@ import { allowed } from "../lib/http.js";
 import { TENANT_ID } from "./todogreen-access.js";
 import { planElectricRoute } from "./todogreen-electric-routing.js";
 import { estimateRouteEnergy } from "../../src/features/logistics/energyEstimationDomain.js";
+import { selectRoutingEngine } from "../../src/features/logistics/routingEngineSelectionDomain.js";
 
 const cors = {
   "access-control-allow-origin": "*",
@@ -88,7 +89,7 @@ function routingEndpoint(env) {
   }
 }
 
-async function electricPlan(request) {
+async function electricPlan(request, env) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object" || Array.isArray(body))
     return apiJson({ error: "invalid_electric_request", message: "Corpo JSON inválido." }, 400);
@@ -104,12 +105,25 @@ async function electricPlan(request) {
   // aqui não invalida o plano — só significa que faltou dado para a estimativa.
   const energyEstimate = estimateRouteEnergy(body);
 
+  // Qual motor de rota (OSRM x Valhalla) o backend escolheria para este
+  // veículo, considerando a classe/restrições e os motores realmente
+  // disponíveis. É metadado informativo — a decisão de path fica no dispatch
+  // quando a infra do motor estiver conectada. `available` reflete os motores
+  // configurados por env (sem URL configurada, o motor não é oferecido).
+  const availableEngines = [];
+  if (String(env?.TDG_OSRM_BASE_URL || "").trim()) availableEngines.push("osrm");
+  if (String(env?.TDG_VALHALLA_BASE_URL || "").trim()) availableEngines.push("valhalla");
+  const routingEngineSelection = selectRoutingEngine(body.vehicle || {}, {
+    available: availableEngines.length ? availableEngines : undefined,
+  });
+
   return apiJson({
     engine: "tdg-electric-routing-v1",
     provider: "native",
     generatedAt: new Date().toISOString(),
     plan: result,
     energyEstimate,
+    routingEngineSelection,
   }, 200, { "x-tdg-routing-engine": "tdg-electric-routing-v1" });
 }
 
@@ -185,6 +199,6 @@ export async function handlePublicTodoGreenRoutingApi(request, env) {
     return apiJson({ error: "rate_limited", message: "Limite de chamadas por minuto atingido." }, 429, { "retry-after": "60" });
 
   const pathname = new URL(request.url).pathname;
-  if (pathname.endsWith("/routes/electric-plan")) return electricPlan(request);
+  if (pathname.endsWith("/routes/electric-plan")) return electricPlan(request, env);
   return optimize(request, env);
 }
