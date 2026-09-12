@@ -25,6 +25,11 @@ import {
   podePagar,
 } from "../../src/features/logistics/pjInvoiceDomain.js";
 import { enviarPagamentoSyspag, syspagHabilitado, syspagProntidao } from "./todogreen-syspag.js";
+import {
+  validarChamado,
+  podeAtender,
+  podeResolver,
+} from "../../src/features/logistics/employeeTicketDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -104,6 +109,26 @@ const notasDoColaborador = async (env, ownerId, employeeId) => {
   return (results || []).map(notaDaLinha);
 };
 
+const chamadoDaLinha = (row) => ({
+  id: row.id,
+  categoria: row.categoria || "outro",
+  assunto: row.assunto || "",
+  descricao: row.descricao || "",
+  status: row.status || "aberto",
+  resposta: row.response || "",
+  abertoEm: row.created_at || "",
+  resolvidoEm: row.resolved_at || "",
+});
+
+const chamadosDoColaborador = async (env, ownerId, employeeId) => {
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM todogreen_employee_tickets
+      WHERE tenant_id = ? AND workspace_owner_id = ? AND employee_id = ? AND archived_at IS NULL
+      ORDER BY (status IN ('aberto','em_andamento')) DESC, created_at DESC LIMIT 40`,
+  ).bind(TENANT_ID, ownerId, employeeId).all();
+  return (results || []).map(chamadoDaLinha);
+};
+
 // ---- self-service (a própria pessoa) ------------------------------------
 
 const responderSessao = async (env, access, colaborador) => {
@@ -115,6 +140,7 @@ const responderSessao = async (env, access, colaborador) => {
   const pj = ehPj(colaborador);
   const pix = await pixDoColaborador(env, access.ownerId, colaborador.id);
   const notas = pj ? await notasDoColaborador(env, access.ownerId, colaborador.id) : [];
+  const chamados = await chamadosDoColaborador(env, access.ownerId, colaborador.id);
   return json({
     vinculado: true,
     colaborador: {
@@ -131,7 +157,27 @@ const responderSessao = async (env, access, colaborador) => {
       tiposPix: TIPOS_CHAVE_PIX,
     },
     notas,
+    chamados,
   });
+};
+
+// O colaborador (CLT ou PJ) abre um chamado quando vê divergência nos próprios
+// dados. Ele não corrige — quem resolve é a equipe (RH/financeiro).
+const abrirChamado = async (env, access, user, colaborador, corpo) => {
+  const categoria = texto(corpo.categoria, 30);
+  const assunto = texto(corpo.assunto, 160);
+  const descricao = texto(corpo.descricao, 2000);
+  const validacao = validarChamado({ categoria, assunto, descricao });
+  if (!validacao.valido) return json({ error: validacao.erro }, 400);
+  const id = crypto.randomUUID();
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO todogreen_employee_tickets
+       (id, tenant_id, workspace_owner_id, employee_id, categoria, assunto, descricao, status,
+        response, fields_json, revision, created_by, updated_by, created_at, updated_at, archived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'aberto', '', '{}', 1, ?, ?, ?, ?, NULL)`,
+  ).bind(id, TENANT_ID, access.ownerId, colaborador.id, categoria, assunto, descricao, user.id, user.id, agora, agora).run();
+  return json({ ok: true, id, chamados: await chamadosDoColaborador(env, access.ownerId, colaborador.id) }, 201);
 };
 
 // PJ grava a PRÓPRIA chave PIX (destino do repasse). Vai para o cadastro
@@ -356,6 +402,59 @@ const pagarNota = async (env, ownerId, user, id) => {
   });
 };
 
+const chamadoGestaoDaLinha = (row) => ({
+  ...chamadoDaLinha(row),
+  colaboradorId: row.employee_id,
+  colaboradorNome: row.full_name || "",
+});
+
+const listarChamadosGestao = async (env, ownerId, url) => {
+  const status = texto(url.searchParams.get("status"), 20);
+  const filtro = ["aberto", "em_andamento", "resolvido", "cancelado"].includes(status) ? status : "";
+  const sql =
+    `SELECT t.*, e.full_name FROM todogreen_employee_tickets t
+       LEFT JOIN todogreen_employees e ON e.id = t.employee_id AND e.workspace_owner_id = t.workspace_owner_id
+      WHERE t.tenant_id = ? AND t.workspace_owner_id = ? AND t.archived_at IS NULL` +
+    (filtro ? ` AND t.status = ?` : "") +
+    ` ORDER BY (t.status IN ('aberto','em_andamento')) DESC, t.created_at DESC LIMIT 200`;
+  const binds = filtro ? [TENANT_ID, ownerId, filtro] : [TENANT_ID, ownerId];
+  const { results } = await env.DB.prepare(sql).bind(...binds).all();
+  return (results || []).map(chamadoGestaoDaLinha);
+};
+
+const chamadoPorId = (env, ownerId, id) =>
+  env.DB.prepare(
+    `SELECT * FROM todogreen_employee_tickets
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+  ).bind(id, TENANT_ID, ownerId).first();
+
+const atenderChamado = async (env, ownerId, user, id) => {
+  const t = await chamadoPorId(env, ownerId, id);
+  if (!t) return json({ error: "Chamado não encontrado." }, 404);
+  if (!podeAtender(t.status)) return json({ error: "Só um chamado aberto entra em andamento." }, 409);
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE todogreen_employee_tickets SET status = 'em_andamento', updated_by = ?, updated_at = ?, revision = revision + 1
+      WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND status = 'aberto'`,
+  ).bind(user.id, agora, id, TENANT_ID, ownerId).run();
+  return json({ ok: true });
+};
+
+const resolverChamado = async (env, ownerId, user, id, corpo) => {
+  const t = await chamadoPorId(env, ownerId, id);
+  if (!t) return json({ error: "Chamado não encontrado." }, 404);
+  if (!podeResolver(t.status)) return json({ error: "Este chamado não pode ser resolvido." }, 409);
+  const resposta = texto(corpo.resposta, 2000);
+  if (!resposta) return json({ error: "Escreva a resposta (o colaborador vê o que foi feito)." }, 400);
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE todogreen_employee_tickets
+       SET status = 'resolvido', response = ?, resolved_by = ?, resolved_at = ?, updated_by = ?, updated_at = ?, revision = revision + 1
+     WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND status IN ('aberto','em_andamento')`,
+  ).bind(resposta, user.id, agora, user.id, agora, id, TENANT_ID, ownerId).run();
+  return json({ ok: true });
+};
+
 export async function handleTodoGreenEmployeePortal(request, env, access, user) {
   if (!env.DB) return json({ error: "Banco indisponível." }, 503);
   const url = new URL(request.url);
@@ -366,19 +465,26 @@ export async function handleTodoGreenEmployeePortal(request, env, access, user) 
   if (recurso === "gestao") {
     if (!podeGerir(access))
       return json({ error: "A gestão de notas PJ é do RH ou do financeiro." }, 403);
-    const sub = texto(partes[4], 40); // "notas"
-    const notaId = texto(partes[5], 120);
+    const sub = texto(partes[4], 40); // "notas" | "chamados"
+    const alvoId = texto(partes[5], 120);
     const acao = texto(partes[6], 30);
-    if (request.method === "GET" && sub === "notas" && !notaId)
+    if (request.method === "GET" && sub === "notas" && !alvoId)
       return json({ notas: await listarNotasGestao(env, access.ownerId, url) });
-    if (request.method === "POST" && sub === "notas" && notaId) {
+    if (request.method === "POST" && sub === "notas" && alvoId) {
       const corpo = await request.json().catch(() => ({}));
-      if (acao === "aprovar") return aprovarNota(env, access.ownerId, user, notaId);
-      if (acao === "recusar") return recusarNota(env, access.ownerId, user, notaId, corpo);
-      if (acao === "ajustar") return ajustarEsperado(env, access.ownerId, user, notaId, corpo);
-      if (acao === "pagar") return pagarNota(env, access.ownerId, user, notaId);
+      if (acao === "aprovar") return aprovarNota(env, access.ownerId, user, alvoId);
+      if (acao === "recusar") return recusarNota(env, access.ownerId, user, alvoId, corpo);
+      if (acao === "ajustar") return ajustarEsperado(env, access.ownerId, user, alvoId, corpo);
+      if (acao === "pagar") return pagarNota(env, access.ownerId, user, alvoId);
     }
-    return json({ error: "Rota de gestão de notas PJ não encontrada." }, 404);
+    if (request.method === "GET" && sub === "chamados" && !alvoId)
+      return json({ chamados: await listarChamadosGestao(env, access.ownerId, url) });
+    if (request.method === "POST" && sub === "chamados" && alvoId) {
+      const corpo = await request.json().catch(() => ({}));
+      if (acao === "atender") return atenderChamado(env, access.ownerId, user, alvoId);
+      if (acao === "resolver") return resolverChamado(env, access.ownerId, user, alvoId, corpo);
+    }
+    return json({ error: "Rota de gestão do colaborador não encontrada." }, 404);
   }
 
   // ---- self-service (a própria pessoa) ----
@@ -397,6 +503,10 @@ export async function handleTodoGreenEmployeePortal(request, env, access, user) 
   if (request.method === "POST" && recurso === "nota") {
     const corpo = await request.json().catch(() => ({}));
     return imputarNota(env, access, user, colaborador, corpo);
+  }
+  if (request.method === "POST" && recurso === "chamado") {
+    const corpo = await request.json().catch(() => ({}));
+    return abrirChamado(env, access, user, colaborador, corpo);
   }
 
   return json({ error: "Rota do portal do colaborador não encontrada." }, 404);

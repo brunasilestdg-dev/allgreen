@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileText, User, Wallet } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, LifeBuoy, User, Wallet } from "lucide-react";
 import "./TodoGreenPages.css";
 import { TIPOS_CHAVE_PIX, rotuloTipoPix } from "../pixDomain.js";
 import { rotuloStatusNotaPj, conferirNota } from "../pjInvoiceDomain.js";
+import { CATEGORIAS_CHAMADO, rotuloStatusChamado, rotuloCategoriaChamado } from "../employeeTicketDomain.js";
 
 // ===== Portal do Colaborador (PJ e CLT) =====
 //
@@ -51,6 +52,12 @@ export default function ColaboradorPortalPage() {
   const [nfValor, setNfValor] = useState("");
   const [nfAnexo, setNfAnexo] = useState("");
   const [enviandoNota, setEnviandoNota] = useState(false);
+
+  // Chamado (CLT e PJ): reportar divergência nos próprios dados.
+  const [chCategoria, setChCategoria] = useState("dados_cadastrais");
+  const [chAssunto, setChAssunto] = useState("");
+  const [chDescricao, setChDescricao] = useState("");
+  const [abrindoChamado, setAbrindoChamado] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -107,6 +114,23 @@ export default function ColaboradorPortalPage() {
       setAviso(motivo.message || "Não consegui enviar a nota.");
     } finally {
       setEnviandoNota(false);
+    }
+  };
+
+  const abrirChamado = async () => {
+    setAbrindoChamado(true);
+    try {
+      await pedir("/chamado", {
+        method: "POST",
+        body: JSON.stringify({ categoria: chCategoria, assunto: chAssunto, descricao: chDescricao }),
+      });
+      setAviso("Chamado aberto. A equipe vai analisar e responder.");
+      setChAssunto(""); setChDescricao("");
+      await carregar();
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui abrir o chamado.");
+    } finally {
+      setAbrindoChamado(false);
     }
   };
 
@@ -169,7 +193,7 @@ export default function ColaboradorPortalPage() {
       ) : (
         <article className="tdg-driver-cartao">
           <div className="tdg-driver-info-linha"><Wallet size={16} /><span>Dados bancários</span></div>
-          <small>Seus dados de banco/PIX são cadastrados pelo RH. Se houver divergência, abra um chamado — em breve por aqui.</small>
+          <small>Seus dados de banco/PIX são cadastrados pelo RH. Se houver divergência, abra um chamado abaixo — a equipe corrige.</small>
         </article>
       )}
 
@@ -230,6 +254,41 @@ export default function ColaboradorPortalPage() {
           </article>
         </>
       )}
+
+      <article className="tdg-driver-cartao tdg-colab-nota">
+        <div className="tdg-driver-info-linha"><LifeBuoy size={16} /><span>Abrir chamado</span></div>
+        <small>Viu algo errado nos seus dados? Abra um chamado — a equipe corrige (você não edita direto).</small>
+        <label className="tdg-driver-pix-campo">
+          <span>Categoria</span>
+          <select value={chCategoria} onChange={(e) => setChCategoria(e.target.value)} disabled={abrindoChamado}>
+            {CATEGORIAS_CHAMADO.map((cat) => <option key={cat.id} value={cat.id}>{cat.rotulo}</option>)}
+          </select>
+        </label>
+        <label className="tdg-driver-pix-campo">
+          <span>Assunto</span>
+          <input type="text" value={chAssunto} onChange={(e) => setChAssunto(e.target.value)} disabled={abrindoChamado} placeholder="Ex.: minha chave PIX está errada" />
+        </label>
+        <label className="tdg-driver-pix-campo">
+          <span>Descrição</span>
+          <textarea rows={3} value={chDescricao} onChange={(e) => setChDescricao(e.target.value)} disabled={abrindoChamado} placeholder="Diga o que está divergente e o dado correto." />
+        </label>
+        <button type="button" className="tdg-captura-btn" onClick={abrirChamado} disabled={abrindoChamado}>
+          <LifeBuoy size={16} /> {abrindoChamado ? "Abrindo…" : "Abrir chamado"}
+        </button>
+        {sessao.chamados?.length > 0 && (
+          <ul className="tdg-colab-notas">
+            {sessao.chamados.map((ch) => (
+              <li key={ch.id}>
+                <div>
+                  <b>{rotuloCategoriaChamado(ch.categoria)}</b> · {ch.assunto}
+                  <span className={`tdg-colab-status ${ch.status}`}>{rotuloStatusChamado(ch.status)}</span>
+                </div>
+                {ch.resposta && <small>Resposta: {ch.resposta}</small>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
 
       <p className="tdg-driver-rodape-nota">
         {c.tipo === "pj"

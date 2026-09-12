@@ -201,9 +201,10 @@ valor, anexo). O valor é conferido contra o "salário"/contrato cadastrado no
 colaborador — que o financeiro pode ajustar (ex.: entrada no meio do mês). Nota
 aprovada vira conta a pagar; o repasse sai por PIX quando a SysPag estiver ligada.
 O **CLT** vê os próprios dados nesse mesmo portal, mas o banco/PIX é cadastrado pelo
-RH (Cadastros → Contas bancárias); em caso de divergência, o CLT abre um chamado
-(em construção). Para o PJ prestador ter login sem enxergar o resto do ERP, use o
-papel **"Colaborador"** ao liberar o acesso dele.
+RH (Cadastros → Contas bancárias); em caso de divergência, o CLT **abre um chamado**
+ali mesmo (categoria, assunto, descrição) — a equipe (RH/financeiro) atende e
+responde, e o CLT vê a resposta. Para o PJ prestador ter login sem enxergar o resto
+do ERP, use o papel **"Colaborador"** ao liberar o acesso dele.
 
 Para ligar, preciso que você levante com a SysPag e cadastre no cofre:
 

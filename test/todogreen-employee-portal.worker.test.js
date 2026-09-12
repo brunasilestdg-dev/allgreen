@@ -216,6 +216,11 @@ describe("gestão do RH/financeiro: analisar, ajustar, aprovar, pagar", () => {
     expect(conta.paid_amount).toBe(4000);
   });
 
+  it("colaborador comum não alcança os chamados da gestão (403)", async () => {
+    const r = await pedir("/api/todogreen/employee-portal/gestao/chamados", { token: clt.token });
+    expect(r.status).toBe(403);
+  });
+
   it("recusar exige motivo e volta a nota para o PJ corrigir", async () => {
     // Nova nota do PJ A para recusar.
     await pedir("/api/todogreen/employee-portal/nota", {
@@ -249,5 +254,64 @@ describe("gestão do RH/financeiro: analisar, ajustar, aprovar, pagar", () => {
     const daComp = s2.notas.filter((x) => x.competencia === "2026-10");
     expect(daComp.length).toBe(1); // reenvio atualizou, não duplicou
     expect(daComp[0].status).toBe("em_analise");
+  });
+});
+
+describe("chamado do colaborador (CLT abre, equipe resolve)", () => {
+  it("CLT abre chamado de divergência e o vê aberto na própria sessão", async () => {
+    const r = await pedir("/api/todogreen/employee-portal/chamado", {
+      method: "POST", token: clt.token,
+      body: { categoria: "banco_pix", assunto: "PIX errado", descricao: "Minha chave PIX no cadastro está desatualizada." },
+    });
+    expect(r.status).toBe(201);
+    const s = await (await pedir("/api/todogreen/employee-portal/sessao", { token: clt.token })).json();
+    const ch = s.chamados.find((x) => x.assunto === "PIX errado");
+    expect(ch.status).toBe("aberto");
+    expect(ch.categoria).toBe("banco_pix");
+  });
+
+  it("chamado sem descrição suficiente é recusado (400)", async () => {
+    const r = await pedir("/api/todogreen/employee-portal/chamado", {
+      method: "POST", token: clt.token,
+      body: { categoria: "dados_cadastrais", assunto: "x", descricao: "abc" },
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it("a equipe atende, resolve com resposta, e o colaborador vê a resposta", async () => {
+    const lista = await (await pedir("/api/todogreen/employee-portal/gestao/chamados", { token: dona.token })).json();
+    const ch = lista.chamados.find((x) => x.assunto === "PIX errado");
+    expect(ch.colaboradorNome).toBe("Colaborador CLT");
+
+    const at = await pedir(`/api/todogreen/employee-portal/gestao/chamados/${ch.id}/atender`, {
+      method: "POST", token: dona.token,
+    });
+    expect(at.status).toBe(200);
+
+    // Resolver sem resposta é recusado.
+    const semResposta = await pedir(`/api/todogreen/employee-portal/gestao/chamados/${ch.id}/resolver`, {
+      method: "POST", token: dona.token, body: {},
+    });
+    expect(semResposta.status).toBe(400);
+
+    const res = await pedir(`/api/todogreen/employee-portal/gestao/chamados/${ch.id}/resolver`, {
+      method: "POST", token: dona.token, body: { resposta: "Corrigimos sua chave PIX no cadastro." },
+    });
+    expect(res.status).toBe(200);
+
+    const s = await (await pedir("/api/todogreen/employee-portal/sessao", { token: clt.token })).json();
+    const resolvido = s.chamados.find((x) => x.assunto === "PIX errado");
+    expect(resolvido.status).toBe("resolvido");
+    expect(resolvido.resposta).toMatch(/corrigimos/i);
+  });
+
+  it("cada colaborador só vê os próprios chamados", async () => {
+    // pjA abre um chamado; clt não deve vê-lo.
+    await pedir("/api/todogreen/employee-portal/chamado", {
+      method: "POST", token: pjA.token,
+      body: { categoria: "pagamento", assunto: "Nota atrasada", descricao: "Minha nota de setembro não foi paga." },
+    });
+    const sClt = await (await pedir("/api/todogreen/employee-portal/sessao", { token: clt.token })).json();
+    expect(sClt.chamados.every((x) => x.assunto !== "Nota atrasada")).toBe(true);
   });
 });

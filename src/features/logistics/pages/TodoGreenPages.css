@@ -2088,7 +2088,9 @@
 .tdg-driver-pix-campo { display: grid; gap: 4px; }
 .tdg-driver-pix-campo > span { color: #173d31; font-size: .8rem; font-weight: 700; }
 .tdg-driver-pix-campo select,
-.tdg-driver-pix-campo input { border: 1px solid #b9d3c5; border-radius: 9px; font-size: 1rem; min-height: 44px; padding: 8px 12px; width: 100%; }
+.tdg-driver-pix-campo input,
+.tdg-driver-pix-campo textarea { border: 1px solid #b9d3c5; border-radius: 9px; font-family: inherit; font-size: 1rem; min-height: 44px; padding: 8px 12px; width: 100%; }
+.tdg-driver-pix-campo textarea { min-height: 72px; resize: vertical; }
 .tdg-colab-cabecalho { align-items: center; display: flex; gap: 12px; margin-bottom: 4px; }
 .tdg-colab-cabecalho strong { display: block; font-size: 1.05rem; }
 .tdg-colab-cabecalho small { color: #6d8377; }
@@ -2105,7 +2107,10 @@
 .tdg-colab-status.aprovada { background: #e7f5ee; color: #1c6b47; }
 .tdg-colab-status.paga { background: #dff3e6; color: #14683f; }
 .tdg-colab-status.recusada { background: #fdeaea; color: #a12d2d; }
-.tdg-colab-status.cancelada { background: #eee; color: #666; }
+.tdg-colab-status.cancelada, .tdg-colab-status.cancelado { background: #eee; color: #666; }
+.tdg-colab-status.aberto { background: #eaf1fb; color: #2b5fb0; }
+.tdg-colab-status.em_andamento { background: #fdf2e3; color: #94631a; }
+.tdg-colab-status.resolvido { background: #dff3e6; color: #14683f; }
 .tdg-driver-reenviar {
   background: #0b9f8f; border: 0; border-radius: 10px; color: #fff; cursor: pointer;
   font-size: .9rem; font-weight: 700; margin-top: 4px; min-height: 44px; width: 100%;

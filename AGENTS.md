@@ -311,6 +311,16 @@ quantos resultados vieram.
   a pagar ligada). Não recriar cadastro de colaborador (é `todogreen_employees`,
   0062/0066), não guardar PIX fora de `todogreen_bank_accounts`, não deixar PJ ver
   a vertical (`colaborador` é SEM `read`), não pagar nota sem conferência humana.
+- **Chamado do colaborador** (`employeeTicketDomain.js`; `todogreen_employee_tickets`,
+  migração `0118`; no mesmo `todogreen-employee-portal.js`): o CLT vê os próprios
+  dados mas NÃO edita (banco/PIX/salário são do RH) — quando há divergência, abre
+  um CHAMADO (`POST /chamado`: categoria, assunto, descrição) em vez de corrigir.
+  Registro próprio (não é `todogreen_client_requests`, que é do cliente): o dono é
+  o `employee_id`. Ciclo `aberto → em_andamento → resolvido` (ou `cancelado`); a
+  equipe (`finance:manage`/`hr:manage`) atende e resolve com resposta em
+  `/gestao/chamados/*`, e o colaborador vê a resposta na própria sessão. PJ também
+  abre chamado (ex.: nota atrasada). Recorte pelo `employee_id` — ninguém vê o
+  chamado de outro.
 - **Módulos de ERP da vertical (NÃO confundir com os homônimos do monólito)**:
   cada um tem núcleo puro testado + tela lazy, e escreve em tabela própria
   `todogreen_*` (nunca no blob do workspace). Saldo/valor é sempre `SUM` de
