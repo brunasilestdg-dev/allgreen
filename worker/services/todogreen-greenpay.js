@@ -18,7 +18,7 @@ import {
   PARAMETROS_GREENPAY_PADRAO,
   arredondarReais,
 } from "../../src/features/logistics/greenPayDomain.js";
-import { syspagProntidao } from "./todogreen-syspag.js";
+import { syspagProntidao, syspagHabilitado, enviarPagamentoSyspag } from "./todogreen-syspag.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -158,6 +158,18 @@ export const carteiraDoMotorista = async (env, ownerId, driverId) => {
 
 const podeGerenciar = (access) => podeNaVertical(access, "finance:manage");
 
+// Traduz o motivo técnico do adaptador SysPag numa frase para o gestor. Só é
+// usado quando a conexão ESTÁ ligada e o repasse não saiu — nunca esconde o erro.
+const motivoSyspagLegivel = (repasse) => {
+  if (repasse.motivo === "pagamento_invalido")
+    return (repasse.erros || []).join(" ") || "Repasse inválido — confira a chave PIX do motorista.";
+  if (repasse.motivo === "recusado_pela_syspag")
+    return "A SysPag recusou o repasse. Confira os dados e tente de novo.";
+  if (repasse.motivo === "falha_de_rede")
+    return "Falha de rede ao falar com a SysPag. O pagamento não saiu; tente novamente.";
+  return "O repasse pela SysPag não saiu; o pagamento não foi marcado como pago.";
+};
+
 const visaoDosMotoristas = async (env, ownerId) => {
   const { results } = await env.DB.prepare(
     `SELECT d.id, d.full_name,
@@ -260,19 +272,76 @@ export async function handleTodoGreenGreenPay(request, env, access, user) {
   }
 
   // Paga tudo que está aprovado de um motorista, num lote (settlement).
+  //
+  // O repasse pode sair de fato por PIX (SysPag) ou ficar só no razão interno,
+  // conforme a conexão esteja ligada. Regra de honestidade: se a SysPag está
+  // ligada e o repasse NÃO saiu (ex.: motorista sem chave PIX), o lote NÃO é
+  // marcado como pago — o dinheiro não foi, então o razão não pode dizer que foi.
+  // Com a conexão dormente (sem segredo no cofre), o gestor paga por fora e o
+  // razão registra a liquidação — comportamento de sempre, sem exigir chave.
   if (request.method === "POST" && recurso === "pagar") {
     const corpo = await request.json().catch(() => ({}));
     const driverId = texto(corpo.driverId, 120);
     if (!driverId) return json({ error: "Informe o motorista." }, 400);
+
+    // Soma do que está aprovado (o valor deste lote) e o motorista favorecido.
+    const aprovado = await env.DB.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total, COUNT(id) AS itens
+         FROM todogreen_driver_earnings
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ?
+          AND status = 'aprovado' AND archived_at IS NULL`,
+    ).bind(TENANT_ID, ownerId, driverId).first();
+    if (!(numero(aprovado?.itens) > 0))
+      return json({ error: "Não há valores aprovados para pagar." }, 409);
+    const totalAprovado = arredondarReais(aprovado?.total);
+
+    const motorista = await env.DB.prepare(
+      `SELECT full_name, pix_key, pix_key_type FROM todogreen_drivers
+        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+    ).bind(driverId, TENANT_ID, ownerId).first();
+
     const settlement = crypto.randomUUID();
     const agora = new Date().toISOString();
+
+    // Dispara o repasse externo (dormente por ausência de segredo: devolve
+    // conexao_nao_configurada e o pagamento segue só como razão interno).
+    const repasse = await enviarPagamentoSyspag(env, {
+      settlementId: settlement,
+      motoristaId: driverId,
+      motoristaNome: motorista?.full_name || "",
+      valor: totalAprovado,
+      chavePix: motorista?.pix_key || "",
+      referencia: `Repasse GreenPay — ${motorista?.full_name || "motorista"}`,
+    });
+
+    // Conexão ligada mas repasse não saiu → não marca pago; devolve o motivo.
+    if (syspagHabilitado(env) && !repasse.enviado) {
+      return json({
+        error: motivoSyspagLegivel(repasse),
+        motivo: repasse.motivo,
+        syspag: syspagProntidao(env),
+        carteira: await carteiraDoMotorista(env, ownerId, driverId),
+      }, 409);
+    }
+
     const res = await env.DB.prepare(
       `UPDATE todogreen_driver_earnings
          SET status = 'pago', settlement_id = ?, updated_at = ?
        WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ?
          AND status = 'aprovado' AND archived_at IS NULL`,
     ).bind(settlement, agora, TENANT_ID, ownerId, driverId).run();
-    return json({ ok: true, pagos: res.meta?.changes || 0, settlementId: settlement, carteira: await carteiraDoMotorista(env, ownerId, driverId) });
+    return json({
+      ok: true,
+      pagos: res.meta?.changes || 0,
+      settlementId: settlement,
+      // Como o repasse saiu: pelo PIX da SysPag (externo) ou só no razão interno.
+      repasse: {
+        externo: Boolean(repasse.enviado),
+        motivo: repasse.motivo || "",
+        idExterno: repasse.idExterno || "",
+      },
+      carteira: await carteiraDoMotorista(env, ownerId, driverId),
+    });
   }
 
   // Backfill: gera o ganho das entregas que já aconteceram antes da régua

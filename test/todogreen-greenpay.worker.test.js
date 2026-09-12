@@ -191,5 +191,19 @@ describe("GreenPay — ajuste, aprovação e pagamento", () => {
     expect(pg.settlementId).toBeTruthy();
     expect(pg.carteira.resumo.saldos.pago).toBe(40);
     expect(pg.carteira.resumo.saldos.aReceber).toBe(0);
+    // Conexão SysPag dormente no teste: o repasse externo NÃO saiu — foi só
+    // razão interno. Honesto: nunca finge que mandou o PIX.
+    expect(pg.repasse.externo).toBe(false);
+    expect(pg.repasse.motivo).toBe("conexao_nao_configurada");
+  });
+
+  it("pagar sem nada aprovado responde 409 (não cria lote vazio)", async () => {
+    // A Maria tem ganho pendente, mas nada aprovado ainda.
+    const r = await pedir("/api/todogreen/greenpay/pagar", {
+      method: "POST", token: dona.token, body: { driverId: "gpd-maria" },
+    });
+    expect(r.status).toBe(409);
+    const d = await r.json();
+    expect(d.error).toMatch(/aprovado/i);
   });
 });

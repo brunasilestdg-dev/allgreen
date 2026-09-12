@@ -2084,6 +2084,11 @@
 .tdg-driver-cnh-foto img { border: 1px solid #d5e5de; border-radius: 10px; max-height: 220px; object-fit: contain; width: 100%; }
 .tdg-driver-cnh-vazia { align-items: center; background: #f4f8f6; border: 1px dashed #b9d3c5; border-radius: 10px; color: #6d8377; display: grid; gap: 6px; justify-items: center; padding: 20px 12px; text-align: center; }
 .tdg-driver-cnh-vazia svg { color: #8fbfa8; }
+.tdg-driver-pix { display: grid; gap: 10px; }
+.tdg-driver-pix-campo { display: grid; gap: 4px; }
+.tdg-driver-pix-campo > span { color: #173d31; font-size: .8rem; font-weight: 700; }
+.tdg-driver-pix-campo select,
+.tdg-driver-pix-campo input { border: 1px solid #b9d3c5; border-radius: 9px; font-size: 1rem; min-height: 44px; padding: 8px 12px; width: 100%; }
 .tdg-driver-reenviar {
   background: #0b9f8f; border: 0; border-radius: 10px; color: #fff; cursor: pointer;
   font-size: .9rem; font-weight: 700; margin-top: 4px; min-height: 44px; width: 100%;

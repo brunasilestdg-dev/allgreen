@@ -1,4 +1,5 @@
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
+import { validarChavePix, normalizarChavePix, tipoPixValido } from "../../src/features/logistics/pixDomain.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -95,13 +96,24 @@ const CONFIG = {
   },
   drivers: {
     table:"todogreen_drivers", permissions:["fleet:manage","operations:manage","operation:manage","hr:manage"], order:"full_name ASC",
-    required:(b)=>!text(b.fullName)?"Informe o nome do motorista.":"",
+    // A operação pode corrigir a chave PIX do motorista aqui — mas uma chave que não
+    // bate com o tipo é recusada (não vai dinheiro para destino malformado), igual à
+    // captura no portal do motorista. Chave vazia é permitida (motorista ainda não informou).
+    required:(b)=>{
+      if(!text(b.fullName)) return "Informe o nome do motorista.";
+      if(text(b.pixKey)){ const v=validarChavePix(b.pixKeyType,b.pixKey); if(!v.valido) return v.erro; }
+      return "";
+    },
     map:(r)=>({ ...common(r), employeeId:r.employee_id, partyId:r.party_id, driverCode:r.driver_code, fullName:r.full_name, document:r.document,
       employmentType:r.employment_type, phone:r.phone, email:r.email, operationalUnitId:r.operational_unit_id, baseName:r.base_name,
       availabilityStatus:r.availability_status, cnhNumber:r.cnh_number, cnhCategory:r.cnh_category, cnhExpiresAt:r.cnh_expires_at||"",
       // Foto da CNH que o motorista subiu pelo app (disponível à operação).
       cnhImageUrl:r.cnh_image_url||"", cnhSelfUpdatedAt:r.cnh_self_updated_at||"",
-      moppExpiresAt:r.mopp_expires_at||"", rntrc:r.rntrc, status:r.status, userEmail:r.user_email||"", fields:parse(r.fields_json,{}) }),
+      moppExpiresAt:r.mopp_expires_at||"", rntrc:r.rntrc, status:r.status, userEmail:r.user_email||"",
+      // Chave PIX que o motorista informou no portal (0116): destino do repasse do
+      // GreenPay. A operação vê e corrige aqui; pixSelfUpdatedAt marca a última vez
+      // que foi o próprio motorista quem gravou.
+      pixKey:r.pix_key||"", pixKeyType:r.pix_key_type||"", pixSelfUpdatedAt:r.pix_self_updated_at||"", fields:parse(r.fields_json,{}) }),
     encode:(b,c={})=>({ employee_id:text(value(b,c,"employeeId","employee_id"),120), party_id:text(value(b,c,"partyId","party_id"),120),
       driver_code:text(value(b,c,"driverCode","driver_code"),60).toUpperCase(), full_name:text(value(b,c,"fullName","full_name"),240), document:digits(value(b,c,"document","document"),14),
       employment_type:["employee","aggregate","pj","third_party","other"].includes(text(value(b,c,"employmentType","employment_type")))?text(value(b,c,"employmentType","employment_type")):"employee",
@@ -112,6 +124,10 @@ const CONFIG = {
       // E-mail de acesso ao portal do motorista (0070): é por ele que a sessão
       // da pessoa encontra o próprio cadastro e as próprias viagens.
       user_email:text(value(b,c,"userEmail","user_email"),200).toLowerCase(),
+      // Chave PIX normalizada (o required já barrou a inválida). NÃO mexemos em
+      // pix_self_updated_at: essa marca é só do que o próprio motorista gravou.
+      pix_key:normalizarChavePix(text(value(b,c,"pixKeyType","pix_key_type"),20), value(b,c,"pixKey","pix_key")).slice(0,140),
+      pix_key_type:tipoPixValido(text(value(b,c,"pixKeyType","pix_key_type"),20))?text(value(b,c,"pixKeyType","pix_key_type"),20):"",
       status:["draft","active","blocked","inactive"].includes(text(value(b,c,"status","status")))?text(value(b,c,"status","status")):"draft",
       fields_json:JSON.stringify(object(has(b,"fields")?b.fields:parse(c.fields_json,{}))) }),
   },

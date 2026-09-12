@@ -9,6 +9,7 @@ import { avaliarConformidadeJornada, formatarDuracao, resumoDaJornada } from "..
 import { calcularScoreMotorista, ROTULO_FAIXA } from "../driverScoreDomain.js";
 import { resumoDeProdutividade } from "../driverProductivityDomain.js";
 import { metaEProjecaoMes } from "../greenPayDomain.js";
+import { TIPOS_CHAVE_PIX, rotuloTipoPix } from "../pixDomain.js";
 import PadAssinatura from "../PadAssinatura.jsx";
 import { dimensoesReduzidas, LADO_MAXIMO_PADRAO } from "../podCaptura.js";
 
@@ -163,6 +164,14 @@ export default function DriverPortalPage() {
   const [veiculo, setVeiculo] = useState(null); // telemetria elétrica do veículo do dia
   const [scoreRemoto, setScoreRemoto] = useState(null); // nota + comparação com o time (lazy)
   const avatarInputRef = useRef(null);
+  // Chave PIX do repasse (GreenPay): o motorista informa a PRÓPRIA aqui. Começa
+  // vazia; ao abrir a sessão, herda o que já foi informado (tipo + chave). É o
+  // destino do dinheiro — por isso o formulário exige o tipo, e o servidor
+  // valida a chave por ele antes de gravar.
+  const [pixTipo, setPixTipo] = useState("");
+  const [pixChave, setPixChave] = useState("");
+  const [salvandoPix, setSalvandoPix] = useState(false);
+  const [pixTocado, setPixTocado] = useState(false); // só sincroniza da sessão até a pessoa mexer
   // Trava de reentrância: mount + evento "online" + botão "Reenviar" poderiam
   // drenar a fila ao mesmo tempo e enviar cada evento mais de uma vez. Só um
   // dreno por vez.
@@ -244,6 +253,16 @@ export default function DriverPortalPage() {
     }
   }, [escoarFila]);
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Herda a chave PIX já informada quando a sessão chega — mas para de sincronizar
+  // assim que a pessoa começa a editar, para não sobrescrever o que ela digita.
+  const pixSessaoTipo = sessao?.motorista?.pixTipo || "";
+  const pixSessaoChave = sessao?.motorista?.pixChave || "";
+  useEffect(() => {
+    if (pixTocado) return;
+    setPixTipo(pixSessaoTipo);
+    setPixChave(pixSessaoChave);
+  }, [pixSessaoTipo, pixSessaoChave, pixTocado]);
 
   // A conta (nome + foto escolhida) vem do mesmo endpoint de sessão do app —
   // com a MESMA sessão do motorista. Só leitura; se falhar, o perfil segue com
@@ -381,6 +400,28 @@ export default function DriverPortalPage() {
       await carregar();
     } catch (motivo) {
       setAviso(motivo.message || "Não consegui salvar a validade.");
+    }
+  };
+
+  // O motorista grava a PRÓPRIA chave PIX (destino do repasse GreenPay). Vai
+  // direto ao servidor, que valida a chave pelo tipo — chave malformada volta
+  // com o motivo, nunca é "corrigida" às escondidas nem enviada torta ao pagamento.
+  const salvarPix = async () => {
+    if (!pixTipo) { setAviso("Escolha o tipo da chave PIX."); return; }
+    if (!pixChave.trim()) { setAviso("Informe a chave PIX."); return; }
+    setSalvandoPix(true);
+    try {
+      const d = await pedir("/pix", { method: "POST", body: JSON.stringify({ tipo: pixTipo, chave: pixChave }) });
+      // Recarrega a sessão (que passa a trazer a chave normalizada) ANTES de
+      // soltar a trava — assim o campo não pisca vazio entre o salvar e o reload.
+      await carregar();
+      setPixChave(d.pixChave || pixChave);
+      setPixTocado(false);
+      setAviso("Chave PIX salva. É para lá que vai o seu repasse.");
+    } catch (motivo) {
+      setAviso(motivo.message || "Não consegui salvar a chave PIX.");
+    } finally {
+      setSalvandoPix(false);
     }
   };
 
@@ -952,6 +993,49 @@ export default function DriverPortalPage() {
                 <Camera size={16} /> {enviandoCnh ? "Enviando…" : sessao.motorista.cnhImagemUrl ? "Refazer foto da CNH" : "Enviar foto da CNH"}
               </button>
             </div>
+          </article>
+          {/* Chave PIX do repasse: o motorista informa a PRÓPRIA aqui — é para
+              onde vai o dinheiro do GreenPay. A operação vê/corrige no cadastro
+              do ERP; o pagamento só sai por PIX quando a conexão SysPag estiver
+              ligada (até lá, fica no razão interno). */}
+          <article className="tdg-driver-cartao tdg-driver-pix">
+            <div className="tdg-driver-info-linha"><Wallet size={16} /><span>Chave PIX do repasse</span></div>
+            <label className="tdg-driver-pix-campo">
+              <span>Tipo da chave</span>
+              <select
+                value={pixTipo}
+                onChange={(e) => { setPixTocado(true); setPixTipo(e.target.value); }}
+                disabled={salvandoPix}
+              >
+                <option value="">Escolha…</option>
+                {TIPOS_CHAVE_PIX.map((t) => (
+                  <option key={t.id} value={t.id}>{t.rotulo}</option>
+                ))}
+              </select>
+            </label>
+            <label className="tdg-driver-pix-campo">
+              <span>Chave {pixTipo ? `(${rotuloTipoPix(pixTipo)})` : ""}</span>
+              <input
+                type="text"
+                inputMode={pixTipo === "cpf" || pixTipo === "telefone" ? "numeric" : "text"}
+                autoComplete="off"
+                placeholder={
+                  pixTipo === "cpf" ? "Somente números"
+                    : pixTipo === "telefone" ? "DDD + número"
+                      : pixTipo === "email" ? "seu@email.com"
+                        : pixTipo === "aleatoria" ? "Chave aleatória (do seu banco)"
+                          : "Informe a chave"}
+                value={pixChave}
+                onChange={(e) => { setPixTocado(true); setPixChave(e.target.value); }}
+                disabled={salvandoPix}
+              />
+            </label>
+            <button type="button" className="tdg-captura-btn" onClick={salvarPix} disabled={salvandoPix}>
+              <Wallet size={16} /> {salvandoPix ? "Salvando…" : "Salvar minha chave PIX"}
+            </button>
+            {sessao.motorista.pixChave
+              ? <small>Sua chave está registrada. O repasse do GreenPay vai para ela.</small>
+              : <small>Informe a sua chave PIX para receber o repasse do GreenPay.</small>}
           </article>
           {/* Score do motorista: cruza entregas (prazo, POD, ocorrências) com
               jornada e vistoria. O servidor devolve a comparação com o time. */}

@@ -268,6 +268,28 @@ quantos resultados vieram.
   entrega avançam a rota dentro de `aplicarEventoOperacional`; a última entrega
   libera os recursos. O checkbox manual fica só para rota legada sem operação,
   pois concluir uma entrega por fora do evento burlaria o POD e o faturamento.
+- **GreenPay + chave PIX do motorista + repasse SysPag** (carteira do motorista,
+  `todogreen-greenpay.js` + `greenPayDomain.js`; adaptador de pagamento
+  `todogreen-syspag.js` + `syspagDomain.js`; chave PIX na migração `0116`):
+  o ganho do motorista é DERIVADO da entrega (nunca digitado), com o ciclo
+  pendente → aprovado → pago. A **chave PIX é o destino do repasse** e segue o
+  molde da CNH (0097): o motorista informa a PRÓPRIA no portal (aba Perfil,
+  `POST /driver-portal/pix`, recorte = vínculo); a operação vê/corrige a mesma
+  no cadastro do ERP (`todogreen-master-data.js`, coleção `drivers`,
+  `pixKey`/`pixKeyType` no map/encode). A validação é uma só, pura e testada
+  (`pixDomain.js`, `validarChavePix` por tipo — CPF por DV, e-mail, telefone com
+  DDI 55, aleatória UUID): chave torta é RECUSADA com o motivo, nunca "corrigida"
+  às escondidas. A marca `pix_self_updated_at` distingue o que o próprio
+  motorista gravou do que a operação corrigiu — a correção da equipe NÃO carimba
+  essa marca. Ao PAGAR um lote, o handler lê `pix_key` e chama
+  `enviarPagamentoSyspag` (dormente por ausência de segredo, igual a `pushEnabled`
+  e à transmissão fiscal — segredo lido pelo NOME da env-var `SYSPAG_API_TOKEN`,
+  nunca no banco/código/log/frontend). Regra de honestidade do repasse: com a
+  conexão LIGADA e o disparo falhando (ex.: motorista sem chave), o lote NÃO é
+  marcado como pago (o dinheiro não saiu); com a conexão DORMENTE, o "pago" é só
+  o razão interno de sempre e não exige chave. Não inventar segundo cadastro de
+  chave, não gravar a chave sem validar pelo tipo, não marcar pago quando o
+  repasse externo falhou.
 - **Módulos de ERP da vertical (NÃO confundir com os homônimos do monólito)**:
   cada um tem núcleo puro testado + tela lazy, e escreve em tabela própria
   `todogreen_*` (nunca no blob do workspace). Saldo/valor é sempre `SUM` de
