@@ -4808,3 +4808,39 @@
 .tdg-tarifa-legenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; }
 .tdg-tarifa-legenda span { align-items: center; color: var(--tdg-muted); display: flex; font-size: .78rem; gap: 6px; }
 .tdg-tarifa-legenda i { border-radius: 3px; height: 11px; width: 11px; }
+
+/* ===== Saúde do sistema (Administração) ===== */
+.tdg-system-health .tdg-health-head { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.tdg-system-health .tdg-health-head p { margin: 4px 0 0; color: var(--tdg-muted); font-size: 13px; }
+.tdg-health-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tdg-health-actions button,
+.tdg-health-alert button { display: inline-flex; align-items: center; gap: 6px; }
+.tdg-health-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap;
+  border: 1px solid var(--tdg-line); background: var(--tdg-soft); color: var(--tdg-ink);
+}
+.tdg-health-badge.state-OPERATIONAL { color: var(--tdg-green); border-color: color-mix(in srgb, var(--tdg-green) 45%, transparent); background: color-mix(in srgb, var(--tdg-green) 12%, transparent); }
+.tdg-health-badge.state-DEGRADED,
+.tdg-health-badge.state-FALLBACK,
+.tdg-health-badge.state-EXTERNAL_DEPENDENCY { color: var(--tdg-warning, #b45309); border-color: color-mix(in srgb, var(--tdg-warning, #b45309) 45%, transparent); background: color-mix(in srgb, var(--tdg-warning, #b45309) 12%, transparent); }
+.tdg-health-badge.state-ERROR { color: var(--tdg-danger); border-color: color-mix(in srgb, var(--tdg-danger) 45%, transparent); background: color-mix(in srgb, var(--tdg-danger) 12%, transparent); }
+.tdg-health-badge.state-NOT_CONFIGURED { color: var(--tdg-muted); }
+.tdg-health-version { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
+.tdg-health-version article { border: 1px solid var(--tdg-line); border-radius: 12px; padding: 12px 14px; background: var(--tdg-card); min-width: 0; }
+.tdg-health-version article span { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--tdg-muted); }
+.tdg-health-version article strong { display: block; font-size: 17px; margin: 4px 0; word-break: break-all; font-variant-numeric: tabular-nums; }
+.tdg-health-version article small { color: var(--tdg-muted); font-size: 12px; line-height: 1.45; }
+.tdg-health-alerts { display: grid; gap: 8px; margin-top: 12px; }
+.tdg-health-alert { border-left: 3px solid var(--tdg-warning, #b45309); padding: 8px 12px; border-radius: 8px; background: var(--tdg-soft); font-size: 13px; line-height: 1.45; margin-top: 12px; }
+.tdg-health-alert.error { border-left-color: var(--tdg-danger); }
+.tdg-health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.tdg-health-card { border: 1px solid var(--tdg-line); border-radius: 12px; padding: 12px 14px; background: var(--tdg-card); display: grid; gap: 6px; align-content: start; min-width: 0; }
+.tdg-health-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tdg-health-card strong { font-size: 14px; }
+.tdg-health-card small { color: var(--tdg-muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.tdg-health-metrics { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--tdg-muted); }
+.tdg-health-impl { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px dashed var(--tdg-line); color: var(--tdg-muted); width: fit-content; }
+.tdg-health-unavailable { padding: 16px; border: 1px dashed var(--tdg-line); border-radius: 12px; color: var(--tdg-muted); margin-top: 12px; }
+.tdg-health-foot { color: var(--tdg-muted); font-size: 12px; line-height: 1.5; padding: 0 4px; }
+.tdg-system-health .tdg-access-row > span { display: grid; gap: 4px; min-width: 0; }

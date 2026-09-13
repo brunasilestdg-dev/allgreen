@@ -88,10 +88,18 @@ o log distinguir "falhou na validação" de "falhou ao publicar".
 2. No painel: **Workers & Pages → seufuncionario-expo → Builds** — acompanhe o log
    (deve rodar verify → build → migrations → deploy).
 3. Confirme a versão no ar:
-   `https://seufuncionario-expo.brunapsiles.workers.dev/api/status`
-   → o campo **`version`** deve mostrar o **SHA curto** do commit da `main` que
-   você acabou de publicar (é como se rastreia "produção == main"). O `buildTime`
-   deve ser recente.
+   `https://seufuncionario-expo.brunapsiles.workers.dev/api/system/version`
+   → `sha` deve ser o **SHA curto** do commit da `main` que você acabou de
+   publicar (é como se rastreia "produção == main"); `branch` = `main`;
+   `publishedBy` = `cloudflare-workers-builds` (o build lê `WORKERS_CI_COMMIT_SHA`
+   e `WORKERS_CI_BRANCH`, que o Builds injeta); `environment` = `production`
+   (var `TDG_ENVIRONMENT` do Worker). `/api/status` continua respondendo o mesmo
+   `version`. Na tela **Administração → Saúde do sistema** os três lados
+   (LOCAL × SERVIDOR × BANCO) devem bater e a lista de alertas ficar vazia.
+4. Se a versão no ar **não** avançou depois do merge, o Builds não publicou
+   (fila, falha de build ou conexão): publique pelo caminho manual do
+   `DEPLOYMENT_RUNBOOK.md` §12a — foi o que a consolidação de 13/09 fez para
+   levar `d2396e44d8e4` a produção.
 
 ## Deploy manual de emergência (fallback, não é o caminho principal)
 

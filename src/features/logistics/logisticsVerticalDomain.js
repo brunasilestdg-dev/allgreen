@@ -647,6 +647,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
     order: 22,
     description: "Acervo de habilitação com semáforo de validade, kits conferidos e o ciclo do RFQ do e-mail ao resultado.",
   }),
+  module("saude-sistema", "Saúde do sistema", "administracao", "/todogreen/saude-sistema", {
+    icon: "Activity",
+    order: 69,
+    permissions: ["read", "audit:read", "integration:manage"],
+    description: "Versão publicada (local × servidor × banco), componentes da plataforma e estado honesto de cada integração.",
+  }),
   module("sobre-o-negocio", "Sobre o negócio", "administracao", "/todogreen/sobre-o-negocio", {
     icon: "BookOpen",
     order: 70,

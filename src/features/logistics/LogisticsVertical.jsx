@@ -151,6 +151,7 @@ const TripViabilityPage = lazy(() => import("./pages/TripViabilityPage.jsx"));
 const DealDeskPage = lazy(() => import("./pages/DealDeskPage.jsx"));
 const DocumentVaultPage = lazy(() => import("./pages/DocumentVaultPage.jsx"));
 const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
+const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage.jsx"));
 const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
 const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
 const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
@@ -350,6 +351,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "aprovacoes",
   "notificacoes",
   "inbox",
+  "saude-sistema",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -926,6 +928,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["access:manage", "integration:manage", "audit:read"],
     description: "Acessos, permissões, auditoria, configurações e governança do ambiente To Do Green.",
   },
+  "saude-sistema": {
+    title: "Saúde do sistema",
+    navLabel: "Saúde do sistema",
+    route: "/todogreen/saude-sistema",
+    area: "administracao",
+    status: "functional",
+    permission: ["integration:manage", "audit:read"],
+    description: "Versão publicada (local × servidor × banco), componentes da plataforma e estado honesto de cada integração — com métricas e teste.",
+  },
   "central-rfq": {
     title: "Central de RFQ e RFI",
     navLabel: "RFQ e RFI",
@@ -1003,7 +1014,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // área nem no menu de Compliance (pedido da titular).
   // Integrações e "Usuários e acessos" vivem no menu Configurações (topo), o
   // lar convencional das configurações — não repetimos aqui na lateral.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
@@ -3609,6 +3620,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "auditoria" && <Suspense fallback={<section className="tdg-panel">Carregando auditoria...</section>}><GovernancePage role={role} permissions={remoteAccess.permissions || []} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
       {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "saude-sistema" && <Suspense fallback={<section className="tdg-panel">Carregando saúde do sistema...</section>}><SystemHealthPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 
       {isOverview && (
