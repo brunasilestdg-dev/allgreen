@@ -165,6 +165,12 @@ export default function DispatchPanel({ authHeaders, setToast }) {
               <article><span><Truck size={13} /> Veículos livres</span><strong>{cand.veiculos?.length || 0}</strong></article>
             </div>
           )}
+          {/* "Recarregar" é ação de apoio e fica SEM classe de propósito: a
+              regra-base de botões (`:where(.tdg) button` no ERP e a equivalente
+              do Portal TMS em TmsPortal.css) já o veste como secundário. Não
+              trocar por `tdg-action tdg-action-ghost`: dentro de `.tdg` a
+              fantasma é sobreposta pela ação principal e ele viraria um segundo
+              "Otimizar rotas". */}
           <div className="tdg-dispatch-acoes">
             <button type="button" onClick={carregar} disabled={carregando}>Recarregar</button>
             <button type="button" className="tdg-action" onClick={otimizar} disabled={otimizando || !(cand?.operacoes?.length) || !(cand?.veiculos?.length) || !(cand?.motoristas?.length)}>{otimizando ? "Otimizando…" : "Otimizar rotas"}</button>
