@@ -260,7 +260,7 @@ VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
 | --- | --- |
 | `TDG_ROUTING_URL` / `TDG_ROUTING_TOKEN` | otimizador VROOM (`/routes/optimize`) |
 | `TDG_OSRM_BASE_URL` / `TODOGREEN_OSRM_BASE_URL` | motor OSRM (perfil genérico; o gateway de integrações lê `TODOGREEN_*`, a API elétrica lê `TDG_*` — a tela de saúde aceita qualquer um dos dois) |
-| `TDG_VALHALLA_BASE_URL` | motor Valhalla (truck costing / restrições) — **PREPARADO**: seleção de motor pronta, cliente HTTP ainda não |
+| `TDG_VALHALLA_BASE_URL` (ou `TODOGREEN_VALHALLA_BASE_URL`) | motor Valhalla (truck costing / restrições / elevação `/height`) — **REAL**: `POST /api/todogreen/maps/route` com `vehicle` pesado roteia por ele; sem a URL responde `NO_SAFE_ROUTING_ENGINE` (409), nunca perfil de carro |
 | `TODOGREEN_VROOM_BASE_URL` | VROOM via gateway de integrações (mesmo papel de `TDG_ROUTING_URL`) |
 | `TODOGREEN_NOMINATIM_BASE_URL` | geocodificação própria |
 

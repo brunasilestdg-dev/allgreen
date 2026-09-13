@@ -4992,3 +4992,9 @@
 .tdg-viab-form input, .tdg-viab-form select { min-width: 0; width: 100%; }
 .tdg-viab-form .tdg-opp-ressalva, .tdg-viab-acoes { grid-column: 1 / -1; }
 .tdg-viab-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+
+
+/* ===== Roteirizador: classe do veículo (OSRM × Valhalla) ===== */
+.tdg-roteirizacao-classe { display: grid; gap: 4px; margin: 8px 0 4px; max-width: 420px; }
+.tdg-roteirizacao-classe span { font-size: 12px; font-weight: 600; color: var(--tdg-ink); }
+.tdg-roteirizacao-classe small { font-size: 11px; color: var(--tdg-muted); line-height: 1.4; }

@@ -26,6 +26,8 @@
 // Camada pura no sentido que importa: recebe o `fetch` por parâmetro, então o
 // teste exercita a lógica sem tocar a rede.
 
+import { descreverMotor } from "./routingProvidersDomain.js";
+
 const texto = (valor) => String(valor ?? "").trim();
 
 // O OSM pede identificação de quem chama. Sem isso o Nominatim recusa em
@@ -45,12 +47,15 @@ async function consultarOSRM(coordenadas, {
   sinal,
   headers = {},
   geometria = false,
+  veiculo = null,
 } = {}) {
   if (usarGatewayInterno(headers)) {
+    // O veículo vai junto: é o backend que escolhe OSRM × Valhalla por classe e
+    // restrições (seção 32) — a tela nunca fala com um motor.
     return fetcher(MAPS_ROUTE, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json", ...headers },
-      body: JSON.stringify({ coordinates: coordenadas, geometry: geometria }),
+      body: JSON.stringify({ coordinates: coordenadas, geometry: geometria, ...(veiculo ? { vehicle: veiculo } : {}) }),
       signal: sinal,
     });
   }
@@ -70,7 +75,20 @@ export const MOTIVOS = Object.freeze({
   destinoNaoEncontrado: "Não encontrei o destino no mapa. Tente incluir a cidade e o estado.",
   semRota: "Não há rota rodoviária entre esses dois pontos.",
   indisponivel: "O serviço de mapas não respondeu agora. Digite a distância manualmente.",
+  semMotorSeguro: "Veículo pesado ou com restrição exige o motor Valhalla; sem ele a rota não é traçada por perfil de carro.",
 });
+
+// Rota recusada pelo backend por FALTA DE MOTOR SEGURO (seção 33) não é
+// "serviço fora do ar": é uma decisão, e a tela precisa dizer isso.
+async function recusaDeMotor(resposta) {
+  const erro = await resposta.json().catch(() => null);
+  if (erro?.code === "NO_SAFE_ROUTING_ENGINE" || erro?.code === "NO_ROUTING_ENGINE")
+    return { ok: false, motivo: texto(erro.message) || MOTIVOS.semMotorSeguro, codigo: erro.code, motorNecessario: texto(erro.requiredEngine) };
+  return null;
+}
+
+const fonteDaRota = (dados) =>
+  `OpenStreetMap · Nominatim + ${descreverMotor(dados) || "OSRM"} (sem trânsito ao vivo)`;
 
 /**
  * Endereço → coordenada. Devolve `null` quando não acha, nunca lança:
@@ -162,7 +180,7 @@ export async function resolverCoordenadasDaOperacao(
  * cobrar só a ida é o erro que aparece na margem no fim do mês.
  */
 export async function calcularDistancia(
-  { origem, destino, idaEVolta = false } = {},
+  { origem, destino, idaEVolta = false, veiculo = null } = {},
   { fetcher = fetch, sinal, headers = {} } = {},
 ) {
   const de = texto(origem);
@@ -183,9 +201,13 @@ export async function calcularDistancia(
       [pontoDestino.longitude, pontoDestino.latitude],
     ];
     const resposta = await consultarOSRM(coordenadas, {
-      fetcher, sinal, headers, geometria: false,
+      fetcher, sinal, headers, geometria: false, veiculo,
     });
-    if (!resposta.ok) throw new Error(`OSRM indisponível (${resposta.status})`);
+    if (!resposta.ok) {
+      const recusa = await recusaDeMotor(resposta);
+      if (recusa) return recusa;
+      throw new Error(`OSRM indisponível (${resposta.status})`);
+    }
     const dados = await resposta.json();
     const rota = Array.isArray(dados?.routes) ? dados.routes[0] : null;
     if (!rota || !Number.isFinite(Number(rota.distance))) return { ok: false, motivo: MOTIVOS.semRota };
@@ -205,7 +227,10 @@ export async function calcularDistancia(
       destino: pontoDestino.rotulo,
       // Sem trânsito: o OSRM devolve tempo livre. Dizer isso evita a tela
       // prometer previsão de chegada que ela não tem como cumprir.
-      fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito ao vivo)",
+      fonte: fonteDaRota(dados),
+      motor: dados?.engine || "osrm",
+      perfilMotor: dados?.profile || "",
+      contingencia: Boolean(dados?.fallback || dados?.publicFallback),
     };
   } catch (erro) {
     if (erro?.name === "AbortError") return { ok: false, motivo: MOTIVOS.indisponivel, cancelado: true };
@@ -224,7 +249,7 @@ export async function calcularDistancia(
  * roteiriza a sequência inteira). A titular pediu vários endereços.
  */
 export async function tracarRota(
-  { origem, destino, paradas } = {},
+  { origem, destino, paradas, veiculo = null } = {},
   { fetcher = fetch, sinal, headers = {} } = {},
 ) {
   // Normaliza para uma lista de {endereco, coord?}. Cada parada pode ser uma
@@ -270,9 +295,13 @@ export async function tracarRota(
 
     const coordenadas = pontos.map((p) => [p.longitude, p.latitude]);
     const resposta = await consultarOSRM(coordenadas, {
-      fetcher, sinal, headers, geometria: true,
+      fetcher, sinal, headers, geometria: true, veiculo,
     });
-    if (!resposta.ok) throw new Error(`OSRM indisponível (${resposta.status})`);
+    if (!resposta.ok) {
+      const recusa = await recusaDeMotor(resposta);
+      if (recusa) return recusa;
+      throw new Error(`OSRM indisponível (${resposta.status})`);
+    }
     const dados = await resposta.json();
     const rota = Array.isArray(dados?.routes) ? dados.routes[0] : null;
     const linha = rota?.geometry?.coordinates;
@@ -294,7 +323,10 @@ export async function tracarRota(
       destino: pontos[pontos.length - 1],
       distanciaKm: Math.round((Number(rota.distance || 0) / 1000) * 10) / 10,
       minutos: Math.round(Number(rota.duration || 0) / 60),
-      fonte: "OpenStreetMap · Nominatim + OSRM (sem trânsito ao vivo)",
+      fonte: fonteDaRota(dados),
+      motor: dados?.engine || "osrm",
+      perfilMotor: dados?.profile || "",
+      contingencia: Boolean(dados?.fallback || dados?.publicFallback),
     };
   } catch (erro) {
     if (erro?.name === "AbortError") return { ok: false, motivo: MOTIVOS.indisponivel, cancelado: true };

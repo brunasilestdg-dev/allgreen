@@ -195,7 +195,19 @@ describe("To Do Green routing API", () => {
         chargingStations: [],
       }),
     });
-    const response = await handlePublicTodoGreenRoutingApi(request, { DB: env.DB });
+    // Sem TDG_VALHALLA_BASE_URL não existe motor SEGURO para carreta: a
+    // seleção diz isso (engine null + motivo) em vez de fingir Valhalla —
+    // seção 33: pesado nunca cai em perfil de carro em silêncio.
+    const semValhalla = await handlePublicTodoGreenRoutingApi(request.clone(), { DB: env.DB });
+    expect(semValhalla.status).toBe(200);
+    const recusa = (await semValhalla.json()).routingEngineSelection;
+    expect(recusa.engine).toBeNull();
+    expect(recusa.requested).toBe("valhalla");
+    expect(recusa.reason).toBe("sem_motor_seguro_para_restricoes");
+    expect(recusa.restrictionAware).toBe(true);
+
+    // Com o Valhalla configurado, a carreta roteia por truck costing.
+    const response = await handlePublicTodoGreenRoutingApi(request, { DB: env.DB, TDG_VALHALLA_BASE_URL: "https://valhalla.test" });
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.routingEngineSelection.engine).toBe("valhalla");

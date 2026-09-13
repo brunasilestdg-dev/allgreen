@@ -37,6 +37,26 @@ services:
       - osrm
     restart: unless-stopped
 
+  # Valhalla: rota para PESADOS (truck costing: altura, largura, comprimento,
+  # peso, eixos) e elevação (/height) a partir do MESMO extrato OSM. Os tiles
+  # são construídos na primeira subida (demorado) e ficam no volume.
+  valhalla:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    environment:
+      tile_urls: ${TDG_OSM_PBF_URL:-https://download.geofabrik.de/south-america/brazil/sudeste-latest.osm.pbf}
+      build_elevation: "True"
+      build_admins: "True"
+      build_time_zones: "True"
+      serve_tiles: "True"
+      use_tiles_ignore_pbf: "True"
+      force_rebuild: "False"
+      server_threads: ${VALHALLA_THREADS:-2}
+    volumes:
+      - valhalla-tiles:/custom_files
+    ports:
+      - "127.0.0.1:8002:8002"
+    restart: unless-stopped
+
   routing-gateway:
     image: nginx:alpine
     environment:
@@ -48,8 +68,10 @@ services:
     depends_on:
       - vroom
       - nominatim
+      - valhalla
     restart: unless-stopped
 
 volumes:
   nominatim-db:
   nominatim-flatnode:
+  valhalla-tiles:

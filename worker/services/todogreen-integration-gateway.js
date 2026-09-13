@@ -204,6 +204,17 @@ export function todoGreenExternalIntegrationCatalog(env = {}) {
         detail: "Otimização de sequência de entregas, capacidade e janelas.",
         capabilities: ["optimize"],
       }),
+      // Pesados (VUC, truck, carreta) e veículos com restrição física roteiam
+      // por truck costing. Sem ele, o backend responde NO_SAFE_ROUTING_ENGINE
+      // em vez de um perfil de carro (seção 33).
+      selfHosted(env, {
+        id: "valhalla",
+        name: "Valhalla (pesados / restrições viárias)",
+        category: "routing",
+        envKey: "TDG_VALHALLA_BASE_URL",
+        detail: "Rota para pesados com altura, largura, comprimento, peso e eixos (truck costing); elevação via /height quando os tiles têm relevo.",
+        capabilities: ["route", "height", "status"],
+      }),
     ],
     localAi: [
       selfHosted(env, {
@@ -235,6 +246,7 @@ const selfHostedBase = (env, id) => {
     osrm: "TODOGREEN_OSRM_BASE_URL",
     nominatim: "TODOGREEN_NOMINATIM_BASE_URL",
     vroom: "TODOGREEN_VROOM_BASE_URL",
+    valhalla: "TDG_VALHALLA_BASE_URL",
     ollama: "TODOGREEN_OLLAMA_BASE_URL",
     vllm: "TODOGREEN_VLLM_BASE_URL",
   };
@@ -325,6 +337,11 @@ export async function probeTodoGreenExternalIntegration(env = {}, provider) {
     case "vroom": {
       const base = selfHostedBase(env, id);
       result = await probeUrl(base, {}, "VROOM");
+      break;
+    }
+    case "valhalla": {
+      const base = selfHostedBase(env, id);
+      result = await jsonFrom(`${base}/status`, {}, "Valhalla");
       break;
     }
     case "ollama": {

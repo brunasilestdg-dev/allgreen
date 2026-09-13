@@ -112,9 +112,11 @@ describe("GET /api/todogreen/system-health", () => {
     expect(componentes.r2.state).toBe("FALLBACK");
 
     const integracoes = Object.fromEntries(body.integrations.map((i) => [i.id, i]));
-    // Preparada ≠ conectada: Valhalla sem URL é NOT_CONFIGURED e diz o porquê.
-    expect(integracoes.valhalla).toMatchObject({ state: "NOT_CONFIGURED", implementation: "PREPARED" });
+    // Cliente real existe, mas sem URL o estado é NOT_CONFIGURED — e a linha
+    // diz o que acontece com pesados enquanto isso (NO_SAFE_ROUTING_ENGINE).
+    expect(integracoes.valhalla).toMatchObject({ state: "NOT_CONFIGURED", implementation: "REAL" });
     expect(integracoes.valhalla.detail).toContain("NO_SAFE_ROUTING_ENGINE");
+    expect(integracoes.valhalla.requirement).toContain("TDG_VALHALLA_BASE_URL");
     // Não implementada nunca aparece conectada.
     for (const id of ["ons", "anp", "gdelt", "prf", "compras-gov", "postgis", "elevation"])
       expect(integracoes[id]).toMatchObject({ state: "NOT_CONFIGURED", implementation: "NOT_IMPLEMENTED" });

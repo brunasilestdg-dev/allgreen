@@ -5,7 +5,8 @@ Stack auto-hospedado para o Portal TMS da To Do Green:
 - **VROOM**: otimiza sequência e alocação considerando capacidade, janelas, skills, múltiplos depósitos e pickup/delivery.
 - **OSRM**: calcula a rede viária, tempos, distâncias e geometria usando OpenStreetMap.
 - **Nominatim + PostgreSQL/PostGIS**: geocodifica endereços usando a mesma base OpenStreetMap, sem depender do endpoint público.
-- **Nginx gateway**: expõe somente `/optimize`, `/osrm/` e `/nominatim/`, todos protegidos pelo mesmo Bearer token entre o Worker e a máquina.
+- **Valhalla**: roteia **pesados** com *truck costing* (altura, largura, comprimento, peso, eixos, hazmat) e devolve **elevação** (`/height`) a partir do mesmo extrato OSM. Sem ele, o Worker responde `NO_SAFE_ROUTING_ENGINE` para VUC/truck/carreta — nunca uma rota de carro.
+- **Nginx gateway**: expõe somente `/optimize`, `/osrm/`, `/nominatim/` e `/valhalla/`, todos protegidos pelo mesmo Bearer token entre o Worker e a máquina.
 
 Não há cobrança de licença nem custo por chamada. Existe apenas o custo/uso da máquina onde os containers rodam.
 
@@ -158,3 +159,23 @@ Em produção, a atualização deve ser feita em janela controlada ou preparando
 ## Observação sobre perfis
 
 A primeira versão usa o perfil viário `car` do OSRM. Isso atende ao núcleo de roteirização e permite colocar o TMS em operação rapidamente. O tratamento fino por moto, VUC, van, caminhão e carreta deve evoluir depois com perfis/restrições específicos, sem alterar o contrato da API externa.
+
+
+## Valhalla (pesados e elevação)
+
+O serviço `valhalla` constrói os tiles na primeira subida a partir de
+`TDG_OSM_PBF_URL` (o mesmo extrato do OSRM) — com relevo (`build_elevation`),
+o que habilita o `/height` usado pelo modelo de energia. A construção é
+demorada (horas para o Sudeste) e fica no volume `valhalla-tiles`.
+
+No Worker:
+
+| Variável | Valor |
+| --- | --- |
+| `TDG_VALHALLA_BASE_URL` | `https://<gateway>/valhalla` |
+| `TDG_ROUTING_TOKEN` | o mesmo `ROUTING_TOKEN` do `.env` |
+
+Confirme em **Administração → Saúde do sistema → Roteirização e geodados →
+Valhalla → Testar** (lê `/status`: versão, tiles, relevo). Enquanto a URL não
+existir, o roteirizador recusa pesados com `NO_SAFE_ROUTING_ENGINE` e diz o que
+falta — esse é o comportamento correto, não um defeito.
