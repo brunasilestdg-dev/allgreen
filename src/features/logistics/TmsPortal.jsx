@@ -74,6 +74,11 @@ import "./pages/TodoGreenPages.css";
 // portal TMS (antes aqui só havia painel de vitrine). Lazy para não pesar o
 // bundle de quem abre o TMS só para ver a torre de controle.
 const RoteirizacaoDinamica = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
+// Configuração do rastreador (integração de ENTRADA: recebe posição e
+// ocorrências da telemetria). A tela já existia pronta e testada, mas estava
+// órfã — sem rota nem botão em lugar nenhum. Aqui ela ganha o botão que
+// faltava dentro do próprio TMS. Lazy: só carrega quando a pessoa abre.
+const TrackerConfig = lazy(() => import("./pages/TrackerPage.jsx"));
 
 const SECTIONS = [
   { id: "controle", label: "Torre de controle", icon: Gauge },
@@ -1399,15 +1404,30 @@ function ApiManager({ api, onReload }) {
   );
 }
 
-function Integrations({ data, onReload }) {
+function Integrations({ data, onReload, setToast }) {
+  // A configuração do rastreador abre aqui mesmo, embaixo do botão — antes não
+  // havia lugar nenhum para ligar a telemetria pelo TMS.
+  const [configurando, setConfigurando] = useState(false);
+  const track3r = data?.integrations?.track3r;
   const rows = [
+    { name: "Rastreador / telemetria (entrada)", detail: "Recebe posição e ocorrências dos veículos", value: track3r },
     { name: "CIOT / ANTT", detail: "Integração direta e certificado", value: data?.integrations?.ciot },
     { name: "Fiscal / SEFAZ", detail: "CT-e e MDF-e", value: data?.integrations?.fiscal },
-    { name: "API TMS", detail: "API externa própria para clientes e parceiros", value: data?.integrations?.api },
+    { name: "API TMS (saída)", detail: "API externa própria para clientes e parceiros", value: data?.integrations?.api },
   ];
   return (
     <section className="tms-panel">
-      <div className="tms-panel-head"><div><span>Conectividade</span><h2>Integrações do TMS</h2></div></div>
+      <div className="tms-panel-head">
+        <div><span>Conectividade</span><h2>Integrações do TMS</h2></div>
+        <button
+          type="button"
+          className="tms-primary-action"
+          aria-expanded={configurando}
+          onClick={() => setConfigurando((atual) => !atual)}
+        >
+          <Cable size={16} /> {configurando ? "Fechar configuração" : "Configurar rastreador"}
+        </button>
+      </div>
       <div className="tms-integration-list">
         {rows.map((row) => (
           <div key={row.name}>
@@ -1417,6 +1437,13 @@ function Integrations({ data, onReload }) {
           </div>
         ))}
       </div>
+      {configurando ? (
+        <div className="tms-api-card" style={{ marginTop: 14 }}>
+          <Suspense fallback={<div className="tms-loading"><RefreshCw size={20} className="spin" /><span>Abrindo a configuração do rastreador...</span></div>}>
+            <TrackerConfig authHeaders={authHeaders} setToast={setToast} />
+          </Suspense>
+        </div>
+      ) : null}
       <div className="tms-api-note">
         <div>
           <strong>API TMS externa {(data?.integrations?.api?.activeKeys || 0) > 0 ? "ativa" : "pronta — gere uma chave para ativar"}</strong>
@@ -1489,7 +1516,7 @@ export default function TmsPortal() {
   if (section === "viagens") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Execução</span><h2>Viagens e movimentações</h2></div><strong className="tms-queue-count">{data?.totals?.operations || 0}</strong></div><OperationsWorkbench rows={data?.all?.operations || []} /></section>;
   if (section === "fiscal") content = <div className="tms-stack"><section className="tms-panel"><div className="tms-panel-head"><div><span>Documentos fiscais</span><h2>CT-e e MDF-e</h2></div></div><FiscalTable rows={data?.recent?.fiscal} /></section><section className="tms-panel"><div className="tms-panel-head"><div><span>ANTT</span><h2>CIOT</h2></div></div><CiotTable rows={data?.recent?.ciots} /></section></div>;
   if (section === "faturamento") content = <BillingSection data={data} onReload={load} />;
-  if (section === "integracoes") content = <Integrations data={data} onReload={load} />;
+  if (section === "integracoes") content = <Integrations data={data} onReload={load} setToast={mostrarToast} />;
 
   return (
     <div className="tms-portal">
