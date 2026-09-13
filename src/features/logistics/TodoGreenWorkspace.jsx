@@ -206,7 +206,7 @@ function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNav
   const openAdvanced = (task) => {
     const params = new URLSearchParams();
     params.set("ferramenta", "tarefas");
-    if (task?.id) params.set("task", task.id);
+    if (task?.rawId || task?.id) params.set("task", task.rawId || task.id);
     onNavigate?.(`/todogreen/espaco?${params.toString()}`);
     setTab("quadro");
   };
