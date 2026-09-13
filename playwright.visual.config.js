@@ -47,7 +47,7 @@ export default defineConfig({
   reporter: process.env.CI ? "line" : "list",
   // Baselines agrupados por arquivo de spec; o nome do screenshot já carrega
   // tema/viewport (ver o spec), então não duplicamos por "project".
-  snapshotPathTemplate: "e2e/visual/__baselines__/{testFilePath}/{arg}{ext}",
+  snapshotPathTemplate: "e2e/visual/__baselines__/{testFileName}/{arg}{ext}",
   use: {
     baseURL: `http://localhost:${PORTA}`,
     locale: "pt-BR",

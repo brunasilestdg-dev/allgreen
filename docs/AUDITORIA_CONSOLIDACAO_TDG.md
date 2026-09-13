@@ -316,3 +316,33 @@ reaplicada ou apagada; nenhum SQL destrutivo.
 9. **P1.4 design system/regressão visual** e **P2 restante** (pré-flight persistido como gate de
    publicação de rota, Action Queue) e **P7** (Green On/OCPP comandos, GreenPay repasse, Core All
    Green/Greenmob) — não iniciados nesta rodada; ver `RELATORIO_CONSOLIDACAO_TDG.md` "O que falta".
+
+## 13. Rodada 3 (13/09/2026, tarde) — P1.4 publicado, `main` do Codex absorvida, P2 fechado
+
+### 13.1 O que entrou
+
+| Entrega | Onde | Estado |
+| --- | --- | --- |
+| **P1.4 design system**: bloco canônico `.tdg` (claro/escuro), 16 aliases legados com valor real, guarda estática de tokens | PR #371 → `1a17c34d8cec` em produção (13:20 UTC) | REAL |
+| **Regressão visual — suíte única**: o PR #371 trouxe `e2e/todogreen-screenshots.spec.js`; o commit do Codex `c38c627` (direto na `main`, mesmo horário) trouxe `e2e/visual/` + `playwright.visual.config.js` + Docker. Duas implementações paralelas → **consolidadas** na de `e2e/visual/` (máscaras de relógio/versão/latência/mapa e as telas Saúde do sistema/Inteligência migraram; o spec e os 12 PNGs do #371 foram removidos); baselines gerados e revalidados aqui | este PR | REAL (Docker ainda não exercitado — `docs/VISUAL_REGRESSION.md`) |
+| **`main` do Codex absorvida com gate**: `c38c627` (menu em 8 grupos, sessões/reservas de recarga, cobrança por kWh, GreenPay fase 2, migrations `0130`/`0131`) entrou na `main` sem PR e sem gate; o merge do #371 sobre ele foi gateado aqui depois do fato: lint 0 erros, worker 106/106, unit 352 ok (única falha: o teste do To Do, 12.3), build ok; D1 remoto já tinha `0130`/`0131` (`migrations list --remote` sem pendências) | — | verificado |
+| **P2.b pré-flight persistido** (migration `0132`): `POST /api/todogreen/preflight` resolve motorista/veículo/carregadores pelo cadastro, roda `preflightDomain`, grava resultado + proveniência; **gate** na coleção `rotas` (mesmo par por assinatura, prazo, não-BLOCK, WARNING só com justificativa auditada); passo "Rodar pré-flight" na Roteirização | este PR | REAL |
+| **P2.c fila de ação**: BLOCK/WARNING e risco viário alto viram itens no quadro seed Torre de Controle (dedupe por `sourceKey`) — sem entidade nova | este PR | REAL |
+
+### 13.2 Produção × main
+
+`f357c76` (fecho da rodada 2) → `1a17c34d8cec` (merge do #371 sobre `c38c627`; Workers Builds; `migrations.expected` 134, última `0131`) → **P2 (este PR): SHA a registrar em `DEPLOYMENT_RUNBOOK.md` §13a após o merge**. Migration nova `0132_todogreen_preflight_results` (aditiva) — aplicar com `wrangler d1 migrations apply --remote` antes/junto do deploy, como no runbook.
+
+### 13.3 O que mudou no diagnóstico
+
+- A regra "auditar antes de criar" agora vale também para o que chega **em paralelo pela `main`**: o Codex publica direto, sem PR; toda rodada começa com `git fetch` + diff da `main` antes de qualquer commit (foi assim que a duplicata da regressão visual apareceu e foi resolvida no mesmo dia).
+- O gate de pré-flight é **restritivo por padrão**: quem atribui rota pela Roteirização passa obrigatoriamente pela checagem. O despacho automático (`todogreen-dispatch.js`) continua criando rotas sem pré-flight persistido (filtra disponibilidade, mas não grava resultado) — está na matriz como limite e é a próxima extensão natural (mesmo serviço, mesma tabela).
+
+### 13.4 Decisões da titular — lista atualizada
+
+Permanecem as de 12.4 (1–8). Novas:
+
+10. **Codex direto na `main`**: manter assim (rápido, sem gate) ou exigir PR com gate local declarado, como esta sessão faz. Enquanto for direto, cada rodada daqui absorve e gateia o que entrou.
+11. **Regressão visual canônica**: rodar uma vez `npm run test:visual:docker` numa máquina com Docker; se acusar só anti-aliasing, regenerar lá e passar a tratar o Docker como origem única dos baselines.
+12. **Gate de pré-flight no despacho automático**: estender (recomendado) ou aceitar que rotas do despacho nasçam sem `preflight_status`.
+

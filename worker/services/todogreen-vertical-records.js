@@ -85,6 +85,7 @@ import {
   validarDocumentoJuridico,
 } from "../../src/features/logistics/legalDomain.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
+import { gateDePreflightDaRota } from "./todogreen-preflight.js";
 import { normalizarFato } from "../../src/features/logistics/businessContextDomain.js";
 import { efeitosDoEvento, medicaoDoEvento, normalizarTipoEvento } from "../../src/features/logistics/operationTrackingDomain.js";
 import { concluirParadasDaOperacao, statusPelaConclusao } from "../../src/features/logistics/routePlanDomain.js";
@@ -1042,6 +1043,10 @@ const COLECOES = {
       pedagioTotal: numero(row.toll_total),
       paradas: parse(row.stops_json, []),
       notas: row.notes || "",
+      // Pré-flight que liberou a rota (0132): id + status (PASS ou WARNING
+      // autorizado). Vazio = rota anterior ao gate ou criada pelo despacho.
+      preflightId: row.preflight_id || "",
+      preflightStatus: row.preflight_status || "",
       revision: row.revision,
       criadoEm: row.created_at,
       atualizadoEm: row.updated_at,
@@ -1060,6 +1065,10 @@ const COLECOES = {
       toll_total: numero(corpo.pedagioTotal),
       stops_json: JSON.stringify(Array.isArray(corpo.paradas) ? corpo.paradas.slice(0, 200) : []),
       notes: texto(corpo.notas, 1000),
+      // Só o que a guarda carimbou (verificado no banco) — nunca o que o
+      // cliente mandou em `preflightStatus`.
+      preflight_id: texto(corpo.preflightId, 120),
+      preflight_status: texto(corpo.preflightStatusVerificado, 20),
     }),
     exigido: (corpo) => {
       if (!texto(corpo.motoristaId)) return "Escolha o motorista que vai receber a rota.";
@@ -1067,6 +1076,10 @@ const COLECOES = {
         return "A rota precisa de pelo menos duas paradas (origem e destino).";
       return "";
     },
+    // Gate de publicação (P2): atribuir/mudar o par motorista+veículo+paradas
+    // exige pré-flight não-BLOCK do MESMO par, dentro do prazo; WARNING só com
+    // justificativa (auditada). Editar nome/notas/status não reabre o gate.
+    guardaDeEscrita: (env, { access, user, corpo, id }) => gateDePreflightDaRota(env, { access, user, corpo, id }),
   },
 
   // Pontos de recarga próprios (Ground/GreenOn/pátio próprio). Cadastro da
@@ -2175,7 +2188,7 @@ const criar = async (env, colecao, access, user, corpo, email = "") => {
   // pasta privada). Fica no servidor porque um ciclo travaria a leitura
   // recursiva do próprio servidor, e porque dono é regra de acesso.
   if (typeof colecao.guardaDeEscrita === "function") {
-    const impedimento = await colecao.guardaDeEscrita(env, { access, email, corpo, id: "" });
+    const impedimento = await colecao.guardaDeEscrita(env, { access, email, user, corpo, id: "" });
     if (impedimento) return json({ error: impedimento }, impedimento.status || 409);
   }
 
@@ -2295,7 +2308,7 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
   }
 
   if (typeof colecao.guardaDeEscrita === "function") {
-    const impedimento = await colecao.guardaDeEscrita(env, { access, email, corpo: proximo, id });
+    const impedimento = await colecao.guardaDeEscrita(env, { access, email, user, corpo: proximo, id });
     if (impedimento) return json({ error: impedimento }, 409);
   }
 

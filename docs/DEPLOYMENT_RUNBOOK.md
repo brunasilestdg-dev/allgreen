@@ -253,6 +253,7 @@ Produção ≠ `main` até prova em contrário. Após cada publicação, anote e
 | 2026-09-13 12:18 | `2d65bdfdf87b` (PR #365, energia P4 + lint) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 131; D1 remoto com 0124 aplicada |
 | 2026-09-13 12:22 | `6028b0edad89` (PR #366, Codex — bipagem de etiquetas) | Cloudflare Workers Builds | — | `/api/system/version` ok |
 | 2026-09-13 12:52 | `bd402c306939` (PR #367, radar estruturado + Risk Map + alternativas; inclui #368 do Codex) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 132, última `0125`; `wrangler d1 migrations list --remote` → "No migrations to apply" |
+| 2026-09-13 13:20 | `1a17c34d8cec` (merge do PR #371 P1.4 sobre `c38c627` do Codex) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 134, última `0131`; D1 remoto sem pendências; gate local do estado mesclado: lint 0 erros, worker 106/106, unit 352 ok (falha pré-existente do To Do), build ok |
 
 > Os deploys automáticos do Workers Builds **não rodam o gate** (só `build` + `deploy:cloudflare`):
 > o gate desta rodada foi executado localmente antes de cada merge (logs completos guardados por PR).
@@ -264,25 +265,24 @@ isso lado a lado.
 
 ## 13a-bis. Regressão visual (screenshots de referência)
 
-`npm run test:e2e -- e2e/todogreen-screenshots.spec.js` compara 6 telas-chave (desktop 1440×960 e
-mobile 390×844) com as imagens em `e2e/todogreen-screenshots.spec.js-snapshots/`. O Playwright
-nomeia a referência com o sistema (`*-linux.png`): as versionadas são do Chromium/Linux, o mesmo
-ambiente do runner e da sessão remota — num Mac o teste procuraria `*-darwin.png` e criaria
-referências novas em vez de comparar. Relógios, versão publicada, latências e o **mapa** (tiles
-externos, carregam ou não conforme a rede) ficam mascarados; a tolerância é 0,5% dos pixels
-(anti-aliasing de fonte).
-
-Mudança visual **intencional**: rode com `--update-snapshots` no mesmo ambiente das referências e
-revise as imagens no PR como qualquer outra mudança. Mudança **não intencional** que quebre a
-comparação é regressão — não atualize a referência sem entender a causa. A guarda de tokens
-(`src/design-system/designTokens.test.js`) roda no `npm test`.
+Suíte única: `playwright.visual.config.js` + `e2e/visual/regressao-visual.spec.js`, baselines em
+`e2e/visual/__baselines__/` — guia completo em `docs/VISUAL_REGRESSION.md`. Telas do ERP em desktop
+claro/escuro e mobile (onde se aplica), portal TMS e entrada dos portais externos, com relógio
+congelado, animações desligadas e máscaras sobre o que é legitimamente variável (horas, versão,
+latências, mapa).
 
 ```bash
-# gerar/atualizar referências (só depois de uma mudança visual intencional)
-PLAYWRIGHT_CHROMIUM=/opt/pw-browsers/chromium npx playwright test e2e/todogreen-screenshots.spec.js --update-snapshots
-# comparar
-PLAYWRIGHT_CHROMIUM=/opt/pw-browsers/chromium npx playwright test e2e/todogreen-screenshots.spec.js
+# comparar (gate) — Chromium/Linux, mesmo ambiente das referências
+PLAYWRIGHT_CHROMIUM=/opt/pw-browsers/chromium npm run test:visual
+# atualizar referências, só depois de uma mudança visual INTENCIONAL revisada no PR
+PLAYWRIGHT_CHROMIUM=/opt/pw-browsers/chromium npm run test:visual:update
+# caminho canônico reproduzível em qualquer máquina (exige Docker)
+npm run test:visual:docker
 ```
+
+Mudança **não intencional** que quebre a comparação é regressão — não atualize a referência
+sem entender a causa. A guarda de tokens (`src/design-system/designTokens.test.js`) roda no
+`npm test`.
 
 ## 13b. Rollback
 
@@ -322,6 +322,9 @@ VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
 | `TDG_ANTT_BASE_URL` / `TDG_ANTT_ACIDENTES_PACKAGE` (opcionais) | CKAN da ANTT e o pacote de *acidentes por quilômetro* das concessionárias (padrão `acidentes-quilometro-rodovias`); um recurso CSV por hora (teto 12 MB), refresh a cada 30 dias |
 | `TDG_ROAD_RISK_DISABLED=1` (opcional) | desliga o cron da ANTT e as ingestões do Risk Map; o risco por rota passa a `RISK_DATA_NOT_AVAILABLE` |
 | `TDG_CRON_EXTERNAL_DISABLED=1` (opcional; **ligado no ambiente de teste**) | kill switch único dos crons que saem para a internet (energia, sinais de mercado, Risk Map): o handler `scheduled` pula os três e devolve `skipped`. Os botões "Sincronizar" das telas continuam funcionando |
+| `TDG_PREFLIGHT_GATE_DISABLED=1` (opcional) | desliga o **gate** de pré-flight da coleção `rotas` (a rota passa sem verificação e fica com `preflight_status` vazio); o endpoint `/api/todogreen/preflight` continua funcionando e registrando. Padrão: ligado |
+| `TDG_PREFLIGHT_TTL_HOURS` (opcional, padrão 24) | por quantas horas um pré-flight libera a rota do mesmo par; depois disso é preciso rodar de novo |
+| `TDG_RISK_ACTION_THRESHOLD` (opcional, padrão 60) | score de risco viário (0–100) a partir do qual o traçado vira item de ação na Torre de Controle |
 
 Sem essas URLs, a otimização responde `routing_not_configured` (503) e a
 seleção de motor reflete os motores disponíveis — nada é forjado como ativo

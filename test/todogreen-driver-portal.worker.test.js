@@ -488,8 +488,17 @@ describe("rota do dia atribuída ao motorista (#139)", () => {
     { ordem: 2, rotulo: "Loja Centro, SP", lat: -23.55, lng: -46.63, recarga: true, concluida: false },
   ];
 
-  const criarRota = (driverId, token) =>
-    pedir("/api/todogreen/records/rotas", {
+  // P2: a coleção `rotas` só aceita atribuição com pré-flight do MESMO par.
+  // Sem veículo da frota o pré-flight é WARNING (autonomia não verificada) e
+  // exige justificativa — o mesmo caminho que a tela percorre.
+  const criarRota = async (driverId, token) => {
+    const pre = await pedir("/api/todogreen/preflight", {
+      method: "POST",
+      token,
+      body: { motoristaId: driverId, motorista: "Motorista", paradas, rota: { distanciaKm: 12, duracaoMin: 30 } },
+    });
+    const { preflight } = await pre.json();
+    return pedir("/api/todogreen/records/rotas", {
       method: "POST",
       token,
       body: {
@@ -501,8 +510,11 @@ describe("rota do dia atribuída ao motorista (#139)", () => {
         destino: paradas[1].rotulo,
         distanciaKm: 12,
         paradas,
+        preflightId: preflight?.id || "",
+        justificativa: "Teste: rota curta sem veículo da frota definido.",
       },
     });
+  };
 
   it("a operação cria a rota e o motorista dono a enxerga; o outro não", async () => {
     const criacao = await criarRota("drv-joao", dona.token);

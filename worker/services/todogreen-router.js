@@ -44,6 +44,7 @@ import { handleTodoGreenMarketRadar } from "./todogreen-market-radar.js";
 import { handleTodoGreenMarketSignals } from "./todogreen-market-signals.js";
 import { handleTodoGreenRoadRisk } from "./todogreen-road-risk.js";
 import { handleTodoGreenViability } from "./todogreen-viability.js";
+import { handleTodoGreenPreflight } from "./todogreen-preflight.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
@@ -518,6 +519,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
       } catch (erro) {
         return json({ error: erro.message || "Carregadores indisponíveis agora." }, 400);
       }
+    });
+  }
+
+  // Pré-flight persistido (P2): rodar, consultar e autorizar WARNING; é o que
+  // a coleção `rotas` exige antes de atribuir a rota ao motorista.
+  if (path.startsWith("/api/todogreen/preflight")) {
+    return guarded("To Do Green preflight error", "Não foi possível rodar o pré-flight.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenPreflight(request, env, resolved.access, resolved.user, url);
     });
   }
 

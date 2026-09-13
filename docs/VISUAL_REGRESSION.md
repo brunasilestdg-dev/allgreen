@@ -6,7 +6,15 @@ componente aparece como diff — é o que protege a consolidação do Design Sys
 de quebrar telas sem ninguém ver.
 
 > **Não depende do GitHub Actions.** O Actions está sem franquia/minutos; esta
-> suíte roda **local** ou, para baseline canônico, numa **imagem Docker fixa**.
+> suíte roda **local**, na **sessão remota do Claude Code** (Chromium/Linux, mesma
+> versão do Playwright) ou, para baseline canônico reproduzível em qualquer
+> máquina, numa **imagem Docker fixa**.
+
+> **Uma suíte só.** Em 13/09 existiam duas implementações paralelas (esta e
+> `e2e/todogreen-screenshots.spec.js`, do PR #371). Foram consolidadas aqui: as
+> máscaras de relógio/versão/latência/mapa e as telas Saúde do sistema e
+> Inteligência vieram para este spec; o outro arquivo e seus PNGs foram removidos.
+> Não crie outra — estenda `PAGINAS_ERP`.
 
 ## Arquivos
 
@@ -23,6 +31,14 @@ gerado numa máquina e comparado em outra, o diff acusa diferença onde não hou
 mudança de código. A imagem `mcr.microsoft.com/playwright:v1.62.1-noble` (a
 MESMA versão do `@playwright/test` do projeto) fixa fonte + navegador + SO, então
 o baseline é reproduzível em qualquer máquina com Docker.
+
+**Estado real dos baselines versionados:** foram gerados na sessão remota do
+Claude Code (Ubuntu + Chromium do Playwright 1.62.1, sem Docker disponível ali)
+e revalidados em execução independente no mesmo ambiente. É o mesmo par
+Playwright/Chromium da imagem Docker, mas a lista de fontes do sistema pode
+diferir — se a primeira rodada em Docker acusar diferença só de anti-aliasing,
+regenere lá (`npm run test:visual:docker:update`), comite e passe a tratar o
+Docker como origem única. Nunca comite baseline gerado num Mac/Windows.
 
 ## Comandos
 
@@ -57,7 +73,9 @@ npm run test:visual:update   # regenera local
 - **Animações e transições desligadas** (reducedMotion + CSS injetado +
   `animations:"disabled"`).
 - **locale `pt-BR` e fuso `America/Sao_Paulo`** fixos.
-- **Máscaras** sobre regiões voláteis (e-mail único no perfil, assistente Semente).
+- **Máscaras** sobre regiões voláteis: `time`, `[data-visual-dinamico]`, versão
+  publicada/latências da Saúde do sistema (`.tdg-health-*`), relógio do shell e o
+  **mapa Leaflet** (tiles externos carregam ou não conforme a rede do runner).
 
 ## Cobertura
 
@@ -66,8 +84,9 @@ se aplica — painel, frota, To Do, TMS e portais; não em telas densas de mesa)
 
 Telas: Dashboard, Clientes, Oportunidades, Viabilidade (Aceito esta viagem?),
 Precificação, Propostas, Operações, Roteirização, Frota, Energia, To Do,
-Financeiro, ESG, TMS (portal interno — abre pela mesma sessão, sem novo login) e
-a entrada dos portais externos (Cliente e Motorista).
+Financeiro, ESG, Saúde do sistema, Inteligência (radar/RFQ), TMS (portal interno —
+abre pela mesma sessão, sem novo login) e a entrada dos portais externos (Cliente
+e Motorista).
 
 ### Próximo degrau
 

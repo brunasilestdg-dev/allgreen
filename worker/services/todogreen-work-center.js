@@ -720,6 +720,55 @@ async function seedBoards(env, ownerId, userId) {
   if (statements.length) await env.DB.batch(statements);
 }
 
+// ===== Fila de ação operacional (P2.c) =====
+//
+// Pré-flight (BLOCK/WARNING) e Risk Map (risco alto) precisam virar trabalho
+// visível para alguém — e a Central de Trabalho já é esse lugar. Em vez de uma
+// entidade "action queue" paralela, os itens entram no quadro seed "Torre de
+// Controle" (viagens, atrasos, SLA, ocorrências e planos de ação), com
+// `fields.origem` e `fields.sourceKey` para a MESMA causa não gerar item em
+// duplicata a cada nova execução do pré-flight. Quem chama não conhece o
+// esquema do quadro; recebe os ids criados e os já existentes.
+export const QUADRO_FILA_DE_ACAO = "torre-controle";
+
+export async function enfileirarAcoesOperacionais(env, { ownerId, userId, acoes = [], boardKey = QUADRO_FILA_DE_ACAO } = {}) {
+  const resultado = { boardId: `${ownerId}:${boardKey}`, criados: [], existentes: [] };
+  if (!ownerId || !Array.isArray(acoes) || !acoes.length) return resultado;
+  await seedBoards(env, ownerId, userId);
+  const agora = new Date().toISOString();
+  for (const acao of acoes.slice(0, 50)) {
+    const sourceKey = clean(acao.sourceKey, 200);
+    if (!sourceKey) continue;
+    const aberto = await env.DB.prepare(
+      `SELECT id FROM todogreen_work_items
+        WHERE workspace_owner_id = ? AND board_id = ? AND archived_at IS NULL AND status <> 'concluido'
+          AND json_extract(fields_json, '$.sourceKey') = ? LIMIT 1`,
+    ).bind(ownerId, resultado.boardId, sourceKey).first();
+    if (aberto) {
+      resultado.existentes.push(aberto.id);
+      continue;
+    }
+    const id = crypto.randomUUID();
+    const fields = { ...(acao.fields && typeof acao.fields === "object" ? acao.fields : {}), sourceKey, origem: clean(acao.fields?.origem || acao.origem || "automacao", 40) };
+    const title = clean(acao.title, 200) || "Ação operacional";
+    await env.DB.prepare(
+      `INSERT INTO todogreen_work_items
+       (id,tenant_id,workspace_owner_id,board_id,type,title,description,status,priority,
+        responsible_user_id,responsible_label,client_label,due_date,fields_json,relations_json,
+        dependencies_json,revision,created_by,updated_by,created_at,updated_at,archived_at)
+       VALUES (?,?,?,?,?,?,?,'novo',?,NULL,'','',?,?,?,'[]',1,?,?,?,?,NULL)`,
+    ).bind(
+      id, TENANT_ID, ownerId, resultado.boardId, clean(acao.type, 40) || "plano-de-acao", title, clean(acao.description, 4000),
+      ["baixa", "media", "alta", "critica"].includes(acao.priority) ? acao.priority : "media",
+      clean(acao.dueDate, 10) || null, JSON.stringify(fields), JSON.stringify(Array.isArray(acao.relations) ? acao.relations.slice(0, 20) : []),
+      userId, userId, agora, agora,
+    ).run();
+    await event(env, ownerId, resultado.boardId, id, userId, "created", {}, { id, title, origem: fields.origem });
+    resultado.criados.push(id);
+  }
+  return resultado;
+}
+
 async function event(env, ownerId, boardId, itemId, actorId, action, before, after) {
   await env.DB.prepare(
     `INSERT INTO todogreen_work_item_events

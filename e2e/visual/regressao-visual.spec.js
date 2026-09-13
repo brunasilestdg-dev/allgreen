@@ -9,10 +9,17 @@ import {
   sair,
 } from "./apoioVisual.js";
 
-// Telas do ERP cobertas pela regressão visual (pedido da titular). Cada uma é
-// uma rota navegável direta; Pré-flight e a ficha de Conta vivem DENTRO de
-// fluxos (TMS/cliente) que exigem dado semeado e interação — ficam como próximo
-// degrau, anotado em docs/VISUAL_REGRESSION.md.
+// ===== Regressão visual — a ÚNICA suíte de screenshot do projeto =====
+//
+// `todogreen-visual.spec.js` mede estouro de layout e `legibilidade.spec.js`
+// mede contraste; nenhum dos dois pega "a tela ficou diferente" (um token que
+// muda de valor, um cartão que perde a borda, um espaçamento que dobra). Aqui
+// cada tela é comparada com a imagem de referência versionada em
+// `e2e/visual/__baselines__/` (ver docs/VISUAL_REGRESSION.md).
+//
+// Cada tela é uma rota navegável direta; Pré-flight e a ficha de Conta vivem
+// DENTRO de fluxos (TMS/cliente) que exigem dado semeado e interação — ficam
+// como próximo degrau, anotado em docs/VISUAL_REGRESSION.md.
 //
 // `mobile`: a tela entra também no viewport 390x844 (390 só onde faz sentido —
 // painel e listas de uso em campo; não em telas densas de mesa).
@@ -21,17 +28,19 @@ import {
 const PAGINAS_ERP = [
   { nome: "dashboard", rota: "/todogreen/dashboard", ancora: "main.tdg", mobile: true, tdg: true },
   { nome: "clientes", rota: "/todogreen/clientes", ancora: "main.tdg", tdg: true },
-  { nome: "oportunidades", rota: "/todogreen/oportunidades", ancora: "main.tdg", tdg: true },
+  { nome: "oportunidades", rota: "/todogreen/oportunidades", ancora: "main.tdg", mobile: true, tdg: true },
   { nome: "viabilidade", rota: "/todogreen/aceite-viagens", ancora: "main.tdg", tdg: true },
   { nome: "precificacao", rota: "/todogreen/precificacao", ancora: "main.tdg", tdg: true },
   { nome: "propostas", rota: "/todogreen/propostas", ancora: "main.tdg", tdg: true },
   { nome: "operacoes", rota: "/todogreen/operacoes", ancora: "main.tdg", tdg: true },
-  { nome: "roteirizacao", rota: "/todogreen/roteirizacao", ancora: "main.tdg", tdg: true },
+  { nome: "roteirizacao", rota: "/todogreen/roteirizacao", ancora: "main.tdg", mobile: true, tdg: true },
   { nome: "frota", rota: "/todogreen/motorista-frota", ancora: "main.tdg", mobile: true, tdg: true },
-  { nome: "energia", rota: "/todogreen/energia", ancora: "main.tdg", tdg: true },
+  { nome: "energia", rota: "/todogreen/energia", ancora: "main.tdg", mobile: true, tdg: true },
   { nome: "to-do", rota: "/todogreen/espaco?ferramenta=tarefas", ancora: "main.tdg", mobile: true, tdg: true },
   { nome: "financeiro", rota: "/todogreen/faturamento", ancora: "main.tdg", tdg: true },
   { nome: "esg", rota: "/todogreen/central-esg", ancora: "main.tdg", tdg: true },
+  { nome: "saude-sistema", rota: "/todogreen/saude-sistema", ancora: "main.tdg", mobile: true, tdg: true },
+  { nome: "inteligencia", rota: "/todogreen/marketing", ancora: "main.tdg", tdg: true },
   // TMS é portal interno (mesma sessão — SSO): abre sem novo login. Shell
   // próprio, sem alternador de tema, então só claro + mobile.
   { nome: "tms", rota: "/portal-tms", ancora: "body", mobile: true, tdg: false },
@@ -40,10 +49,21 @@ const PAGINAS_ERP = [
 const DESKTOP = { width: 1440, height: 960 };
 const MOBILE = { width: 390, height: 844 };
 
-// Regiões voláteis que não devem entrar na comparação (mesmo com conta fixa e
-// relógio congelado): o e-mail único da conta no perfil e o assistente Semente,
-// que monta conforme a página. Mascarar > baseline instável.
-const mascaras = (page) => [page.locator(".tdg-semente"), page.locator(".tdg-profile")];
+// Regiões legitimamente voláteis, mesmo com conta fixa e relógio congelado:
+// horas/datas renderizadas fora do relógio da página, a versão publicada e as
+// latências da Saúde do sistema, o e-mail único da conta e o MAPA (tiles vêm
+// de servidor externo — carregam ou não conforme a rede do runner; a comparação
+// é da interface, não do OpenStreetMap). Mascarar > baseline instável.
+const SELETORES_VOLATEIS = [
+  "time",
+  "[data-visual-dinamico]",
+  ".tdg-health-version",
+  ".tdg-health-meta",
+  ".tdg-health-checked",
+  ".tdg-shell-clock",
+  ".leaflet-container",
+];
+const mascaras = (page) => SELETORES_VOLATEIS.map((seletor) => page.locator(seletor));
 
 async function fotografar(page, nome, sufixo) {
   await expect(page).toHaveScreenshot(`${nome}__${sufixo}.png`, {
@@ -54,6 +74,7 @@ async function fotografar(page, nome, sufixo) {
 
 test.describe("regressão visual — To Do Green", () => {
   test("ERP em desktop (1440x960), tema claro", async ({ page }) => {
+    test.setTimeout(300_000);
     await prepararDeterminismo(page);
     await page.setViewportSize(DESKTOP);
     await criarConta(page, contaNova("visual"));
@@ -69,6 +90,7 @@ test.describe("regressão visual — To Do Green", () => {
   });
 
   test("ERP em desktop (1440x960), tema escuro", async ({ page }) => {
+    test.setTimeout(300_000);
     await prepararDeterminismo(page);
     await page.setViewportSize(DESKTOP);
     await criarConta(page, contaNova("visual-dark"));
@@ -88,6 +110,7 @@ test.describe("regressão visual — To Do Green", () => {
   });
 
   test("ERP em mobile (390x844), onde se aplica", async ({ page }) => {
+    test.setTimeout(300_000);
     await prepararDeterminismo(page);
     await page.setViewportSize(MOBILE);
     await criarConta(page, contaNova("visual-mobile"));

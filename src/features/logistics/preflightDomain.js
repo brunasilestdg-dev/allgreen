@@ -17,6 +17,8 @@
 import { estimateRouteEnergy } from "./energyEstimationDomain.js";
 
 export const SEVERITY = Object.freeze({ PASS: "PASS", WARNING: "WARNING", BLOCK: "BLOCK" });
+// Rótulo humano do status, para a tela não mostrar o código cru.
+export const ROTULO_STATUS_PREFLIGHT = Object.freeze({ PASS: "liberado", WARNING: "com alertas", BLOCK: "bloqueado" });
 const RANK = { PASS: 0, WARNING: 1, BLOCK: 2 };
 
 const num = (v, fb = null) => {
@@ -108,6 +110,13 @@ function autonomySuggestions({ vehicle, energy, route, alternatives = {} }) {
   return suggestions;
 }
 
+// Motivos do estimateRouteEnergy em linguagem de operação.
+const MOTIVO_ENERGIA = Object.freeze({
+  route_distance_required: "a rota não tem distância",
+  consumption_required: "o veículo não tem consumo (kWh/km) cadastrado",
+  battery_capacity_required: "o veículo não tem capacidade de bateria cadastrada",
+});
+
 /**
  * Roda o pré-flight. Devolve { status, blocked, checks[], suggestions[] }.
  * status = pior severidade das checagens. blocked = há algum BLOCK.
@@ -122,14 +131,21 @@ export function runPreflight(input = {}) {
   const energy = input.energyEstimate && input.energyEstimate.status === "ok" ? input.energyEstimate : null;
 
   // ---- Motorista ----
-  if (driver.available === false) checks.push(check("driver_available", "Motorista disponível", SEVERITY.BLOCK, "Motorista indisponível."));
+  // `unavailableReason` deixa o cadastro explicar (alocado, afastado, não
+  // encontrado) em vez do genérico. `licenseUnknown` é o caso honesto de CNH
+  // sem validade cadastrada: não bloqueia, mas não passa em silêncio.
+  if (driver.available === false) checks.push(check("driver_available", "Motorista disponível", SEVERITY.BLOCK, driver.unavailableReason || "Motorista indisponível."));
   else if (driver.licenseValid === false) checks.push(check("driver_license", "Habilitação do motorista", SEVERITY.BLOCK, "CNH inválida ou vencida."));
   else if (driver.journeyOk === false) checks.push(check("driver_journey", "Jornada do motorista", SEVERITY.BLOCK, "Jornada estouraria os limites."));
+  else if (driver.licenseUnknown === true) checks.push(check("driver_license_unknown", "Habilitação do motorista", SEVERITY.WARNING, "Validade da CNH não cadastrada — confirme antes de liberar."));
   else if (driver.trainingOk === false) checks.push(check("driver_training", "Treinamento do motorista", SEVERITY.WARNING, "Treinamento pendente."));
   else checks.push(check("driver", "Motorista", SEVERITY.PASS));
 
   // ---- Veículo ----
-  if (vehicle.available === false) checks.push(check("vehicle_available", "Veículo disponível", SEVERITY.BLOCK, "Veículo indisponível."));
+  // Sem veículo da frota não há como verificar capacidade nem autonomia: é
+  // alerta explícito, não PASS por omissão.
+  if (vehicle.unknown === true) checks.push(check("vehicle_unknown", "Veículo da frota", SEVERITY.WARNING, "Sem veículo da frota informado — capacidade e autonomia não verificadas."));
+  else if (vehicle.available === false) checks.push(check("vehicle_available", "Veículo disponível", SEVERITY.BLOCK, vehicle.unavailableReason || "Veículo indisponível."));
   else if (vehicle.docsOk === false) checks.push(check("vehicle_docs", "Documentação do veículo", SEVERITY.BLOCK, "Documentação do veículo irregular."));
   else if (vehicle.maintenanceOk === false) checks.push(check("vehicle_maintenance", "Manutenção do veículo", SEVERITY.WARNING, "Manutenção pendente."));
   else checks.push(check("vehicle", "Veículo", SEVERITY.PASS));
@@ -173,6 +189,11 @@ export function runPreflight(input = {}) {
       checks.push(check("energy_confidence", "Confiança da estimativa de energia", SEVERITY.WARNING,
         `Estimativa de energia com confiança ${energy.confidence} — dados de apoio insuficientes.`));
     }
+  } else if (input.energyEstimate && input.energyEstimate.status === "invalid" && vehicle.unknown !== true) {
+    // Havia veículo e rota, mas faltou dado (bateria, consumo, distância): a
+    // autonomia NÃO foi verificada — alerta com o motivo, nunca PASS implícito.
+    checks.push(check("energy_unknown", "Autonomia / energia", SEVERITY.WARNING,
+      `Autonomia não verificada: ${MOTIVO_ENERGIA[input.energyEstimate.reason] || input.energyEstimate.reason || "dados insuficientes"}.`));
   }
 
   // ---- SLA / janela ----
@@ -186,6 +207,57 @@ export function runPreflight(input = {}) {
     checks,
     suggestions: autonomySugs,
   };
+}
+
+// ===== Assinatura da rota (paradas + motorista + veículo) =====
+// Amarra um resultado de pré-flight ao par EXATO que ele avaliou. Coordenada
+// arredondada a 4 casas (~11 m); sem coordenada, vale o rótulo normalizado.
+// Reordenar/trocar parada, motorista ou veículo muda a assinatura; um clique a
+// mais na mesma tela, não. Puro e determinístico: a tela e o servidor calculam
+// a mesma coisa e o servidor não confia na assinatura enviada.
+const fnv1a = (texto) => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i += 1) {
+    h ^= texto.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+};
+const chaveDaParada = (parada) => {
+  const lat = Number(parada?.lat);
+  const lng = Number(parada?.lng ?? parada?.lon);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  return String(parada?.rotulo || parada?.endereco || parada?.label || "").trim().toLowerCase().replace(/\s+/g, " ");
+};
+export function routeFingerprint({ stops = [], driverId = "", vehicleKey = "" } = {}) {
+  const partes = [
+    String(driverId || "").trim(),
+    String(vehicleKey || "").trim().toUpperCase(),
+    ...(Array.isArray(stops) ? stops : []).map(chaveDaParada).filter(Boolean),
+  ];
+  const base = partes.join("|");
+  const reverso = base.split("").reverse().join("");
+  return `pf1-${fnv1a(base)}${fnv1a(reverso)}-${partes.length}`;
+}
+
+// ===== Decisão de publicação — a MESMA régua na tela e no servidor =====
+// BLOCK nunca publica. WARNING publica só com justificativa (decisão autorizada,
+// com auditoria de quem e por quê). PASS publica. Sem resultado, não publica.
+export const JUSTIFICATIVA_MINIMA = 10;
+export function decisaoDoPreflight(resultado, { justificativa = "" } = {}) {
+  const status = resultado?.status;
+  const texto = String(justificativa || "").trim();
+  if (!status) return { podeSalvar: false, precisaJustificativa: false, motivo: "Rode o pré-flight desta rota antes de atribuí-la ao motorista." };
+  if (status === SEVERITY.BLOCK) {
+    return { podeSalvar: false, precisaJustificativa: false, motivo: "O pré-flight bloqueou esta rota. Resolva as checagens em BLOCK (ou siga uma sugestão) e rode de novo." };
+  }
+  if (status === SEVERITY.WARNING) {
+    if (texto.length < JUSTIFICATIVA_MINIMA) {
+      return { podeSalvar: false, precisaJustificativa: true, motivo: `O pré-flight tem alertas: para atribuir mesmo assim, registre uma justificativa (mínimo ${JUSTIFICATIVA_MINIMA} caracteres).` };
+    }
+    return { podeSalvar: true, precisaJustificativa: true, motivo: "" };
+  }
+  return { podeSalvar: true, precisaJustificativa: false, motivo: "" };
 }
 
 export const __test__ = { energyBudget, autonomySuggestions };
