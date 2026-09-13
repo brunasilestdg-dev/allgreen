@@ -122,6 +122,8 @@ A suíte `todogreen-purchasing.worker.test.js` já funciona como teste transvers
 | Integração / capacidade | Status | Situação |
 | --- | --- | --- |
 | Cloudflare Worker + D1 + Cron | **REAL** | infraestrutura nativa ativa |
+| Versão publicada (`GET /api/system/version`) | **REAL** | SHA, `buildTime`, `branch`, `publishedBy`, `environment` (var do Worker) e migrations esperadas, a partir do manifesto do build — sem segredo; público como `/api/status` |
+| Saúde do sistema (Administração) | **REAL** | `GET /api/todogreen/system-health` (sessão + `integration:manage`/`audit:read`) → componentes (Worker, App, D1 c/ latência e migrations aplicadas × esperadas, R2, IA, busca) e integrações da seção 113 com estado canônico (`systemHealthDomain` reaproveita `integrationStatusDomain`), métricas por integração (migration `0120`: latência, volume, último sucesso/falha) e alertas nomeados (`D1_BEHIND_CODE`, `CLIENT_SERVER_MISMATCH`); testes unitários + worker. Integração só vira *Operacional* com teste/sincronização real |
 | Automações internas | **REAL** | executadas no servidor e persistidas |
 | Webhooks de saída | **REAL** | motor existe; destino precisa estar configurado |
 | API pública / idempotência | **REAL** | infraestrutura disponível |

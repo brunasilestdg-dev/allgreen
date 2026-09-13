@@ -86,27 +86,13 @@ import { runTodoGreenIntelligenceWatches } from "./worker/services/todogreen-cli
 import { runTodoGreenMarketIntelligenceScheduled } from "./worker/services/todogreen-market-intelligence.js";
 import { runTodoGreenTrackerScheduled, expurgarPosicoesAntigasDoTracker } from "./worker/services/todogreen-tracker.js";
 import { runTodoGreenPendenciaAvisos } from "./worker/services/todogreen-semente.js";
+import { lerManifestoDeVersao, systemVersionPayload } from "./worker/services/todogreen-system-health.js";
 
 
 
-async function publishedVersion(env, origin) {
-  try {
-    if (!env.ASSETS?.fetch) return null;
-    const response = await env.ASSETS.fetch(
-      new Request(`${origin}/version.json`, {
-        headers: { "cache-control": "no-store" },
-      }),
-    );
-    if (!response.ok) return null;
-    const data = await response.json();
-    return {
-      version: String(data.version || "").trim(),
-      buildTime: data.buildTime || null,
-    };
-  } catch {
-    return null;
-  }
-}
+// Uma fonte só para "qual SHA está publicado": o manifesto version.json do
+// build. /api/status, /api/system/version e a tela Saúde do sistema leem daqui.
+const publishedVersion = (env, origin) => lerManifestoDeVersao(env, origin);
 
 // Movido para ./worker/auth/credenciais.js; reexportado para os testes.
 export { createSession, hex, passwordHash, randomHex, sameHash, sha256, unhex };
@@ -4335,6 +4321,13 @@ export default {
           500,
         );
       }
+    }
+    // Público e sem segredo: SHA publicado, hora do build e ambiente. É o que
+    // a auditoria compara com `git rev-parse HEAD` para dizer "produção = main".
+    if (url.pathname === "/api/system/version") {
+      if (request.method !== "GET") return json({ error: "Método não permitido." }, 405);
+      const manifesto = await publishedVersion(env, url.origin);
+      return json(systemVersionPayload(env, manifesto));
     }
     if (url.pathname === "/api/status") {
       let database = "indisponível";

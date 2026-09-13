@@ -38,6 +38,7 @@ import { handleTodoGreenMarketIntelligence } from "./todogreen-market-intelligen
 import { handleTodoGreenSemente } from "./todogreen-semente.js";
 import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
+import { handleTodoGreenSystemHealth } from "./todogreen-system-health.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
@@ -477,6 +478,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
       } catch (erro) {
         return json({ error: erro.message || "Carregadores indisponíveis agora." }, 400);
       }
+    });
+  }
+
+  if (path === "/api/todogreen/system-health") {
+    return guarded("To Do Green system health error", "Não foi possível ler a saúde do sistema.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenSystemHealth(request, env, resolved.access, url);
     });
   }
 
