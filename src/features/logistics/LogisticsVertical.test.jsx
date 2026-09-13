@@ -629,8 +629,13 @@ describe("LogisticsVertical", () => {
     });
     await renderarAutorizada();
     const aviso = await screen.findByRole("alert");
-    expect(aviso.textContent).toMatch(/Banco indisponível/);
-    expect(aviso.textContent).toMatch(/não porque não existam/);
+    // Diz que não sabe (indisponível/desatualizado), não que é zero — e NÃO ecoa
+    // o erro técnico do servidor ("Banco indisponível.") ao usuário final.
+    expect(aviso.textContent).toMatch(/não foi possível carregar/i);
+    expect(aviso.textContent).toMatch(/não são necessariamente zero/i);
+    expect(aviso.textContent).not.toMatch(/Banco indisponível/);
+    // E oferece recuperar sem recarregar a aplicação inteira.
+    expect(screen.getByRole("button", { name: /tentar novamente/i })).toBeTruthy();
   });
 
   it("o lançamento financeiro vai para o servidor com o tipo certo", async () => {
