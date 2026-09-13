@@ -33,6 +33,7 @@ import {
   rotaValidaParaAtribuir,
 } from "../routePlanDomain.js";
 import { pontosParaMapa } from "../chargingPointsDomain.js";
+import { ROTULO_STATUS_PREFLIGHT, decisaoDoPreflight, routeFingerprint } from "../preflightDomain.js";
 import "./TodoGreenPages.css";
 
 const formatarReais = (valor) =>
@@ -172,8 +173,14 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
   // a rota no próprio app (portal do motorista), pelo driver_id.
   const [motoristas, setMotoristas] = useState([]);
   const [rotasSalvas, setRotasSalvas] = useState([]);
-  const [atribuir, setAtribuir] = useState({ motoristaId: "", nome: "", nomeRota: "", data: "" });
+  const [atribuir, setAtribuir] = useState({ motoristaId: "", nome: "", nomeRota: "", data: "", veiculoId: "" });
   const [salvandoRota, setSalvandoRota] = useState(false);
+  // P2: pré-flight PERSISTIDO antes de atribuir. O servidor resolve motorista,
+  // veículo da frota e carregadores pelo cadastro e devolve PASS/WARNING/BLOCK;
+  // a rota só é salva com um pré-flight não-BLOCK do MESMO par (assinatura).
+  const [veiculos, setVeiculos] = useState([]);
+  const [preflight, setPreflight] = useState({ fase: "idle", resultado: null, erro: "" });
+  const [justificativa, setJustificativa] = useState("");
 
   const containerRef = useRef(null);
   const mapaRef = useRef(null);
@@ -876,6 +883,11 @@ Regras:
       .then((resp) => (resp.ok ? resp.json() : null))
       .then((dados) => { if (ativo) setMotoristas(dados?.records || dados?.registros || []); })
       .catch(() => {});
+    // Frota para o pré-flight (capacidade, bateria, consumo, documentos).
+    fetch("/api/todogreen/fleet", { headers: authHeaders() })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((dados) => { if (ativo) setVeiculos(Array.isArray(dados?.vehicles) ? dados.vehicles : []); })
+      .catch(() => {});
     carregarRotas();
     return () => { ativo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -884,17 +896,61 @@ Regras:
   // Salva a rota traçada e a atribui ao motorista escolhido. As paradas saem do
   // resultado do traçado (rótulo + coordenada), somadas às janelas e recargas
   // marcadas — a mesma verdade que o mapa mostra.
+  // O par que o pré-flight avalia: paradas + motorista + veículo. Mudou qualquer
+  // um, a assinatura muda e o resultado anterior deixa de valer (a mesma regra
+  // que o servidor aplica no gate).
+  const veiculoEscolhido = veiculos.find((v) => v.id === atribuir.veiculoId) || null;
+  const chaveDoVeiculoEscolhido = veiculoEscolhido ? String(veiculoEscolhido.plate || veiculoEscolhido.prefix || "").toUpperCase() : "";
+  const paradasParaAtribuir = montarParadasDaRota({ paradas: estado.resultado?.paradas || [], recargas, janelas });
+  const assinaturaAtual = routeFingerprint({ stops: paradasParaAtribuir, driverId: atribuir.motoristaId, vehicleKey: chaveDoVeiculoEscolhido });
+  const preflightAtual = preflight.resultado && preflight.resultado.fingerprint === assinaturaAtual ? preflight.resultado : null;
+  const decisaoPreflight = decisaoDoPreflight(preflightAtual, { justificativa });
+
+  const rodarPreflight = async () => {
+    const resultado = estado.resultado;
+    const validacao = rotaValidaParaAtribuir({ driverId: atribuir.motoristaId, stops: paradasParaAtribuir });
+    if (!validacao.valido) { setToast?.(validacao.erro); return; }
+    setPreflight({ fase: "rodando", resultado: null, erro: "" });
+    try {
+      const corpo = {
+        motoristaId: atribuir.motoristaId,
+        motorista: atribuir.nome || motoristas.find((m) => m.id === atribuir.motoristaId)?.fullName || "",
+        veiculoId: atribuir.veiculoId,
+        placa: veiculoEscolhido?.plate || "",
+        paradas: paradasParaAtribuir,
+        rota: { distanciaKm: Number(resultado?.distanciaKm || 0), duracaoMin: Number(resultado?.minutos || 0) },
+        // Carregadores vistos no mapa entram como alternativa de recarga (com potência).
+        carregadores: carregadores.lista.map((c) => ({ id: c.id, nome: c.nome, potenciaKw: c.potenciaKw })),
+        // Risco viário do traçado (P6): alto vira item de ação na Torre de Controle.
+        risco: resultado?.risco || null,
+      };
+      const resposta = await fetch("/api/todogreen/preflight", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify(corpo),
+      });
+      const retorno = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(retorno.error || "Não foi possível rodar o pré-flight.");
+      setPreflight({ fase: "pronto", resultado: retorno.preflight, erro: "" });
+    } catch (erro) {
+      setPreflight({ fase: "erro", resultado: null, erro: erro.message || "Não foi possível rodar o pré-flight." });
+    }
+  };
+
   const salvarEAtribuir = async () => {
     const resultado = estado.resultado;
-    const stops = montarParadasDaRota({ paradas: resultado?.paradas || [], recargas, janelas });
+    const stops = paradasParaAtribuir;
     const validacao = rotaValidaParaAtribuir({ driverId: atribuir.motoristaId, stops });
     if (!validacao.valido) { setToast?.(validacao.erro); return; }
+    if (!decisaoPreflight.podeSalvar) { setToast?.(decisaoPreflight.motivo); return; }
     setSalvandoRota(true);
     try {
       const corpo = {
         nome: atribuir.nomeRota || `Rota ${stops[0].rotulo.split(",")[0]} → ${stops[stops.length - 1].rotulo.split(",")[0]}`,
         motoristaId: atribuir.motoristaId,
         motorista: atribuir.nome || motoristas.find((m) => m.id === atribuir.motoristaId)?.fullName || "",
+        veiculoId: atribuir.veiculoId,
+        placa: chaveDoVeiculoEscolhido,
         dataServico: atribuir.data || "",
         origem: stops[0].rotulo,
         destino: stops[stops.length - 1].rotulo,
@@ -903,6 +959,10 @@ Regras:
         pedagioTotal: Number(estimarTotalPedagios(pedagios.dados?.quantidade, tarifaMedia) || 0),
         paradas: stops,
         status: "planejada",
+        // O gate do servidor confere: mesmo par, dentro do prazo, não-BLOCK;
+        // WARNING só com a justificativa (auditada).
+        preflightId: preflightAtual?.id || "",
+        justificativa: preflightAtual?.status === "WARNING" ? justificativa : "",
       };
       const resposta = await fetch("/api/todogreen/records/rotas", {
         method: "POST",
@@ -912,7 +972,9 @@ Regras:
       const retorno = await resposta.json().catch(() => ({}));
       if (!resposta.ok) throw new Error(retorno.error || "Não foi possível salvar a rota.");
       setToast?.("Rota atribuída ao motorista — ela aparece no app dele.");
-      setAtribuir({ motoristaId: "", nome: "", nomeRota: "", data: "" });
+      setAtribuir({ motoristaId: "", nome: "", nomeRota: "", data: "", veiculoId: "" });
+      setPreflight({ fase: "idle", resultado: null, erro: "" });
+      setJustificativa("");
       carregarRotas();
     } catch (erro) {
       setToast?.(erro.message || "Não foi possível salvar a rota.");
@@ -1212,15 +1274,87 @@ Regras:
               <span>Nome da rota (opcional)</span>
               <input value={atribuir.nomeRota} onChange={(event) => setAtribuir((v) => ({ ...v, nomeRota: event.target.value }))} placeholder="Ex.: Entregas Zona Sul" />
             </label>
+            <label>
+              <span>Veículo da frota (capacidade e autonomia)</span>
+              <select
+                value={atribuir.veiculoId}
+                onChange={(event) => setAtribuir((v) => ({ ...v, veiculoId: event.target.value }))}
+                aria-label="Veículo da frota para o pré-flight"
+              >
+                <option value="">Sem veículo definido (gera alerta)</option>
+                {veiculos.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.prefix}{v.plate ? ` · ${v.plate}` : ""}{v.status && v.status !== "available" ? ` (${v.status})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
+
+          {/* P2: pré-flight persistido — PASS / WARNING / BLOCK com sugestões
+              calculadas. BLOCK impede atribuir; WARNING exige justificativa. */}
+          <div className="tdg-roteirizacao-preflight" data-testid="tdg-preflight">
+            <div className="tdg-roteirizacao-preflight-acoes">
+              <button
+                type="button"
+                className="tdg-action tdg-action-secondary"
+                onClick={rodarPreflight}
+                disabled={preflight.fase === "rodando" || !atribuir.motoristaId}
+              >
+                <ListChecks size={16} />{preflight.fase === "rodando" ? "Checando…" : preflightAtual ? "Rodar pré-flight de novo" : "Rodar pré-flight"}
+              </button>
+              {preflight.resultado && !preflightAtual && (
+                <small className="tdg-roteirizacao-preflight-aviso">A rota, o motorista ou o veículo mudaram depois do último pré-flight — rode de novo.</small>
+              )}
+              {preflight.fase === "erro" && <small className="tdg-roteirizacao-preflight-aviso">{preflight.erro}</small>}
+            </div>
+            {preflightAtual && (
+              <div className={`tdg-roteirizacao-preflight-resultado sev-${String(preflightAtual.status).toLowerCase()}`}>
+                <strong>Pré-flight: {ROTULO_STATUS_PREFLIGHT[preflightAtual.status] || preflightAtual.status}</strong>
+                <ul className="tdg-roteirizacao-preflight-checks">
+                  {preflightAtual.checks.map((c) => (
+                    <li key={c.id} className={`sev-${String(c.severity).toLowerCase()}`}>
+                      <span className="tdg-preflight-sev">{c.severity}</span>
+                      <span><b>{c.label}</b>{c.reason ? ` — ${c.reason}` : ""}</span>
+                    </li>
+                  ))}
+                </ul>
+                {preflightAtual.suggestions?.length > 0 && (
+                  <div className="tdg-roteirizacao-preflight-sugestoes">
+                    <span>Sugestões calculadas</span>
+                    <ul>{preflightAtual.suggestions.map((s, i) => <li key={`${s.type}-${i}`}>{s.text}</li>)}</ul>
+                  </div>
+                )}
+                {preflightAtual.status === "WARNING" && (
+                  <label className="tdg-roteirizacao-preflight-justificativa">
+                    <span>Justificativa para atribuir com alertas (fica na auditoria)</span>
+                    <textarea
+                      value={justificativa}
+                      onChange={(event) => setJustificativa(event.target.value)}
+                      placeholder="Ex.: veículo será definido no pátio; rota curta, sem risco de autonomia."
+                      rows={2}
+                    />
+                  </label>
+                )}
+                {preflightAtual.acoes?.criados?.length > 0 && (
+                  <small className="tdg-roteirizacao-preflight-fila">{preflightAtual.acoes.criados.length} item(ns) de ação criado(s) na Torre de Controle (Central de Trabalho).</small>
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             className="tdg-action"
             onClick={salvarEAtribuir}
-            disabled={salvandoRota || !atribuir.motoristaId}
+            disabled={salvandoRota || !atribuir.motoristaId || !decisaoPreflight.podeSalvar}
+            title={decisaoPreflight.podeSalvar ? "" : decisaoPreflight.motivo}
           >
             <Truck size={16} />{salvandoRota ? "Atribuindo…" : "Salvar e atribuir ao motorista"}
           </button>
+          {!decisaoPreflight.podeSalvar && atribuir.motoristaId && (
+            <small className="tdg-roteirizacao-preflight-motivo">{decisaoPreflight.motivo}</small>
+          )}
         </div>
       )}
 
