@@ -3987,6 +3987,7 @@
 }
 .tdg-rot-import-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
 .tdg-rot-import-arquivo { cursor: pointer; }
+.tdg-rot-import-arquivo.is-desabilitado { opacity: .5; pointer-events: none; }
 /* Fase de geocodificação: barra de progresso simples. */
 .tdg-rot-import-progresso { display: grid; gap: 8px; }
 .tdg-rot-import-progresso p { margin: 0; font-weight: 600; color: var(--tdg-ink, #1e293b); }
