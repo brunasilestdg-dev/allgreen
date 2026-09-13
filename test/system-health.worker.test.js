@@ -118,8 +118,18 @@ describe("GET /api/todogreen/system-health", () => {
     expect(integracoes.valhalla.detail).toContain("NO_SAFE_ROUTING_ENGINE");
     expect(integracoes.valhalla.requirement).toContain("TDG_VALHALLA_BASE_URL");
     // Não implementada nunca aparece conectada.
-    for (const id of ["ons", "anp", "gdelt", "prf", "compras-gov", "postgis"])
+    for (const id of ["gdelt", "prf", "compras-gov", "postgis"])
       expect(integracoes[id]).toMatchObject({ state: "NOT_CONFIGURED", implementation: "NOT_IMPLEMENTED" });
+    // Energia (P4): referências públicas REAIS. Sem perfil de energia a ANEEL é
+    // NOT_CONFIGURED e diz o que falta; ONS/ANP existem, mas neste banco nunca
+    // sincronizaram → "Configurado, sem verificação", nunca "conectado".
+    expect(integracoes["aneel-open-data"]).toMatchObject({ state: "NOT_CONFIGURED", implementation: "REAL" });
+    expect(integracoes["aneel-open-data"].requirement).toContain("Perfil de energia");
+    for (const id of ["ons-open-data", "anp-open-data"]) {
+      expect(integracoes[id].implementation).toBe("REAL");
+      expect(integracoes[id].online).toBe(false);
+      expect(integracoes[id].unverified).toBe(true);
+    }
     // Elevação: provedor REAL (Valhalla /height) que fica NOT_CONFIGURED sem a
     // URL — e a linha diz que o modelo assume plano (ELEVATION_NOT_AVAILABLE).
     expect(integracoes.elevation).toMatchObject({ state: "NOT_CONFIGURED", implementation: "REAL" });

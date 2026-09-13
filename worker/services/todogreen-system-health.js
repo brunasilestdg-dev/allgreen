@@ -19,6 +19,7 @@ import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { envComChavesDoEspaco } from "./ai-keys.js";
 import { todoGreenExternalIntegrationCatalog } from "./todogreen-integration-gateway.js";
 import { latestTodoGreenIntegrationHealth } from "./todogreen-integration-health.js";
+import { ENERGY_LIMITS, estadoDasReferenciasDeEnergia } from "./todogreen-energy-reference.js";
 import { R2_BUCKET_BINDING } from "./todogreen-file-store.js";
 import {
   ciotStatusForOwner,
@@ -172,6 +173,39 @@ const doCatalogo = (item, saude, extra = {}) => ({
   ...extra,
 });
 
+const dataCurta = (iso) => (iso ? String(iso).slice(0, 16).replace("T", " ") : "—");
+
+// Referência pública em cache (ANEEL/ANP/ONS): a linha mostra a data da FONTE e
+// da última ingestão. Nunca sincronizou → vale o último "Testar" (probe) ou
+// "sem verificação"; falhou sem nunca ter dado → ERROR; velho → STALE/DEGRADED.
+const linhaDeReferencia = (item, fonte, saudeProbe, { staleMs, detalheOk, detalheSem }) => {
+  const f = fonte || { status: "never", configured: true };
+  const jaSincronizou = Boolean(f.lastSuccessAt);
+  const saude = jaSincronizou || f.status === "error"
+    ? {
+        online: jaSincronizou,
+        error: f.status === "error" ? f.error : "",
+        checkedAt: f.lastAttemptAt || null,
+        lastSuccessAt: f.lastSuccessAt || null,
+        lastFailureAt: f.status === "error" ? f.lastAttemptAt || null : null,
+        latencyMs: f.latencyMs ?? null,
+        recordsProcessed: f.records ?? null,
+      }
+    : saudeProbe;
+  let detail = detalheSem;
+  if (jaSincronizou) detail = `${detalheOk(f)}${f.stale ? " Fonte sem atualização dentro do prazo esperado (STALE)." : ""}`;
+  else if (f.status === "error") detail = `Última tentativa falhou: ${texto(f.error, 160)}. ${detalheSem}`;
+  return doCatalogo({ ...item, configured: f.configured !== false, requirement: f.requirement || item.requirement || "" }, saude, {
+    group: "energia",
+    implementation: IMPLEMENTATION.REAL,
+    canTest: true,
+    staleMs,
+    detail,
+    lastSyncAt: f.lastSuccessAt || null,
+    sourceUpdatedAt: f.sourceUpdatedAt || null,
+  });
+};
+
 const naoImplementada = (id, name, group, detail, requirement) => ({
   id, name, group, detail, requirement,
   implementation: IMPLEMENTATION.NOT_IMPLEMENTED,
@@ -196,6 +230,7 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
   const envBusca = await envComChavesDeBuscaDoEspaco(envIa, ownerId).catch(() => envIa);
   const saudeRegistrada = await latestTodoGreenIntegrationHealth(env, ownerId);
   const saudePorId = new Map(saudeRegistrada.map((row) => [row.integrationId, row]));
+  const energia = await estadoDasReferenciasDeEnergia(env, ownerId).catch(() => null);
 
   const versao = systemVersionPayload(env, manifesto);
   const catalogo = todoGreenExternalIntegrationCatalog(envBusca);
@@ -320,6 +355,8 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
   const nominatim = doGateway("nominatim");
   const clima = doGateway("open-meteo");
   const aneel = doGateway("aneel-open-data");
+  const ons = doGateway("ons-open-data");
+  const anp = doGateway("anp-open-data");
   const antt = doGateway("antt-open-data");
   const ocm = doGateway("open-charge-map");
   const busca = webSearchConfiguration(envBusca);
@@ -411,20 +448,24 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
     ciot && deReadiness(ciot, { group: "operacao", implementation: IMPLEMENTATION.EXTERNAL, canTest: false }, agora),
     deReadiness(sefazStatus(env), { group: "operacao", implementation: IMPLEMENTATION.EXTERNAL, canTest: false }, agora),
 
-    // Energia e recarga
-    aneel && {
-      ...doCatalogo(aneel, saudePorId.get("aneel-open-data"), {
-        group: "energia",
-        implementation: IMPLEMENTATION.PARTIAL,
-        detail: `${texto(aneel.detail, 200)} Cache tarifário operacional (distribuidora/UF/modalidade/vigência) ainda não ingerido.`,
-      }),
-    },
-    naoImplementada("ons", "ONS (carga e geração do SIN)", "energia",
-      "Sem ingestão do ONS: a janela energética recomendada não é calculada — nada de 'hora verde' inventada.",
-      "Dados abertos do ONS + cache com sourceUpdatedAt/ingestedAt"),
-    naoImplementada("anp", "ANP (preço de diesel)", "energia",
-      "Sem ingestão da ANP: o TCO usa a hierarquia contrato > frota informada > fallback configurado, sem referência municipal/estadual.",
-      "Série de preços ANP (diesel S10) por município/UF/região"),
+    // Energia e recarga — referências públicas em cache (P4). Sem perfil de
+    // energia a ANEEL fica NOT_CONFIGURED e diz o que falta; ONS/ANP não pedem
+    // configuração (dados abertos) e o cron as mantém frescas.
+    aneel && linhaDeReferencia(aneel, energia?.aneel, saudePorId.get("aneel-open-data"), {
+      staleMs: 400 * 24 * 60 * 60 * 1000,
+      detalheOk: (f) => `Tarifas homologadas (Tarifa de Aplicação) de ${energia?.perfil?.distribuidora || "—"} ${energia?.perfil?.subgrupo || ""} ${energia?.perfil?.modalidade || ""}: ${f.records} linha(s); fonte gerada em ${f.sourceUpdatedAt || "—"}, ingerida em ${dataCurta(f.lastSuccessAt)}. Alimenta a hierarquia contrato > informada > ANEEL > fallback.`,
+      detalheSem: "Sem perfil de energia (distribuidora/subgrupo/modalidade) a tarifa de referência não é buscada: o custo usa contrato > informada > fallback declarado.",
+    }),
+    ons && linhaDeReferencia(ons, energia?.ons, saudePorId.get("ons-open-data"), {
+      staleMs: ENERGY_LIMITS.onsFrescorMs,
+      detalheOk: (f) => `Curva de carga horária do SIN (subsistema ${energia?.perfil?.subsistemaOns || "SE"}): ${f.records} leituras; último instante da fonte ${f.sourceUpdatedAt || "—"}, ingerida em ${dataCurta(f.lastSuccessAt)}. Dá a janela ENERGÉTICA de recarga (proxy de sistema leve, não medição de carbono).`,
+      detalheSem: "Sem ingestão do ONS a janela energética fica ONS_NOT_AVAILABLE e a recomendada iguala a financeira — nada de 'hora verde' inventada.",
+    }),
+    anp && linhaDeReferencia(anp, energia?.anp, saudePorId.get("anp-open-data"), {
+      staleMs: ENERGY_LIMITS.anpFrescorMs,
+      detalheOk: (f) => `Levantamento semanal de preços (diesel/diesel S10): ${f.records} coletas agregadas por município/UF/região/país; última coleta ${f.sourceUpdatedAt || "—"}, ingerida em ${dataCurta(f.lastSuccessAt)}. Alimenta o TCO pela hierarquia contrato > frota > ANP município > UF > região > país > fallback.`,
+      detalheSem: "Sem ingestão da ANP o TCO usa contrato > frota informada > fallback, sem referência municipal/estadual.",
+    }),
     clima && {
       ...doCatalogo(clima, saudePorId.get("open-meteo"), {
         group: "energia",
