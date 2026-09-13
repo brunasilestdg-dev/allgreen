@@ -24,6 +24,7 @@ import EnviarApresentacao from "../EnviarApresentacao.jsx";
 import { interacoesVisiveis } from "../interacoesDomain.js";
 import TopScrollRow from "./TopScrollRow.jsx";
 import {
+  ESTAGIOS_FUNIL,
   ESTAGIOS_OPORTUNIDADE,
   analisarOportunidade,
   normalizarOportunidade,
@@ -68,7 +69,10 @@ const FORM_VAZIO = {
   cliente: "",
   productId: "middle-mile",
   tabelaPrecoId: "",
-  estagio: "Diagnóstico",
+  // Começa na primeira etapa do funil. "Diagnóstico" era estágio de CONTA, não
+  // de oportunidade — não existia no seletor e o servidor o rebaixava para
+  // "Prospecção" na surdina, gravando um valor diferente do que a tela mostrava.
+  estagio: "Prospecção",
   tipoVeiculo: "elétrico",
   distanciaKm: "",
   viagensMes: "",
@@ -801,7 +805,10 @@ export default function OpportunitiesPage({
     [registros, scenarios],
   );
   const editando = registros.find((registro) => registro.id === editandoId) || null;
-  const etapas = useMemo(() => ESTAGIOS_OPORTUNIDADE.map((estagio) => {
+  // O funil tem SÓ as 5 etapas abertas. "Fechada ganha"/"Fechada perdida" são
+  // desfechos, não colunas — mostrar o negócio ganho como se ainda estivesse
+  // "numa etapa" era o que confundia a leitura do funil.
+  const etapas = useMemo(() => ESTAGIOS_FUNIL.map((estagio) => {
     const itens = registros.filter((registro) => registro.estagio === estagio);
     return {
       estagio,
@@ -809,6 +816,15 @@ export default function OpportunitiesPage({
       valor: itens.reduce((sum, item) => sum + analisarOportunidade(item).financeiro.valorContrato, 0),
     };
   }), [registros]);
+  const desfechos = useMemo(() => {
+    const somar = (lista) => lista.reduce((sum, item) => sum + analisarOportunidade(item).financeiro.valorContrato, 0);
+    const ganhas = registros.filter((registro) => registro.estagio === "Fechada ganha");
+    const perdidas = registros.filter((registro) => registro.estagio === "Fechada perdida");
+    return {
+      ganhas: { quantidade: ganhas.length, valor: somar(ganhas) },
+      perdidas: { quantidade: perdidas.length, valor: somar(perdidas) },
+    };
+  }, [registros]);
   const visiveis = useMemo(() => registros.filter((registro) => {
     const stageMatches = filtroEstagio === "todas" || registro.estagio === filtroEstagio;
     const queryMatches = `${tituloDaOportunidade(registro)} ${registro.cliente} ${registro.nextStep || ""} ${registro.source || ""}`.toLowerCase().includes(busca.toLowerCase());
@@ -973,8 +989,10 @@ export default function OpportunitiesPage({
           </label>
           <label>
             <span>Estágio</span>
+            {/* Só etapas ABERTAS aqui: um negócio nasce no funil, não já ganho ou
+                perdido — fechar é ação deliberada no cartão da oportunidade. */}
             <select value={form.estagio} onChange={campo("estagio")}>
-              {ESTAGIOS_OPORTUNIDADE.map((estagio) => (
+              {ESTAGIOS_FUNIL.map((estagio) => (
                 <option key={estagio} value={estagio}>
                   {estagio}
                 </option>
@@ -1062,10 +1080,18 @@ export default function OpportunitiesPage({
 
       {visao === "kanban" && registros.length > 0 && (
         <>
-          <p className="tdg-opp-kb-resumo">{visiveis.length} oportunidade(s), cada uma na etapa em que está hoje. Clique no cartão para abrir.</p>
-          <div className="tdg-opp-kb-colunas" role="group" aria-label="Escolher quais etapas aparecem no kanban">
+          <div className="tdg-opp-kb-cabecalho">
+            <p className="tdg-opp-kb-resumo">{visiveis.length} oportunidade(s) no funil, cada uma na etapa em que está hoje. Clique no cartão para abrir.</p>
+            {(desfechos.ganhas.quantidade > 0 || desfechos.perdidas.quantidade > 0) && (
+              <p className="tdg-opp-kb-desfechos">
+                <span className="ganhas">✓ Ganhas: {desfechos.ganhas.quantidade} · {BRL.format(desfechos.ganhas.valor)}</span>
+                <span className="perdidas">✗ Perdidas: {desfechos.perdidas.quantidade}</span>
+              </p>
+            )}
+          </div>
+          <div className="tdg-opp-kb-colunas" role="group" aria-label="Escolher quais etapas do funil aparecem no quadro">
             <span>Etapas no quadro:</span>
-            {ESTAGIOS_OPORTUNIDADE.map((estagio) => (
+            {ESTAGIOS_FUNIL.map((estagio) => (
               <button
                 type="button"
                 key={estagio}
@@ -1082,10 +1108,9 @@ export default function OpportunitiesPage({
               {etapas.map((coluna, indice) => {
                 if (colunasOcultas.has(coluna.estagio)) return null;
                 const itens = visiveis.filter((registro) => registro.estagio === coluna.estagio);
-                const perdida = coluna.estagio === "Fechada perdida";
                 return (
                   <section
-                    className={`tdg-opp-kb-col${perdida ? " perdida" : ""}`}
+                    className="tdg-opp-kb-col"
                     style={{ "--kb-tom": Math.min(indice, 5) }}
                     key={coluna.estagio}
                   >
