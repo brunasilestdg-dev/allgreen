@@ -806,6 +806,11 @@ function FleetImportModal({ authHeaders, placasExistentes, onClose, onDone, setT
 const VEHICLE_BLANK = {
   prefix: "", plate: "", manufacturer: "", model: "", vehicleClass: "", energyType: "electric",
   status: "available", operationalUnit: "", costCenter: "", payloadKg: "", odometerKm: "", batterySohPercent: "",
+  // Energia e perfil físico (seção 38): alimentam o modelo de energia, o
+  // truck costing do Valhalla, o pré-flight e o smart charging.
+  batteryCapacityKwh: "", energyConsumptionKwhPerKm: "", nominalRangeKm: "",
+  heightM: "", widthM: "", lengthM: "", tareKg: "", grossWeightKg: "", axles: "",
+  connectorType: "", maxChargingPowerKw: "", referenceConsumptionKwhKm: "",
 };
 
 function VehicleModal({ vehicle, authHeaders, onClose, onSave, onArchive, setToast }) {
@@ -895,6 +900,38 @@ function VehicleModal({ vehicle, authHeaders, onClose, onSave, onArchive, setToa
           <label>Hodômetro (km)<input type="number" min="0" value={form.odometerKm} onChange={set("odometerKm")} /></label>
           <label>SOH bateria (%)<input type="number" min="0" max="100" value={form.batterySohPercent} onChange={set("batterySohPercent")} /></label>
         </div>
+        <div className="tdg-planner-grid3">
+          <label>Bateria (kWh)<input type="number" min="0" step="0.1" value={form.batteryCapacityKwh ?? ""} onChange={set("batteryCapacityKwh")} /></label>
+          <label>Consumo nominal (kWh/km)<input type="number" min="0" step="0.01" value={form.energyConsumptionKwhPerKm ?? ""} onChange={set("energyConsumptionKwhPerKm")} /></label>
+          <label>Autonomia nominal (km)<input type="number" min="0" value={form.nominalRangeKm ?? ""} onChange={set("nominalRangeKm")} /></label>
+        </div>
+        <fieldset className="df-perfil-fisico">
+          <legend>Perfil físico e recarga — roteirização de pesados (Valhalla), pré-flight e smart charging</legend>
+          <div className="tdg-planner-grid3">
+            <label>Altura (m)<input type="number" min="0" step="0.01" value={form.heightM ?? ""} onChange={set("heightM")} /></label>
+            <label>Largura (m)<input type="number" min="0" step="0.01" value={form.widthM ?? ""} onChange={set("widthM")} /></label>
+            <label>Comprimento (m)<input type="number" min="0" step="0.01" value={form.lengthM ?? ""} onChange={set("lengthM")} /></label>
+          </div>
+          <div className="tdg-planner-grid3">
+            <label>Tara (kg)<input type="number" min="0" value={form.tareKg ?? ""} onChange={set("tareKg")} /></label>
+            <label>PBT (kg)<input type="number" min="0" value={form.grossWeightKg ?? ""} onChange={set("grossWeightKg")} /></label>
+            <label>Eixos<input type="number" min="0" step="1" value={form.axles ?? ""} onChange={set("axles")} /></label>
+          </div>
+          <div className="tdg-planner-grid3">
+            <label>Conector
+              <select value={form.connectorType || ""} onChange={set("connectorType")}>
+                <option value="">—</option>
+                <option value="CCS2">CCS2</option>
+                <option value="CHADEMO">CHAdeMO</option>
+                <option value="TYPE2">Tipo 2 (AC)</option>
+                <option value="GBT">GB/T</option>
+                <option value="MCS">MCS</option>
+              </select>
+            </label>
+            <label>Potência máx. de recarga (kW)<input type="number" min="0" value={form.maxChargingPowerKw ?? ""} onChange={set("maxChargingPowerKw")} /></label>
+            <label>Consumo de referência (kWh/km)<input type="number" min="0" step="0.01" value={form.referenceConsumptionKwhKm ?? ""} onChange={set("referenceConsumptionKwhKm")} /></label>
+          </div>
+        </fieldset>
 
         {editando && (
           <div className="tdg-planner-checklist">

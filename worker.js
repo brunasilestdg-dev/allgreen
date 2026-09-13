@@ -84,29 +84,16 @@ import { createWebhookHandlers } from "./worker/services/webhooks.js";
 import { runTodoGreenScheduledWorkAutomations } from "./worker/services/todogreen-work-center.js";
 import { runTodoGreenIntelligenceWatches } from "./worker/services/todogreen-client-intelligence.js";
 import { runTodoGreenMarketIntelligenceScheduled } from "./worker/services/todogreen-market-intelligence.js";
+import { runTodoGreenEnergyReferenceScheduled } from "./worker/services/todogreen-energy-reference.js";
 import { runTodoGreenTrackerScheduled, expurgarPosicoesAntigasDoTracker } from "./worker/services/todogreen-tracker.js";
 import { runTodoGreenPendenciaAvisos } from "./worker/services/todogreen-semente.js";
+import { lerManifestoDeVersao, systemVersionPayload } from "./worker/services/todogreen-system-health.js";
 
 
 
-async function publishedVersion(env, origin) {
-  try {
-    if (!env.ASSETS?.fetch) return null;
-    const response = await env.ASSETS.fetch(
-      new Request(`${origin}/version.json`, {
-        headers: { "cache-control": "no-store" },
-      }),
-    );
-    if (!response.ok) return null;
-    const data = await response.json();
-    return {
-      version: String(data.version || "").trim(),
-      buildTime: data.buildTime || null,
-    };
-  } catch {
-    return null;
-  }
-}
+// Uma fonte só para "qual SHA está publicado": o manifesto version.json do
+// build. /api/status, /api/system/version e a tela Saúde do sistema leem daqui.
+const publishedVersion = (env, origin) => lerManifestoDeVersao(env, origin);
 
 // Movido para ./worker/auth/credenciais.js; reexportado para os testes.
 export { createSession, hex, passwordHash, randomHex, sameHash, sha256, unhex };
@@ -4266,6 +4253,14 @@ export default {
         console.error("scheduled To Do Green market intelligence", error),
       ),
     );
+    // Referências de energia (ANEEL tarifas, ANP diesel, ONS curva de carga):
+    // mantém o cache fresco com data da fonte, auto-limitado (ONS 1×/dia, ANP
+    // 1×/semana, ANEEL 1×/semana por par configurado, 3 pares por disparo).
+    ctx.waitUntil(
+      runTodoGreenEnergyReferenceScheduled(env, now).catch((error) =>
+        console.error("scheduled To Do Green energy references", error),
+      ),
+    );
     // Rastreador → operação no cron: a posição do veículo (last_position) fica
     // fresca para o cockpit e o portal do cliente sem ninguém clicar "sincronizar".
     // Auto-limitado: só integrações em polling, respeitando o intervalo ≥60min de
@@ -4335,6 +4330,13 @@ export default {
           500,
         );
       }
+    }
+    // Público e sem segredo: SHA publicado, hora do build e ambiente. É o que
+    // a auditoria compara com `git rev-parse HEAD` para dizer "produção = main".
+    if (url.pathname === "/api/system/version") {
+      if (request.method !== "GET") return json({ error: "Método não permitido." }, 405);
+      const manifesto = await publishedVersion(env, url.origin);
+      return json(systemVersionPayload(env, manifesto));
     }
     if (url.pathname === "/api/status") {
       let database = "indisponível";

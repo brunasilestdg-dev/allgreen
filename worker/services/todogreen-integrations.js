@@ -282,6 +282,10 @@ async function trackerStatusForOwner(env, ownerId) {
   });
 }
 
+// Exportados para a tela "Saúde do sistema" reaproveitar a MESMA leitura do
+// painel de Integrações (uma régua, não duas).
+export { sefazStatus, ciotStatusForOwner, trackerStatusForOwner };
+
 const track3rDefaultStatus = () => withReadiness({
   id: "track3r",
   name: "TRACK3R · documentos e ocorrências",
@@ -290,7 +294,7 @@ const track3rDefaultStatus = () => withReadiness({
   requirement: "Integração cadastrada + arquivo validado ou credencial do modo API/webhook",
 });
 
-async function track3rStatusForOwner(env, ownerId) {
+export async function track3rStatusForOwner(env, ownerId) {
   if (!env.DB || !ownerId) return track3rDefaultStatus();
   const integration = await env.DB.prepare(
     `SELECT sync_mode,token_env_key,webhook_secret_env_key,status,last_sync_at,last_error
@@ -321,7 +325,7 @@ async function track3rStatusForOwner(env, ownerId) {
   });
 }
 
-const ocppStatus = () => withReadiness({
+export const ocppStatus = () => withReadiness({
   id: "ocpp",
   name: "OCPP · recarga elétrica",
   configured: false,
@@ -439,6 +443,7 @@ export async function handleTodoGreenIntegrations(request, env, access) {
         authenticated: online, online,
         error: online ? "" : "O gateway não respondeu ao teste.",
         nextAction: online ? "" : "Confirme a URL/credencial e rode o teste novamente.",
+        latencyMs: integrationTest?.latencyMs,
       });
       return json({ integrationTest, checkedAt: new Date().toISOString() });
     }
@@ -449,6 +454,8 @@ export async function handleTodoGreenIntegrations(request, env, access) {
         ownerId: access.ownerId, integrationId: provider, configured: true, authenticated: online, online,
         error: online ? "" : (searchTest?.failures || []).map((item) => item.error).filter(Boolean).join(" · "),
         nextAction: online ? "" : "Revise a fonte configurada e rode o teste novamente.",
+        latencyMs: searchTest?.latencyMs,
+        recordsProcessed: searchTest?.resultCount,
       });
       return json({ searchTest, checkedAt: new Date().toISOString() });
     }
@@ -458,6 +465,7 @@ export async function handleTodoGreenIntegrations(request, env, access) {
       authenticated: Boolean(test.ok), online: Boolean(test.ok),
       error: test.ok ? "" : "O provedor não respondeu ao teste técnico.",
       nextAction: test.ok ? "" : "Revise a credencial e rode o teste novamente.",
+      latencyMs: test?.latencyMs,
     });
     return json({ test, checkedAt: new Date().toISOString() });
   } catch (error) {

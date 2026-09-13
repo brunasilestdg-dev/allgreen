@@ -25,16 +25,14 @@ npm run deploy:cloudflare                             # aplica migrações e pub
 npx wrangler d1 migrations apply seu-funcionario-db --remote   # aplica migrações novas
 ```
 
-**Lint** (`eslint.config.js`, flat config): roda no `verify`, no deploy local completo e no CI. O Cloudflare Workers Builds executa só a compilação porque a validação completa já é a barreira obrigatória do GitHub. O lint trava só em ERROS; hoje o único rule como erro é `react-hooks/rules-of-hooks` (0 violações — de guarda contra a classe de bug de "hooks depois de return condicional" que já mordeu aqui). O resto é AVISO (backlog para reduzir aos poucos, ~80): `no-unused-vars`, `react-hooks/exhaustive-deps`, regras novas do React Compiler (`set-state-in-effect` etc.) e `jsx-a11y` (acessibilidade). Ao mexer no código, não precisa zerar os avisos, mas **não introduza erros** (o CI barra).
+**Lint** (`eslint.config.js`, flat config): roda no `verify`, no deploy local completo e no CI. O Cloudflare Workers Builds também deve executar o gate mínimo (`npm ci`, `npm run verify`, `npm run build`) antes de publicar; GitHub Actions vermelho por falta de minutos/runner não bloqueia, mas `verify`, `build`, Cloudflare Builds ou deploy manual vermelho bloqueia. O lint trava só em ERROS; hoje o único rule como erro é `react-hooks/rules-of-hooks` (0 violações — de guarda contra a classe de bug de "hooks depois de return condicional" que já mordeu aqui). O resto é AVISO (backlog para reduzir aos poucos, ~80): `no-unused-vars`, `react-hooks/exhaustive-deps`, regras novas do React Compiler (`set-state-in-effect` etc.) e `jsx-a11y` (acessibilidade). Ao mexer no código, não precisa zerar os avisos, mas **não introduza erros** (o CI barra).
 
 ## Deploy automático
 
 O Cloudflare Workers Builds está conectado ao repositório `brunapsiles/Seufuncionario`.
-Todo push na branch `main` executa `npm ci && npm run build` e, em seguida,
-`npm run deploy:cloudflare`. O diretório raiz configurado é `/`; builds de branches que
-não sejam a `main` também estão habilitados como versões de prévia. A validação completa
-(`npm run verify`) acontece antes no GitHub Actions, evitando estourar o tempo do build
-gratuito da Cloudflare. O workflow `Publicar` do GitHub é apenas uma contingência manual.
+Todo push na branch `main` deve executar `npm ci`, `npm run verify`,
+`npm run build` e, em seguida, `npm run deploy:cloudflare`. O diretório raiz configurado é `/`; builds de branches que
+não sejam a `main` também estão habilitados como versões de prévia. A validação completa não pode depender dos minutos do GitHub Actions. Se o Actions estiver vermelho por falta de runner/minutos, isso não bloqueia; se `verify`, `build`, Cloudflare Builds ou deploy manual falharem, bloqueia. O workflow `Publicar` do GitHub é apenas uma contingência manual e também precisa rodar o mesmo gate mínimo antes de publicar.
 
 ## Segredos (JÁ configurados no cofre do Worker — nunca commitar valores)
 
@@ -880,3 +878,12 @@ estender, não recriar. Detalhe e status em `docs/TODOGREEN_ERP_READINESS_MATRIX
 
 Migração/deploy num ambiente Cloudflare novo: `docs/DEPLOYMENT_RUNBOOK.md`.
 Segredos e variáveis: `docs/SECRETS.md`.
+
+
+## To Do Green — task canônica
+
+- A fonte única de tarefas da vertical é `db.tasks`. To Do, Planner, CRM e Implantação são **visões/contextos da mesma entidade**, nunca stores concorrentes.
+- O Planner pode persistir **planos, baldes, membros e visibilidade** no backend, mas a aplicação não deve criar/editar/excluir tarefas em `todogreen_planner_tasks`.
+- `GET /api/todogreen/planner/planos/:planId/tarefas` existe somente para migração explícita de legado e não deve ser chamado pelo runtime normal. Escritas nesse store exigem o header explícito `x-tdg-legacy-planner-write: 1` e são exclusivas de migração.
+- Ao arquivar um plano, desvincule `plannerPlanId`/metadados Planner da task canônica; não apague a tarefa por remover uma visualização.
+- Não reintroduzir sincronização bidirecional Planner ↔ To Do. Se uma nova tela precisar de tarefas, filtre/projete `db.tasks` e preserve `canonicalTaskId`/links de contexto.

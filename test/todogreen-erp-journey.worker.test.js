@@ -179,6 +179,32 @@ describe("jornada cliente → caixa", () => {
     deal = (await decisao.json()).pedido;
     expect(deal.situacao).toBe("aprovado");
 
+    // 4b. Viabilidade operacional (seções 47–50): a proposta ligada à
+    // oportunidade só é liberada com o snapshot (rota, veículo, energia, custo)
+    // registrado — a energia é estimada no servidor pelo mesmo modelo do
+    // pré-flight, com proveniência.
+    const viabilidadeResp = await pedir("/api/todogreen/viability-snapshots", {
+      method: "POST", token: dona.token,
+      body: {
+        opportunityId: oportunidade.id,
+        scenarioId: scenario.id,
+        origin: "São Paulo",
+        destination: "Campinas",
+        cost: 4200,
+        costPerDelivery: 84,
+        avoidedCo2: 28,
+        energy: {
+          vehicle: { id: "VAN-001", vehicleClass: "van", batteryCapacityKwh: 90, consumptionKwhPerKm: 0.3, socPercent: 100, reservePercent: 15 },
+          route: { distanceKm: 100 },
+        },
+      },
+    });
+    expect(viabilidadeResp.status).toBe(201);
+    const viabilidade = await viabilidadeResp.json();
+    expect(viabilidade.snapshot.version).toBe(1);
+    expect(viabilidade.blockers).toEqual([]);
+    expect(viabilidade.snapshot.snapshot.energyKwh).toBeGreaterThan(0);
+
     // 5. Proposta. O servidor consulta o Deal Desk antes de aceitar o POST.
     const propostaResp = await pedir("/api/todogreen/records/proposals", {
       method: "POST", token: dona.token,
@@ -195,6 +221,8 @@ describe("jornada cliente → caixa", () => {
     });
     expect(propostaResp.status).toBe(201);
     let proposta = (await propostaResp.json()).registro;
+    // A proposta liberada carrega QUAL versão da viabilidade a autorizou.
+    expect(proposta.campos.viabilidade).toMatchObject({ version: 1, snapshotId: viabilidade.snapshot.id });
 
     const aceite = await pedir(`/api/todogreen/records/proposals/${proposta.id}`, {
       method: "PATCH", token: dona.token,

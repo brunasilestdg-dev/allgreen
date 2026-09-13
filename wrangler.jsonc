@@ -34,6 +34,10 @@
   "vars": {
     "GEMINI_MODEL": "gemini-flash-lite-latest",
     "XAI_MODEL": "grok-4.3",
-    "TODOGREEN_ADMIN_EMAILS": "brunapsiles@icloud.com,brunapsiles@gmail.com,brunapsiles+todogreen@gmail.com"
+    "TODOGREEN_ADMIN_EMAILS": "brunapsiles@icloud.com,brunapsiles@gmail.com,brunapsiles+todogreen@gmail.com",
+    // Ambiente declarado pelo PRÓPRIO Worker (LOCAL × PRÉVIA × PRODUÇÃO na tela
+    // "Saúde do sistema" e em /api/system/version). Outro Worker/D1/domínio
+    // declara o seu — nunca um literal escondido no código.
+    "TDG_ENVIRONMENT": "production"
   }
 }

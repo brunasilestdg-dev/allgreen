@@ -127,8 +127,8 @@ migration destrutivamente.
 | Regressão | Evidência | Fase |
 |---|---|---|
 | **Records zerados em falha parcial** | seção 4 (raiz confirmada) | PR 2 |
-| **To Do "voltou ao formato antigo"** | Confirmado: `TodoGreenWorkspace.jsx:50` faz `lazy(() => import("../tasks/TasksScreen.jsx"))` e renderiza a tela do produto geral. Preservar toda a função; reorganizar entrada em HOJE/PRÓXIMAS/QUADRO/PROJETOS | PR 3 |
-| **Planner × To Do (duas verdades)** | Confirmado: dois stores (`db.tasks` × Planner no servidor) espelhados por `plannerIntegrationDomain.js` (`tarefaPlannerParaTodo`). Riscos concretos: (a) **delete do To-Do não propaga → tarefa ressuscita** no próximo sync (`TasksScreen.jsx:1074`); (b) status "Aguardando"→"em_andamento" **perde no round-trip** (`plannerIntegrationDomain.js:7`); (c) write-back não transacional | PR 3 |
+| **To Do "voltou ao formato antigo"** | **Resolvido em 13/09/2026**: a entrada própria usa HOJE/PRÓXIMAS/QUADRO/PROJETOS e reaproveita `TasksScreen` apenas como visão avançada, preservando as funções históricas | concluído |
+| **Planner × To Do (duas verdades)** | **Resolvido em 13/09/2026**: `db.tasks` é a task canônica. Planner projeta e edita a mesma entidade; CRM e Implantação já gravam nela. O store antigo do Planner fica somente para leitura/importação legada; escrita direta exige opt-in explícito `x-tdg-legacy-planner-write: 1` e não é usada pelo app | concluído |
 | **Roteirizador perde o mapa (Leaflet branco)** | histórico: 2 colunas quebrou o Leaflet → voltou a 1 coluna. Preservar correções; só migrar com `invalidateSize`/`ResizeObserver` provados por teste | PR 5 |
 | **Navegação: quase todo o organograma no 1º nível** | Confirmado: `PRIMARY_NAVIGATION` (`LogisticsVertical.jsx:966`) = **19 áreas** no 1º nível, lista plana. Rotas↔`MODULE_IMPLEMENTATION` batem 68↔68; **aliases de URL já existem** (`TODO_GREEN_ROUTE_ALIASES`) — base boa para reagrupar sem quebrar links. Smell: página desconhecida cai silenciosamente no Dashboard (`:3597`) | PR 4 |
 

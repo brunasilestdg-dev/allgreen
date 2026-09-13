@@ -1,5 +1,241 @@
 const list = (value) => (Array.isArray(value) ? value : []);
 
+const normalizeText = (value) =>
+  String(value || "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const byId = (items) => {
+  const map = new Map();
+  for (const item of list(items)) {
+    for (const key of [item?.id, item?.taskId, item?.canonicalTaskId]) {
+      const normalized = String(key || "").trim();
+      if (normalized && !map.has(normalized)) map.set(normalized, item);
+    }
+  }
+  return map;
+};
+
+const firstText = (...values) =>
+  values.map((value) => String(value || "").trim()).find(Boolean) || "";
+
+export const TODO_GREEN_TASK_DONE_STATUSES = Object.freeze(["concluido", "done", "completed"]);
+
+export const normalizeTodoGreenTaskStatus = (value) => {
+  const status = normalizeText(value);
+  if (TODO_GREEN_TASK_DONE_STATUSES.includes(status) || status === "concluida") return "Concluído";
+  if (["em andamento", "em_andamento", "doing", "progress", "in progress", "in_progress"].includes(status)) {
+    return "Em andamento";
+  }
+  if (["aguardando", "waiting", "blocked", "bloqueada", "bloqueado"].includes(status)) return "Aguardando";
+  return "A fazer";
+};
+
+const normalizePriority = (value) => {
+  const priority = normalizeText(value);
+  if (["urgente", "urgent", "critical", "critica", "critico"].includes(priority)) return "Urgente";
+  if (["alta", "high"].includes(priority)) return "Alta";
+  if (["baixa", "low"].includes(priority)) return "Baixa";
+  return "Média";
+};
+
+const priorityRank = (task) => ({ Urgente: 0, Alta: 1, Média: 2, Baixa: 3 }[task.priority] ?? 4);
+
+const taskSort = (a, b) =>
+  priorityRank(a) - priorityRank(b) ||
+  String(a.due || "9999-12-31").localeCompare(String(b.due || "9999-12-31")) ||
+  String(a.title || "").localeCompare(String(b.title || ""), "pt-BR");
+
+const sourceTaskId = (task = {}) => firstText(task.canonicalTaskId, task.taskId, task.id);
+
+const dependencyIdsOf = (task = {}) => {
+  const raw = task.dependsOn ?? task.dependencies ?? task.blockedBy ?? [];
+  return list(Array.isArray(raw) ? raw : [raw])
+    .map((item) => String(item?.id || item?.taskId || item || "").trim())
+    .filter(Boolean);
+};
+
+const openStatus = (status) => !TODO_GREEN_TASK_DONE_STATUSES.includes(normalizeText(status)) && normalizeText(status) !== "concluida";
+
+export const buildTodoGreenCanonicalTask = (task = {}, {
+  tasks = [],
+  projects = [],
+  clients = [],
+  opportunities = [],
+  currentUserId = "",
+  today = new Date().toISOString().slice(0, 10),
+} = {}) => {
+  const taskId = sourceTaskId(task);
+  const rawId = firstText(task.id, task.taskId, taskId);
+  const allTasksById = byId(tasks);
+  const projectsById = byId(projects);
+  const opportunitiesById = byId(opportunities);
+  const clientsById = byId(clients);
+  const opportunity = opportunitiesById.get(String(task.opportunityId || ""));
+  const client = clientsById.get(String(task.clientId || opportunity?.clientId || ""));
+  const projectRecord = projectsById.get(String(task.projectId || task.plannerPlanId || ""));
+  const dependsOn = dependencyIdsOf(task);
+  const dependencyTasks = dependsOn.map((id) => allTasksById.get(String(id))).filter(Boolean);
+  const dependencyLabels = dependencyTasks.map((item) => firstText(item.title, item.name, item.id));
+  const dependencyOpen = dependencyTasks.some((item) => openStatus(item.status));
+  const missingDependency = dependsOn.length > dependencyTasks.length;
+  const status = normalizeTodoGreenTaskStatus(task.status);
+  const priority = normalizePriority(task.priority);
+  const due = firstText(task.due, task.dueDate, task.deadline);
+  const assigneeId = firstText(task.assigneeId, task.assignedTo, task.ownerId, task.userId);
+  const assignee = firstText(task.assignee, task.assigneeLabel, task.ownerName, assigneeId);
+  const normalizedCurrentUserId = String(currentUserId || "").trim();
+  const mine = Boolean(
+    task.mine ||
+    task.assignedToMe ||
+    (normalizedCurrentUserId && [assigneeId, assignee, task.ownerId, task.userId].map(String).includes(normalizedCurrentUserId)),
+  );
+  const blocked = Boolean(task.blocked || dependsOn.length && (dependencyOpen || missingDependency));
+  const open = status !== "Concluído";
+  const project = firstText(task.project, projectRecord?.name, opportunity?.title, opportunity?.name);
+  const clientId = firstText(task.clientId, client?.id, opportunity?.clientId);
+  const opportunityId = firstText(task.opportunityId, opportunity?.id);
+  const clientLabel = firstText(task.clientLabel, client?.name, client?.company, opportunity?.clientName, project);
+  const nextAction = firstText(
+    task.nextAction,
+    task.nextStep,
+    task.proximaAcao,
+    blocked ? "Resolver dependência" : "",
+    due && due < today ? "Replanejar prazo" : "",
+    status === "A fazer" ? "Definir primeira ação" : "Avançar execução",
+  );
+  const sourceLinks = {
+    ...(task.sourceLinks || {}),
+    todo: { taskId: rawId },
+    ...(task.plannerPlanId || task.plannerTaskId ? {
+      planner: { planId: task.plannerPlanId || "", taskId: task.plannerTaskId || rawId },
+    } : {}),
+    ...(clientId || opportunityId || String(task.source || "").includes("crm") ? {
+      crm: { clientId, opportunityId },
+    } : {}),
+    ...(task.implantationId || String(task.source || "").includes("implant") ? {
+      implantation: { implantationId: task.implantationId || "", taskId: rawId },
+    } : {}),
+  };
+
+  return {
+    raw: task,
+    id: taskId,
+    rawId,
+    canonicalId: taskId,
+    title: firstText(task.title, task.name, "Tarefa sem título"),
+    description: task.description || task.notes || "",
+    status,
+    priority,
+    due,
+    assignee,
+    assigneeId,
+    project,
+    projectId: firstText(task.projectId, task.plannerPlanId),
+    clientId,
+    clientLabel,
+    opportunityId,
+    dependsOn,
+    dependencyLabels,
+    blocked,
+    nextAction,
+    flags: {
+      open,
+      overdue: Boolean(open && due && due < today),
+      dueToday: Boolean(open && due === today),
+      blocked: Boolean(open && blocked),
+      highPriority: Boolean(open && ["Urgente", "Alta"].includes(priority)),
+      mine: Boolean(open && mine),
+    },
+    sourceLinks,
+  };
+};
+
+export const buildTodoGreenTaskBoard = ({
+  db = {},
+  verticalData = {},
+  businessId = "todogreen",
+  currentUserId = "",
+  today = new Date().toISOString().slice(0, 10),
+} = {}) => {
+  const rawTasks = scoped(db.tasks, businessId).filter((task) => task.archived !== true && task.deleted !== true);
+  const projects = [...list(db.projects), ...list(verticalData.projects), ...list(verticalData.plannerPlans)];
+  const canonicalById = new Map();
+  for (const rawTask of rawTasks) {
+    const canonical = buildTodoGreenCanonicalTask(rawTask, {
+      tasks: rawTasks,
+      projects,
+      clients: verticalData.clients,
+      opportunities: verticalData.opportunities,
+      currentUserId,
+      today,
+    });
+    const current = canonicalById.get(canonical.id);
+    if (!current) {
+      canonicalById.set(canonical.id, canonical);
+      continue;
+    }
+    const currentIsLegacy = current.raw?.canonicalSource === "planner";
+    const candidateIsLegacy = canonical.raw?.canonicalSource === "planner";
+    const currentUpdatedAt = String(current.raw?.updatedAt || current.raw?.createdAt || "");
+    const candidateUpdatedAt = String(canonical.raw?.updatedAt || canonical.raw?.createdAt || "");
+    if ((currentIsLegacy && !candidateIsLegacy) || (currentIsLegacy === candidateIsLegacy && candidateUpdatedAt > currentUpdatedAt)) {
+      canonicalById.set(canonical.id, canonical);
+    }
+  }
+  const canonicalTasks = [...canonicalById.values()].sort(taskSort);
+  const openTasks = canonicalTasks.filter((task) => task.flags.open);
+  const byStatus = new Map();
+  for (const task of canonicalTasks) {
+    const bucket = byStatus.get(task.status) || [];
+    bucket.push(task);
+    byStatus.set(task.status, bucket);
+  }
+  const projectMap = new Map();
+  for (const task of openTasks) {
+    const key = task.projectId || task.project || task.clientLabel || "sem-projeto";
+    const current = projectMap.get(key) || {
+      id: key,
+      name: task.project || task.clientLabel || "Sem projeto",
+      clientLabel: task.clientLabel || "",
+      open: 0,
+      overdue: 0,
+      blocked: 0,
+      highPriority: 0,
+    };
+    current.open += 1;
+    if (task.flags.overdue) current.overdue += 1;
+    if (task.flags.blocked) current.blocked += 1;
+    if (task.flags.highPriority) current.highPriority += 1;
+    projectMap.set(key, current);
+  }
+
+  return {
+    tasks: canonicalTasks,
+    today: {
+      overdue: openTasks.filter((task) => task.flags.overdue),
+      dueToday: openTasks.filter((task) => task.flags.dueToday),
+      blocked: openTasks.filter((task) => task.flags.blocked),
+      highPriority: openTasks.filter((task) => task.flags.highPriority),
+      mine: openTasks.filter((task) => task.flags.mine),
+      nextActions: openTasks.filter((task) => task.nextAction).slice(0, 8),
+    },
+    upcoming: openTasks.filter((task) => task.due && task.due > today).slice(0, 12),
+    board: Object.fromEntries([...byStatus.entries()].map(([status, items]) => [status, items.sort(taskSort)])),
+    projects: [...projectMap.values()].sort((a, b) => b.overdue - a.overdue || b.highPriority - a.highPriority || a.name.localeCompare(b.name, "pt-BR")),
+    metrics: {
+      total: canonicalTasks.length,
+      open: openTasks.length,
+      overdue: openTasks.filter((task) => task.flags.overdue).length,
+      blocked: openTasks.filter((task) => task.flags.blocked).length,
+      highPriority: openTasks.filter((task) => task.flags.highPriority).length,
+    },
+  };
+};
+
+
 export const TODO_GREEN_WORKSPACE_TOOLS = Object.freeze([
   {
     id: "visao-geral",

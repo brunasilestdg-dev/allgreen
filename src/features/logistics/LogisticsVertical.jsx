@@ -103,7 +103,11 @@ import TodoGreenProfile from "./TodoGreenProfile.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
 import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
-import { contextoComercialDaTarefa, tarefaPlannerParaTodo } from "./plannerIntegrationDomain.js";
+import {
+  aplicarEdicaoPlannerNaTarefa,
+  contextoComercialDaTarefa,
+  desvincularTarefaDoPlanner,
+} from "./plannerIntegrationDomain.js";
 import { sugestaoDeContrato } from "./contratoSugeridoDomain.js";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
@@ -151,6 +155,7 @@ const TripViabilityPage = lazy(() => import("./pages/TripViabilityPage.jsx"));
 const DealDeskPage = lazy(() => import("./pages/DealDeskPage.jsx"));
 const DocumentVaultPage = lazy(() => import("./pages/DocumentVaultPage.jsx"));
 const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
+const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage.jsx"));
 const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
 const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
 const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
@@ -350,6 +355,7 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "aprovacoes",
   "notificacoes",
   "inbox",
+  "saude-sistema",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -926,6 +932,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["access:manage", "integration:manage", "audit:read"],
     description: "Acessos, permissões, auditoria, configurações e governança do ambiente To Do Green.",
   },
+  "saude-sistema": {
+    title: "Saúde do sistema",
+    navLabel: "Saúde do sistema",
+    route: "/todogreen/saude-sistema",
+    area: "administracao",
+    status: "functional",
+    permission: ["integration:manage", "audit:read"],
+    description: "Versão publicada (local × servidor × banco), componentes da plataforma e estado honesto de cada integração — com métricas e teste.",
+  },
   "central-rfq": {
     title: "Central de RFQ e RFI",
     navLabel: "RFQ e RFI",
@@ -1003,7 +1018,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // área nem no menu de Compliance (pedido da titular).
   // Integrações e "Usuários e acessos" vivem no menu Configurações (topo), o
   // lar convencional das configurações — não repetimos aqui na lateral.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
@@ -3566,23 +3581,32 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         clientes={clientes}
         oportunidades={verticalData.opportunities}
         onNavigate={navigate}
-        onSyncTask={(tarefa, plano) => update?.((current) => {
+        canonicalTasks={db?.tasks || []}
+        onUpsertCanonicalTask={(tarefa, plano) => update?.((current) => {
           const tarefas = current.tasks || [];
-          const existente = tarefas.find((item) => item.plannerTaskId === tarefa.id);
-          // Resolve o nome do cliente para o rótulo humano da dependência (#142):
-          // sem ele, duas "Precificação" (DHL e Vivara) ficam idênticas na lista.
+          const rawId = tarefa.rawTaskId || tarefa.id;
+          const existente = tarefas.find((item) => item.id === rawId)
+            || tarefas.find((item) => item.canonicalTaskId && item.canonicalTaskId === tarefa.canonicalTaskId);
           const { clientId } = contextoComercialDaTarefa(tarefa);
           const cliente = clientes.find((item) => item.id === clientId);
-          const sincronizada = tarefaPlannerParaTodo(tarefa, plano, existente, {
-            clientLabel: cliente?.name || cliente?.nome || "",
+          const canonica = aplicarEdicaoPlannerNaTarefa(tarefa, plano, existente || {}, {
+            clientLabel: cliente?.name || cliente?.nome || existente?.clientLabel || "",
           });
           return {
             ...current,
             tasks: existente
-              ? tarefas.map((item) => (item.id === existente.id ? sincronizada : item))
-              : [sincronizada, ...tarefas],
+              ? tarefas.map((item) => (item.id === existente.id ? canonica : item))
+              : [canonica, ...tarefas],
           };
         })}
+        onDeleteCanonicalTask={(taskId) => update?.((current) => ({
+          ...current,
+          tasks: (current.tasks || []).filter((item) => item.id !== taskId),
+        }))}
+        onDetachCanonicalPlanTasks={(planId) => update?.((current) => ({
+          ...current,
+          tasks: (current.tasks || []).map((item) => desvincularTarefaDoPlanner(item, planId)),
+        }))}
       /></Suspense>}
       {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} interactions={verticalData.interactions} onComment={(registro) => criar("comments", registro)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><QualityPage registros={registros.quality} clients={clientes} operations={registros.operations} criar={criar} atualizar={atualizar} setToast={setToast} /></Suspense>}
@@ -3609,6 +3633,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "auditoria" && <Suspense fallback={<section className="tdg-panel">Carregando auditoria...</section>}><GovernancePage role={role} permissions={remoteAccess.permissions || []} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
       {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "saude-sistema" && <Suspense fallback={<section className="tdg-panel">Carregando saúde do sistema...</section>}><SystemHealthPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 
       {isOverview && (

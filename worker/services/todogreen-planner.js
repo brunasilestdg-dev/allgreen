@@ -1,6 +1,6 @@
 // ===== Planner (estilo Microsoft Planner) =====
 //
-// Planos com baldes e tarefas. A regra que este handler protege é a
+// Planos com baldes e tarefas legadas de migração. A regra que este handler protege é a
 // visibilidade: um plano `private` só aparece para quem o criou; um `shared`,
 // para todo o espaço de trabalho. É o "pode ser compartilhado ou não". A mesma
 // regra do `plannerDomain.js` (podeVerPlano/podeEditarPlano) é repetida aqui em
@@ -502,10 +502,21 @@ export async function handleTodoGreenPlanner(request, env, access) {
     }
   }
 
-  // Tarefas: /planos/:planId/tarefas e /planos/:planId/tarefas/:taskId
+  // Tarefas do Planner são legado de migração. A aplicação atual usa `db.tasks` como
+  // fonte canônica e o Planner apenas projeta essa mesma entidade. Leitura segue
+  // disponível para importar dados antigos; escrita só existe com opt-in
+  // explícito para ferramentas de migração, evitando reabrir a segunda verdade.
   const tarefaMatch = path.match(/^\/planos\/([^/]+)\/tarefas(?:\/([^/]+))?$/);
   if (tarefaMatch) {
     const [, planId, taskId] = tarefaMatch;
+    const escritaDeTarefa = ["POST", "PATCH", "PUT", "DELETE"].includes(method);
+    const compatibilidadeLegada = request.headers.get("x-tdg-legacy-planner-write") === "1";
+    if (escritaDeTarefa && !compatibilidadeLegada) {
+      return json({
+        error: "As tarefas do Planner agora são uma visão da task canônica. Edite pelo To Do/Planner atual.",
+        code: "CANONICAL_TASK_REQUIRED",
+      }, 409);
+    }
     if (!taskId) {
       if (method === "GET") return listarTarefas(env, access, planId);
       if (method === "POST") return criarTarefa(env, access, planId, await corpo());

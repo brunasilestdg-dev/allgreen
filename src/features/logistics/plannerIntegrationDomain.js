@@ -23,11 +23,9 @@ export const contextoComercialDaTarefa = (tarefa = {}) => ({
   opportunityId: String(tarefa.campos?.opportunityId || ""),
 });
 
-// O Planner tem 3 status; a To-Do tem 4 ("Aguardando" não existe no Planner e
-// colapsa em "em_andamento"). Ao RE-espelhar do Planner para a To-Do, se o
-// status que a To-Do já tinha mapeia para o MESMO status do Planner, o Planner
-// não mudou de verdade — então preserva o status mais fino da To-Do. Sem isto,
-// "Aguardando" virava "Em andamento" a cada sincronização (perda no round-trip).
+// O Planner legado tem 3 status; a task canônica tem 4 ("Aguardando" não existe
+// no formato antigo). Na importação do legado, se o valor antigo representa o
+// mesmo estado amplo, preservamos o status mais fino já presente na task canônica.
 const mesmoStatusNoPlanner = (statusTarefa, progressoPlanner) =>
   Boolean(statusTarefa) && STATUS_TAREFA_PARA_PLANNER[statusTarefa] === progressoPlanner;
 
@@ -36,11 +34,16 @@ export const statusTarefaAoEspelhar = (progressoPlanner, statusExistente) =>
     ? statusExistente
     : STATUS_PLANNER_PARA_TAREFA[progressoPlanner] || "A fazer";
 
-export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {}) => {
+export const importarTarefaLegadaPlanner = (tarefa, plano, existente = {}, rotulos = {}) => {
   const contexto = contextoComercialDaTarefa(tarefa);
+  const plannerPlanId = tarefa.planId || plano?.id || "";
+  const plannerTaskId = tarefa.id;
+  const canonicalTaskId = existente.canonicalTaskId || `planner:${plannerPlanId || "sem-plano"}:${plannerTaskId}`;
   return {
     ...existente,
     id: existente.id || `planner-${tarefa.id}`,
+    canonicalTaskId,
+    canonicalSource: existente.canonicalSource || "planner",
     title: tarefa.title,
     description: tarefa.notes || "",
     status: statusTarefaAoEspelhar(tarefa.progress, existente.status),
@@ -52,17 +55,117 @@ export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {
     project: plano?.name || existente.project || "",
     businessId: "todogreen",
     source: "todogreen-planner",
-    plannerPlanId: tarefa.planId || plano?.id || "",
-    plannerTaskId: tarefa.id,
+    plannerPlanId,
+    plannerTaskId,
     plannerRevision: tarefa.revision,
+    plannerBucketId: tarefa.bucketId || existente.plannerBucketId || "",
+    plannerChecklist: Array.isArray(tarefa.checklist) ? tarefa.checklist : (existente.plannerChecklist || []),
+    plannerLabels: Array.isArray(tarefa.labels) ? tarefa.labels : (existente.plannerLabels || []),
     clientId: contexto.clientId,
     opportunityId: contexto.opportunityId,
     // O nome do cliente viaja com a tarefa espelhada (#142): o "Projeto" é o
     // nome do PLANO ("To do List"), que não distingue a "Precificação" da DHL da
     // da Vivara. Sem este rótulo, duas dependências ficam idênticas na tela.
     clientLabel: String(rotulos.clientLabel || existente.clientLabel || "").trim(),
+    sourceLinks: {
+      ...(existente.sourceLinks || {}),
+      todo: { taskId: existente.id || `planner-${tarefa.id}` },
+      planner: { planId: plannerPlanId, taskId: plannerTaskId },
+      ...(contexto.clientId || contexto.opportunityId ? {
+        crm: { clientId: contexto.clientId, opportunityId: contexto.opportunityId },
+      } : {}),
+    },
     updatedAt: tarefa.atualizadoEm || new Date().toISOString(),
     createdAt: existente.createdAt || tarefa.criadoEm || new Date().toISOString(),
+  };
+};
+
+
+export const tarefaTodoParaPlanner = (tarefa = {}) => ({
+  id: tarefa.id || "",
+  rawTaskId: tarefa.id || "",
+  canonicalTaskId: tarefa.canonicalTaskId || tarefa.id || "",
+  planId: tarefa.plannerPlanId || "",
+  revision: tarefa.plannerRevision || 0,
+  title: tarefa.title || "",
+  notes: tarefa.description || "",
+  bucketId: tarefa.plannerBucketId || "",
+  assigneeUserId: tarefa.assigneeId || "",
+  assigneeLabel: tarefa.assignee || "",
+  priority: String(tarefa.priority || "Média").toLocaleLowerCase("pt-BR")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+  progress: STATUS_TAREFA_PARA_PLANNER[tarefa.status] || "nao_iniciada",
+  startDate: tarefa.startDate || "",
+  dueDate: tarefa.due || "",
+  checklist: Array.isArray(tarefa.plannerChecklist) ? tarefa.plannerChecklist : [],
+  labels: Array.isArray(tarefa.plannerLabels) ? tarefa.plannerLabels : [],
+  campos: {
+    clientId: tarefa.clientId || "",
+    opportunityId: tarefa.opportunityId || "",
+  },
+});
+
+export const desvincularTarefaDoPlanner = (tarefa = {}, planId = "") => {
+  if (!planId || tarefa?.plannerPlanId !== planId) return tarefa;
+  const sourceLinks = { ...(tarefa.sourceLinks || {}) };
+  delete sourceLinks.planner;
+  return {
+    ...tarefa,
+    plannerPlanId: "",
+    plannerTaskId: "",
+    plannerRevision: 0,
+    plannerBucketId: "",
+    plannerChecklist: [],
+    plannerLabels: [],
+    sourceLinks,
+    updatedAt: new Date().toISOString(),
+  };
+};
+
+export const tarefaCanonicaPertenceAoPlano = (tarefa = {}, planId = "") =>
+  Boolean(planId && tarefa?.plannerPlanId === planId && tarefa?.archived !== true && tarefa?.deleted !== true);
+
+export const aplicarEdicaoPlannerNaTarefa = (tarefaPlanner = {}, plano = {}, existente = {}, rotulos = {}) => {
+  const contexto = contextoComercialDaTarefa(tarefaPlanner);
+  const rawTaskId = existente.id || tarefaPlanner.rawTaskId || tarefaPlanner.id;
+  const canonicalTaskId = existente.canonicalTaskId || tarefaPlanner.canonicalTaskId || rawTaskId;
+  const plannerPlanId = tarefaPlanner.planId || plano?.id || existente.plannerPlanId || "";
+  const now = new Date().toISOString();
+  return {
+    ...existente,
+    id: rawTaskId,
+    canonicalTaskId,
+    canonicalSource: "task",
+    title: tarefaPlanner.title || existente.title || "",
+    description: tarefaPlanner.notes || "",
+    status: statusTarefaAoEspelhar(tarefaPlanner.progress, existente.status),
+    priority: PRIORIDADE_PLANNER_PARA_TAREFA[tarefaPlanner.priority] || existente.priority || "Média",
+    startDate: tarefaPlanner.startDate || "",
+    due: tarefaPlanner.dueDate || "",
+    assignee: tarefaPlanner.assigneeLabel || "",
+    assigneeId: tarefaPlanner.assigneeUserId || "",
+    project: plano?.name || existente.project || "",
+    businessId: existente.businessId || "todogreen",
+    source: existente.source || "todogreen-planner",
+    plannerPlanId,
+    plannerTaskId: existente.plannerTaskId || tarefaPlanner.legacyTaskId || "",
+    plannerRevision: existente.plannerRevision || 0,
+    plannerBucketId: tarefaPlanner.bucketId || "",
+    plannerChecklist: Array.isArray(tarefaPlanner.checklist) ? tarefaPlanner.checklist : [],
+    plannerLabels: Array.isArray(tarefaPlanner.labels) ? tarefaPlanner.labels : [],
+    clientId: contexto.clientId,
+    opportunityId: contexto.opportunityId,
+    clientLabel: String(rotulos.clientLabel || existente.clientLabel || "").trim(),
+    sourceLinks: {
+      ...(existente.sourceLinks || {}),
+      todo: { taskId: rawTaskId },
+      planner: { planId: plannerPlanId, taskId: rawTaskId },
+      ...(contexto.clientId || contexto.opportunityId ? {
+        crm: { clientId: contexto.clientId, opportunityId: contexto.opportunityId },
+      } : {}),
+    },
+    updatedAt: now,
+    createdAt: existente.createdAt || now,
   };
 };
 
@@ -97,25 +200,3 @@ export const listaDependenciasComRotulo = (tarefas = []) => {
   });
 };
 
-export const patchPlannerDaTarefa = (tarefa, alteracoes = {}) => {
-  const proxima = { ...tarefa, ...alteracoes };
-  return {
-    revision: tarefa.plannerRevision,
-    title: proxima.title,
-    notes: proxima.description || "",
-    progress: STATUS_TAREFA_PARA_PLANNER[proxima.status] || "nao_iniciada",
-    priority: String(proxima.priority || "Média").toLocaleLowerCase("pt-BR")
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
-    startDate: proxima.startDate || "",
-    dueDate: proxima.due || "",
-    assigneeUserId: proxima.assigneeId || "",
-    assigneeLabel: proxima.assignee || "",
-    campos: {
-      clientId: proxima.clientId || "",
-      opportunityId: proxima.opportunityId || "",
-    },
-  };
-};
-
-export const tarefaVinculadaAoPlanner = (tarefa) =>
-  Boolean(tarefa?.plannerPlanId && tarefa?.plannerTaskId);

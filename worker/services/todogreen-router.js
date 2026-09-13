@@ -38,6 +38,9 @@ import { handleTodoGreenMarketIntelligence } from "./todogreen-market-intelligen
 import { handleTodoGreenSemente } from "./todogreen-semente.js";
 import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
+import { handleTodoGreenSystemHealth } from "./todogreen-system-health.js";
+import { handleTodoGreenEnergy } from "./todogreen-energy-reference.js";
+import { handleTodoGreenViability } from "./todogreen-viability.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
@@ -230,6 +233,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
   if (path.startsWith("/api/todogreen/tracker"))
     return guarded("To Do Green Tracker error", "Não foi possível processar o rastreamento veicular.",
       () => handleTodoGreenTracker(request, env));
+  // Energia (P4): perfil do espaço, referências públicas (ANEEL/ANP/ONS) e o
+  // plano composto (tarifa → melhor hora → recarga por veículo → diesel).
+  if (path.startsWith("/api/todogreen/energy")) {
+    return guarded("To Do Green energy error", "Não foi possível montar o plano de energia.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenEnergy(request, env, resolved.access, resolved.user, url);
+    });
+  }
+
   if (path.startsWith("/api/todogreen/fleet")) {
     return guarded("To Do Green fleet error", "Não foi possível sincronizar a frota.", async () => {
       const resolved = await internalReadAccess(request, env);
@@ -477,6 +490,22 @@ export async function routeTodoGreenApi(request, env, ctx) {
       } catch (erro) {
         return json({ error: erro.message || "Carregadores indisponíveis agora." }, 400);
       }
+    });
+  }
+
+  if (path === "/api/todogreen/viability-snapshots") {
+    return guarded("To Do Green viability error", "Não foi possível registrar a viabilidade.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenViability(request, env, resolved.access, resolved.user, url);
+    });
+  }
+
+  if (path === "/api/todogreen/system-health") {
+    return guarded("To Do Green system health error", "Não foi possível ler a saúde do sistema.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenSystemHealth(request, env, resolved.access, url);
     });
   }
 

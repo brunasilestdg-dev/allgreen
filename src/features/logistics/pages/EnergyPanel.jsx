@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BatteryCharging, Clock, Gauge, Leaf, Loader2, PiggyBank, Zap } from "lucide-react";
 import { resumoEnergia } from "../energyDomain.js";
 import { planoRecargaInteligente } from "../smartChargingDomain.js";
+import EnergyReferenceSection from "./EnergyReferenceSection.jsx";
 import "./TodoGreenPages.css";
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -166,6 +167,10 @@ export default function EnergyPanel({ authHeaders }) {
           )}
         </>
       )}
+
+      {/* Referências públicas (ANEEL/ANP/ONS), melhor hora e plano por veículo:
+          o servidor resolve a hierarquia e devolve origem/data de cada número. */}
+      <EnergyReferenceSection authHeaders={authHeaders} />
     </section>
   );
 }
