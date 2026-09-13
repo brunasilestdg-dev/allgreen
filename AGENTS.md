@@ -847,3 +847,36 @@ quantos resultados vieram.
 - "Esqueci minha senha": ✅ implementado (/api/auth/forgot e /api/auth/reset, códigos via Brevo)
 - Google OAuth, Gmail API e Calendar API: ✅ origem, escopos, usuário de teste e fluxos reais validados em 17/07/2026
 - Domínio próprio e servidor GPU de vídeo: opcionais, dependem da titular
+
+## Camada de decisão da eletrificação/roteirização (domínios puros — NÃO duplicar)
+
+Módulos puros, determinísticos e testados em `src/features/logistics/` que viram
+frota/rota/energia/restrições em decisão. São a fonte única dessas regras —
+estender, não recriar. Detalhe e status em `docs/TODOGREEN_ERP_READINESS_MATRIX.md`.
+
+- **`energyEstimationDomain.js`** — `estimateRouteEnergy(input)`: energia/autonomia
+  ELÉTRICA com elevação, carga, temperatura, SoH; devolve o contrato do snapshot
+  (SOC de chegada/mínimo, `chargingRequired`, `confidence`, `assumptions`,
+  `calculationVersion=energy-model@1.0.0`). Sempre ESTIMATED; dado ausente vira
+  `null` + premissa, nunca 0 chutado. Anexado ao `POST /routes/electric-plan`.
+- **`viabilitySnapshotDomain.js`** — snapshot IMUTÁVEL versionado por conteúdo
+  (`createViabilitySnapshot`/`nextViabilitySnapshot`); consome a estimativa de
+  energia; `viabilitySnapshotBlockers` barra o avanço da proposta (seção 17).
+- **`routingEngineSelectionDomain.js`** — `selectRoutingEngine(vehicle, {available})`:
+  OSRM×Valhalla por classe/restrição com fallback SEGURO (pesado sem Valhalla não
+  cai para perfil de carro). Exposto no `electric-plan` como `routingEngineSelection`.
+- **`roadRestrictionDomain.js`** — tags OSM (maxheight/weight/width/length/hgv/
+  access) × veículo; `chooseCompatibleRoute` escolhe a mais curta compatível com
+  motivo das rejeitadas. Não consulta Overpass por entrega (recebe segmentos).
+- **`preflightDomain.js`** — `runPreflight(input)`: PASS/WARNING/BLOCK + sugestões
+  CALCULADAS (trocar veículo via modelo de energia, inserir recarga em minutos,
+  reduzir carga, dividir viagem). BLOCK impede publicar.
+- **`dataProvenanceDomain.js`** — envelope de proveniência (medido×estimado,
+  confiança, frescor/stale) e `pickBestProvenance` (hierarquia de verdade). Base
+  para marcar origem de energia/tarifa/CO2/risco.
+- **`driverOfflineQueueDomain.js`** — fila offline idempotente do app do motorista
+  (dedupe por chave, colapso de singletons, ordem, remoção por chave). Consumido
+  pelo dreno em `pages/DriverPortalPage.jsx` — não reimplementar a fila inline.
+
+Migração/deploy num ambiente Cloudflare novo: `docs/DEPLOYMENT_RUNBOOK.md`.
+Segredos e variáveis: `docs/SECRETS.md`.

@@ -200,3 +200,26 @@ O teste transversal segue deliberadamente o caminho correto e deixa esses cinco 
 **P1:** transformar alçadas de compras codificadas em configuração versionada e auditável.
 
 **P1:** manter testes transversais permanentes para order-to-cash, procure-to-pay e hire-to-pay, além das suítes por módulo.
+
+## Eletrificação, roteirização e viabilidade (camada de decisão)
+
+Iteração recente: módulos de domínio PUROS, DETERMINÍSTICOS e testados que
+transformam frota/rota/energia/restrições em decisão. Seguindo o critério
+honesto desta matriz, ficam **PARCIAL** enquanto não têm persistência D1
+dedicada e UI própria — o núcleo (regra + teste) é real e parte já responde por
+endpoint. Não são marcados REAL para não inflar status (seções 14, 55).
+
+| Processo | Status | O que já é real | Fronteira encontrada |
+| --- | --- | --- | --- |
+| Estimativa de energia/autonomia | **PARCIAL** | `energyEstimationDomain` (puro, 13 testes): elevação, carga, temperatura, SoH, SOC de chegada/mínimo, proveniência e confiança; contrato versionado (`energy-model@1.0.0`); anexado ao `POST /routes/electric-plan` como `energyEstimate` | Sem UI dedicada e sem telemetria medida por sessão (kWh é ESTIMADO); elevação/temperatura reais dependem de fonte DEM/clima |
+| Seleção de motor OSRM×Valhalla | **PARCIAL** | `routingEngineSelectionDomain` (11 testes): classe/restrição → motor, fallback seguro; exposto no `electric-plan` como `routingEngineSelection` a partir de `TDG_OSRM_BASE_URL`/`TDG_VALHALLA_BASE_URL` | Valhalla/OSRM auto‑hospedados ainda não conectados (infra `infra/tms-routing`) |
+| Restrições viárias (OSM) | **PARCIAL** | `roadRestrictionDomain` (13 testes): tags maxheight/weight/width/length/hgv/access → compatibilidade e rota mais curta compatível com motivo | Depende do grafo OSM local/PostGIS com as tags carregadas em lote |
+| Snapshot de viabilidade | **PARCIAL** | `viabilitySnapshotDomain` (13 testes): imutável, versionado por conteúdo (FNV‑1a), consome a estimativa de energia, bloqueio de avanço | Sem tabela D1 própria e sem tela; persistência via handler ainda a ligar |
+| Pré‑flight operacional | **PARCIAL** | `preflightDomain` (7 testes): PASS/WARNING/BLOCK (motorista/veículo/capacidade/autonomia/SLA) + sugestões CALCULADAS (trocar veículo, inserir recarga, reduzir carga, dividir viagem) | Sem persistência de auditoria dedicada e sem UI; consome disponibilidade informada |
+| Proveniência de dados | **PARCIAL** | `dataProvenanceDomain` (12 testes): envelope medido×estimado, frescor (stale), melhor fonte por hierarquia | Aplicação campo a campo nas telas ainda a fazer |
+| Fila offline do motorista | **REAL (núcleo)** | `driverOfflineQueueDomain` (12 testes) extraído do `DriverPortalPage` e consumido pelo dreno: dedupe idempotente, colapso de singletons, ordem, remoção por chave | Chave determinística por parada (evitar duplicidade em clique repetido no servidor) fica como próximo passo com id de parada |
+
+Todos os módulos acima entram na suíte `npm run test:unit` e não dependem de
+credencial externa para rodar. O que os torna REAL de ponta a ponta é
+persistência D1 + UI no momento da decisão (seção 50) + auditoria — o backlog
+está nomeado acima, sem status verde antecipado.
