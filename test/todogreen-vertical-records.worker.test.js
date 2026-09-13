@@ -477,6 +477,13 @@ describe("contrato nasce de proposta aceita", () => {
   it("preserva cliente, oportunidade e simulação e impede duplicidade", async () => {
     const clienteId = `cli-contrato-${crypto.randomUUID()}`;
     await criarCliente(gestora, clienteId, "Cliente Contrato");
+    // A proposta nasce ACEITA e ligada à oportunidade: o gate de viabilidade
+    // (seções 47–50) exige o snapshot sem faltas antes — o caminho correto.
+    const viabilidade = await pedir("/api/todogreen/viability-snapshots", {
+      metodo: "POST", token: gestora.token,
+      corpo: { opportunityId: "opp-c", scenarioId: "cen-c", distanceKm: 80, vehicleClass: "van", energyKwh: 26, cost: 1500 },
+    });
+    expect(viabilidade.status).toBe(201);
     const proposalResponse = await pedir("/api/todogreen/records/proposals", {
       metodo: "POST", token: gestora.token,
       corpo: { clientId: clienteId, cliente: "Cliente Contrato", oportunidadeId: "opp-c", titulo: "Proposta aceita", cenarioId: "cen-c", situacao: "accepted" },
