@@ -88,6 +88,44 @@ describe("integração universal do Planner", () => {
   });
 });
 
+
+  it("marca a tarefa espelhada com id canônico e links de origem", () => {
+    const todo = tarefaPlannerParaTodo(
+      {
+        id: "task-crm",
+        planId: "plan-comercial",
+        title: "Enviar proposta",
+        progress: "em_andamento",
+        priority: "alta",
+        revision: 3,
+        campos: { clientId: "cli-1", opportunityId: "opp-1" },
+      },
+      { id: "plan-comercial", name: "Comercial" },
+    );
+
+    expect(todo).toMatchObject({
+      canonicalTaskId: "planner:plan-comercial:task-crm",
+      canonicalSource: "planner",
+      plannerPlanId: "plan-comercial",
+      plannerTaskId: "task-crm",
+      sourceLinks: {
+        todo: { taskId: "planner-task-crm" },
+        planner: { planId: "plan-comercial", taskId: "task-crm" },
+        crm: { clientId: "cli-1", opportunityId: "opp-1" },
+      },
+    });
+  });
+
+  it("preserva o id canônico existente no reespelhamento", () => {
+    const todo = tarefaPlannerParaTodo(
+      { id: "task-1", planId: "plan-1", title: "X", progress: "nao_iniciada", campos: {} },
+      { id: "plan-1", name: "Plano" },
+      { id: "todo-local", canonicalTaskId: "task:canonica:1" },
+    );
+    expect(todo.canonicalTaskId).toBe("task:canonica:1");
+    expect(todo.sourceLinks.todo.taskId).toBe("todo-local");
+  });
+
 describe("rótulo da dependência sem confundir clientes (#142)", () => {
   it("carrega o nome do cliente para o rótulo humano, não só o nome do plano", () => {
     const todo = tarefaPlannerParaTodo(
