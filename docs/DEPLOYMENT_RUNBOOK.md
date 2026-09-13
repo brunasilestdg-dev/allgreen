@@ -262,6 +262,28 @@ Sempre diferenciar **LOCAL** (build do navegador), **MAIN** (branch) e
 **PRODUÇÃO** (o que `/api/system/version` devolve) — a tela Saúde do sistema faz
 isso lado a lado.
 
+## 13a-bis. Regressão visual (screenshots de referência)
+
+`npm run test:e2e -- e2e/todogreen-screenshots.spec.js` compara 6 telas-chave (desktop 1440×960 e
+mobile 390×844) com as imagens em `e2e/todogreen-screenshots.spec.js-snapshots/`. O Playwright
+nomeia a referência com o sistema (`*-linux.png`): as versionadas são do Chromium/Linux, o mesmo
+ambiente do runner e da sessão remota — num Mac o teste procuraria `*-darwin.png` e criaria
+referências novas em vez de comparar. Relógios, versão publicada, latências e o **mapa** (tiles
+externos, carregam ou não conforme a rede) ficam mascarados; a tolerância é 0,5% dos pixels
+(anti-aliasing de fonte).
+
+Mudança visual **intencional**: rode com `--update-snapshots` no mesmo ambiente das referências e
+revise as imagens no PR como qualquer outra mudança. Mudança **não intencional** que quebre a
+comparação é regressão — não atualize a referência sem entender a causa. A guarda de tokens
+(`src/design-system/designTokens.test.js`) roda no `npm test`.
+
+```bash
+# gerar/atualizar referências (só depois de uma mudança visual intencional)
+PLAYWRIGHT_CHROMIUM=/opt/pw-browsers/chromium npx playwright test e2e/todogreen-screenshots.spec.js --update-snapshots
+# comparar
+PLAYWRIGHT_CHROMIUM=/opt/pw-browsers/chromium npx playwright test e2e/todogreen-screenshots.spec.js
+```
+
 ## 13b. Rollback
 
 O Worker guarda as versões publicadas. Para voltar à anterior **sem** mexer no

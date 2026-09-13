@@ -1,4 +1,13 @@
 .tdg {
+  /* ===== TOKENS CANÔNICOS DA VERTICAL (fonte única) =====================
+     Todo `--tdg-*` nasce AQUI (claro) e no bloco `:root[data-theme="dark"] .tdg`
+     (escuro). Não redeclarar estes tokens em outro seletor `.tdg`/`:root`:
+     `src/design-system/designTokens.test.js` falha se aparecer duplicata ou
+     token usado sem definição. Aliases de componente (ex.: `.tdg-planner-taskform`)
+     e os `--tdg-x-*` da experiência comercial são escopos próprios, permitidos.
+     Os valores são os EFETIVOS de antes da consolidação (o segundo bloco `.tdg`
+     deste arquivo sobrescrevia bg/card/muted/line/shadow — agora existe um só). */
+
   /* Padronização de marca: componentes herdados do Seu Funcionário usam os
      tokens --primary/--primary2/--pink/--blue (teal). Dentro da vertical eles
      passam a apontar para o verde To Do Green, recolorindo botões e realces
@@ -7,17 +16,17 @@
   --primary2: #2a9d78;
   --pink: #17624f;
   --blue: #0f4a3b;
-  --tdg-bg: #f3f8f5;
+
+  /* ---- Superfícies e texto ---- */
+  --tdg-bg: #edf5f1;
   --tdg-card: #ffffff;
   --tdg-soft: #e8f5ef;
   --tdg-ink: #10241f;
-  /* Era #62766f, que dava 4,3:1 sobre os fundos claros da própria vertical —
-     abaixo do mínimo de 4,5:1 para texto pequeno. Como quase todo texto
-     secundário do produto usa esta variável, o "quase não dá para ler" vinha
-     em grande parte daqui. #52645c mantém o mesmo verde-acinzentado e sobe
-     para 5,6:1 no pior fundo. */
-  --tdg-muted: #52645c;
-  --tdg-line: #d6e8df;
+  /* Texto secundário: 4,7:1 sobre --tdg-bg e 5,2:1 sobre branco (mínimo AA 4,5:1).
+     O teste e2e de legibilidade mede o contraste real de cada tela. */
+  --tdg-muted: #577266;
+  --tdg-line: #bdd7cc;
+  --tdg-line-strong: #91b9aa;
   --tdg-green: #17624f;
   /* O lima da marca. Serve para PREENCHER (folha do avatar, olho da Semente,
      realce sobre verde escuro) — nunca para escrever sobre fundo claro: ali
@@ -30,7 +39,30 @@
      tela de acesso) quem fica ilegível é o tom escuro. Ali vale o lima
      clareado — 5,1:1 sobre --tdg-green. */
   --tdg-lime-texto-escuro: #bfe56b;
-  --tdg-shadow: 0 18px 46px rgba(16, 36, 31, 0.1);
+  --tdg-shadow: 0 18px 44px rgba(11, 42, 34, 0.1);
+
+  /* ---- Aliases legados ----------------------------------------------------
+     Nomes que telas mais antigas usam via `var(--tdg-…, fallback)`. Antes não
+     existiam (valiam só pelo fallback); agora apontam para o token canônico com
+     o MESMO valor do fallback predominante — nenhuma tela muda de cor no claro,
+     e no escuro passam a seguir o tema em vez de ficar presas ao valor claro. */
+  --tdg-surface: var(--tdg-card);
+  --tdg-surface2: #eef4ef;
+  --tdg-surface-soft: rgba(16, 122, 87, 0.05);
+  --tdg-surface-muted: #f6faf8;
+  --tdg-text: var(--tdg-ink);
+  --tdg-border: #e3e8e5;
+  --tdg-primary: var(--tdg-green);
+  --tdg-brand: #1f8a54;
+  --tdg-deep: #14532d;
+  --tdg-accent: #14966b;
+  --tdg-accent-soft: var(--tdg-soft);
+  --tdg-green-soft: #e9f3ef;
+  --tdg-ok: var(--tdg-green);
+  --tdg-warn: #b7791f;
+  --tdg-warning: #b45309;
+  --tdg-danger: #b3261e;
+
   color: var(--tdg-ink);
   display: grid;
   gap: 18px;
@@ -2645,12 +2677,7 @@
 
 /* ===== To Do Green visual polish v40 ===== */
 .tdg {
-  --tdg-bg: #edf5f1;
-  --tdg-card: #ffffff;
-  --tdg-muted: #577266;
-  --tdg-line: #bdd7cc;
-  --tdg-line-strong: #91b9aa;
-  --tdg-shadow: 0 18px 44px rgba(11, 42, 34, 0.1);
+  /* Tokens: só no bloco canônico do topo deste arquivo. */
   max-width: none;
   min-height: 100vh;
   padding: clamp(16px, 2vw, 30px);
@@ -2876,6 +2903,19 @@
   --tdg-lime: #9fe870;
   --tdg-lime-texto: #bfe56b;
   --tdg-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  /* Aliases legados no escuro: superfícies e bordas seguem o tema; as cores
+     semânticas clareiam para não sumir sobre o fundo escuro. */
+  --tdg-surface2: #17403a;
+  --tdg-surface-soft: rgba(75, 201, 162, 0.08);
+  --tdg-surface-muted: #12302a;
+  --tdg-border: #274c43;
+  --tdg-brand: #4bc9a2;
+  --tdg-deep: #9fe870;
+  --tdg-accent: #58c78a;
+  --tdg-green-soft: #16352a;
+  --tdg-warn: #e2b45e;
+  --tdg-warning: #e2b45e;
+  --tdg-danger: #f0908a;
   color: var(--tdg-ink);
   background:
     radial-gradient(circle at 8% -8%, rgba(75, 201, 162, 0.16), transparent 30%),
