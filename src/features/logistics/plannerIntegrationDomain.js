@@ -38,9 +38,14 @@ export const statusTarefaAoEspelhar = (progressoPlanner, statusExistente) =>
 
 export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {}) => {
   const contexto = contextoComercialDaTarefa(tarefa);
+  const plannerPlanId = tarefa.planId || plano?.id || "";
+  const plannerTaskId = tarefa.id;
+  const canonicalTaskId = existente.canonicalTaskId || `planner:${plannerPlanId || "sem-plano"}:${plannerTaskId}`;
   return {
     ...existente,
     id: existente.id || `planner-${tarefa.id}`,
+    canonicalTaskId,
+    canonicalSource: existente.canonicalSource || "planner",
     title: tarefa.title,
     description: tarefa.notes || "",
     status: statusTarefaAoEspelhar(tarefa.progress, existente.status),
@@ -52,8 +57,8 @@ export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {
     project: plano?.name || existente.project || "",
     businessId: "todogreen",
     source: "todogreen-planner",
-    plannerPlanId: tarefa.planId || plano?.id || "",
-    plannerTaskId: tarefa.id,
+    plannerPlanId,
+    plannerTaskId,
     plannerRevision: tarefa.revision,
     clientId: contexto.clientId,
     opportunityId: contexto.opportunityId,
@@ -61,6 +66,14 @@ export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {
     // nome do PLANO ("To do List"), que não distingue a "Precificação" da DHL da
     // da Vivara. Sem este rótulo, duas dependências ficam idênticas na tela.
     clientLabel: String(rotulos.clientLabel || existente.clientLabel || "").trim(),
+    sourceLinks: {
+      ...(existente.sourceLinks || {}),
+      todo: { taskId: existente.id || `planner-${tarefa.id}` },
+      planner: { planId: plannerPlanId, taskId: plannerTaskId },
+      ...(contexto.clientId || contexto.opportunityId ? {
+        crm: { clientId: contexto.clientId, opportunityId: contexto.opportunityId },
+      } : {}),
+    },
     updatedAt: tarefa.atualizadoEm || new Date().toISOString(),
     createdAt: existente.createdAt || tarefa.criadoEm || new Date().toISOString(),
   };
