@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Radar, RefreshCw } from "lucide-react";
+import { Briefcase, ExternalLink, Radar, RefreshCw, Settings2 } from "lucide-react";
 
 // Sinais de mercado ESTRUTURADOS (PNCP · Compras.gov.br · GDELT), lidos de
 // GET /api/todogreen/market-signals. Cada sinal traz score explicável (os
@@ -16,6 +16,10 @@ export default function MarketSignalsPanel({ authHeaders, setToast }) {
   const [estado, setEstado] = useState("carregando");
   const [ocupado, setOcupado] = useState("");
   const [fonte, setFonte] = useState("");
+  // Preferências do espaço (termos PNCP/GDELT, UFs de foco): editadas aqui,
+  // gravadas em PUT /market-signals/prefs; vazio = padrão do código.
+  const [prefsForm, setPrefsForm] = useState(null);
+  const [salvandoPrefs, setSalvandoPrefs] = useState(false);
 
   const cabecalhos = () => authHeaders?.() || {};
   const carregar = async (f = fonte) => {
@@ -49,6 +53,43 @@ export default function MarketSignalsPanel({ authHeaders, setToast }) {
       setToast?.(erro.message);
     } finally {
       setOcupado("");
+    }
+  };
+
+  // Sinal → oportunidade pela MESMA esteira de records/opportunities (o
+  // servidor cria e marca a triagem como convertida).
+  const converter = async (sinal) => {
+    setOcupado(`opp:${sinal.id}`);
+    try {
+      const r = await fetch(`/api/todogreen/market-signals/${sinal.id}/opportunity`, { method: "POST", headers: { "content-type": "application/json", ...cabecalhos() }, body: JSON.stringify({}) });
+      const corpo = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(corpo.error || "Não foi possível criar a oportunidade.");
+      setToast?.(corpo.created ? `Oportunidade criada a partir do sinal (${corpo.opportunity?.cliente || "cliente"}). Veja em Comercial → Oportunidades.` : "Este sinal já tinha sido convertido em oportunidade.");
+      setDados(await carregar());
+    } catch (erro) {
+      setToast?.(erro.message);
+    } finally {
+      setOcupado("");
+    }
+  };
+
+  const abrirPrefs = () => {
+    const p = dados?.prefs || {};
+    setPrefsForm({ termosPncp: (p.termosPncp || []).join("\n"), termosGdelt: (p.termosGdelt || []).join("\n"), ufsFoco: (p.ufsFoco || []).join(", ") });
+  };
+  const salvarPrefs = async () => {
+    setSalvandoPrefs(true);
+    try {
+      const r = await fetch("/api/todogreen/market-signals/prefs", { method: "PUT", headers: { "content-type": "application/json", ...cabecalhos() }, body: JSON.stringify(prefsForm) });
+      const corpo = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(corpo.error || "Não foi possível salvar as preferências do radar.");
+      setToast?.("Preferências do radar salvas — valem na próxima sincronização.");
+      setPrefsForm(null);
+      setDados(await carregar());
+    } catch (erro) {
+      setToast?.(erro.message);
+    } finally {
+      setSalvandoPrefs(false);
     }
   };
 
@@ -86,8 +127,29 @@ export default function MarketSignalsPanel({ authHeaders, setToast }) {
           {canResearch && ["pncp", "compras-gov", "gdelt"].map((s) => (
             <button type="button" key={s} disabled={Boolean(ocupado)} onClick={() => sincronizar(s)}><RefreshCw size={12} /> {ocupado === s ? "…" : FONTE[s]}</button>
           ))}
+          {canResearch && <button type="button" onClick={prefsForm ? () => setPrefsForm(null) : abrirPrefs} aria-expanded={Boolean(prefsForm)}><Settings2 size={12} /> Termos e UFs</button>}
         </div>
       </header>
+      {prefsForm && (
+        <form className="tdg-intelligence-signals-prefs" data-testid="tdg-market-prefs" onSubmit={(e) => { e.preventDefault(); salvarPrefs(); }}>
+          <label>
+            <span>Termos PNCP (um por linha; vazio = padrão: {(dados.prefs?.padrao?.termosPncp || []).join(", ")})</span>
+            <textarea rows={3} value={prefsForm.termosPncp} onChange={(e) => setPrefsForm((v) => ({ ...v, termosPncp: e.target.value }))} />
+          </label>
+          <label>
+            <span>Termos GDELT (um por linha; aspas mantêm a expressão exata)</span>
+            <textarea rows={3} value={prefsForm.termosGdelt} onChange={(e) => setPrefsForm((v) => ({ ...v, termosGdelt: e.target.value }))} />
+          </label>
+          <label>
+            <span>UFs de foco (bônus no score da sincronização manual, ex.: SP, MG)</span>
+            <input value={prefsForm.ufsFoco} onChange={(e) => setPrefsForm((v) => ({ ...v, ufsFoco: e.target.value }))} placeholder="SP, RJ, MG" />
+          </label>
+          <div>
+            <button type="submit" disabled={salvandoPrefs}>{salvandoPrefs ? "Salvando…" : "Salvar preferências"}</button>
+            <small>O cron continua cobrindo os termos padrão + os de todos os espaços; estas preferências valem na sincronização manual e no filtro.</small>
+          </div>
+        </form>
+      )}
       <p className="tdg-intelligence-policy"><strong>Critério:</strong> licitação só com objeto de transporte/logística e proposta ainda aberta; notícia só com transporte ou eletrificação. Fora de escopo, bitrem/rodotrem e processo encerrado são rejeitados. O score explica cada ponto.</p>
       {dados.signals.length === 0 ? (
         <div className="tdg-intelligence-empty"><Radar size={22} /><strong>Nenhum sinal estruturado ainda</strong><span>O cron sincroniza PNCP a cada 6 h, Compras.gov diariamente e GDELT a cada hora. Quem tem permissão de pesquisa pode sincronizar agora.</span></div>
@@ -111,6 +173,9 @@ export default function MarketSignalsPanel({ authHeaders, setToast }) {
                 <div className="tdg-intelligence-signals-triagem">
                   <button type="button" onClick={() => triar(s, "triaged")}>Triar</button>
                   <button type="button" onClick={() => triar(s, "dismissed")}>Descartar</button>
+                  {s.triage?.status === "converted" && s.triage.opportunityId
+                    ? <small>Oportunidade criada</small>
+                    : <button type="button" disabled={ocupado === `opp:${s.id}`} onClick={() => converter(s)}><Briefcase size={12} /> {ocupado === `opp:${s.id}` ? "…" : "Criar oportunidade"}</button>}
                 </div>
               )}
             </article>

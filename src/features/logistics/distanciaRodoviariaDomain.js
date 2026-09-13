@@ -49,15 +49,25 @@ async function consultarOSRM(coordenadas, {
   geometria = false,
   veiculo = null,
   alternativas = false,
+  pedagios = false,
+  tarifaPedagio = 0,
 } = {}) {
   if (usarGatewayInterno(headers)) {
     // O veículo vai junto: é o backend que escolhe OSRM × Valhalla por classe e
     // restrições (seção 32) — a tela nunca fala com um motor. `alternatives`
-    // pede rotas alternativas ranqueadas com risco viário como custo (P6).
+    // pede rotas alternativas ranqueadas com risco viário como custo (P6);
+    // `tolls` conta as praças de pedágio de cada alternativa (ANTT) e, com a
+    // tarifa média informada, põe o pedágio no custo total do ranking.
     return fetcher(MAPS_ROUTE, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json", ...headers },
-      body: JSON.stringify({ coordinates: coordenadas, geometry: geometria, ...(veiculo ? { vehicle: veiculo } : {}), ...(alternativas ? { alternatives: true } : {}) }),
+      body: JSON.stringify({
+        coordinates: coordenadas,
+        geometry: geometria,
+        ...(veiculo ? { vehicle: veiculo } : {}),
+        ...(alternativas ? { alternatives: true } : {}),
+        ...(pedagios ? { tolls: true, ...(Number(tarifaPedagio) > 0 ? { tollPerPlaza: Number(tarifaPedagio) } : {}) } : {}),
+      }),
       signal: sinal,
     });
   }
@@ -236,6 +246,7 @@ export async function calcularDistancia(
       // P6: risco viário histórico (PRF/ANTT) como custo, alternativas e ranking.
       rodovias: Array.isArray(rota.roadRefs) ? rota.roadRefs : [],
       risco: rota.risk || null,
+      pedagios: rota.tolls || null,
       alternativas: (Array.isArray(dados?.routes) ? dados.routes.slice(1) : []).map(rotaParaTela),
       ranking: dados?.ranking || null,
     };
@@ -264,11 +275,12 @@ const rotaParaTela = (rota) => {
     minutos: Math.round(Number(rota?.duration || 0) / 60),
     rodovias: Array.isArray(rota?.roadRefs) ? rota.roadRefs : [],
     risco: rota?.risk || null,
+    pedagios: rota?.tolls || null,
   };
 };
 
 export async function tracarRota(
-  { origem, destino, paradas, veiculo = null, alternativas = false } = {},
+  { origem, destino, paradas, veiculo = null, alternativas = false, pedagios = false, tarifaPedagio = 0 } = {},
   { fetcher = fetch, sinal, headers = {} } = {},
 ) {
   // Normaliza para uma lista de {endereco, coord?}. Cada parada pode ser uma
@@ -314,7 +326,7 @@ export async function tracarRota(
 
     const coordenadas = pontos.map((p) => [p.longitude, p.latitude]);
     const resposta = await consultarOSRM(coordenadas, {
-      fetcher, sinal, headers, geometria: true, veiculo, alternativas,
+      fetcher, sinal, headers, geometria: true, veiculo, alternativas, pedagios, tarifaPedagio,
     });
     if (!resposta.ok) {
       const recusa = await recusaDeMotor(resposta);

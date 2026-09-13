@@ -58,3 +58,41 @@ describe("MarketSignalsPanel", () => {
     expect(screen.queryByText("Descartar")).not.toBeInTheDocument();
   });
 });
+
+describe("MarketSignalsPanel — complementos (prefs por espaço e sinal → oportunidade)", () => {
+  it("cria oportunidade a partir do sinal e mostra o estado convertido", async () => {
+    const chamadas = [];
+    let convertido = false;
+    vi.stubGlobal("fetch", vi.fn((url, init = {}) => {
+      chamadas.push(`${init.method || "GET"} ${url}`);
+      if (String(url).endsWith("/opportunity")) { convertido = true; return resp({ created: true, opportunityId: "opp-1", opportunity: { cliente: "MUNICIPIO X" }, signal: {} }); }
+      if (!convertido) return resp(LISTA);
+      return resp({ ...LISTA, signals: [{ ...LISTA.signals[0], triage: { status: "converted", opportunityId: "opp-1" } }, LISTA.signals[1]] });
+    }));
+    const setToast = vi.fn();
+    render(<MarketSignalsPanel authHeaders={authHeaders} setToast={setToast} />);
+    await screen.findByText(/score 100\/100/);
+    fireEvent.click(screen.getAllByRole("button", { name: /Criar oportunidade/ })[0]);
+    await waitFor(() => expect(chamadas.some((c) => c === "POST /api/todogreen/market-signals/ms-1/opportunity")).toBe(true));
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith(expect.stringContaining("Oportunidade criada")));
+    expect(await screen.findByText("Oportunidade criada")).toBeInTheDocument();
+  });
+
+  it("edita e salva termos/UFs do espaço em PUT /prefs", async () => {
+    const chamadas = [];
+    vi.stubGlobal("fetch", vi.fn((url, init = {}) => {
+      chamadas.push({ m: init.method || "GET", url: String(url), body: init.body ? JSON.parse(init.body) : null });
+      if (String(url).endsWith("/prefs")) return resp({ prefs: { termosPncp: ["transporte escolar"], termosGdelt: [], ufsFoco: ["SP"] } });
+      return resp({ ...LISTA, prefs: { termosPncp: [], termosGdelt: [], ufsFoco: [], padrao: { termosPncp: ["frete"], termosGdelt: [] } } });
+    }));
+    render(<MarketSignalsPanel authHeaders={authHeaders} setToast={vi.fn()} />);
+    await screen.findByText(/score 100\/100/);
+    fireEvent.click(screen.getByRole("button", { name: /Termos e UFs/ }));
+    const form = await screen.findByTestId("tdg-market-prefs");
+    expect(form).toHaveTextContent(/padrão: frete/);
+    fireEvent.change(screen.getByLabelText(/Termos PNCP/), { target: { value: "transporte escolar" } });
+    fireEvent.change(screen.getByLabelText(/UFs de foco/), { target: { value: "SP" } });
+    fireEvent.click(screen.getByRole("button", { name: /Salvar preferências/ }));
+    await waitFor(() => expect(chamadas.some((c) => c.m === "PUT" && c.url.endsWith("/market-signals/prefs") && c.body.termosPncp === "transporte escolar" && c.body.ufsFoco === "SP")).toBe(true));
+  });
+});

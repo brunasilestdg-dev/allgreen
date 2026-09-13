@@ -328,10 +328,11 @@ reaplicada ou apagada; nenhum SQL destrutivo.
 | **`main` do Codex absorvida com gate**: `c38c627` (menu em 8 grupos, sessões/reservas de recarga, cobrança por kWh, GreenPay fase 2, migrations `0130`/`0131`) entrou na `main` sem PR e sem gate; o merge do #371 sobre ele foi gateado aqui depois do fato: lint 0 erros, worker 106/106, unit 352 ok (única falha: o teste do To Do, 12.3), build ok; D1 remoto já tinha `0130`/`0131` (`migrations list --remote` sem pendências) | — | verificado |
 | **P2.b pré-flight persistido** (migration `0132`): `POST /api/todogreen/preflight` resolve motorista/veículo/carregadores pelo cadastro, roda `preflightDomain`, grava resultado + proveniência; **gate** na coleção `rotas` (mesmo par por assinatura, prazo, não-BLOCK, WARNING só com justificativa auditada); passo "Rodar pré-flight" na Roteirização | este PR | REAL |
 | **P2.c fila de ação**: BLOCK/WARNING e risco viário alto viram itens no quadro seed Torre de Controle (dedupe por `sourceKey`) — sem entidade nova | este PR | REAL |
+| **P5/P6 complementos**: termos PNCP/GDELT e UFs de foco por espaço (`0133`, `GET/PUT /market-signals/prefs`; sync manual usa o espaço, cron usa a união); "Criar oportunidade" a partir do sinal pela esteira de `records/opportunities` (triagem `converted`); pedágio por alternativa (praças da ANTT × tarifa média) no custo total do ranking, com nota honesta quando falta tarifa ou a consulta falha | PR seguinte | REAL |
 
 ### 13.2 Produção × main
 
-`f357c76` (fecho da rodada 2) → `1a17c34d8cec` (merge do #371 sobre `c38c627`; Workers Builds; `migrations.expected` 134, última `0131`) → **P2 (este PR): SHA a registrar em `DEPLOYMENT_RUNBOOK.md` §13a após o merge**. Migration nova `0132_todogreen_preflight_results` (aditiva) — aplicar com `wrangler d1 migrations apply --remote` antes/junto do deploy, como no runbook.
+`f357c76` (fecho da rodada 2) → `1a17c34d8cec` (merge do #371 sobre `c38c627`; Workers Builds; `migrations.expected` 134, última `0131`) → **`fdcd3bd627b7`** (PR #373, P2; Workers Builds 13:48 UTC; `migrations.expected` 135, última `0132`). A migration `0132_todogreen_preflight_results` (aditiva) foi aplicada no D1 remoto **antes** do merge, para o código novo nunca encontrar a tabela ausente. → **P5/P6 complementos (PR seguinte): SHA a registrar após o merge**; migration `0133_todogreen_market_radar_prefs` pelo mesmo caminho.
 
 ### 13.3 O que mudou no diagnóstico
 

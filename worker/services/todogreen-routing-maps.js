@@ -6,6 +6,7 @@
 
 const PUBLIC_NOMINATIM = "https://nominatim.openstreetmap.org/";
 import { rotearComProvider } from "./routing-providers.js";
+import { consultarPedagiosDaRota } from "./todogreen-pedagios.js";
 import { riscoDoTracado } from "./todogreen-road-risk.js";
 import { rankRouteAlternatives } from "../../src/features/logistics/routeAlternativesDomain.js";
 
@@ -103,28 +104,67 @@ export async function geocodeTodoGreen(body, env) {
  * 83). O risco entra como CUSTO — nunca bloqueia; sem índice ingerido, cada
  * rota traz `risk.riskScore = null` e o motivo (RISK_DATA_NOT_AVAILABLE).
  */
-export async function enriquecerComRisco(corpo, body, env) {
+// Pedágio por rota (P6 complemento): praças da ANTT que cada traçado cruza
+// (mesma consulta da tela) × tarifa média informada pela operação
+// (`tollPerPlaza`) — a ANTT não publica tarifa, então sem tarifa o custo fica 0
+// e só a CONTAGEM entra na resposta (declarado em `tollNote`). Opt-in por
+// `body.tolls === true`: é uma consulta externa a mais por requisição.
+async function pedagiosPorRota(rotas, body, { pedagios = consultarPedagiosDaRota } = {}) {
+  if (body?.tolls !== true) return rotas.map(() => null);
+  return Promise.all(rotas.map(async (r) => {
+    const linha = (Array.isArray(r?.geometry?.coordinates) ? r.geometry.coordinates : [])
+      .filter((p) => Array.isArray(p) && p.length >= 2)
+      .map(([lon, lat]) => [Number(lat), Number(lon)]);
+    if (linha.length < 2) return null;
+    try {
+      const resultado = await pedagios(linha);
+      return { quantidade: Number(resultado?.quantidade) || 0, pracas: (resultado?.pracas || []).slice(0, 40), fonte: resultado?.fonte || "" };
+    } catch (error) {
+      return { quantidade: null, pracas: [], erro: String(error?.message || error).slice(0, 120) };
+    }
+  }));
+}
+
+export async function enriquecerComRisco(corpo, body, env, { pedagios } = {}) {
   const rotas = Array.isArray(corpo?.routes) ? corpo.routes : [];
   if (!rotas.length || !env?.DB) return corpo;
   const consumo = Number(body?.vehicle?.energyConsumptionKwhPerKm) || 0;
-  const riscos = await Promise.all(rotas.map((r) => riscoDoTracado(env, r?.geometry?.coordinates || [], { refs: r?.roadRefs || [] }).catch(() => ({ riskScore: null, reason: "RISK_LOOKUP_FAILED" }))));
-  const routes = rotas.map((r, i) => ({ ...r, risk: riscos[i] }));
+  const tarifaPorPraca = Math.max(0, Number(body?.vehicle?.tollPerPlaza ?? body?.tollPerPlaza) || 0);
+  const [riscos, pedagiosDasRotas] = await Promise.all([
+    Promise.all(rotas.map((r) => riscoDoTracado(env, r?.geometry?.coordinates || [], { refs: r?.roadRefs || [] }).catch(() => ({ riskScore: null, reason: "RISK_LOOKUP_FAILED" })))),
+    pedagiosPorRota(rotas, body, { pedagios }),
+  ]);
+  const routes = rotas.map((r, i) => {
+    const pedagio = pedagiosDasRotas[i];
+    // `Number(null)` é 0 — a falha da consulta tem que continuar null (declarada), nunca virar "zero praças".
+    const quantidade = pedagio && pedagio.quantidade !== null && pedagio.quantidade !== undefined && Number.isFinite(Number(pedagio.quantidade)) ? Number(pedagio.quantidade) : null;
+    return {
+      ...r,
+      risk: riscos[i],
+      ...(pedagio ? { tolls: { plazas: quantidade, cost: quantidade !== null && tarifaPorPraca > 0 ? Math.round(quantidade * tarifaPorPraca * 100) / 100 : null, perPlaza: tarifaPorPraca || null, list: pedagio.pracas, source: pedagio.fonte || "", error: pedagio.erro || "" } } : {}),
+    };
+  });
   const candidatas = routes.map((r, i) => ({
     id: i === 0 ? "principal" : `alternativa-${i}`,
     distanceKm: (Number(r.distance) || 0) / 1000,
     durationMinutes: Math.round((Number(r.duration) || 0) / 60),
     energyKwh: consumo > 0 ? Math.round(((Number(r.distance) || 0) / 1000) * consumo * 10) / 10 : 0,
-    tollCost: 0,
+    tollCost: Number(r.tolls?.cost) || 0,
     riskScore: Number.isFinite(Number(r.risk?.riskScore)) ? Number(r.risk.riskScore) : 0,
     riskAvailable: Number.isFinite(Number(r.risk?.riskScore)),
     restrictionsOk: true,
   }));
   const ranking = routes.length > 1 ? rankRouteAlternatives(candidatas) : null;
+  const notas = [];
+  if (ranking && !candidatas.every((c) => c.riskAvailable)) notas.push("Sem índice de risco ingerido para alguma rota: o critério de risco valeu 0 nela (RISK_DATA_NOT_AVAILABLE), não 'seguro'.");
+  if (ranking && body?.tolls === true && tarifaPorPraca <= 0) notas.push("Praças de pedágio contadas, mas sem tarifa média informada: o pedágio valeu 0 no custo total.");
+  if (ranking && body?.tolls === true && routes.some((r) => r.tolls?.plazas === null)) notas.push("Consulta de praças de pedágio indisponível para alguma rota: pedágio valeu 0 nela.");
   return {
     ...corpo,
     routes,
     riskAvailable: candidatas.some((c) => c.riskAvailable),
-    ranking: ranking ? { ...ranking, nota: candidatas.every((c) => c.riskAvailable) ? "" : "Sem índice de risco ingerido para alguma rota: o critério de risco valeu 0 nela (RISK_DATA_NOT_AVAILABLE), não 'seguro'." } : null,
+    tollsAvailable: body?.tolls === true && routes.every((r) => r.tolls?.plazas !== null && r.tolls?.plazas !== undefined),
+    ranking: ranking ? { ...ranking, nota: notas.join(" ") } : null,
   };
 }
 

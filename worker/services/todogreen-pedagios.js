@@ -11,13 +11,13 @@ const TTL_MS = 6 * 60 * 60 * 1000; // 6h: localização de praça muda pouco.
 // Cache por isolate: uma busca serve muitas consultas até o TTL.
 let cachePracas = { emCache: null, buscadoEm: 0 };
 
-async function carregarPracas() {
+async function carregarPracas({ fetcher = fetch } = {}) {
   const agora = Date.now();
   if (cachePracas.emCache && agora - cachePracas.buscadoEm < TTL_MS) return cachePracas.emCache;
   const controlador = new AbortController();
   const timer = setTimeout(() => controlador.abort("timeout"), 12_000);
   try {
-    const resposta = await fetch(ANTT_PRACAS_URL, {
+    const resposta = await fetcher(ANTT_PRACAS_URL, {
       headers: { accept: "application/json" },
       signal: controlador.signal,
     });
@@ -46,10 +46,12 @@ function amostrarLinha(polyline, max = 600) {
   return amostra;
 }
 
-export async function consultarPedagiosDaRota(polyline) {
+// `fetcher`/`pracas` injetáveis: o ranking de alternativas (routing-maps) e os
+// testes reutilizam a MESMA consulta sem sair para a ANTT.
+export async function consultarPedagiosDaRota(polyline, { fetcher = fetch, pracas: pracasInformadas = null } = {}) {
   const linha = amostrarLinha(polyline);
   if (linha.length < 2) throw new Error("Trace a rota antes de consultar os pedágios.");
-  const pracas = await carregarPracas();
+  const pracas = Array.isArray(pracasInformadas) ? pracasInformadas : await carregarPracas({ fetcher });
   const naRota = pracasNaRota(pracas, linha, 1.5);
   return {
     pracas: naRota,

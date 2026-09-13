@@ -5,6 +5,7 @@ import {
   TERMOS_GDELT,
   TERMOS_PNCP,
   handleTodoGreenMarketSignals,
+  termosParaCron,
   runTodoGreenMarketSignalsScheduled,
   sincronizarComprasGov,
   sincronizarGdelt,
@@ -215,5 +216,69 @@ describe("endpoints e triagem por espaço", () => {
     expect([200, 500]).toContain(r.status);
     expect(r.status).not.toBe(404);
     expect((await call("/api/todogreen/market-radar", { token: outro.token })).status).toBe(403);
+  });
+});
+
+describe("preferências do radar por espaço (0133) e sinal → oportunidade", () => {
+  let gestor;
+  beforeAll(async () => {
+    gestor = await createUser("ms-gestor", "ms-gestor@example.com", "gestor", ["read", "market:read", "market:research", "crm:manage"]);
+  });
+
+  it("PUT/GET prefs normaliza termos e UFs (limites, dedupe) e a lista devolve prefs + padrão", async () => {
+    const put = await call("/api/todogreen/market-signals/prefs", { method: "PUT", token: gestor.token, body: {
+      termosPncp: "transporte escolar\nTransporte Escolar\ncoleta de resíduos\n x \n", termosGdelt: ['"ônibus elétrico"'], ufsFoco: "sp, mg, xx, SP",
+    } });
+    expect(put.status).toBe(200);
+    const { prefs } = await put.json();
+    expect(prefs.termosPncp).toEqual(["transporte escolar", "coleta de resíduos"]);
+    expect(prefs.termosGdelt).toEqual(['"ônibus elétrico"']);
+    expect(prefs.ufsFoco).toEqual(["SP", "MG"]);
+    expect(prefs.padrao.termosPncp).toEqual([...TERMOS_PNCP]);
+    const lista = await (await call("/api/todogreen/market-signals", { token: gestor.token })).json();
+    expect(lista.prefs.termosPncp).toEqual(["transporte escolar", "coleta de resíduos"]);
+    // outro espaço não herda
+    const doLeitor = await (await call("/api/todogreen/market-signals/prefs", { token: leitor.token })).json();
+    expect(doLeitor.prefs.termosPncp).toEqual([]);
+    expect((await call("/api/todogreen/market-signals/prefs", { method: "PUT", token: leitor.token, body: {} })).status).toBe(403);
+  });
+
+  it("a sincronização manual usa os termos do espaço; o cron usa a união padrão + espaços", async () => {
+    const contador = {};
+    const f = fetcher(contador);
+    const r = await handleTodoGreenMarketSignals(
+      new Request("https://app.test/api/todogreen/market-signals/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ source: "pncp" }) }),
+      env, { ownerId: gestor.id, role: "gestor", permissions: ["read", "market:read", "market:research", "crm:manage"] }, { id: gestor.id, email: gestor.email },
+      new URL("https://app.test/api/todogreen/market-signals/sync"), { fetcher: f, now: NOW },
+    );
+    expect(r.status).toBe(200);
+    const urls = Object.keys(contador).filter((u) => u.includes("pncp.gov.br"));
+    expect(urls.some((u) => u.includes("q=transporte+escolar") || u.includes("q=transporte%20escolar"))).toBe(true);
+    expect(urls.some((u) => u.includes("q=frete"))).toBe(false);
+    const cron = await termosParaCron(env);
+    expect(cron.pncp).toEqual(expect.arrayContaining([...TERMOS_PNCP, "transporte escolar", "coleta de resíduos"]));
+    expect(cron.gdelt).toContain('"ônibus elétrico"');
+  });
+
+  it("POST :id/opportunity cria a oportunidade pela esteira de records, marca a triagem e é idempotente; exige crm:manage", async () => {
+    const lista = await (await call("/api/todogreen/market-signals?source=pncp", { token: gestor.token })).json();
+    const sinal = lista.signals.find((s) => s.kind === "licitacao");
+    expect(sinal).toBeTruthy();
+    const semCrm = await call(`/api/todogreen/market-signals/${sinal.id}/opportunity`, { method: "POST", token: vendedor.token, body: {} });
+    expect(semCrm.status).toBe(403);
+    const criado = await call(`/api/todogreen/market-signals/${sinal.id}/opportunity`, { method: "POST", token: gestor.token, body: {} });
+    expect(criado.status).toBe(201);
+    const corpo = await criado.json();
+    expect(corpo.created).toBe(true);
+    expect(corpo.opportunity.cliente).toBe(sinal.orgao);
+    expect(corpo.opportunity.titulo).toBe(sinal.title);
+    expect(corpo.opportunity.campos.marketSignalId).toBe(sinal.id);
+    expect(corpo.signal.triage).toMatchObject({ status: "converted", opportunityId: corpo.opportunityId });
+    const linha = await env.DB.prepare("SELECT client_name, stage FROM todogreen_opportunities WHERE id = ? AND workspace_owner_id = ?").bind(corpo.opportunityId, gestor.id).first();
+    expect(linha).toMatchObject({ client_name: sinal.orgao, stage: "Prospecção" });
+    const denovo = await call(`/api/todogreen/market-signals/${sinal.id}/opportunity`, { method: "POST", token: gestor.token, body: {} });
+    expect(denovo.status).toBe(200);
+    expect((await denovo.json()).created).toBe(false);
+    expect((await call("/api/todogreen/market-signals/nao-existe/opportunity", { method: "POST", token: gestor.token, body: {} })).status).toBe(404);
   });
 });

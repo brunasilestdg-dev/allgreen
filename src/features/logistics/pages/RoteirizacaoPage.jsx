@@ -591,7 +591,9 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
     const resultado = await tracarRota(
       // `alternativas`: o backend devolve rotas alternativas ranqueadas com o
       // risco viário histórico (PRF/ANTT) como CUSTO — a pessoa escolhe.
-      { paradas: comCoords, veiculo: { category: classeVeiculo }, alternativas: true },
+      // `pedagios`: conta as praças da ANTT em cada alternativa; com a tarifa
+      // média informada, o pedágio entra no custo total do ranking (P6).
+      { paradas: comCoords, veiculo: { category: classeVeiculo }, alternativas: true, pedagios: true, tarifaPedagio: Number(tarifaMedia) || 0 },
       { headers: authHeaders?.() || {} },
     );
     if (resultado.ok) {
@@ -1230,7 +1232,7 @@ Regras:
                 const rotulos = [rec.fastest === id && "mais rápida", rec.safest === id && "menor risco", rec.cheapest === id && "menor custo total", rec.balanced === id && "equilibrada"].filter(Boolean);
                 return (
                   <li key={id}>
-                    <span>Alternativa {i + 1}: {alt.distanciaKm} km · {formatarTempo(alt.minutos)}{alt.risco && Number.isFinite(Number(alt.risco.riskScore)) ? ` · risco ${alt.risco.riskScore}/100` : " · risco sem índice"}{alt.rodovias?.length ? ` · ${alt.rodovias.join(", ")}` : ""}{rotulos.length ? ` · ${rotulos.join(", ")}` : ""}</span>
+                    <span>Alternativa {i + 1}: {alt.distanciaKm} km · {formatarTempo(alt.minutos)}{alt.risco && Number.isFinite(Number(alt.risco.riskScore)) ? ` · risco ${alt.risco.riskScore}/100` : " · risco sem índice"}{alt.pedagios && Number.isFinite(Number(alt.pedagios.plazas)) ? ` · ${alt.pedagios.plazas} praça(s) de pedágio${Number.isFinite(Number(alt.pedagios.cost)) ? ` (~R$ ${Number(alt.pedagios.cost).toFixed(2).replace(".", ",")})` : ""}` : ""}{alt.rodovias?.length ? ` · ${alt.rodovias.join(", ")}` : ""}{rotulos.length ? ` · ${rotulos.join(", ")}` : ""}</span>
                     <button type="button" className="tdg-action tdg-action-ghost" onClick={() => usarAlternativa(i)}>Usar esta rota</button>
                   </li>
                 );

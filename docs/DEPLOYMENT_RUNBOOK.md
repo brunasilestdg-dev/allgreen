@@ -254,6 +254,7 @@ Produção ≠ `main` até prova em contrário. Após cada publicação, anote e
 | 2026-09-13 12:22 | `6028b0edad89` (PR #366, Codex — bipagem de etiquetas) | Cloudflare Workers Builds | — | `/api/system/version` ok |
 | 2026-09-13 12:52 | `bd402c306939` (PR #367, radar estruturado + Risk Map + alternativas; inclui #368 do Codex) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 132, última `0125`; `wrangler d1 migrations list --remote` → "No migrations to apply" |
 | 2026-09-13 13:20 | `1a17c34d8cec` (merge do PR #371 P1.4 sobre `c38c627` do Codex) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 134, última `0131`; D1 remoto sem pendências; gate local do estado mesclado: lint 0 erros, worker 106/106, unit 352 ok (falha pré-existente do To Do), build ok |
+| 2026-09-13 13:48 | `fdcd3bd627b7` (PR #373, P2 pré-flight persistido + fila de ação + regressão visual consolidada) | Cloudflare Workers Builds | `0132` aplicada no D1 remoto antes do merge (`wrangler d1 migrations apply --remote`) | `/api/system/version` ok, `migrations.expected` 135, última `0132`; `/api/todogreen/preflight` responde 401 sem sessão; gate local: lint 0 erros, worker 107/107, unit 352 ok (falha pré-existente do To Do), build ok, visual 4/4 |
 
 > Os deploys automáticos do Workers Builds **não rodam o gate** (só `build` + `deploy:cloudflare`):
 > o gate desta rodada foi executado localmente antes de cada merge (logs completos guardados por PR).
@@ -325,6 +326,7 @@ VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
 | `TDG_PREFLIGHT_GATE_DISABLED=1` (opcional) | desliga o **gate** de pré-flight da coleção `rotas` (a rota passa sem verificação e fica com `preflight_status` vazio); o endpoint `/api/todogreen/preflight` continua funcionando e registrando. Padrão: ligado |
 | `TDG_PREFLIGHT_TTL_HOURS` (opcional, padrão 24) | por quantas horas um pré-flight libera a rota do mesmo par; depois disso é preciso rodar de novo |
 | `TDG_RISK_ACTION_THRESHOLD` (opcional, padrão 60) | score de risco viário (0–100) a partir do qual o traçado vira item de ação na Torre de Controle |
+| (sem variável) migration `0133_todogreen_market_radar_prefs` | preferências do radar por espaço (termos PNCP/GDELT, UFs de foco). Aditiva; aplicar com `wrangler d1 migrations apply --remote` junto do deploy |
 
 Sem essas URLs, a otimização responde `routing_not_configured` (503) e a
 seleção de motor reflete os motores disponíveis — nada é forjado como ativo

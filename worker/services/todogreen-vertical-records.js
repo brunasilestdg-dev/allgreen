@@ -2108,6 +2108,15 @@ const documentoDeAssinaturaVinculado = async (env, access, { contractId = "", pr
   return temAnexoNoCofre(env, access, "workflow", ids);
 };
 
+// Exportado para outros serviços criarem registros pela MESMA esteira da API
+// (validação, gates, auditoria, aquecimento de conta) — ex.: oportunidade a
+// partir de um sinal de mercado. Devolve a Response da API; quem chama lê o JSON.
+export const criarRegistroDaColecao = (env, { nome, access, user, corpo, email = "" }) => {
+  const colecao = COLECOES[nome];
+  if (!colecao) return json({ error: `Coleção desconhecida: ${nome}.` }, 400);
+  return criar(env, colecao, access, user, corpo, email);
+};
+
 const criar = async (env, colecao, access, user, corpo, email = "") => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);

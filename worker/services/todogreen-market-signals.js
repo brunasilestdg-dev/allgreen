@@ -14,6 +14,7 @@
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
+import { criarRegistroDaColecao } from "./todogreen-vertical-records.js";
 import { CRON_EXTERNAL_DISABLED_KEY, REFERENCE_SYNC_TABLE, baixarTexto, cronExternoDesligado, estadoDaFonte, gravarSyncDeReferencia, lerSyncsDeReferencia } from "./reference-sync.js";
 import {
   SIGNAL_STATUS,
@@ -199,6 +200,69 @@ export async function sincronizarGdelt(env, { fetcher = fetch, now = new Date(),
 }
 
 // ---- Leitura ----
+// ===== Preferências do radar por espaço (0133) =====
+// Termos do PNCP/GDELT e UFs de foco. Vazio = padrão do código. Limites: 12
+// termos por fonte (2–60 caracteres), 27 UFs. O cron usa a UNIÃO de todos os
+// espaços + padrões; a sincronização manual e a tela usam as do espaço.
+export const PREFS_LIMITES = Object.freeze({ termos: 12, termoMax: 60, ufs: 27 });
+const listaDeTermos = (valor, max = PREFS_LIMITES.termos) => {
+  const vistos = new Set();
+  return (Array.isArray(valor) ? valor : String(valor || "").split(/[\n;]+/))
+    .map((t) => texto(t, PREFS_LIMITES.termoMax))
+    .filter((t) => t.length >= 2)
+    .filter((t) => { const k = t.toLowerCase(); if (vistos.has(k)) return false; vistos.add(k); return true; })
+    .slice(0, max);
+};
+const UFS_BR = new Set(["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"]);
+const listaDeUfs = (valor) => [...new Set((Array.isArray(valor) ? valor : String(valor || "").split(/[\s,;]+/)).map((u) => texto(u, 2).toUpperCase()).filter((u) => UFS_BR.has(u)))].slice(0, PREFS_LIMITES.ufs);
+
+export const prefsDaLinha = (row) => ({
+  termosPncp: parseJson(row?.termos_pncp_json, []),
+  termosGdelt: parseJson(row?.termos_gdelt_json, []),
+  ufsFoco: parseJson(row?.ufs_foco_json, []),
+  padrao: { termosPncp: [...TERMOS_PNCP], termosGdelt: [...TERMOS_GDELT] },
+  updatedAt: row?.updated_at || "",
+  updatedBy: row?.updated_by || "",
+});
+
+export async function lerPrefsDoRadar(env, ownerId) {
+  if (!ownerId) return prefsDaLinha(null);
+  const row = await env.DB.prepare(`SELECT * FROM todogreen_market_radar_prefs WHERE workspace_owner_id = ? AND tenant_id = ?`).bind(ownerId, TENANT_ID).first().catch(() => null);
+  return prefsDaLinha(row);
+}
+
+export async function gravarPrefsDoRadar(env, ownerId, userId, corpo = {}, { now = new Date() } = {}) {
+  const termosPncp = listaDeTermos(corpo.termosPncp);
+  const termosGdelt = listaDeTermos(corpo.termosGdelt);
+  const ufsFoco = listaDeUfs(corpo.ufsFoco);
+  await env.DB.prepare(
+    `INSERT INTO todogreen_market_radar_prefs (workspace_owner_id, tenant_id, termos_pncp_json, termos_gdelt_json, ufs_foco_json, updated_by, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(workspace_owner_id) DO UPDATE SET termos_pncp_json = excluded.termos_pncp_json, termos_gdelt_json = excluded.termos_gdelt_json,
+       ufs_foco_json = excluded.ufs_foco_json, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+  ).bind(ownerId, TENANT_ID, JSON.stringify(termosPncp), JSON.stringify(termosGdelt), JSON.stringify(ufsFoco), texto(userId, 120), agora(now)).run();
+  return lerPrefsDoRadar(env, ownerId);
+}
+
+// Termos efetivos do espaço: os configurados, senão os padrões.
+export const termosDoEspaco = (prefs) => ({
+  pncp: prefs?.termosPncp?.length ? prefs.termosPncp : [...TERMOS_PNCP],
+  gdelt: prefs?.termosGdelt?.length ? prefs.termosGdelt : [...TERMOS_GDELT],
+  ufsFoco: Array.isArray(prefs?.ufsFoco) ? prefs.ufsFoco : [],
+});
+
+// União de todos os espaços + padrões, com teto — o cron é tenant-wide.
+export async function termosParaCron(env, { tetoPncp = 16, tetoGdelt = 10 } = {}) {
+  const { results } = await env.DB.prepare(`SELECT termos_pncp_json, termos_gdelt_json FROM todogreen_market_radar_prefs WHERE tenant_id = ? LIMIT 200`).bind(TENANT_ID).all().catch(() => ({ results: [] }));
+  const pncp = [...TERMOS_PNCP];
+  const gdelt = [...TERMOS_GDELT];
+  for (const row of results || []) {
+    for (const t of parseJson(row.termos_pncp_json, [])) if (!pncp.some((x) => x.toLowerCase() === String(t).toLowerCase())) pncp.push(t);
+    for (const t of parseJson(row.termos_gdelt_json, [])) if (!gdelt.some((x) => x.toLowerCase() === String(t).toLowerCase())) gdelt.push(t);
+  }
+  return { pncp: pncp.slice(0, tetoPncp), gdelt: gdelt.slice(0, tetoGdelt) };
+}
+
 const sinalDaLinha = (row, triagem) => ({
   id: row.id,
   fingerprint: row.fingerprint,
@@ -288,12 +352,14 @@ export async function runTodoGreenMarketSignalsScheduled(env, now = new Date(), 
     return true;
   };
   const resumo = { pncp: null, comprasGov: null, gdelt: null };
-  if (vencida("pncp:busca", MARKET_LIMITS.cronPncpMs)) resumo.pncp = await sincronizarPncp(env, { fetcher, now });
+  // Termos = padrões + o que cada espaço configurou (0133), com teto.
+  const termos = await termosParaCron(env);
+  if (vencida("pncp:busca", MARKET_LIMITS.cronPncpMs)) resumo.pncp = await sincronizarPncp(env, { fetcher, now, termos: termos.pncp });
   if (vencida("compras-gov:contratacoes", MARKET_LIMITS.cronComprasMs)) resumo.comprasGov = await sincronizarComprasGov(env, { fetcher, now });
   // GDELT: um termo por disparo, rodando a lista — respeita 1 consulta/5 s da fonte.
-  const termo = TERMOS_GDELT.map((tm) => ({ tm, s: porFonte.get(`gdelt:${texto(tm, 60)}`) }))
+  const termo = termos.gdelt.map((tm) => ({ tm, s: porFonte.get(`gdelt:${texto(tm, 60)}`) }))
     .sort((a, b) => String(a.s?.lastAttemptAt || "").localeCompare(String(b.s?.lastAttemptAt || "")))[0];
-  if (termo && vencida(`gdelt:${texto(termo.tm, 60)}`, MARKET_LIMITS.cronGdeltMs * TERMOS_GDELT.length)) resumo.gdelt = await sincronizarGdelt(env, { fetcher, now, termo: termo.tm });
+  if (termo && vencida(`gdelt:${texto(termo.tm, 60)}`, MARKET_LIMITS.cronGdeltMs * termos.gdelt.length)) resumo.gdelt = await sincronizarGdelt(env, { fetcher, now, termo: termo.tm });
   await expurgarSinaisVelhos(env, now);
   return resumo;
 }
@@ -313,21 +379,68 @@ export async function handleTodoGreenMarketSignals(request, env, access, user, u
       minScore: Number(url.searchParams.get("minScore")) || 0, status: texto(url.searchParams.get("status"), 20), q: texto(url.searchParams.get("q"), 80),
       limit: Number(url.searchParams.get("limit")) || 100, now,
     });
-    return json({ signals: sinais, fontes: await estadoDosSinaisDeMercado(env, { now }), access: { canResearch: podePesquisar(access) } });
+    return json({ signals: sinais, fontes: await estadoDosSinaisDeMercado(env, { now }), prefs: await lerPrefsDoRadar(env, ownerId), access: { canResearch: podePesquisar(access) } });
   }
   if (sub === "status" && request.method === "GET") return json(await estadoDosSinaisDeMercado(env, { now }));
+  // Preferências do espaço: termos de busca e UFs de foco (0133).
+  if (sub === "prefs" && request.method === "GET") return json({ prefs: await lerPrefsDoRadar(env, ownerId) });
+  if (sub === "prefs" && (request.method === "PUT" || request.method === "POST")) {
+    if (!podePesquisar(access)) return json({ error: "Sem permissão para configurar o radar." }, 403);
+    const corpo = await request.json().catch(() => null);
+    if (!corpo || typeof corpo !== "object") return json({ error: "Corpo inválido." }, 400);
+    const prefs = await gravarPrefsDoRadar(env, ownerId, user?.id, corpo, { now });
+    await registrarAuditoriaTodoGreen(env, { access, user, action: "market.radar.prefs", resourceType: "market_radar_prefs", resourceId: ownerId, after: { termosPncp: prefs.termosPncp, termosGdelt: prefs.termosGdelt, ufsFoco: prefs.ufsFoco }, details: `Radar: ${prefs.termosPncp.length} termo(s) PNCP, ${prefs.termosGdelt.length} GDELT, UFs ${prefs.ufsFoco.join(",") || "—"}` });
+    return json({ prefs });
+  }
   if (sub === "sync" && request.method === "POST") {
     if (!podePesquisar(access)) return json({ error: "Sem permissão para sincronizar fontes de mercado." }, 403);
     if (desligado(env)) return json({ error: `Sinais de mercado desligados por ${MARKET_ENV_KEYS.disabled}.`, code: "MARKET_SIGNALS_DISABLED" }, 409);
     const corpo = await request.json().catch(() => ({}));
     const fonte = texto(corpo?.source, 20).toLowerCase();
+    // Sem termos no corpo, valem os do espaço (0133); sem prefs, os padrões.
+    const doEspaco = termosDoEspaco(await lerPrefsDoRadar(env, ownerId));
     let resultado;
-    if (fonte === "pncp") resultado = await sincronizarPncp(env, { fetcher, now, termos: Array.isArray(corpo.termos) && corpo.termos.length ? corpo.termos.map((t) => texto(t, 60)).filter(Boolean).slice(0, 8) : TERMOS_PNCP });
-    else if (fonte === "compras-gov") resultado = await sincronizarComprasGov(env, { fetcher, now });
-    else if (fonte === "gdelt") resultado = await sincronizarGdelt(env, { fetcher, now, termo: texto(corpo?.termo, 60) || TERMOS_GDELT[0] });
+    if (fonte === "pncp") resultado = await sincronizarPncp(env, { fetcher, now, ufsFoco: doEspaco.ufsFoco, termos: Array.isArray(corpo.termos) && corpo.termos.length ? corpo.termos.map((t) => texto(t, 60)).filter(Boolean).slice(0, 12) : doEspaco.pncp });
+    else if (fonte === "compras-gov") resultado = await sincronizarComprasGov(env, { fetcher, now, ufsFoco: doEspaco.ufsFoco });
+    else if (fonte === "gdelt") resultado = await sincronizarGdelt(env, { fetcher, now, termo: texto(corpo?.termo, 60) || doEspaco.gdelt[0] });
     else return json({ error: "Fonte desconhecida. Use pncp, compras-gov ou gdelt." }, 400);
     await registrarAuditoriaTodoGreen(env, { access, user, action: `market.signals.sync.${fonte}`, resourceType: "market_signal", resourceId: fonte, after: resultado, details: resultado.ok ? `Sincronização ${fonte}: ${resultado.records} itens, ${resultado.aceitos} sinais` : `Falhou: ${resultado.error || ""}` });
     return json({ resultado, fontes: await estadoDosSinaisDeMercado(env, { now }) }, resultado.ok ? 200 : 502);
+  }
+  // Criar oportunidade a partir do sinal: mesma esteira de `records/opportunities`
+  // (validação, auditoria, aquecimento de conta); a triagem vira `converted`
+  // com o id da oportunidade. Idempotente: já convertido → devolve a existente.
+  if (sub && parts[4] === "opportunity" && request.method === "POST") {
+    if (!podePesquisar(access) || !podeNaVertical(access, "crm:manage")) return json({ error: "Converter sinal em oportunidade exige permissão de pesquisa de mercado e de CRM (crm:manage)." }, 403);
+    const [sinal] = await listarSinais(env, ownerId, { limit: 500, now }).then((l) => l.filter((x) => x.id === texto(sub, 80)));
+    if (!sinal) return json({ error: "Sinal não encontrado." }, 404);
+    if (sinal.triage?.status === "converted" && sinal.triage.opportunityId)
+      return json({ signal: sinal, opportunityId: sinal.triage.opportunityId, created: false });
+    const corpo = await request.json().catch(() => ({}));
+    const cliente = texto(corpo?.cliente, 200) || texto(sinal.orgao, 200) || texto(sinal.dominio, 200);
+    if (!cliente) return json({ error: "Informe o cliente (órgão ou empresa) da oportunidade." }, 400);
+    const resposta = await criarRegistroDaColecao(env, {
+      nome: "opportunities", access, user, email: texto(user?.email, 200),
+      corpo: {
+        cliente,
+        titulo: texto(corpo?.titulo, 200) || texto(sinal.title, 200),
+        estagio: texto(corpo?.estagio, 60) || "Prospecção",
+        valorContrato: sinal.valorEstimado || null,
+        origem: `radar:${sinal.source}`,
+        notas: [sinal.summary && sinal.summary !== sinal.title ? sinal.summary : "", sinal.url ? `Fonte: ${sinal.url}` : "", sinal.prazoProposta ? `Propostas até ${sinal.prazoProposta}` : ""].filter(Boolean).join("\n"),
+        campos: { marketSignalId: sinal.id, fonte: sinal.source, url: sinal.url, uf: sinal.uf, municipio: sinal.municipio, modalidade: sinal.modalidade, prazoProposta: sinal.prazoProposta, score: sinal.score },
+      },
+    });
+    const criado = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) return json({ error: criado.error || "Não foi possível criar a oportunidade." }, resposta.status);
+    const opportunityId = texto(criado?.registro?.id, 80);
+    await env.DB.prepare(
+      `INSERT INTO todogreen_market_signal_triage (workspace_owner_id, signal_id, tenant_id, status, note, opportunity_id, updated_by, updated_at) VALUES (?, ?, ?, 'converted', ?, ?, ?, ?)
+       ON CONFLICT(workspace_owner_id, signal_id) DO UPDATE SET status = 'converted', opportunity_id = excluded.opportunity_id, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+    ).bind(ownerId, sinal.id, TENANT_ID, texto(corpo?.note, 500), opportunityId, texto(user?.id, 120), agora(now)).run();
+    await registrarAuditoriaTodoGreen(env, { access, user, action: "market.signal.converted", resourceType: "market_signal", resourceId: sinal.id, after: { opportunityId, cliente }, details: `Sinal convertido em oportunidade ${opportunityId}` });
+    const [atualizado] = await listarSinais(env, ownerId, { limit: 500, now }).then((l) => l.filter((x) => x.id === sinal.id));
+    return json({ signal: atualizado || sinal, opportunity: criado.registro, opportunityId, created: true }, 201);
   }
   if (sub && request.method === "PATCH") {
     if (!podePesquisar(access)) return json({ error: "Sem permissão para triar sinais." }, 403);

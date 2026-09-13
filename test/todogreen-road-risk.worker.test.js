@@ -193,4 +193,46 @@ describe("alternativas de rota com risco como custo", () => {
     expect(enriquecido.ranking).toBeNull();
     expect(enriquecido.routes[0].risk.riskScore).toBeGreaterThan(0);
   });
+
+  // P6 complemento: pedágio por alternativa no custo total do ranking.
+  it("conta praças por alternativa, converte em custo com a tarifa informada e o ranking muda", async () => {
+    const fetcher = async (url) => new Response(JSON.stringify(OSRM), { status: 200, headers: { "content-type": "application/json", "x-url": String(url) } });
+    const r = await rotearComProvider({ coordinates: [ROTA[0], ROTA[3]], vehicle: { category: "van" }, alternatives: true }, env, { fetcher });
+    expect(r.body.routes).toHaveLength(2);
+    // Consulta de praças injetada: principal cruza 3 praças, alternativa nenhuma.
+    let chamadas = 0;
+    const pedagios = async (linha) => {
+      chamadas += 1;
+      expect(Array.isArray(linha) && linha.length >= 2).toBe(true);
+      // linha em [lat, lon] (a mesma convenção da tela): latitude negativa no Brasil.
+      expect(linha[0][0]).toBeLessThan(0);
+      return chamadas === 1 ? { quantidade: 3, pracas: [{ praca: "P1" }, { praca: "P2" }, { praca: "P3" }], fonte: "ANTT" } : { quantidade: 0, pracas: [], fonte: "ANTT" };
+    };
+    const semTarifa = await enriquecerComRisco(r.body, { tolls: true, vehicle: { category: "van", energyConsumptionKwhPerKm: 0.3 } }, env, { pedagios });
+    expect(semTarifa.routes[0].tolls).toMatchObject({ plazas: 3, cost: null, perPlaza: null });
+    expect(semTarifa.routes[1].tolls.plazas).toBe(0);
+    expect(semTarifa.tollsAvailable).toBe(true);
+    expect(semTarifa.ranking.nota).toMatch(/sem tarifa média/);
+
+    chamadas = 0;
+    const comTarifa = await enriquecerComRisco(r.body, { tolls: true, tollPerPlaza: 50, vehicle: { category: "van", energyConsumptionKwhPerKm: 0.3 } }, env, { pedagios });
+    expect(comTarifa.routes[0].tolls).toMatchObject({ plazas: 3, cost: 150, perPlaza: 50 });
+    expect(comTarifa.ranking.nota).not.toMatch(/sem tarifa média/);
+    // Com R$ 150 de pedágio na principal, a alternativa (sem praças) vence em custo total.
+    const rec = comTarifa.ranking.recommendations || comTarifa.ranking;
+    expect(rec.cheapest).toBe("alternativa-1");
+
+    // Sem opt-in não consulta praça nenhuma e nada muda no formato.
+    chamadas = 0;
+    const semOptIn = await enriquecerComRisco(r.body, { vehicle: { category: "van" } }, env, { pedagios });
+    expect(chamadas).toBe(0);
+    expect(semOptIn.routes[0].tolls).toBeUndefined();
+    expect(semOptIn.tollsAvailable).toBe(false);
+
+    // Falha na consulta: declarada, não zero silencioso.
+    const falho = await enriquecerComRisco(r.body, { tolls: true, tollPerPlaza: 50 }, env, { pedagios: async () => { throw new Error("ANTT fora"); } });
+    expect(falho.routes[0].tolls.plazas).toBeNull();
+    expect(falho.tollsAvailable).toBe(false);
+    expect(falho.ranking.nota).toMatch(/indisponível/);
+  });
 });
