@@ -149,6 +149,10 @@ describe("ANTT por km", () => {
 
   it("cron: desligado por variável é honesto; POST /sync/antt exige permissão", async () => {
     expect(await runTodoGreenRoadRiskScheduled({ ...env, TDG_ROAD_RISK_DISABLED: "1" }, NOW, { fetcher: fetcherAntt() })).toEqual({ skipped: "TDG_ROAD_RISK_DISABLED" });
+    expect(await runTodoGreenRoadRiskScheduled(env, NOW, { fetcher: fetcherAntt() })).toEqual({ skipped: "TDG_CRON_EXTERNAL_DISABLED" });
+    // Religado, o cron roda a ANTT com a rede injetada.
+    const rodou = await runTodoGreenRoadRiskScheduled({ ...env, TDG_CRON_EXTERNAL_DISABLED: "" }, new Date(NOW.getTime() + 40 * 24 * 3600_000), { fetcher: fetcherAntt() });
+    expect(rodou.antt.ok).toBe(true);
     expect((await call("/api/todogreen/risk/sync/antt", { method: "POST", token: leitor.token, body: {} })).status).toBe(403);
   });
 });

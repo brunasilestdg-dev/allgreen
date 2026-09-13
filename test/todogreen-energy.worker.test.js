@@ -296,7 +296,8 @@ describe("sincronização por endpoint, importação e cron", () => {
   it("cron: só o que venceu roda; segunda rodada logo depois não chama nada", async () => {
     await env.DB.prepare("DELETE FROM todogreen_energy_reference_sync").run();
     const contador = {};
-    const primeira = await runTodoGreenEnergyReferenceScheduled(env, NOW, { fetcher: fetcherDasFontes(contador) });
+    const comRede = { ...env, TDG_CRON_EXTERNAL_DISABLED: "" };
+    const primeira = await runTodoGreenEnergyReferenceScheduled(comRede, NOW, { fetcher: fetcherDasFontes(contador) });
     expect(primeira.ons.ok).toBe(true);
     expect(primeira.anp.ok).toBe(true);
     expect(primeira.aneel).toHaveLength(1);
@@ -304,11 +305,12 @@ describe("sincronização por endpoint, importação e cron", () => {
     const chamadas = Object.values(contador).reduce((s, n) => s + n, 0);
     expect(chamadas).toBe(3);
 
-    const segunda = await runTodoGreenEnergyReferenceScheduled(env, new Date(NOW.getTime() + 10 * 60_000), { fetcher: async () => { throw new Error("não devia chamar"); } });
+    const segunda = await runTodoGreenEnergyReferenceScheduled(comRede, new Date(NOW.getTime() + 10 * 60_000), { fetcher: async () => { throw new Error("não devia chamar"); } });
     expect(segunda).toEqual({ ons: null, anp: null, aneel: [] });
 
-    // Desligado por variável: honesto, não silencioso.
+    // Desligado por variável: honesto, não silencioso — o interruptor específico e o geral.
     expect(await runTodoGreenEnergyReferenceScheduled({ ...env, TDG_ENERGY_REFERENCE_DISABLED: "1" }, NOW, { fetcher: fetcherDasFontes() })).toEqual({ skipped: "TDG_ENERGY_REFERENCE_DISABLED" });
+    expect(await runTodoGreenEnergyReferenceScheduled(env, NOW, { fetcher: fetcherDasFontes() })).toEqual({ skipped: "TDG_CRON_EXTERNAL_DISABLED" });
   });
 
   it("rota desconhecida e método errado", async () => {

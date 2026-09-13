@@ -14,7 +14,7 @@
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
-import { REFERENCE_SYNC_TABLE, baixarTexto, estadoDaFonte, gravarSyncDeReferencia, lerSyncsDeReferencia } from "./reference-sync.js";
+import { CRON_EXTERNAL_DISABLED_KEY, REFERENCE_SYNC_TABLE, baixarTexto, cronExternoDesligado, estadoDaFonte, gravarSyncDeReferencia, lerSyncsDeReferencia } from "./reference-sync.js";
 import {
   SIGNAL_STATUS,
   classificarSinais,
@@ -275,6 +275,7 @@ export async function estadoDosSinaisDeMercado(env, { now = new Date() } = {}) {
 export async function runTodoGreenMarketSignalsScheduled(env, now = new Date(), { fetcher = fetch } = {}) {
   if (!env?.DB) return { skipped: "sem D1" };
   if (desligado(env)) return { skipped: MARKET_ENV_KEYS.disabled };
+  if (cronExternoDesligado(env)) return { skipped: CRON_EXTERNAL_DISABLED_KEY };
   const t = new Date(now).getTime();
   const syncs = await lerSyncsDeReferencia(env, ["pncp:", "compras-gov:", "gdelt:"]);
   const porFonte = new Map(syncs.map((s) => [s.source, s]));

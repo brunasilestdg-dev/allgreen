@@ -297,6 +297,7 @@ VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
 | `TDG_MARKET_SIGNALS_DISABLED=1` (opcional) | desliga o cron e o botão de sincronização dos sinais de mercado (PNCP/Compras.gov/GDELT); as três linhas ficam não configuradas na Saúde do sistema |
 | `TDG_ANTT_BASE_URL` / `TDG_ANTT_ACIDENTES_PACKAGE` (opcionais) | CKAN da ANTT e o pacote de *acidentes por quilômetro* das concessionárias (padrão `acidentes-quilometro-rodovias`); um recurso CSV por hora (teto 12 MB), refresh a cada 30 dias |
 | `TDG_ROAD_RISK_DISABLED=1` (opcional) | desliga o cron da ANTT e as ingestões do Risk Map; o risco por rota passa a `RISK_DATA_NOT_AVAILABLE` |
+| `TDG_CRON_EXTERNAL_DISABLED=1` (opcional; **ligado no ambiente de teste**) | kill switch único dos crons que saem para a internet (energia, sinais de mercado, Risk Map): o handler `scheduled` pula os três e devolve `skipped`. Os botões "Sincronizar" das telas continuam funcionando |
 
 Sem essas URLs, a otimização responde `routing_not_configured` (503) e a
 seleção de motor reflete os motores disponíveis — nada é forjado como ativo

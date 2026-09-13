@@ -185,7 +185,8 @@ describe("endpoints e triagem por espaço", () => {
   it("cron: PNCP/Compras quando vencem, GDELT um termo por vez; nada roda de novo logo depois", async () => {
     await env.DB.prepare("DELETE FROM todogreen_reference_sync WHERE source LIKE 'pncp:%' OR source LIKE 'compras-gov:%' OR source LIKE 'gdelt:%'").run();
     const contador = {};
-    const primeira = await runTodoGreenMarketSignalsScheduled(env, NOW, { fetcher: fetcher(contador) });
+    const comRede = { ...env, TDG_CRON_EXTERNAL_DISABLED: "" };
+    const primeira = await runTodoGreenMarketSignalsScheduled(comRede, NOW, { fetcher: fetcher(contador) });
     expect(primeira.pncp.ok).toBe(true);
     expect(primeira.comprasGov.ok).toBe(true);
     expect(primeira.gdelt.ok).toBe(true);
@@ -195,16 +196,17 @@ describe("endpoints e triagem por espaço", () => {
     // disparo (rotação) até esgotar a lista — e então nada roda.
     const vistos = new Set([primeira.gdelt.source]);
     for (let i = 1; i < TERMOS_GDELT.length; i += 1) {
-      const rodada = await runTodoGreenMarketSignalsScheduled(env, new Date(NOW.getTime() + i * 5 * 60_000), { fetcher: fetcher() });
+      const rodada = await runTodoGreenMarketSignalsScheduled(comRede, new Date(NOW.getTime() + i * 5 * 60_000), { fetcher: fetcher() });
       expect(rodada.pncp).toBeNull();
       expect(rodada.comprasGov).toBeNull();
       expect(rodada.gdelt.ok).toBe(true);
       expect(vistos.has(rodada.gdelt.source)).toBe(false);
       vistos.add(rodada.gdelt.source);
     }
-    const segunda = await runTodoGreenMarketSignalsScheduled(env, new Date(NOW.getTime() + TERMOS_GDELT.length * 5 * 60_000), { fetcher: async () => { throw new Error("não devia chamar"); } });
+    const segunda = await runTodoGreenMarketSignalsScheduled(comRede, new Date(NOW.getTime() + TERMOS_GDELT.length * 5 * 60_000), { fetcher: async () => { throw new Error("não devia chamar"); } });
     expect(segunda).toEqual({ pncp: null, comprasGov: null, gdelt: null });
     expect(await runTodoGreenMarketSignalsScheduled({ ...env, TDG_MARKET_SIGNALS_DISABLED: "1" }, NOW, { fetcher: fetcher() })).toEqual({ skipped: "TDG_MARKET_SIGNALS_DISABLED" });
+    expect(await runTodoGreenMarketSignalsScheduled(env, NOW, { fetcher: fetcher() })).toEqual({ skipped: "TDG_CRON_EXTERNAL_DISABLED" });
   });
 
   it("o radar por busca web está roteado (regressão: a tela chamava um endpoint sem rota)", async () => {

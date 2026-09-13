@@ -17,6 +17,7 @@
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
+import { CRON_EXTERNAL_DISABLED_KEY, cronExternoDesligado } from "./reference-sync.js";
 import {
   ANP_PRODUTO_PADRAO,
   agregarPrecosAnp,
@@ -567,6 +568,7 @@ export async function montarPlanoDeEnergia(env, ownerId, { now = new Date(), hor
 export async function runTodoGreenEnergyReferenceScheduled(env, now = new Date(), { fetcher = fetch } = {}) {
   if (!env?.DB) return { skipped: "sem D1" };
   if (desligado(env)) return { skipped: ENERGY_ENV_KEYS.disabled };
+  if (cronExternoDesligado(env)) return { skipped: CRON_EXTERNAL_DISABLED_KEY };
   const t = new Date(now).getTime();
   const syncs = await lerSyncs(env);
   const porFonte = new Map(syncs.map((s) => [s.source, s]));

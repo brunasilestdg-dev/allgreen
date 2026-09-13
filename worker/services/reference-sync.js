@@ -9,6 +9,13 @@ import { TENANT_ID } from "./todogreen-access.js";
 
 export const REFERENCE_SYNC_TABLE = "todogreen_reference_sync";
 
+// Interruptor único dos crons que saem para a internet (ANEEL/ANP/ONS, PNCP/
+// Compras.gov/GDELT, ANTT). Ligado no ambiente de TESTE (vitest.worker.config)
+// para nenhum teste depender de rede; em produção fica ausente — e serve de
+// kill switch de emergência sem redeploy de código.
+export const CRON_EXTERNAL_DISABLED_KEY = "TDG_CRON_EXTERNAL_DISABLED";
+export const cronExternoDesligado = (env) => String(env?.[CRON_EXTERNAL_DISABLED_KEY] || "") === "1";
+
 const TABELAS_PERMITIDAS = new Set(["todogreen_reference_sync", "todogreen_energy_reference_sync"]);
 const tabela = (nome) => {
   if (!TABELAS_PERMITIDAS.has(nome)) throw new Error(`Tabela de sincronização desconhecida: ${nome}`);
