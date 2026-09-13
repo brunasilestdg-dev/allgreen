@@ -4088,6 +4088,74 @@
 }
 .tdg-rot-import-prontas ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 3px; color: var(--tdg-muted, #5a6b64); }
 
+/* Bipagem de etiqueta: leitor físico (campo) + câmera + fila em preparação.
+   O código lido entra no mesmo funil da importação. */
+.tdg-rot-bip { display: grid; gap: 14px; }
+.tdg-rot-bip-entrada { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.tdg-rot-bip-input {
+  flex: 1 1 260px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 10px;
+  background: var(--tdg-card, #fff);
+  color: var(--tdg-ink, #1e293b);
+  font: inherit;
+}
+.tdg-rot-bip-input:focus {
+  outline: none;
+  border-color: #0b9f8f;
+  box-shadow: 0 0 0 3px rgba(11, 159, 143, .15);
+}
+.tdg-rot-bip-camera { display: grid; gap: 8px; }
+.tdg-rot-bip-camera video {
+  width: 100%;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 12px;
+  background: #0b1512;
+  object-fit: cover;
+}
+.tdg-rot-bip-placar { display: flex; flex-wrap: wrap; gap: 8px; }
+.tdg-rot-bip-placar span {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 750;
+  background: var(--tdg-green-soft, #e9f3ef);
+  color: #0b7d70;
+}
+.tdg-rot-bip-lista { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: 220px; overflow-y: auto; }
+.tdg-rot-bip-lista li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  background: var(--tdg-card, #fff);
+}
+.tdg-rot-bip-lista li span { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
+.tdg-rot-bip-lista li strong { color: #0b7d70; font-size: 0.82rem; }
+.tdg-rot-bip-lista li em { color: var(--tdg-muted, #5a6b64); font-style: normal; font-size: 0.82rem; }
+.tdg-rot-bip-lista li button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 8px;
+  background: transparent;
+  color: #b4471f;
+  cursor: pointer;
+}
+.tdg-rot-bip-lista li button:hover { border-color: #b4471f; background: #fbeee8; }
+
 /* #91: marcar parada como recarga (+1h30). */
 .tdg-roteirizacao-recarga {
   flex: 0 0 auto;

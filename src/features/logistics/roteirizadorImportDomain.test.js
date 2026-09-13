@@ -8,6 +8,8 @@ import {
   classificarGeocodificacao,
   precisaConferencia,
   resumoImportacao,
+  pareceCodigoSeco,
+  interpretarBipagem,
 } from "./roteirizadorImportDomain.js";
 
 describe("padronizarEndereco", () => {
@@ -125,6 +127,39 @@ describe("classificarGeocodificacao", () => {
     expect(precisaConferencia("resolvido")).toBe(false);
     expect(precisaConferencia("falha")).toBe(true);
     expect(precisaConferencia("ambiguo")).toBe(true);
+  });
+});
+
+describe("pareceCodigoSeco", () => {
+  it("token único sem espaço é código; com espaço é endereço", () => {
+    expect(pareceCodigoSeco("35240612345678901234567890123456789012345678")).toBe(true);
+    expect(pareceCodigoSeco("PED-123")).toBe(true);
+    expect(pareceCodigoSeco("NF/2024.55")).toBe(true);
+    expect(pareceCodigoSeco("Rua X, 10")).toBe(false);
+    expect(pareceCodigoSeco("Santos SP")).toBe(false);
+    expect(pareceCodigoSeco("")).toBe(false);
+  });
+});
+
+describe("interpretarBipagem", () => {
+  it("código seco vira referência com endereço vazio (completa na conferência)", () => {
+    expect(interpretarBipagem("PED-9988")).toEqual({ referencia: "PED-9988", endereco: "" });
+  });
+  it("etiqueta com referência e endereço separados por ; usa os dois", () => {
+    expect(interpretarBipagem("PED-1; Rua A, 100 santos sp")).toEqual({
+      referencia: "PED-1",
+      endereco: "Rua A, 100 santos SP",
+    });
+  });
+  it("etiqueta que embute o endereço inteiro vira endereço padronizado", () => {
+    expect(interpretarBipagem("Rua da Estação, 100, campinas sp")).toEqual({
+      referencia: "",
+      endereco: "Rua da Estação, 100, campinas SP",
+    });
+  });
+  it("texto vazio devolve null", () => {
+    expect(interpretarBipagem("   ")).toBe(null);
+    expect(interpretarBipagem(null)).toBe(null);
   });
 });
 
