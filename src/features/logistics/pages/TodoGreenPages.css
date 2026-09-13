@@ -3957,6 +3957,137 @@
   .tdg-rot-mapa-col .tdg-roteirizacao-mapa { height: clamp(320px, 46vh, 480px); }
 }
 
+/* Importação de paradas em massa (colar texto ou arquivo CSV/Excel). Todo
+   endereço passa pelo mesmo funil — padroniza, geocodifica e o que vem torto
+   cai na conferência abaixo antes de virar parada. */
+.tdg-rot-import { display: grid; gap: 14px; }
+.tdg-rot-import-intro {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--tdg-muted, #5a6b64);
+}
+.tdg-rot-import-textarea {
+  width: 100%;
+  min-height: 132px;
+  padding: 10px 12px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 10px;
+  background: var(--tdg-card, #fff);
+  color: var(--tdg-ink, #1e293b);
+  font: inherit;
+  line-height: 1.4;
+  resize: vertical;
+  transition: border-color .15s, box-shadow .15s;
+}
+.tdg-rot-import-textarea:focus {
+  outline: none;
+  border-color: #0b9f8f;
+  box-shadow: 0 0 0 3px rgba(11, 159, 143, .15);
+}
+.tdg-rot-import-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.tdg-rot-import-arquivo { cursor: pointer; }
+/* Fase de geocodificação: barra de progresso simples. */
+.tdg-rot-import-progresso { display: grid; gap: 8px; }
+.tdg-rot-import-progresso p { margin: 0; font-weight: 600; color: var(--tdg-ink, #1e293b); }
+.tdg-rot-import-barra {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--tdg-green-soft, #e9f3ef);
+  overflow: hidden;
+}
+.tdg-rot-import-barra span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #0b9f8f;
+  transition: width .2s ease;
+}
+/* Placar da leva: quantas entraram direto x quantas precisam de conferência. */
+.tdg-rot-import-placar { display: flex; flex-wrap: wrap; gap: 8px; }
+.tdg-rot-import-placar span {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+.tdg-rot-import-placar span.ok { background: var(--tdg-green-soft, #e9f3ef); color: #0b7d70; }
+.tdg-rot-import-placar span.conf { background: #fbeee8; color: #b4471f; }
+.tdg-rot-import-conferencia { display: grid; gap: 10px; }
+.tdg-rot-import-conferencia h4 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--tdg-ink, #1e293b);
+}
+.tdg-rot-import-linha {
+  display: grid;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--tdg-card, #fff);
+}
+.tdg-rot-import-linha.is-falha { border-left-color: #b4471f; }
+.tdg-rot-import-linha.is-ambiguo { border-left-color: #c98a12; }
+.tdg-rot-import-linha-cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.tdg-rot-import-linha-cab strong { color: var(--tdg-ink, #1e293b); font-size: 0.9rem; overflow-wrap: anywhere; }
+.tdg-rot-import-linha-cab em { font-size: 0.74rem; font-weight: 700; font-style: normal; color: var(--tdg-muted, #5a6b64); }
+.tdg-rot-import-cands { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.tdg-rot-import-cands button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1.35;
+  transition: background .12s, border-color .12s;
+}
+.tdg-rot-import-cands button:hover,
+.tdg-rot-import-cands button:focus-visible {
+  background: var(--tdg-green-soft, #e9f3ef);
+  border-color: #0b9f8f;
+  outline: none;
+}
+.tdg-rot-import-corrige { display: flex; flex-wrap: wrap; gap: 8px; }
+.tdg-rot-import-corrige input {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  background: var(--tdg-card, #fff);
+  color: var(--tdg-ink, #1e293b);
+  font: inherit;
+}
+.tdg-rot-import-corrige input:focus {
+  outline: none;
+  border-color: #0b9f8f;
+  box-shadow: 0 0 0 3px rgba(11, 159, 143, .15);
+}
+.tdg-rot-import-prontas { font-size: 0.84rem; }
+.tdg-rot-import-prontas summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #0b7d70;
+}
+.tdg-rot-import-prontas ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 3px; color: var(--tdg-muted, #5a6b64); }
+
 /* #91: marcar parada como recarga (+1h30). */
 .tdg-roteirizacao-recarga {
   flex: 0 0 auto;

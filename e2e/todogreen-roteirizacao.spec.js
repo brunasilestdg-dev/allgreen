@@ -75,6 +75,67 @@ test("roteirização mostra o mapa e desenha a rota com várias paradas", async 
   await expect(page.locator(".tdg-roteirizacao-resumo")).toContainText("3 paradas");
 });
 
+// Camada de entrada de endereços — fatia 1: importar paradas coladas passa pelo
+// funil padroniza→geocodifica→conferência. Um endereço resolve sozinho (1
+// candidato), um é ambíguo (vários → a pessoa escolhe) e um falha (0 → a pessoa
+// corrige e busca de novo). Só depois de zerar a conferência as paradas entram
+// na rota. jsdom não renderiza o modal nem o Leaflet, então isto se prova no
+// navegador; a geocodificação é dublada para ser determinística.
+test("importar paradas: funil padroniza, geocodifica e manda o torto pra conferência", async ({ page }) => {
+  await page.route(/\/api\/todogreen\/maps\/geocode$/, (rota) => {
+    const q = rota.request().postDataJSON()?.q || "";
+    let pontos = [];
+    if (q.includes("Santos")) {
+      pontos = [{ lat: "-23.96", lon: "-46.33", display_name: "Santos, São Paulo, Brasil" }];
+    } else if (q.includes("Osasco")) {
+      pontos = [
+        { lat: "-23.53", lon: "-46.79", display_name: "Osasco Centro, São Paulo, Brasil" },
+        { lat: "-23.52", lon: "-46.77", display_name: "Osasco Km 18, São Paulo, Brasil" },
+      ];
+    } else if (q.includes("Campinas")) {
+      pontos = [{ lat: "-22.90", lon: "-47.06", display_name: "Campinas, São Paulo, Brasil" }];
+    }
+    return rota.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pontos) });
+  });
+
+  await criarConta(page, contaNova("import"));
+  await habilitarTodoGreen(page, "owner");
+  await page.goto("/todogreen/roteirizacao");
+  await expect(page.locator(".tdg-roteirizacao-mapa")).toHaveClass(/leaflet-container/);
+
+  await page.getByRole("button", { name: /Importar paradas/ }).click();
+  await page.locator(".tdg-rot-import-textarea").fill("Santos SP\nOsasco SP\nXyzinexistente 99999");
+  await page.getByRole("button", { name: /Processar colados/ }).click();
+
+  // Placar: 1 entrou direto, 2 caíram na conferência (1 ambíguo, 1 sem local).
+  await expect(page.locator(".tdg-rot-import-placar")).toContainText("1 pronta(s)");
+  await expect(page.locator(".tdg-rot-import-placar")).toContainText("2 em conferência");
+  await expect(page.locator(".tdg-rot-import-linha.is-ambiguo")).toHaveCount(1);
+  await expect(page.locator(".tdg-rot-import-linha.is-falha")).toHaveCount(1);
+  await page.screenshot({ path: "/tmp/claude-0/-home-user-Seufuncionario/6ab46bb0-563b-53ca-99f2-d36a228221d3/scratchpad/rot-import-conferencia.png", fullPage: true });
+
+  // Ambíguo: escolher um dos candidatos resolve a linha.
+  await page.locator(".tdg-rot-import-linha.is-ambiguo .tdg-rot-import-cands button").first().click();
+  await expect(page.locator(".tdg-rot-import-linha.is-ambiguo")).toHaveCount(0);
+
+  // Falha: corrigir o endereço e buscar de novo — agora acha e vira pronta.
+  await page.locator(".tdg-rot-import-linha.is-falha .tdg-rot-import-corrige input").fill("Campinas SP");
+  await page.locator(".tdg-rot-import-linha.is-falha .tdg-rot-import-corrige button").click();
+  await expect(page.locator(".tdg-rot-import-linha.is-falha")).toHaveCount(0);
+
+  // Zerada a conferência: 3 prontas entram na rota.
+  await expect(page.locator(".tdg-rot-import-placar")).toContainText("3 pronta(s)");
+  await page.getByRole("button", { name: /Adicionar 3 à rota/ }).click();
+
+  // Modal fecha e as três paradas resolvidas estão nos campos da rota.
+  await expect(page.locator(".tdg-rot-import")).toHaveCount(0);
+  const inputs = page.locator(".tdg-roteirizacao-campo input");
+  await expect(inputs).toHaveCount(3);
+  await expect(inputs.nth(0)).toHaveValue(/Santos/);
+  await expect(inputs.nth(1)).toHaveValue(/Osasco/);
+  await expect(inputs.nth(2)).toHaveValue(/Campinas/);
+});
+
 // #90: carregadores elétricos no mapa. A busca agora é gratuita (OpenStreetMap
 // via backend, sem chave). A chamada ao backend é dublada para o teste ser
 // determinístico e não depender de rede — o formato já é o canônico do mapa.
