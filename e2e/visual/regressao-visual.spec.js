@@ -65,8 +65,11 @@ const SELETORES_VOLATEIS = [
 ];
 const mascaras = (page) => SELETORES_VOLATEIS.map((seletor) => page.locator(seletor));
 
+// `expect.soft`: uma tela diferente não interrompe as seguintes — o relatório
+// mostra TODAS as telas que mudaram (antes parava na primeira, escondendo o
+// tamanho real de uma mudança de menu ou de token). O teste continua falhando.
 async function fotografar(page, nome, sufixo) {
-  await expect(page).toHaveScreenshot(`${nome}__${sufixo}.png`, {
+  await expect.soft(page).toHaveScreenshot(`${nome}__${sufixo}.png`, {
     mask: mascaras(page),
     fullPage: false,
   });

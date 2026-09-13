@@ -345,5 +345,23 @@ Permanecem as de 12.4 (1–8). Novas:
 
 10. **Codex direto na `main`**: manter assim (rápido, sem gate) ou exigir PR com gate local declarado, como esta sessão faz. Enquanto for direto, cada rodada daqui absorve e gateia o que entrou.
 11. **Regressão visual canônica**: rodar uma vez `npm run test:visual:docker` numa máquina com Docker; se acusar só anti-aliasing, regenerar lá e passar a tratar o Docker como origem única dos baselines.
-12. **Gate de pré-flight no despacho automático**: estender (recomendado) ou aceitar que rotas do despacho nasçam sem `preflight_status`.
+12. ~~**Gate de pré-flight no despacho automático**~~ — **fechado pelo Codex** (`cd8f90b`): `/dispatch/aplicar` chama `registrarPreflight` + `gateDePreflightDaRota` (o mesmo serviço, sem duplicação) e a atribuição direta legada foi desativada (`CANONICAL_ROUTE_REQUIRED`).
+13. **Onde roda o gate de navegador** (`test:e2e:critical`): hoje antes do merge (sessão/local) e no `deploy.yml`; para virar gate automático de produção precisa do runner self-hosted ou de proteção da `main` com PR obrigatório (script `scripts/github/protect-main.sh`, que exige permissão administrativa) — dentro do Workers Builds não é possível (13.5).
+
+### 13.5 Rodada 3-bis (13/09, 17h UTC) — `main` do Codex absorvida e gateada depois do fato
+
+Enquanto esta sessão estava pausada (limite de uso da titular), o Codex publicou 5 commits direto na `main`, sem PR e sem gate: `a363850` (o conteúdo do PR #374, idêntico byte a byte), `bfcb2a1` (PR #372 recuperado: navegação reativa, Meu Dia, TMS, chunk recovery, **teste do To Do corrigido**), `e1de658` (Design System fase 1: Card, Table, Drawer, Tooltip, feedback), `037ab25` (hardenings: score determinístico, holerite, POD) e `cd8f90b` (pré-flight no despacho, E2E crítico, k6, docs). Verificação feita aqui:
+
+| Achado | Estado | Ação |
+| --- | --- | --- |
+| Migrations `0133` no D1 remoto | aplicada (`migrations list --remote` sem pendências) | — |
+| Despacho automático reutiliza o serviço de pré-flight | correto (sem implementação paralela) | decisão 12 fechada |
+| Matriz: gates Jurídico/assinatura/implantação/tabela de preço marcados REAL | coerente com o código (`juridicoConcluido`, cofre de evidência; `it.todo` restante só o CT-e) | — |
+| **Lint vermelho na `main`** | `MarketSignalsPanel.test.jsx`: um `\n` literal colado na linha (erro de parse) em `bfcb2a1` | corrigido nesta rodada |
+| **Produção presa em `037ab25`** | `cd8f90b` passou a rodar `npx playwright install --with-deps chromium` + E2E **dentro do deploy command do Workers Builds**; 30+ min depois nenhum deployment novo (`wrangler deployments list`), a API de builds não é legível com o token | `deploy:cloudflare` voltou a migrations + publicação; gate de navegador antes do merge e no `deploy.yml`; `deploy:cloudflare:gated` para publicação manual com Chromium; docs (AGENTS, CLOUDFLARE_BUILDS_SETUP, runbook, matriz P0, relatório) corrigidas para o estado real |
+| Regressão visual: `tms-mobile` oscila (fotografado no meio de "Carregando torre de controle…") | 2 de 5 execuções | `estabilizar` espera a rede assentar e o `.tms-loading` sumir (teto 45 s) |
+| **Worker vermelho na `main`**: `todogreen-erp-journey.worker.test.js` (jornada cliente → caixa) quebrou no despacho — o veículo do cenário não tinha bateria/consumo e o pré-flight do `cd8f90b`, corretamente, devolveu WARNING (409) | 1 arquivo em 107 | cenário ganha veículo completo (120 kWh, SoH 98%, 0,45 kWh/km) e passa a conferir `preflights[0].status = PASS` |
+| **E2E crítico vermelho na `main`**: `todogreen-portais-auth.spec.js` esperava o título "Minha rota" na abertura do app do motorista, que abre na seção Hoje | 1 de 11 jornadas | o teste passa a abrir a aba Rota pela navegação, como o motorista faz |
+| **Baselines visuais desatualizados**: o menu em 8 grupos (`bfcb2a1`) mudou 3 telas (dashboard claro/escuro, oportunidades mobile; ~2% dos pixels, diff conferido = só o menu) | mudança intencional | baselines regenerados e revalidados |
+| Gate local do estado final da `main` (com as correções acima) | lint 0 erros; unit **357/357** (o teste do To Do voltou a passar com a correção do Codex; guarda de tokens corrigida); worker **107/107** (jornada transversal corrigida); build ok; E2E crítico e visual: registrados no PR #379 | — |
 

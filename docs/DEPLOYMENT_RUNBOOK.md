@@ -33,15 +33,16 @@ npm ci
 ```bash
 npm run verify                  # lint + testes (unit + worker)
 npm run build                   # gera dist/
-npm run test:e2e:critical:ci    # Chromium + jornadas críticas reais
+npm run test:e2e:critical       # jornadas críticas no Chromium (PLAYWRIGHT_CHROMIUM=/opt/pw-browsers/chromium na sessão remota; :ci instala o navegador)
 ```
 
-Ambos precisam passar. Enquanto o GitHub Actions estiver sem minutos/runner, um
+Todos precisam passar **antes do merge**. Enquanto o GitHub Actions estiver sem minutos/runner, um
 check vermelho por falta de capacidade do Actions não bloqueia. O que bloqueia é
-`npm run verify` vermelho, `npm run build` vermelho ou falha no Cloudflare
-Builds/deploy manual ou `test:e2e:critical` vermelho. A suíte crítica de Playwright
-é obrigatória antes de publicar; a regressão visual completa por screenshots continua
-separada, porque é mais pesada e depende dos baselines canônicos.
+`npm run verify` vermelho, `npm run build` vermelho, `test:e2e:critical` vermelho ou falha no
+Cloudflare Builds/deploy manual. A suíte crítica de Playwright roda antes do merge e no
+fallback manual `deploy.yml`, **não** dentro do build do Cloudflare (o container não instala
+Chromium — ver seção 11); a regressão visual completa por screenshots continua separada,
+porque é mais pesada e depende dos baselines canônicos.
 
 ## 3. Autenticar o wrangler
 
@@ -176,11 +177,14 @@ novo cron aqui, com o handler no roteador do Worker.
   gate obrigatório passa a ser o **local** (seção 12a) ou o do Cloudflare Builds —
   `verify`, `build`, Cloudflare Builds ou deploy manual vermelho, esses sim, bloqueiam.
 - Cloudflare Workers Builds (conectado ao repo): em push na `main`, roda
-  `npm ci && npm run verify && npm run build` e depois `npm run deploy:cloudflare`.
-  O próprio `deploy:cloudflare` instala Chromium e executa `test:e2e:critical`;
-  só depois aplica migrations e chama `wrangler deploy`. Assim, falha de navegação
-  não chega à produção mesmo que unitários/worker estejam verdes.
-- `.github/workflows/deploy.yml` (**Publicar**): contingência manual. Também instala
+  `npm ci && npm run verify && npm run build` e depois `npm run deploy:cloudflare`
+  (`wrangler d1 migrations apply --remote && wrangler deploy`). O E2E de navegador
+  **não** roda aqui: o container do Builds não instala Chromium — em 13/09 o
+  `deploy:cloudflare` passou a chamar `test:e2e:critical:ci` (`cd8f90b`) e a `main`
+  ficou sem publicar (produção presa em `037ab25`) até o comando voltar a
+  migrations + publicação. Quem publica com navegador disponível pode usar
+  `npm run deploy:cloudflare:gated` (E2E → migrations → publicação).
+- `.github/workflows/deploy.yml` (**Publicar**): contingência manual. Instala
   Chromium e executa `test:e2e:critical` antes de migrar/publicar.
 
 Para trocar o repositório: reconecte o Workers Builds ao novo repo e mantenha o
@@ -192,8 +196,8 @@ mesmo pipeline (nada de específico do repositório está embutido nos workflows
 npm ci
 npm run verify
 npm run build
-npm run test:e2e:critical:ci
-npm run deploy:cloudflare
+npm run test:e2e:critical:ci    # gate de navegador (instala Chromium)
+npm run deploy:cloudflare       # aplica migrations no D1 remoto e publica
 
 # Atalho equivalente depois do npm ci:
 npm run deploy            # valida + build + migrations + publica
@@ -260,13 +264,16 @@ Produção ≠ `main` até prova em contrário. Após cada publicação, anote e
 | 2026-09-13 12:52 | `bd402c306939` (PR #367, radar estruturado + Risk Map + alternativas; inclui #368 do Codex) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 132, última `0125`; `wrangler d1 migrations list --remote` → "No migrations to apply" |
 | 2026-09-13 13:20 | `1a17c34d8cec` (merge do PR #371 P1.4 sobre `c38c627` do Codex) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 134, última `0131`; D1 remoto sem pendências; gate local do estado mesclado: lint 0 erros, worker 106/106, unit 352 ok (falha pré-existente do To Do), build ok |
 | 2026-09-13 13:48 | `fdcd3bd627b7` (PR #373, P2 pré-flight persistido + fila de ação + regressão visual consolidada) | Cloudflare Workers Builds | `0132` aplicada no D1 remoto antes do merge (`wrangler d1 migrations apply --remote`) | `/api/system/version` ok, `migrations.expected` 135, última `0132`; `/api/todogreen/preflight` responde 401 sem sessão; gate local: lint 0 erros, worker 107/107, unit 352 ok (falha pré-existente do To Do), build ok, visual 4/4 |
+| 2026-09-13 14:04–14:40 | `a363850` → `037ab2538fb5` (Codex direto na `main`: P5/P6 complementos do PR #374, PR #372 recuperado, Design System fase 1, hardenings) | Cloudflare Workers Builds | `0133` aplicada no D1 remoto | `/api/system/version` = `037ab2538fb5`, `migrations.expected` 136, última `0133`; gate local desses commits rodado só depois (rodada 3-bis) |
+| 2026-09-13 17:11 | `cd8f90b` (Codex: hardening de despacho + E2E no `deploy:cloudflare`) | Cloudflare Workers Builds | — | **não publicou**: 30+ min sem novo deployment (`wrangler deployments list`), produção seguiu em `037ab25`; causa: Playwright dentro do deploy command do Cloudflare — desfeito na rodada 3-bis (ver seção 11) |
 
-> **Estado atual do gate:** `deploy:cloudflare` não é mais um atalho de publicação.
-> Antes de tocar no D1 remoto ou publicar, ele instala Chromium e executa
-> `test:e2e:critical` (smoke, acesso, navegação ERP↔TMS e portais autenticados).
-> O build command do Workers Builds continua devendo executar `npm ci && npm run verify && npm run build`;
-> o deploy command deve continuar sendo `npm run deploy:cloudflare`. A regressão visual
-> completa permanece como gate separado.
+> **Estado atual do gate:** `deploy:cloudflare` = migrations + publicação (é o deploy
+> command do Workers Builds e precisa rodar sem navegador). O gate de navegador
+> `test:e2e:critical` (smoke, acesso, navegação ERP↔TMS e portais autenticados) é
+> obrigatório **antes do merge** e roda no fallback manual `deploy.yml`;
+> `deploy:cloudflare:gated` encadeia os dois para publicação manual com Chromium.
+> O build command do Workers Builds continua `npm ci && npm run verify && npm run build`.
+> A regressão visual completa permanece como gate separado.
 
 Sempre diferenciar **LOCAL** (build do navegador), **MAIN** (branch) e
 **PRODUÇÃO** (o que `/api/system/version` devolve) — a tela Saúde do sistema faz

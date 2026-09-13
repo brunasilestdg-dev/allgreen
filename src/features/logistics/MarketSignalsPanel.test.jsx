@@ -50,7 +50,8 @@ describe("MarketSignalsPanel", () => {
   it("sem endpoint diz que está indisponível; sem permissão não mostra botões", async () => {
     vi.stubGlobal("fetch", vi.fn(() => resp({}, false)));
     render(<MarketSignalsPanel authHeaders={authHeaders} />);
-    expect(await screen.findByText(/não foi possível carregar agora/i)).toBeInTheDocument();\n    expect(screen.getByText(/Nada foi estimado no lugar/)).toBeInTheDocument();
+    expect(await screen.findByText(/não foi possível carregar agora/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nada foi estimado no lugar/)).toBeInTheDocument();
     cleanup();
     vi.stubGlobal("fetch", vi.fn(() => resp({ ...LISTA, access: { canResearch: false } })));
     render(<MarketSignalsPanel authHeaders={authHeaders} />);

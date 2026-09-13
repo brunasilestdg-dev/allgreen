@@ -76,9 +76,12 @@ test.describe("portais autenticados da To Do Green", () => {
 
     await driverPage.goto("/portal-motorista");
     await expect(driverPage.getByRole("heading", { name: /Olá,/i })).toBeVisible({ timeout: 30_000 });
-    await expect(driverPage.getByRole("heading", { name: "Minha rota" })).toBeVisible();
     await expect(driverPage.locator(".tdg-driver-app")).toBeVisible();
     await expect(driverPage.locator(".tdg-fleet-center")).toHaveCount(0);
+    // O app abre na seção "Hoje"; "Minha rota" é a seção Rota — como o motorista
+    // chega nela: pela navegação de baixo, não por padrão.
+    await driverPage.getByRole("navigation", { name: "Seções do app do motorista" }).getByRole("button", { name: /Rota/ }).click();
+    await expect(driverPage.getByRole("heading", { name: "Minha rota" })).toBeVisible();
 
     await ownerContext.close();
     await driverContext.close();

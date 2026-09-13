@@ -498,6 +498,12 @@ describe("jornada cliente → caixa", () => {
         energyType: "electric",
         status: "available",
         payloadKg: 1500,
+        // O despacho passa pelo pré-flight persistido (P2): sem bateria e
+        // consumo cadastrados a autonomia não é verificável e o resultado é
+        // WARNING (exige justificativa). O caminho feliz tem o veículo completo.
+        batteryCapacityKwh: 120,
+        batterySohPercent: 98,
+        energyConsumptionKwhPerKm: 0.45,
       },
     });
     expect(veiculoResp.status).toBe(201);
@@ -521,7 +527,10 @@ describe("jornada cliente → caixa", () => {
       },
     });
     expect(despacho.status).toBe(200);
-    const rotaId = (await despacho.json()).rotas[0];
+    const despachoCorpo = await despacho.json();
+    const rotaId = despachoCorpo.rotas[0];
+    // A rota nasce ligada ao pré-flight que a liberou (gate canônico, P2).
+    expect(despachoCorpo.preflights?.[0]).toMatchObject({ rotaId, status: "PASS" });
 
     // 15. O motorista não inicia sem vistoria. Uma vistoria reprovada também
     // não libera a jornada; só a aprovada abre a execução da rota.

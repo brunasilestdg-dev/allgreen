@@ -66,6 +66,16 @@ export async function definirTema(page, tema) {
 // real percebido pelo app).
 export async function estabilizar(page, ancora = "main.tdg") {
   await expect(page.locator(ancora)).toBeVisible();
+  // Estados de carregamento ("Carregando torre de controle…") são transitórios e
+  // dependem da rede: fotografar no meio deles gera diff sem mudança de código
+  // (foi assim que o portal TMS mobile oscilou 16% entre duas execuções). Espera
+  // bounded: a rede assentar e todo texto "Carregando…" sumir; se algum painel
+  // ficar carregando por design (relógio congelado), segue mesmo assim.
+  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+  // A torre do TMS agrega várias consultas no D1 local e pode levar dezenas de
+  // segundos a frio: o teto é generoso porque fotografar o spinner é pior do que
+  // esperar. Timers do app não travam: o relógio instalado corre em ritmo real.
+  await page.locator(".tms-loading, text=/^Carregando/i").first().waitFor({ state: "hidden", timeout: 45_000 }).catch(() => {});
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
   await page.waitForTimeout(200);
 }
