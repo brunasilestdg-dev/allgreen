@@ -9,6 +9,7 @@ import {
   vehicleClass,
 } from "../../src/features/logistics/vehicleClassDomain.js";
 import { consolidarEconomiaFrota, normalizePlate } from "../../src/features/logistics/todoGreenFleetDomain.js";
+import { baselineDoVeiculo } from "../../src/features/logistics/vehicleBaselineDomain.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const clean = (value, max = 500) => String(value || "").trim().slice(0, max);
@@ -33,8 +34,49 @@ const mapVehicle = (row) => ({
   emissionFactorKgCo2ePerKwh: row.emission_factor_kgco2e_per_kwh, batteryCapacityKwh: row.battery_capacity_kwh,
   batterySohPercent: row.battery_soh_percent, nominalRangeKm: row.nominal_range_km, realRangeKm: row.real_range_km,
   nextMaintenanceAt: row.next_maintenance_at || "", nextDocumentDueAt: row.next_document_due_at || "",
+  // Perfil físico e energético (migration 0123): alimenta o truck costing do
+  // Valhalla, o pré-flight (PBT/eixos) e o smart charging (conector/potência).
+  // null = não informado — nunca zero disfarçado de medida.
+  heightM: row.height_m ?? null, widthM: row.width_m ?? null, lengthM: row.length_m ?? null,
+  tareKg: row.tare_kg ?? null, grossWeightKg: row.gross_weight_kg ?? null, axles: row.axles ?? null,
+  connectorType: row.connector_type || "", maxChargingPowerKw: row.max_charging_power_kw ?? null,
+  referenceConsumptionKwhKm: row.reference_consumption_kwh_km ?? null,
   fields: parse(row.fields_json, {}), revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at,
 });
+
+const mapObservation = (row) => ({
+  id: row.id, vehicleId: row.vehicle_id, vehiclePlate: row.vehicle_plate || "", routeId: row.route_id || "", driverId: row.driver_id || "",
+  observedAt: row.observed_at, distanceKm: row.distance_km, energyKwh: row.energy_kwh, socStartPercent: row.soc_start_percent,
+  socEndPercent: row.soc_end_percent, chargedKwh: row.charged_kwh, payloadKg: row.payload_kg, temperatureC: row.temperature_c,
+  sohPercent: row.soh_percent, measurementType: row.measurement_type, source: row.source || "", notes: row.notes || "", createdAt: row.created_at,
+});
+
+// Perfil físico/energético (0123): gravado num passo próprio, aditivo ao
+// cadastro — só toca o que veio no corpo (chave ausente = não mexe; "" ou
+// null = limpa). Assim os INSERT/UPDATE grandes do cadastro ficam intactos.
+const PERFIL_FISICO = Object.freeze({
+  heightM: "height_m", widthM: "width_m", lengthM: "length_m", tareKg: "tare_kg", grossWeightKg: "gross_weight_kg",
+  axles: "axles", connectorType: "connector_type", maxChargingPowerKw: "max_charging_power_kw", referenceConsumptionKwhKm: "reference_consumption_kwh_km",
+});
+const numOuNulo = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+async function gravarPerfilFisico(env, ownerId, vehicleId, body = {}) {
+  const sets = [];
+  const valores = [];
+  for (const [campo, coluna] of Object.entries(PERFIL_FISICO)) {
+    if (!(campo in body)) continue;
+    sets.push(`${coluna} = ?`);
+    if (campo === "connectorType") valores.push(clean(body[campo], 40).toUpperCase());
+    else if (campo === "axles") { const n = numOuNulo(body[campo]); valores.push(n === null ? null : Math.round(n)); }
+    else valores.push(numOuNulo(body[campo]));
+  }
+  if (!sets.length) return;
+  await env.DB.prepare(`UPDATE todogreen_fleet_vehicles SET ${sets.join(", ")} WHERE id = ? AND workspace_owner_id = ?`)
+    .bind(...valores, vehicleId, ownerId).run();
+}
 const num = (value) => Math.max(0, Number(value) || 0);
 const FIELD_KEYS = [
   "currentDriver", "lastAddress", "speedKmh", "hourmeter", "batteryVoltage", "currentRoute",
@@ -111,6 +153,49 @@ export async function handleTodoGreenFleet(request, env, access, user) {
     return json({ economics: consolidarEconomiaFrota(vehicles, manutencaoPorVeiculo, operacoesPorPlaca) });
   }
 
+  // Observações de energia por viagem (seção 44 — digital twin básico): a
+  // linha de base REAL do veículo. GET lista + baseline (mediana/p90/correção
+  // sobre o nominal); POST grava kWh medido ou delta de SOC. Escopo do espaço.
+  if (vehicleId && subresource === "energy-observations") {
+    const veiculo = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ? AND workspace_owner_id = ? AND archived_at IS NULL").bind(vehicleId, access.ownerId).first();
+    if (!veiculo) return json({ error: "Veículo não encontrado." }, 404);
+    const listar = async () => {
+      const { results } = await env.DB.prepare(`SELECT * FROM todogreen_vehicle_energy_observations WHERE workspace_owner_id = ? AND vehicle_id = ? ORDER BY observed_at DESC LIMIT 100`)
+        .bind(access.ownerId, vehicleId).all();
+      return (results || []).map(mapObservation);
+    };
+    if (request.method === "GET") {
+      const observations = await listar();
+      return json({ observations, baseline: baselineDoVeiculo(observations, mapVehicle(veiculo)) });
+    }
+    if (request.method === "POST") {
+      if (!canWrite(access)) return json({ error: "Seu papel não pode registrar observações de energia." }, 403);
+      const body = await request.json().catch(() => ({}));
+      const distanceKm = Number(body.distanceKm);
+      if (!Number.isFinite(distanceKm) || distanceKm <= 0) return json({ error: "Informe a distância rodada (km) maior que zero." }, 400);
+      const energyKwh = numOuNulo(body.energyKwh);
+      const socStart = numOuNulo(body.socStartPercent);
+      const socEnd = numOuNulo(body.socEndPercent);
+      if (energyKwh === null && (socStart === null || socEnd === null))
+        return json({ error: "Informe a energia consumida (kWh) ou o SOC inicial e final." }, 400);
+      const tipoBruto = clean(body.measurementType, 20).toUpperCase();
+      const tipo = ["MEASURED", "INFORMED", "IMPORTED"].includes(tipoBruto) ? tipoBruto : "INFORMED";
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const observedAt = Number.isFinite(Date.parse(String(body.observedAt || ""))) ? new Date(Date.parse(String(body.observedAt))).toISOString() : now;
+      const temperatura = body.temperatureC === undefined || body.temperatureC === null || body.temperatureC === "" || !Number.isFinite(Number(body.temperatureC)) ? null : Number(body.temperatureC);
+      await env.DB.prepare(`INSERT INTO todogreen_vehicle_energy_observations
+          (id, tenant_id, workspace_owner_id, vehicle_id, vehicle_plate, route_id, driver_id, observed_at, distance_km, energy_kwh,
+           soc_start_percent, soc_end_percent, charged_kwh, payload_kg, temperature_c, soh_percent, measurement_type, source, notes, created_by, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(id, TENANT_ID, access.ownerId, vehicleId, veiculo.plate || "", clean(body.routeId, 120), clean(body.driverId, 120), observedAt, distanceKm, energyKwh,
+          socStart, socEnd, numOuNulo(body.chargedKwh), numOuNulo(body.payloadKg), temperatura, numOuNulo(body.sohPercent), tipo, clean(body.source, 80), clean(body.notes, 500), user.id, now).run();
+      const observations = await listar();
+      return json({ observation: observations.find((o) => o.id === id) || null, baseline: baselineDoVeiculo(observations, mapVehicle(veiculo)) }, 201);
+    }
+    return json({ error: "Método não permitido." }, 405);
+  }
+
   if (request.method === "GET" && vehicleId && subresource === "maintenance") {
     const rows = await env.DB.prepare(`SELECT * FROM todogreen_fleet_maintenance_orders WHERE workspace_owner_id = ? AND vehicle_id = ? AND archived_at IS NULL ORDER BY created_at DESC LIMIT 200`)
       .bind(access.ownerId, vehicleId).all();
@@ -148,6 +233,7 @@ export async function handleTodoGreenFleet(request, env, access, user) {
         num(body.payloadKg), num(body.volumeM3), num(body.palletCapacity), num(body.odometerKm), num(body.acquisitionValue), num(body.monthlyFixedCost), num(body.revenueAccumulated),
         num(body.costAccumulated), num(body.energyConsumptionKwhPerKm), num(body.emissionFactorKgCo2ePerKwh), num(body.batteryCapacityKwh), Math.min(100, num(body.batterySohPercent || 100)),
         num(body.nominalRangeKm), num(body.realRangeKm), clean(body.nextMaintenanceAt, 20) || null, clean(body.nextDocumentDueAt, 20) || null, JSON.stringify(vehicleFields(body)), user.id, user.id, now, now).run();
+    await gravarPerfilFisico(env, access.ownerId, id, body);
     const row = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ?").bind(id).first();
     return json({ vehicle: mapVehicle(row) }, 201);
   }
@@ -229,6 +315,7 @@ export async function handleTodoGreenFleet(request, env, access, user) {
     }
     await env.DB.prepare(`UPDATE todogreen_fleet_vehicles SET prefix=?, plate=?, manufacturer=?, model=?, model_year=?, category=?, vehicle_class=?, energy_type=?, status=?, operational_unit=?, cost_center=?, payload_kg=?, volume_m3=?, pallet_capacity=?, odometer_km=?, acquisition_value=?, monthly_fixed_cost=?, revenue_accumulated=?, cost_accumulated=?, energy_consumption_kwh_per_km=?, emission_factor_kgco2e_per_kwh=?, battery_capacity_kwh=?, battery_soh_percent=?, nominal_range_km=?, real_range_km=?, next_maintenance_at=?, next_document_due_at=?, fields_json=?, revision=revision+1, updated_by=?, updated_at=? WHERE id=? AND workspace_owner_id=? AND revision=?`)
       .bind(clean(next.prefix,50), clean(next.plate,20).toUpperCase(), clean(next.manufacturer,100), clean(next.model,100), Number(next.modelYear)||null, clean(next.category,80), classeNext, clean(next.energyType,40), clean(next.status,40), clean(next.operationalUnit,120), clean(next.costCenter,120), num(next.payloadKg), num(next.volumeM3), num(next.palletCapacity), num(next.odometerKm), num(next.acquisitionValue), num(next.monthlyFixedCost), num(next.revenueAccumulated), num(next.costAccumulated), num(next.energyConsumptionKwhPerKm), num(next.emissionFactorKgCo2ePerKwh), num(next.batteryCapacityKwh), Math.min(100,num(next.batterySohPercent)), num(next.nominalRangeKm), num(next.realRangeKm), clean(next.nextMaintenanceAt,20)||null, clean(next.nextDocumentDueAt,20)||null, JSON.stringify(next.fields||{}), user.id, now, vehicleId, access.ownerId, current.revision).run();
+    await gravarPerfilFisico(env, access.ownerId, vehicleId, body);
     const row = await env.DB.prepare("SELECT * FROM todogreen_fleet_vehicles WHERE id = ?").bind(vehicleId).first();
     return json({ vehicle: mapVehicle(row) });
   }

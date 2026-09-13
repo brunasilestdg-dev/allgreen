@@ -15,6 +15,7 @@
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
+import { enriquecerRotaComGeo } from "./geo-providers.js";
 import {
   ENERGY_MODEL_VERSION,
   estimateRouteEnergy,
@@ -122,16 +123,36 @@ export async function viabilidadeDaProposta(env, access, { opportunityId, scenar
 // mesmo modelo do electric-plan (o cliente não "inventa" kWh). A proveniência
 // de cada fonte fica registrada em dataSources — SEM carimbo de hora: o
 // conteúdo é o que decide a versão (hash); a hora mora em createdAt.
-function montarEntrada(corpo = {}) {
+async function montarEntrada(corpo = {}, { env } = {}) {
   const energiaInput = corpo.energy && typeof corpo.energy === "object" ? corpo.energy : null;
   let energyEstimate = null;
+  let geo = null;
   const dataSources = Array.isArray(corpo.dataSources) ? corpo.dataSources.slice(0, 20) : [];
   if (energiaInput) {
+    // Elevação e clima (seções 42–43): quando a rota traz geometria (ou
+    // coordenada), o backend busca o que faltar em fontes abertas com cache;
+    // o que o chamador informou vence (INFORMED); o indisponível vira aviso
+    // com proveniência — nunca um número inventado.
+    let route = energiaInput.route || {};
+    const geometry = Array.isArray(energiaInput.geometry) ? energiaInput.geometry
+      : Array.isArray(corpo.geometry) ? corpo.geometry
+        : Array.isArray(route.geometry) ? route.geometry : null;
+    if (env && (geometry || (route.latitude !== undefined && route.longitude !== undefined))) {
+      geo = await enriquecerRotaComGeo(env, route, { geometry, departureIso: texto(corpo.departureAt || energiaInput.departureAt, 40) });
+      route = geo.route;
+    }
     energyEstimate = estimateRouteEnergy({
       vehicle: energiaInput.vehicle || {},
-      route: energiaInput.route || {},
+      route,
       assumptions: energiaInput.assumptions || {},
     });
+    for (const p of geo?.provenance || []) {
+      // Sem ingestedAt/cached: são metadados de busca, não conteúdo do snapshot.
+      dataSources.push({ id: p.id, field: p.field, source: p.source, measurementType: p.measurementType, confidence: p.confidence, method: p.method, at: p.at, samples: p.samples, coverage: p.coverage });
+    }
+    for (const w of geo?.warnings || []) {
+      dataSources.push({ id: String(w.code || "").toLowerCase(), source: w.source || "none", measurementType: MEASUREMENT_TYPES.ESTIMATED, warning: w.code });
+    }
     if (energyEstimate.status === "ok") {
       dataSources.push({
         id: "energy-model",
@@ -157,6 +178,7 @@ function montarEntrada(corpo = {}) {
   }
   const vehicle = energiaInput?.vehicle || {};
   return {
+    geo,
     input: {
       ...corpo,
       opportunityId: texto(corpo.opportunityId, 120),
@@ -222,7 +244,7 @@ export async function handleTodoGreenViability(request, env, access, user, url) 
   const scenarioId = texto(corpo.scenarioId || corpo.cenarioId, 120);
 
   const agora = new Date().toISOString();
-  const { input, energyEstimate } = montarEntrada({ ...corpo, opportunityId, scenarioId });
+  const { input, energyEstimate, geo } = await montarEntrada({ ...corpo, opportunityId, scenarioId }, { env });
   if (energyEstimate && energyEstimate.status !== "ok") {
     return json({
       error: `Não foi possível estimar a energia: ${energyEstimate.reason || "entrada inválida"}. Informe distância, capacidade da bateria e consumo do veículo.`,
@@ -244,7 +266,7 @@ export async function handleTodoGreenViability(request, env, access, user, url) 
     : { changed: true, snapshot: createViabilitySnapshot(input, meta) };
 
   if (!resultado.changed) {
-    return json({ changed: false, snapshot: anterior, blockers: anterior.blockers, energyEstimate }, 200);
+    return json({ changed: false, snapshot: anterior, blockers: anterior.blockers, energyEstimate, geo: geo ? { provenance: geo.provenance, warnings: geo.warnings } : null }, 200);
   }
 
   const snapshot = resultado.snapshot;
@@ -278,5 +300,5 @@ export async function handleTodoGreenViability(request, env, access, user, url) 
     previousContentHash: snapshot.previousContentHash || null, schemaVersion: snapshot.schemaVersion,
     blockers, snapshot, createdBy: user.id, createdAt: agora,
   };
-  return json({ changed: true, snapshot: gravado, blockers, energyEstimate }, 201);
+  return json({ changed: true, snapshot: gravado, blockers, energyEstimate, geo: geo ? { provenance: geo.provenance, warnings: geo.warnings } : null }, 201);
 }

@@ -4998,3 +4998,8 @@
 .tdg-roteirizacao-classe { display: grid; gap: 4px; margin: 8px 0 4px; max-width: 420px; }
 .tdg-roteirizacao-classe span { font-size: 12px; font-weight: 600; color: var(--tdg-ink); }
 .tdg-roteirizacao-classe small { font-size: 11px; color: var(--tdg-muted); line-height: 1.4; }
+
+
+/* ===== Frota: perfil físico e recarga do veículo (seção 38) ===== */
+.df-perfil-fisico { border: 1px solid var(--tdg-line); border-radius: 12px; padding: 10px 12px 12px; margin: 6px 0 4px; min-width: 0; }
+.df-perfil-fisico legend { font-size: 12px; color: var(--tdg-muted); padding: 0 6px; }
