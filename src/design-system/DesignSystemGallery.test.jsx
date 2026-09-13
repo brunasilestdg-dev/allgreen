@@ -19,6 +19,37 @@ describe("Design System — galeria e combobox", () => {
     expect(screen.getByText("Concluído")).toBeInTheDocument();
   });
 
+  it("renderiza os primitivos novos da Onda 1", () => {
+    render(<DesignSystemGallery />);
+    // Cartões e indicadores
+    expect(screen.getByText("Receita 30d")).toBeInTheDocument();
+    expect(screen.getByText("Contrato de energia renovável")).toBeInTheDocument();
+    // Avisos (Alert): o de erro aparece com seu título.
+    expect(screen.getByText("Falha")).toBeInTheDocument();
+    // Tabela com cabeçalhos
+    expect(screen.getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
+    // Estado vazio e topo de página
+    expect(screen.getByText("Nenhuma oportunidade ainda")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Oportunidades", level: 1 })).toBeInTheDocument();
+  });
+
+  it("Drawer abre pelo gatilho e fecha no Esc", () => {
+    render(<DesignSystemGallery />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Abrir Drawer" }));
+    const painel = screen.getByRole("dialog", { name: "Detalhe da rota" });
+    expect(painel).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Alert de aviso fecha no botão de fechar", () => {
+    render(<DesignSystemGallery />);
+    expect(screen.getByText(/turno da manhã sem motorista/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
+    expect(screen.queryByText(/turno da manhã sem motorista/)).not.toBeInTheDocument();
+  });
+
   it("o SearchableSelect abre, filtra sem acento e seleciona", () => {
     render(<DesignSystemGallery />);
     // Abre o combobox de Cliente.

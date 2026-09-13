@@ -8,12 +8,18 @@ import "./tokens.css";
 import "./design-system.css";
 
 export { Button, IconButton } from "./Button.jsx";
-export { Field, Input, Textarea } from "./fields.jsx";
+export { Field, Input, Textarea, Checkbox, Radio } from "./fields.jsx";
 export { SearchableSelect } from "./SearchableSelect.jsx";
 export { RadioCards } from "./RadioCards.jsx";
 export { SegmentedControl } from "./SegmentedControl.jsx";
 export { Tabs } from "./Tabs.jsx";
 export { Badge, StatusBadge } from "./Badge.jsx";
+export { Card, MetricCard } from "./Card.jsx";
+export { Alert, EmptyState, Spinner, Skeleton } from "./feedback.jsx";
+export { Table } from "./DataTable.jsx";
+export { PageHeader, Toolbar } from "./layout.jsx";
+export { Drawer } from "./Drawer.jsx";
+export { Tooltip } from "./Tooltip.jsx";
 export {
   normalizar,
   opcaoCasa,

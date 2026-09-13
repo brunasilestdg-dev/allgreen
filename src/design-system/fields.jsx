@@ -61,3 +61,35 @@ export function Textarea({ label, hint, error, required, rows = 4, className = "
     </Field>
   );
 }
+
+// Checkbox e Radio "planos" (uma linha: controle + rótulo clicável). Para a
+// escolha em BLOCOS grandes, use RadioCards; estes são para o sim/não e a opção
+// simples dentro de um formulário. A caixa/bolinha herda a cor de marca via
+// accent-color, e o foco usa o mesmo anel do resto (item 42).
+export function Checkbox({ label, hint, className = "", id, ...props }) {
+  const auto = useId();
+  const controlId = id || auto;
+  return (
+    <label className={`ds-choice ${className}`.trim()} htmlFor={controlId}>
+      <input type="checkbox" id={controlId} className="ds-choice__control" {...props} />
+      <span className="ds-choice__body">
+        {label && <span className="ds-choice__label">{label}</span>}
+        {hint && <small className="ds-choice__hint">{hint}</small>}
+      </span>
+    </label>
+  );
+}
+
+export function Radio({ label, hint, className = "", id, ...props }) {
+  const auto = useId();
+  const controlId = id || auto;
+  return (
+    <label className={`ds-choice ${className}`.trim()} htmlFor={controlId}>
+      <input type="radio" id={controlId} className="ds-choice__control" {...props} />
+      <span className="ds-choice__body">
+        {label && <span className="ds-choice__label">{label}</span>}
+        {hint && <small className="ds-choice__hint">{hint}</small>}
+      </span>
+    </label>
+  );
+}
