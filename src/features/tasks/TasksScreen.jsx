@@ -808,6 +808,24 @@ export default function Tasks({
       })
       .catch((erro) => setToast(erro.message));
   };
+  // Excluir uma To-do espelhada do Planner sem propagar deixava a tarefa viva no
+  // Planner, e o próximo espelhamento a RESSUSCITAVA. Propaga o arquivamento
+  // para a fonte do Planner. Melhor-esforço: se falhar, avisa, mas a exclusão
+  // local já aconteceu (o operador não fica preso).
+  const arquivarTarefaNoPlanner = (task) => {
+    if (!tarefaVinculadaAoPlanner(task)) return;
+    fetch(
+      `/api/todogreen/planner/planos/${encodeURIComponent(task.plannerPlanId)}/tarefas/${encodeURIComponent(task.plannerTaskId)}`,
+      { method: "DELETE", headers: { ...authHeaders() } },
+    )
+      .then(async (resposta) => {
+        if (!resposta.ok) {
+          const corpo = await resposta.json().catch(() => ({}));
+          throw new Error(corpo.error || "A tarefa foi excluída aqui, mas o Planner não confirmou.");
+        }
+      })
+      .catch((erro) => setToast(erro.message));
+  };
   const changeTask = (id, changes) => {
     const task = db.tasks.find((item) => item.id === id);
     update((d) => ({
@@ -1073,10 +1091,13 @@ export default function Tasks({
   };
   const removeTask = (id) => {
     if (!confirm("Excluir esta tarefa definitivamente?")) return;
+    const alvo = db.tasks.find((task) => task.id === id);
     update((d) => ({
       ...d,
       tasks: d.tasks.filter((task) => task.id !== id),
     }));
+    // Propaga o arquivamento ao Planner para a tarefa espelhada não ressuscitar.
+    if (alvo) arquivarTarefaNoPlanner(alvo);
     setToast("Tarefa excluída");
   };
   const toggleSelected = (id) =>
