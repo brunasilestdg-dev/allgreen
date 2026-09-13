@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BatteryCharging, Clock, Coins, GripVertical, Navigation, Plug, Plus, Route, Shuffle, Sparkles, Trash2, Truck, UserCheck } from "lucide-react";
+import { BatteryCharging, Clock, Coins, GripVertical, ListChecks, Navigation, Plug, Plus, Route, Shuffle, Sparkles, Trash2, Truck, Upload, UserCheck } from "lucide-react";
+import Modal from "../../../components/Modal.jsx";
+import {
+  classificarGeocodificacao,
+  csvParaMatriz,
+  parsearParadasColadas,
+  parsearParadasDePlanilha,
+  precisaConferencia,
+  resumoImportacao,
+} from "../roteirizadorImportDomain.js";
 import {
   aplicarOrdemDoMeio,
   otimizarOrdemDeParadas,
@@ -123,6 +132,15 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
   const [sugestoes, setSugestoes] = useState({});
   // Qual parada está com a lista de sugestões aberta (a que está com foco).
   const [sugestaoAberta, setSugestaoAberta] = useState(null);
+  // Importação de paradas em massa (colar ou arquivo CSV/Excel): tudo passa
+  // pelo mesmo funil padronizar → geocodificar → conferência antes de virar
+  // parada. `importFase`: idle | processando | revisao.
+  const [importAberto, setImportAberto] = useState(false);
+  const [importTexto, setImportTexto] = useState("");
+  const [importFase, setImportFase] = useState("idle");
+  const [importItens, setImportItens] = useState([]);
+  const [importProgresso, setImportProgresso] = useState({ feito: 0, total: 0 });
+  const [importErro, setImportErro] = useState("");
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
   const [mostrarProprios, setMostrarProprios] = useState(false);
   const [pedagios, setPedagios] = useState({ fase: "idle" });
@@ -206,6 +224,122 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
     setSugestoes((atual) => ({ ...atual, [indice]: [] }));
     setSugestaoAberta(null);
   };
+  // ---- Importação de paradas em massa (colar ou arquivo CSV/Excel) ----
+  // Todas as origens caem no mesmo funil: padroniza (no domínio) → geocodifica
+  // (uma por vez, respeitando o Nominatim) → o que sai com 0 ou vários
+  // candidatos vai para conferência; só o que tem coordenada certa vira parada.
+  const geocodificarImport = async (itensBrutos) => {
+    setImportFase("processando");
+    setImportErro("");
+    setImportProgresso({ feito: 0, total: itensBrutos.length });
+    const acumulado = [];
+    for (let i = 0; i < itensBrutos.length; i += 1) {
+      const bruto = itensBrutos[i];
+      let candidatos = [];
+      try {
+        candidatos = await sugerirEnderecos(bruto.endereco, { headers: authHeaders?.() || {} });
+      } catch {
+        candidatos = [];
+      }
+      const status = classificarGeocodificacao(candidatos);
+      acumulado.push({
+        id: `imp-${i}`,
+        referencia: bruto.referencia || "",
+        entrada: bruto.endereco,
+        endereco: bruto.endereco,
+        status,
+        candidatos,
+        escolhido: status === "ok" ? candidatos[0] : null,
+      });
+      setImportProgresso({ feito: i + 1, total: itensBrutos.length });
+      setImportItens([...acumulado]);
+    }
+    setImportFase("revisao");
+  };
+
+  const processarColado = () => {
+    const itens = parsearParadasColadas(importTexto);
+    if (!itens.length) {
+      setImportErro("Cole ao menos um endereço — um por linha.");
+      return;
+    }
+    geocodificarImport(itens);
+  };
+
+  const processarArquivoImport = async (arquivo) => {
+    if (!arquivo) return;
+    setImportErro("");
+    try {
+      const nome = (arquivo.name || "").toLowerCase();
+      let matriz = [];
+      if (nome.endsWith(".xlsx") || nome.endsWith(".xls")) {
+        const readXlsxFile = (await import("read-excel-file")).default;
+        matriz = await readXlsxFile(arquivo);
+      } else {
+        matriz = csvParaMatriz(await arquivo.text());
+      }
+      const itens = parsearParadasDePlanilha(matriz);
+      if (!itens.length) {
+        setImportErro("Não encontrei endereços no arquivo. Espere uma coluna de endereço.");
+        return;
+      }
+      geocodificarImport(itens);
+    } catch (erro) {
+      setImportErro(erro?.message || "Não consegui ler o arquivo.");
+    }
+  };
+
+  const escolherCandidatoImport = (id, candidato) => {
+    setImportItens((atual) => atual.map((it) => (it.id === id
+      ? { ...it, escolhido: candidato, endereco: candidato.rotulo, status: "resolvido" }
+      : it)));
+  };
+
+  const editarEnderecoImport = (id, texto) => {
+    setImportItens((atual) => atual.map((it) => (it.id === id ? { ...it, endereco: texto } : it)));
+  };
+
+  const regeocodificarItem = async (id) => {
+    const item = importItens.find((it) => it.id === id);
+    if (!item) return;
+    let candidatos = [];
+    try {
+      candidatos = await sugerirEnderecos(item.endereco, { headers: authHeaders?.() || {} });
+    } catch {
+      candidatos = [];
+    }
+    const status = classificarGeocodificacao(candidatos);
+    setImportItens((atual) => atual.map((it) => (it.id === id
+      ? { ...it, candidatos, status, escolhido: status === "ok" ? candidatos[0] : null }
+      : it)));
+  };
+
+  const fecharImport = () => {
+    setImportAberto(false);
+    setImportFase("idle");
+    setImportTexto("");
+    setImportItens([]);
+    setImportErro("");
+    setImportProgresso({ feito: 0, total: 0 });
+  };
+
+  const adicionarImportadasARota = () => {
+    const prontas = importItens.filter((it) => it.escolhido && (it.status === "ok" || it.status === "resolvido"));
+    if (!prontas.length) return;
+    prontas.forEach((it) => {
+      coordsResolvidasRef.current[String(it.escolhido.rotulo).trim()] = [it.escolhido.latitude, it.escolhido.longitude];
+    });
+    const pristine = paradas.every((p) => !p.trim());
+    const novos = prontas.map((it) => it.escolhido.rotulo);
+    const combinado = pristine ? [...novos] : [...paradas, ...novos];
+    while (combinado.length < 2) combinado.push("");
+    setParadas(combinado);
+    setJanelas(combinado.map((_, i) => (pristine ? { inicio: "", fim: "" } : (janelas[i] || { inicio: "", fim: "" }))));
+    if (pristine) setRecargas(new Set());
+    setToast?.(`${prontas.length} parada(s) adicionada(s) à rota.`);
+    fecharImport();
+  };
+
   const adicionarParada = () => {
     setParadas((atual) => [...atual, ""]);
     setJanelas((atual) => [...atual, { inicio: "", fim: "" }]);
@@ -767,6 +901,9 @@ Regras:
           <button type="button" className="tdg-action tdg-action-ghost" onClick={adicionarParada}>
             <Plus size={16} /> Adicionar parada
           </button>
+          <button type="button" className="tdg-action tdg-action-ghost" onClick={() => setImportAberto(true)}>
+            <Upload size={16} /> Importar paradas
+          </button>
           {estado.fase === "pronto" && (
             <button
               type="button"
@@ -973,6 +1110,109 @@ Regras:
           />
         </div>
       </div>
+
+      {importAberto && (
+        <Modal title="Importar paradas" onClose={fecharImport}>
+          <div className="tdg-rot-import">
+            {importFase === "idle" && (
+              <>
+                <p className="tdg-rot-import-intro">
+                  Cole os endereços (um por linha) ou envie um arquivo CSV/Excel. Cada endereço é
+                  padronizado e geocodificado; o que vier ambíguo ou sem localização cai na
+                  conferência antes de virar parada. Nada é gravado — é só para montar a rota.
+                </p>
+                <textarea
+                  className="tdg-rot-import-textarea"
+                  rows={6}
+                  value={importTexto}
+                  onChange={(event) => setImportTexto(event.target.value)}
+                  placeholder={"Rua da Estação, 100, Santos SP\nAv. Brasil, 500, Campinas SP\nPED-123; Rua X, 10, Osasco SP"}
+                />
+                {importErro ? <p className="tdg-roteirizacao-erro">{importErro}</p> : null}
+                <div className="tdg-rot-import-acoes">
+                  <button type="button" className="tdg-action" onClick={processarColado}>
+                    <ListChecks size={16} /> Processar colados
+                  </button>
+                  <label className="tdg-action tdg-action-ghost tdg-rot-import-arquivo">
+                    <Upload size={16} /> Enviar CSV/Excel
+                    <input type="file" accept=".csv,.txt,.xlsx,.xls" hidden onChange={(event) => processarArquivoImport(event.target.files?.[0])} />
+                  </label>
+                </div>
+              </>
+            )}
+
+            {importFase === "processando" && (
+              <div className="tdg-rot-import-progresso">
+                <p>Geocodificando {importProgresso.feito} de {importProgresso.total}…</p>
+                <div className="tdg-rot-import-barra">
+                  <span style={{ width: `${importProgresso.total ? Math.round((importProgresso.feito / importProgresso.total) * 100) : 0}%` }} />
+                </div>
+              </div>
+            )}
+
+            {importFase === "revisao" && (() => {
+              const resumo = resumoImportacao(importItens);
+              const conferir = importItens.filter((it) => precisaConferencia(it.status));
+              const prontas = importItens.filter((it) => it.status === "ok" || it.status === "resolvido");
+              return (
+                <>
+                  <div className="tdg-rot-import-placar">
+                    <span className="ok">{resumo.prontas} pronta(s)</span>
+                    {resumo.conferencia > 0 ? <span className="conf">{resumo.conferencia} em conferência</span> : null}
+                  </div>
+                  {conferir.length > 0 && (
+                    <div className="tdg-rot-import-conferencia">
+                      <h4>Conferência — resolva antes de adicionar</h4>
+                      {conferir.map((it) => (
+                        <div className={`tdg-rot-import-linha is-${it.status}`} key={it.id}>
+                          <div className="tdg-rot-import-linha-cab">
+                            <strong>{it.referencia ? `${it.referencia} · ` : ""}{it.entrada}</strong>
+                            <em>{it.status === "falha" ? "não localizado" : "ambíguo — escolha"}</em>
+                          </div>
+                          {it.status === "ambiguo" && (
+                            <ul className="tdg-rot-import-cands">
+                              {it.candidatos.map((c) => (
+                                <li key={c.rotulo}>
+                                  <button type="button" onClick={() => escolherCandidatoImport(it.id, c)}>{c.rotulo}</button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <div className="tdg-rot-import-corrige">
+                            <input
+                              value={it.endereco}
+                              onChange={(event) => editarEnderecoImport(it.id, event.target.value)}
+                              placeholder="Corrija o endereço e busque de novo"
+                            />
+                            <button type="button" className="tdg-action tdg-action-ghost" onClick={() => regeocodificarItem(it.id)}>Buscar</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {prontas.length > 0 && (
+                    <details className="tdg-rot-import-prontas">
+                      <summary>{prontas.length} parada(s) pronta(s)</summary>
+                      <ul>
+                        {prontas.map((it) => (
+                          <li key={it.id}>{it.referencia ? `${it.referencia} · ` : ""}{it.escolhido?.rotulo || it.endereco}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  {importErro ? <p className="tdg-roteirizacao-erro">{importErro}</p> : null}
+                  <div className="tdg-rot-import-acoes">
+                    <button type="button" className="tdg-action" onClick={adicionarImportadasARota} disabled={!prontas.length}>
+                      Adicionar {prontas.length} à rota
+                    </button>
+                    <button type="button" className="tdg-action tdg-action-ghost" onClick={fecharImport}>Cancelar</button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

@@ -271,7 +271,10 @@ describe("régua editável no motor auditável (conjuntoDaRegua)", () => {
   it("régua de fábrica: o cálculo é idêntico ao de antes desta feature", () => {
     const semRegua = calcularImpactoAmbiental(entradaVan);
     const comFabrica = calcularImpactoAmbiental(entradaVan, conjuntoDaRegua({ deFabrica: true }));
-    expect(comFabrica).toEqual(semRegua);
+    // calculadoEm é um carimbo de tempo por chamada — o que importa aqui é que
+    // TODO o resto (os números) seja idêntico; sem isto o toEqual pisca quando
+    // as duas chamadas caem em milissegundos diferentes.
+    expect({ ...comFabrica, calculadoEm: null }).toEqual({ ...semRegua, calculadoEm: null });
   });
 
   it("editar o fator da rede elétrica sobe a emissão executada e derruba o CO2 evitado", () => {

@@ -35,8 +35,11 @@ npm run verify   # lint + testes (unit + worker)
 npm run build    # gera dist/
 ```
 
-Ambos precisam passar. O CI (`.github/workflows/ci.yml`) roda os mesmos passos
-mais o E2E (Playwright) — não publique com teste vermelho (seção 45).
+Ambos precisam passar. Enquanto o GitHub Actions estiver sem minutos/runner, um
+check vermelho por falta de capacidade do Actions não bloqueia. O que bloqueia é
+`npm run verify` vermelho, `npm run build` vermelho ou falha no Cloudflare
+Builds/deploy manual. E2E visual (Playwright) continua sendo gate separado quando
+houver navegador disponível.
 
 ## 3. Autenticar o wrangler
 
@@ -152,10 +155,13 @@ novo cron aqui, com o handler no roteador do Worker.
 - `.github/workflows/ci.yml` (**Qualidade**): roda em push/PR — lint, testes,
   build e E2E. **Enquanto o GitHub Actions estiver sem minutos** (runner vazio,
   `steps: []`, workflow "Publicar" *skipped*), isso **não** é erro de código e o
-  gate obrigatório passa a ser o **local** (seção 12a) ou o do Cloudflare Builds.
-- Cloudflare Workers Builds (conectado ao repo): em push na `main`, roda
-  `npm ci && npm run build` e `npm run deploy:cloudflare`.
-- `.github/workflows/deploy.yml` (**Publicar**): contingência manual.
+  gate obrigatório passa a ser o **local** (seção 12a) ou o do Cloudflare Builds —
+  `verify`, `build`, Cloudflare Builds ou deploy manual vermelho, esses sim, bloqueiam.
+- Cloudflare Workers Builds (conectado ao repo): em push na `main`, deve rodar
+  `npm ci && npm run verify && npm run build` e só depois
+  `npm run deploy:cloudflare`.
+- `.github/workflows/deploy.yml` (**Publicar**): contingência manual. Também roda
+  `npm ci`, `npm run verify` e `npm run build` antes de migrar/publicar.
 
 Para trocar o repositório: reconecte o Workers Builds ao novo repo e mantenha o
 mesmo pipeline (nada de específico do repositório está embutido nos workflows).
@@ -163,9 +169,13 @@ mesmo pipeline (nada de específico do repositório está embutido nos workflows
 ## 12. Primeiro deploy
 
 ```bash
-npm run deploy            # valida + build + migrations + publica
-# ou, sem revalidar:
+npm ci
+npm run verify
+npm run build
 npm run deploy:cloudflare
+
+# Atalho equivalente depois do npm ci:
+npm run deploy            # valida + build + migrations + publica
 ```
 
 ## 12a. Deploy manual sem GitHub Actions (gate local + Wrangler)

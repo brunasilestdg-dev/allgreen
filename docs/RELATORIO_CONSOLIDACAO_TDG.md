@@ -31,7 +31,8 @@ Restrições respeitadas em **todas** as entregas abaixo:
   reconciliada — o arquivo existe no repositório e a numeração segue linear.
   Nenhuma migration aplicada foi renomeada, reaplicada ou apagada.
 - **Deploy**: Cloudflare Workers Builds é o publicador de fato (push em `main` →
-  `npm ci && npm run build` → `npm run deploy:cloudflare`). GitHub Actions ("Publicar")
+  `npm ci` → `npm run verify` → `npm run build` →
+  `npm run deploy:cloudflare`). GitHub Actions ("Publicar")
   ficou como contingência **manual** (`workflow_dispatch`).
 
 ## O que foi entregue nesta rodada (PRs mergeados)
@@ -103,7 +104,10 @@ npm run build    # gera dist/
 ```
 
 Em produção, comparar `GET /api/status` → `version` com o SHA de `main`. A
-publicação é automática via Cloudflare Workers Builds a cada push em `main`.
+publicação é automática via Cloudflare Workers Builds a cada push em `main`,
+mas só depois do gate mínimo: `npm ci`, `npm run verify`, `npm run build` e
+`npm run deploy:cloudflare`. GitHub Actions vermelho por falta de minutos/runner
+não bloqueia; teste local, Cloudflare Build ou deploy manual vermelho bloqueia.
 
 ## Pendência de credencial (só a titular resolve)
 

@@ -1,18 +1,11 @@
 name: Publicar
 
-# Publicação oficial — e só depois que a qualidade passou.
+# Fallback manual de publicação — e só depois do gate local completo.
 #
-# Antes este fluxo escutava `push` na main, então subia em paralelo com o
-# fluxo "Qualidade". Os dois olhavam o mesmo commit ao mesmo tempo e nenhum
-# esperava o outro: um push com teste vermelho ia para produção assim mesmo,
-# e a página de Actions mostrava a falha ao lado de um deploy bem-sucedido.
-#
-# Agora o gatilho é a conclusão da Qualidade. Se ela falhar, cancelar ou for
-# pulada, o `if` abaixo impede a publicação — o fluxo aparece como "skipped",
-# que é a informação certa: não publicou porque não podia.
-#
-# O acionamento manual continua como contingência (workflow_dispatch), para o
-# caso de precisar republicar sem um commit novo.
+# O CI/CD principal é o Cloudflare Workers Builds. Este workflow existe só como
+# botão manual de emergência. Como o GitHub Actions pode ficar sem minutos/runner,
+# ele não é a fonte única do quality gate; quando este botão for usado, ele próprio
+# precisa instalar, validar, compilar e só então migrar/publicar.
 #
 # Só funciona depois que o segredo CLOUDFLARE_API_TOKEN existir no repositório
 # (Settings > Secrets and variables > Actions). O passo abaixo confere isso
@@ -78,8 +71,9 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # Sem repetir lint e testes: a Qualidade acabou de rodá-los neste mesmo
-      # commit, e é a aprovação dela que autorizou este fluxo a começar.
+      - name: Validar qualidade
+        run: npm run verify
+
       - name: Construir o app
         run: npm run build
 
