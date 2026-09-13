@@ -3,7 +3,7 @@ import { arquivosVisiveis, pastasVisiveis } from "../../src/features/logistics/p
 // O "escreve bytes → devolve id/hash" (chunking, sha256, base64) mora no
 // file-store, compartilhado com o POD do motorista (#120b). Aqui fica a
 // permissão, a pasta e a versão — o que é do cofre.
-import { MAX_FILE_BYTES, base64ToBytes, armazenarArquivoInterno, R2_BUCKET_BINDING } from "./todogreen-file-store.js";
+import { MAX_FILE_BYTES, armazenarArquivoInterno, servirArquivoInterno } from "./todogreen-file-store.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -143,20 +143,14 @@ async function download(env, access, id, email) {
   // documento existe naquela pasta.
   if(!(await arquivoNaVista(env, access, email, row))) return json({error:"Documento não encontrado."},404);
   if(row.source==="client_reference") return json({externalUrl:row.external_url,reference:true});
-  const baixarHeaders={"content-type":row.content_type||"application/octet-stream","content-length":String(row.byte_size),"content-disposition":`attachment; filename="${String(row.file_name).replace(/["\\]/g,"")}"`,"cache-control":"no-store","x-content-type-options":"nosniff","x-document-sha256":row.sha256};
-  // Mídia no R2 (r2_key preenchido): serve o objeto direto. Sem o binding ou sem
-  // o objeto, o arquivo não pode ser entregue — 404, não um corpo vazio que
-  // passaria por comprovante válido.
-  if(row.r2_key){
-    const bucket=env[R2_BUCKET_BINDING];
-    const objeto=bucket?await bucket.get(row.r2_key):null;
-    if(!objeto) return json({error:"Documento não encontrado."},404);
-    return new Response(objeto.body,{status:200,headers:baixarHeaders});
-  }
-  const {results}=await env.DB.prepare("SELECT content_base64 FROM todogreen_internal_file_chunks WHERE file_id=? ORDER BY chunk_index").bind(id).all();
-  const chunks=(results||[]).map((item)=>base64ToBytes(item.content_base64));
-  const blob=new Blob(chunks,{type:row.content_type||"application/octet-stream"});
-  return new Response(blob,{status:200,headers:baixarHeaders});
+  // O comprovante interno é servido pelo caminho compartilhado
+  // (servirArquivoInterno): do R2 quando há r2_key, senão dos chunks do D1. Sem o
+  // objeto, é 404 — não um corpo vazio que passaria por comprovante válido. É o
+  // MESMO caminho que a concessão do Portal do Cliente usa, para o POD abrir
+  // igual dos dois lados.
+  const resposta=await servirArquivoInterno(env,access.ownerId,id);
+  if(!resposta) return json({error:"Documento não encontrado."},404);
+  return resposta;
 }
 
 export async function handleTodoGreenFileVault(request,env,access,user){

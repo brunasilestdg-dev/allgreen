@@ -119,6 +119,41 @@ export const descartarArquivos = async (env, ownerId, ids = []) => {
   ]);
 };
 
+// Serve os bytes de um arquivo do cofre interno como Response pronta (do R2
+// quando há r2_key, senão dos chunks base64 no D1), escopada ao dono. É o MESMO
+// caminho de entrega do download do cofre (todogreen-file-vault) e da concessão
+// temporária do Portal do Cliente (o comprovante de entrega) — uma cópia só da
+// lógica de servir bytes, para o POD funcionar igual nos dois lugares e em
+// qualquer backend (D1 hoje, R2 quando ligado). Devolve null quando o arquivo
+// não existe, foi arquivado, é só referência externa, ou o objeto R2 sumiu; o
+// chamador decide o status (404/410).
+export const servirArquivoInterno = async (env, ownerId, fileId, { comoAnexo = true } = {}) => {
+  const row = await env.DB.prepare(
+    "SELECT * FROM todogreen_internal_files WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL",
+  ).bind(fileId, TENANT_ID, ownerId).first();
+  if (!row || row.source === "client_reference") return null;
+  const nome = String(row.file_name || "arquivo").replace(/["\\]/g, "");
+  const headers = {
+    "content-type": row.content_type || "application/octet-stream",
+    "content-length": String(row.byte_size ?? ""),
+    "content-disposition": `${comoAnexo ? "attachment" : "inline"}; filename="${nome}"`,
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "x-document-sha256": row.sha256 || "",
+  };
+  if (row.r2_key) {
+    const bucket = bucketR2(env);
+    const objeto = bucket ? await bucket.get(row.r2_key) : null;
+    if (!objeto) return null;
+    return new Response(objeto.body, { status: 200, headers });
+  }
+  const { results } = await env.DB.prepare(
+    "SELECT content_base64 FROM todogreen_internal_file_chunks WHERE file_id=? ORDER BY chunk_index",
+  ).bind(fileId).all();
+  const chunks = (results || []).map((item) => base64ToBytes(item.content_base64));
+  return new Response(new Blob(chunks, { type: row.content_type || "application/octet-stream" }), { status: 200, headers });
+};
+
 const EXTENSAO_POR_MIME = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic" };
 
 // Recebe um data URL de imagem (a foto/assinatura que o motorista capturou e

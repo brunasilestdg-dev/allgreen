@@ -227,6 +227,54 @@ describe("o detalhe", () => {
     expect(url).not.toContain("arquivos.exemplo.com");
   });
 
+  it("POD guardado no cofre interno chega ao cliente (link interno, não externo)", async () => {
+    // O POD real do motorista é salvo no cofre INTERNO e o proof_url aponta para
+    // /api/todogreen/file-vault/:id/download — caminho relativo/interno que o
+    // enderecoAceito recusa de propósito. Antes da correção, o cliente recebia
+    // erro ao pedir o comprovante de uma entrega de verdade (o teste acima só
+    // passava porque usava uma URL externa fabricada).
+    const fileId = crypto.randomUUID();
+    const conteudo = "POD-BYTES-REAIS";
+    await env.DB.prepare(
+      `INSERT INTO todogreen_internal_files
+         (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,
+          file_name,content_type,byte_size,sha256,version,source,external_url,folder_id,
+          created_by,created_at,archived_at)
+       VALUES (?,'todogreen',?,NULL,NULL,'operation_proof',NULL,?,?,?,'',1,'internal_upload','','',?,?,NULL)`,
+    )
+      .bind(fileId, dona.id, `pod-${fileId}.jpg`, "image/jpeg", conteudo.length, dona.id, new Date().toISOString())
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO todogreen_internal_file_chunks (file_id, chunk_index, content_base64) VALUES (?,0,?)",
+    )
+      .bind(fileId, btoa(conteudo))
+      .run();
+
+    const opId = await criarOperacao({
+      referencia: "OP-POD-INTERNO",
+      prometidoEm: h(-30),
+      entregueEm: h(-25),
+      comprovanteUrl: `/api/todogreen/file-vault/${fileId}/download`,
+      comprovanteHash: "hhh",
+    });
+
+    const r = await pedir(`/api/todogreen/portal/operacoes/${opId}/comprovante`, cliente.token, "POST");
+    expect(r.status).toBe(201);
+    const { url } = await r.json();
+    expect(url).toMatch(/^\/api\/todogreen\/arquivo\?t=/);
+    // O caminho interno do cofre não vaza para o cliente.
+    expect(url).not.toContain("file-vault");
+
+    // O cliente abre o link (público por token) e recebe os BYTES do POD.
+    const arq = await worker.fetch(
+      new Request(`https://app.test${url}`, { headers: { "cf-connecting-ip": nextIp() } }),
+      env,
+      { waitUntil() {}, passThroughOnException() {} },
+    );
+    expect(arq.status).toBe(200);
+    expect(await arq.text()).toBe(conteudo);
+  });
+
   it("sem comprovante, o pedido de link é recusado com motivo", async () => {
     const r = await pedir(`/api/todogreen/portal/operacoes/${comOcorrencia}/comprovante`, cliente.token, "POST");
     expect(r.status).toBe(409);

@@ -61,6 +61,23 @@ export const enderecoAceito = (url) => {
   return { ok: true, motivo: "", url: alvo.toString() };
 };
 
+// Comprovante (POD/assinatura) que o motorista captura mora no cofre INTERNO
+// (todogreen_internal_files, servido por /api/todogreen/file-vault/:id/download),
+// não num endereço http externo. `enderecoAceito` recusa esse caminho de
+// propósito (é interno e relativo), então a concessão precisa reconhecê-lo e
+// servir os bytes direto do cofre — sem tentar `fetch` de um endpoint que exige
+// sessão da equipe. Este helper puro extrai o id do arquivo tanto do caminho de
+// download quanto do sentinela guardado na concessão. "" = não é arquivo interno.
+export const PREFIXO_ARQUIVO_INTERNO = "file-vault:";
+export const idDeArquivoInterno = (valor) => {
+  const bruto = texto(valor, 2000);
+  if (!bruto) return "";
+  if (bruto.startsWith(PREFIXO_ARQUIVO_INTERNO))
+    return texto(bruto.slice(PREFIXO_ARQUIVO_INTERNO.length), 120);
+  const m = bruto.match(/\/api\/todogreen\/file-vault\/([A-Za-z0-9_-]+)\/download\/?$/);
+  return m ? m[1] : "";
+};
+
 export const documentoValido = (documento = {}) => {
   const problemas = [];
   if (!texto(documento.titulo)) problemas.push("Dê um título ao documento.");
