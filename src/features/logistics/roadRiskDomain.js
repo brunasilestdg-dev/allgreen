@@ -18,7 +18,7 @@ export const TAMANHO_CELULA_GRAUS = 0.01; // ≈ 1,1 km em latitude
 export const ESCALA_RISCO_UPS_KM = 60;    // UPS/km em que o score chega a ~63; editável
 
 const clean = (v, max = 200) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-const fold = (v) => clean(v, 400).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const fold = (v) => clean(v, 400).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const num = (v) => {
   if (v === null || v === undefined) return null;
   const s = String(v).trim().replace(/^"|"$/g, "");
@@ -73,7 +73,7 @@ export function upsDaOcorrencia({ classificacao = "", mortos = 0, feridosGraves 
  * acentos/caixa; `;` ou `,`; decimal com vírgula; datas dd/mm/aaaa ou ISO.
  */
 export function parseAcidentesPrf(csvText = "", { max = 400000 } = {}) {
-  const linhas = String(csvText || "").replace(/^﻿/, "").split(/\r?\n/);
+  const linhas = String(csvText || "").replace(/^\uFEFF/, "").split(/\r?\n/);
   const primeira = linhas.findIndex((l) => l.trim());
   if (primeira < 0 || linhas.length - primeira < 2) return { ok: false, reason: "PRF_CSV_VAZIO", registros: [], total: 0, ignorados: 0 };
   const sep = detectarSeparador(linhas[primeira]);
@@ -125,7 +125,7 @@ export function parseAcidentesPrf(csvText = "", { max = 400000 } = {}) {
  * CSV da ANTT (Acidentes por quilômetro): `Concessionaria;Data;Km;Trecho`.
  */
 export function parseAcidentesAnttPorKm(csvText = "", { concessionaria = "", max = 400000 } = {}) {
-  const linhas = String(csvText || "").replace(/^﻿/, "").split(/\r?\n/);
+  const linhas = String(csvText || "").replace(/^\uFEFF/, "").split(/\r?\n/);
   const primeira = linhas.findIndex((l) => l.trim());
   if (primeira < 0 || linhas.length - primeira < 2) return { ok: false, reason: "ANTT_CSV_VAZIO", registros: [], total: 0, ignorados: 0 };
   const sep = detectarSeparador(linhas[primeira]);

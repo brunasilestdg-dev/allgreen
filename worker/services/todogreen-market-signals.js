@@ -79,7 +79,8 @@ export function urlContratacoesComprasGov(env, { inicio, fim, modalidade, pagina
 }
 export function urlGdelt(env, termo, { maxrecords = MARKET_LIMITS.gdeltMaxRecords, timespan = MARKET_LIMITS.gdeltTimespan } = {}) {
   const params = new URLSearchParams({ query: `${termo} sourcecountry:BR`, mode: "artlist", maxrecords: String(maxrecords), format: "json", timespan });
-  return `${base(env, MARKET_ENV_KEYS.gdeltBase, GDELT_BASE_PADRAO)}/api/v2/doc/doc?${params}`;
+  // GDELT documenta espaços como %20 (não "+") dentro de `query`.
+  return `${base(env, MARKET_ENV_KEYS.gdeltBase, GDELT_BASE_PADRAO)}/api/v2/doc/doc?${params.toString().replace(/\+/g, "%20")}`;
 }
 const modalidadesCompras = (env) => {
   const lista = texto(env?.[MARKET_ENV_KEYS.comprasModalidades], 60).split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);

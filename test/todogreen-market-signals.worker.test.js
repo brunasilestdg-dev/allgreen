@@ -81,7 +81,7 @@ describe("URLs das fontes", () => {
   it("PNCP, Compras.gov e GDELT com os parâmetros que as APIs exigem", () => {
     expect(urlBuscaPncp(env, "transporte de cargas")).toBe("https://pncp.gov.br/api/search/?q=transporte+de+cargas&tipos_documento=edital&ordenacao=-data&pagina=1&tam_pagina=20&status=recebendo_proposta");
     expect(urlContratacoesComprasGov(env, { inicio: "2026-09-10", fim: "2026-09-13", modalidade: 5 })).toContain("/modulo-contratacoes/1_consultarContratacoes_PNCP_14133?dataPublicacaoPncpInicial=2026-09-10&dataPublicacaoPncpFinal=2026-09-13&codigoModalidade=5&pagina=1&tamanhoPagina=50");
-    expect(urlGdelt(env, '"frota elétrica"')).toContain("api.gdeltproject.org/api/v2/doc/doc?query=%22frota+el%C3%A9trica%22+sourcecountry%3ABR&mode=artlist&maxrecords=75&format=json&timespan=7d");
+    expect(urlGdelt(env, '"frota elétrica"')).toContain("api.gdeltproject.org/api/v2/doc/doc?query=%22frota%20el%C3%A9trica%22%20sourcecountry%3ABR&mode=artlist&maxrecords=75&format=json&timespan=7d");
     expect(TERMOS_PNCP.length).toBeGreaterThanOrEqual(5);
     expect(TERMOS_GDELT.length).toBeGreaterThanOrEqual(3);
   });

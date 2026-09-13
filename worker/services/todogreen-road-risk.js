@@ -52,7 +52,7 @@ const parseJson = (s, fb) => { try { return JSON.parse(s); } catch { return fb; 
 const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
 const PODE_INGERIR = ["operations:manage", "operation:manage", "planning:manage", "tms:manage", "integration:manage"];
 const canIngest = (access) => PODE_INGERIR.some((p) => podeNaVertical(access, p));
-const slug = (v) => texto(v, 80).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const slug = (v) => texto(v, 80).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // ---- PRF: importação do CSV oficial → células + segmentos ----
 export async function importarAcidentesPrf(env, csvText, { now = new Date(), janelaMeses = RISK_LIMITS.prfJanelaMeses, origem = "prf-import" } = {}) {

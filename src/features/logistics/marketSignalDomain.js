@@ -17,7 +17,7 @@ export const SIGNAL_STATUS = Object.freeze(["new", "triaged", "dismissed", "conv
 export const MARKET_SIGNAL_VERSION = "market-signal@1.0.0";
 
 export const clean = (value, max = 500) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-export const fold = (value) => clean(value, 6000).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+export const fold = (value) => clean(value, 6000).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 export const includesAny = (text, terms) => terms.some((term) => text.includes(fold(term)));
 
 export const TERMOS = Object.freeze({

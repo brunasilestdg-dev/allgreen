@@ -23,10 +23,14 @@ Restrições respeitadas em **todas** as entregas abaixo:
 
 ## Estado de referência
 
-- **Produção** (no fecho desta rodada): `GET /api/status` → `version` `58c0000535fe`,
-  `database: operacional`. É o SHA curto do código publicado — o jeito de comparar
-  produção × `main` sem adivinhação.
-- **Migrations**: 126 arquivos, até `0119_todogreen_operation_import_templates`.
+- **Produção** (rodada 1): `GET /api/status` → `version` `58c0000535fe`. **Rodada 2 (13/09/2026)**:
+  `GET /api/system/version` → `2d65bdfdf87b` (PR #365), `environment: production`,
+  `publishedBy: cloudflare-workers-builds`, `migrations.expected: 131` — e, após o merge de P5/P6,
+  o SHA daquele merge com `0125`. A tela **Administração → Saúde do sistema** mostra LOCAL × SERVIDOR
+  × BANCO lado a lado (`docs/DEPLOYMENT_RUNBOOK.md` §13a tem o registro de cada publicação).
+- **Migrations**: rodada 1 até `0119`; rodada 2 acrescentou `0120`–`0125` (todas aditivas:
+  métricas de integração, snapshots de viabilidade, cache geográfico, perfil energético do
+  veículo, referências de energia, sinais de mercado + Risk Map).
   A anomalia da auditoria (0119 aplicada no D1 remoto e ausente do `main`) está
   reconciliada — o arquivo existe no repositório e a numeração segue linear.
   Nenhuma migration aplicada foi renomeada, reaplicada ou apagada.
@@ -43,7 +47,13 @@ Restrições respeitadas em **todas** as entregas abaixo:
 | **#352** | Estabilidade CSS | Chave `{` não fechada quebrava o CSS da vertical. → Correção pontual | `build` verde |
 | **#353** | P0 — fim do "zero falso" | Uma coleção com erro zerava TODOS os records ("Banco indisponível", números falsos). → `Promise.allSettled` por coleção no worker + gancho resiliente + banner de 3 estados (fatal/parcial/desatualizado) com "Tentar novamente" | teste worker de falha parcial + testes do gancho e do banner |
 | **#355** | Integridade Planner ↔ To-Do | "Aguardando" virava "Em andamento" a cada sync (perda no round-trip) e tarefa apagada ressuscitava. → `statusTarefaAoEspelhar` preserva o status mais fino; `removeTask` arquiva no Planner antes de remover | testes de round-trip de status e de propagação do delete |
-| **este** | Visibilidade da eletrificação + matriz + relatório | Domínios de decisão puros/testados não apareciam no caminho conectado. → `preflight` (PASS/WARNING/BLOCK + sugestões calculadas) anexado ao `POST /routes/electric-plan`, reusando o domínio puro (sem 3ª camada); matriz e este relatório atualizados | 3 testes de endpoint (PASS, BLOCK por autonomia, BLOCK por motorista) — suíte da API verde |
+| **#358** | P0 — versão e saúde | Produção sem identificação de SHA/ambiente e sem visão de integrações. → `GET /api/system/version` + **Saúde do sistema** (componentes, integrações em estado canônico, alertas `D1_BEHIND_CODE`/`CLIENT_SERVER_MISMATCH`, métricas por integração) + `TDG_ENVIRONMENT` | gate local verde; smoke em produção |
+| **#362** | P2-A — viabilidade persistida | Viabilidade só calculada no cliente, proposta avançava sem ela. → snapshot imutável/versionado em D1 + gate server-side 409 `viability_required` + painel com proveniência | 13 testes de worker + jornada ERP |
+| **#363** | P3-A — RoutingProvider | Pesado roteava como carro. → OSRM × Valhalla (truck costing) por veículo; `NO_SAFE_ROUTING_ENGINE` honesto; infra Valhalla no compose | 22 testes (domínio + worker) |
+| **#364** | P3-B/C — elevação/clima/digital twin | Modelo de energia assumia plano e sem clima; veículo sem perfil físico. → Valhalla `/height` + Open-Meteo com cache e proveniência; perfil físico; baseline de consumo por observações | 23 testes unit + worker |
+| **#365** | P4 — energia | Tarifa e diesel fixos no código; sem ONS; recarga sem plano por veículo. → hierarquias com fonte/data (ANEEL, ANP, ONS), plano de recarga por veículo, perfil por espaço, cron | 58 testes unit + 14 worker |
+| **P5/P6** | Radar estruturado + Risk Map | Radar só por busca web (e endpoint órfão); risco viário inexistente; alternativas de rota não conectadas. → PNCP/Compras.gov/GDELT → `market_signal` com score explicável e triagem; PRF/ANTT → risco por rota; alternativas ranqueadas com risco como custo | 22 testes unit + 17 worker |
+| **rodada 1** | Visibilidade da eletrificação + matriz + relatório | Domínios de decisão puros/testados não apareciam no caminho conectado. → `preflight` (PASS/WARNING/BLOCK + sugestões calculadas) anexado ao `POST /routes/electric-plan`, reusando o domínio puro (sem 3ª camada); matriz e este relatório atualizados | 3 testes de endpoint (PASS, BLOCK por autonomia, BLOCK por motorista) — suíte da API verde |
 
 ## Fechamento da task canônica (13/09/2026)
 
@@ -101,11 +111,13 @@ regressões que a rodada existe para eliminar.
 
 | Item | Estado | Por que ficou fora / próximo passo seguro |
 | --- | --- | --- |
-| Design system / regressão visual | Backlog | Precisa de navegador para conferir tokens e capturar screenshots de referência |
+| Design system / regressão visual (P1.4) | Backlog | Chromium existe no ambiente de sessão, mas a rodada priorizou P0→P6 a pedido da titular; próximo passo: tokens canônicos + aliases e capturas Playwright das 12 telas |
 | Roteirizador em duas colunas (mapa) | Backlog | Depende de o Leaflet montar (`invalidateSize`/`ResizeObserver`) — só verificável em navegador |
-| Painel de observabilidade ("Administração > Saúde do sistema") | Não iniciado | É funcionalidade nova de UI; decisão da titular. Se aprovado, nasce como domínio puro + painel testável em jsdom, sem inventar métricas |
-| `viabilitySnapshot` no caminho conectado | Pendente | Exige tabela D1 própria + bloqueio de avanço da proposta (persistência antes de UI) |
-| `dataProvenance` campo a campo | Pendente | Aplicação nas telas — trabalho visual, requer navegador |
+| Pré-flight persistido como gate de publicação de rota + Action Queue (P2 restante) | Pendente | Exige tabela própria e trava de escrita em `rotas`/despacho; a viabilidade (P2-A) já é gate da proposta |
+| P7 — Green On (comandos OCPP), GreenPay repasse (SysPag), Core All Green / Greenmob | Não iniciado | OCPP hoje é *PREPARED* (status/probe, sem CSMS); GreenPay é razão interno REAL; SysPag EXTERNAL sem token; identidade multi-vertical ainda usa `tenant_id` único — decisão de produto |
+| Painel de observabilidade ("Administração > Saúde do sistema") | **Entregue (#358)** | Domínio puro `systemHealthDomain` + painel; integrações só ficam "Operacional" com teste/sincronização realtricas |
+| `viabilitySnapshot` no caminho conectado | **Entregue (#362)** | Tabela própria, versionamento por hash, gate 409 na proposta |
+| `dataProvenance` campo a campo | Parcial | Aparece na viabilidade (fontes/tipo/confiança), na Energia (origem/data/vigência) e nos sinais de mercado (motivos do score); demais telas seguem sem |
 | Restrições viárias (OSM) efetivas | Infra | Dependem do grafo OSM/PostGIS carregado (infra externa) |
 
 ## Como validar
@@ -121,10 +133,22 @@ mas só depois do gate mínimo: `npm ci`, `npm run verify`, `npm run build` e
 `npm run deploy:cloudflare`. GitHub Actions vermelho por falta de minutos/runner
 não bloqueia; teste local, Cloudflare Build ou deploy manual vermelho bloqueia.
 
+## Regressões da `main` fora do escopo desta sessão
+
+- `LogisticsVertical.test.jsx › abre o To Do diretamente pela jornada do espaço de trabalho`
+  está vermelho desde o To Do canônico (Codex): a tela perdeu o botão "Nova tarefa" que o
+  teste espera. Não alterado aqui; todos os gates da rodada registram só essa falha.
+- Lint vermelho no `PlannerPage` (mesmo commit) foi corrigido em #365 sem mudar comportamento.
+
 ## Pendência de credencial (só a titular resolve)
 
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` no cofre do Worker — sem eles as
   notificações do navegador ficam desligadas (o app funciona normalmente).
 - A chave da API Cloudflare compartilhada durante a sessão deve ser tratada como
-  **exposta**: recomenda-se revogar/rotacionar. Foi usada apenas para consultas
-  D1 somente-leitura de auditoria; nenhum segredo foi commitado.
+  **exposta**: recomenda-se revogar/rotacionar. Na rodada 2 foi usada, só por variável de
+  ambiente, para `wrangler d1 migrations list --remote` e dois deploys manuais
+  (`d2396e44`, `401f7ec`); nenhum segredo foi commitado.
+- **Workers Builds publica sem gate**: definir o *build command* como
+  `npm run verify && npm run build` (ver `AUDITORIA_CONSOLIDACAO_TDG.md` §12.4 para a lista
+  completa de decisões da titular: token, gate, teste do To Do, `TDG_ENVIRONMENT` em prévia,
+  infra Valhalla/OSRM, CSV da PRF, perfil de energia por espaço, R2).

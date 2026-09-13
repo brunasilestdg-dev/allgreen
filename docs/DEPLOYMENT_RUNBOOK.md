@@ -246,6 +246,15 @@ Produção ≠ `main` até prova em contrário. Após cada publicação, anote e
 | Data (UTC) | SHA publicado | Como | Version ID (wrangler) | Smoke |
 | --- | --- | --- | --- | --- |
 | 2026-09-13 02:30 | `d2396e44d8e4` (= `main`) | `npm run deploy:cloudflare` c/ token | `3fdb0103-5906-48d6-affb-f974e869ad59` | `/api/status` ok, SPA 200, records 401 |
+| 2026-09-13 05:10 | `401f7ecb8c78` (último `main` verde) | manual c/ token — *pin* por cima do auto-deploy `700468c` (teste do To Do vermelho na main) | `80bd5835-…` | `/api/system/version` ok |
+| 2026-09-13 05:2x | `cc4c0fe6476c` (PR #362, viabilidade) | Cloudflare Workers Builds (push em `main`) | — | `/api/system/version` ok, `migrations.expected` 128 |
+| 2026-09-13 05:38 | `2a4d459fdc2d` (PR #363, RoutingProvider) | Cloudflare Workers Builds | — | `/api/system/version` ok |
+| 2026-09-13 05:53 | `c4f363784393` (PR #364, elevação/clima/perfil do veículo) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 130; D1 remoto com 0122/0123 aplicadas |
+| 2026-09-13 12:18 | `2d65bdfdf87b` (PR #365, energia P4 + lint) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 131; D1 remoto com 0124 aplicada |
+
+> Os deploys automáticos do Workers Builds **não rodam o gate** (só `build` + `deploy:cloudflare`):
+> o gate desta rodada foi executado localmente antes de cada merge (logs completos guardados por PR).
+> Decisão pendente da titular: colocar `npm run verify && npm run build` como *build command* do Worker.
 
 Sempre diferenciar **LOCAL** (build do navegador), **MAIN** (branch) e
 **PRODUÇÃO** (o que `/api/system/version` devolve) — a tela Saúde do sistema faz
