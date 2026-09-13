@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useVerticalRecords } from "./useVerticalRecords.js";
+import { useVerticalRecords, descreverAreasComErro } from "./useVerticalRecords.js";
 
 // Antes, criar/atualizar/arquivar terminavam chamando um recarregamento da
 // vertical inteira — cinco coleções e as simulações de novo, por uma escrita
@@ -97,6 +97,61 @@ describe("useVerticalRecords", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][1].method).toBe("DELETE");
+    expect(result.current.dados.opportunities).toEqual([]);
+  });
+});
+
+describe("descreverAreasComErro", () => {
+  it("nomeia a área afetada com rótulo amigável (não o nome técnico)", () => {
+    expect(descreverAreasComErro({ financial: {} })).toBe("Financeiro");
+  });
+  it("junta duas e três áreas com 'e'", () => {
+    expect(descreverAreasComErro({ financial: {}, operations: {} })).toBe("Financeiro e Operações");
+    expect(descreverAreasComErro({ opportunities: {}, proposals: {}, financial: {} })).toBe(
+      "Oportunidades, Propostas e Financeiro",
+    );
+  });
+  it("vazio quando não há erro", () => {
+    expect(descreverAreasComErro({})).toBe("");
+    expect(descreverAreasComErro()).toBe("");
+  });
+});
+
+describe("useVerticalRecords — falha parcial e total", () => {
+  const authHeaders = () => ({});
+  afterEach(() => vi.restoreAllMocks());
+
+  it("falha PARCIAL: financeiro indisponível não zera oportunidades (erros, não erro)", async () => {
+    global.fetch = vi.fn(() =>
+      response({
+        opportunities: [{ id: "op-1", cliente: "Cliente 1", revision: 1 }],
+        proposals: [],
+        contracts: [],
+        operations: [],
+        financial: [],
+        scenarios: [],
+        errors: { financial: { code: "read_failed", message: "Não foi possível ler esta coleção agora." } },
+        totals: { opportunities: 1, financial: 0 },
+      }),
+    );
+    const { result } = renderHook(() => useVerticalRecords(authHeaders));
+    await waitFor(() => expect(result.current.carregando).toBe(false));
+    // O que leu, ficou.
+    expect(result.current.dados.opportunities).toHaveLength(1);
+    // A que falhou é sinalizada — não como erro fatal.
+    expect(result.current.erros.financial).toBeTruthy();
+    expect(result.current.erro).toBe("");
+    expect(result.current.desatualizado).toBe(false);
+  });
+
+  it("falha TOTAL: mantém desatualizado e não vira zero silencioso", async () => {
+    global.fetch = vi.fn(() => response({ error: "Falha geral" }, 500));
+    const { result } = renderHook(() => useVerticalRecords(authHeaders));
+    await waitFor(() => expect(result.current.carregando).toBe(false));
+    expect(result.current.erro).toBeTruthy();
+    expect(result.current.desatualizado).toBe(true);
+    // dados segue VAZIO (primeira carga), e a tela usa `erro` para mostrar
+    // "indisponível" — não zero real.
     expect(result.current.dados.opportunities).toEqual([]);
   });
 });
