@@ -3201,6 +3201,7 @@
 }
 @media (max-width: 640px) {
   .tdg-avanco-registro-campos { grid-template-columns: minmax(0, 1fr); }
+}
 /* ===== Planner sharing modal polish v42 ===== */
 .tdg-planner-form {
   gap: 14px;
