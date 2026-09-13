@@ -263,6 +263,7 @@ VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
 | `TDG_VALHALLA_BASE_URL` (ou `TODOGREEN_VALHALLA_BASE_URL`) | motor Valhalla (truck costing / restrições / elevação `/height`) — **REAL**: `POST /api/todogreen/maps/route` com `vehicle` pesado roteia por ele; sem a URL responde `NO_SAFE_ROUTING_ENGINE` (409), nunca perfil de carro |
 | `TODOGREEN_VROOM_BASE_URL` | VROOM via gateway de integrações (mesmo papel de `TDG_ROUTING_URL`) |
 | `TODOGREEN_NOMINATIM_BASE_URL` | geocodificação própria |
+| `TDG_WEATHER_DISABLED=1` (opcional) | desliga a consulta de clima (Open-Meteo) do modelo de energia; sem ela o modelo assume sem penalidade térmica e reduz a confiança |
 
 Sem essas URLs, a otimização responde `routing_not_configured` (503) e a
 seleção de motor reflete os motores disponíveis — nada é forjado como ativo

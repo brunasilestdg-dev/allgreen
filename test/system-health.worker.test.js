@@ -118,8 +118,12 @@ describe("GET /api/todogreen/system-health", () => {
     expect(integracoes.valhalla.detail).toContain("NO_SAFE_ROUTING_ENGINE");
     expect(integracoes.valhalla.requirement).toContain("TDG_VALHALLA_BASE_URL");
     // Não implementada nunca aparece conectada.
-    for (const id of ["ons", "anp", "gdelt", "prf", "compras-gov", "postgis", "elevation"])
+    for (const id of ["ons", "anp", "gdelt", "prf", "compras-gov", "postgis"])
       expect(integracoes[id]).toMatchObject({ state: "NOT_CONFIGURED", implementation: "NOT_IMPLEMENTED" });
+    // Elevação: provedor REAL (Valhalla /height) que fica NOT_CONFIGURED sem a
+    // URL — e a linha diz que o modelo assume plano (ELEVATION_NOT_AVAILABLE).
+    expect(integracoes.elevation).toMatchObject({ state: "NOT_CONFIGURED", implementation: "REAL" });
+    expect(integracoes.elevation.detail).toContain("ELEVATION_NOT_AVAILABLE");
     // O que roda dentro do próprio Worker sobre o D1 é operacional.
     expect(integracoes.greenpay.state).toBe("OPERATIONAL");
     expect(integracoes["tms-api"].state).toBe("OPERATIONAL");

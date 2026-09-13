@@ -375,9 +375,23 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
     naoImplementada("postgis", "PostGIS (restrições OSM, índice geográfico)", "roteirizacao",
       "Sem grafo OSM/PostGIS carregado: restrições viárias (maxheight/maxweight/hgv) são avaliadas só quando as tags chegam pelo chamador.",
       "TODOGREEN_POSTGIS_URL (reservado) + ingestão batch de extracts OSM"),
-    naoImplementada("elevation", "Elevação (DEM)", "roteirizacao",
-      "Sem fonte DEM ligada: o modelo energético usa elevação informada/estimada e reduz a confiança.",
-      "SRTM/NASADEM com cache local"),
+    {
+      id: "elevation",
+      name: "Elevação (DEM aberto via Valhalla /height)",
+      group: "roteirizacao",
+      implementation: IMPLEMENTATION.REAL,
+      configured: motores.valhalla.configured,
+      authenticated: motores.valhalla.configured,
+      online: Boolean(saudePorId.get("valhalla")?.online),
+      checkedAt: saudePorId.get("valhalla")?.checkedAt || null,
+      lastSuccessAt: saudePorId.get("valhalla")?.lastSuccessAt || null,
+      lastFailureAt: saudePorId.get("valhalla")?.lastFailureAt || null,
+      detail: motores.valhalla.configured
+        ? "Perfil de elevação (ganho/perda) pelo /height do Valhalla, cache local de 30 dias (todogreen_geo_cache). Sem relevo nos tiles, o modelo assume plano e reduz a confiança."
+        : "Sem fonte DEM: o modelo de energia assume perfil plano e diz isso (ELEVATION_NOT_AVAILABLE). Configure TDG_VALHALLA_BASE_URL com tiles de relevo (infra/tms-routing).",
+      requirement: "TDG_VALHALLA_BASE_URL (tiles com build_elevation)",
+      canTest: false,
+    },
 
     // Operação e telemetria
     {
@@ -412,7 +426,11 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
       "Sem ingestão da ANP: o TCO usa a hierarquia contrato > frota informada > fallback configurado, sem referência municipal/estadual.",
       "Série de preços ANP (diesel S10) por município/UF/região"),
     clima && {
-      ...doCatalogo(clima, saudePorId.get("open-meteo"), { group: "energia", implementation: IMPLEMENTATION.REAL }),
+      ...doCatalogo(clima, saudePorId.get("open-meteo"), {
+        group: "energia",
+        implementation: IMPLEMENTATION.REAL,
+        detail: "Temperatura na hora de saída para o modelo de energia (Open-Meteo, licença aberta), cache local de 1 h. Sem dado → WEATHER_NOT_AVAILABLE e confiança reduzida — nunca temperatura inventada.",
+      }),
     },
     ocm && {
       ...doCatalogo(ocm, saudePorId.get("open-charge-map"), {
