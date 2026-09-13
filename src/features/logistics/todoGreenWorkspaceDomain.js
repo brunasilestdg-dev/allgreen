@@ -7,7 +7,16 @@ const normalizeText = (value) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const byId = (items) => new Map(list(items).filter((item) => item?.id).map((item) => [String(item.id), item]));
+const byId = (items) => {
+  const map = new Map();
+  for (const item of list(items)) {
+    for (const key of [item?.id, item?.taskId, item?.canonicalTaskId]) {
+      const normalized = String(key || "").trim();
+      if (normalized && !map.has(normalized)) map.set(normalized, item);
+    }
+  }
+  return map;
+};
 
 const firstText = (...values) =>
   values.map((value) => String(value || "").trim()).find(Boolean) || "";
@@ -59,6 +68,7 @@ export const buildTodoGreenCanonicalTask = (task = {}, {
   today = new Date().toISOString().slice(0, 10),
 } = {}) => {
   const taskId = sourceTaskId(task);
+  const rawId = firstText(task.id, task.taskId, taskId);
   const allTasksById = byId(tasks);
   const projectsById = byId(projects);
   const opportunitiesById = byId(opportunities);
@@ -85,6 +95,8 @@ export const buildTodoGreenCanonicalTask = (task = {}, {
   const blocked = Boolean(task.blocked || dependsOn.length && (dependencyOpen || missingDependency));
   const open = status !== "Concluído";
   const project = firstText(task.project, projectRecord?.name, opportunity?.title, opportunity?.name);
+  const clientId = firstText(task.clientId, client?.id, opportunity?.clientId);
+  const opportunityId = firstText(task.opportunityId, opportunity?.id);
   const clientLabel = firstText(task.clientLabel, client?.name, client?.company, opportunity?.clientName, project);
   const nextAction = firstText(
     task.nextAction,
@@ -96,21 +108,22 @@ export const buildTodoGreenCanonicalTask = (task = {}, {
   );
   const sourceLinks = {
     ...(task.sourceLinks || {}),
-    todo: { taskId },
+    todo: { taskId: rawId },
     ...(task.plannerPlanId || task.plannerTaskId ? {
       planner: { planId: task.plannerPlanId || "", taskId: task.plannerTaskId || "" },
     } : {}),
-    ...(task.clientId || task.opportunityId || String(task.source || "").includes("crm") ? {
-      crm: { clientId: task.clientId || "", opportunityId: task.opportunityId || "" },
+    ...(clientId || opportunityId || String(task.source || "").includes("crm") ? {
+      crm: { clientId, opportunityId },
     } : {}),
     ...(task.implantationId || String(task.source || "").includes("implant") ? {
-      implantation: { implantationId: task.implantationId || "", taskId },
+      implantation: { implantationId: task.implantationId || "", taskId: rawId },
     } : {}),
   };
 
   return {
     raw: task,
     id: taskId,
+    rawId,
     canonicalId: taskId,
     title: firstText(task.title, task.name, "Tarefa sem título"),
     description: task.description || task.notes || "",
@@ -121,9 +134,9 @@ export const buildTodoGreenCanonicalTask = (task = {}, {
     assigneeId,
     project,
     projectId: firstText(task.projectId, task.plannerPlanId),
-    clientId: firstText(task.clientId, client?.id, opportunity?.clientId),
+    clientId,
     clientLabel,
-    opportunityId: firstText(task.opportunityId, opportunity?.id),
+    opportunityId,
     dependsOn,
     dependencyLabels,
     blocked,
