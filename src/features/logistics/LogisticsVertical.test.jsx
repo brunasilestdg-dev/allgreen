@@ -166,10 +166,13 @@ describe("LogisticsVertical", () => {
   it("renders the private hub for authorized To Do Green users", async () => {
     await renderarAutorizada();
     expect(screen.getByRole("heading", { name: "Principal", level: 1 }).hidden).toBe(false);
-    // O primeiro nível é apresentação, não uma segunda taxonomia: 8 frentes
-    // agrupam as áreas reais sem remover rota, permissão, breadcrumb ou página.
+    // Acordeão: 19 áreas (taxonomia da titular; Implantação mora no Workspace e
+    // Planejamento voltou a ser área própria, separada de Operação e de
+    // Indicadores; "Estúdio" reúne as ferramentas trazidas do app geral).
+    // "Marketing" deixou de ser área própria: Notícias e inteligência agora
+    // vive no Comercial (decisão da titular, 05/09). Conta-se as ÁREAS.
     const navegacao = screen.getByRole("navigation", { name: "Navegação To Do Green" });
-    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(8);
+    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(19);
     expect(screen.getByText("Configurações")).toBeTruthy();
     // Sem "Sair" a sessão fica eterna no navegador: quem pega o mesmo
     // aparelho entra direto na conta de quem esqueceu de sair.
@@ -191,21 +194,16 @@ describe("LogisticsVertical", () => {
     await renderarAutorizada();
 
     const areas = screen.getByRole("navigation", { name: "Navegação To Do Green" });
-    // Os 8 grupos principais estão presentes.
+    // Taxonomia da titular presente.
     expect(within(areas).getByRole("button", { name: "Comercial" })).toBeTruthy();
-    expect(within(areas).getByRole("button", { name: "Frota & Energia" })).toBeTruthy();
-    expect(within(areas).getByRole("button", { name: "Pessoas & Trabalho" })).toBeTruthy();
-    expect(within(areas).getByRole("button", { name: "Administração" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Frota" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Departamento Pessoal" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Recursos Humanos" })).toBeTruthy();
 
-    // Abrir o segundo nível do Comercial sem navegar.
+    // Abrir o segundo nível do Comercial sem navegar (a seta só expande).
     fireEvent.click(within(areas).getByRole("button", { name: /Abrir funcionalidades de Comercial/ }));
     expect(within(areas).getByRole("button", { name: "Oportunidades" })).toBeTruthy();
     expect(within(areas).getByRole("button", { name: /Precificação/ })).toBeTruthy();
-
-    // DP e RH continuam acessíveis, agora dentro de Pessoas & Trabalho.
-    fireEvent.click(within(areas).getByRole("button", { name: /Abrir funcionalidades de Pessoas & Trabalho/ }));
-    expect(within(areas).getByRole("button", { name: "DP" })).toBeTruthy();
-    expect(within(areas).getByRole("button", { name: "RH" })).toBeTruthy();
 
     // A busca atravessa todas as áreas e substitui o acordeão enquanto digita.
     fireEvent.change(screen.getByLabelText("Buscar funcionalidades"), { target: { value: "ocorrência" } });
@@ -265,7 +263,12 @@ describe("LogisticsVertical", () => {
     await renderarAutorizada();
     // O "To Do" (tarefas) é uma ferramenta carregada por lazy; em runner lento
     // do CI o carregamento passa do timeout padrão de 1s do findBy. Damos folga
-    // para o chunk montar antes de procurar o botão.
+    // para o chunk montar antes de procurar a tela.
+    // A rota abre na aba "Hoje" (a fila do dia); o quadro completo — com "Nova
+    // tarefa" — fica na aba "Quadro". O teste procurava o botão direto na
+    // chegada e ficava vermelho desde que "Hoje" virou a entrada padrão.
+    expect(await screen.findByRole("heading", { name: "Suas tarefas em um só lugar" }, { timeout: 5000 })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Quadro" }));
     expect(await screen.findByRole("button", { name: "Nova tarefa" }, { timeout: 5000 })).toBeTruthy();
   });
 
@@ -631,11 +634,13 @@ describe("LogisticsVertical", () => {
     });
     await renderarAutorizada();
     const aviso = await screen.findByRole("alert");
-    // Diz que não sabe (indisponível/desatualizado), não que é zero — e NÃO ecoa
-    // o erro técnico do servidor ("Banco indisponível.") ao usuário final.
+    // Diz que não sabe (não carregou, pode estar incompleto), não apresenta o
+    // zero como dado real — e NÃO ecoa o erro técnico do servidor
+    // ("Banco indisponível.") ao usuário final.
     expect(aviso.textContent).toMatch(/não foi possível carregar/i);
-    expect(aviso.textContent).toMatch(/não são necessariamente zero/i);
+    expect(aviso.textContent).toMatch(/incompleto/i);
     expect(aviso.textContent).not.toMatch(/Banco indisponível/);
+    expect(aviso.textContent).not.toMatch(/endpoint|payload|fallback/i);
     // E oferece recuperar sem recarregar a aplicação inteira.
     expect(screen.getByRole("button", { name: /tentar novamente/i })).toBeTruthy();
   });
@@ -841,5 +846,30 @@ describe("LogisticsVertical", () => {
     await screen.findByText(/Nenhum e-mail autorizado ainda/);
     expect(container.textContent).not.toMatch(/continua liberado automaticamente/);
     expect(container.textContent).not.toMatch(/@todogreen\.com\.br/);
+  });
+});
+
+describe("pontes entre as superfícies de trabalho", () => {
+  beforeEach(() => {
+    window.history.pushState({}, "", "/todogreen");
+    stubDeRede();
+  });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.pushState({}, "", "/"); });
+
+  it("o botão 'Quadro To Do' do Planner abre o quadro de tarefas de verdade", async () => {
+    window.history.pushState({}, "", "/todogreen/planner");
+    await renderarAutorizada();
+    fireEvent.click(await screen.findByRole("button", { name: /Quadro To Do/ }, { timeout: 5000 }));
+    expect(window.location.pathname + window.location.search).toBe("/todogreen/espaco?ferramenta=tarefas");
+    expect(await screen.findByRole("navigation", { name: "Jornadas principais do espaço de trabalho" }, { timeout: 5000 })).toBeTruthy();
+  });
+
+  it("a aba 'To Do' do espaço de trabalho abre o quadro, não fica no lugar", async () => {
+    window.history.pushState({}, "", "/todogreen/espaco");
+    await renderarAutorizada();
+    const navegacao = await screen.findByRole("navigation", { name: "Jornadas principais do espaço de trabalho" }, { timeout: 5000 });
+    fireEvent.click(within(navegacao).getByRole("button", { name: /To Do/ }));
+    expect(window.location.search).toBe("?ferramenta=tarefas");
+    expect(await screen.findByRole("navigation", { name: /Entrada principal/ }, { timeout: 5000 })).toBeTruthy();
   });
 });

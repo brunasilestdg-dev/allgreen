@@ -24,6 +24,53 @@ const isOpenOpportunity = (item) =>
 
 const countLabel = (total, singular, plural) => `${total} ${total === 1 ? singular : plural}`;
 
+// Dia de calendário (AAAA-MM-DD) de uma data solta. Data pura fica como está —
+// converter para fuso transformaria "hoje" em "ontem" para quem está a oeste de
+// Greenwich, que é o caso do Brasil inteiro.
+export const diaDaData = (valor) => {
+  if (valor instanceof Date) return Number.isFinite(valor.getTime()) ? valor.toLocaleDateString("sv-SE") : "";
+  const texto = String(valor ?? "").trim();
+  if (!texto) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+  const parsed = new Date(texto);
+  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString("sv-SE") : "";
+};
+
+// "Ação atrasada" é DIA anterior a hoje, não instante anterior a agora. Comparar
+// por timestamp fazia a ação marcada para HOJE já nascer atrasada (`new Date("2026-09-13")`
+// é meia-noite UTC, sempre atrás do agora no Brasil) e, pior, divergia do filtro
+// "Ações atrasadas" do CRM, que sempre comparou dia: o aviso contava 2 contas e a
+// lista abria vazia. Agora é UMA definição, importada pelo CRM e pelo Meu Dia.
+export const contaComAcaoAtrasada = (cliente, hoje = diaDaData(new Date())) => {
+  const dia = diaDaData(cliente?.crm?.nextActionAt ?? cliente?.nextActionAt);
+  return Boolean(dia) && Boolean(hoje) && dia < hoje;
+};
+
+export const contasComAcaoAtrasada = (clientes = [], agora = new Date()) => {
+  const hoje = diaDaData(agora) || diaDaData(new Date());
+  return (Array.isArray(clientes) ? clientes : []).filter((item) => contaComAcaoAtrasada(item, hoje));
+};
+
+export const oportunidadeSemProximaAcao = (item) =>
+  !String(item?.nextStep ?? item?.proximoPasso ?? item?.nextAction ?? "").trim();
+
+const nomeDoRegistro = (item) =>
+  String(item?.name ?? item?.nome ?? item?.cliente ?? item?.client ?? item?.titulo ?? item?.title ?? "").trim();
+
+// "2 clientes com ação atrasada" sem dizer QUAIS obriga a caçar na lista — e foi
+// exatamente a reclamação da titular. O aviso passa a nomear até três contas.
+const nomesDoAlerta = (registros, limite = 3) => {
+  const nomes = registros.map(nomeDoRegistro).filter(Boolean);
+  if (!nomes.length) return "";
+  const restantes = nomes.length - limite;
+  return restantes > 0 ? `${nomes.slice(0, limite).join(", ")} e mais ${restantes}` : nomes.join(", ");
+};
+
+// Cada pendência abre a tela FILTRADA nos registros que a acenderam. Sem o
+// filtro na rota, clicar no aviso caía na lista inteira do CRM e a pessoa tinha
+// de adivinhar quem estava atrasado.
+const comDetalhe = (nomes, texto) => (nomes ? `${nomes}. ${texto}` : texto);
+
 // O contrato da vertical expõe o fim como `fimEm`; os aliases em inglês ficam
 // por compatibilidade com fixtures e chamadores antigos. Sem `fimEm` aqui, o
 // alerta de renovação nunca acendia para contrato real nenhum.
@@ -76,13 +123,8 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
     0,
   );
 
-  const overdueClients = clients.filter((item) => {
-    const nextAt = dateValue(item?.crm?.nextActionAt);
-    return nextAt !== null && nextAt < nowMs;
-  });
-  const opportunitiesWithoutAction = opportunities.filter((item) =>
-    !String(item?.nextStep ?? item?.proximoPasso ?? item?.nextAction ?? "").trim(),
-  );
+  const overdueClients = contasComAcaoAtrasada(clients, now);
+  const opportunitiesWithoutAction = opportunities.filter(oportunidadeSemProximaAcao);
   const expiringContracts = contracts.filter((item) => {
     // Contrato sem renovação não gera aviso de renovação — acender aqui seria
     // ruído. Já vencido também sai: é outro problema, não "antecipe".
@@ -110,17 +152,26 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
       id: "clients-overdue",
       tone: "attention",
       title: `${countLabel(overdueClients.length, "cliente", "clientes")} com ação atrasada`,
-      detail: "Retome o relacionamento ou atualize a próxima ação da conta.",
+      detail: comDetalhe(nomesDoAlerta(overdueClients), "Retome o relacionamento ou atualize a próxima ação da conta."),
       action: "Abrir clientes",
-      route: "/todogreen/clientes",
+      // Uma conta atrasada abre direto na ficha dela; várias abrem o CRM já
+      // filtrado em "Ações atrasadas" — nunca mais a carteira inteira.
+      route: overdueClients.length === 1 && overdueClients[0]?.id
+        ? `/todogreen/clientes?client=${encodeURIComponent(overdueClients[0].id)}`
+        : "/todogreen/clientes?filtro=acao-atrasada",
+      ids: overdueClients.map((item) => item.id).filter(Boolean),
     },
     opportunitiesWithoutAction.length && {
       id: "opportunities-without-action",
       tone: "attention",
       title: `${countLabel(opportunitiesWithoutAction.length, "oportunidade", "oportunidades")} sem próxima ação`,
-      detail: "O forecast perde confiabilidade quando a negociação não tem próximo passo.",
+      detail: comDetalhe(
+        nomesDoAlerta(opportunitiesWithoutAction),
+        "O forecast perde confiabilidade quando a negociação não tem próximo passo.",
+      ),
       action: "Revisar pipeline",
-      route: "/todogreen/oportunidades",
+      route: "/todogreen/oportunidades?filtro=sem-proxima-acao",
+      ids: opportunitiesWithoutAction.map((item) => item.id).filter(Boolean),
     },
     Number(dashboard.aprovacoesPendentes || 0) > 0 && {
       id: "approvals-pending",

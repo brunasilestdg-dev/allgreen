@@ -1,10 +1,24 @@
 .tms-portal {
-  --tms-ink: #14211d;
-  --tms-muted: #66736e;
-  --tms-green: #17624f;
-  --tms-green-soft: #e9f3ef;
-  --tms-border: #dfe6e2;
-  --tms-surface: #f5f7f5;
+  /* O Portal TMS é outro PORTAL, não outro produto. Os tokens deixam de ser uma
+     paleta paralela (que ia derivando do ERP a cada ajuste) e passam a apontar
+     para os do design system — que já herdam a marca da vertical e já foram
+     calibrados para contraste. Os valores literais ficam só como reserva para
+     quando a folha de tokens não estiver carregada.
+
+     Fica só a cor: layout, densidade e as particularidades de torre de controle
+     do TMS continuam como estão. Em especial, --tms-muted valia #66736e, que dá
+     4,3:1 sobre os fundos claros — abaixo do mínimo de 4,5:1 para texto
+     pequeno. Era o mesmo problema que a vertical já tinha corrigido no
+     --tdg-muted, e que não tinha chegado até aqui. */
+  --tms-ink: var(--ds-ink, #10241f);
+  --tms-muted: var(--ds-ink-muted, #52645c);
+  --tms-green: var(--ds-brand, #17624f);
+  --tms-green-soft: var(--ds-surface-soft, #e8f5ef);
+  --tms-border: var(--ds-line, #d6e8df);
+  --tms-surface: var(--ds-bg, #f3f8f5);
+  --tms-card: var(--ds-surface, #ffffff);
+  --tms-radius: var(--ds-radius-lg, 14px);
+  --tms-radius-sm: var(--ds-radius-sm, 8px);
   min-height: 100vh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -39,9 +53,14 @@
   display: flex;
   flex-direction: column;
   padding: 22px 14px 16px;
-  background: #17211e;
-  color: #f6f8f7;
-  border-right: 1px solid #26332f;
+  /* Era um quase-preto (#17211e) que não existe em lugar nenhum do ERP e fazia
+     a Torre parecer outro sistema já na primeira olhada. Agora é o MESMO verde
+     profundo dos blocos escuros da vertical. A barra continua escura — isso é
+     particularidade de torre de controle, e a densidade não muda; o que muda é
+     a paleta deixar de ser paralela. */
+  background: linear-gradient(180deg, var(--ds-brand, #17624f) 0%, #0f4a3b 100%);
+  color: #eef6f2;
+  border-right: 1px solid rgba(255, 255, 255, .12);
 }
 
 .tms-brand {
@@ -49,7 +68,7 @@
   gap: 11px;
   align-items: center;
   padding: 0 8px 22px;
-  border-bottom: 1px solid #2b3733;
+  border-bottom: 1px solid rgba(255, 255, 255, .16);
 }
 
 .tms-brand-mark {
@@ -59,7 +78,7 @@
   display: grid;
   place-items: center;
   background: #f3f7f5;
-  color: #17624f;
+  color: var(--ds-brand, #17624f);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: .04em;
@@ -98,7 +117,7 @@
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #bdc8c4;
+  color: #cfe5da;
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -106,13 +125,13 @@
 }
 
 .tms-sidebar nav button:hover {
-  background: #202d29;
+  background: rgba(255, 255, 255, .12);
   color: #fff;
 }
 
 .tms-sidebar nav button.active {
-  background: #e7f1ed;
-  color: #154e40;
+  background: #ffffff;
+  color: var(--ds-brand, #17624f);
   font-weight: 700;
 }
 
@@ -122,7 +141,7 @@
   gap: 8px;
   align-items: center;
   padding: 13px 10px 2px;
-  color: #8fa09a;
+  color: #bcd8cb;
   font-size: 11px;
   line-height: 1.35;
 }
@@ -301,7 +320,7 @@
   margin-bottom: 16px;
   border: 1px solid var(--tms-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--tms-card);
 }
 
 .tms-panel-head {
@@ -329,7 +348,7 @@
   position: relative;
   min-width: 0;
   padding: 12px 9px;
-  border: 1px solid #e5eae7;
+  border: 1px solid var(--tms-border);
   border-radius: 10px;
   background: #fafcfb;
   text-align: left;
@@ -535,9 +554,18 @@
   align-items: center;
   gap: 11px;
   padding: 12px;
-  border: 1px solid #e5eae7;
+  border: 1px solid var(--tms-border);
   border-radius: 9px;
+  flex-wrap: wrap;
 }
+
+/* A linha de integração diz o estado real (último erro, última sincronização,
+   o que ainda falta) e traz a ação que resolve. */
+.tms-integration-list > div > span { flex: 1 1 220px; min-width: 0; }
+/* O selo é etiqueta, não faixa: sem isto ele esticava e ocupava o meio da linha. */
+.tms-integration-list > div > .tms-status { flex: 0 0 auto; }
+.tms-integration-estado { display: block; color: var(--tms-muted, #6b7c76); }
+.tms-integration-list > div > button { flex: 0 0 auto; }
 
 .tms-feature-list svg,
 .tms-integration-icon {
@@ -879,12 +907,20 @@
 .tms-search-field svg { flex: 0 0 auto; color: var(--tms-muted); }
 .tms-search-field input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 12px; }
 .tms-primary-action, .tms-secondary-action, .tms-danger-action, .tms-icon-action, .tms-pagination button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
-.tms-primary-action { color: #fff; background: #17624f; }
+.tms-primary-action { color: #fff; background: var(--tms-green); }
 .tms-primary-action:hover { background: #124d3e; }
-.tms-secondary-action { color: #17624f; background: #fff; border-color: #cfdcd6; }
-.tms-secondary-action:hover { border-color: #17624f; background: #f7fbf9; }
-.tms-danger-action { color: #9d342d; background: #fff; border-color: #e6c1bc; }
-.tms-icon-action { width: 34px; min-height: 34px; padding: 0; color: #17624f; background: #eef5f2; border-color: #d7e5df; }
+.tms-secondary-action { color: var(--tms-green); background: var(--tms-card); border-color: #cfdcd6; }
+.tms-secondary-action:hover { border-color: var(--tms-green); background: #f7fbf9; }
+.tms-danger-action { color: var(--ds-danger, #9d342d); background: var(--tms-card); border-color: #e6c1bc; }
+.tms-icon-action { width: 34px; min-height: 34px; padding: 0; color: var(--tms-green); background: var(--tms-green-soft); border-color: #d7e5df; }
+
+/* Foco visível com o MESMO anel do resto do produto. O ERP já tinha; o portal
+   navegado por teclado ficava sem marca nenhuma em botão, aba e campo. */
+.tms-portal :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--ds-focus, #0b8073);
+  outline-offset: 2px;
+  border-radius: var(--tms-radius-sm);
+}
 .tms-primary-action:disabled, .tms-secondary-action:disabled, .tms-danger-action:disabled, .tms-icon-action:disabled, .tms-pagination button:disabled { opacity: .5; cursor: default; }
 .tms-table-action { min-height: 30px; padding: 0 9px; font-size: 10px; }
 .tms-permission-note { color: var(--tms-muted); font-size: 9px; font-weight: 700; white-space: nowrap; }

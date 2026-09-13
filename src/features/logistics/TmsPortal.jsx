@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import {
   Activity,
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   Boxes,
   Cable,
@@ -61,7 +62,11 @@ import {
   registrarRecente,
   resumoDaLeva,
 } from "./tmsBipagemDomain.js";
+// Os tokens do design system primeiro: é deles que a cor, o contraste e o raio
+// do portal saem agora (ver o bloco .tms-portal em TmsPortal.css).
+import "../../design-system/tokens.css";
 import "./TmsPortal.css";
+import { ACOES_TMS, linhasDeIntegracaoTms } from "./tmsIntegrationsDomain.js";
 import "./TmsApiManager.css";
 // Reaproveita o estilo do pino (divIcon) e do container do mapa já validados
 // no RoteirizacaoPage — mesma técnica, mesma folha.
@@ -195,8 +200,17 @@ const pathSection = () => {
   return SECTIONS.some((item) => item.id === part) ? part : "controle";
 };
 
+// Uma só porta de saída do portal para o ERP (a barra superior usa a mesma):
+// pushState + popstate deixa o roteador do app trocar de portal sem recarregar.
+const irParaOErp = (rota) => {
+  window.history.pushState({}, "", rota);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+};
+
 function StatusPill({ value }) {
   const normalized = String(value || "").toLowerCase();
+  if (normalized === "nao_configurada") return <span className="tms-status pending">Não configurada</span>;
+  if (normalized === "pendente") return <span className="tms-status pending">Falta concluir</span>;
   const tone = ["completed", "concluida", "autorizado", "issued", "closed", "ativa", "ready"].includes(normalized)
     ? "ok"
     : ["cancelled", "canceled", "cancelado", "error", "erro", "failed", "revogada"].includes(normalized)
@@ -1398,13 +1412,14 @@ function Integrations({ data, onReload, setToast }) {
   // A configuração do rastreador abre aqui mesmo, embaixo do botão — antes não
   // havia lugar nenhum para ligar a telemetria pelo TMS.
   const [configurando, setConfigurando] = useState(false);
-  const track3r = data?.integrations?.track3r;
-  const rows = [
-    { name: "Rastreador / telemetria (entrada)", detail: "Recebe posição e ocorrências dos veículos", value: track3r },
-    { name: "CIOT / ANTT", detail: "Integração direta e certificado", value: data?.integrations?.ciot },
-    { name: "Fiscal / SEFAZ", detail: "CT-e e MDF-e", value: data?.integrations?.fiscal },
-    { name: "API TMS (saída)", detail: "API externa própria para clientes e parceiros", value: data?.integrations?.api },
-  ];
+  // As linhas (estado real, o que falta, ação que resolve) vêm do domínio
+  // testado; aqui só executamos a ação que cada uma descreve.
+  const rows = linhasDeIntegracaoTms(data?.integrations || {});
+  const executar = (acao) => {
+    if (acao.tipo === ACOES_TMS.configurarRastreador) { setConfigurando(true); return; }
+    if (acao.tipo === ACOES_TMS.abrirNoErp) { irParaOErp(acao.rota); return; }
+    document.getElementById("tms-api-chaves")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   return (
     <section className="tms-panel">
       <div className="tms-panel-head">
@@ -1420,10 +1435,15 @@ function Integrations({ data, onReload, setToast }) {
       </div>
       <div className="tms-integration-list">
         {rows.map((row) => (
-          <div key={row.name}>
+          <div key={row.id}>
             <div className="tms-integration-icon"><Cable size={19} /></div>
-            <span><strong>{row.name}</strong><small>{row.detail}</small></span>
-            <StatusPill value={row.value?.status || "configurar"} />
+            <span>
+              <strong>{row.name}</strong>
+              <small>{row.detail}</small>
+              <small className="tms-integration-estado">{row.estado}</small>
+            </span>
+            <StatusPill value={row.status} />
+            <button type="button" className="tms-secondary-action" onClick={() => executar(row.acao)}>{row.acao.rotulo}</button>
           </div>
         ))}
       </div>
@@ -1437,10 +1457,10 @@ function Integrations({ data, onReload, setToast }) {
       <div className="tms-api-note">
         <div>
           <strong>API TMS externa {(data?.integrations?.api?.activeKeys || 0) > 0 ? "ativa" : "pronta — gere uma chave para ativar"}</strong>
-          <p>Clientes e parceiros podem criar cargas, consultar pedidos, enviar rastreamento e comprovante de entrega, além de consultar CT-e, MDF-e, CIOT e faturamento sem entrar no ERP. A autenticação usa chaves próprias `tdg_live_`, com isolamento por cliente e escopo.</p>
+          <p>Clientes e parceiros podem criar cargas, consultar pedidos, enviar rastreamento e comprovante de entrega, além de consultar CT-e, MDF-e, CIOT e faturamento sem entrar no ERP. Cada chave vale para um cliente e só libera o que você autorizar.</p>
         </div>
       </div>
-      <ApiManager api={data?.integrations?.api} onReload={onReload} />
+      <div id="tms-api-chaves"><ApiManager api={data?.integrations?.api} onReload={onReload} /></div>
     </section>
   );
 }
@@ -1495,6 +1515,12 @@ export default function TmsPortal() {
     setSection(valid);
   }, []);
 
+  // A Torre é um portal à parte, mas não pode ser um beco sem saída: quem entra
+  // pela tela inicial do ERP só voltava editando a URL na mão. O `popstate`
+  // avisa o roteador do app (ver src/routing/useRoutePath.js) para trocar de
+  // portal sem recarregar a página.
+  const voltarAoErp = useCallback(() => irParaOErp("/todogreen"), []);
+
   const active = useMemo(() => SECTIONS.find((item) => item.id === section) || SECTIONS[0], [section]);
   let content;
   if (section === "controle") content = <ControlTower data={data} onSection={navigate} />;
@@ -1518,12 +1544,12 @@ export default function TmsPortal() {
             return <button type="button" key={item.id} className={section === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>;
           })}
         </nav>
-        <div className="tms-sidebar-foot"><Activity size={16} /><span>Portal operacional separado do ERP</span></div>
+        <div className="tms-sidebar-foot"><Activity size={16} /><span>Operação de transporte em tempo real</span></div>
       </aside>
       <main className="tms-main">
         <header className="tms-topbar">
           <div><span>PORTAL TMS · ATUALIZAÇÃO AUTOMÁTICA</span><h1>{active.label}</h1></div>
-          <div className="tms-topbar-actions"><small>{data?.generatedAt ? `Última leitura ${dateTime(data.generatedAt)}` : ""}</small><button type="button" className="tms-refresh" onClick={load} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} />{loading ? "Atualizando" : "Atualizar"}</button></div>
+          <div className="tms-topbar-actions"><small>{data?.generatedAt ? `Última leitura ${dateTime(data.generatedAt)}` : ""}</small><button type="button" className="tms-refresh tms-voltar-erp" onClick={voltarAoErp}><ArrowLeft size={16} />Voltar ao ERP</button><button type="button" className="tms-refresh" onClick={load} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} />{loading ? "Atualizando" : "Atualizar"}</button></div>
         </header>
         {error ? <div className="tms-error" role="alert"><AlertTriangle size={18} /><span>{error}</span></div> : null}
         {loading && !data ? <div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Carregando torre de controle...</span></div> : content}

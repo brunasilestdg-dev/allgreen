@@ -139,7 +139,7 @@ export default function EnergyReferenceSection({ authHeaders }) {
     return <div className="tdg-recarga tdg-eref"><p className="tdg-recarga-nota"><Loader2 className="girando" size={16} /> Carregando tarifa, melhor hora e plano de recarga...</p></div>;
   }
   if (!plano) {
-    return <div className="tdg-recarga tdg-eref"><p className="tdg-recarga-nota">Plano de energia indisponível neste servidor (o endpoint não respondeu). Nada foi estimado no lugar.</p></div>;
+    return <div className="tdg-recarga tdg-eref"><p className="tdg-recarga-nota">Não foi possível carregar o plano de energia agora. Nada foi estimado no lugar.</p></div>;
   }
 
   const { tarifa, janelas, diesel, plano: recarga, referencias, perfil } = plano;
@@ -260,7 +260,7 @@ export default function EnergyReferenceSection({ authHeaders }) {
           <label><span>Diesel de frota (R$/L)</span><input type="number" min="0" step="0.01" {...campo("dieselFrotaL")} disabled={!canWrite} /></label>
           <label><span>Data do diesel de frota</span><input type="date" {...campo("dieselFrotaData")} disabled={!canWrite} /></label>
           <label><span>Diesel fallback (R$/L)</span><input type="number" min="0" step="0.01" {...campo("dieselFallbackL")} disabled={!canWrite} /></label>
-          <p className="tdg-recarga-dica">Contrato e tarifa informada são INFORMED; ANEEL/ANP são EXTERNAL com data da fonte; fallback é DERIVED e aparece marcado. Sem retorno informado, a frota é considerada parada nas 12 h antes da saída (premissa declarada).</p>
+          <p className="tdg-recarga-dica">Cada número mostra de onde veio: contrato e tarifa informada valem primeiro; ANEEL e ANP entram com a data da fonte; o valor de reserva aparece marcado como estimativa. Sem retorno informado, a frota é considerada parada nas 12 h antes da saída.</p>
           <div className="tdg-recarga-form-actions">
             <button type="submit" className="tdg-action" disabled={!canWrite || ocupado === "perfil"}>{ocupado === "perfil" ? "Salvando..." : "Salvar perfil"}</button>
           </div>

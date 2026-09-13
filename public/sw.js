@@ -1,11 +1,10 @@
 const SERVICE_VERSION =
   new URL(self.location.href).searchParams.get("v") || "local";
-// v14: nova tela de configuração de busca (Integrações → Busca web) muda o
-// bundle; o bump força quem estiver preso na versão antiga a descartar o cache
-// e baixar a nova. Mudar o número do cache faz o `activate` apagar tudo o que
-// não é este cache — cura o caso de telas que "não fazem nada" porque o JS em
-// cache aponta para pedaços que já não existem.
-const CACHE = `seu-funcionario-v238-${SERVICE_VERSION}`;
+// O bump do número força quem estiver preso numa versão antiga a descartar o
+// cache e baixar a nova: mudar o nome do cache faz o `activate` apagar tudo o
+// que não é este cache — cura o caso de telas que "não fazem nada" porque o JS
+// em cache aponta para pedaços que já não existem.
+const CACHE = `seu-funcionario-v239-${SERVICE_VERSION}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -37,16 +36,27 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-  // Demais (JS/CSS com hash, imagens): rede primeiro, cai para cache offline
+  // Demais (JS/CSS com hash, imagens): rede primeiro, cai para cache offline.
+  // Duas armadilhas aqui, e as duas produziam o "Algo deu errado":
+  //  1. um pedaço com hash some do servidor depois do deploy e volta 404 — o
+  //     404 NÃO pode ser guardado no cache, senão a aba fica presa nele;
+  //  2. sem rede, devolver o index.html (`cache.match("/")`) para um pedido de
+  //     .js faz o navegador tentar executar HTML como módulo e estourar um erro
+  //     de sintaxe indecifrável. Melhor deixar a falha ser o que é.
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {
       try {
         const fresh = await fetch(req);
         if (fresh.ok) cache.put(req, fresh.clone());
+        else if (fresh.status === 404) {
+          const cached = await cache.match(req);
+          if (cached) return cached;
+        }
         return fresh;
-      } catch {
+      } catch (erro) {
         const cached = await cache.match(req);
-        return cached || cache.match("/");
+        if (cached) return cached;
+        throw erro;
       }
     }),
   );

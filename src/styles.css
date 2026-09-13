@@ -430,3 +430,19 @@
   .tdg-task-meta { grid-template-columns: 1fr; }
   .tdg-task-project-card div { grid-template-columns: repeat(2, auto); }
 }
+
+/* Falha contida numa tela (RouteErrorBoundary): o app continua de pé em volta,
+   então este aviso é um cartão no conteúdo, não uma tela cheia de erro. */
+.route-error { display: flex; justify-content: center; padding: 48px 16px; }
+.route-error-card {
+  background: var(--card, #fff); border: 1px solid var(--line, #e2e8ec); border-radius: 14px;
+  display: grid; gap: 8px; max-width: 460px; padding: 24px; text-align: left; width: 100%;
+}
+.route-error-card strong { font-size: 1.05rem; }
+.route-error-card p { color: var(--muted, #5b6b66); font-size: .88rem; line-height: 1.45; margin: 0; }
+.route-error-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.route-error-actions button {
+  background: var(--brand, #0b5c45); border: 1px solid var(--brand, #0b5c45); border-radius: 9px;
+  color: #fff; cursor: pointer; font: inherit; font-weight: 700; min-height: 40px; padding: 0 16px;
+}
+.route-error-actions .route-error-secondary { background: transparent; color: var(--brand, #0b5c45); }

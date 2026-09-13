@@ -64,6 +64,12 @@ const CAMPOS_CONTRATO = [
   { key: "probabilidade", label: "Probabilidade (%)", type: "number" },
 ];
 
+// Filtro pedido pela rota (?filtro=sem-proxima-acao), vindo dos avisos de
+// pendência da home e do painel de gerenciamento.
+const filtroDaBusca = () => (typeof window === "undefined"
+  ? ""
+  : new URLSearchParams(window.location.search).get("filtro") || "");
+
 const FORM_VAZIO = {
   titulo: "",
   clientId: "",
@@ -776,6 +782,16 @@ export default function OpportunitiesPage({
     const opportunityId = new URLSearchParams(window.location.search).get("opportunity") || "";
     if (opportunityId && registros.some((item) => item.id === opportunityId)) setEditandoId(opportunityId);
   }, [registros]);
+  // O aviso "N oportunidades sem próxima ação" abre esta tela por
+  // /todogreen/oportunidades?filtro=sem-proxima-acao. Sem ler o parâmetro, o
+  // clique caía no pipeline inteiro sem dizer QUAIS negociações estão sem
+  // próximo passo — a mesma queixa do aviso de clientes atrasados.
+  const [filtroDaRota, setFiltroDaRota] = useState(() => ({ valor: filtroDaBusca(), marca: 0 }));
+  useEffect(() => {
+    const sync = () => setFiltroDaRota((atual) => ({ valor: filtroDaBusca(), marca: atual.marca + 1 }));
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
   const resumo = useMemo(() => resumirPipeline(registros), [registros]);
   const forecast = useMemo(() => {
     const agora = new Date();
@@ -793,6 +809,20 @@ export default function OpportunitiesPage({
       porEstagio: forecastPor("estagio", { oportunidades: registros }).filter((linha) => linha.pipeline > 0),
     };
   }, [registros]);
+  // Aplica UMA vez por navegação: se a pessoa limpar o filtro na tela, um
+  // recálculo do forecast não pode reimpor o recorte que ela acabou de tirar.
+  const filtroDaRotaAplicado = useRef(-1);
+  useEffect(() => {
+    if (filtroDaRota.valor !== "sem-proxima-acao" || filtroDaRotaAplicado.current === filtroDaRota.marca) return;
+    const trava = forecast.pendencias.find((item) => item.id === "sem-proximo-passo");
+    if (!trava) return;
+    filtroDaRotaAplicado.current = filtroDaRota.marca;
+    // Sem trocar a visão: lista e kanban leem a mesma `visiveis`, e mexer aqui
+    // sobrescreveria no localStorage a visão que a pessoa escolheu.
+    setFiltroPendencia({ rotulo: trava.rotulo, ids: new Set(trava.ids || []) });
+    setFiltroEstagio("todas");
+    setBusca("");
+  }, [filtroDaRota, forecast.pendencias]);
   const analises = useMemo(
     () => new Map(registros.map((registro) => [registro.id, analisarOportunidade(registro)])),
     [registros],

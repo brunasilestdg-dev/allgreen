@@ -458,4 +458,55 @@ describe("consumo da pesquisa 360", () => {
     // É `focus: "contacts"` que faz o servidor ignorar o cache — por desenho.
     expect(corpoDaPesquisa(fetchMock).focus).toBe("contacts");
   });
+
+  describe("rota com filtro de ação atrasada", () => {
+    const carteira = () => vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      clientes: [
+        { id: "c1", name: "Rede Atrasada", segment: "Varejo", status: "ativo", vendedores: [], crm: { nextAction: "Ligar", nextActionAt: "2020-01-01", contacts: [] } },
+        { id: "c2", name: "Rede Em Dia", segment: "Indústria", status: "ativo", vendedores: [], crm: { nextAction: "Visitar", nextActionAt: "2999-01-01", contacts: [] } },
+      ],
+      acesso: { podeGerenciar: true, podeEditar: true, somenteCarteira: false },
+    }), { status: 200 })));
+
+    it("abre o CRM já mostrando SÓ quem está atrasado", async () => {
+      // A queixa da titular: o aviso "2 clientes com ação atrasada" caía na
+      // carteira inteira e não dizia quais eram as contas.
+      window.history.replaceState({}, "", "/todogreen/clientes?filtro=acao-atrasada");
+      carteira();
+      render(<ClientsPage authHeaders={() => ({})} />);
+
+      expect(await screen.findByText(/Mostrando/)).toHaveTextContent("1 conta(s) com ação atrasada");
+      expect(screen.getAllByText("Rede Atrasada").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Rede Em Dia")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Ver carteira completa" }));
+      expect(await screen.findByText("Rede Em Dia")).toBeInTheDocument();
+    });
+
+    it("sem o parâmetro, a carteira continua inteira", async () => {
+      window.history.replaceState({}, "", "/todogreen/clientes");
+      carteira();
+      render(<ClientsPage authHeaders={() => ({})} />);
+
+      expect(await screen.findByText("Rede Atrasada")).toBeInTheDocument();
+      expect(screen.getByText("Rede Em Dia")).toBeInTheDocument();
+      expect(screen.queryByText(/Mostrando/)).not.toBeInTheDocument();
+    });
+
+    it("o contador de ações atrasadas usa a mesma régua do filtro", async () => {
+      // Contador por timestamp x filtro por dia era o que fazia o cartão dizer
+      // "1" e a lista abrir vazia quando a ação era do próprio dia.
+      window.history.replaceState({}, "", "/todogreen/clientes");
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        clientes: [{ id: "c1", name: "Rede Hoje", status: "ativo", vendedores: [], crm: { nextActionAt: new Date().toLocaleDateString("sv-SE"), contacts: [] } }],
+        acesso: { podeGerenciar: true, podeEditar: true, somenteCarteira: false },
+      }), { status: 200 })));
+      render(<ClientsPage authHeaders={() => ({})} />);
+
+      const cartao = await screen.findByRole("button", { name: /ações atrasadas/i });
+      expect(within(cartao).getByText("0")).toBeInTheDocument();
+      fireEvent.click(cartao);
+      expect(await screen.findByText("Nenhuma conta com ação atrasada nesta carteira.")).toBeInTheDocument();
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTodoGreenDecisionCenter } from "./decisionCenterDomain.js";
+import { buildTodoGreenDecisionCenter, contaComAcaoAtrasada, contasComAcaoAtrasada } from "./decisionCenterDomain.js";
 
 describe("centro de decisão To Do Green", () => {
   it("calcula pipeline e forecast somente com oportunidades abertas", () => {
@@ -60,6 +60,60 @@ describe("centro de decisão To Do Green", () => {
     it("contrato já vencido sai deste alerta (é outro problema)", () => {
       expect(alerta(em({}, { fimEm: "2026-07-01" }))).toBeUndefined();
     });
+  });
+
+  describe("clientes com ação atrasada", () => {
+    const centro = (clients, now = new Date("2026-09-13T12:00:00Z")) =>
+      buildTodoGreenDecisionCenter({ now, data: { clients } });
+    const alerta = (r) => r.alerts.find((a) => a.id === "clients-overdue");
+
+    it("ação marcada para HOJE ainda não está atrasada", () => {
+      // O contador comparava timestamp: `new Date("2026-09-13")` é meia-noite
+      // UTC, sempre atrás do agora, então a ação do próprio dia já nascia
+      // atrasada — e sumia do filtro do CRM, que compara dia. Aviso dizia 2,
+      // lista abria vazia.
+      expect(alerta(centro([{ id: "c1", name: "Rede Alfa", crm: { nextActionAt: "2026-09-13" } }]))).toBeUndefined();
+      expect(alerta(centro([{ id: "c1", name: "Rede Alfa", crm: { nextActionAt: "2026-09-12" } }]))).toBeTruthy();
+    });
+
+    it("nomeia as contas e leva ao CRM já filtrado nelas", () => {
+      const a = alerta(centro([
+        { id: "c1", name: "Rede Alfa", crm: { nextActionAt: "2026-09-01" } },
+        { id: "c2", name: "Rede Beta", crm: { nextActionAt: "2026-09-02" } },
+      ]));
+      expect(a.title).toBe("2 clientes com ação atrasada");
+      expect(a.detail).toContain("Rede Alfa, Rede Beta");
+      expect(a.route).toBe("/todogreen/clientes?filtro=acao-atrasada");
+      expect(a.ids).toEqual(["c1", "c2"]);
+    });
+
+    it("uma conta só abre direto na ficha dela", () => {
+      const a = alerta(centro([{ id: "c1", name: "Rede Alfa", crm: { nextActionAt: "2026-09-01" } }]));
+      expect(a.route).toBe("/todogreen/clientes?client=c1");
+    });
+
+    it("resume a partir da quarta conta em vez de listar tudo", () => {
+      const a = alerta(centro(["Alfa", "Beta", "Gama", "Delta"].map((nome, i) => (
+        { id: `c${i}`, name: nome, crm: { nextActionAt: "2026-09-01" } }
+      ))));
+      expect(a.detail).toContain("Alfa, Beta, Gama e mais 1");
+    });
+
+    it("a mesma régua vale para conta com nextActionAt na raiz (CRM)", () => {
+      expect(contaComAcaoAtrasada({ nextActionAt: "2020-01-01" })).toBe(true);
+      expect(contaComAcaoAtrasada({ nextActionAt: "2999-01-01" })).toBe(false);
+      expect(contaComAcaoAtrasada({})).toBe(false);
+      expect(contasComAcaoAtrasada([{ crm: { nextActionAt: "2020-01-01" } }, {}])).toHaveLength(1);
+    });
+  });
+
+  it("oportunidade sem próximo passo nomeia o negócio e filtra o pipeline", () => {
+    const alerta = buildTodoGreenDecisionCenter({
+      data: { opportunities: [{ id: "o1", cliente: "Transportes Gama", value: 10_000, stage: "Negociação" }] },
+    }).alerts.find((a) => a.id === "opportunities-without-action");
+    expect(alerta.detail).toContain("Transportes Gama");
+    expect(alerta.route).toBe("/todogreen/oportunidades?filtro=sem-proxima-acao");
+    expect(alerta.ids).toEqual(["o1"]);
   });
 
   it("não inventa alerta quando não há evidência", () => {

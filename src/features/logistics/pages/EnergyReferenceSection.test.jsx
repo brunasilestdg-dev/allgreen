@@ -90,6 +90,7 @@ describe("EnergyReferenceSection", () => {
   it("sem endpoint (resposta vazia) diz que está indisponível em vez de estimar", async () => {
     vi.stubGlobal("fetch", vi.fn(() => resp({})));
     render(<EnergyReferenceSection authHeaders={authHeaders} />);
-    expect(await screen.findByText(/Plano de energia indisponível neste servidor/)).toBeInTheDocument();
+    expect(await screen.findByText(/Não foi possível carregar o plano de energia agora/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nada foi estimado no lugar/)).toBeInTheDocument();
   });
 });

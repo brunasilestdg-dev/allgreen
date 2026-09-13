@@ -79,6 +79,7 @@ import {
 } from "./components/ui.jsx";
 import HomeHub from "./features/home/HomeHub.jsx";
 import PrimaryAppRouter, { resolvePrimaryRoute } from "./routing/PrimaryAppRouter.jsx";
+import { useRoutePath } from "./routing/useRoutePath.js";
 import { taskUrgency } from "./features/tasks/taskUrgencia.js";
 import {
   aiWorkspaceContext,
@@ -14160,6 +14161,10 @@ function AccountSettings({ db, update, setToast, go }) {
 }
 
 export default function App() {
+  // A rota que decide qual portal montar precisa ser reativa, e o hook tem de
+  // ficar aqui em cima, antes de qualquer return antecipado — mesma razão do
+  // comentário dos estados logo abaixo.
+  const routePath = useRoutePath();
   const savedUi = (() => {
     try {
       return JSON.parse(localStorage.getItem("sf-ui") || "{}");
@@ -14366,7 +14371,7 @@ export default function App() {
   // No universo To Do Green (login, vertical e portais) a aba mostra a marca
   // da To Do Green; fora dele, o ícone padrão do Seu Funcionário.
   useEffect(() => {
-    const p = location.pathname || "/";
+    const p = routePath || "/";
     const authed =
       sessionStatus === "authenticated" ||
       (!/^\/todogreen(?:\/|$)/.test(p) && Boolean(db.user));
@@ -14374,7 +14379,7 @@ export default function App() {
       /^\/(?:todogreen|portal-tms|portal-cliente|portal-motorista|central-motorista|central-frota|motorista-frota)(?:\/|$)/.test(p) ||
       (!authed && p === "/");
     setFavicon(isTodoGreenView ? TDG_FAVICON : DEFAULT_FAVICON);
-  }, [location.pathname, sessionStatus, db.user]);
+  }, [routePath, sessionStatus, db.user]);
   useEffect(() => {
     if (!db.user?.id) return;
     const key = `sf-session-event:${db.user.id}:${db.spaceKey || "own"}:${today()}`;
@@ -14438,9 +14443,9 @@ export default function App() {
   // A vertical To Do Green nunca confia no usuário guardado no navegador:
   // só abre após o Worker confirmar o token atual. As demais telas mantêm a
   // restauração local histórica enquanto a sessão é revalidada.
-  const isTodoGreenRoute = /^\/todogreen(?:\/|$)/.test(location.pathname);
+  const isTodoGreenRoute = /^\/todogreen(?:\/|$)/.test(routePath);
   const primaryRoute = resolvePrimaryRoute(
-    location.pathname,
+    routePath,
     sessionStatus === "authenticated" || (!isTodoGreenRoute && Boolean(db.user)),
   );
   if (primaryRoute.kind !== "workspace")

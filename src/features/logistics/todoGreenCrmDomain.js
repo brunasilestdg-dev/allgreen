@@ -1,3 +1,5 @@
+import { contaComAcaoAtrasada, diaDaData } from "./decisionCenterDomain.js";
+
 const asText = (value) => String(value || "").trim();
 const asNumber = (value) => {
   const parsed = Number(value);
@@ -266,9 +268,10 @@ export const accountHealth = (account = {}, contacts = [], opportunities = []) =
     (sum, item) => sum + asNumber(item.value) * clamp(asNumber(item.probability)) / 100,
     0,
   );
-  const overdue = account.nextActionAt
-    ? new Date(account.nextActionAt).getTime() < Date.now()
-    : false;
+  // Mesma régua do aviso de pendências e do filtro "Ações atrasadas": dia
+  // anterior a hoje. Com o timestamp cru, a ação marcada para HOJE já entrava
+  // como atrasada no contador e sumia do filtro — números que nunca fechavam.
+  const overdue = contaComAcaoAtrasada(account);
   const alerts = [];
   if (coverage.score < 50) alerts.push("Mapa de decisores incompleto");
   if (!account.nextAction) alerts.push("Sem próxima ação definida");
@@ -306,9 +309,10 @@ export const buildCrmCommandCenter = (accounts = [], opportunities = [], now = n
       churnRisk: asNumber(account.churnRisk),
       attention: crmAttention({ ...summary, churnRisk: account.churnRisk }),
       nextActionAt: account.nextActionAt || "",
-      overdue: account.nextActionAt
-        ? new Date(account.nextActionAt).getTime() < now.getTime()
-        : false,
+      // Mesma régua do filtro "Ações atrasadas" e do aviso de pendências: dia
+      // anterior a hoje. Comparar timestamp fazia o cartão contar a ação de HOJE
+      // e a lista, que compara dia, abrir sem ela.
+      overdue: contaComAcaoAtrasada(account, diaDaData(now)),
     };
   });
   const open = opportunities.filter(

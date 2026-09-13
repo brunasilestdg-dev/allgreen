@@ -104,7 +104,7 @@ export default function MarketSignalsPanel({ authHeaders, setToast }) {
   };
 
   if (estado === "carregando") return <p className="tdg-intelligence-policy">Carregando sinais estruturados (PNCP · Compras.gov · GDELT)…</p>;
-  if (!dados) return <p className="tdg-intelligence-policy"><strong>Sinais estruturados:</strong> indisponíveis neste servidor (o endpoint não respondeu). Nada foi estimado no lugar.</p>;
+  if (!dados) return <p className="tdg-intelligence-policy"><strong>Sinais de mercado:</strong> não foi possível carregar agora. Nada foi estimado no lugar.</p>;
 
   const fontes = dados.fontes || {};
   const canResearch = Boolean(dados.access?.canResearch);

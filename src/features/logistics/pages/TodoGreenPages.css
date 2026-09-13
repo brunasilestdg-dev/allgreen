@@ -252,6 +252,16 @@
   text-align: left; width: 100%;
 }
 .tdg-forecast-travas-lista .tdg-forecast-trava-card:hover { background: #ffefd6; border-color: #c4700b; }
+.tdg-crm-filtro-ativo {
+  align-items: center; background: #fff8ef; border: 1px solid color-mix(in srgb, #c4700b 35%, var(--tdg-line));
+  border-radius: 10px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-bottom: 10px; padding: 8px 12px;
+}
+.tdg-crm-filtro-ativo span { align-items: center; color: var(--tdg-ink); display: flex; font-size: 12px; gap: 6px; }
+.tdg-crm-filtro-ativo svg { color: #c4700b; flex: none; }
+.tdg-crm-filtro-ativo button {
+  background: transparent; border: 1px solid #c4700b; border-radius: 999px; color: #c4700b;
+  cursor: pointer; font-size: 12px; font-weight: 600; padding: 4px 12px; white-space: nowrap;
+}
 .tdg-opp-pendencia-filtro {
   align-items: center; background: #fff8ef; border: 1px solid color-mix(in srgb, #c4700b 35%, var(--tdg-line));
   border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 10px; padding: 8px 12px;

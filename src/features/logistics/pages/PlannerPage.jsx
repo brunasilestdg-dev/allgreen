@@ -389,12 +389,12 @@ export default function PlannerPage({
         <div>
           <span>Produtividade</span>
           <h2>Planner</h2>
-          <p>Planos compartilhados com prazo, prioridade e checklist. O Planner é uma visão das mesmas tarefas canônicas do <strong>quadro To Do</strong>, sem espelhamento entre dois cadastros.</p>
+          <p>Planos compartilhados com prazo, prioridade e checklist. As mesmas tarefas aparecem no <strong>quadro To Do</strong> e no Meu Dia de quem é responsável.</p>
         </div>
         <div className="tdg-page-actions">
           {/* #115: ponte para o lugar único de tarefas. Toda tarefa do Planner
-              já aparece lá (espelhada); o botão torna isso visível em vez de a
-              pessoa sentir que há dois mundos de tarefa. */}
+              já aparece lá; o botão torna isso visível em vez de a pessoa
+              sentir que há dois mundos de tarefa. */}
           <button type="button" className="tdg-planner-toggle" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")} title="Ver todas as tarefas no quadro To Do">
             <LayoutGrid size={15} /> Quadro To Do
           </button>

@@ -57,6 +57,7 @@ import {
   normalizeRelationshipRole,
 } from "../todoGreenCrmDomain.js";
 import { assessAccount, gmailComposeUrl, outlookComposeUrl, whatsappUrl } from "../accountIntelligenceDomain.js";
+import { contaComAcaoAtrasada } from "../decisionCenterDomain.js";
 import { resumoContaConectada } from "../contaConectadaDomain.js";
 import { parseCrmImportFile } from "../crmSpreadsheetImportDomain.js";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
@@ -666,6 +667,13 @@ function AccountEditor({ client, onClose, onSave }) {
 }
 
 const clientIdFromLocation = () => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("client") || "";
+// O aviso "N clientes com ação atrasada" abre o CRM por /todogreen/clientes?filtro=acao-atrasada.
+// Sem ler esse parâmetro aqui, o clique caía na carteira inteira e a pessoa
+// tinha de descobrir sozinha quais contas estavam atrasadas.
+const FILTROS_DA_ROTA = { "acao-atrasada": "overdue" };
+const quickFilterFromLocation = () => typeof window === "undefined"
+  ? "all"
+  : FILTROS_DA_ROTA[new URLSearchParams(window.location.search).get("filtro") || ""] || "all";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
 export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, onCompletarTarefa, currentUserId, remetenteNome = "", assinaturaEmail = "", espacoId = "", onClientContextChange }) {
@@ -674,12 +682,12 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const [quickFilter, setQuickFilter] = useState("all");
+  const [quickFilter, setQuickFilter] = useState(quickFilterFromLocation);
   const [temperatureFilter, setTemperatureFilter] = useState("all");
   const [contactFilter, setContactFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("name-asc");
+  const [sortBy, setSortBy] = useState(() => (quickFilterFromLocation() === "overdue" ? "next-action" : "name-asc"));
   const [viewMode, setViewMode] = useState(() => {
     if (typeof window === "undefined") return "cards";
     const stored = window.localStorage.getItem("todogreen-crm-view");
@@ -775,7 +783,14 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
   }, [authHeaders, espacoId]);
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const sync = () => { setSelectedId(clientIdFromLocation()); setPortalPreviewOpen(false); };
+    const sync = () => {
+      setSelectedId(clientIdFromLocation());
+      setPortalPreviewOpen(false);
+      const daRota = quickFilterFromLocation();
+      // Só a rota COM filtro manda; voltar para /todogreen/clientes sem
+      // parâmetro não desfaz o filtro que a pessoa escolheu na tela.
+      if (daRota !== "all") { setQuickFilter(daRota); setSortBy("next-action"); setVisibleLimit(100); }
+    };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
@@ -824,8 +839,7 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
     const ownerText = (client.vendedores || []).map((seller) => seller.email).join(" ");
     const matchesQuery = `${client.accountCode || ""} ${client.id || ""} ${client.name} ${client.legalName || ""} ${client.document || ""} ${client.segment || ""} ${client.crm?.stage || ""} ${contactText} ${ownerText}`.toLowerCase().includes(query.toLowerCase());
     const matchesFilter = filter === "all" || summary?.attention === filter || (filter === "no-decision" && summary?.coverage < 60);
-    const hoje = new Date().toLocaleDateString("sv-SE");
-    const matchesQuickFilter = quickFilter === "all" || (quickFilter === "overdue" && client.crm?.nextActionAt && client.crm.nextActionAt < hoje);
+    const matchesQuickFilter = quickFilter === "all" || (quickFilter === "overdue" && contaComAcaoAtrasada(client));
     const matchesTemperature = temperatureFilter === "all" || client.crm?.temperature === temperatureFilter;
     const hasContact = (client.crm?.contacts || []).some((contact) => contact.active !== false && (contact.email || contact.phone));
     const matchesContact = contactFilter === "all" || (contactFilter === "with" ? hasContact : !hasContact);
@@ -1258,7 +1272,11 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       {showCreate && <Modal title="Registrar uma pista" onClose={() => setShowCreate(false)}><form className="tdg-client-admin-form tdg-form-em-modal tdg-progressive-form" onSubmit={createClient}><p>Se você só tem o nome e um contexto, já pode começar. Complete o restante depois na mesma ficha.</p><div className="tdg-form-row"><label><span>Empresa ou pista</span><input required autoFocus value={clientForm.nome} onChange={(e) => setClientForm({ ...clientForm, nome: e.target.value })} placeholder="Ex.: empresa vista em um evento" /></label><label className="tdg-form-wide"><span>O que você sabe até agora</span><textarea value={clientForm.observacoes} onChange={(e) => setClientForm({ ...clientForm, observacoes: e.target.value })} placeholder="Ex.: demonstrou interesse em entregas elétricas; preciso descobrir quem cuida de Logística." /></label></div><details><summary>Adicionar mais informações agora</summary><div className="tdg-form-row"><label><span>Documento</span><input value={clientForm.documento} onChange={(e) => setClientForm({ ...clientForm, documento: e.target.value })} /></label><label><span>Segmento</span><input value={clientForm.segmento} onChange={(e) => setClientForm({ ...clientForm, segmento: e.target.value })} /></label><label><span>Classificação</span><select value={clientForm.tier} onChange={(e) => setClientForm({ ...clientForm, tier: e.target.value })}><option value="">Ainda não classificada</option>{TODO_GREEN_ACCOUNT_TIERS.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>Momento</span><select value={clientForm.stage} onChange={(e) => setClientForm({ ...clientForm, stage: e.target.value })}><option value="">Ainda não definido</option>{TODO_GREEN_ACCOUNT_STAGES.map((item) => <option key={item}>{item}</option>)}</select></label></div></details><div className="tdg-form-actions"><button type="button" onClick={() => setShowCreate(false)}>Cancelar</button><button className="tdg-action"><Plus size={16} />Salvar pista</button></div></form></Modal>}
       {novoContatoAberto && <Modal title="Novo contato" onClose={() => setNovoContatoAberto(false)}><form className="tdg-client-admin-form tdg-form-em-modal" onSubmit={salvarContatoGlobal}><div className="tdg-form-row"><label><span>Conta</span><input required autoFocus list="tdg-crm-contas" value={novoContatoGlobal.conta} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, conta: e.target.value })} placeholder="Digite para ver as contas cadastradas" /><datalist id="tdg-crm-contas">{clients.map((c) => <option value={c.name} key={c.id} />)}</datalist></label><label><span>Nome</span><input required value={novoContatoGlobal.name} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, name: e.target.value })} /></label><label><span>Cargo</span><input value={novoContatoGlobal.title} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, title: e.target.value })} /></label><label><span>Papel</span><select value={novoContatoGlobal.relationshipRole} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, relationshipRole: e.target.value })}>{TODO_GREEN_RELATIONSHIP_ROLES.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>E-mail</span><input type="email" value={novoContatoGlobal.email} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, email: e.target.value })} /></label><label><span>Telefone</span><input value={novoContatoGlobal.phone} onChange={(e) => setNovoContatoGlobal({ ...novoContatoGlobal, phone: e.target.value })} /></label></div><div className="tdg-form-actions"><button type="button" onClick={() => setNovoContatoAberto(false)}>Cancelar</button><button className="tdg-action"><UserPlus size={16} />Salvar contato</button></div></form></Modal>}
       <div className="tdg-crm-toolbar"><div className="tdg-client-toolbar"><Search size={18} /><input aria-label="Buscar clientes e contatos" placeholder="Buscar ID, conta, contato, e-mail, telefone ou responsável" value={query} onChange={(e) => { setQuery(e.target.value); setVisibleLimit(100); }} /></div><div className="tdg-crm-view-switch" aria-label="Modo de visualização"><button type="button" className={viewMode === "cards" ? "active" : ""} onClick={() => setViewMode("cards")}><LayoutGrid size={15} />Cartões</button><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => setViewMode("kanban")}><BriefcaseBusiness size={15} />Kanban</button><button type="button" className={viewMode === "funil" ? "active" : ""} onClick={() => setViewMode("funil")}><Filter size={15} />Funil</button><button type="button" className={viewMode === "table" ? "active" : ""} onClick={() => setViewMode("table")}><List size={15} />Tabela</button></div><div className="tdg-crm-filter-grid" aria-label="Filtros e ordenação do CRM"><label><span>Ordenar</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="name-asc">Nome (A–Z)</option><option value="name-desc">Nome (Z–A)</option><option value="temperature">Temperatura</option><option value="next-action">Próxima ação</option><option value="updated">Atualização recente</option><option value="contacts">Mais contatos</option></select></label><label><span>Etapa</span><select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}><option value="all">Todas as etapas</option>{stageOptions.map((stage) => <option key={stage}>{stage}</option>)}</select></label><label><span>Responsável</span><select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}><option value="all">Todos</option><option value="unassigned">Sem responsável</option>{ownerOptions.map((owner) => <option key={owner}>{owner}</option>)}</select></label><label><span>Contatos</span><select value={contactFilter} onChange={(e) => setContactFilter(e.target.value)}><option value="all">Com e sem contato</option><option value="with">Com telefone/e-mail</option><option value="without">Sem telefone/e-mail</option></select></label></div><div className="tdg-crm-filters" aria-label="Temperatura das contas">{[["all", "Todas"], ["Quente", "Quentes"], ["Morno", "Mornas"], ["Frio", "Frias"]].map(([id, label]) => <button type="button" className={temperatureFilter === id ? "active" : ""} onClick={() => { setTemperatureFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div><div className="tdg-crm-filters" aria-label="Saúde da carteira">{[["all", "Toda saúde"], ["critical", "Críticas"], ["attention", "Atenção"], ["healthy", "Saudáveis"], ["no-decision", "Mapa incompleto"]].map(([id, label]) => <button type="button" className={filter === id ? "active" : ""} onClick={() => { setQuickFilter("all"); setFilter(id); setVisibleLimit(100); }} key={id}>{label}</button>)}</div></div>
-      {loading && <p>Carregando carteira...</p>}{!loading && visible.length === 0 && <p className="tdg-crm-empty">Nenhuma conta corresponde aos filtros desta carteira.</p>}
+      {/* Quando a rota chega filtrada (pelo aviso de pendências ou pelo cartão
+          "Ações atrasadas"), a tela DIZ que está filtrada e por quê — lista
+          curta sem explicação parecia carteira sumida. */}
+      {quickFilter === "overdue" && <div className="tdg-crm-filtro-ativo" role="status"><span><CalendarClock size={15} />Mostrando <strong>{visible.length} conta(s) com ação atrasada</strong> — a próxima ação combinada já venceu.</span><button type="button" onClick={() => { setQuickFilter("all"); setVisibleLimit(100); }}>Ver carteira completa</button></div>}
+      {loading && <p>Carregando carteira...</p>}{!loading && visible.length === 0 && <p className="tdg-crm-empty">{quickFilter === "overdue" ? "Nenhuma conta com ação atrasada nesta carteira." : "Nenhuma conta corresponde aos filtros desta carteira."}</p>}
       {!loading && visible.length > 0 && viewMode === "cards" && <div className="tdg-crm-card-grid" aria-label="Contas do CRM em cartões">{renderedClients.map((client) => { const summary = summaryById.get(client.id); const alerta = alertaPrincipal(summary); return <button type="button" className={summary?.attention || ""} onClick={() => openClient(client.id)} key={client.id}><header><span><strong>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><b>{summary?.score || 0}</b></header><div className="tdg-crm-card-tags"><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{client.crm?.stage || "Mapeamento"}</em>{apresentacaoPorCliente[client.id] && <em className="tdg-crm-card-apres"><Send size={11} /> Apresentação enviada</em>}{alerta && <em className={`tdg-crm-card-alerta ${alerta.severidade}`}><AlertTriangle size={11} /> {alerta.rotulo}</em>}</div><dl><div><dt>Pipeline</dt><dd>{BRL.format(summary?.pipeline || 0)}</dd></div><div><dt>Decisores</dt><dd>{summary?.coverage || 0}%</dd></div><div><dt>Contatos</dt><dd>{client.crm?.contacts?.length || 0}</dd></div></dl><footer><span><small>Próxima ação</small><strong>{summary?.nextAction || "Definir próxima ação"}</strong></span><ArrowRight size={16} /></footer></button>; })}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-card-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div>}
       {!loading && visible.length > 0 && viewMode === "kanban" && <>
         {/* O rótulo diz O QUE o quadro mostra, não "mais ou menos detalhe": um é

@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import RouteErrorBoundary from "./RouteErrorBoundary.jsx";
 
 const LogisticsVertical = lazy(() => import("../features/logistics/LogisticsVertical.jsx"));
 const CustomerPortal = lazy(() => import("../features/logistics/CustomerPortal.jsx"));
@@ -48,7 +49,17 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   return { kind: "workspace" };
 }
 
-export default function PrimaryAppRouter({
+export default function PrimaryAppRouter(props) {
+  // A falha fica contida no portal que falhou (ver RouteErrorBoundary): o app
+  // não cai inteiro, e trocar de rota limpa o estado de erro.
+  return (
+    <RouteErrorBoundary chave={props.route?.kind}>
+      <PortalDaRota {...props} />
+    </RouteErrorBoundary>
+  );
+}
+
+function PortalDaRota({
   route,
   db,
   update,

@@ -18,7 +18,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import "./ErpHome.css";
 import { comRotulo } from "./rotulosDomain.js";
 import WidgetChart from "./pages/DashboardCharts.jsx";
-import { WORKDAY_FILTERS, WORKDAY_ROUTES, workdayTasks } from "./workdayDomain.js";
+import { WORKDAY_FILTERS, WORKDAY_ROUTES, origemDaTarefa, workdayTasks } from "./workdayDomain.js";
 
 // Os gráficos do painel da home: puro SVG (CSP-safe), alimentados pelos mesmos
 // dados da vertical. Dão o "dashboard" e o dinamismo que faltavam — um número
@@ -106,20 +106,27 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     ? [...operationalRisks, ...decision.alerts]
     : [...operationalRisks, ...alerts].filter((alert) => alertsForArea([alert], area.id).length);
   const focusedTasks = workdayTasks(myTasks, taskFilter);
-  const queue = [
-    ...focusedTasks.slice(0, 5).map((task) => ({
-      // Abre a ferramenta de tarefas do Espaço, não /central-trabalho — esse
-      // alias é sequestrado pela Central de Implantação e abria uma tela vazia.
-      id: `task-${task.id}`, tone: "task", title: task.title || "Tarefa sem título",
-      // Abre a tarefa ESPECÍFICA no quadro (?task=<id>), não o quadro em geral —
-      // clicar "minha tarefa" tem de cair nela, não numa lista para caçar.
-      detail: `${task.status || "Pendente"} · ${dueLabel(task)}`, action: "Abrir tarefa",
-      route: `/todogreen/espaco?ferramenta=tarefas&task=${encodeURIComponent(task.id)}`,
-    })),
-    ...contextualAlerts.slice(0, Math.max(0, 6 - focusedTasks.length)).map((alert) => ({
-      id: `alert-${alert.id}`, tone: alert.tone, title: alert.title, detail: alert.detail, action: alert.action, route: alert.route,
-    })),
-  ];
+  // A fila tem DUAS naturezas e elas não podem se misturar: tarefa é cartão do
+  // quadro; pendência é situação lida dos dados (conta atrasada, negócio sem
+  // próximo passo). Empilhadas na mesma lista, o contador dizia "0 tarefa(s)" com
+  // duas linhas na tela e o quadro abria vazio — foi exatamente o que a titular
+  // relatou. Continuam juntas na mesma seção, mas separadas e rotuladas.
+  const tarefasDaFila = focusedTasks.slice(0, 5).map((task) => ({
+    // Abre a ferramenta de tarefas do Espaço, não /central-trabalho — esse
+    // alias é sequestrado pela Central de Implantação e abria uma tela vazia.
+    id: `task-${task.id}`, tone: "task", title: task.title || "Tarefa sem título",
+    // Abre a tarefa ESPECÍFICA no quadro (?task=<id>), não o quadro em geral —
+    // clicar "minha tarefa" tem de cair nela, não numa lista para caçar.
+    detail: `${task.status || "Pendente"} · ${dueLabel(task)} · ${origemDaTarefa(task)}`, action: "Abrir tarefa",
+    route: `/todogreen/espaco?ferramenta=tarefas&task=${encodeURIComponent(task.id)}`,
+  }));
+  const pendenciasDaFila = contextualAlerts.slice(0, Math.max(0, 6 - focusedTasks.length)).map((alert) => ({
+    id: `alert-${alert.id}`, tone: alert.tone, title: alert.title, detail: alert.detail, action: alert.action, route: alert.route,
+  }));
+  const linhaDaFila = (item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>
+    <span className={item.tone === "risk" ? "risk" : ""}>{item.tone === "risk" ? <AlertTriangle size={17} /> : <ClipboardCheck size={17} />}</span>
+    <span><strong>{item.title}</strong><small>{item.detail}</small></span><b>{item.action}<ArrowRight size={14} /></b>
+  </button>;
 
   const metrics = {
     pipeline: ["Pipeline", BRL.format(decision.pipeline), `${decision.counts.openOpportunities} oportunidade(s) aberta(s)`],
@@ -222,17 +229,19 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
     if (id === "queue") {
       return <div className="tdg-home-grid" key="queue">
         <section className="tdg-home-section tdg-home-queue">
-          <header><div><span>MEU DIA</span><h3>Minha fila</h3></div><small>{focusedTasks.length} tarefa(s) no filtro</small></header>
+          <header><div><span>MEU DIA</span><h3>Minha fila</h3></div><small>{focusedTasks.length} tarefa(s) no filtro · {pendenciasDaFila.length} pendência(s)</small></header>
           <div className="tdg-workday-filters" role="group" aria-label="Filtrar minhas tarefas por prazo">
             {WORKDAY_FILTERS.map((filter) => <button type="button" key={filter.id} aria-pressed={taskFilter === filter.id} onClick={() => setTaskFilter(filter.id)}>
               {filter.label} <span>{workdayTasks(myTasks, filter.id).length}</span>
             </button>)}
           </div>
-          {queue.length ? queue.map((item) => <button type="button" onClick={() => onNavigate?.(item.route)} key={item.id}>
-            <span className={item.tone === "risk" ? "risk" : ""}>{item.tone === "risk" ? <AlertTriangle size={17} /> : <ClipboardCheck size={17} />}</span>
-            <span><strong>{item.title}</strong><small>{item.detail}</small></span><b>{item.action}<ArrowRight size={14} /></b>
-          </button>) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>{myTasks.length ? "Nenhuma tarefa neste filtro" : "Nenhuma pendência atribuída"}</strong><small>{myTasks.length ? "Escolha outro prazo para continuar." : "Itens da sua área aparecem aqui quando exigem ação."}</small></span></div>}
+          {tarefasDaFila.length ? tarefasDaFila.map(linhaDaFila) : <div className="tdg-home-empty"><CheckCircle2 size={20} /><span><strong>{myTasks.length ? "Nenhuma tarefa neste filtro" : "Nenhuma tarefa no seu quadro"}</strong><small>{myTasks.length ? "Escolha outro prazo para continuar." : "O quadro abre vazio mesmo: crie uma tarefa ou receba uma atribuição para ela aparecer aqui."}</small></span></div>}
           <button type="button" className="tdg-workday-all" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")}>Abrir quadro de tarefas<ArrowRight size={16} /></button>
+          {pendenciasDaFila.length > 0 && <div className="tdg-home-fila-sep">
+            <span>PENDÊNCIAS DA OPERAÇÃO</span>
+            <small>Lidas dos seus dados — não são cartões do quadro de tarefas. Cada uma abre a tela onde se resolve, já filtrada nos registros que a acenderam.</small>
+          </div>}
+          {pendenciasDaFila.map(linhaDaFila)}
         </section>
       </div>;
     }

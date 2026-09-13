@@ -224,10 +224,10 @@ function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNav
       <section className="tdg-task-hero">
         <div>
           <span className="tdg-kicker">TO DO GREEN</span>
-          <h2>Tarefas canônicas, sem duas verdades</h2>
+          <h2>Suas tarefas em um só lugar</h2>
           <p>
-            A mesma tarefa aparece como execução pessoal, planejamento, CRM ou implantação,
-            preservando os recursos avançados da tela histórica quando você abre o detalhe.
+            A mesma tarefa aparece no Planner, no CRM e no cliente. Abra o detalhe para
+            editar prazo, responsável, checklist e anexos.
           </p>
         </div>
         <div className="tdg-task-metrics" aria-label="Resumo das tarefas">
@@ -252,8 +252,8 @@ function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNav
           <TodoGreenTaskSection title="Vencendo hoje" description="O que precisa ser resolvido até o fim do dia." tasks={board.today.dueToday} onOpenAdvanced={openAdvanced} />
           <TodoGreenTaskSection title="Bloqueadas" description="Tarefas presas por dependência aberta ou ausente." tasks={board.today.blocked} onOpenAdvanced={openAdvanced} />
           <TodoGreenTaskSection title="Alta prioridade" description="Urgente e alta prioridade no mesmo fluxo." tasks={board.today.highPriority} onOpenAdvanced={openAdvanced} />
-          <TodoGreenTaskSection title="Minhas tarefas" description="Itens atribuídos ao usuário atual quando essa informação existe." tasks={board.today.mine} onOpenAdvanced={openAdvanced} />
-          <TodoGreenTaskSection title="Próxima ação" description="Fila prática para continuar sem abrir cada projeto." tasks={board.today.nextActions} onOpenAdvanced={openAdvanced} />
+          <TodoGreenTaskSection title="Minhas tarefas" description="O que está atribuído a você." tasks={board.today.mine} onOpenAdvanced={openAdvanced} />
+          <TodoGreenTaskSection title="Próxima ação" description="Por onde continuar, sem abrir projeto por projeto." tasks={board.today.nextActions} onOpenAdvanced={openAdvanced} />
         </div>
       )}
 
@@ -275,7 +275,7 @@ function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNav
               <div>
                 <span className="tdg-kicker">{board.projects.length} projeto(s)</span>
                 <h3>Projetos com tarefa aberta</h3>
-                <p>Resumo operacional por projeto ou cliente, usando a mesma task canônica.</p>
+                <p>Quanto ainda falta em cada projeto e cliente.</p>
               </div>
             </header>
             <div className="tdg-task-project-grid">

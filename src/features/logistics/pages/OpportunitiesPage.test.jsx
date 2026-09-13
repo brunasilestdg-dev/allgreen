@@ -322,3 +322,32 @@ it("seleciona usuário cadastrado e cria follow-up vinculado à oportunidade", a
     expect(onInteraction).toHaveBeenCalledWith(expect.objectContaining({ clientId: "cli1", opportunityId: "opp-1" }));
   } finally { globalThis.fetch = fetchAnterior; }
 });
+
+describe("filtro pedido pela rota", () => {
+  afterEach(() => { window.history.replaceState({}, "", "/"); });
+
+  it("?filtro=sem-proxima-acao abre o pipeline já recortado nas negociações sem próximo passo", async () => {
+    // O aviso "N oportunidades sem próxima ação" mandava para o pipeline
+    // inteiro: a pessoa via o número e tinha de descobrir sozinha quais eram.
+    window.history.replaceState({}, "", "/todogreen/oportunidades?filtro=sem-proxima-acao");
+    render(<OpportunitiesPage opportunities={[
+      { ...completa, id: "opp-com", cliente: "Com Próximo Passo", nextStep: "Enviar minuta" },
+      { ...completa, id: "opp-sem", cliente: "Sem Próximo Passo", nextStep: "" },
+    ]} />);
+
+    const aviso = await screen.findByRole("status");
+    expect(aviso).toHaveTextContent("Sem próximo passo definido");
+    expect(aviso).toHaveTextContent("1 oportunidade(s)");
+    expect(screen.getByText(/^Sem Próximo Passo/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Com Próximo Passo/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtro" }));
+    expect(await screen.findByText(/^Com Próximo Passo/)).toBeInTheDocument();
+  });
+
+  it("sem o parâmetro, o pipeline abre inteiro", () => {
+    window.history.replaceState({}, "", "/todogreen/oportunidades");
+    render(<OpportunitiesPage opportunities={[{ ...completa, id: "opp-sem", cliente: "Sem Próximo Passo", nextStep: "" }]} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});

@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { chaveDeRecuperacao, deveRecarregarPorVersaoTrocada } from "./features/app/chunkRecovery.js";
 import "./styles.css";
 import "./features/logistics/LogisticsVertical.css";
 import "./features/logistics/TodoGreenWorkspace.css";
@@ -14,7 +15,7 @@ import "./features/logistics/LogisticsVerticalRecovery.js";
 import "./features/logistics/LogisticsVerticalCredentials.js";
 // WorkCenterV2 é lazy-loaded quando acessado (ARQ-01 otimização)
 
-const reportError = (message, stack, componentStack) => {
+const reportError = (message, stack, componentStack, kind = "erro") => {
   try {
     fetch("/api/errors", {
       method: "POST",
@@ -24,19 +25,54 @@ const reportError = (message, stack, componentStack) => {
         stack: String(stack || "").slice(0, 4000),
         componentStack: String(componentStack || "").slice(0, 4000),
         url: location.href,
+        // Separa "versão trocada debaixo da aba" de bug de verdade: sem isso os
+        // dois chegavam ao log como o mesmo "Algo deu errado" e não dava para
+        // saber qual estava acontecendo de fato.
+        kind,
       }),
     }).catch(() => {});
   } catch {}
 };
 
+// Deploy novo, aba antiga: o pedaço com hash que a aba vai buscar já não existe
+// no servidor. É a maior fonte do "Algo deu errado" que some ao recarregar —
+// ver src/features/app/chunkRecovery.js. Recarregar aqui é a cura (a única),
+// não um disfarce: acontece UMA vez por versão publicada e só para esta classe
+// de erro. Qualquer outra falha continua aparecendo.
+function recuperarDeVersaoTrocada(erro) {
+  const versao = window.__SF_APP_VERSION__ || "local";
+  let jaTentouNestaVersao = true;
+  try {
+    jaTentouNestaVersao = sessionStorage.getItem(chaveDeRecuperacao(versao)) === "1";
+  } catch {
+    jaTentouNestaVersao = true;
+  }
+  if (!deveRecarregarPorVersaoTrocada({ erro, jaTentouNestaVersao })) return false;
+  reportError(erro?.message || String(erro), erro?.stack, "", "versao-trocada");
+  try {
+    sessionStorage.setItem(chaveDeRecuperacao(versao), "1");
+  } catch {
+    return false;
+  }
+  location.reload();
+  return true;
+}
+
 window.addEventListener("error", (event) => {
+  if (recuperarDeVersaoTrocada(event.error || event.message)) return;
   reportError(event.message, event.error?.stack);
 });
 window.addEventListener("unhandledrejection", (event) => {
+  if (recuperarDeVersaoTrocada(event.reason)) return;
   reportError(
     event.reason?.message || String(event.reason || "unhandled rejection"),
     event.reason?.stack,
   );
+});
+// O Vite avisa a falha de pré-carregamento antes de o React estourar; pegar
+// aqui evita a tela de erro em vez de consertá-la depois.
+window.addEventListener("vite:preloadError", (event) => {
+  if (recuperarDeVersaoTrocada(event.payload || event.detail)) event.preventDefault?.();
 });
 
 class ErrorBoundary extends React.Component {
@@ -48,6 +84,7 @@ class ErrorBoundary extends React.Component {
     return { hasError: true };
   }
   componentDidCatch(error, info) {
+    if (recuperarDeVersaoTrocada(error)) return;
     reportError(error?.message || String(error), error?.stack, info?.componentStack);
   }
   render() {

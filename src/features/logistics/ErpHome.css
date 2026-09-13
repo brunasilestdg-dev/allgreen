@@ -138,4 +138,9 @@
 .tdg-home-queue > .tdg-workday-filters button span { color:inherit; font-size:.7rem; }
 .tdg-home-queue > .tdg-workday-filters button[aria-pressed="true"] { background:var(--tdg-green); color:#fff; border-color:var(--tdg-green); }
 .tdg-home-queue > .tdg-workday-all { display:flex; grid-template-columns:none; justify-content:space-between; margin-top:10px; border:0; color:var(--tdg-green); font-weight:800; }
+/* Divisor entre TAREFAS (cartões do quadro) e PENDÊNCIAS (situações lidas dos
+   dados). Sem ele, o aviso parecia tarefa e o quadro abria vazio. */
+.tdg-home-queue > .tdg-home-fila-sep { border-top:1px solid var(--tdg-line); display:grid; gap:3px; margin-top:12px; padding-top:12px; }
+.tdg-home-queue > .tdg-home-fila-sep span { color:var(--tdg-green); font-size:.66rem; font-weight:850; letter-spacing:.08em; }
+.tdg-home-queue > .tdg-home-fila-sep small { color:var(--tdg-muted); font-size:.72rem; line-height:1.4; }
 @media(max-width:760px) { .tdg-workday-routes { grid-template-columns:minmax(0,1fr); } .tdg-workday-routes > button { min-height:0; padding:15px; } }
