@@ -148,6 +148,45 @@ const criarHandoffOperacional = async (env, access, user, oportunidade) => {
   ).bind(crypto.randomUUID(), access.ownerId, boardId, itemId, user.id, JSON.stringify({ opportunityId: oportunidade.id }), agora).run();
 };
 
+// Ganhar a oportunidade abre a IMPLANTAÇÃO de verdade — a mesma que a tela
+// /todogreen/implantacao (ClientActivationPage) lê em todogreen_implementation_projects.
+// Sem isto, o negócio ganho caía só no quadro do Planner e a tela de Implantação
+// ficava vazia: o fluxo comercial → operação não fechava, era preciso recriar a
+// implantação à mão. Idempotente: o id é derivado da oportunidade e o INSERT é
+// OR IGNORE, então remarcar "ganha" (ou ganhar de novo) nunca duplica. A tabela
+// exige cliente; sem vínculo de conta a implantação não é criada (o card do
+// Planner ainda registra o handoff), porque uma implantação sem cliente não teria
+// onde ser trabalhada.
+export const idDaImplantacaoDeGanho = (oportunidadeId) => `todogreen-impl-opp-${oportunidadeId}`;
+const criarImplantacaoDeGanho = async (env, access, user, oportunidade) => {
+  const clientId = texto(oportunidade.clientId, 120);
+  if (!clientId) return null;
+  const agora = new Date().toISOString();
+  const id = idDaImplantacaoDeGanho(oportunidade.id);
+  const titulo = `Implantação — ${texto(oportunidade.cliente, 200) || "cliente"}`.slice(0, 240);
+  const contractId = texto(oportunidade.contractId, 120);
+  const fields = JSON.stringify({ source: "opportunity_won", opportunityId: oportunidade.id });
+  const { meta } = await env.DB.prepare(
+    `INSERT OR IGNORE INTO todogreen_implementation_projects
+       (id,tenant_id,workspace_owner_id,client_id,contract_id,operation_id,title,status,
+        owner_user_id,target_go_live_at,actual_go_live_at,
+        scope_json,operating_model_json,capacity_json,integrations_json,billing_json,
+        support_json,rasci_json,risks_json,fields_json,
+        revision,created_by,updated_by,created_at,updated_at,archived_at)
+     VALUES (?,?,?,?,?,'',?,'planning',NULL,NULL,NULL,
+        '{}','{}','{}','{}','{}','{}','{}','[]',?,1,?,?,?,?,NULL)`,
+  ).bind(id, TENANT_ID, access.ownerId, clientId, contractId, titulo, fields, user.id, user.id, agora, agora).run();
+  if (meta?.changes) {
+    await registrarAuditoriaTodoGreen(env, {
+      access, user, action: "created", resourceType: "implementation-projects", resourceId: id,
+      clientId,
+      before: {},
+      after: { title: titulo, status: "planning", source: "opportunity_won", opportunityId: oportunidade.id },
+    });
+  }
+  return meta?.changes ? id : null;
+};
+
 // Oportunidade aberta é conversa viva: uma conta Fria (ou ainda sem
 // classificação) que ganha oportunidade vinculada vira "Morno" sozinha —
 // pedido da titular (30/08). A régua só esquenta: nunca rebaixa "Morno" ou
@@ -2029,8 +2068,12 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
     .first();
   const antes = colecao.daLinha(atual);
   const depois = colecao.daLinha(row);
-  if (colecao === COLECOES.opportunities && deveCriarHandoff(atual.stage, row.stage))
+  if (colecao === COLECOES.opportunities && deveCriarHandoff(atual.stage, row.stage)) {
     await criarHandoffOperacional(env, access, user, depois);
+    // Além do card no Planner, abre a implantação que a tela Implantação lê —
+    // é o elo que faltava para o fluxo comercial → operação fechar de verdade.
+    await criarImplantacaoDeGanho(env, access, user, depois);
+  }
   if (colecao === COLECOES.opportunities && !texto(antes.clientId) && texto(depois.clientId))
     await aquecerContaPorOportunidade(env, access, user, depois.clientId);
   if (colecao === COLECOES.contracts)

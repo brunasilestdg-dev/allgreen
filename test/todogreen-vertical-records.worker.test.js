@@ -546,6 +546,57 @@ describe("oportunidade ganha abre handoff operacional", () => {
     ).bind(`todogreen-handoff-opportunity-${registro.id}`, gestora.id).first();
     expect(item).toEqual(expect.objectContaining({ type: "handoff", status: "novo", client_label: "Cliente Handoff" }));
   });
+
+  it("abre a implantação que a tela Implantação lê, quando há cliente vinculado", async () => {
+    const { registro } = await (await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST", token: gestora.token, corpo: { cliente: "Cliente Impl", clientId: "cli-impl-1", estagio: "Negociação" },
+    })).json();
+    const won = await pedir(`/api/todogreen/records/opportunities/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { estagio: "Fechada ganha", revision: registro.revision },
+    });
+    expect(won.status).toBe(200);
+    const impl = await env.DB.prepare(
+      "SELECT client_id,status,title FROM todogreen_implementation_projects WHERE id=? AND workspace_owner_id=?",
+    ).bind(`todogreen-impl-opp-${registro.id}`, gestora.id).first();
+    expect(impl).toEqual(expect.objectContaining({ client_id: "cli-impl-1", status: "planning" }));
+    expect(impl.title).toMatch(/Implanta/);
+  });
+
+  it("sem cliente vinculado não cria implantação — mas ainda registra o handoff", async () => {
+    const { registro } = await (await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST", token: gestora.token, corpo: { cliente: "Sem Conta", estagio: "Negociação" },
+    })).json();
+    await pedir(`/api/todogreen/records/opportunities/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { estagio: "Fechada ganha", revision: registro.revision },
+    });
+    const impl = await env.DB.prepare(
+      "SELECT id FROM todogreen_implementation_projects WHERE id=? AND workspace_owner_id=?",
+    ).bind(`todogreen-impl-opp-${registro.id}`, gestora.id).first();
+    expect(impl).toBeNull();
+    const handoff = await env.DB.prepare(
+      "SELECT id FROM todogreen_work_items WHERE id=? AND workspace_owner_id=?",
+    ).bind(`todogreen-handoff-opportunity-${registro.id}`, gestora.id).first();
+    expect(handoff).not.toBeNull();
+  });
+
+  it("remarcar como ganha não duplica a implantação (idempotente)", async () => {
+    const { registro } = await (await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST", token: gestora.token, corpo: { cliente: "Cliente Idem", clientId: "cli-idem", estagio: "Negociação" },
+    })).json();
+    const won1 = await (await pedir(`/api/todogreen/records/opportunities/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { estagio: "Fechada ganha", revision: registro.revision },
+    })).json();
+    const reaberta = await (await pedir(`/api/todogreen/records/opportunities/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { estagio: "Negociação", revision: won1.registro.revision },
+    })).json();
+    await pedir(`/api/todogreen/records/opportunities/${registro.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { estagio: "Fechada ganha", revision: reaberta.registro.revision },
+    });
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM todogreen_implementation_projects WHERE id=? AND workspace_owner_id=?",
+    ).bind(`todogreen-impl-opp-${registro.id}`, gestora.id).all();
+    expect(results.length).toBe(1);
+  });
 });
 
 // A tela recusa gerar a proposta quando a aprovação comercial não liberou a simulação —
