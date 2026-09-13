@@ -27,11 +27,20 @@ Restrições respeitadas em **todas** as entregas abaixo:
   `GET /api/system/version` → `2d65bdfdf87b` (PR #365), `environment: production`,
   `publishedBy: cloudflare-workers-builds`, `migrations.expected: 131`; **fecho da rodada**:
   `bd402c306939` (PR #367, P5/P6 + docs), `migrations.expected: 132`, última `0125`, D1 remoto sem
-  migration pendente. A tela **Administração → Saúde do sistema** mostra LOCAL × SERVIDOR
-  × BANCO lado a lado (`docs/DEPLOYMENT_RUNBOOK.md` §13a tem o registro de cada publicação).
+  migration pendente. **Rodada 3 / 3-bis (13/09/2026, tarde)**: `1a17c34d8cec` (P1.4) →
+  `fdcd3bd627b7` (P2) → `037ab2538fb5` (Codex direto na `main`, incluindo os complementos do
+  P5/P6) → **`3d83b2b7e6fe`** (PR #379, fecho), `migrations.expected: 136`, última `0133`, D1
+  remoto sem pendência. Entre 14:40 e 18:07 UTC a produção ficou presa em `037ab25` porque o
+  `deploy:cloudflare` passou a rodar Playwright dentro do build do Cloudflare (`cd8f90b`);
+  desfeito no #379, o merge publicou em 70 s. A tela **Administração → Saúde do sistema**
+  mostra LOCAL × SERVIDOR × BANCO lado a lado (`docs/DEPLOYMENT_RUNBOOK.md` §13a tem o
+  registro de cada publicação).
 - **Migrations**: rodada 1 até `0119`; rodada 2 acrescentou `0120`–`0125` (todas aditivas:
   métricas de integração, snapshots de viabilidade, cache geográfico, perfil energético do
-  veículo, referências de energia, sinais de mercado + Risk Map).
+  veículo, referências de energia, sinais de mercado + Risk Map); rodada 3 acrescentou
+  `0130`/`0131` (Codex: sessões/reservas/preço de recarga, contratos GreenPay), `0132`
+  (pré-flight persistido) e `0133` (preferências do radar) — `0126`–`0129` não existem
+  (numeração pulada pelo Codex para evitar colisão; não há lacuna aplicada no D1).
   A anomalia da auditoria (0119 aplicada no D1 remoto e ausente do `main`) está
   reconciliada — o arquivo existe no repositório e a numeração segue linear.
   Nenhuma migration aplicada foi renomeada, reaplicada ou apagada.
