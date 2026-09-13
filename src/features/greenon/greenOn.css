@@ -1,0 +1,216 @@
+/* ===== Green On — vertical de recarga e energia =====
+   Reusa os tokens do design system (--ds-*) para herdar tema claro/escuro
+   e paleta de marca. Nada de cores duras aqui. */
+
+.green-on-shell {
+  --local-gap: var(--ds-space-6, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--local-gap);
+  padding: var(--ds-space-6, 24px);
+  min-height: 100%;
+  background: var(--ds-bg);
+  color: var(--ds-ink);
+}
+
+.green-on-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--ds-radius-md, 8px);
+  border: 1px solid var(--ds-line);
+  color: var(--ds-ink);
+  text-decoration: none;
+  font-size: 14px;
+  background: var(--ds-surface);
+}
+.green-on-back:hover { background: var(--ds-surface-soft); }
+
+.green-on-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--ds-line);
+  padding-bottom: 6px;
+}
+
+.green-on-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ds-ink-muted);
+  padding: 8px 14px;
+  border-radius: var(--ds-radius-md, 8px);
+  font-size: 14px;
+  cursor: pointer;
+}
+.green-on-tab:hover { color: var(--ds-ink); background: var(--ds-surface-soft); }
+.green-on-tab.is-active {
+  background: var(--ds-surface);
+  border-color: var(--ds-line);
+  color: var(--ds-brand);
+  font-weight: 600;
+}
+
+.green-on-grid {
+  display: grid;
+  gap: var(--ds-space-4, 16px);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.green-on-content { display: flex; flex-direction: column; gap: var(--ds-space-6, 24px); }
+
+.green-on-pipeline { display: flex; flex-direction: column; gap: var(--ds-space-6, 24px); }
+
+.green-on-pipeline-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--ds-space-3, 12px);
+}
+
+.green-on-stage {
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md, 8px);
+  padding: 12px;
+  background: var(--ds-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.green-on-stage.is-closed { border-color: var(--ds-brand); background: var(--ds-surface-soft); }
+.green-on-stage-title { font-size: 12px; color: var(--ds-ink-muted); text-transform: uppercase; letter-spacing: .04em; }
+.green-on-stage-count { font-size: 24px; font-weight: 700; color: var(--ds-ink); }
+.green-on-stage-hint { font-size: 12px; color: var(--ds-ink-muted); }
+
+.green-on-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.green-on-list li {
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md, 8px);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--ds-surface);
+}
+.green-on-list-title { display: flex; align-items: center; gap: 8px; }
+.green-on-list-meta { color: var(--ds-ink-muted); font-size: 13px; }
+.green-on-list-alerts { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: #b0410f; }
+.green-on-list-alerts span { background: rgba(176, 65, 15, 0.08); border-radius: 999px; padding: 2px 8px; }
+
+.green-on-empty { color: var(--ds-ink-muted); font-style: italic; margin: 0; }
+
+.green-on-crm, .green-on-sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-6, 24px);
+}
+
+.green-on-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.green-on-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ds-ink-muted);
+}
+.green-on-form input,
+.green-on-form select,
+.green-on-form textarea {
+  padding: 8px 10px;
+  border-radius: var(--ds-radius-md, 8px);
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface);
+  color: var(--ds-ink);
+  font-size: 14px;
+  font-family: inherit;
+}
+.green-on-form input:focus,
+.green-on-form select:focus,
+.green-on-form textarea:focus {
+  outline: 2px solid var(--ds-brand);
+  outline-offset: 1px;
+}
+.green-on-form-full { grid-column: 1 / -1; }
+.green-on-form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+
+.green-on-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.green-on-table th,
+.green-on-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ds-line);
+  text-align: left;
+  vertical-align: middle;
+}
+.green-on-table th {
+  font-size: 12px;
+  color: var(--ds-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.green-on-table select {
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface);
+  color: var(--ds-ink);
+}
+
+.green-on-help {
+  color: var(--ds-ink-muted);
+  margin: 0 0 var(--ds-space-3, 12px);
+  font-size: 14px;
+}
+
+.green-on-op-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: var(--ds-radius-md, 8px);
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface);
+  color: var(--ds-ink);
+  text-decoration: none;
+}
+.green-on-op-card:hover { background: var(--ds-surface-soft); border-color: var(--ds-brand); }
+.green-on-op-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ds-radius-md, 8px);
+  background: var(--ds-surface-soft);
+  color: var(--ds-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.green-on-op-body { display: flex; flex-direction: column; gap: 4px; }
+.green-on-op-body strong { font-size: 15px; color: var(--ds-ink); }
+.green-on-op-body span { color: var(--ds-ink-muted); font-size: 13px; }
+
+.green-on-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: var(--ds-space-4, 16px);
+  border-top: 1px solid var(--ds-line);
+  color: var(--ds-ink-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .green-on-shell { padding: var(--ds-space-4, 16px); }
+  .green-on-tabs { overflow-x: auto; }
+  .green-on-tab { white-space: nowrap; }
+  .green-on-form { grid-template-columns: 1fr; }
+}

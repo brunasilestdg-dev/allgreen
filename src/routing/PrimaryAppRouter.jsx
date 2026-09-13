@@ -2,6 +2,8 @@ import { Suspense, lazy } from "react";
 import RouteErrorBoundary from "./RouteErrorBoundary.jsx";
 
 const LogisticsVertical = lazy(() => import("../features/logistics/LogisticsVertical.jsx"));
+const GreenOnVertical = lazy(() => import("../features/greenon/GreenOnVertical.jsx"));
+const GreenmobVertical = lazy(() => import("../features/greenmob/GreenmobVertical.jsx"));
 const CustomerPortal = lazy(() => import("../features/logistics/CustomerPortal.jsx"));
 const TmsPortal = lazy(() => import("../features/logistics/TmsPortal.jsx"));
 const ClientActivationPage = lazy(() => import("../features/logistics/ClientActivationPage.jsx"));
@@ -45,6 +47,8 @@ export function resolvePrimaryRoute(pathname, authenticated) {
   if (/^\/portal-colaborador(?:\/|$)/.test(path)) return { kind: "colaborador-portal" };
   if (/^\/todogreen\/ativacao(?:\/|$)/.test(path)) return { kind: "todogreen-activation" };
   if (/^\/design-system(?:\/|$)/.test(path)) return { kind: "design-system" };
+  if (/^\/greenon(?:\/|$)/.test(path)) return { kind: "greenon" };
+  if (/^\/greenmob(?:\/|$)/.test(path)) return { kind: "greenmob" };
   if (/^\/todogreen(?:\/|$)/.test(path)) return { kind: "todogreen" };
   return { kind: "workspace" };
 }
@@ -136,6 +140,18 @@ function PortalDaRota({
     return (
       <Suspense fallback={<div className="inbox-loading">Carregando To Do Green...</div>}>
         <LogisticsVertical db={db} update={update} setToast={setToast} authHeaders={authHeaders} />
+      </Suspense>
+    );
+  if (route.kind === "greenon")
+    return (
+      <Suspense fallback={<div className="inbox-loading">Carregando Green On...</div>}>
+        <GreenOnVertical db={db} update={update} setToast={setToast} authHeaders={authHeaders} />
+      </Suspense>
+    );
+  if (route.kind === "greenmob")
+    return (
+      <Suspense fallback={<div className="inbox-loading">Carregando Greenmob...</div>}>
+        <GreenmobVertical db={db} update={update} setToast={setToast} authHeaders={authHeaders} />
       </Suspense>
     );
   return null;
