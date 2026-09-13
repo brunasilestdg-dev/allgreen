@@ -137,4 +137,69 @@ describe("To Do Green routing API", () => {
       options: { g: true },
     });
   });
+
+  it("planeja rota elétrica e anexa a estimativa de energia estruturada e versionada", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const token = await seedKey(suffix, ["routing:write"]);
+    const request = new Request("https://tms.test/api/tms/v1/routes/electric-plan", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        vehicle: {
+          id: "VAN-082",
+          category: "van",
+          consumptionKwhPerKm: 0.42,
+          batteryCapacityKwh: 100,
+          socPercent: 80,
+          reservePercent: 15,
+          connectors: ["CCS2"],
+          maxDcKw: 100,
+        },
+        route: { distanceKm: 120, elevationGainM: 300, elevationLossM: 300, temperatureC: 18 },
+        chargingStations: [],
+      }),
+    });
+    const response = await handlePublicTodoGreenRoutingApi(request, { DB: env.DB });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.engine).toBe("tdg-electric-routing-v1");
+    expect(body.plan).toBeTruthy();
+    // A estimativa estruturada acompanha o plano, sem substituí-lo.
+    expect(body.energyEstimate.status).toBe("ok");
+    expect(body.energyEstimate.calculationVersion).toBe("energy-model@1.0.0");
+    expect(body.energyEstimate.measurementType).toBe("ESTIMATED");
+    expect(typeof body.energyEstimate.estimatedArrivalSoc).toBe("number");
+    expect(typeof body.energyEstimate.chargingRequired).toBe("boolean");
+    // van sem restrição declarada -> OSRM é o motor preferido.
+    expect(body.routingEngineSelection.engine).toBe("osrm");
+    expect(body.routingEngineSelection.vehicleClass).toBe("van");
+  });
+
+  it("seleciona Valhalla (truck) para veículo pesado no electric-plan", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const token = await seedKey(suffix, ["routing:write"]);
+    const request = new Request("https://tms.test/api/tms/v1/routes/electric-plan", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        vehicle: {
+          category: "carreta",
+          consumptionKwhPerKm: 1.3,
+          batteryCapacityKwh: 540,
+          socPercent: 90,
+          reservePercent: 15,
+          connectors: ["CCS2"],
+          maxDcKw: 350,
+        },
+        route: { distanceKm: 200 },
+        chargingStations: [],
+      }),
+    });
+    const response = await handlePublicTodoGreenRoutingApi(request, { DB: env.DB });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.routingEngineSelection.engine).toBe("valhalla");
+    expect(body.routingEngineSelection.profile).toBe("truck");
+    expect(body.routingEngineSelection.restrictionAware).toBe(true);
+  });
 });
