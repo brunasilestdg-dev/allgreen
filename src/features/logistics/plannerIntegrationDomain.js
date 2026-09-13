@@ -23,6 +23,19 @@ export const contextoComercialDaTarefa = (tarefa = {}) => ({
   opportunityId: String(tarefa.campos?.opportunityId || ""),
 });
 
+// O Planner tem 3 status; a To-Do tem 4 ("Aguardando" não existe no Planner e
+// colapsa em "em_andamento"). Ao RE-espelhar do Planner para a To-Do, se o
+// status que a To-Do já tinha mapeia para o MESMO status do Planner, o Planner
+// não mudou de verdade — então preserva o status mais fino da To-Do. Sem isto,
+// "Aguardando" virava "Em andamento" a cada sincronização (perda no round-trip).
+const mesmoStatusNoPlanner = (statusTarefa, progressoPlanner) =>
+  Boolean(statusTarefa) && STATUS_TAREFA_PARA_PLANNER[statusTarefa] === progressoPlanner;
+
+export const statusTarefaAoEspelhar = (progressoPlanner, statusExistente) =>
+  mesmoStatusNoPlanner(statusExistente, progressoPlanner)
+    ? statusExistente
+    : STATUS_PLANNER_PARA_TAREFA[progressoPlanner] || "A fazer";
+
 export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {}) => {
   const contexto = contextoComercialDaTarefa(tarefa);
   return {
@@ -30,7 +43,7 @@ export const tarefaPlannerParaTodo = (tarefa, plano, existente = {}, rotulos = {
     id: existente.id || `planner-${tarefa.id}`,
     title: tarefa.title,
     description: tarefa.notes || "",
-    status: STATUS_PLANNER_PARA_TAREFA[tarefa.progress] || "A fazer",
+    status: statusTarefaAoEspelhar(tarefa.progress, existente.status),
     priority: PRIORIDADE_PLANNER_PARA_TAREFA[tarefa.priority] || "Média",
     startDate: tarefa.startDate || "",
     due: tarefa.dueDate || "",

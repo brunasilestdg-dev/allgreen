@@ -4,9 +4,35 @@ import {
   listaDependenciasComRotulo,
   patchPlannerDaTarefa,
   rotuloBaseDependencia,
+  statusTarefaAoEspelhar,
   tarefaPlannerParaTodo,
   tarefaVinculadaAoPlanner,
 } from "./plannerIntegrationDomain.js";
+
+describe("status não se perde no round-trip Planner<->To-Do", () => {
+  it("preserva 'Aguardando' quando o Planner segue em em_andamento", () => {
+    // Aguardando e Em andamento colapsam em em_andamento no Planner. Se o
+    // Planner não saiu de em_andamento, a To-Do NÃO deve perder 'Aguardando'.
+    expect(statusTarefaAoEspelhar("em_andamento", "Aguardando")).toBe("Aguardando");
+    expect(statusTarefaAoEspelhar("em_andamento", "Em andamento")).toBe("Em andamento");
+  });
+  it("adota o novo status quando o Planner realmente mudou", () => {
+    expect(statusTarefaAoEspelhar("concluida", "Aguardando")).toBe("Concluído");
+    expect(statusTarefaAoEspelhar("nao_iniciada", "Em andamento")).toBe("A fazer");
+  });
+  it("sem status existente, usa o mapa do Planner", () => {
+    expect(statusTarefaAoEspelhar("em_andamento", undefined)).toBe("Em andamento");
+    expect(statusTarefaAoEspelhar("concluida", "")).toBe("Concluído");
+  });
+  it("no espelhamento completo, 'Aguardando' sobrevive", () => {
+    const todo = tarefaPlannerParaTodo(
+      { id: "t1", planId: "p1", title: "X", progress: "em_andamento", priority: "media", revision: 2, campos: {} },
+      { id: "p1", name: "Plano" },
+      { id: "planner-t1", status: "Aguardando" },
+    );
+    expect(todo.status).toBe("Aguardando");
+  });
+});
 
 describe("integração universal do Planner", () => {
   it("mantém tarefas comuns sem exigir CRM", () => {
