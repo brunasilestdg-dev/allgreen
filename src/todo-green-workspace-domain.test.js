@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildTodoGreenTaskBoard,
+  buildTodoGreenCanonicalTask,
   buildTodoGreenWorkspaceIntelligence,
   buildTodoGreenWorkspaceSummary,
+  normalizeTodoGreenTaskStatus,
   findLinkedDocument,
   findLinkedNote,
   linkedEntityFor,
@@ -79,6 +82,78 @@ describe("espaço de trabalho To Do Green", () => {
       openCases: 1,
       bases: 0,
       boards: 0,
+    });
+  });
+
+
+  it("monta a task canônica para Hoje sem duplicar Planner, CRM e implantação", () => {
+    const board = buildTodoGreenTaskBoard({
+      today: "2026-09-13",
+      currentUserId: "u1",
+      db: {
+        tasks: [
+          {
+            id: "planner-t1",
+            canonicalTaskId: "planner:plan-1:t1",
+            businessId: "todogreen",
+            source: "todogreen-planner",
+            plannerPlanId: "plan-1",
+            plannerTaskId: "t1",
+            title: "Liberar proposta",
+            status: "Aguardando",
+            priority: "alta",
+            due: "2026-09-12",
+            assigneeId: "u1",
+            clientId: "cli-1",
+            opportunityId: "op-1",
+            dependsOn: ["dep-1"],
+          },
+          { id: "dep-1", businessId: "todogreen", title: "Precificação", status: "A fazer" },
+          {
+            id: "imp-1",
+            businessId: "todogreen",
+            source: "todogreen-implantation",
+            implantationId: "implant-1",
+            title: "Agendar treinamento",
+            status: "A fazer",
+            priority: "Média",
+            due: "2026-09-13",
+          },
+        ],
+      },
+      verticalData: {
+        clients: [{ id: "cli-1", name: "DHL" }],
+        opportunities: [{ id: "op-1", clientId: "cli-1", title: "Frete dedicado" }],
+      },
+    });
+
+    expect(board.metrics).toMatchObject({ open: 3, overdue: 1, blocked: 1, highPriority: 1 });
+    expect(board.today.overdue[0]).toMatchObject({
+      id: "planner:plan-1:t1",
+      clientLabel: "DHL",
+      priority: "Alta",
+      blocked: true,
+      sourceLinks: {
+        planner: { planId: "plan-1", taskId: "t1" },
+        crm: { clientId: "cli-1", opportunityId: "op-1" },
+      },
+    });
+    expect(board.today.mine.map((task) => task.id)).toContain("planner:plan-1:t1");
+    expect(board.today.dueToday[0]).toMatchObject({
+      title: "Agendar treinamento",
+      sourceLinks: { implantation: { implantationId: "implant-1", taskId: "imp-1" } },
+    });
+  });
+
+  it("normaliza status e mantém uma saída canônica para qualquer visão", () => {
+    expect(normalizeTodoGreenTaskStatus("completed")).toBe("Concluído");
+    expect(normalizeTodoGreenTaskStatus("blocked")).toBe("Aguardando");
+    expect(buildTodoGreenCanonicalTask({ id: "t1", title: "Contato", source: "todogreen-crm", clientId: "cli-1" }, {
+      clients: [{ id: "cli-1", company: "Vivara" }],
+    })).toMatchObject({
+      canonicalId: "t1",
+      clientLabel: "Vivara",
+      sourceLinks: { crm: { clientId: "cli-1", opportunityId: "" } },
     });
   });
 
