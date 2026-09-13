@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import {
   TODO_GREEN_WORKSPACE_TOOLS,
+  buildTodoGreenTaskBoard,
   buildTodoGreenWorkspaceSummary,
 } from "./todoGreenWorkspaceDomain.js";
 import { TODO_GREEN_AI_SPECIALISTS } from "./todoGreenAiSpecialists.js";
@@ -133,6 +134,172 @@ const FerramentaNula = () => null;
 // da To Do Green já existem (os especialistas do motor de IA) e já operam sobre
 // os dados reais; aqui eles aparecem para lançar, e o estúdio de criação segue
 // abaixo para quem quiser um agente sob medida.
+
+const TODO_GREEN_TASK_TABS = Object.freeze([
+  { id: "hoje", label: "Hoje" },
+  { id: "proximas", label: "Próximas" },
+  { id: "quadro", label: "Quadro" },
+  { id: "projetos", label: "Projetos" },
+]);
+
+const TaskMeta = ({ label, value }) => (
+  <span><small>{label}</small><b>{value || "Não informado"}</b></span>
+);
+
+function TodoGreenTaskCard({ task, onOpenAdvanced }) {
+  return (
+    <article className={`tdg-task-card${task.flags?.blocked ? " is-blocked" : ""}`}>
+      <header>
+        <span>{task.clientLabel || task.project || "To Do Green"}</span>
+        <strong>{task.title}</strong>
+      </header>
+      <div className="tdg-task-meta">
+        <TaskMeta label="Responsável" value={task.assignee} />
+        <TaskMeta label="Prazo" value={task.due} />
+        <TaskMeta label="Prioridade" value={task.priority} />
+        <TaskMeta label="Status" value={task.status} />
+        <TaskMeta label="Dependência" value={task.dependencyLabels?.join(", ") || (task.blocked ? "Pendente" : "Livre")} />
+        <TaskMeta label="Próxima ação" value={task.nextAction} />
+      </div>
+      <button type="button" onClick={() => onOpenAdvanced(task)}>
+        Abrir recursos avançados <ArrowRight size={15} />
+      </button>
+    </article>
+  );
+}
+
+function TodoGreenTaskSection({ title, description, tasks, onOpenAdvanced }) {
+  return (
+    <section className="tdg-task-section">
+      <header>
+        <div>
+          <span className="tdg-kicker">{tasks.length} tarefa(s)</span>
+          <h3>{title}</h3>
+          {description && <p>{description}</p>}
+        </div>
+      </header>
+      {tasks.length > 0 ? (
+        <div className="tdg-task-card-grid">
+          {tasks.map((task) => <TodoGreenTaskCard key={task.id} task={task} onOpenAdvanced={onOpenAdvanced} />)}
+        </div>
+      ) : (
+        <p className="tdg-task-empty">Nada crítico aqui agora.</p>
+      )}
+    </section>
+  );
+}
+
+function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNavigate, onOpenTool }) {
+  const [tab, setTab] = useState(() => {
+    if (typeof window === "undefined") return "hoje";
+    return new URLSearchParams(window.location.search).get("task") ? "quadro" : "hoje";
+  });
+  const board = useMemo(
+    () => buildTodoGreenTaskBoard({
+      db,
+      verticalData,
+      businessId: business.id,
+      currentUserId: db?.currentUserId || db?.user?.id || "",
+    }),
+    [db, verticalData, business.id],
+  );
+  const openAdvanced = (task) => {
+    const params = new URLSearchParams();
+    params.set("ferramenta", "tarefas");
+    if (task?.id) params.set("task", task.id);
+    onNavigate?.(`/todogreen/espaco?${params.toString()}`);
+    setTab("quadro");
+  };
+  const renderLegacyTasks = () => (
+    <TasksScreen
+      {...commonProps}
+      AreaToolkit={FerramentaNula}
+      go={() => onOpenTool("visao-geral")}
+      workspaceAction={async () => ({})}
+    />
+  );
+
+  return (
+    <div className="tdg-task-workspace">
+      <section className="tdg-task-hero">
+        <div>
+          <span className="tdg-kicker">TO DO GREEN</span>
+          <h2>Tarefas canônicas, sem duas verdades</h2>
+          <p>
+            A mesma tarefa aparece como execução pessoal, planejamento, CRM ou implantação,
+            preservando os recursos avançados da tela histórica quando você abre o detalhe.
+          </p>
+        </div>
+        <div className="tdg-task-metrics" aria-label="Resumo das tarefas">
+          <span><small>Abertas</small><b>{board.metrics.open}</b></span>
+          <span><small>Atrasadas</small><b>{board.metrics.overdue}</b></span>
+          <span><small>Bloqueadas</small><b>{board.metrics.blocked}</b></span>
+          <span><small>Alta prioridade</small><b>{board.metrics.highPriority}</b></span>
+        </div>
+      </section>
+
+      <nav className="tdg-task-tabs" aria-label="Entrada principal do To Do Green">
+        {TODO_GREEN_TASK_TABS.map((item) => (
+          <button type="button" key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "hoje" && (
+        <div className="tdg-task-home">
+          <TodoGreenTaskSection title="Atrasadas" description="Prazos que já passaram e ainda estão abertos." tasks={board.today.overdue} onOpenAdvanced={openAdvanced} />
+          <TodoGreenTaskSection title="Vencendo hoje" description="O que precisa ser resolvido até o fim do dia." tasks={board.today.dueToday} onOpenAdvanced={openAdvanced} />
+          <TodoGreenTaskSection title="Bloqueadas" description="Tarefas presas por dependência aberta ou ausente." tasks={board.today.blocked} onOpenAdvanced={openAdvanced} />
+          <TodoGreenTaskSection title="Alta prioridade" description="Urgente e alta prioridade no mesmo fluxo." tasks={board.today.highPriority} onOpenAdvanced={openAdvanced} />
+          <TodoGreenTaskSection title="Minhas tarefas" description="Itens atribuídos ao usuário atual quando essa informação existe." tasks={board.today.mine} onOpenAdvanced={openAdvanced} />
+          <TodoGreenTaskSection title="Próxima ação" description="Fila prática para continuar sem abrir cada projeto." tasks={board.today.nextActions} onOpenAdvanced={openAdvanced} />
+        </div>
+      )}
+
+      {tab === "proximas" && (
+        <TodoGreenTaskSection
+          title="Próximas"
+          description="Tarefas futuras abertas, ordenadas por prioridade e prazo."
+          tasks={board.upcoming}
+          onOpenAdvanced={openAdvanced}
+        />
+      )}
+
+      {tab === "quadro" && renderLegacyTasks()}
+
+      {tab === "projetos" && (
+        <div className="tdg-task-projects">
+          <section className="tdg-task-section">
+            <header>
+              <div>
+                <span className="tdg-kicker">{board.projects.length} projeto(s)</span>
+                <h3>Projetos com tarefa aberta</h3>
+                <p>Resumo operacional por projeto ou cliente, usando a mesma task canônica.</p>
+              </div>
+            </header>
+            <div className="tdg-task-project-grid">
+              {board.projects.length > 0 ? board.projects.map((project) => (
+                <article className="tdg-task-project-card" key={project.id}>
+                  <strong>{project.name}</strong>
+                  {project.clientLabel && <span>{project.clientLabel}</span>}
+                  <div>
+                    <b>{project.open}</b><small>abertas</small>
+                    <b>{project.overdue}</b><small>atrasadas</small>
+                    <b>{project.blocked}</b><small>bloqueadas</small>
+                    <b>{project.highPriority}</b><small>prioridade alta</small>
+                  </div>
+                </article>
+              )) : <p className="tdg-task-empty">Nenhum projeto com tarefa aberta.</p>}
+            </div>
+          </section>
+          {renderLegacyTasks()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TodoGreenAgentes({ onOpenTool, commonProps }) {
   const prontos = Object.entries(TODO_GREEN_AI_SPECIALISTS).map(([nome, dados]) => ({ nome, ...dados }));
   return (
@@ -497,17 +664,13 @@ export default function TodoGreenWorkspace({
           {tool === "ajuda" && <TodoGreenGuides mode="ajuda" onNavigate={onNavigate} mostrarIntegracoes={mostrarIntegracoes} />}
           {tool === "estrutura" && <WorkStructure {...commonProps} />}
           {tool === "tarefas" && (
-            <TasksScreen
-              {...commonProps}
-              /* A tela nasceu no aplicativo geral e espera três coisas que o
-                 espaço não tem: o kit da área (aqui não existe — componente
-                 nulo), o `go` para telas do app geral (volta para a visão
-                 geral do espaço) e a ação de mural compartilhado (devolve {}
-                 e a tela cai no caminho local, que é o comportamento certo
-                 para o To Do de uma pessoa). */
-              AreaToolkit={FerramentaNula}
-              go={() => openTool("visao-geral")}
-              workspaceAction={async () => ({})}
+            <TodoGreenTaskWorkspace
+              commonProps={commonProps}
+              db={db}
+              verticalData={verticalData}
+              business={business}
+              onNavigate={onNavigate}
+              onOpenTool={openTool}
             />
           )}
           {tool === "visoes" && <WorkViews setToast={setToast} profiles={db?.resourceProfiles || []} onOpenTool={openTool} />}
