@@ -85,7 +85,7 @@ import {
 import { liberacaoDaProposta } from "./dealDeskDomain.js";
 import { endSession } from "../../session/armazenamento.js";
 import { useSaidaPorInatividade } from "../../session/useSaidaPorInatividade.js";
-import { useVerticalRecords } from "./useVerticalRecords.js";
+import { useVerticalRecords, descreverAreasComErro } from "./useVerticalRecords.js";
 import { inputsDePrecificacaoDaOportunidade } from "./electrificationJourneyDomain.js";
 import { buildTodoGreenDecisionCenter } from "./decisionCenterDomain.js";
 import { cenariosAbaixoDoPiso, resumoDeMargem } from "./marginDomain.js";
@@ -3027,6 +3027,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const {
     dados: registros,
     erro: erroDosRegistros,
+    erros: errosDosRegistros,
+    desatualizado: registrosDesatualizados,
     recarregar: recarregarRegistros,
     criar,
     atualizar,
@@ -3412,12 +3414,25 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
 
         <section className="tdg-erp-stage">
           <div data-tdg-page-content="true">
-      {erroDosRegistros && (
+      {erroDosRegistros ? (
         <div className="tdg-alert" role="alert">
           <AlertTriangle size={18} />
-          <span>{erroDosRegistros} Os indicadores abaixo estão zerados porque os dados não puderam ser lidos — não porque não existam.</span>
+          <span>Não foi possível carregar os dados da To Do Green agora. Os números podem estar indisponíveis ou desatualizados — <strong>não são necessariamente zero</strong>.</span>
+          <button type="button" className="tdg-action" onClick={() => { if (allowed) recarregarRegistros(); }}>Tentar novamente</button>
         </div>
-      )}
+      ) : errosDosRegistros && Object.keys(errosDosRegistros).length > 0 ? (
+        <div className="tdg-alert" role="alert">
+          <AlertTriangle size={18} />
+          <span>Algumas áreas não puderam ser lidas agora: <strong>{descreverAreasComErro(errosDosRegistros)}</strong>. Os números dessas áreas podem estar incompletos — <strong>não são zero</strong>. As demais áreas estão atualizadas.</span>
+          <button type="button" className="tdg-action" onClick={() => { if (allowed) recarregarRegistros(); }}>Tentar novamente</button>
+        </div>
+      ) : registrosDesatualizados ? (
+        <div className="tdg-alert" role="status">
+          <AlertTriangle size={18} />
+          <span>Mostrando os últimos dados carregados — a atualização mais recente falhou.</span>
+          <button type="button" className="tdg-action" onClick={() => { if (allowed) recarregarRegistros(); }}>Atualizar</button>
+        </div>
+      ) : null}
 
       {!podeVerPagina && (
         <section className="tdg-panel tdg-sem-permissao" role="alert">

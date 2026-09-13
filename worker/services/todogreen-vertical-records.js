@@ -2779,17 +2779,43 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
     if (request.method !== "GET") return json({ error: "Método não permitido." }, 405);
     const nomes = Object.keys(COLECOES);
     const permitidas = nomes.filter((n) => podeLerColecao(access, COLECOES[n]));
-    const [listas, cenarios] = await Promise.all([
-      Promise.all(permitidas.map((n) => listar(env, COLECOES[n], access, user.email))),
+    // ISOLAMENTO POR COLEÇÃO. Antes era Promise.all: uma coleção que falha
+    // (coluna/tabela ausente, SQL incompatível com o schema remoto) rejeitava o
+    // agregado inteiro → a tela caía no catch e mostrava TUDO zerado. Agora é
+    // allSettled: o que leu aparece; o que falhou entra em `errors` para a tela
+    // mostrar "indisponível" (não zero). Ver AUDITORIA_CONSOLIDACAO_TDG.md §4.
+    const [resultados, cenariosRes] = await Promise.all([
+      Promise.allSettled(permitidas.map((n) => listar(env, COLECOES[n], access, user.email))),
       podeLerCenarios(access)
-        ? listarCenarios(env, access, user.email)
-        : Promise.resolve({ registros: [], total: 0 }),
+        ? listarCenarios(env, access, user.email).then(
+            (value) => ({ status: "fulfilled", value }),
+            (reason) => ({ status: "rejected", reason }),
+          )
+        : Promise.resolve({ status: "fulfilled", value: { registros: [], total: 0 } }),
     ]);
-    const porNome = Object.fromEntries(permitidas.map((n, i) => [n, listas[i]]));
+    const porNome = Object.fromEntries(
+      permitidas.map((n, i) => [n, resultados[i].status === "fulfilled" ? resultados[i].value : null]),
+    );
+    const errors = {};
+    permitidas.forEach((n, i) => {
+      if (resultados[i].status === "rejected") {
+        console.error(`todogreen records: coleção "${n}" indisponível`, resultados[i].reason?.message || resultados[i].reason);
+        errors[n] = { code: "read_failed", message: "Não foi possível ler esta coleção agora." };
+      }
+    });
+    if (cenariosRes.status === "rejected") {
+      console.error("todogreen records: coleção \"scenarios\" indisponível", cenariosRes.reason?.message || cenariosRes.reason);
+      errors.scenarios = { code: "read_failed", message: "Não foi possível ler as simulações agora." };
+    }
+    const cenarios = cenariosRes.status === "fulfilled" ? cenariosRes.value : { registros: [], total: 0 };
     const payload = {
       ...Object.fromEntries(nomes.map((n) => [n, porNome[n]?.registros || []])),
       scenarios: cenarios.registros,
     };
+    // `errors` só aparece quando há coleção indisponível. Zero de verdade
+    // (coleção lida e vazia) continua sendo array vazio SEM entrada em errors —
+    // é como a tela distingue "não tem" de "não deu para ler".
+    if (Object.keys(errors).length) payload.errors = errors;
     if (url.searchParams.get("includeTotals") === "1" || request.headers.get("x-todogreen-include-totals") === "1") payload.totals = {
         ...Object.fromEntries(nomes.map((n) => [n, porNome[n]?.total || 0])),
         scenarios: cenarios.total,

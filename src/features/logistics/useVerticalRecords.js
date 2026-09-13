@@ -91,6 +91,12 @@ export function useVerticalRecords(authHeaders, { ativo = true, colecoes = null 
   const [dados, setDados] = useState(VAZIO);
   const [carregando, setCarregando] = useState(ativo);
   const [erro, setErro] = useState("");
+  // Falha PARCIAL por coleção (a leitura de UMA coleção falhou; as outras vieram).
+  // A tela usa isto para mostrar "indisponível" só na área afetada — nunca zero.
+  const [erros, setErros] = useState({});
+  // Os dados exibidos são de uma carga anterior porque a última atualização
+  // falhou (mantidos em vez de zerar). A tela pode marcar "desatualizado".
+  const [desatualizado, setDesatualizado] = useState(false);
 
   const carregarColecoes = useCallback(async (colecaoEspecifica = null) => {
     const alvo = colecaoEspecifica
@@ -99,24 +105,46 @@ export function useVerticalRecords(authHeaders, { ativo = true, colecoes = null 
 
     try {
       const corpo = await pedir("", authHeaders, { includeTotals: true });
-      const completo = { ...VAZIO, ...corpo };
+      // `errors`/`totals` vêm no corpo mas NÃO são coleções — separar antes de
+      // montar `dados`, senão virariam "coleções" fantasma.
+      const errosDaColecao = { ...(corpo.errors || {}) };
+      const totals = corpo.totals || {};
+      const corpoLimpo = { ...corpo };
+      delete corpoLimpo.errors;
+      delete corpoLimpo.totals;
+      const completo = { ...VAZIO, ...corpoLimpo };
 
-      await Promise.all(alvo.map(async (colecao) => {
+      // Paginação RESILIENTE: uma coleção que falha ao paginar não derruba as
+      // outras (allSettled) e entra em `erros` — em vez de estourar tudo.
+      await Promise.allSettled(alvo.map(async (colecao) => {
         if (!VAZIO[colecao]) return;
-        const total = Number(corpo.totals?.[colecao] || completo[colecao]?.length || 0);
-        let offset = completo[colecao]?.length || 0;
-        while (offset < total) {
-          const pagina = await pedir(`/${colecao}?limit=200&offset=${offset}`, authHeaders);
-          const items = pagina.registros || [];
-          completo[colecao] = [...(completo[colecao] || []), ...items];
-          if (!items.length) break;
-          offset += items.length;
+        if (errosDaColecao[colecao]) return; // já veio indisponível no agregado
+        try {
+          const total = Number(totals[colecao] || completo[colecao]?.length || 0);
+          let offset = completo[colecao]?.length || 0;
+          while (offset < total) {
+            const pagina = await pedir(`/${colecao}?limit=200&offset=${offset}`, authHeaders);
+            const items = pagina.registros || [];
+            completo[colecao] = [...(completo[colecao] || []), ...items];
+            if (!items.length) break;
+            offset += items.length;
+          }
+        } catch (e) {
+          errosDaColecao[colecao] = { code: e.status ? String(e.status) : "read_failed", message: e.message };
         }
       }));
       setDados(completo);
+      setErros(errosDaColecao);
+      setDesatualizado(false);
+      // Sucesso (ainda que parcial). Falha parcial é sinalizada por `erros`, não
+      // por `erro` — que fica só para a falha TOTAL do agregado (catch abaixo).
       setErro("");
     } catch (razao) {
+      // Falha TOTAL do agregado (500 geral, rede). NÃO zera `dados`: mantém a
+      // última carga boa e marca desatualizado. Na primeira carga, `dados` ainda
+      // é VAZIO — aí a tela mostra "indisponível" por causa de `erro`, não zero.
       setErro(razao.message);
+      setDesatualizado(true);
     }
   }, [authHeaders, colecoes]);
 
@@ -245,10 +273,36 @@ export function useVerticalRecords(authHeaders, { ativo = true, colecoes = null 
   );
 
   return {
-    dados, carregando, erro, recarregar, criar, atualizar, arquivar,
+    dados, carregando, erro, erros, desatualizado, recarregar, criar, atualizar, arquivar,
     registrarPagamento, estornarPagamento, registrarEventoOperacao, listarSubrecurso,
     carregarAoNecessario,
   };
 }
 
 export const REGISTROS_VAZIOS = VAZIO;
+
+// Rótulos amigáveis para nomear a ÁREA afetada quando uma coleção fica
+// indisponível. A tela nunca mostra o nome técnico da coleção nem erro de SQL/D1
+// ao usuário final — só o nome da área e a opção de tentar de novo.
+export const ROTULOS_COLECAO = {
+  opportunities: "Oportunidades",
+  proposals: "Propostas",
+  contracts: "Contratos",
+  operations: "Operações",
+  financial: "Financeiro",
+  scenarios: "Simulações",
+  comments: "Comentários",
+  interactions: "Interações",
+  quality: "Qualidade",
+  legal: "Jurídico",
+  rfq: "RFQ/RFI",
+  habilitacao: "Habilitação",
+};
+
+// "Financeiro" · "Financeiro e Operações" · "Oportunidades, Propostas e Financeiro".
+export const descreverAreasComErro = (erros = {}) => {
+  const nomes = Object.keys(erros || {}).map((chave) => ROTULOS_COLECAO[chave] || chave);
+  if (!nomes.length) return "";
+  if (nomes.length === 1) return nomes[0];
+  return `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
+};
