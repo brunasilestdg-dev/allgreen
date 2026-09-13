@@ -5,7 +5,6 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  BatteryCharging,
   Boxes,
   Cable,
   CalendarClock,
@@ -31,7 +30,6 @@ import {
   Trash2,
   Truck,
   Waypoints,
-  Zap,
 } from "lucide-react";
 import Modal from "../../components/Modal.jsx";
 import {
@@ -1022,24 +1020,16 @@ function ControlTower({ data, onSection }) {
 // 1h30, pedágios, carregadores para pesados) — deixou de ser vitrine e virou
 // ferramenta de trabalho dentro do portal.
 function ElectricRouting({ setToast }) {
+  // Sem hero próprio aqui: a RoteirizacaoPage já traz o cabeçalho completo da
+  // roteirização. Antes o portal empilhava DOIS cabeçalhos de rota (o desta
+  // seção + o da página) antes de o formulário aparecer — era o que mais fazia
+  // a tela parecer poluída.
   return (
-    <div className="tms-stack">
-      <section className="tms-panel tms-route-hero tms-electric-hero">
-        <BatteryCharging size={30} />
-        <div>
-          <span>ROTEIRIZAÇÃO ELÉTRICA DINÂMICA</span>
-          <h2>Planeje a rota entendendo bateria, carga e carregador</h2>
-          <p>Adicione as paradas abaixo, otimize a ordem para tirar o zigue-zague, marque as recargas (soma 1h30 cada), veja pedágios e carregadores com foco em pesados. Autonomia, reserva e conector entram na conta.</p>
-        </div>
-        <span className="tms-electric-live"><Zap size={14} /> Otimização ativa</span>
-      </section>
-
-      <Suspense fallback={<div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Abrindo roteirização...</span></div>}>
-        {/* authHeaders é obrigatório: sem ele, Pedágios/Carregadores/IA chamam a
-            API sem token e tomam 401 ("sessão expirada" falso). */}
-        <RoteirizacaoDinamica setToast={setToast} authHeaders={authHeaders} />
-      </Suspense>
-    </div>
+    <Suspense fallback={<div className="tms-loading"><RefreshCw size={22} className="spin" /><span>Abrindo roteirização...</span></div>}>
+      {/* authHeaders é obrigatório: sem ele, Pedágios/Carregadores/IA chamam a
+          API sem token e tomam 401 ("sessão expirada" falso). */}
+      <RoteirizacaoDinamica setToast={setToast} authHeaders={authHeaders} />
+    </Suspense>
   );
 }
 

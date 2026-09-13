@@ -3643,7 +3643,44 @@
 }
 .tdg-roteirizacao-parada.origem .tdg-roteirizacao-num { background: #0b9f8f; }
 .tdg-roteirizacao-parada.destino .tdg-roteirizacao-num { background: #b4471f; }
-.tdg-roteirizacao-campo { display: grid; gap: 4px; flex: 1 1 240px; min-width: 0; }
+.tdg-roteirizacao-campo { display: grid; gap: 4px; flex: 1 1 240px; min-width: 0; position: relative; }
+/* Lista de sugestões de endereço: dropdown próprio (o <datalist> nativo era
+   feio e, em vários navegadores/celulares, não deixava escolher de fato). */
+.tdg-roteirizacao-sugestoes {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 42, 34, .16);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.tdg-roteirizacao-sugestoes li { margin: 0; }
+.tdg-roteirizacao-sugestoes button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1.35;
+}
+.tdg-roteirizacao-sugestoes button:hover,
+.tdg-roteirizacao-sugestoes button:focus-visible {
+  background: var(--tdg-green-soft, #e9f3ef);
+  outline: none;
+}
 .tdg-roteirizacao-campo span {
   font-size: 0.76rem;
   font-weight: 700;

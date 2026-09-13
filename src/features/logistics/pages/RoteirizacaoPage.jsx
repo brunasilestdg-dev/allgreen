@@ -121,6 +121,8 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
   const [estado, setEstado] = useState({ fase: "parado" });
   const [otimizando, setOtimizando] = useState(false);
   const [sugestoes, setSugestoes] = useState({});
+  // Qual parada está com a lista de sugestões aberta (a que está com foco).
+  const [sugestaoAberta, setSugestaoAberta] = useState(null);
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
   const [mostrarProprios, setMostrarProprios] = useState(false);
   const [pedagios, setPedagios] = useState({ fase: "idle" });
@@ -193,6 +195,16 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
       });
       setSugestoes((atual) => ({ ...atual, [indice]: lista }));
     }, 350);
+  };
+  // A pessoa clicou numa sugestão: fixa o endereço completo E guarda a
+  // coordenada exata dela, para a rota não depender de o geocoder reencontrar o
+  // texto (era a origem do "só cidade × cidade"). Substitui o <datalist> nativo,
+  // que em vários navegadores/celulares não deixava escolher de fato e era feio.
+  const escolherSugestao = (indice, sugestao) => {
+    coordsResolvidasRef.current[String(sugestao.rotulo).trim()] = [sugestao.latitude, sugestao.longitude];
+    setParadas((atual) => atual.map((p, i) => (i === indice ? sugestao.rotulo : p)));
+    setSugestoes((atual) => ({ ...atual, [indice]: [] }));
+    setSugestaoAberta(null);
   };
   const adicionarParada = () => {
     setParadas((atual) => [...atual, ""]);
@@ -684,16 +696,27 @@ Regras:
                   <span>{papel === "origem" ? "Origem" : papel === "destino" ? "Destino" : `Parada ${indice}`}</span>
                   <input
                     value={valor}
-                    list={`tdg-sug-${indice}`}
                     autoComplete="off"
+                    role="combobox"
+                    aria-expanded={sugestaoAberta === indice && (sugestoes[indice] || []).length > 0}
+                    aria-controls={`tdg-sug-${indice}`}
                     onChange={(event) => alterarParada(indice, event.target.value)}
+                    onFocus={() => setSugestaoAberta(indice)}
+                    onBlur={() => setTimeout(() => setSugestaoAberta((atual) => (atual === indice ? null : atual)), 150)}
                     placeholder={indice === 0 ? "Ex.: Rua da Estação, 100, Santos SP" : "Ex.: Av. Brasil, 500, Campinas SP"}
                   />
-                  <datalist id={`tdg-sug-${indice}`}>
-                    {(sugestoes[indice] || []).map((s) => (
-                      <option key={s.rotulo} value={s.rotulo} />
-                    ))}
-                  </datalist>
+                  {sugestaoAberta === indice && (sugestoes[indice] || []).length > 0 && (
+                    <ul className="tdg-roteirizacao-sugestoes" id={`tdg-sug-${indice}`} role="listbox">
+                      {(sugestoes[indice] || []).map((s) => (
+                        <li key={s.rotulo} role="option" aria-selected={valor === s.rotulo}>
+                          {/* onMouseDown (não onClick) para escolher ANTES do blur do input fechar a lista */}
+                          <button type="button" onMouseDown={(event) => { event.preventDefault(); escolherSugestao(indice, s); }}>
+                            {s.rotulo}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </label>
                 <div className="tdg-roteirizacao-janela" title="Janela de horário para esta parada (opcional)">
                   <Clock size={13} aria-hidden="true" />
