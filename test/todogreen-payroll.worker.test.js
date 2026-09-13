@@ -442,3 +442,35 @@ describe("rescisão (sem justa causa)", () => {
     })).status).toBe(409);
   });
 });
+
+
+describe("colaborador sem salário não vira holerite zerado", () => {
+  it("fecha a folha pulando e sinalizando quem ainda não tem salário base", async () => {
+    const dono = await criarUsuario("folha-semsal", "semsal@folha.test");
+    await autorizar(dono, "rh", ["read", "hr:manage"]);
+
+    const comSalario = await (await pedir("/api/todogreen/payroll/colaboradores", {
+      metodo: "POST", token: dono.token,
+      corpo: { nome: "Com Salario", cpf: "111.444.777-35", salarioBase: 3000, admissaoEm: "2026-01-10" },
+    })).json();
+    expect(comSalario.id).toBeTruthy();
+
+    const semSalarioResp = await pedir("/api/todogreen/master-data/employees", {
+      metodo: "POST", token: dono.token,
+      corpo: { fullName: "Sem Salario Teste", status: "active" },
+    });
+    expect(semSalarioResp.status).toBeLessThan(300);
+
+    const run = await (await pedir("/api/todogreen/payroll/folhas", {
+      metodo: "POST", token: dono.token, corpo: { competencia: "2026-07", tipo: "mensal" },
+    })).json();
+    const fechar = await pedir(`/api/todogreen/payroll/folhas/${run.id}/fechar`, { metodo: "POST", token: dono.token });
+    expect(fechar.status).toBe(200);
+    const resultado = await fechar.json();
+
+    expect(resultado.colaboradores).toBe(1);
+    expect(resultado.pendentesSalario).toBe(1);
+    expect(resultado.pendentesSalarioNomes).toContain("Sem Salario Teste");
+    expect(resultado.totalLiquido).toBeGreaterThan(0);
+  });
+});

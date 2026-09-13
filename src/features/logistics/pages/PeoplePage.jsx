@@ -102,7 +102,7 @@ export default function PeoplePage({ authHeaders, setToast }) {
   const fecharFolha = async (run) => {
     try {
       const r = await request(`/folhas/${run.id}/fechar`, authHeaders, { method: "POST" });
-      avisar(`Folha fechada: ${r.colaboradores} colaboradores, líquido ${dinheiro(r.totalLiquido)}.`, "sucesso");
+      avisar(`Folha fechada: ${r.colaboradores} colaboradores, líquido ${dinheiro(r.totalLiquido)}.${r.pendentesSalario ? ` ${r.pendentesSalario} sem salário cadastrado (ignorado(s)).` : ""}`, "sucesso");
       await carregar();
     } catch (motivo) { avisar(motivo.message, "erro"); }
   };

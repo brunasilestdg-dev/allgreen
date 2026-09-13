@@ -7,6 +7,7 @@ import {
   enderecoAceito,
   idDeArquivoInterno,
   linkExpirado,
+  refDeArquivoAceita,
   tamanhoLegivel,
   validadeDoLink,
 } from "./documentVaultDomain.js";
@@ -57,6 +58,28 @@ describe("endereço do arquivo", () => {
     ]) {
       expect(enderecoAceito(host).ok).toBe(false);
     }
+  });
+});
+
+describe("refDeArquivoAceita (URL de comprovante na escrita)", () => {
+  it("aceita http(s) público, referência interna e vazio", () => {
+    expect(refDeArquivoAceita("https://arquivos.exemplo.com/pod.pdf").ok).toBe(true);
+    expect(refDeArquivoAceita("/api/todogreen/file-vault/abc123/download").ok).toBe(true);
+    expect(refDeArquivoAceita("")).toMatchObject({ ok: true, url: "" });
+  });
+
+  it("data:image só passa com permissão explícita", () => {
+    expect(refDeArquivoAceita("data:image/png;base64,AAAA", { permitirImagemInline: true }).ok).toBe(true);
+    expect(refDeArquivoAceita("data:image/png;base64,AAAA").ok).toBe(false);
+  });
+
+  it("recusa javascript, HTML inline, host interno e protocol-relative", () => {
+    expect(refDeArquivoAceita("javascript:alert(1)").ok).toBe(false);
+    expect(refDeArquivoAceita("data:text/html,<script>x</script>", { permitirImagemInline: true }).ok).toBe(false);
+    expect(refDeArquivoAceita("http://169.254.169.254/latest/meta-data").ok).toBe(false);
+    expect(refDeArquivoAceita("http://127.0.0.1/x").ok).toBe(false);
+    expect(refDeArquivoAceita("//evil.com/x").ok).toBe(false);
+    expect(refDeArquivoAceita("/api/outra-coisa").ok).toBe(false);
   });
 });
 

@@ -467,7 +467,14 @@ const fecharRun = async (env, access, user, runId) => {
 
   const itensCalculados = [];
   const gravacoes = [];
+  const semSalario = [];
   for (const c of colaboradores) {
+    // Cadastros mestres permitem criar pessoa ativa antes de a remuneração ser
+    // informada. Folha não pode transformar ausência de dado em holerite R$ 0.
+    if (!(c.salario_base > 0)) {
+      semSalario.push(c.full_name || c.id);
+      continue;
+    }
     let base = c.salario_base;
     const eventos = [];
 
@@ -533,7 +540,9 @@ const fecharRun = async (env, access, user, runId) => {
   if (!gravacoes.length) {
     return json({ error: eDecimoTerceiro
       ? "Nenhum colaborador com avos de 13º nesta competência."
-      : "Nenhum colaborador para calcular." }, 400);
+      : semSalario.length
+        ? "Colaboradores ativos sem salário base cadastrado: complete o salário antes de fechar a folha."
+        : "Nenhum colaborador para calcular." }, 400);
   }
   await env.DB.batch(gravacoes);
 
@@ -566,7 +575,7 @@ const fecharRun = async (env, access, user, runId) => {
   const lancamentos = await lancarFolhaNoFinanceiro(env, access, user, run, totais);
 
   const row = await env.DB.prepare("SELECT * FROM todogreen_payroll_runs WHERE id = ?").bind(runId).first();
-  return json({ run: runDaLinha(row), colaboradores: itensCalculados.length, lancamentosFinanceiros: lancamentos, ...totais });
+  return json({ run: runDaLinha(row), colaboradores: itensCalculados.length, lancamentosFinanceiros: lancamentos, pendentesSalario: semSalario.length, pendentesSalarioNomes: semSalario, ...totais });
 };
 
 const reabrirRun = async (env, access, user, runId) => {

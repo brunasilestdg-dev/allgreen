@@ -198,6 +198,19 @@ describe("To Do Green TMS API externa", () => {
     ).first();
     expect(eventoCanonico.kind).toBe("transito");
 
+    const podInvalido = await json(await call(`/api/tms/v1/shipments/${created.body.id}/pod`, {
+      method: "POST",
+      token: seeded.token,
+      idempotencyKey: `pod-invalido-${suffix}`,
+      body: {
+        recipientName: "Recebedor Teste",
+        documentUrl: "javascript:alert(1)",
+        completeShipment: true,
+      },
+    }));
+    expect(podInvalido.status).toBe(400);
+    expect(podInvalido.body.error).toBe("invalid_document_url");
+
     const pod = await json(await call(`/api/tms/v1/shipments/${created.body.id}/pod`, {
       method: "POST",
       token: seeded.token,

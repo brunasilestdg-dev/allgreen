@@ -104,6 +104,7 @@ import {
 // POD do motorista (#120b): a foto/assinatura chega como data URL reduzido e é
 // guardada no cofre; a URL de download entra no comprovante da entrega.
 import { armazenarImagemBase64, descartarArquivos } from "./todogreen-file-store.js";
+import { refDeArquivoAceita } from "../../src/features/logistics/documentVaultDomain.js";
 import { STATUS_DE_LIBERACAO, viabilidadeDaProposta } from "./todogreen-viability.js";
 
 const json = (data, status = 200) =>
@@ -2595,6 +2596,12 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   let comprovanteHash = efeitos.concluiEntrega ? texto(corpo.comprovanteHash, 200) : "";
   let assinaturaUrl = efeitos.concluiEntrega ? texto(corpo.assinaturaUrl, 800) : "";
   let assinaturaHash = efeitos.concluiEntrega ? texto(corpo.assinaturaHash, 200) : "";
+  if (efeitos.concluiEntrega) {
+    const okComprovante = refDeArquivoAceita(comprovanteUrl);
+    if (!okComprovante.ok) return { erro: okComprovante.motivo };
+    const okAssinatura = refDeArquivoAceita(assinaturaUrl);
+    if (!okAssinatura.ok) return { erro: okAssinatura.motivo };
+  }
   // Entrega sem prova não encerra execução. O mesmo gate vale para a tela
   // interna, Portal do Motorista, Portal TMS, API e integrações: mudar a porta
   // de entrada não pode mudar a regra de negócio.

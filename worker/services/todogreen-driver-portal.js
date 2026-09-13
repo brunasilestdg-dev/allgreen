@@ -374,6 +374,7 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
            FROM todogreen_client_operations
           WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id IS NOT NULL
             AND driver_id != '' AND archived_at IS NULL
+          ORDER BY service_date DESC, updated_at DESC, id
           LIMIT 5000`,
       ).bind(TENANT_ID, access.ownerId).all(),
       env.DB.prepare(
@@ -381,6 +382,7 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
            FROM todogreen_driver_shifts
           WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id IS NOT NULL
             AND driver_id != '' AND archived_at IS NULL
+          ORDER BY service_date DESC, started_at DESC, id
           LIMIT 5000`,
       ).bind(TENANT_ID, access.ownerId).all(),
       env.DB.prepare(

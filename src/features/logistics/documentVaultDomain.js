@@ -61,6 +61,20 @@ export const enderecoAceito = (url) => {
   return { ok: true, motivo: "", url: alvo.toString() };
 };
 
+// Referência de comprovante/POD aceita na escrita. Além de URL pública segura,
+// aceita a referência interna do cofre e, quando explicitamente permitido,
+// imagem inline data:image. Continua recusando javascript:, data:text/html,
+// protocol-relative e redes privadas.
+const REF_INTERNA_COFRE = /^\/api\/todogreen\/file-vault\/[^/]+\/download$/;
+
+export const refDeArquivoAceita = (url, { permitirImagemInline = false } = {}) => {
+  const bruto = texto(url, permitirImagemInline ? 300000 : 2000);
+  if (!bruto) return { ok: true, motivo: "", url: "" };
+  if (REF_INTERNA_COFRE.test(bruto)) return { ok: true, motivo: "", url: bruto };
+  if (permitirImagemInline && /^data:image\//i.test(bruto)) return { ok: true, motivo: "", url: bruto };
+  return enderecoAceito(bruto);
+};
+
 // Comprovante (POD/assinatura) que o motorista captura mora no cofre INTERNO
 // (todogreen_internal_files, servido por /api/todogreen/file-vault/:id/download),
 // não num endereço http externo. `enderecoAceito` recusa esse caminho de

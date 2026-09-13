@@ -2,6 +2,7 @@ import { sha256 } from "../auth/credenciais.js";
 import { allowed } from "../lib/http.js";
 import { TENANT_ID } from "./todogreen-access.js";
 import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
+import { refDeArquivoAceita } from "../../src/features/logistics/documentVaultDomain.js";
 
 const cors = {
   "access-control-allow-origin": "*",
@@ -528,6 +529,10 @@ async function registrarPod(env, { workspaceOwnerId, shipment, createdBy, body, 
   const documentUrl = text(body.documentUrl, 200_000);
   if (!recipientName && !documentUrl)
     return { error: { status: 400, payload: { error: "pod_required", message: "Informe quem recebeu ou uma assinatura/foto." } } };
+
+  const okDoc = refDeArquivoAceita(documentUrl, { permitirImagemInline: true });
+  if (!okDoc.ok)
+    return { error: { status: 400, payload: { error: "invalid_document_url", message: okDoc.motivo } } };
 
   const now = new Date().toISOString();
   const occurredAt = text(body.occurredAt, 40) || now;
