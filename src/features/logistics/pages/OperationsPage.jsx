@@ -1,10 +1,16 @@
 import "./TodoGreenPages.css";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Clock3, MapPin, PackageCheck, Plus, Route, Truck } from "lucide-react";
+import { AlertTriangle, Clock3, MapPin, PackageCheck, Plus, Route, Truck, Upload } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
 import { VEHICLE_CLASSES } from "../vehicleClassDomain.js";
 import { resolverCoordenadasDaOperacao } from "../distanciaRodoviariaDomain.js";
+import {
+  LIMITE_PARADAS_IMPORTACAO,
+  excedenteDeParadas,
+  parseParadasEmMassa,
+  resumoDaImportacao,
+} from "../operationsImportDomain.js";
 
 const agoraLocal = () => new Date().toISOString().slice(0, 16);
 const EVENT_TYPES = ["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"];
@@ -72,6 +78,13 @@ export default function OperationsPage({ operations = [], clients = [], contract
     setNovaAberta(true);
   };
   const fecharModal = () => { setNovaAberta(false); setConfirmando(null); setForm(empty); setCamposBase({}); setCoordsBase({}); };
+  // Importação de paradas em massa (uma por linha) — o caminho rápido para pôr
+  // um dia inteiro de entregas no roteirizador sem o formulário de 17 campos.
+  const [importAberta, setImportAberta] = useState(false);
+  const [importClientId, setImportClientId] = useState("");
+  const [importData, setImportData] = useState("");
+  const [importTexto, setImportTexto] = useState("");
+  const [importando, setImportando] = useState(false);
   const [selected, setSelected] = useState(null);
   const [events, setEvents] = useState([]);
   const [event, setEvent] = useState({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal(), recebedor: "", comprovanteUrl: "" });
@@ -127,6 +140,36 @@ export default function OperationsPage({ operations = [], clients = [], contract
     finally { setSaving(false); }
   };
 
+  const importarEmMassa = async () => {
+    if (!importClientId) { setToast?.("Escolha o cliente do lote antes de importar."); return; }
+    const paradas = parseParadasEmMassa(importTexto);
+    if (!paradas.length) { setToast?.("Cole ao menos uma parada — uma por linha."); return; }
+    setImportando(true);
+    const headers = authHeaders?.() || {};
+    let criadas = 0; let semCoordenada = 0; let falhas = 0;
+    for (const parada of paradas) {
+      try {
+        // Geocodifica cada endereço para a operação já entrar roteirizável.
+        // Best-effort: sem coordenada ela é criada mesmo assim e conta como
+        // "sem coordenada" no resumo — o planejador localiza depois.
+        const coords = await resolverCoordenadasDaOperacao({ destino: parada.destino }, { headers });
+        await criar("operations", {
+          clientId: importClientId,
+          referencia: parada.referencia,
+          destino: parada.destino,
+          dataServico: importData || undefined,
+          situacao: "planned",
+          entregaLat: coords.entregaLat, entregaLng: coords.entregaLng,
+        });
+        criadas += 1;
+        if (!coords.entregaLocalizada) semCoordenada += 1;
+      } catch { falhas += 1; }
+    }
+    setImportando(false);
+    setToast?.(resumoDaImportacao({ criadas, semCoordenada, falhas }));
+    setImportAberta(false); setImportTexto("");
+  };
+
   const openEvents = async (operation) => {
     setSelected(operation);
     try {
@@ -151,7 +194,7 @@ export default function OperationsPage({ operations = [], clients = [], contract
 
   return (
     <section className="tdg-panel tdg-enterprise-operations">
-      <div className="tdg-section-head"><div><span className="tdg-kicker">{isIncidents ? "OCORRÊNCIAS" : "EXECUÇÃO OPERACIONAL"}</span><h2>{isIncidents ? "Ocorrências e exceções operacionais" : "Operação, SLA, frota e execução"}</h2><p>{isIncidents ? "Acompanhe atrasos, insucessos, reentregas, documentos e eventos críticos vinculados à operação." : "A equipe interna escreve na mesma operação que o cliente acompanha no portal."}</p></div><div className="tdg-page-actions"><strong>{isIncidents ? `${visibleOperations.length} em atenção` : `${operations.length} operação(ões)`}</strong>{!isIncidents && <button type="button" className="tdg-action" onClick={() => setNovaAberta(true)}><Plus size={16} />Nova operação</button>}</div></div>
+      <div className="tdg-section-head"><div><span className="tdg-kicker">{isIncidents ? "OCORRÊNCIAS" : "EXECUÇÃO OPERACIONAL"}</span><h2>{isIncidents ? "Ocorrências e exceções operacionais" : "Operação, SLA, frota e execução"}</h2><p>{isIncidents ? "Acompanhe atrasos, insucessos, reentregas, documentos e eventos críticos vinculados à operação." : "A equipe interna escreve na mesma operação que o cliente acompanha no portal."}</p></div><div className="tdg-page-actions"><strong>{isIncidents ? `${visibleOperations.length} em atenção` : `${operations.length} operação(ões)`}</strong>{!isIncidents && <button type="button" onClick={() => setImportAberta(true)}><Upload size={16} />Importar em massa</button>}{!isIncidents && <button type="button" className="tdg-action" onClick={() => setNovaAberta(true)}><Plus size={16} />Nova operação</button>}</div></div>
       <div className="tdg-result"><article className="tdg-metric"><span>Viagens</span><strong>{totals.trips.toLocaleString("pt-BR")}</strong><small>volume registrado</small></article><article className="tdg-metric good"><span>Entregas</span><strong>{totals.deliveries.toLocaleString("pt-BR")}</strong><small>execução consolidada</small></article><article className={`tdg-metric ${totals.incidents ? "risk" : ""}`}><span>Ocorrências</span><strong>{totals.incidents}</strong><small>eventos operacionais</small></article><article className="tdg-metric"><span>Distância</span><strong>{totals.distance.toLocaleString("pt-BR")} km</strong><small>base para custo e ESG</small></article></div>
       {/* Registro em janela própria: o formulário de 17 campos não empurra
           mais a grade de operações (rodada "nada corta a tela", 30/08). */}
@@ -179,6 +222,20 @@ export default function OperationsPage({ operations = [], clients = [], contract
         <label><span>Tipo de veículo exigido</span><select value={form.requiredVehicleClass} onChange={(e) => setForm((v) => ({ ...v, requiredVehicleClass: e.target.value }))}><option value="">Qualquer veículo</option>{VEHICLE_CLASSES.map((classe) => <option key={classe.id} value={classe.id}>{classe.name}</option>)}</select></label>
         <div className="tdg-form-actions"><button type="button" onClick={fecharModal}>Cancelar</button><button className="tdg-action" type="submit" disabled={saving}><Plus size={17} />{saving ? "Salvando..." : confirmando ? "Confirmar operação" : "Registrar operação"}</button></div>
       </form></Modal>}
+      {!isIncidents && importAberta && <Modal title="Importar paradas em massa" onClose={() => !importando && setImportAberta(false)} wide>
+        <div className="tdg-access-form tdg-form-em-modal">
+          <p className="tdg-esg-nota">Uma parada por linha. O primeiro campo é a <strong>referência</strong> (NF, pedido); o resto é o <strong>endereço de entrega</strong>. Separe por <code>;</code>, <code>|</code> ou tab. O endereço é geocodificado para a operação já entrar no roteirizador — endereço não reconhecido é criado mesmo assim, só fica de fora do despacho até você localizá-lo.</p>
+          <label><span>Cliente do lote</span><select required value={importClientId} onChange={(e) => setImportClientId(e.target.value)}><option value="">Selecione</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name || client.nome || client.id}</option>)}</select></label>
+          <label><span>Data de serviço (opcional)</span><input type="date" value={importData} onChange={(e) => setImportData(e.target.value)} /></label>
+          <label><span>Paradas</span><textarea rows={8} value={importTexto} onChange={(e) => setImportTexto(e.target.value)} placeholder={"NF 1001; Rua das Flores, 100, São Paulo SP\nNF 1002; Av. Brasil, 200, Santos SP"} /></label>
+          {(() => {
+            const total = parseParadasEmMassa(importTexto).length;
+            const excedente = excedenteDeParadas(importTexto);
+            return <small>{total} parada(s) reconhecida(s){excedente > 0 ? ` · ${excedente} além do limite de ${LIMITE_PARADAS_IMPORTACAO} ficam de fora` : ""}.</small>;
+          })()}
+          <div className="tdg-form-actions"><button type="button" onClick={() => setImportAberta(false)} disabled={importando}>Cancelar</button><button className="tdg-action" type="button" onClick={importarEmMassa} disabled={importando || !importClientId || !parseParadasEmMassa(importTexto).length}><Upload size={17} />{importando ? "Importando…" : "Importar paradas"}</button></div>
+        </div>
+      </Modal>}
       <div className="tdg-operation-grid">{visibleOperations.length === 0 && <div className="tdg-empty-access">{isIncidents ? "Nenhuma ocorrência ou atraso em aberto." : "Nenhuma operação real registrada."}</div>}{visibleOperations.map((operation) => <article className="tdg-operation-card" key={operation.id}><div><Route size={18} /><span><strong>{operation.referencia || "Operação sem referência"}</strong><small>{operation.origem || "origem pendente"} → {operation.destino || "destino pendente"}</small></span><span className={`tdg-ledger-status ${ehRascunho(operation) || slaEfetivo(operation) === "atrasado" ? "overdue" : "pending"}`}>{(ehRascunho(operation) || slaEfetivo(operation) === "atrasado") && <AlertTriangle size={14} />}{ehRascunho(operation) ? "rascunho · confirmar" : slaEfetivo(operation)}</span></div><dl><div><dt><Truck size={14} /> Frota</dt><dd>{operation.placa || "sem placa"} · {operation.motorista || "sem motorista"}</dd></div><div><dt><Clock3 size={14} /> Prometido</dt><dd>{operation.prometidoEm || "não informado"}</dd></div><div><dt><PackageCheck size={14} /> Volume</dt><dd>{Number(operation.entregas || 0)} entregas · {Number(operation.pacotes || 0)} pacotes</dd></div><div><dt><MapPin size={14} /> Última posição</dt><dd>{operation.ultimaPosicaoEm || "não informada"}</dd></div></dl><div className="tdg-operation-card-actions">{!isIncidents && ehRascunho(operation) && <button type="button" className="tdg-action" onClick={() => abrirConfirmacao(operation)}>Confirmar operação</button>}<button type="button" onClick={() => openEvents(operation)}>{isIncidents ? "Tratar ocorrência" : "Linha do tempo"} · {Number(operation.ocorrencias || 0)} ocorrência(s)</button></div></article>)}</div>
       {/* Linha do tempo em janela própria: antes o formulário de evento
           nascia depois da grade inteira, fora da tela em carteiras grandes. */}
