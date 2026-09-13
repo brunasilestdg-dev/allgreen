@@ -4,6 +4,7 @@ import { TENANT_ID } from "./todogreen-access.js";
 import { planElectricRoute } from "./todogreen-electric-routing.js";
 import { estimateRouteEnergy } from "../../src/features/logistics/energyEstimationDomain.js";
 import { selectRoutingEngine } from "../../src/features/logistics/routingEngineSelectionDomain.js";
+import { runPreflight } from "../../src/features/logistics/preflightDomain.js";
 
 const cors = {
   "access-control-allow-origin": "*",
@@ -117,6 +118,47 @@ async function electricPlan(request, env) {
     available: availableEngines.length ? availableEngines : undefined,
   });
 
+  // Pré-flight operacional (PASS / WARNING / BLOCK) sobre o MESMO par
+  // veículo/rota: motorista, veículo, capacidade e autonomia (consome a mesma
+  // `energyEstimate`). É a reconciliação do domínio puro `preflightDomain` com o
+  // caminho conectado (não é uma terceira implementação): a decisão de "esta
+  // rota pode rodar AGORA?" passa a viajar junto do plano, com sugestões
+  // CALCULADas quando a autonomia não fecha. Aditivo e não quebra `plan`.
+  // Quando o chamador não manda `alternatives.chargers`, derivamos dos
+  // `chargingStations` que ele já enviou, para as sugestões de recarga terem
+  // potência real. Blindado: qualquer falha aqui devolve `preflight: null`,
+  // nunca derruba o plano nem a estimativa.
+  let preflight = null;
+  try {
+    const alternatives = {
+      ...(body.alternatives && typeof body.alternatives === "object" && !Array.isArray(body.alternatives)
+        ? body.alternatives
+        : {}),
+    };
+    if (!Array.isArray(alternatives.chargers) || alternatives.chargers.length === 0) {
+      const derivados = (Array.isArray(body.chargingStations) ? body.chargingStations : [])
+        .map((estacao) => ({
+          id: estacao?.id || estacao?.name || "",
+          powerKw: Array.isArray(estacao?.connectors)
+            ? estacao.connectors.reduce((maior, c) => Math.max(maior, Number(c?.powerKw) || 0), 0)
+            : Number(estacao?.powerKw) || 0,
+        }))
+        .filter((c) => c.powerKw > 0);
+      if (derivados.length) alternatives.chargers = derivados;
+    }
+    preflight = runPreflight({
+      vehicle: body.vehicle || {},
+      driver: body.driver || {},
+      load: body.load || {},
+      route: body.route || {},
+      charging: body.charging || {},
+      energyEstimate,
+      alternatives,
+    });
+  } catch {
+    preflight = null;
+  }
+
   return apiJson({
     engine: "tdg-electric-routing-v1",
     provider: "native",
@@ -124,6 +166,7 @@ async function electricPlan(request, env) {
     plan: result,
     energyEstimate,
     routingEngineSelection,
+    preflight,
   }, 200, { "x-tdg-routing-engine": "tdg-electric-routing-v1" });
 }
 

@@ -202,4 +202,100 @@ describe("To Do Green routing API", () => {
     expect(body.routingEngineSelection.profile).toBe("truck");
     expect(body.routingEngineSelection.restrictionAware).toBe(true);
   });
+
+  it("anexa o pré-flight PASS quando a rota fecha sem recarga", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const token = await seedKey(suffix, ["routing:write"]);
+    const request = new Request("https://tms.test/api/tms/v1/routes/electric-plan", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        vehicle: {
+          id: "VAN-082",
+          category: "van",
+          consumptionKwhPerKm: 0.42,
+          batteryCapacityKwh: 100,
+          socPercent: 80,
+          reservePercent: 15,
+          connectors: ["CCS2"],
+          maxDcKw: 100,
+        },
+        route: { distanceKm: 120, elevationGainM: 300, elevationLossM: 300, temperatureC: 18 },
+        chargingStations: [],
+      }),
+    });
+    const response = await handlePublicTodoGreenRoutingApi(request, { DB: env.DB });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    // O pré-flight (domínio puro reconciliado) viaja junto do plano.
+    expect(body.preflight).toBeTruthy();
+    expect(body.preflight.status).toBe("PASS");
+    expect(body.preflight.blocked).toBe(false);
+    // A checagem de energia consome a MESMA estimativa (não é 2ª fonte).
+    const energia = body.preflight.checks.find((c) => c.id === "energy");
+    expect(energia.severity).toBe("PASS");
+    expect(energia.arrivalSoc).toBe(body.energyEstimate.estimatedArrivalSoc);
+  });
+
+  it("pré-flight BLOQUEIA e sugere solução quando a autonomia não fecha", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const token = await seedKey(suffix, ["routing:write"]);
+    const request = new Request("https://tms.test/api/tms/v1/routes/electric-plan", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        vehicle: {
+          id: "VAN-curta",
+          category: "van",
+          consumptionKwhPerKm: 0.5,
+          batteryCapacityKwh: 45,
+          socPercent: 30,
+          reservePercent: 15,
+          connectors: ["CCS2"],
+          maxDcKw: 50,
+        },
+        route: { distanceKm: 120 },
+        chargingStations: [],
+      }),
+    });
+    const response = await handlePublicTodoGreenRoutingApi(request, { DB: env.DB });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.preflight.status).toBe("BLOCK");
+    expect(body.preflight.blocked).toBe(true);
+    // Não basta dizer "erro de autonomia": vem sugestão CALCULADA (seção 20).
+    expect(Array.isArray(body.preflight.suggestions)).toBe(true);
+    expect(body.preflight.suggestions.some((s) => s.type === "split_trip")).toBe(true);
+  });
+
+  it("pré-flight BLOQUEIA por motorista indisponível, sem depender da energia", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const token = await seedKey(suffix, ["routing:write"]);
+    const request = new Request("https://tms.test/api/tms/v1/routes/electric-plan", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        vehicle: {
+          category: "van",
+          consumptionKwhPerKm: 0.42,
+          batteryCapacityKwh: 100,
+          socPercent: 90,
+          reservePercent: 15,
+          connectors: ["CCS2"],
+          maxDcKw: 100,
+        },
+        route: { distanceKm: 60 },
+        driver: { available: false },
+        chargingStations: [],
+      }),
+    });
+    const response = await handlePublicTodoGreenRoutingApi(request, { DB: env.DB });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.preflight.status).toBe("BLOCK");
+    expect(body.preflight.checks.some((c) => c.id === "driver_available")).toBe(true);
+    // Mesmo bloqueado, o plano e a estimativa continuam presentes (aditivo).
+    expect(body.plan).toBeTruthy();
+    expect(body.energyEstimate).toBeTruthy();
+  });
 });
