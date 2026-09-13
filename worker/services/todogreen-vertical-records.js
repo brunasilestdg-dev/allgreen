@@ -1098,6 +1098,34 @@ const COLECOES = {
     exigido: (corpo) => validarPontoRecarga(corpo),
   },
 
+  // Modelo de rota recorrente: guarda o TEXTO das paradas (mesmo formato da
+  // importação em massa), não rotas prontas. Reaplicar geocodifica e cria
+  // operações novas para a data escolhida — que seguem o fluxo do despacho.
+  importTemplates: {
+    tabela: "todogreen_operation_import_templates",
+    permissao: "operations:manage",
+    permissoesLeitura: ["operations:manage", "planning:manage", "tms:manage", "fleet:manage", "audit:read"],
+    escopoDeCarteira: false,
+    ordem: "name ASC",
+    daLinha: (row) => ({
+      id: row.id,
+      nome: row.name || "",
+      clientId: row.client_id || "",
+      paradasTexto: row.stops_text || "",
+      campos: parse(row.fields_json, {}),
+      revision: row.revision,
+      criadoEm: row.created_at,
+      atualizadoEm: row.updated_at,
+    }),
+    colunas: (corpo) => ({
+      name: texto(corpo.nome, 160),
+      client_id: texto(corpo.clientId, 120),
+      stops_text: texto(corpo.paradasTexto, 20000),
+      fields_json: JSON.stringify(objeto(corpo.campos)),
+    }),
+    exigido: (corpo) => (texto(corpo.nome) ? "" : "Dê um nome ao modelo de rota."),
+  },
+
   financial: {
     tabela: "todogreen_financial_entries",
     permissao: "finance:manage",

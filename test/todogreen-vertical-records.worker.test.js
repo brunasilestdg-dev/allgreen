@@ -364,6 +364,46 @@ describe("paginação e filtro no servidor", () => {
   });
 });
 
+describe("modelos de rota (salvar e reusar)", () => {
+  it("cria, lista e devolve o texto das paradas, isolado por espaço", async () => {
+    const dono = await criarUsuario("rec-modelo-dono", "modelo-dono@parceiro.com.br");
+    const outro = await criarUsuario("rec-modelo-outro", "modelo-outro@parceiro.com.br");
+    await autorizar(dono);
+    await autorizar(outro);
+    await criarCliente(dono, "cli-modelo", "Cliente modelo");
+
+    const criado = await pedir("/api/todogreen/records/importTemplates", {
+      metodo: "POST",
+      token: dono.token,
+      corpo: {
+        nome: "Rota Zona Sul (diária)",
+        clientId: "cli-modelo",
+        paradasTexto: "NF 1; Rua A, 10\nNF 2; Rua B, 20",
+      },
+    });
+    expect(criado.status).toBe(201);
+    const modelo = (await criado.json()).registro;
+    expect(modelo).toMatchObject({ nome: "Rota Zona Sul (diária)", clientId: "cli-modelo" });
+    expect(modelo.paradasTexto).toContain("NF 2; Rua B, 20");
+
+    const lista = await pedir("/api/todogreen/records/importTemplates", { token: dono.token });
+    expect((await lista.json()).registros.map((m) => m.nome)).toContain("Rota Zona Sul (diária)");
+
+    // Outro espaço não enxerga o modelo (isolamento por workspace_owner_id).
+    const listaOutro = await pedir("/api/todogreen/records/importTemplates", { token: outro.token });
+    expect((await listaOutro.json()).registros.map((m) => m.id)).not.toContain(modelo.id);
+  });
+
+  it("recusa modelo sem nome", async () => {
+    const dono = await criarUsuario("rec-modelo-vazio", "modelo-vazio@parceiro.com.br");
+    await autorizar(dono);
+    const r = await pedir("/api/todogreen/records/importTemplates", {
+      metodo: "POST", token: dono.token, corpo: { paradasTexto: "Rua X" },
+    });
+    expect(r.status).toBe(400);
+  });
+});
+
 describe("escrita concorrente não apaga o trabalho alheio", () => {
   it("a segunda gravação em cima da mesma versão é recusada", async () => {
     const { registro } = await (
@@ -954,6 +994,7 @@ describe("a vertical inteira numa chamada só", () => {
       "financial",
       "habilitacao",
       "habilitacaoKits",
+      "importTemplates",
       "interactions",
       "items",
       "legal",

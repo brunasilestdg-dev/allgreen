@@ -1,5 +1,5 @@
 import "./TodoGreenPages.css";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, MapPin, PackageCheck, Plus, Route, Truck, Upload } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
@@ -85,6 +85,9 @@ export default function OperationsPage({ operations = [], clients = [], contract
   const [importData, setImportData] = useState("");
   const [importTexto, setImportTexto] = useState("");
   const [importando, setImportando] = useState(false);
+  // Modelos de rota (salvar e reusar): a mesma lista de paradas de uma rota fixa.
+  const [modelos, setModelos] = useState([]);
+  const [modeloNome, setModeloNome] = useState("");
   const [selected, setSelected] = useState(null);
   const [events, setEvents] = useState([]);
   const [event, setEvent] = useState({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal(), recebedor: "", comprovanteUrl: "" });
@@ -138,6 +141,34 @@ export default function OperationsPage({ operations = [], clients = [], contract
       fecharModal();
     } catch (error) { setToast?.(error.message); }
     finally { setSaving(false); }
+  };
+
+  const carregarModelos = useCallback(async () => {
+    if (!authHeaders) return;
+    try {
+      const r = await fetch("/api/todogreen/records/importTemplates", { headers: authHeaders() });
+      const p = await r.json().catch(() => ({}));
+      if (r.ok) setModelos(p.registros || []);
+    } catch { /* modelos são conveniência: falha não trava a importação */ }
+  }, [authHeaders]);
+  useEffect(() => { if (importAberta) carregarModelos(); }, [importAberta, carregarModelos]);
+
+  const aplicarModelo = (id) => {
+    const modelo = modelos.find((m) => m.id === id);
+    if (!modelo) return;
+    setImportClientId(modelo.clientId || "");
+    setImportTexto(modelo.paradasTexto || "");
+  };
+
+  const salvarModelo = async () => {
+    if (!modeloNome.trim()) { setToast?.("Dê um nome ao modelo."); return; }
+    if (!parseParadasEmMassa(importTexto).length) { setToast?.("Cole as paradas antes de salvar o modelo."); return; }
+    try {
+      await criar("importTemplates", { nome: modeloNome.trim(), clientId: importClientId, paradasTexto: importTexto });
+      setModeloNome("");
+      await carregarModelos();
+      setToast?.("Modelo de rota salvo. Reaplique quando quiser.");
+    } catch (error) { setToast?.(error.message); }
   };
 
   const importarEmMassa = async () => {
@@ -225,6 +256,9 @@ export default function OperationsPage({ operations = [], clients = [], contract
       {!isIncidents && importAberta && <Modal title="Importar paradas em massa" onClose={() => !importando && setImportAberta(false)} wide>
         <div className="tdg-access-form tdg-form-em-modal">
           <p className="tdg-esg-nota">Uma parada por linha. O primeiro campo é a <strong>referência</strong> (NF, pedido); o resto é o <strong>endereço de entrega</strong>. Separe por <code>;</code>, <code>|</code> ou tab. O endereço é geocodificado para a operação já entrar no roteirizador — endereço não reconhecido é criado mesmo assim, só fica de fora do despacho até você localizá-lo.</p>
+          {modelos.length > 0 && (
+            <label><span>Reusar modelo de rota</span><select value="" onChange={(e) => aplicarModelo(e.target.value)}><option value="">Começar do zero</option>{modelos.map((modelo) => <option key={modelo.id} value={modelo.id}>{modelo.nome}</option>)}</select></label>
+          )}
           <label><span>Cliente do lote</span><select required value={importClientId} onChange={(e) => setImportClientId(e.target.value)}><option value="">Selecione</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name || client.nome || client.id}</option>)}</select></label>
           <label><span>Data de serviço (opcional)</span><input type="date" value={importData} onChange={(e) => setImportData(e.target.value)} /></label>
           <label><span>Paradas</span><textarea rows={8} value={importTexto} onChange={(e) => setImportTexto(e.target.value)} placeholder={"NF 1001; Rua das Flores, 100, São Paulo SP\nNF 1002; Av. Brasil, 200, Santos SP"} /></label>
@@ -233,7 +267,9 @@ export default function OperationsPage({ operations = [], clients = [], contract
             const excedente = excedenteDeParadas(importTexto);
             return <small>{total} parada(s) reconhecida(s){excedente > 0 ? ` · ${excedente} além do limite de ${LIMITE_PARADAS_IMPORTACAO} ficam de fora` : ""}.</small>;
           })()}
-          <div className="tdg-form-actions"><button type="button" onClick={() => setImportAberta(false)} disabled={importando}>Cancelar</button><button className="tdg-action" type="button" onClick={importarEmMassa} disabled={importando || !importClientId || !parseParadasEmMassa(importTexto).length}><Upload size={17} />{importando ? "Importando…" : "Importar paradas"}</button></div>
+          {/* Salvar a lista atual como rota fixa reutilizável. */}
+          <label><span>Salvar como modelo (rota fixa)</span><input value={modeloNome} onChange={(e) => setModeloNome(e.target.value)} placeholder="Ex.: Zona Sul diária" /></label>
+          <div className="tdg-form-actions"><button type="button" onClick={() => setImportAberta(false)} disabled={importando}>Cancelar</button><button type="button" onClick={salvarModelo} disabled={importando || !modeloNome.trim() || !parseParadasEmMassa(importTexto).length}>Salvar modelo</button><button className="tdg-action" type="button" onClick={importarEmMassa} disabled={importando || !importClientId || !parseParadasEmMassa(importTexto).length}><Upload size={17} />{importando ? "Importando…" : "Importar paradas"}</button></div>
         </div>
       </Modal>}
       <div className="tdg-operation-grid">{visibleOperations.length === 0 && <div className="tdg-empty-access">{isIncidents ? "Nenhuma ocorrência ou atraso em aberto." : "Nenhuma operação real registrada."}</div>}{visibleOperations.map((operation) => <article className="tdg-operation-card" key={operation.id}><div><Route size={18} /><span><strong>{operation.referencia || "Operação sem referência"}</strong><small>{operation.origem || "origem pendente"} → {operation.destino || "destino pendente"}</small></span><span className={`tdg-ledger-status ${ehRascunho(operation) || slaEfetivo(operation) === "atrasado" ? "overdue" : "pending"}`}>{(ehRascunho(operation) || slaEfetivo(operation) === "atrasado") && <AlertTriangle size={14} />}{ehRascunho(operation) ? "rascunho · confirmar" : slaEfetivo(operation)}</span></div><dl><div><dt><Truck size={14} /> Frota</dt><dd>{operation.placa || "sem placa"} · {operation.motorista || "sem motorista"}</dd></div><div><dt><Clock3 size={14} /> Prometido</dt><dd>{operation.prometidoEm || "não informado"}</dd></div><div><dt><PackageCheck size={14} /> Volume</dt><dd>{Number(operation.entregas || 0)} entregas · {Number(operation.pacotes || 0)} pacotes</dd></div><div><dt><MapPin size={14} /> Última posição</dt><dd>{operation.ultimaPosicaoEm || "não informada"}</dd></div></dl><div className="tdg-operation-card-actions">{!isIncidents && ehRascunho(operation) && <button type="button" className="tdg-action" onClick={() => abrirConfirmacao(operation)}>Confirmar operação</button>}<button type="button" onClick={() => openEvents(operation)}>{isIncidents ? "Tratar ocorrência" : "Linha do tempo"} · {Number(operation.ocorrencias || 0)} ocorrência(s)</button></div></article>)}</div>
