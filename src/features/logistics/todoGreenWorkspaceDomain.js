@@ -110,7 +110,7 @@ export const buildTodoGreenCanonicalTask = (task = {}, {
     ...(task.sourceLinks || {}),
     todo: { taskId: rawId },
     ...(task.plannerPlanId || task.plannerTaskId ? {
-      planner: { planId: task.plannerPlanId || "", taskId: task.plannerTaskId || "" },
+      planner: { planId: task.plannerPlanId || "", taskId: task.plannerTaskId || rawId },
     } : {}),
     ...(clientId || opportunityId || String(task.source || "").includes("crm") ? {
       crm: { clientId, opportunityId },
@@ -162,16 +162,30 @@ export const buildTodoGreenTaskBoard = ({
 } = {}) => {
   const rawTasks = scoped(db.tasks, businessId).filter((task) => task.archived !== true && task.deleted !== true);
   const projects = [...list(db.projects), ...list(verticalData.projects), ...list(verticalData.plannerPlans)];
-  const canonicalTasks = rawTasks
-    .map((task) => buildTodoGreenCanonicalTask(task, {
+  const canonicalById = new Map();
+  for (const rawTask of rawTasks) {
+    const canonical = buildTodoGreenCanonicalTask(rawTask, {
       tasks: rawTasks,
       projects,
       clients: verticalData.clients,
       opportunities: verticalData.opportunities,
       currentUserId,
       today,
-    }))
-    .sort(taskSort);
+    });
+    const current = canonicalById.get(canonical.id);
+    if (!current) {
+      canonicalById.set(canonical.id, canonical);
+      continue;
+    }
+    const currentIsLegacy = current.raw?.canonicalSource === "planner";
+    const candidateIsLegacy = canonical.raw?.canonicalSource === "planner";
+    const currentUpdatedAt = String(current.raw?.updatedAt || current.raw?.createdAt || "");
+    const candidateUpdatedAt = String(canonical.raw?.updatedAt || canonical.raw?.createdAt || "");
+    if ((currentIsLegacy && !candidateIsLegacy) || (currentIsLegacy === candidateIsLegacy && candidateUpdatedAt > currentUpdatedAt)) {
+      canonicalById.set(canonical.id, canonical);
+    }
+  }
+  const canonicalTasks = [...canonicalById.values()].sort(taskSort);
   const openTasks = canonicalTasks.filter((task) => task.flags.open);
   const byStatus = new Map();
   for (const task of canonicalTasks) {

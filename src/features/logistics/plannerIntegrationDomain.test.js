@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  aplicarEdicaoPlannerNaTarefa,
   contextoComercialDaTarefa,
+  desvincularTarefaDoPlanner,
   listaDependenciasComRotulo,
-  patchPlannerDaTarefa,
   rotuloBaseDependencia,
   statusTarefaAoEspelhar,
-  tarefaPlannerParaTodo,
-  tarefaVinculadaAoPlanner,
+  tarefaCanonicaPertenceAoPlano,
+  importarTarefaLegadaPlanner,
+  tarefaTodoParaPlanner,
 } from "./plannerIntegrationDomain.js";
 
-describe("status não se perde no round-trip Planner<->To-Do", () => {
+describe("status legado é importado sem perder nuance", () => {
   it("preserva 'Aguardando' quando o Planner segue em em_andamento", () => {
     // Aguardando e Em andamento colapsam em em_andamento no Planner. Se o
     // Planner não saiu de em_andamento, a To-Do NÃO deve perder 'Aguardando'.
@@ -25,7 +27,7 @@ describe("status não se perde no round-trip Planner<->To-Do", () => {
     expect(statusTarefaAoEspelhar("concluida", "")).toBe("Concluído");
   });
   it("no espelhamento completo, 'Aguardando' sobrevive", () => {
-    const todo = tarefaPlannerParaTodo(
+    const todo = importarTarefaLegadaPlanner(
       { id: "t1", planId: "p1", title: "X", progress: "em_andamento", priority: "media", revision: 2, campos: {} },
       { id: "p1", name: "Plano" },
       { id: "planner-t1", status: "Aguardando" },
@@ -36,7 +38,7 @@ describe("status não se perde no round-trip Planner<->To-Do", () => {
 
 describe("integração universal do Planner", () => {
   it("mantém tarefas comuns sem exigir CRM", () => {
-    const todo = tarefaPlannerParaTodo({
+    const todo = importarTarefaLegadaPlanner({
       id: "task-marketing", planId: "plan-marketing", title: "Criar campanha",
       notes: "Campanha institucional", progress: "nao_iniciada", priority: "media",
       revision: 1, campos: {},
@@ -61,7 +63,7 @@ describe("integração universal do Planner", () => {
       clientId: "cli-1",
       opportunityId: "opp-1",
     });
-    expect(tarefaPlannerParaTodo(tarefa, { name: "Comercial" })).toMatchObject({
+    expect(importarTarefaLegadaPlanner(tarefa, { name: "Comercial" })).toMatchObject({
       status: "Em andamento",
       clientId: "cli-1",
       opportunityId: "opp-1",
@@ -69,28 +71,11 @@ describe("integração universal do Planner", () => {
     });
   });
 
-  it("converte alterações da To-do para o Planner", () => {
-    const tarefa = {
-      plannerPlanId: "plan-1", plannerTaskId: "task-1", plannerRevision: 4,
-      title: "Antes", description: "", status: "A fazer", priority: "Média",
-      clientId: "cli-1", opportunityId: "opp-1",
-    };
-    expect(tarefaVinculadaAoPlanner(tarefa)).toBe(true);
-    expect(patchPlannerDaTarefa(tarefa, {
-      title: "Depois", status: "Concluído", due: "2026-09-10",
-    })).toMatchObject({
-      revision: 4,
-      title: "Depois",
-      progress: "concluida",
-      dueDate: "2026-09-10",
-      campos: { clientId: "cli-1", opportunityId: "opp-1" },
-    });
-  });
 });
 
 
   it("marca a tarefa espelhada com id canônico e links de origem", () => {
-    const todo = tarefaPlannerParaTodo(
+    const todo = importarTarefaLegadaPlanner(
       {
         id: "task-crm",
         planId: "plan-comercial",
@@ -117,7 +102,7 @@ describe("integração universal do Planner", () => {
   });
 
   it("preserva o id canônico existente no reespelhamento", () => {
-    const todo = tarefaPlannerParaTodo(
+    const todo = importarTarefaLegadaPlanner(
       { id: "task-1", planId: "plan-1", title: "X", progress: "nao_iniciada", campos: {} },
       { id: "plan-1", name: "Plano" },
       { id: "todo-local", canonicalTaskId: "task:canonica:1" },
@@ -126,9 +111,103 @@ describe("integração universal do Planner", () => {
     expect(todo.sourceLinks.todo.taskId).toBe("todo-local");
   });
 
+describe("task canônica como fonte única do Planner", () => {
+  it("projeta a task canônica para o formato visual do Planner sem criar outra entidade", () => {
+    const planner = tarefaTodoParaPlanner({
+      id: "task-1",
+      canonicalTaskId: "task-1",
+      plannerPlanId: "plan-1",
+      plannerBucketId: "bucket-1",
+      title: "Enviar proposta",
+      description: "Versão final",
+      status: "Aguardando",
+      priority: "Alta",
+      due: "2026-09-15",
+      assigneeId: "u1",
+      assignee: "Ana",
+      clientId: "cli-1",
+      opportunityId: "opp-1",
+      plannerChecklist: [{ texto: "Revisar", feito: true }],
+    });
+
+    expect(planner).toMatchObject({
+      id: "task-1",
+      rawTaskId: "task-1",
+      planId: "plan-1",
+      bucketId: "bucket-1",
+      progress: "em_andamento",
+      priority: "alta",
+      campos: { clientId: "cli-1", opportunityId: "opp-1" },
+    });
+  });
+
+  it("arquivar um plano só remove a visão Planner, sem apagar a task", () => {
+    const original = {
+      id: "task-1",
+      canonicalTaskId: "task-1",
+      plannerPlanId: "plan-1",
+      plannerTaskId: "legacy-1",
+      plannerBucketId: "bucket-1",
+      sourceLinks: {
+        todo: { taskId: "task-1" },
+        planner: { planId: "plan-1", taskId: "task-1" },
+        crm: { clientId: "cli-1", opportunityId: "opp-1" },
+      },
+    };
+    const desvinculada = desvincularTarefaDoPlanner(original, "plan-1");
+    expect(desvinculada).toMatchObject({
+      id: "task-1",
+      canonicalTaskId: "task-1",
+      plannerPlanId: "",
+      plannerTaskId: "",
+      sourceLinks: {
+        todo: { taskId: "task-1" },
+        crm: { clientId: "cli-1", opportunityId: "opp-1" },
+      },
+    });
+    expect(desvinculada.sourceLinks.planner).toBeUndefined();
+  });
+
+  it("edita pelo Planner a mesma task canônica, preservando o id", () => {
+    const atualizada = aplicarEdicaoPlannerNaTarefa({
+      id: "task-1",
+      rawTaskId: "task-1",
+      canonicalTaskId: "task-1",
+      planId: "plan-1",
+      title: "Enviar proposta revisada",
+      notes: "Nova descrição",
+      progress: "concluida",
+      priority: "urgente",
+      dueDate: "2026-09-14",
+      bucketId: "bucket-b",
+      checklist: [{ texto: "Aprovar", feito: true }],
+      campos: { clientId: "cli-1", opportunityId: "opp-1" },
+    }, { id: "plan-1", name: "Comercial" }, {
+      id: "task-1",
+      canonicalTaskId: "task-1",
+      businessId: "todogreen",
+      status: "Em andamento",
+      createdAt: "2026-09-10T10:00:00.000Z",
+    }, { clientLabel: "DHL" });
+
+    expect(atualizada).toMatchObject({
+      id: "task-1",
+      canonicalTaskId: "task-1",
+      status: "Concluído",
+      priority: "Urgente",
+      plannerPlanId: "plan-1",
+      plannerBucketId: "bucket-b",
+      clientId: "cli-1",
+      opportunityId: "opp-1",
+      clientLabel: "DHL",
+    });
+    expect(tarefaCanonicaPertenceAoPlano(atualizada, "plan-1")).toBe(true);
+  });
+});
+
 describe("rótulo da dependência sem confundir clientes (#142)", () => {
   it("carrega o nome do cliente para o rótulo humano, não só o nome do plano", () => {
-    const todo = tarefaPlannerParaTodo(
+    const todo = importarTarefaLegadaPlanner(
       { id: "t1", title: "Precificação", campos: { clientId: "cli-dhl" } },
       { id: "plan-1", name: "To do List" },
       {},

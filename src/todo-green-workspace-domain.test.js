@@ -146,6 +146,37 @@ describe("espaço de trabalho To Do Green", () => {
     });
   });
 
+  it("deduplica uma projeção legada quando a task canônica já existe", () => {
+    const board = buildTodoGreenTaskBoard({
+      today: "2026-09-13",
+      db: {
+        tasks: [
+          {
+            id: "task-real",
+            canonicalTaskId: "task:1",
+            canonicalSource: "task",
+            businessId: "todogreen",
+            title: "Versão canônica",
+            status: "A fazer",
+            updatedAt: "2026-09-13T04:00:00.000Z",
+          },
+          {
+            id: "planner-old",
+            canonicalTaskId: "task:1",
+            canonicalSource: "planner",
+            businessId: "todogreen",
+            title: "Cópia antiga",
+            status: "Em andamento",
+            updatedAt: "2026-09-13T05:00:00.000Z",
+          },
+        ],
+      },
+    });
+
+    expect(board.tasks).toHaveLength(1);
+    expect(board.tasks[0]).toMatchObject({ id: "task:1", rawId: "task-real", title: "Versão canônica" });
+  });
+
   it("resolve dependência por id canônico para não ressuscitar duas tarefas", () => {
     const board = buildTodoGreenTaskBoard({
       today: "2026-09-13",

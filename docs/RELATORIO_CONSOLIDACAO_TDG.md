@@ -45,6 +45,18 @@ Restrições respeitadas em **todas** as entregas abaixo:
 | **#355** | Integridade Planner ↔ To-Do | "Aguardando" virava "Em andamento" a cada sync (perda no round-trip) e tarefa apagada ressuscitava. → `statusTarefaAoEspelhar` preserva o status mais fino; `removeTask` arquiva no Planner antes de remover | testes de round-trip de status e de propagação do delete |
 | **este** | Visibilidade da eletrificação + matriz + relatório | Domínios de decisão puros/testados não apareciam no caminho conectado. → `preflight` (PASS/WARNING/BLOCK + sugestões calculadas) anexado ao `POST /routes/electric-plan`, reusando o domínio puro (sem 3ª camada); matriz e este relatório atualizados | 3 testes de endpoint (PASS, BLOCK por autonomia, BLOCK por motorista) — suíte da API verde |
 
+## Fechamento da task canônica (13/09/2026)
+
+A regressão Planner ↔ To Do foi encerrada estruturalmente, não apenas com sincronização melhor:
+`db.tasks` é a **fonte única da tarefa**. O Planner mantém planos, baldes e compartilhamento no servidor,
+mas tarefas são projeções da task canônica. Criar, editar, concluir ou excluir pelo Planner altera a mesma
+entidade exibida no To Do, CRM e Implantação, sem PATCH/DELETE de espelho.
+
+Para preservar dados antigos, `GET /api/todogreen/planner/planos/:id/tarefas` continua disponível somente para
+migração explícita. O runtime normal não lê essa coleção, evitando que uma tarefa apagada volte após recarregar. Escrita no store legado é bloqueada por padrão com `CANONICAL_TASK_REQUIRED`;
+somente ferramentas explícitas de migração podem usar `x-tdg-legacy-planner-write: 1`.
+Arquivar um plano apenas remove o vínculo da visão Planner e **não apaga** a task canônica.
+
 ## O que já existia no código (não recriado)
 
 A auditoria confirmou que boa parte do "plano de consolidação" **já estava

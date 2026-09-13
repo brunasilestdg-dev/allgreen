@@ -87,11 +87,7 @@ import {
   taskCompletionGaps,
 } from "./taskAiDomain.js";
 import { taskUrgency } from "./taskUrgencia.js";
-import {
-  listaDependenciasComRotulo,
-  patchPlannerDaTarefa,
-  tarefaVinculadaAoPlanner,
-} from "../logistics/plannerIntegrationDomain.js";
+import { listaDependenciasComRotulo } from "../logistics/plannerIntegrationDomain.js";
 import {
   createGoogleCalendarEventReal,
   googleCalendarUrl,
@@ -742,18 +738,6 @@ export default function Tasks({
           : [item, ...d.tasks],
       };
     });
-    if (editingTask && tarefaVinculadaAoPlanner(editingTask)) {
-      syncTaskToPlanner(editingTask, {
-        title: form.title.trim(),
-        description: form.description || "",
-        status: form.status,
-        priority: form.priority,
-        startDate: form.startDate || "",
-        due: form.due || "",
-        assigneeId: form.assigneeId || "",
-        assignee: form.assignee || "",
-      });
-    }
     const wantsNotify =
       form.assigneeType !== "digital" &&
       form.notify &&
@@ -786,48 +770,7 @@ export default function Tasks({
       setToast(editing ? "Tarefa atualizada" : "Tarefa criada");
     }
   };
-  const syncTaskToPlanner = (task, changes) => {
-    if (!tarefaVinculadaAoPlanner(task)) return;
-    fetch(
-      `/api/todogreen/planner/planos/${encodeURIComponent(task.plannerPlanId)}/tarefas/${encodeURIComponent(task.plannerTaskId)}`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json", ...authHeaders() },
-        body: JSON.stringify(patchPlannerDaTarefa(task, changes)),
-      },
-    )
-      .then(async (resposta) => {
-        const corpo = await resposta.json().catch(() => ({}));
-        if (!resposta.ok) throw new Error(corpo.error || "A To-do foi salva, mas o Planner não sincronizou.");
-        update((atual) => ({
-          ...atual,
-          tasks: atual.tasks.map((item) => (
-            item.id === task.id ? { ...item, plannerRevision: corpo.revision } : item
-          )),
-        }));
-      })
-      .catch((erro) => setToast(erro.message));
-  };
-  // Excluir uma To-do espelhada do Planner sem propagar deixava a tarefa viva no
-  // Planner, e o próximo espelhamento a RESSUSCITAVA. Propaga o arquivamento
-  // para a fonte do Planner. Melhor-esforço: se falhar, avisa, mas a exclusão
-  // local já aconteceu (o operador não fica preso).
-  const arquivarTarefaNoPlanner = (task) => {
-    if (!tarefaVinculadaAoPlanner(task)) return;
-    fetch(
-      `/api/todogreen/planner/planos/${encodeURIComponent(task.plannerPlanId)}/tarefas/${encodeURIComponent(task.plannerTaskId)}`,
-      { method: "DELETE", headers: { ...authHeaders() } },
-    )
-      .then(async (resposta) => {
-        if (!resposta.ok) {
-          const corpo = await resposta.json().catch(() => ({}));
-          throw new Error(corpo.error || "A tarefa foi excluída aqui, mas o Planner não confirmou.");
-        }
-      })
-      .catch((erro) => setToast(erro.message));
-  };
   const changeTask = (id, changes) => {
-    const task = db.tasks.find((item) => item.id === id);
     update((d) => ({
       ...d,
       tasks: d.tasks.map((item) =>
@@ -836,7 +779,6 @@ export default function Tasks({
           : item,
       ),
     }));
-    if (task) syncTaskToPlanner(task, changes);
   };
   const blockingTasks = (task) =>
     (task.dependsOn || [])
@@ -1091,13 +1033,10 @@ export default function Tasks({
   };
   const removeTask = (id) => {
     if (!confirm("Excluir esta tarefa definitivamente?")) return;
-    const alvo = db.tasks.find((task) => task.id === id);
     update((d) => ({
       ...d,
       tasks: d.tasks.filter((task) => task.id !== id),
     }));
-    // Propaga o arquivamento ao Planner para a tarefa espelhada não ressuscitar.
-    if (alvo) arquivarTarefaNoPlanner(alvo);
     setToast("Tarefa excluída");
   };
   const toggleSelected = (id) =>

@@ -878,3 +878,12 @@ estender, não recriar. Detalhe e status em `docs/TODOGREEN_ERP_READINESS_MATRIX
 
 Migração/deploy num ambiente Cloudflare novo: `docs/DEPLOYMENT_RUNBOOK.md`.
 Segredos e variáveis: `docs/SECRETS.md`.
+
+
+## To Do Green — task canônica
+
+- A fonte única de tarefas da vertical é `db.tasks`. To Do, Planner, CRM e Implantação são **visões/contextos da mesma entidade**, nunca stores concorrentes.
+- O Planner pode persistir **planos, baldes, membros e visibilidade** no backend, mas a aplicação não deve criar/editar/excluir tarefas em `todogreen_planner_tasks`.
+- `GET /api/todogreen/planner/planos/:planId/tarefas` existe somente para migração explícita de legado e não deve ser chamado pelo runtime normal. Escritas nesse store exigem o header explícito `x-tdg-legacy-planner-write: 1` e são exclusivas de migração.
+- Ao arquivar um plano, desvincule `plannerPlanId`/metadados Planner da task canônica; não apague a tarefa por remover uma visualização.
+- Não reintroduzir sincronização bidirecional Planner ↔ To Do. Se uma nova tela precisar de tarefas, filtre/projete `db.tasks` e preserve `canonicalTaskId`/links de contexto.

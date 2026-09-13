@@ -29,6 +29,10 @@ import {
   sinaisDaTarefa,
   tarefaAtendeBusca,
 } from "../plannerDomain.js";
+import {
+  tarefaCanonicaPertenceAoPlano,
+  tarefaTodoParaPlanner,
+} from "../plannerIntegrationDomain.js";
 import "./TodoGreenPages.css";
 
 // Planner estilo Microsoft Planner: planos com baldes e tarefas, privados ou
@@ -120,11 +124,13 @@ export default function PlannerPage({
   clientes = [],
   oportunidades = [],
   onNavigate,
-  onSyncTask,
+  canonicalTasks = [],
+  onUpsertCanonicalTask,
+  onDeleteCanonicalTask,
+  onDetachCanonicalPlanTasks,
 }) {
   const [planos, setPlanos] = useState([]);
   const [planoAtivoId, setPlanoAtivoId] = useState("");
-  const [tarefas, setTarefas] = useState([]);
   // Pessoas da plataforma para sugerir como responsável: o dono do espaço e os
   // membros ativos, da mesma lista que o /api/collab já serve ao app inteiro.
   // Se a chamada falhar, o campo continua aceitando texto livre — sugestão é
@@ -169,7 +175,6 @@ export default function PlannerPage({
   const [erro, setErro] = useState("");
   const [semAcesso, setSemAcesso] = useState(false);
   const [vendoMinhas, setVendoMinhas] = useState(false);
-  const [minhas, setMinhas] = useState([]);
   const [modalPlano, setModalPlano] = useState(false);
   const [formPlano, setFormPlano] = useState({ name: "", modo: "privado", description: "", members: [] });
   const [partilhaEmEdicao, setPartilhaEmEdicao] = useState(null);
@@ -182,6 +187,23 @@ export default function PlannerPage({
     () => planos.find((p) => p.id === planoAtivoId) || null,
     [planos, planoAtivoId],
   );
+  const tarefas = useMemo(
+    () => canonicalTasks
+      .filter((task) => tarefaCanonicaPertenceAoPlano(task, planoAtivoId))
+      .map((task) => tarefaTodoParaPlanner(task)),
+    [canonicalTasks, planoAtivoId],
+  );
+  const minhas = useMemo(() => {
+    const planosVisiveis = new Set(planos.map((plano) => plano.id));
+    return canonicalTasks
+      .filter((task) =>
+        task?.plannerPlanId &&
+        planosVisiveis.has(task.plannerPlanId) &&
+        task?.archived !== true &&
+        task?.deleted !== true
+      )
+      .map((task) => tarefaTodoParaPlanner(task));
+  }, [canonicalTasks, planos]);
   // Só o criador (ou a administração) mexe na estrutura do plano.
   const souDono = Boolean(
     planoAtivo && (["owner", "admin"].includes(role) || planoAtivo.ownerUserId === currentUserId),
@@ -203,29 +225,9 @@ export default function PlannerPage({
     }
   };
 
-  const carregarTarefas = async (planId) => {
-    if (!planId) { setTarefas([]); return; }
-    try {
-      const { registros } = await request(`/planos/${planId}/tarefas`, authHeaders);
-      setTarefas(registros || []);
-    } catch (motivo) {
-      if (motivo.status === 404) { setTarefas([]); await carregarPlanos(); return; }
-      avisar(motivo.message, "erro");
-    }
-  };
-
-  const carregarMinhas = async () => {
-    try {
-      const { registros } = await request("/minhas-tarefas", authHeaders);
-      setMinhas(registros || []);
-    } catch (motivo) {
-      avisar(motivo.message, "erro");
-    }
-  };
+  const carregarMinhas = () => carregarPlanos(planoAtivoId);
 
   useEffect(() => { carregarPlanos(); }, []);
-  useEffect(() => { if (planoAtivoId) carregarTarefas(planoAtivoId); }, [planoAtivoId]);
-  useEffect(() => { if (vendoMinhas) carregarMinhas(); }, [vendoMinhas]);
   useEffect(() => {
     let ativo = true;
     // Duas portas de "gente do espaço", exatamente as que o servidor aceita
@@ -302,9 +304,10 @@ export default function PlannerPage({
 
   const arquivarPlano = async () => {
     if (!planoAtivo || !souDono) return;
-    if (typeof window !== "undefined" && !window.confirm(`Arquivar o plano "${planoAtivo.name}" e suas tarefas?`)) return;
+    if (typeof window !== "undefined" && !window.confirm(`Arquivar o plano "${planoAtivo.name}"? As tarefas continuarão disponíveis no To Do.`)) return;
     try {
       await request(`/planos/${planoAtivo.id}`, authHeaders, { method: "DELETE" });
+      onDetachCanonicalPlanTasks?.(planoAtivo.id);
       setPlanoAtivoId("");
       await carregarPlanos();
       avisar("Plano arquivado.", "sucesso");
@@ -316,47 +319,28 @@ export default function PlannerPage({
   const adicionarRapida = async (bucketId) => {
     const titulo = (rascunhoRapido[bucketId] || "").trim();
     if (!titulo || !planoAtivo) return;
-    try {
-      const criada = await request(`/planos/${planoAtivo.id}/tarefas`, authHeaders, {
-        method: "POST",
-        body: JSON.stringify({ title: titulo, bucketId }),
-      });
-      onSyncTask?.(criada, planoAtivo);
-      setRascunhoRapido((r) => ({ ...r, [bucketId]: "" }));
-      await carregarTarefas(planoAtivo.id);
-    } catch (motivo) {
-      avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro");
-    }
+    const id = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    onUpsertCanonicalTask?.({ ...tarefaVazia(bucketId), id, rawTaskId: id, canonicalTaskId: id, title: titulo, planId: planoAtivo.id }, planoAtivo);
+    setRascunhoRapido((r) => ({ ...r, [bucketId]: "" }));
   };
 
   const salvarTarefa = async (tarefa) => {
     if (!planoAtivo) return;
-    const corpo = JSON.stringify(tarefa);
-    try {
-      const salva = tarefa.id
-        ? await request(`/planos/${planoAtivo.id}/tarefas/${tarefa.id}`, authHeaders, { method: "PATCH", body: corpo })
-        : await request(`/planos/${planoAtivo.id}/tarefas`, authHeaders, { method: "POST", body: corpo });
-      onSyncTask?.(salva, planoAtivo);
-      setTarefaEmEdicao(null);
-      await carregarTarefas(planoAtivo.id);
-      if (vendoMinhas) await carregarMinhas();
-      avisar("Tarefa salva.", "sucesso");
-    } catch (motivo) {
-      if (motivo.status === 409) { avisar("A tarefa mudou em outra tela. Recarreguei.", "erro"); setTarefaEmEdicao(null); await carregarTarefas(planoAtivo.id); return; }
-      avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro");
-    }
+    const id = tarefa.rawTaskId || tarefa.id || (typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    onUpsertCanonicalTask?.({ ...tarefa, id, rawTaskId: id, canonicalTaskId: tarefa.canonicalTaskId || id, planId: planoAtivo.id }, planoAtivo);
+    setTarefaEmEdicao(null);
+    avisar("Tarefa salva.", "sucesso");
   };
 
   const arquivarTarefa = async (tarefa) => {
     if (!planoAtivo) return;
-    try {
-      await request(`/planos/${planoAtivo.id}/tarefas/${tarefa.id}`, authHeaders, { method: "DELETE" });
-      setTarefaEmEdicao(null);
-      await carregarTarefas(planoAtivo.id);
-      avisar("Tarefa arquivada.", "sucesso");
-    } catch (motivo) {
-      avisar(motivo.message, "erro");
-    }
+    onDeleteCanonicalTask?.(tarefa.rawTaskId || tarefa.id);
+    setTarefaEmEdicao(null);
+    avisar("Tarefa arquivada.", "sucesso");
   };
 
   // Mudança rápida de status a partir do cartão, sem abrir o modal.
@@ -403,7 +387,7 @@ export default function PlannerPage({
         <div>
           <span>Produtividade</span>
           <h2>Planner</h2>
-          <p>Planos compartilhados com tarefas, prazo, prioridade e checklist. Estas tarefas também aparecem no <strong>quadro To Do</strong> — o lugar único de todas as suas tarefas.</p>
+          <p>Planos compartilhados com prazo, prioridade e checklist. O Planner é uma visão das mesmas tarefas canônicas do <strong>quadro To Do</strong>, sem espelhamento entre dois cadastros.</p>
         </div>
         <div className="tdg-page-actions">
           {/* #115: ponte para o lugar único de tarefas. Toda tarefa do Planner

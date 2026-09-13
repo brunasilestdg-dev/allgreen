@@ -6,7 +6,8 @@ import worker from "../worker-entry.js";
 //   • plano PRIVADO só aparece para quem criou; COMPARTILHADO, para o espaço;
 //   • quem não tem planner:manage lê, mas não escreve (403);
 //   • um espaço não vê o plano do outro (404, não 403);
-//   • concorrência: dois PATCH com a mesma revision — o segundo é 409;
+//   • escrita direta de tarefa exige opt-in legado; o app atual usa a task canônica;
+//   • concorrência no caminho legado: dois PATCH com a mesma revision — o segundo é 409;
 //   • progresso concluída carimba data; tarefa órfã de balde inválido cai no
 //     primeiro balde, não some.
 
@@ -39,10 +40,15 @@ async function vincular(usuario, papel, permissoes, donoDoEspaco) {
        permissions_json = excluded.permissions_json, status = 'active'`,
   ).bind(crypto.randomUUID(), donoDoEspaco, usuario.id, papel, JSON.stringify(permissoes), agora, agora).run();
 }
-const pedir = (caminho, { metodo = "GET", token, corpo } = {}) => {
+const pedir = (caminho, { metodo = "GET", token, corpo, compatLegada = true } = {}) => {
   const headers = { "cf-connecting-ip": nextIp() };
   if (token) headers.authorization = `Bearer ${token}`;
   if (corpo !== undefined) headers["content-type"] = "application/json";
+  if (
+    compatLegada &&
+    ["POST", "PATCH", "PUT", "DELETE"].includes(metodo) &&
+    /\/api\/todogreen\/planner\/planos\/[^/]+\/tarefas/.test(caminho)
+  ) headers["x-tdg-legacy-planner-write"] = "1";
   return worker.fetch(
     new Request(`https://app.test${caminho}`, { method: metodo, headers, body: corpo === undefined ? undefined : JSON.stringify(corpo) }),
     env, { waitUntil() {}, passThroughOnException() {} },
@@ -147,6 +153,17 @@ describe("tarefas de um plano compartilhado", () => {
       corpo: { name: "Operação", visibility: "shared", buckets: [{ id: "todo", nome: "A fazer" }] },
     })).json();
     planId = c.id;
+  });
+
+  it("bloqueia escrita direta de tarefa sem opt-in legado", async () => {
+    const r = await pedir(`/api/todogreen/planner/planos/${planId}/tarefas`, {
+      metodo: "POST",
+      token: bia.token,
+      compatLegada: false,
+      corpo: { title: "Não deve criar uma segunda verdade" },
+    });
+    expect(r.status).toBe(409);
+    expect((await r.json()).code).toBe("CANONICAL_TASK_REQUIRED");
   });
 
   it("qualquer colega do espaço cria tarefa; balde inválido cai no primeiro", async () => {
