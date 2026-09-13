@@ -994,6 +994,9 @@ describe("a vertical inteira numa chamada só", () => {
       "accounts",
       "bankAccounts",
       "businessContext",
+      "chargerReservations",
+      "chargingPrices",
+      "chargingSessions",
       "comments",
       "contracts",
       "costCenters",
@@ -1811,5 +1814,61 @@ describe("pontos de recarga próprios (cadastro da eletrificação)", () => {
       metodo: "POST", token: auditor.token, corpo: { nome: "Auditor não grava" },
     });
     expect(criada.status).toBe(403);
+  });
+});
+
+
+describe("operação de recarga: sessão medida e reserva sem conflito", () => {
+  it("cria sessão concluída somente com energia medida", async () => {
+    const criada = await pedir("/api/todogreen/records/chargingSessions", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { pontoNome: "Pátio", inicioEm: "2026-09-13T03:00", energiaKwh: 120, status: "concluida", segmento: "b2b" },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+    expect(registro).toMatchObject({ energiaKwh: 120, status: "concluida", fonte: "manual", segmento: "b2b" });
+
+    const invalida = await pedir("/api/todogreen/records/chargingSessions", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { pontoNome: "Pátio", inicioEm: "2026-09-13T04:00", status: "concluida" },
+    });
+    expect(invalida.status).toBe(400);
+  });
+
+  it("barra reservas cruzadas no mesmo ponto e permite fronteira contígua", async () => {
+    const pontoId = `ponto-${crypto.randomUUID()}`;
+    const primeira = await pedir("/api/todogreen/records/chargerReservations", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { pontoId, pontoNome: "Vaga 1", inicioEm: "2026-09-13T22:00", fimEm: "2026-09-14T02:00", status: "reservada" },
+    });
+    expect(primeira.status).toBe(201);
+
+    const conflito = await pedir("/api/todogreen/records/chargerReservations", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { pontoId, pontoNome: "Vaga 1", inicioEm: "2026-09-14T01:00", fimEm: "2026-09-14T03:00", status: "reservada" },
+    });
+    expect(conflito.status).toBe(409);
+
+    const seguida = await pedir("/api/todogreen/records/chargerReservations", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { pontoId, pontoNome: "Vaga 1", inicioEm: "2026-09-14T02:00", fimEm: "2026-09-14T04:00", status: "reservada" },
+    });
+    expect(seguida.status).toBe(201);
+  });
+
+  it("salva preço por kWh e preserva a precedência de escopo no domínio", async () => {
+    const criada = await pedir("/api/todogreen/records/chargingPrices", {
+      metodo: "POST",
+      token: gestora.token,
+      corpo: { escopo: "base", precoPorKwh: 1.89, observacao: "Tabela pública" },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+    expect(registro).toMatchObject({ escopo: "base", precoPorKwh: 1.89 });
   });
 });

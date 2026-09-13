@@ -37,6 +37,26 @@ describe("resumo de energia da frota", () => {
     expect(r.custoEstimado).toBe(9000 * 0.92);
   });
 
+  it("energia medida por sessão aparece separada da estimativa", () => {
+    const sessoes = [
+      { status: "concluida", energiaKwh: 100, inicioEm: "2026-01-10T03:00", veiculoId: "v1", veiculoRotulo: "V-01" },
+      { status: "em_andamento", energiaKwh: 30, inicioEm: "2026-01-11T03:00", veiculoId: "v1" },
+    ];
+    const r = resumoEnergia(veiculos, pontos, { energyCostPerKwh: 1 }, sessoes);
+    expect(r.medido.disponivel).toBe(true);
+    expect(r.medido.energiaKwh).toBe(100);
+    expect(r.medido.custoEstimado).toBe(100);
+    expect(r.medido.sessoes).toBe(1);
+    expect(r.energiaKwh).toBe(9000);
+  });
+
+  it("sem sessões, medição fica indisponível sem zerar a estimativa", () => {
+    const r = resumoEnergia(veiculos, pontos, { energyCostPerKwh: 1 });
+    expect(r.medido.disponivel).toBe(false);
+    expect(r.medido.energiaKwh).toBe(0);
+    expect(r.energiaKwh).toBe(9000);
+  });
+
   it("sem frota: indisponível, sem chutar número", () => {
     const r = resumoEnergia([], pontos);
     expect(r.disponivel).toBe(false);

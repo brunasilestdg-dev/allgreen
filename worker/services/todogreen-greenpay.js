@@ -19,6 +19,12 @@ import {
   arredondarReais,
 } from "../../src/features/logistics/greenPayDomain.js";
 import { syspagProntidao, syspagHabilitado, enviarPagamentoSyspag } from "./todogreen-syspag.js";
+import {
+  conciliarRepasses,
+  lancamentoDoContrato,
+  normalizarContrato,
+  validarContrato,
+} from "../../src/features/logistics/greenPayStatementDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -197,6 +203,82 @@ const visaoDosMotoristas = async (env, ownerId) => {
   }));
 };
 
+// --- Repasses realizados (lado interno da conciliação) -------------------
+// Lotes PAGOS agrupados por settlement, com o nome do motorista. É o que a
+// conciliação casa com o retorno externo (SysPag/extrato bancário).
+const repassesRealizados = async (env, ownerId) => {
+  const { results } = await env.DB.prepare(
+    `SELECT e.settlement_id AS settlementId, e.driver_id AS driverId, d.full_name AS driverNome,
+            SUM(e.amount) AS total, COUNT(e.id) AS itens, MAX(e.updated_at) AS pagoEm
+       FROM todogreen_driver_earnings e
+       LEFT JOIN todogreen_drivers d ON d.id = e.driver_id AND d.workspace_owner_id = e.workspace_owner_id
+      WHERE e.tenant_id = ? AND e.workspace_owner_id = ? AND e.status = 'pago'
+        AND e.settlement_id IS NOT NULL AND e.settlement_id != '' AND e.archived_at IS NULL
+      GROUP BY e.settlement_id
+      ORDER BY pagoEm DESC LIMIT 500`,
+  ).bind(TENANT_ID, ownerId).all();
+  return (results || []).map((r) => ({
+    settlementId: r.settlementId,
+    driverId: r.driverId || "",
+    driverNome: r.driverNome || "",
+    total: arredondarReais(r.total),
+    itens: numero(r.itens),
+    pagoEm: r.pagoEm || "",
+  }));
+};
+
+// --- Contratos de ganho recorrente ---------------------------------------
+const contratoDaLinha = (row) => ({
+  id: row.id,
+  driverId: row.driver_id,
+  driverNome: row.driver_name || "",
+  descricao: row.description || "",
+  valor: numero(row.amount),
+  diaDoMes: numero(row.day_of_month) || 1,
+  ativo: Number(row.active || 0) === 1,
+  revision: numero(row.revision) || 1,
+  atualizadoEm: row.updated_at || "",
+});
+
+const lerContratos = async (env, ownerId) => {
+  const { results } = await env.DB.prepare(
+    `SELECT c.*, d.full_name AS driver_name FROM todogreen_driver_earning_contracts c
+       LEFT JOIN todogreen_drivers d ON d.id = c.driver_id AND d.workspace_owner_id = c.workspace_owner_id
+      WHERE c.tenant_id = ? AND c.workspace_owner_id = ? AND c.archived_at IS NULL
+      ORDER BY c.created_at DESC`,
+  ).bind(TENANT_ID, ownerId).all();
+  return (results || []).map(contratoDaLinha);
+};
+
+// Gera o lançamento do mês de cada contrato ativo. Idempotente: a referência
+// única (note = contrato-{id}-{AAAA-MM}) impede duplicar ao gerar de novo.
+const gerarMesDosContratos = async (env, ownerId, userId, mesYm) => {
+  const contratos = await lerContratos(env, ownerId);
+  const agora = new Date().toISOString();
+  let gerados = 0;
+  for (const c of contratos) {
+    const l = lancamentoDoContrato(c, mesYm);
+    if (!l) continue;
+    const existe = await env.DB.prepare(
+      `SELECT id FROM todogreen_driver_earnings
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND driver_id = ? AND kind = 'contrato'
+          AND note = ? AND archived_at IS NULL`,
+    ).bind(TENANT_ID, ownerId, l.driverId, l.idempotencia).first();
+    if (existe) continue;
+    await env.DB.prepare(
+      `INSERT INTO todogreen_driver_earnings
+         (id, tenant_id, workspace_owner_id, driver_id, operation_id, kind, amount,
+          reference, service_date, status, memory_json, settlement_id, note, created_by, created_at, updated_at, archived_at)
+       VALUES (?, ?, ?, ?, NULL, 'contrato', ?, ?, ?, 'pendente', ?, NULL, ?, ?, ?, ?, NULL)`,
+    ).bind(
+      crypto.randomUUID(), TENANT_ID, ownerId, l.driverId, l.valor, l.referencia, l.dataServico,
+      JSON.stringify({ base: "contrato de ganho recorrente", mes: mesYm }), l.idempotencia, userId, agora, agora,
+    ).run();
+    gerados += 1;
+  }
+  return { gerados, contratos: contratos.length };
+};
+
 export async function handleTodoGreenGreenPay(request, env, access, user) {
   if (!env.DB) return json({ error: "Banco indisponível." }, 503);
   if (!podeGerenciar(access))
@@ -361,6 +443,75 @@ export async function handleTodoGreenGreenPay(request, env, access, user) {
       if (r.gerados) { gerados += r.gerados; viagens += 1; }
     }
     return json({ ok: true, viagensProcessadas: (results || []).length, viagensComGanhoNovo: viagens, lancamentosCriados: gerados });
+  }
+
+  // Repasses realizados (lado interno da conciliação).
+  if (request.method === "GET" && recurso === "repasses") {
+    return json({ repasses: await repassesRealizados(env, ownerId), syspag: syspagProntidao(env) });
+  }
+
+  // Conciliação: casa os repasses internos com os retornos externos informados
+  // (SysPag ou extrato bancário colado). Sem retornos, os lotes ficam "sem
+  // retorno" — honesto: pago no razão, repasse externo ainda não confirmado.
+  if (request.method === "POST" && recurso === "conciliar") {
+    const corpo = await request.json().catch(() => ({}));
+    const retornos = Array.isArray(corpo.retornos) ? corpo.retornos : [];
+    const { results } = await env.DB.prepare(
+      `SELECT settlement_id AS settlementId, driver_id AS driverId, amount AS valor, status
+         FROM todogreen_driver_earnings
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND status = 'pago'
+          AND settlement_id IS NOT NULL AND settlement_id != '' AND archived_at IS NULL`,
+    ).bind(TENANT_ID, ownerId).all();
+    return json(conciliarRepasses(results || [], retornos));
+  }
+
+  // Contratos de ganho recorrente (valor fixo mensal, ex.: ajuda de custo).
+  if (recurso === "contratos") {
+    if (request.method === "GET") return json({ contratos: await lerContratos(env, ownerId) });
+    if (request.method === "POST" && !id) {
+      const corpo = await request.json().catch(() => ({}));
+      const erro = validarContrato(corpo);
+      if (erro) return json({ error: erro }, 400);
+      const c = normalizarContrato(corpo);
+      const agora = new Date().toISOString();
+      await env.DB.prepare(
+        `INSERT INTO todogreen_driver_earning_contracts
+           (id, tenant_id, workspace_owner_id, driver_id, description, amount, day_of_month, active,
+            config_json, revision, created_by, updated_by, created_at, updated_at, archived_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', 1, ?, ?, ?, ?, NULL)`,
+      ).bind(crypto.randomUUID(), TENANT_ID, ownerId, c.driverId, c.descricao, c.valor, c.diaDoMes, c.ativo ? 1 : 0,
+        user.id, user.id, agora, agora).run();
+      return json({ ok: true, contratos: await lerContratos(env, ownerId) }, 201);
+    }
+    if (request.method === "PUT" && id) {
+      const corpo = await request.json().catch(() => ({}));
+      const erro = validarContrato(corpo);
+      if (erro) return json({ error: erro }, 400);
+      const c = normalizarContrato(corpo);
+      const res = await env.DB.prepare(
+        `UPDATE todogreen_driver_earning_contracts
+            SET driver_id=?, description=?, amount=?, day_of_month=?, active=?, revision=revision+1, updated_by=?, updated_at=?
+          WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+      ).bind(c.driverId, c.descricao, c.valor, c.diaDoMes, c.ativo ? 1 : 0, user.id, new Date().toISOString(),
+        id, TENANT_ID, ownerId).run();
+      if (!res.meta?.changes) return json({ error: "Contrato não encontrado." }, 404);
+      return json({ ok: true, contratos: await lerContratos(env, ownerId) });
+    }
+    if (request.method === "DELETE" && id) {
+      await env.DB.prepare(
+        `UPDATE todogreen_driver_earning_contracts SET archived_at=? WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+      ).bind(new Date().toISOString(), id, TENANT_ID, ownerId).run();
+      return json({ ok: true, contratos: await lerContratos(env, ownerId) });
+    }
+  }
+
+  // Gera o mês dos contratos ativos (ação explícita do gestor — "nada de
+  // dinheiro criado sozinho"). Idempotente por referência.
+  if (request.method === "POST" && recurso === "gerar-contratos") {
+    const corpo = await request.json().catch(() => ({}));
+    const mes = /^\d{4}-\d{2}$/.test(texto(corpo.mes, 7)) ? texto(corpo.mes, 7) : hojeYmd().slice(0, 7);
+    const r = await gerarMesDosContratos(env, ownerId, user.id, mes);
+    return json({ ok: true, mes, ...r });
   }
 
   return json({ error: "Rota do GreenPay não encontrada." }, 404);

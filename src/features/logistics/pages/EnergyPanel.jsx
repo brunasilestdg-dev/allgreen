@@ -48,6 +48,7 @@ function CurvaTarifaria({ curva }) {
 export default function EnergyPanel({ authHeaders }) {
   const [fleet, setFleet] = useState([]);
   const [pontos, setPontos] = useState([]);
+  const [sessoes, setSessoes] = useState([]);
   const [estado, setEstado] = useState("carregando");
 
   useEffect(() => {
@@ -59,16 +60,20 @@ export default function EnergyPanel({ authHeaders }) {
       fetch("/api/todogreen/records/pontosRecarga", { headers: authHeaders?.() || {} })
         .then((r) => (r.ok ? r.json() : { registros: [] }))
         .catch(() => ({ registros: [] })),
-    ]).then(([f, p]) => {
+      fetch("/api/todogreen/records/chargingSessions", { headers: authHeaders?.() || {} })
+        .then((r) => (r.ok ? r.json() : { registros: [] }))
+        .catch(() => ({ registros: [] })),
+    ]).then(([f, p, s]) => {
       if (!vivo) return;
       setFleet(f.vehicles || []);
       setPontos(p.registros || []);
+      setSessoes(s.registros || []);
       setEstado("ok");
     });
     return () => { vivo = false; };
   }, [authHeaders]);
 
-  const r = useMemo(() => resumoEnergia(fleet, pontos), [fleet, pontos]);
+  const r = useMemo(() => resumoEnergia(fleet, pontos, {}, sessoes), [fleet, pontos, sessoes]);
   const plano = useMemo(
     () => planoRecargaInteligente({
       energiaKwh: r.energiaKwh,
@@ -92,7 +97,7 @@ export default function EnergyPanel({ authHeaders }) {
         <div>
           <span className="tdg-kicker">ENERGIA</span>
           <h2>Consumo, custo e capacidade de recarga</h2>
-          <p>O consumo é estimado a partir do hodômetro e do consumo de cada veículo (km × kWh/km) — não é medição por sessão de recarga. A tarifa usada é a régua do motor ({numero.format(r.energyCostPerKwh)} R$/kWh).</p>
+          <p>O consumo estimado continua vindo do hodômetro e do perfil do veículo. Quando existem sessões concluídas, o painel mostra também o <strong>kWh medido</strong>, separado da estimativa e sem substituir um pelo outro. A tarifa usada é a régua do motor ({numero.format(r.energyCostPerKwh)} R$/kWh).</p>
         </div>
         <Zap size={22} />
       </div>
@@ -107,6 +112,29 @@ export default function EnergyPanel({ authHeaders }) {
             <article><small>Emissões da operação</small><strong>{numero.format(r.emissoesKg / 1000)} t</strong></article>
             <article><small>Frota elétrica</small><strong>{inteiro.format(r.frota.eletricos)}/{inteiro.format(r.frota.total)}</strong></article>
           </div>
+
+          {r.medido.disponivel && (
+            <div className="tdg-energia-medido">
+              <h3><BatteryCharging size={16} /> Energia medida por sessão</h3>
+              <p className="tdg-recarga-nota">Consumo real das recargas concluídas. A estimativa da frota continua visível separadamente para comparação.</p>
+              <div className="tdg-energia-metrics">
+                <article><small>Energia medida</small><strong>{numero.format(r.medido.energiaKwh)} kWh</strong></article>
+                <article><small>Custo pela tarifa base</small><strong>{moeda.format(r.medido.custoEstimado)}</strong></article>
+                <article><small>Sessões medidas</small><strong>{inteiro.format(r.medido.sessoes)}</strong></article>
+              </div>
+              {r.medido.porVeiculo.length > 0 && (
+                <ul className="tdg-energia-medido-lista">
+                  {r.medido.porVeiculo.map((v) => (
+                    <li key={v.veiculoId || v.rotulo}>
+                      <span>{v.rotulo}</span>
+                      <strong>{numero.format(v.energiaKwh)} kWh</strong>
+                      <em>{inteiro.format(v.sessoes)} sessão(ões)</em>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           <div className="tdg-energia-cols">
             <div className="tdg-energia-rede">

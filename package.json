@@ -20,7 +20,11 @@
     "test:e2e:todogreen": "playwright test e2e/todogreen-smoke.spec.js e2e/todogreen-visual.spec.js e2e/todogreen-roteirizacao.spec.js",
     "track3r:login": "node scripts/track3r-local-bridge/agent.js login",
     "track3r:probe": "node scripts/track3r-local-bridge/agent.js probe",
-    "track3r:sync": "node scripts/track3r-local-bridge/agent.js sync"
+    "track3r:sync": "node scripts/track3r-local-bridge/agent.js sync",
+    "test:visual": "playwright test --config playwright.visual.config.js",
+    "test:visual:update": "playwright test --config playwright.visual.config.js --update-snapshots",
+    "test:visual:docker": "bash scripts/visual-regression.sh",
+    "test:visual:docker:update": "bash scripts/visual-regression.sh --update"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",

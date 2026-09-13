@@ -163,6 +163,9 @@ const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
 const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
 const RoteirizacaoPage = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
 const ChargingPointsPage = lazy(() => import("./pages/ChargingPointsPage.jsx"));
+const ChargingSessionsPage = lazy(() => import("./pages/ChargingSessionsPage.jsx"));
+const ChargerReservationsPage = lazy(() => import("./pages/ChargerReservationsPage.jsx"));
+const ChargingBillingPage = lazy(() => import("./pages/ChargingBillingPage.jsx"));
 const EnergyPage = lazy(() => import("./pages/EnergyPage.jsx"));
 const OperationEnginePage = lazy(() => import("./pages/OperationEnginePage.jsx"));
 const GreenPayAdminPage = lazy(() => import("./pages/GreenPayAdminPage.jsx"));
@@ -296,6 +299,9 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "rotas",
   "roteirizacao",
   "pontos-recarga",
+  "sessoes-recarga",
+  "reservas-recarga",
+  "cobranca-recarga",
   "viagens",
   "veiculos",
   "motorista-frota",
@@ -700,6 +706,33 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: ["operations:manage", "planning:manage", "tms:manage", "fleet:manage"],
     description: "Cadastro dos carregadores próprios (Ground, GreenOn, pátio próprio) que entram no mapa do roteirizador junto à rede pública.",
   },
+  "sessoes-recarga": {
+    title: "Sessões de recarga",
+    navLabel: "Sessões de recarga",
+    route: "/todogreen/sessoes-recarga",
+    area: "operacao",
+    status: "functional",
+    permission: ["operations:manage", "planning:manage", "fleet:manage", "finance:manage"],
+    description: "Recargas com energia medida por ponto, veículo e cliente. O consumo real alimenta energia e cobrança sem duplicar a fonte.",
+  },
+  "reservas-recarga": {
+    title: "Reservas de carregador",
+    navLabel: "Reservas de recarga",
+    route: "/todogreen/reservas-recarga",
+    area: "operacao",
+    status: "functional",
+    permission: ["operations:manage", "planning:manage", "fleet:manage"],
+    description: "Agenda dos pontos de recarga por veículo, com conflito de horário barrado antes da viagem.",
+  },
+  "cobranca-recarga": {
+    title: "Cobrança de recarga (kWh)",
+    navLabel: "Cobrança de recarga",
+    route: "/todogreen/cobranca-recarga",
+    area: "financeiro",
+    status: "functional",
+    permission: ["finance:manage", "revenue:manage"],
+    description: "Preço por kWh e faturamento por cliente derivados somente de sessões medidas.",
+  },
   cadastros: {
     title: "Cadastros logísticos",
     navLabel: "Cadastros",
@@ -994,7 +1027,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
   // indicadores) existia no menu. Um nome, um lugar.
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga", "sessoes-recarga", "reservas-recarga"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
@@ -1009,7 +1042,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "suprimentos", label: "Compras", route: "/todogreen/compras", pages: ["compras", "estoque"], extras: [["Cadastro · Materiais", "/todogreen/cadastros?secao=items"], ["Cadastro · Depósitos", "/todogreen/cadastros?secao=warehouses"], ["Cadastro · Fornecedores e parceiros", "/todogreen/cadastros?secao=parties"]] },
   { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "ciot"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
   { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
-  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "greenpay"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
+  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "greenpay", "cobranca-recarga"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
   { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "motor-operacao"] },
@@ -1077,6 +1110,38 @@ const MANAGEMENT_TOOLS = Object.freeze([
     permission: "access:manage",
   },
 ]);
+
+// Simplifica o primeiro nível sem mudar a taxonomia real, permissões, rotas ou
+// breadcrumbs. PRIMARY_NAVIGATION continua sendo a fonte de verdade das áreas;
+// esta camada só agrupa a apresentação lateral em 8 frentes de trabalho.
+const MENU_GROUPS = Object.freeze([
+  { id: "comercial", label: "Comercial", route: "/todogreen/clientes", areaIds: ["commercial", "products"] },
+  { id: "operacao", label: "Operação", route: "/todogreen/operacoes", areaIds: ["operations", "planejamento", "suprimentos"] },
+  { id: "frota-energia", label: "Frota & Energia", route: "/todogreen/motorista-frota", areaIds: ["frota"] },
+  { id: "financeiro", label: "Financeiro", route: "/todogreen/faturamento", areaIds: ["finance"] },
+  { id: "esg-dados", label: "ESG & Dados", route: "/todogreen/central-esg", areaIds: ["esg", "indicadores"] },
+  { id: "pessoas-trabalho", label: "Pessoas & Trabalho", route: "/todogreen/espaco", areaIds: ["espaco-trabalho", "dp", "rh"] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", areaIds: ["compliance", "juridico", "qualidade", "documentos", "administracao"] },
+  { id: "ferramentas", label: "Ferramentas", route: "/todogreen/estudio-criativo", areaIds: ["estudio"] },
+]);
+
+const NAV_GROUPS = MENU_GROUPS.map((grupo) => {
+  const areas = grupo.areaIds
+    .map((id) => PRIMARY_NAVIGATION.find((area) => area.id === id))
+    .filter(Boolean);
+  return {
+    id: grupo.id,
+    label: grupo.label,
+    route: grupo.route,
+    areaIds: grupo.areaIds,
+    pages: areas.flatMap((area) => area.pages || []),
+    extras: areas.flatMap((area) => area.extras || []),
+    jornadasInternas: areas.flatMap((area) => area.jornadasInternas || []),
+  };
+});
+
+const grupoDoMenu = (areaId) =>
+  MENU_GROUPS.find((grupo) => grupo.areaIds.includes(areaId))?.id || "";
 
 const navigationModules = (ids = []) => {
   const seenRoutes = new Set();
@@ -2998,16 +3063,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const page = todoGreenRouteToPage(path);
   const secaoDeCadastro = secaoDaRota(path);
   const primaryNavigation = navigationFor(page, secaoDeCadastro);
-  // Ao navegar para uma área, abre o grupo dela no menu (preserva o
-  // comportamento antigo de "a área da tela atual vem aberta"), mas sem travar:
-  // o usuário ainda pode recolher pelo chevron, porque o efeito só dispara
-  // quando a ÁREA muda, não a cada render.
+  const grupoAtivoId = grupoDoMenu(primaryNavigation?.id);
+  // Ao navegar para uma tela, abre o grupo de primeiro nível correspondente.
+  // O dashboard fica fora dos grupos porque possui o botão fixo "Início".
   useEffect(() => {
-    // abrirArea devolve o MESMO Set quando a área já está aberta, então o React
-    // descarta o render — não há cascata apesar do aviso do lint.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (primaryNavigation?.id) abrirArea(primaryNavigation.id);
-  }, [primaryNavigation?.id, abrirArea]);
+    if (grupoAtivoId) abrirArea(grupoAtivoId);
+  }, [grupoAtivoId, abrirArea]);
   const isOverview = page === "dashboard";
   const isWorkCenter = page === "espaco";
   const activeManagement = MANAGEMENT_TOOLS.find((item) => item.id === page) || null;
@@ -3333,11 +3395,11 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             </nav>
           ) : (
             <nav className="tdg-nav-areas" aria-label="Navegação To Do Green">
-              {PRIMARY_NAVIGATION.map((item) => {
+              {NAV_GROUPS.map((item) => {
                 const ocultaDaLista = areasOcultas.has(item.id);
                 // Fora do modo personalizar, área desmarcada não aparece.
                 if (ocultaDaLista && !personalizando) return null;
-                const ativa = primaryNavigation.id === item.id;
+                const ativa = grupoAtivoId === item.id;
                 // `aberta` vem SÓ do estado de abertas — não força a área ativa a
                 // ficar aberta. Antes, `|| ativa` prendia aberta a área da tela
                 // atual, então o chevron dela "abria mas não fechava". A área
@@ -3557,6 +3619,9 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "operacoes" && <Suspense fallback={<section className="tdg-panel">Carregando operações...</section>}><OperationsPage operations={registros.operations} clients={clientes} contracts={registros.contracts} criar={criar} atualizar={atualizar} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
       {page === "roteirizacao" && <Suspense fallback={<section className="tdg-panel">Carregando o mapa...</section>}><RoteirizacaoPage setToast={setToast} authHeaders={authHeaders} pontosProprios={registros.pontosRecarga} /></Suspense>}
       {page === "pontos-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando pontos de recarga...</section>}><ChargingPointsPage registros={registros.pontosRecarga} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} /></Suspense>}
+      {page === "sessoes-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando sessões de recarga...</section>}><ChargingSessionsPage registros={registros.chargingSessions} pontos={registros.pontosRecarga} clientes={clientes} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
+      {page === "reservas-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando reservas...</section>}><ChargerReservationsPage registros={registros.chargerReservations} pontos={registros.pontosRecarga} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
+      {page === "cobranca-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando cobrança de recarga...</section>}><ChargingBillingPage regras={registros.chargingPrices} sessoes={registros.chargingSessions} clientes={clientes} criar={criar} arquivar={arquivar} setToast={setToast} /></Suspense>}
       {page === "motorista-frota" && <Suspense fallback={<section className="tdg-panel">Carregando frota e motoristas...</section>}><DriverFleetCenterPage authHeaders={authHeaders} operations={registros.operations} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "ocorrencias" && <Suspense fallback={<section className="tdg-panel">Carregando ocorrências...</section>}><OccurrencesPage operations={registros.operations} clients={clientes} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
       {page === "ordens-servico" && <Suspense fallback={<section className="tdg-panel">Carregando ordens de serviço...</section>}><TransactionalSpinePage mode="service-orders" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}

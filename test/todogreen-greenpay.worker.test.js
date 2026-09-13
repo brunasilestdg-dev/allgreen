@@ -207,3 +207,64 @@ describe("GreenPay — ajuste, aprovação e pagamento", () => {
     expect(d.error).toMatch(/aprovado/i);
   });
 });
+
+
+describe("GreenPay fase 2 — contratos e conciliação", () => {
+  it("só a gestão financeira acessa contratos recorrentes", async () => {
+    const r = await pedir("/api/todogreen/greenpay/contratos", { token: joao.token });
+    expect(r.status).toBe(403);
+  });
+
+  it("cria contrato recorrente e gera o mês de forma idempotente", async () => {
+    const criado = await pedir("/api/todogreen/greenpay/contratos", {
+      method: "POST",
+      token: dona.token,
+      body: { driverId: "gpd-maria", descricao: "Ajuda de custo", valor: 100, diaDoMes: 10 },
+    });
+    expect(criado.status).toBe(201);
+    const corpo = await criado.json();
+    expect(corpo.contratos.some((item) => item.driverId === "gpd-maria" && item.valor === 100)).toBe(true);
+
+    const mes = new Date().toISOString().slice(0, 7);
+    const primeira = await (await pedir("/api/todogreen/greenpay/gerar-contratos", {
+      method: "POST", token: dona.token, body: { mes },
+    })).json();
+    expect(primeira.gerados).toBeGreaterThan(0);
+
+    const segunda = await (await pedir("/api/todogreen/greenpay/gerar-contratos", {
+      method: "POST", token: dona.token, body: { mes },
+    })).json();
+    expect(segunda.gerados).toBe(0);
+
+    const carteira = await (await pedir("/api/todogreen/driver-portal/ganhos", { token: maria.token })).json();
+    const contratos = carteira.extrato.filter((item) => item.tipo === "contrato");
+    expect(contratos).toHaveLength(1);
+    expect(contratos[0].valor).toBe(100);
+  });
+
+  it("concilia lote pago com retorno externo sem alterar o razão", async () => {
+    const lista = await (await pedir("/api/todogreen/greenpay/repasses", { token: dona.token })).json();
+    const lote = lista.repasses.find((item) => item.driverId === "gpd-joao");
+    expect(lote).toBeTruthy();
+    expect(lote.total).toBe(40);
+
+    const conciliacao = await (await pedir("/api/todogreen/greenpay/conciliar", {
+      method: "POST",
+      token: dona.token,
+      body: {
+        retornos: [{
+          referenciaExterna: lote.settlementId,
+          valor: lote.total,
+          idExterno: "syspag-test-1",
+        }],
+      },
+    })).json();
+
+    expect(conciliacao.resumo.conferidos).toBeGreaterThan(0);
+    expect(conciliacao.resumo.divergentes).toBe(0);
+    expect(conciliacao.resumo.semLancamento).toBe(0);
+
+    const carteira = await (await pedir("/api/todogreen/driver-portal/ganhos", { token: joao.token })).json();
+    expect(carteira.resumo.saldos.pago).toBe(40);
+  });
+});

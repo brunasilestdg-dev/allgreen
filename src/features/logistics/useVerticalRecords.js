@@ -62,6 +62,11 @@ const VAZIO = Object.freeze({
   // (ChargingPointsPage) e o roteirizador buscam sob demanda, mas declarar aqui
   // evita que o gancho descarte calado o que vier na carga inicial.
   pontosRecarga: [],
+  // Operação real de recarga: sessões medidas, reservas e preço por kWh.
+  // Ficam no mesmo store canônico de registros da vertical.
+  chargingSessions: [],
+  chargerReservations: [],
+  chargingPrices: [],
 });
 
 const pedir = async (caminho, authHeaders, opcoes = {}) => {

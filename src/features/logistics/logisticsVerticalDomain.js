@@ -548,6 +548,12 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Carteira dos motoristas: régua de ganhos por entrega e por km, e aprovação/pagamento — derivado das entregas, não da folha.",
     permissions: ["read", "finance:manage"],
   }),
+  module("cobranca-recarga", "Cobrança de recarga", "financeiro", "/todogreen/cobranca-recarga", {
+    icon: "DollarSign",
+    order: 39.55,
+    description: "Preço por kWh e faturamento por cliente derivados das sessões medidas de recarga.",
+    permissions: ["read", "finance:manage", "revenue:manage"],
+  }),
   module("fiscal", "Fiscal", "financeiro", "/todogreen/fiscal", {
     icon: "ReceiptText",
     order: 39.5,
@@ -561,6 +567,18 @@ export const TODO_GREEN_MODULE_CATALOG = [
   module("rotas", "Rotas", "operacao", "/todogreen/operacoes", { icon: "Route", order: 42 }),
   module("roteirizacao", "Roteirização", "operacao", "/todogreen/roteirizacao", { icon: "Route", order: 42.5 }),
   module("pontos-recarga", "Pontos de recarga", "operacao", "/todogreen/pontos-recarga", { icon: "Zap", order: 42.6 }),
+  module("sessoes-recarga", "Sessões de recarga", "operacao", "/todogreen/sessoes-recarga", {
+    icon: "BatteryCharging",
+    order: 42.7,
+    description: "Recargas com energia medida por ponto, veículo e cliente — consumo real e base da cobrança.",
+    permissions: ["read", "operations:manage", "fleet:manage"],
+  }),
+  module("reservas-recarga", "Reservas de recarga", "operacao", "/todogreen/reservas-recarga", {
+    icon: "CalendarClock",
+    order: 42.8,
+    description: "Agenda dos carregadores por veículo, com conflito de horário barrado antes da viagem.",
+    permissions: ["read", "operations:manage", "fleet:manage"],
+  }),
   module("viagens", "Viagens", "operacao", "/todogreen/operacoes", { icon: "Navigation", order: 43 }),
   module("veiculos", "Veículos e frota", "operacao", "/todogreen/motorista-frota", {
     icon: "Truck",

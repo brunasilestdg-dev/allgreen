@@ -166,13 +166,10 @@ describe("LogisticsVertical", () => {
   it("renders the private hub for authorized To Do Green users", async () => {
     await renderarAutorizada();
     expect(screen.getByRole("heading", { name: "Principal", level: 1 }).hidden).toBe(false);
-    // Acordeão: 19 áreas (taxonomia da titular; Implantação mora no Workspace e
-    // Planejamento voltou a ser área própria, separada de Operação e de
-    // Indicadores; "Estúdio" reúne as ferramentas trazidas do app geral).
-    // "Marketing" deixou de ser área própria: Notícias e inteligência agora
-    // vive no Comercial (decisão da titular, 05/09). Conta-se as ÁREAS.
+    // O primeiro nível é apresentação, não uma segunda taxonomia: 8 frentes
+    // agrupam as áreas reais sem remover rota, permissão, breadcrumb ou página.
     const navegacao = screen.getByRole("navigation", { name: "Navegação To Do Green" });
-    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(19);
+    expect(navegacao.querySelectorAll(".tdg-nav-area")).toHaveLength(8);
     expect(screen.getByText("Configurações")).toBeTruthy();
     // Sem "Sair" a sessão fica eterna no navegador: quem pega o mesmo
     // aparelho entra direto na conta de quem esqueceu de sair.
@@ -194,16 +191,21 @@ describe("LogisticsVertical", () => {
     await renderarAutorizada();
 
     const areas = screen.getByRole("navigation", { name: "Navegação To Do Green" });
-    // Taxonomia da titular presente.
+    // Os 8 grupos principais estão presentes.
     expect(within(areas).getByRole("button", { name: "Comercial" })).toBeTruthy();
-    expect(within(areas).getByRole("button", { name: "Frota" })).toBeTruthy();
-    expect(within(areas).getByRole("button", { name: "Departamento Pessoal" })).toBeTruthy();
-    expect(within(areas).getByRole("button", { name: "Recursos Humanos" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Frota & Energia" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Pessoas & Trabalho" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "Administração" })).toBeTruthy();
 
-    // Abrir o segundo nível do Comercial sem navegar (a seta só expande).
+    // Abrir o segundo nível do Comercial sem navegar.
     fireEvent.click(within(areas).getByRole("button", { name: /Abrir funcionalidades de Comercial/ }));
     expect(within(areas).getByRole("button", { name: "Oportunidades" })).toBeTruthy();
     expect(within(areas).getByRole("button", { name: /Precificação/ })).toBeTruthy();
+
+    // DP e RH continuam acessíveis, agora dentro de Pessoas & Trabalho.
+    fireEvent.click(within(areas).getByRole("button", { name: /Abrir funcionalidades de Pessoas & Trabalho/ }));
+    expect(within(areas).getByRole("button", { name: "DP" })).toBeTruthy();
+    expect(within(areas).getByRole("button", { name: "RH" })).toBeTruthy();
 
     // A busca atravessa todas as áreas e substitui o acordeão enquanto digita.
     fireEvent.change(screen.getByLabelText("Buscar funcionalidades"), { target: { value: "ocorrência" } });

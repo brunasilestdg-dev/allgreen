@@ -17,6 +17,7 @@ import {
   summarizeFleet,
 } from "./todoGreenFleetDomain.js";
 import { resumoPontos } from "./chargingPointsDomain.js";
+import { energiaMedidaPorVeiculo, totalEnergiaMedida } from "./chargingSessionDomain.js";
 
 const round = (valor, casas = 2) => {
   const n = Number(valor);
@@ -25,7 +26,7 @@ const round = (valor, casas = 2) => {
   return Math.round(n * f) / f;
 };
 
-export const resumoEnergia = (vehicles = [], pontos = [], assumptions = {}) => {
+export const resumoEnergia = (vehicles = [], pontos = [], assumptions = {}, sessoes = []) => {
   const lista = Array.isArray(vehicles) ? vehicles : [];
   const energyCostPerKwh = Number(assumptions.energyCostPerKwh) > 0
     ? Number(assumptions.energyCostPerKwh)
@@ -33,6 +34,18 @@ export const resumoEnergia = (vehicles = [], pontos = [], assumptions = {}) => {
 
   const resumoFrota = summarizeFleet(lista, { energyCostPerKwh });
   const rede = resumoPontos(pontos);
+
+  // Medição real fica separada da estimativa. Só sessões concluídas e com kWh
+  // válido entram neste bloco; sem medição o painel estimado continua íntegro.
+  const listaSessoes = Array.isArray(sessoes) ? sessoes : [];
+  const energiaMedidaKwh = totalEnergiaMedida(listaSessoes);
+  const medido = {
+    disponivel: energiaMedidaKwh > 0,
+    energiaKwh: energiaMedidaKwh,
+    custoEstimado: round(energiaMedidaKwh * energyCostPerKwh),
+    sessoes: listaSessoes.filter((sessao) => sessao?.status === "concluida" && Number(sessao?.energiaKwh) > 0).length,
+    porVeiculo: energiaMedidaPorVeiculo(listaSessoes).slice(0, 5),
+  };
 
   const porVeiculo = lista.map((v) => {
     const n = normalizeFleetVehicle(v);
@@ -70,6 +83,7 @@ export const resumoEnergia = (vehicles = [], pontos = [], assumptions = {}) => {
       potenciaTotalKw: rede.potenciaTotalKw,
       servemPesado: rede.servemPesado,
     },
+    medido,
     topConsumidores,
   };
 };
