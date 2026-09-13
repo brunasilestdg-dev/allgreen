@@ -256,3 +256,63 @@ CSS lazy não importado, item de menu sem nome, overflow horizontal, Leaflet sem
 container, migration renomeada, deploy de SHA ≠ main sem identificação).
 
 Relatório final em `docs/RELATORIO_CONSOLIDACAO_TDG.md` ao fim da rodada.
+
+
+## 12. Rodada 2 (13/09/2026) — P0→P6 executados, com SHAs e decisões
+
+Diário da segunda rodada (mesma sessão de consolidação). Regra mantida: **auditar
+antes de criar, estender em vez de duplicar, publicar só com gate local verde,
+nunca tocar em migration aplicada**. Tudo abaixo está em `main` e em produção,
+salvo onde indicado.
+
+### 12.1 O que entrou (PRs mesclados, em ordem)
+
+| PR | Fase | Entrega | Migrations |
+| --- | --- | --- | --- |
+| #358 | P0 | `GET /api/system/version` (sha/buildTime/branch/publishedBy/environment/migrations) a partir do manifesto do build; **Saúde do sistema** (Administração) com componentes, integrações da seção 113 em estado canônico, alertas `D1_BEHIND_CODE`/`CLIENT_SERVER_MISMATCH`, métricas por integração (latência/volume/último sucesso e falha); `TDG_ENVIRONMENT` no Worker; guarda de isolamento dos portais externos (teste estático) | `0120` |
+| #362 | P2-A | Viabilidade operacional **persistida** (`todogreen_viability_snapshots`, imutável/versionada por hash do conteúdo) e **gate server-side da proposta** (409 `viability_required` ao enviar/aprovar sem snapshot); painel de viabilidade na oportunidade com proveniência | `0121` |
+| #363 | P3-A | `RoutingProvider` real: OSRM (leves) × **Valhalla truck costing** (pesados) escolhido pelo veículo; sem Valhalla configurado, pesado recebe `NO_SAFE_ROUTING_ENGINE` (409) — nunca rota de carro; catálogo/probe/saúde do Valhalla; `docker-compose` com Valhalla; seletor de veículo na Roteirização | — |
+| #364 | P3-B/C | **Elevação** (Valhalla `/height`) e **clima** (Open-Meteo) honestos com cache (`todogreen_geo_cache`) e proveniência no snapshot de viabilidade; **perfil físico/energético do veículo** e **baseline de consumo** (observações → mediana/p90/correção) — digital twin | `0122`, `0123` |
+| #365 | P4 | **Tarifa de energia** pela hierarquia contrato > informada > **ANEEL** (cache do datastore) > fallback declarado; **ANP** diesel (CSV oficial → mediana por município/UF/região/país); **ONS** curva de carga → janela financeira/energética/recomendada; **plano de recarga por veículo** (pontos × tarifa × demanda contratada); perfil de energia por espaço; cron auto-limitado; Saúde do sistema com ANEEL/ONS/ANP reais; correção de lint na `main` (`PlannerPage`, React Compiler) | `0124` |
+| P5/P6 | P5/P6 | **Sinais de mercado estruturados** (PNCP · Compras.gov · GDELT → `market_signal` com fingerprint e score explicável, triagem por espaço, cron) e correção da rota órfã `/api/todogreen/market-radar`; **Risk Map** (PRF por célula ~1,1 km com UPS; ANTT por rodovia/km via CKAN) com `POST /api/todogreen/risk/route`; **alternativas de rota** com risco como custo (`rankRouteAlternatives` conectado) e cartão de risco na Roteirização | `0125` |
+
+### 12.2 Produção × main ao longo da rodada
+
+Ver a tabela de SHAs em `docs/DEPLOYMENT_RUNBOOK.md` §13a. Resumo: `58c0000` (início) →
+`d2396e44` (manual) → `700468c` (auto, **com teste do To Do vermelho**) → `401f7ec` (pin manual
+no último verde) → `cc4c0fe` → `2a4d459` → `c4f3637` → `2d65bdf` (autos, cada um com gate local
+verde exceto a falha pré-existente abaixo). D1 remoto acompanhou (0120→0124 aplicadas pelo
+`deploy:cloudflare` do build; 0125 após o merge de P5/P6). Nenhuma migration renomeada,
+reaplicada ou apagada; nenhum SQL destrutivo.
+
+### 12.3 Regressões encontradas na `main` fora do escopo desta sessão
+
+- **Teste vermelho** `LogisticsVertical.test.jsx › abre o To Do diretamente pela jornada do espaço
+  de trabalho` desde o commit `0ae17c2` (To Do canônico — Codex): o botão "Nova tarefa" saiu da
+  tela e o teste ainda o espera. **Não alterado aqui** (escopo entregue ao Codex pela titular).
+  Todos os gates desta rodada registram essa única falha (4111+ testes passando).
+- **Lint vermelho** no mesmo commit (`Date.now`/`Math.random` no corpo do `PlannerPage`, regra de
+  pureza do React Compiler): corrigido em #365 com um helper de módulo, sem mudar comportamento.
+- **Endpoint órfão** `/api/todogreen/market-radar` (a tela RFQs/RFIs chamava uma rota que não
+  existia no roteador): roteado em P5/P6.
+
+### 12.4 Decisões que só a titular toma (deixadas para o fim, como pedido)
+
+1. **Rotacionar o token da API Cloudflare** compartilhado no chat (usado só via variável de
+   ambiente para `wrangler d1 migrations list/apply` e `deploy`; nunca gravado no repositório).
+2. **Workers Builds sem gate**: hoje todo push em `main` publica sem rodar testes. Definir o *build
+   command* como `npm run verify && npm run build` (falha do teste bloqueia o deploy) — ou aceitar
+   o risco explicitamente.
+3. **Teste do To Do** (12.3): Codex atualiza o teste ou devolve o botão.
+4. **`TDG_ENVIRONMENT`** nos Workers de prévia (`preview`) para a Saúde do sistema não rotular prévia
+   como produção.
+5. **Infra self-hosted** (`infra/tms-routing`): Valhalla (pesados, elevação, alternativas), OSRM,
+   Nominatim, VROOM — sem eles, pesados não roteiam (honesto) e elevação/alternativas ficam limitadas.
+6. **Risk Map**: importar o CSV oficial da PRF (`POST /api/todogreen/risk/import/prf`) — sem ele o
+   risco por rota é `RISK_DATA_NOT_AVAILABLE`.
+7. **Perfil de energia** de cada espaço (distribuidora/subgrupo/modalidade, UF/município, demanda,
+   horários) na tela Energia — destrava ANEEL/ANP no cálculo.
+8. **R2 (`MEDIA_BUCKET`)** opcional para anexos fora do D1.
+9. **P1.4 design system/regressão visual** e **P2 restante** (pré-flight persistido como gate de
+   publicação de rota, Action Queue) e **P7** (Green On/OCPP comandos, GreenPay repasse, Core All
+   Green/Greenmob) — não iniciados nesta rodada; ver `RELATORIO_CONSOLIDACAO_TDG.md` "O que falta".

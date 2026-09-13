@@ -20,6 +20,8 @@ import { envComChavesDoEspaco } from "./ai-keys.js";
 import { todoGreenExternalIntegrationCatalog } from "./todogreen-integration-gateway.js";
 import { latestTodoGreenIntegrationHealth } from "./todogreen-integration-health.js";
 import { ENERGY_LIMITS, estadoDasReferenciasDeEnergia } from "./todogreen-energy-reference.js";
+import { MARKET_LIMITS, estadoDosSinaisDeMercado } from "./todogreen-market-signals.js";
+import { RISK_LIMITS, estadoDoRiscoViario } from "./todogreen-road-risk.js";
 import { R2_BUCKET_BINDING } from "./todogreen-file-store.js";
 import {
   ciotStatusForOwner,
@@ -174,6 +176,7 @@ const doCatalogo = (item, saude, extra = {}) => ({
 });
 
 const dataCurta = (iso) => (iso ? String(iso).slice(0, 16).replace("T", " ") : "—");
+const TERMOS_TXT = "transporte/logística/frete/veículos elétricos";
 
 // Referência pública em cache (ANEEL/ANP/ONS): a linha mostra a data da FONTE e
 // da última ingestão. Nunca sincronizou → vale o último "Testar" (probe) ou
@@ -230,7 +233,11 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
   const envBusca = await envComChavesDeBuscaDoEspaco(envIa, ownerId).catch(() => envIa);
   const saudeRegistrada = await latestTodoGreenIntegrationHealth(env, ownerId);
   const saudePorId = new Map(saudeRegistrada.map((row) => [row.integrationId, row]));
-  const energia = await estadoDasReferenciasDeEnergia(env, ownerId).catch(() => null);
+  const [energia, mercado, risco] = await Promise.all([
+    estadoDasReferenciasDeEnergia(env, ownerId).catch(() => null),
+    estadoDosSinaisDeMercado(env).catch(() => null),
+    estadoDoRiscoViario(env).catch(() => null),
+  ]);
 
   const versao = systemVersionPayload(env, manifesto);
   const catalogo = todoGreenExternalIntegrationCatalog(envBusca);
@@ -358,6 +365,9 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
   const ons = doGateway("ons-open-data");
   const anp = doGateway("anp-open-data");
   const antt = doGateway("antt-open-data");
+  const pncpItem = doGateway("pncp");
+  const comprasItem = doGateway("compras-gov");
+  const gdeltItem = doGateway("gdelt");
   const ocm = doGateway("open-charge-map");
   const busca = webSearchConfiguration(envBusca);
 
@@ -514,38 +524,36 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
       canTest: false,
     },
 
-    // Mercado e licitações
-    {
-      id: "pncp",
-      name: "PNCP (licitações)",
-      group: "mercado",
-      implementation: IMPLEMENTATION.PARTIAL,
-      configured: Boolean(busca.configured),
-      authenticated: Boolean(busca.configured),
-      online: false,
-      fallbackActive: true,
-      detail: "Coberto pela busca web (site:pncp.gov.br) — a API estruturada do PNCP (processo, órgão, itens, prazos) ainda não está ligada.",
-      requirement: "Adaptador da API pública do PNCP + dedupe por fingerprint",
-      canTest: false,
-    },
-    naoImplementada("compras-gov", "Compras.gov.br", "mercado",
-      "Sem adaptador: oportunidades públicas federais só chegam pela busca web.",
-      "API pública Compras.gov + normalização junto ao PNCP"),
-    naoImplementada("gdelt", "GDELT (sinais de mercado)", "mercado",
-      "Sem ingestão: nenhum market_signal é gerado a partir de notícias globais.",
-      "GDELT DOC 2.0 API + entidade market_signal com score explicável"),
+    // Mercado e licitações — fontes estruturadas (P5) viram market_signal com
+    // fingerprint e score explicável; a busca web continua como complemento.
+    pncpItem && { ...linhaDeReferencia(pncpItem, mercado?.pncp, saudePorId.get("pncp"), {
+      staleMs: MARKET_LIMITS.frescorPncpMs,
+      detalheOk: (f) => `Busca do PNCP (editais recebendo proposta, ${TERMOS_TXT}): ${f.records} item(ns) na última rodada, ${f.detail?.aceitos ?? 0} sinal(is) aceito(s); publicação mais recente ${dataCurta(f.sourceUpdatedAt)}, ingerida em ${dataCurta(f.lastSuccessAt)}. ${mercado?.sinais?.total ?? 0} sinais no total.`,
+      detalheSem: "Sem rodada do PNCP ainda: o cron sincroniza a cada 6 h; a tela Inteligência → RFQs/RFIs também dispara.",
+    }), group: "mercado" },
+    comprasItem && { ...linhaDeReferencia(comprasItem, mercado?.comprasGov, saudePorId.get("compras-gov"), {
+      staleMs: MARKET_LIMITS.frescorComprasMs,
+      detalheOk: (f) => `Contratações Lei 14.133 (Compras.gov, ${f.detail?.periodo || "últimos dias"}): ${f.records} item(ns), ${f.detail?.aceitos ?? 0} sinal(is) aceito(s); publicação mais recente ${dataCurta(f.sourceUpdatedAt)}, ingerida em ${dataCurta(f.lastSuccessAt)}.`,
+      detalheSem: "Sem rodada do Compras.gov ainda (cron diário).",
+    }), group: "mercado" },
+    gdeltItem && { ...linhaDeReferencia(gdeltItem, mercado?.gdelt, saudePorId.get("gdelt"), {
+      staleMs: MARKET_LIMITS.frescorGdeltMs,
+      detalheOk: (f) => `Notícias GDELT (um termo por hora, país BR): ${f.records} artigo(s) na última rodada, ${f.detail?.aceitos ?? 0} sinal(is) aceito(s); mais recente ${dataCurta(f.sourceUpdatedAt)}, ingerida em ${dataCurta(f.lastSuccessAt)}.`,
+      detalheSem: "Sem rodada do GDELT ainda (cron horário; a fonte limita a 1 consulta a cada 5 s).",
+    }), group: "mercado" },
 
-    // Risco viário
-    antt && {
-      ...doCatalogo(antt, saudePorId.get("antt-open-data"), {
-        group: "risco",
-        implementation: IMPLEMENTATION.REAL,
-        detail: `${texto(antt.detail, 200)} Ingestão histórica de acidentes para o Risk Map ainda não implementada.`,
-      }),
-    },
-    naoImplementada("prf", "PRF (acidentes)", "risco",
-      "Sem ingestão dos dados abertos da PRF: o risco por segmento não é calculado; rotas não recebem custo de risco.",
-      "Dados abertos PRF + índice geográfico local"),
+    // Risco viário (P6): PRF por célula geográfica (importação do CSV oficial) e
+    // ANTT por rodovia/km (cron, um recurso por hora). Sem dado → risco null.
+    antt && { ...linhaDeReferencia(antt, risco?.antt, saudePorId.get("antt-open-data"), {
+      staleMs: RISK_LIMITS.frescorAnttMs,
+      detalheOk: (f) => `Acidentes por km das concessionárias (ANTT): ${f.detail?.recursosSincronizados ?? 1} recurso(s) sincronizado(s), ${f.records} ocorrência(s) lida(s), ${risco?.indice?.segmentosAntt ?? 0} segmentos rodovia/km no índice; fonte até ${dataCurta(f.sourceUpdatedAt)}, ingerida em ${dataCurta(f.lastSuccessAt)}.`,
+      detalheSem: "Sem ingestão da ANTT ainda: o cron sincroniza um recurso por hora (≈2 dias para as 40 concessionárias); avisos por rodovia ficam vazios até lá.",
+    }), group: "risco" },
+    { ...linhaDeReferencia({ id: "prf", name: "PRF (acidentes por ocorrência)", configured: true, detail: "", requirement: "" }, risco?.prf, saudePorId.get("prf"), {
+      staleMs: RISK_LIMITS.frescorPrfMs,
+      detalheOk: (f) => `Ocorrências da PRF importadas: ${f.records}, ${risco?.indice?.celulasPrf ?? 0} células de ~1,1 km com UPS; ocorrência mais recente ${dataCurta(f.sourceUpdatedAt)}, importada em ${dataCurta(f.lastSuccessAt)}. Rotas recebem risk score e trechos críticos.`,
+      detalheSem: "Sem CSV da PRF importado: o risco por rota é RISK_DATA_NOT_AVAILABLE (nunca zero) e o ranking de alternativas ignora o critério de risco.",
+    }), group: "risco", canTest: false },
   ].filter(Boolean);
 
   return montarRelatorioDeSaude({

@@ -582,7 +582,9 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
       coord: coordsResolvidasRef.current[String(endereco).trim()] || null,
     }));
     const resultado = await tracarRota(
-      { paradas: comCoords, veiculo: { category: classeVeiculo } },
+      // `alternativas`: o backend devolve rotas alternativas ranqueadas com o
+      // risco viário histórico (PRF/ANTT) como CUSTO — a pessoa escolhe.
+      { paradas: comCoords, veiculo: { category: classeVeiculo }, alternativas: true },
       { headers: authHeaders?.() || {} },
     );
     if (resultado.ok) {
@@ -629,6 +631,20 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
       return;
     }
     await tracar(validas);
+  };
+
+  // P6: trocar a rota desenhada por uma alternativa devolvida pelo motor. A
+  // principal vira alternativa (para poder voltar); paradas e endereços ficam.
+  const usarAlternativa = (indice) => {
+    const r = estado.resultado;
+    const alt = r?.alternativas?.[indice];
+    if (!alt || !Array.isArray(alt.pontos) || alt.pontos.length < 2) return;
+    const principalComoAlternativa = { pontos: r.pontos, distanciaKm: r.distanciaKm, minutos: r.minutos, rodovias: r.rodovias || [], risco: r.risco || null };
+    const restantes = r.alternativas.filter((_, i) => i !== indice);
+    const novo = { ...r, pontos: alt.pontos, distanciaKm: alt.distanciaKm, minutos: alt.minutos, rodovias: alt.rodovias || [], risco: alt.risco || null, alternativas: [principalComoAlternativa, ...restantes], ranking: null };
+    setEstado({ fase: "pronto", resultado: novo });
+    setPedagios({ fase: "idle" });
+    desenhar(novo);
   };
 
   const otimizar = async () => {
@@ -1122,6 +1138,44 @@ Regras:
           )}
           <small>{r.paradas.map((p) => p.rotulo.split(",")[0]).join(" → ")}</small>
           <small className="tdg-roteirizacao-fonte">{r.fonte}{considerarTransito ? " · trânsito de pico é estimativa (régua por horário); ao vivo depende de provedor pago" : ""}</small>
+        </div>
+      )}
+
+      {/* P6: risco viário histórico como CUSTO (não bloqueio) + alternativas. */}
+      {estado.fase === "pronto" && r && (
+        <div className="tdg-roteirizacao-risco" data-testid="tdg-risco-viario">
+          <strong>Risco viário histórico</strong>
+          {r.risco && Number.isFinite(Number(r.risco.riskScore)) ? (
+            <>
+              <span className={`tdg-roteirizacao-risco-score nivel-${r.risco.riskScore >= 60 ? "alto" : r.risco.riskScore >= 25 ? "medio" : "baixo"}`}>{r.risco.riskScore}/100</span>
+              <small>
+                {r.risco.acidentes || 0} ocorrência(s) em {r.risco.celulasComRisco || 0} trecho(s) de ~1 km (PRF, {r.risco.ultimoRegistro ? `até ${String(r.risco.ultimoRegistro).slice(0, 10).split("-").reverse().join("/")}` : "janela ingerida"})
+                {r.risco.mortos ? ` · ${r.risco.mortos} morte(s)` : ""} · confiança {String(r.risco.confidence || "").toLowerCase() || "—"}
+                {r.rodovias?.length ? ` · vias: ${r.rodovias.join(", ")}` : ""}
+              </small>
+              {Array.isArray(r.risco.avisosRodovias) && r.risco.avisosRodovias.length > 0 && (
+                <small>{r.risco.avisosRodovias.map((a) => `${a.rodovia}: ${a.acidentes} ocorrência(s) no índice, km crítico ${a.kmCritico ?? "—"} (${a.fonte.toUpperCase()})`).join(" · ")}</small>
+              )}
+            </>
+          ) : (
+            <small>{r.risco?.reason === "RISK_DATA_NOT_AVAILABLE" || !r.risco ? "Sem índice de acidentes ingerido (PRF/ANTT): o risco não é calculado — não é zero. Administração → Saúde do sistema mostra o que importar." : `Risco indisponível para esta rota (${r.risco.reason || "sem dado"}).`}</small>
+          )}
+          {Array.isArray(r.alternativas) && r.alternativas.length > 0 && (
+            <ul className="tdg-roteirizacao-alternativas">
+              {r.alternativas.map((alt, i) => {
+                const id = `alternativa-${i + 1}`;
+                const rec = r.ranking?.recommendations || {};
+                const rotulos = [rec.fastest === id && "mais rápida", rec.safest === id && "menor risco", rec.cheapest === id && "menor custo total", rec.balanced === id && "equilibrada"].filter(Boolean);
+                return (
+                  <li key={id}>
+                    <span>Alternativa {i + 1}: {alt.distanciaKm} km · {formatarTempo(alt.minutos)}{alt.risco && Number.isFinite(Number(alt.risco.riskScore)) ? ` · risco ${alt.risco.riskScore}/100` : " · risco sem índice"}{alt.rodovias?.length ? ` · ${alt.rodovias.join(", ")}` : ""}{rotulos.length ? ` · ${rotulos.join(", ")}` : ""}</span>
+                    <button type="button" className="tdg-action tdg-action-ghost" onClick={() => usarAlternativa(i)}>Usar esta rota</button>
+                  </li>
+                );
+              })}
+              {r.ranking?.nota && <li className="tdg-roteirizacao-alternativas-nota">{r.ranking.nota}</li>}
+            </ul>
+          )}
         </div>
       )}
 

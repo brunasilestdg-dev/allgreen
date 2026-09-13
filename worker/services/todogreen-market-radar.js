@@ -2,34 +2,26 @@ import { searchWeb, webSearchConfiguration } from "./web-search.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { podeNaVertical } from "./todogreen-access.js";
 import { limparResumoDeBusca } from "../../src/features/logistics/noticiaDomain.js";
+import {
+  TERMOS,
+  canonicalUrl,
+  clean,
+  fold,
+  foraDoEscopoDeTransporte,
+  includesAny,
+} from "../../src/features/logistics/marketSignalDomain.js";
 
-const clean = (value, max = 500) => String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
-const fold = (value) => clean(value, 4000).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-const includesAny = (text, terms) => terms.some((term) => text.includes(fold(term)));
+// O léxico de transporte/eletrificação/fora-de-escopo/encerrado mora em
+// marketSignalDomain (a mesma régua dos sinais estruturados PNCP/Compras/GDELT).
+// Aqui ficam só os termos próprios da BUSCA WEB: vaga, conteúdo educativo,
+// sinais de abertura/ação e o tipo de processo.
+const { CLOSED, TRANSPORT, ELECTRIC, STRONG_FIT, FLEET, UNSUPPORTED, OFF_SCOPE } = TERMOS;
+export { foraDoEscopoDeTransporte };
 
 const VACANCY = ["vaga", "vagas", "career", "careers", "emprego", "empregos", "job", "jobs", "hiring", "recrutamento", "talentos", "comprador de fretes"];
 const EDUCATIONAL = ["o que e rfq", "o que e rfi", "o que e rfp", "what is rfq", "what is rfi", "what is rfp", "modelo de rfq", "template rfq", "guia de rfq", "curso", "glossario"];
-const CLOSED = ["encerrada", "encerrado", "finalizada", "finalizado", "homologada", "homologado", "adjudicada", "adjudicado", "resultado final", "processo concluido", "closed tender", "award notice"];
-const TRANSPORT = ["transporte", "transportadora", "transportadoras", "logistica", "frete", "fretes", "frota", "last mile", "middle mile", "first mile", "line haul", "transferencia", "distribuicao", "entrega", "carrier", "transportation", "freight", "delivery", "cross docking"];
 const OPEN = ["aberta", "aberto", "publicada", "publicado", "prazo", "data limite", "recebimento de propostas", "envio de propostas", "envie sua proposta", "participe", "inscricoes", "cadastro", "credenciamento", "submission deadline", "open tender", "open for bids", "bid deadline", "proposal deadline", "closing date"];
 const ACTION = ["portal", "proposta", "propostas", "inscreva", "cadastre", "cadastro", "submeta", "envie", "documentos", "participar", "participacao", "edital", "termo de referencia", "submission", "register", "bid"];
-const ELECTRIC = ["eletrico", "eletrica", "eletricos", "eletricas", "zero emissao", "zero emission", "descarbonizacao", "baixo carbono", "sustentavel", "veiculo eletrico", "ev fleet", "escopo 3"];
-const STRONG_FIT = ["last mile", "middle mile", "first mile", "transferencia", "distribuicao", "dedicada", "dedicado", "ship from store", "same day", "cross docking", "coleta", "abastecimento de lojas"];
-const FLEET = ["moto", "motocicleta", "van", "vuc", "3/4", "toco", "caminhao", "carreta", "truck"];
-const UNSUPPORTED = ["bitrem", "bi-trem", "bi trem", "rodotrem", "rodo-trem", "rodo trem"];
-// Contratação cujo OBJETO não é serviço de transporte de carga, mesmo citando
-// "frota"/"veículos"/"transporte" de passagem: seguro de veículos, pavimentação,
-// obras, vigilância, compra de insumos para a frota alheia. A To Do Green vende
-// transporte B2B — nada disso vira oportunidade.
-const OFF_SCOPE = [
-  "seguro de veiculo", "seguro de veiculos", "seguro da frota", "seguro frota", "seguro auto", "apolice",
-  "pavimentacao", "recapeamento", "terraplanagem", "sinalizacao viaria", "obra de engenharia", "obras de engenharia",
-  "construcao civil", "reforma predial", "manutencao predial", "vigilancia patrimonial", "limpeza predial", "limpeza urbana",
-  "coleta de residuos", "residuos solidos", "coleta de lixo", "transporte de residuos",
-  "fornecimento de combustivel", "aquisicao de combustivel", "aquisicao de pneus", "fornecimento de pneus",
-  "fornecimento de pecas", "aquisicao de pecas", "aquisicao de veiculo", "aquisicao de veiculos", "compra de veiculos",
-  "merenda escolar", "transporte escolar", "transporte de pacientes", "transporte de servidores",
-];
 
 const TYPE_RULES = [
   ["RFI", [" rfi ", "request for information", "solicitacao de informacoes"]],
@@ -38,19 +30,6 @@ const TYPE_RULES = [
   ["Licitação", ["licitacao", "edital", "pregao", "aviso de contratacao", "chamamento publico"]],
   ["Concorrência", ["concorrencia", "tender", "bid invitation", "invitation to bid"]],
 ];
-
-const canonicalUrl = (value) => {
-  try {
-    const url = new URL(value);
-    url.hash = "";
-    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"].forEach((key) => url.searchParams.delete(key));
-    return url.href.replace(/\/$/, "");
-  } catch { return ""; }
-};
-
-// Também usado pela inteligência de mercado: contratação cujo objeto não é
-// transporte de carga não vira candidato a RFQ em lugar nenhum do produto.
-export const foraDoEscopoDeTransporte = (texto) => includesAny(fold(texto), OFF_SCOPE);
 
 const procurementType = (text) => {
   const padded = ` ${text} `;

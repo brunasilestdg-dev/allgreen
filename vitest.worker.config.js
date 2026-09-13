@@ -21,6 +21,11 @@ export default defineConfig({
           OUTBOX_TEST_DELIVERY: "mock",
           WHATSAPP_VERIFY_TOKEN: "verify-test-token",
           INBOUND_EMAIL_SECRET: "email-inbound-secret",
+          // Nenhum teste depende de rede: os crons que saem para a internet
+          // (ANEEL/ANP/ONS, PNCP/Compras.gov/GDELT, ANTT) ficam desligados no
+          // handler `scheduled`. Os testes desses crons religam explicitamente
+          // com `{ ...env, TDG_CRON_EXTERNAL_DISABLED: "" }` e rede injetada.
+          TDG_CRON_EXTERNAL_DISABLED: "1",
         },
       },
     })),

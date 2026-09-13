@@ -118,8 +118,17 @@ describe("GET /api/todogreen/system-health", () => {
     expect(integracoes.valhalla.detail).toContain("NO_SAFE_ROUTING_ENGINE");
     expect(integracoes.valhalla.requirement).toContain("TDG_VALHALLA_BASE_URL");
     // Não implementada nunca aparece conectada.
-    for (const id of ["gdelt", "prf", "compras-gov", "postgis"])
+    for (const id of ["postgis"])
       expect(integracoes[id]).toMatchObject({ state: "NOT_CONFIGURED", implementation: "NOT_IMPLEMENTED" });
+    // Mercado (P5) e risco (P6): fontes REAIS que neste banco nunca rodaram →
+    // "sem verificação" (PNCP/Compras/GDELT/ANTT) e PRF pedindo a importação.
+    for (const id of ["pncp", "compras-gov", "gdelt", "antt-open-data"]) {
+      expect(integracoes[id].implementation).toBe("REAL");
+      expect(integracoes[id].online).toBe(false);
+      expect(integracoes[id].unverified).toBe(true);
+    }
+    expect(integracoes.prf).toMatchObject({ implementation: "REAL", online: false });
+    expect(integracoes.prf.requirement).toContain("PRF");
     // Energia (P4): referências públicas REAIS. Sem perfil de energia a ANEEL é
     // NOT_CONFIGURED e diz o que falta; ONS/ANP existem, mas neste banco nunca
     // sincronizaram → "Configurado, sem verificação", nunca "conectado".
@@ -142,7 +151,7 @@ describe("GET /api/todogreen/system-health", () => {
     // OSRM sem servidor próprio: contingência pelo endpoint público, declarada.
     expect(integracoes.osrm.state).toBe("FALLBACK");
     // PNCP só pela busca web: parcial em contingência.
-    expect(integracoes.pncp).toMatchObject({ state: "FALLBACK", implementation: "PARTIAL" });
+    expect(integracoes.pncp).toMatchObject({ implementation: "REAL", group: "mercado" });
 
     // Grupos da seção 113 presentes.
     expect(body.groups.map((g) => g.id)).toEqual(expect.arrayContaining(["plataforma", "roteirizacao", "operacao", "energia", "pagamentos", "mercado", "risco"]));

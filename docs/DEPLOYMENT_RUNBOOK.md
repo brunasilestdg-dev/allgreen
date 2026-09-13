@@ -139,6 +139,16 @@ Já declarados em `wrangler.jsonc → triggers.crons`:
 > distribuidora/subgrupo/modalidade configurado (3 pares por disparo). Cada fonte grava
 > `last_attempt_at`/`last_success_at`/`source_updated_at` em `todogreen_energy_reference_sync`;
 > falha não apaga o último sucesso e reaparece em Administração → Saúde do sistema (grupo Energia).
+>
+> **Sinais de mercado (P5)** — `runTodoGreenMarketSignalsScheduled`: PNCP a cada 6 h (6 termos de
+> transporte/logística), Compras.gov 1×/dia (últimos 3 dias), GDELT um termo por hora (a fonte limita a
+> 1 consulta a cada 5 s). Estado em `todogreen_reference_sync`; sinais em `todogreen_market_signals`
+> (retenção 120 dias para o que já venceu).
+>
+> **Risk Map (P6)** — `runTodoGreenRoadRiskScheduled`: ANTT um recurso CSV por hora (≈40 concessionárias,
+> refresh de 30 dias) → `todogreen_road_risk_segments`. A PRF não tem API estável: importe o CSV oficial
+> (acidentes por ocorrência) em `POST /api/todogreen/risk/import/prf` (teto 40 MB) → células de ~1,1 km
+> em `todogreen_road_risk_cells`. Sem importação, o risco por rota é `RISK_DATA_NOT_AVAILABLE` — nunca zero.
 
 - `0 * * * *` — de hora em hora.
 - `0 12 * * 1` — segunda‑feira meio‑dia (UTC).
@@ -236,6 +246,15 @@ Produção ≠ `main` até prova em contrário. Após cada publicação, anote e
 | Data (UTC) | SHA publicado | Como | Version ID (wrangler) | Smoke |
 | --- | --- | --- | --- | --- |
 | 2026-09-13 02:30 | `d2396e44d8e4` (= `main`) | `npm run deploy:cloudflare` c/ token | `3fdb0103-5906-48d6-affb-f974e869ad59` | `/api/status` ok, SPA 200, records 401 |
+| 2026-09-13 05:10 | `401f7ecb8c78` (último `main` verde) | manual c/ token — *pin* por cima do auto-deploy `700468c` (teste do To Do vermelho na main) | `80bd5835-…` | `/api/system/version` ok |
+| 2026-09-13 05:2x | `cc4c0fe6476c` (PR #362, viabilidade) | Cloudflare Workers Builds (push em `main`) | — | `/api/system/version` ok, `migrations.expected` 128 |
+| 2026-09-13 05:38 | `2a4d459fdc2d` (PR #363, RoutingProvider) | Cloudflare Workers Builds | — | `/api/system/version` ok |
+| 2026-09-13 05:53 | `c4f363784393` (PR #364, elevação/clima/perfil do veículo) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 130; D1 remoto com 0122/0123 aplicadas |
+| 2026-09-13 12:18 | `2d65bdfdf87b` (PR #365, energia P4 + lint) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 131; D1 remoto com 0124 aplicada |
+
+> Os deploys automáticos do Workers Builds **não rodam o gate** (só `build` + `deploy:cloudflare`):
+> o gate desta rodada foi executado localmente antes de cada merge (logs completos guardados por PR).
+> Decisão pendente da titular: colocar `npm run verify && npm run build` como *build command* do Worker.
 
 Sempre diferenciar **LOCAL** (build do navegador), **MAIN** (branch) e
 **PRODUÇÃO** (o que `/api/system/version` devolve) — a tela Saúde do sistema faz
@@ -274,6 +293,11 @@ VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
 | `TDG_ONS_CURVA_CARGA_URL` (opcional, aceita `{ano}`) | CSV da curva de carga horária do ONS; padrão: bucket público de dados abertos do ONS (`CURVA_CARGA_<ano>.csv`, teto 8 MB) → perfil médio 24 h por subsistema (`todogreen_grid_load_profiles`) |
 | `TDG_ANP_DIESEL_URL` (opcional) | CSV do levantamento de preços da ANP; padrão: "últimas 4 semanas — diesel/GNV" (gov.br, ~3,6 MB, teto 16 MB) → mediana por município/UF/região/país e semana (`todogreen_fuel_price_reference`). Alternativa: `POST /api/todogreen/energy/anp/import` com o CSV |
 | `TDG_ENERGY_REFERENCE_DISABLED=1` (opcional) | desliga o cron e o botão de sincronização das referências de energia; a Saúde do sistema mostra as três fontes como não configuradas (nunca "conectado") |
+| `TDG_PNCP_BASE_URL` / `TDG_COMPRAS_GOV_BASE_URL` / `TDG_GDELT_BASE_URL` (opcionais) | portais públicos dos sinais de mercado (PNCP busca de editais, Compras.gov contratações 14.133, GDELT DOC 2.0); padrão: endereços oficiais. `TDG_COMPRAS_GOV_MODALIDADES` (padrão `5,3` = pregão e concorrência, códigos do Compras.gov) |
+| `TDG_MARKET_SIGNALS_DISABLED=1` (opcional) | desliga o cron e o botão de sincronização dos sinais de mercado (PNCP/Compras.gov/GDELT); as três linhas ficam não configuradas na Saúde do sistema |
+| `TDG_ANTT_BASE_URL` / `TDG_ANTT_ACIDENTES_PACKAGE` (opcionais) | CKAN da ANTT e o pacote de *acidentes por quilômetro* das concessionárias (padrão `acidentes-quilometro-rodovias`); um recurso CSV por hora (teto 12 MB), refresh a cada 30 dias |
+| `TDG_ROAD_RISK_DISABLED=1` (opcional) | desliga o cron da ANTT e as ingestões do Risk Map; o risco por rota passa a `RISK_DATA_NOT_AVAILABLE` |
+| `TDG_CRON_EXTERNAL_DISABLED=1` (opcional; **ligado no ambiente de teste**) | kill switch único dos crons que saem para a internet (energia, sinais de mercado, Risk Map): o handler `scheduled` pula os três e devolve `skipped`. Os botões "Sincronizar" das telas continuam funcionando |
 
 Sem essas URLs, a otimização responde `routing_not_configured` (503) e a
 seleção de motor reflete os motores disponíveis — nada é forjado como ativo

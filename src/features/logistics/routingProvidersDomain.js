@@ -153,8 +153,8 @@ export function costingValhalla(vehicle = {}) {
 
 /**
  * Corpo do POST /route do Valhalla. `coordinates` em [lon, lat] (GeoJSON), como
- * o resto do backend já usa. `alternates` fica em 0 aqui — alternativas de
- * rota são outra chamada (seção 83).
+ * o resto do backend já usa. `alternates` > 0 pede rotas alternativas ao motor
+ * (seção 83) — normalizadas em `alternatives`.
  */
 export function requisicaoValhalla(coordinates = [], vehicle = {}, { language = "pt-BR", alternates = 0 } = {}) {
   const costing = costingValhalla(vehicle);
@@ -176,13 +176,10 @@ export function requisicaoValhalla(coordinates = [], vehicle = {}, { language = 
  * Resposta do Valhalla → formato normalizado. `summary.length` já vem em km
  * (units kilometers); `time` em segundos; `legs[].shape` em polyline6.
  */
-export function normalizarRespostaValhalla(data = {}) {
-  const trip = data?.trip;
-  if (!trip || !trip.summary) return { ok: false, reason: texto(data?.error || "valhalla_sem_trip", 200) };
+function tripValhallaNormalizado(trip, extra = {}) {
   const legs = Array.isArray(trip.legs) ? trip.legs : [];
   const geometry = [];
   for (const leg of legs) {
-    // decodificarPolyline devolve [lat, lon]; GeoJSON é [lon, lat].
     for (const [lat, lon] of decodificarPolyline(leg?.shape, 6)) geometry.push([lon, lat]);
   }
   const distanceKm = num(trip.summary.length) ?? 0;
@@ -198,14 +195,31 @@ export function normalizarRespostaValhalla(data = {}) {
       distanceKm: num(leg?.summary?.length) ?? 0,
       durationSeconds: Math.round(num(leg?.summary?.time) ?? 0),
     })),
-    warnings: Array.isArray(data?.warnings) ? data.warnings.map((w) => texto(w?.message || w, 200)) : [],
+    // Nomes/refs das vias (ex.: "BR-116") para o Risk Map casar por rodovia.
+    roadRefs: [...new Set(legs.flatMap((leg) => (Array.isArray(leg?.maneuvers) ? leg.maneuvers : []).flatMap((m) => [...(m?.street_names || []), ...(m?.begin_street_names || [])])).map((n) => texto(n, 40)).filter((n) => /^[A-Z]{2,3}-\d{2,4}/.test(n)))],
+    warnings: [],
+    ...extra,
   };
 }
 
+/**
+ * Resposta do Valhalla → formato normalizado. `summary.length` já vem em km
+ * (units kilometers); `time` em segundos; `legs[].shape` em polyline6.
+ * `alternates[]` (quando pedidos) viram `alternatives`, no mesmo formato.
+ */
+export function normalizarRespostaValhalla(data = {}) {
+  const trip = data?.trip;
+  if (!trip || !trip.summary) return { ok: false, reason: texto(data?.error || "valhalla_sem_trip", 200) };
+  const principal = tripValhallaNormalizado(trip, { warnings: Array.isArray(data?.warnings) ? data.warnings.map((w) => texto(w?.message || w, 200)) : [] });
+  const alternatives = (Array.isArray(data?.alternates) ? data.alternates : [])
+    .map((alt) => alt?.trip)
+    .filter((t) => t && t.summary)
+    .map((t) => tripValhallaNormalizado(t));
+  return { ...principal, alternatives };
+}
+
 /** Resposta do OSRM (routes[0]) → mesmo formato normalizado. */
-export function normalizarRespostaOsrm(data = {}) {
-  const route = Array.isArray(data?.routes) ? data.routes[0] : null;
-  if (!route) return { ok: false, reason: texto(data?.code || data?.message || "osrm_sem_rota", 200) };
+function rotaOsrmNormalizada(route) {
   let geometry = [];
   if (route.geometry && typeof route.geometry === "object" && Array.isArray(route.geometry.coordinates)) {
     geometry = route.geometry.coordinates
@@ -227,8 +241,16 @@ export function normalizarRespostaOsrm(data = {}) {
       distanceKm: (num(leg?.distance) ?? 0) / 1000,
       durationSeconds: Math.round(num(leg?.duration) ?? 0),
     })),
+    roadRefs: [...new Set((Array.isArray(route.legs) ? route.legs : []).flatMap((leg) => (Array.isArray(leg?.steps) ? leg.steps : []).map((s) => texto(s?.ref || "", 40))).flatMap((r) => r.split(/[;,]/)).map((r) => r.trim()).filter((r) => /^[A-Z]{2,3}-\d{2,4}/.test(r)))],
     warnings: [],
   };
+}
+
+/** Resposta do OSRM (routes[0]; routes[1..] viram `alternatives`) → formato normalizado. */
+export function normalizarRespostaOsrm(data = {}) {
+  const routes = Array.isArray(data?.routes) ? data.routes.filter(Boolean) : [];
+  if (!routes.length) return { ok: false, reason: texto(data?.code || data?.message || "osrm_sem_rota", 200) };
+  return { ...rotaOsrmNormalizada(routes[0]), alternatives: routes.slice(1).map((r) => rotaOsrmNormalizada(r)) };
 }
 
 /**
@@ -237,16 +259,19 @@ export function normalizarRespostaOsrm(data = {}) {
  * chegam iguais ao Leaflet, e a tela ainda sabe dizer "roteado pelo Valhalla
  * (truck)" — a informação no momento da decisão.
  */
+const rotaCompativel = (r, selecao) => ({
+  distance: Math.round(r.distanceKm * 1000),
+  duration: r.durationSeconds,
+  geometry: { type: "LineString", coordinates: r.geometry },
+  legs: (r.legs || []).map((leg) => ({ distance: Math.round(leg.distanceKm * 1000), duration: leg.durationSeconds })),
+  weight_name: selecao.engine === ROUTING_ENGINES.VALHALLA ? "valhalla" : "routability",
+  roadRefs: r.roadRefs || [],
+});
+
 export function respostaCompativelOsrm(normalizado, selecao = {}, extra = {}) {
   return {
     code: "Ok",
-    routes: [{
-      distance: Math.round(normalizado.distanceKm * 1000),
-      duration: normalizado.durationSeconds,
-      geometry: { type: "LineString", coordinates: normalizado.geometry },
-      legs: normalizado.legs.map((leg) => ({ distance: Math.round(leg.distanceKm * 1000), duration: leg.durationSeconds })),
-      weight_name: selecao.engine === ROUTING_ENGINES.VALHALLA ? "valhalla" : "routability",
-    }],
+    routes: [rotaCompativel(normalizado, selecao), ...(normalizado.alternatives || []).map((alt) => rotaCompativel(alt, selecao))],
     waypoints: [],
     engine: normalizado.engine,
     profile: selecao.profile || "",
