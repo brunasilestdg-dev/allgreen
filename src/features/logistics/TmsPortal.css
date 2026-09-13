@@ -19,6 +19,49 @@
   --tms-card: var(--ds-surface, #ffffff);
   --tms-radius: var(--ds-radius-lg, 14px);
   --tms-radius-sm: var(--ds-radius-sm, 8px);
+
+  /* ---- Telas do ERP embutidas no portal (Roteirização com o Despacho
+     Inteligente, configuração do rastreador) -----------------------------
+     O portal monta essas páginas (`.tdg-page`) FORA do escopo `.tdg`, e elas
+     foram escritas para dentro dele: toda cor sai de `var(--tdg-…)`. Sem o
+     escopo, `.tdg-action` ficava com `background: var(--tdg-green)` indefinido
+     — texto branco sobre transparente: os botões "Fechar" e "Otimizar rotas"
+     do despacho sumiam — e bordas e rótulos secundários da tela perdiam a cor.
+     É o mesmo caso do modal do Planner portalado para fora de `.tdg`
+     (LogisticsVerticalRecovery.css): reinjetar aqui, como alias de componente,
+     os tokens que a vertical define em `.tdg`, apontando para os do próprio
+     portal — a tela herda a paleta do TMS em vez de trazer uma paralela. Não é
+     bloco base (`designTokens.test.js` permite alias fora de `:root`/`.tdg`);
+     os canônicos continuam nascendo só em LogisticsVertical.css, e
+     `todogreen-button-system.test.js` cobra que TODOS cheguem aqui. */
+  --tdg-bg: var(--tms-surface);
+  --tdg-card: var(--tms-card);
+  --tdg-soft: var(--tms-green-soft);
+  --tdg-ink: var(--tms-ink);
+  --tdg-muted: var(--tms-muted);
+  --tdg-line: var(--tms-border);
+  --tdg-line-strong: var(--ds-line-strong, #91b9aa);
+  --tdg-green: var(--tms-green);
+  --tdg-lime: var(--ds-accent, #92c83e);
+  --tdg-lime-texto: var(--ds-accent-ink, #3d6b1f);
+  --tdg-lime-texto-escuro: #bfe56b;
+  --tdg-shadow: var(--ds-shadow-md, 0 18px 44px rgba(11, 42, 34, 0.1));
+  --tdg-surface: var(--tms-card);
+  --tdg-surface2: #eef4ef;
+  --tdg-surface-soft: rgba(16, 122, 87, 0.05);
+  --tdg-surface-muted: #f6faf8;
+  --tdg-text: var(--tms-ink);
+  --tdg-border: #e3e8e5;
+  --tdg-primary: var(--tms-green);
+  --tdg-brand: #1f8a54;
+  --tdg-deep: #14532d;
+  --tdg-accent: #14966b;
+  --tdg-accent-soft: var(--tms-green-soft);
+  --tdg-green-soft: #e9f3ef;
+  --tdg-ok: var(--tms-green);
+  --tdg-warn: #b7791f;
+  --tdg-warning: var(--ds-warning, #b45309);
+  --tdg-danger: var(--ds-danger, #b3261e);
   min-height: 100vh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -1047,4 +1090,91 @@
 @media (max-width: 520px) {
   .tms-bipagem-flash strong { font-size: 18px; }
   .tms-bipagem-input { font-size: 16px; }
+}
+
+/* ===== Botões das telas do ERP embutidas no portal ==========================
+   Dentro de `.tdg`, todo botão parte da regra-base da vertical
+   (`:where(.tdg) button`, TodoGreenCommercialExperience.css) — é ela que tira
+   a aparência nativa do navegador. No portal essa regra não alcança, e um
+   botão sem classe (o "Recarregar" do despacho) saía cinza, com a borda do
+   sistema operacional. Mesma base, só para as páginas do ERP (`.tdg-page`):
+   os botões próprios do TMS (`.tms-*-action`, menu lateral) não passam por
+   aqui. `:where()` zera a especificidade, para `.tdg-action` e
+   `.tdg-action-ghost` continuarem vencendo, como na vertical. */
+:where(.tms-portal .tdg-page) button {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  max-width: 100%;
+  padding: 8px 13px;
+  border: 1px solid #abcac3;
+  border-radius: 10px;
+  background: var(--tms-card);
+  color: var(--tms-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: none;
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+:where(.tms-portal .tdg-page) button:hover:not(:disabled) {
+  border-color: #5fae9f;
+  background: #edf8f5;
+}
+
+:where(.tms-portal .tdg-page) button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+:where(.tms-portal .tdg-page) button:disabled,
+:where(.tms-portal .tdg-page) button[aria-disabled="true"] {
+  opacity: .48;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+}
+
+:where(.tms-portal .tdg-page) button svg {
+  flex: 0 0 auto;
+  width: 1.05em;
+  height: 1.05em;
+}
+
+/* Ação principal e ação "fantasma" com a MESMA cor dos botões nativos do TMS
+   (`.tms-primary-action` / `.tms-secondary-action`): a tela embutida não pode
+   parecer outro sistema. A especificidade fica acima do hover da regra-base —
+   sem isto, o verde do "Otimizar rotas" virava menta ao passar o mouse. A
+   fantasma vem DEPOIS da principal de propósito: mesma especificidade, a
+   última vence. */
+.tms-portal .tdg-page .tdg-action {
+  background: var(--tms-green);
+  border-color: transparent;
+  color: #fff;
+}
+
+.tms-portal .tdg-page .tdg-action:hover:not(:disabled) {
+  background: #124d3e;
+  border-color: transparent;
+  color: #fff;
+}
+
+.tms-portal .tdg-page .tdg-action-ghost {
+  background: var(--tms-card);
+  border: 1px solid #cfdcd6;
+  color: var(--tms-green);
+}
+
+.tms-portal .tdg-page .tdg-action-ghost:hover:not(:disabled) {
+  background: #f7fbf9;
+  border-color: var(--tms-green);
+  color: var(--tms-green);
 }

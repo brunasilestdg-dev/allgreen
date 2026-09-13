@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import {
+// @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import DispatchPanel, {
   atribuicoesDeTours,
   nomesNaoAtribuidas,
   resumoDaRota,
@@ -78,5 +81,38 @@ describe("nomesNaoAtribuidas", () => {
   it("aguenta entradas ausentes", () => {
     expect(nomesNaoAtribuidas(undefined, undefined)).toEqual([]);
     expect(nomesNaoAtribuidas(["x"], null)).toEqual(["x"]);
+  });
+});
+
+describe("botões do painel", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  // Hierarquia do painel: abrir/fechar e otimizar são a ação principal
+  // (`tdg-action`); "Recarregar" é apoio e fica sem classe de propósito — a
+  // regra-base de botões o veste como secundário no ERP e no Portal TMS (ver
+  // TmsPortal.css). Com `tdg-action tdg-action-ghost` ele viraria um segundo
+  // "Otimizar rotas" dentro de `.tdg`, onde a fantasma perde para a principal.
+  it("mantém a ação principal em tdg-action e o Recarregar como apoio", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ operacoes: [], semCoordenadas: 0, motoristas: [{ id: "m1" }], veiculos: [] }),
+    })));
+    const { container } = render(<DispatchPanel authHeaders={() => ({})} setToast={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir despacho" }));
+    await screen.findByText("Operações a despachar");
+
+    expect(screen.getByRole("button", { name: "Fechar" })).toHaveClass("tdg-action");
+    const recarregar = screen.getByRole("button", { name: "Recarregar" });
+    expect(recarregar).not.toHaveClass("tdg-action");
+    expect(recarregar).toBeEnabled();
+    const otimizar = screen.getByRole("button", { name: "Otimizar rotas" });
+    expect(otimizar).toHaveClass("tdg-action");
+    // Sem operação nem veículo livre, otimizar é indisponível — não escondido.
+    expect(otimizar).toBeDisabled();
+    // Só esses três botões antes de haver um plano para aplicar.
+    expect(container.querySelectorAll("button")).toHaveLength(3);
   });
 });
