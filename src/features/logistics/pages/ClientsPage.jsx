@@ -1261,9 +1261,13 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       {loading && <p>Carregando carteira...</p>}{!loading && visible.length === 0 && <p className="tdg-crm-empty">Nenhuma conta corresponde aos filtros desta carteira.</p>}
       {!loading && visible.length > 0 && viewMode === "cards" && <div className="tdg-crm-card-grid" aria-label="Contas do CRM em cartões">{renderedClients.map((client) => { const summary = summaryById.get(client.id); const alerta = alertaPrincipal(summary); return <button type="button" className={summary?.attention || ""} onClick={() => openClient(client.id)} key={client.id}><header><span><strong>{client.name}</strong><small>{client.accountCode || client.id} · {client.segment || "Segmento não informado"}</small></span><b>{summary?.score || 0}</b></header><div className="tdg-crm-card-tags"><em>{client.crm?.temperature || "Sem temperatura"}</em><em>{client.crm?.stage || "Mapeamento"}</em>{apresentacaoPorCliente[client.id] && <em className="tdg-crm-card-apres"><Send size={11} /> Apresentação enviada</em>}{alerta && <em className={`tdg-crm-card-alerta ${alerta.severidade}`}><AlertTriangle size={11} /> {alerta.rotulo}</em>}</div><dl><div><dt>Pipeline</dt><dd>{BRL.format(summary?.pipeline || 0)}</dd></div><div><dt>Decisores</dt><dd>{summary?.coverage || 0}%</dd></div><div><dt>Contatos</dt><dd>{client.crm?.contacts?.length || 0}</dd></div></dl><footer><span><small>Próxima ação</small><strong>{summary?.nextAction || "Definir próxima ação"}</strong></span><ArrowRight size={16} /></footer></button>; })}{visible.length > renderedClients.length && <button type="button" className="tdg-crm-card-load-more" onClick={() => setVisibleLimit((current) => current + 100)}>Mostrar mais 100 contas ({renderedClients.length} de {visible.length})</button>}</div>}
       {!loading && visible.length > 0 && viewMode === "kanban" && <>
-        <div className="tdg-crm-view-switch tdg-crm-kanban-mode" aria-label="Formato do kanban">
-          <button type="button" className={kanbanMode === "simples" ? "active" : ""} onClick={() => setKanbanMode("simples")}>Simplificado</button>
-          <button type="button" className={kanbanMode === "detalhado" ? "active" : ""} onClick={() => setKanbanMode("detalhado")}>Detalhado</button>
+        {/* O rótulo diz O QUE o quadro mostra, não "mais ou menos detalhe": um é
+            o FUNIL DE OPORTUNIDADES (5 etapas), o outro são as ETAPAS DA CONTA
+            (jornada da carteira) — entidades diferentes, e chamá-las de
+            "Simplificado/Detalhado" fazia parecer o mesmo dado com zoom. */}
+        <div className="tdg-crm-view-switch tdg-crm-kanban-mode" aria-label="O que o quadro mostra">
+          <button type="button" className={kanbanMode === "simples" ? "active" : ""} onClick={() => setKanbanMode("simples")}>Funil de oportunidades</button>
+          <button type="button" className={kanbanMode === "detalhado" ? "active" : ""} onClick={() => setKanbanMode("detalhado")}>Etapas da conta</button>
         </div>
         {/* O kanban SIMPLIFICADO é o mockup aprovado pela titular: SÓ as cinco
             etapas do funil (Prospecção → Fechamento), com o total em R$ na

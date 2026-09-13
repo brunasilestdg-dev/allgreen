@@ -98,8 +98,8 @@ describe("página de clientes", () => {
     expect(within(simples).queryByRole("region", { name: /Fechada ganha/ })).not.toBeInTheDocument();
     expect(within(simples).queryByRole("region", { name: /Fechada perdida/ })).not.toBeInTheDocument();
 
-    // O detalhado (por etapa da conta) continua a um clique.
-    fireEvent.click(screen.getByRole("button", { name: "Detalhado" }));
+    // As etapas da conta (jornada da carteira) continuam a um clique.
+    fireEvent.click(screen.getByRole("button", { name: "Etapas da conta" }));
     const board = screen.getByLabelText("Kanban de clientes por etapa");
     const implantacao = within(board).getByRole("region", { name: /Implantação/ });
     expect(within(implantacao).getByRole("button", { name: /Rede Alfa/ })).toBeInTheDocument();
