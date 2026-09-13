@@ -82,6 +82,24 @@ const DEFAULT_SPEED_MS = 40 / 3.6; // 40 km/h em m/s — velocidade média urban
 const DEFAULT_SHIFT_HOURS = 8;
 const DEFAULT_STOP_DURATION_S = 600; // 10 min por parada — coleta ou entrega
 
+// Fator de desvio: a distância rodoviária real é ~1,3× a linha reta (Haversine).
+// O solver de contingência calcula em linha reta; sem corrigir, ele subestima
+// TANTO a distância QUANTO o tempo — e promete uma rota que, na rua, não cabe no
+// turno de 8h. A correção age nos dois:
+//   • a velocidade do perfil cai pelo fator, então o TEMPO interno do solver
+//     (distância_reta ÷ velocidade_efetiva) já equivale ao tempo de rua — a
+//     viabilidade de turno/janela fica honesta;
+//   • a DISTÂNCIA reportada é multiplicada pelo fator para a prévia mostrar km
+//     de rua, não de régua.
+// Escala uniforme não muda a rota escolhida (a ordem relativa dos arcos é a
+// mesma), só torna os números confiáveis. Ajustável por env, travado em [1, 2].
+export const DETOUR_FACTOR_PADRAO = 1.3;
+export const fatorDeDesvio = (env) => {
+  const bruto = Number(env?.TODOGREEN_DISPATCH_DETOUR_FACTOR);
+  if (!Number.isFinite(bruto)) return DETOUR_FACTOR_PADRAO;
+  return Math.min(2, Math.max(1, bruto));
+};
+
 const carregarCandidatos = async (env, access) => {
   const [operacoes, motoristas, veiculos] = await Promise.all([
     env.DB.prepare(
@@ -123,7 +141,7 @@ const carregarCandidatos = async (env, access) => {
 // (entrega, e coleta quando a operação tiver uma), um "tipo de veículo" por
 // veículo disponível (cada um só alcança a si mesmo — não queremos o solver
 // decidindo entre dois caminhões que na prática têm capacidades diferentes).
-const montarProblema = ({ operacoes, veiculos, depot, agora }) => {
+const montarProblema = ({ operacoes, veiculos, depot, agora, fator = DETOUR_FACTOR_PADRAO }) => {
   const jobs = operacoes.map((op) => {
     const campos = parse(op.fields_json, {});
     const demanda = Math.max(1, Number(campos.packages ?? campos.pacotes) || 1);
@@ -157,7 +175,9 @@ const montarProblema = ({ operacoes, veiculos, depot, agora }) => {
 
   return {
     plan: { jobs },
-    fleet: { vehicles, profiles: [{ name: "padrao", speed: DEFAULT_SPEED_MS }] },
+    // Velocidade efetiva = alvo ÷ fator de desvio: como o solver mede o tempo em
+    // linha reta, dividir a velocidade faz esse tempo equivaler ao de rua.
+    fleet: { vehicles, profiles: [{ name: "padrao", speed: DEFAULT_SPEED_MS / Math.max(1, fator) }] },
   };
 };
 
@@ -333,7 +353,8 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
 
     // Contingência sem dependência de rede: preserva o solver WASM quando o
     // host VROOM não estiver configurado ou ficar temporariamente indisponível.
-    const problema = montarProblema({ operacoes, veiculos, depot, agora });
+    const fator = fatorDeDesvio(env);
+    const problema = montarProblema({ operacoes, veiculos, depot, agora, fator });
     const maxTime = maxTimeDoSolver(problema.plan.jobs.length, corpo.maxTimeSeconds);
 
     let solucao;
@@ -353,7 +374,9 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
       const motorista = filaMotoristas.shift() || null;
       const paradas = paradasDaTour(tour, operacoes);
       const ids = [...new Set(paradas.map((parada) => parada.operationId))];
-      const distanciaMetros = Math.max(0, numero(tour.statistic?.distance) || 0);
+      // Distância reportada em km de rua: a linha reta do solver × fator de
+      // desvio. O tempo já sai realista (a velocidade do perfil foi corrigida).
+      const distanciaMetros = Math.max(0, numero(tour.statistic?.distance) || 0) * fator;
       const duracaoSegundos = Math.max(0, numero(tour.statistic?.duration) || 0);
       return {
         veiculoId, placa: veiculo?.plate || "", prefixo: veiculo?.prefix || "",

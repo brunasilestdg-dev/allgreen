@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
-import { handleTodoGreenDispatch, paradasDaTour, maxTimeDoSolver, MAX_SEGUNDOS_SOLVER_CONTINGENCIA } from "../worker/services/todogreen-dispatch.js";
+import { handleTodoGreenDispatch, paradasDaTour, maxTimeDoSolver, MAX_SEGUNDOS_SOLVER_CONTINGENCIA, fatorDeDesvio, DETOUR_FACTOR_PADRAO } from "../worker/services/todogreen-dispatch.js";
 import { handleTodoGreenDriverPortal } from "../worker/services/todogreen-driver-portal.js";
 import { aplicarEventoOperacional } from "../worker/services/todogreen-vertical-records.js";
 
@@ -165,5 +165,20 @@ describe("tempo do solver de contingência (maxTimeDoSolver)", () => {
     expect(maxTimeDoSolver(3, 7)).toBe(7);
     expect(maxTimeDoSolver(3, 99)).toBe(10); // clampa ao teto — CPU do Worker é limitada
     expect(maxTimeDoSolver(3, 0)).toBe(2); // 0/inválido volta a escalar por tamanho
+  });
+});
+
+describe("fator de desvio da contingência (fatorDeDesvio)", () => {
+  it("usa 1,3 por padrão quando não há env válida", () => {
+    expect(DETOUR_FACTOR_PADRAO).toBe(1.3);
+    expect(fatorDeDesvio(undefined)).toBe(1.3);
+    expect(fatorDeDesvio({})).toBe(1.3);
+    expect(fatorDeDesvio({ TODOGREEN_DISPATCH_DETOUR_FACTOR: "abc" })).toBe(1.3);
+  });
+
+  it("respeita a env, travada entre 1 e 2 (nunca encurtar a distância nem exagerar)", () => {
+    expect(fatorDeDesvio({ TODOGREEN_DISPATCH_DETOUR_FACTOR: "1.5" })).toBe(1.5);
+    expect(fatorDeDesvio({ TODOGREEN_DISPATCH_DETOUR_FACTOR: "0.5" })).toBe(1); // piso
+    expect(fatorDeDesvio({ TODOGREEN_DISPATCH_DETOUR_FACTOR: "9" })).toBe(2); // teto
   });
 });
