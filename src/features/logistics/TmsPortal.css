@@ -935,3 +935,80 @@
   .tms-workbench-toolbar > label:not(.tms-search-field) { min-width: 0; width: 100%; }
   .tms-action-item small { white-space: normal; }
 }
+
+/* Estação de bipagem: pensada para o operador de esteira com coletor físico.
+   O campo é grande, o beep confirma sem olhar, e o flash colorido dá o retorno
+   visual à distância. */
+.tms-bipagem-station {
+  padding: 18px;
+  margin-bottom: 16px;
+  border: 1px solid var(--tms-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.tms-bipagem-flash {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 68px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--tms-border);
+  background: var(--tms-surface);
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.tms-bipagem-flash strong { font-size: 20px; letter-spacing: -.01em; }
+.tms-bipagem-flash span { font-size: 14px; font-variant-numeric: tabular-nums; word-break: break-all; }
+.tms-bipagem-flash-idle { color: var(--tms-muted); font-size: 13px; }
+
+.tms-bipagem-flash.is-ok { background: #e7f6ef; border-color: #7bc4a6; color: #0f7a56; }
+.tms-bipagem-flash.is-dup { background: #fdf3e2; border-color: #e6b566; color: #b45309; }
+.tms-bipagem-flash.is-erro { background: #fdeaea; border-color: #e79a9a; color: #c02626; }
+
+.tms-bipagem-input {
+  font-size: 18px;
+  letter-spacing: .01em;
+  padding: 12px 14px;
+}
+
+.tms-bipagem-hint {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--tms-muted);
+  line-height: 1.5;
+}
+
+.tms-bipagem-status {
+  font-size: 13px;
+  color: var(--tms-green);
+  font-weight: 600;
+}
+
+.tms-bipagem-placar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.tms-bipagem-placar span {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.tms-bipagem-placar .ok { background: #e7f6ef; color: #0f7a56; }
+.tms-bipagem-placar .dup { background: #fdf3e2; color: #b45309; }
+.tms-bipagem-placar .erro { background: #fdeaea; color: #c02626; }
+
+@media (max-width: 520px) {
+  .tms-bipagem-flash strong { font-size: 18px; }
+  .tms-bipagem-input { font-size: 16px; }
+}
