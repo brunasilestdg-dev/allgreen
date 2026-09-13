@@ -48,14 +48,16 @@ async function consultarOSRM(coordenadas, {
   headers = {},
   geometria = false,
   veiculo = null,
+  alternativas = false,
 } = {}) {
   if (usarGatewayInterno(headers)) {
     // O veículo vai junto: é o backend que escolhe OSRM × Valhalla por classe e
-    // restrições (seção 32) — a tela nunca fala com um motor.
+    // restrições (seção 32) — a tela nunca fala com um motor. `alternatives`
+    // pede rotas alternativas ranqueadas com risco viário como custo (P6).
     return fetcher(MAPS_ROUTE, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json", ...headers },
-      body: JSON.stringify({ coordinates: coordenadas, geometry: geometria, ...(veiculo ? { vehicle: veiculo } : {}) }),
+      body: JSON.stringify({ coordinates: coordenadas, geometry: geometria, ...(veiculo ? { vehicle: veiculo } : {}), ...(alternativas ? { alternatives: true } : {}) }),
       signal: sinal,
     });
   }
@@ -231,6 +233,11 @@ export async function calcularDistancia(
       motor: dados?.engine || "osrm",
       perfilMotor: dados?.profile || "",
       contingencia: Boolean(dados?.fallback || dados?.publicFallback),
+      // P6: risco viário histórico (PRF/ANTT) como custo, alternativas e ranking.
+      rodovias: Array.isArray(rota.roadRefs) ? rota.roadRefs : [],
+      risco: rota.risk || null,
+      alternativas: (Array.isArray(dados?.routes) ? dados.routes.slice(1) : []).map(rotaParaTela),
+      ranking: dados?.ranking || null,
     };
   } catch (erro) {
     if (erro?.name === "AbortError") return { ok: false, motivo: MOTIVOS.indisponivel, cancelado: true };
@@ -248,8 +255,20 @@ export async function calcularDistancia(
  * `{ paradas: ["A", "B", "C", ...] }` (rota com quantas paradas quiser — o OSRM
  * roteiriza a sequência inteira). A titular pediu vários endereços.
  */
+// Rota (formato OSRM-compatível do backend) → pontos [lat, lon] + risco.
+const rotaParaTela = (rota) => {
+  const linha = Array.isArray(rota?.geometry?.coordinates) ? rota.geometry.coordinates : [];
+  return {
+    pontos: linha.filter((par) => Array.isArray(par) && par.length >= 2).map(([lon, lat]) => [Number(lat), Number(lon)]),
+    distanciaKm: Math.round((Number(rota?.distance || 0) / 1000) * 10) / 10,
+    minutos: Math.round(Number(rota?.duration || 0) / 60),
+    rodovias: Array.isArray(rota?.roadRefs) ? rota.roadRefs : [],
+    risco: rota?.risk || null,
+  };
+};
+
 export async function tracarRota(
-  { origem, destino, paradas, veiculo = null } = {},
+  { origem, destino, paradas, veiculo = null, alternativas = false } = {},
   { fetcher = fetch, sinal, headers = {} } = {},
 ) {
   // Normaliza para uma lista de {endereco, coord?}. Cada parada pode ser uma
@@ -295,7 +314,7 @@ export async function tracarRota(
 
     const coordenadas = pontos.map((p) => [p.longitude, p.latitude]);
     const resposta = await consultarOSRM(coordenadas, {
-      fetcher, sinal, headers, geometria: true, veiculo,
+      fetcher, sinal, headers, geometria: true, veiculo, alternativas,
     });
     if (!resposta.ok) {
       const recusa = await recusaDeMotor(resposta);

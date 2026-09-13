@@ -12,6 +12,7 @@ import {
   UserRoundSearch,
 } from "lucide-react";
 import EnterpriseWorkflowPanel from "./pages/EnterpriseWorkflowPanel.jsx";
+import MarketSignalsPanel from "./MarketSignalsPanel.jsx";
 import { buildTodoGreenWorkspaceIntelligence } from "./todoGreenWorkspaceDomain.js";
 import {
   TEMAS_DE_NOTICIA,
@@ -348,6 +349,8 @@ function MarketRadar({ authHeaders, onNavigate, setToast }) {
           {opportunities.length} elegível(is) · {Number(report.rejected?.incompatibleFleet || 0)} incompatível(is) com frota · {Number(report.rejected?.closed || 0)} encerrado(s) · {Number(report.rejected?.vacancies || 0)} vaga(s) descartada(s)
         </small>
       )}
+      {/* P5: fontes estruturadas (PNCP · Compras.gov · GDELT) → market_signal com score explicável. */}
+      <MarketSignalsPanel authHeaders={authHeaders} setToast={setToast} />
     </section>
   );
 }

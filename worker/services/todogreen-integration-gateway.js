@@ -1,4 +1,6 @@
 import { urlCurvaCargaOns, urlPrecosAnp } from "./todogreen-energy-reference.js";
+import { urlBuscaPncp, urlContratacoesComprasGov, urlGdelt } from "./todogreen-market-signals.js";
+import { urlPacoteAntt } from "./todogreen-road-risk.js";
 
 const DEFAULT_TIMEOUT_MS = 7_000;
 
@@ -185,6 +187,30 @@ export function todoGreenExternalIntegrationCatalog(env = {}) {
         capabilities: ["fuel-prices"],
       }),
       item({
+        id: "pncp",
+        name: "PNCP (API pública de licitações)",
+        category: "intelligence",
+        mode: "official-public",
+        detail: "Editais recebendo proposta por termos de transporte/logística → sinais de mercado com score explicável.",
+        capabilities: ["search"],
+      }),
+      item({
+        id: "compras-gov",
+        name: "Compras.gov.br (dados abertos)",
+        category: "intelligence",
+        mode: "official-public",
+        detail: "Contratações da Lei 14.133 publicadas no PNCP (pregão/concorrência), normalizadas junto ao PNCP.",
+        capabilities: ["contracts"],
+      }),
+      item({
+        id: "gdelt",
+        name: "GDELT (notícias do setor)",
+        category: "intelligence",
+        mode: "official-public",
+        detail: "Notícias em fontes brasileiras sobre frota elétrica e transporte de cargas (DOC 2.0; 1 consulta a cada 5 s).",
+        capabilities: ["news"],
+      }),
+      item({
         id: "open-charge-map",
         name: "Open Charge Map",
         category: "intelligence",
@@ -313,13 +339,6 @@ export async function probeTodoGreenExternalIntegration(env = {}, provider) {
         "Banco Central",
       );
       break;
-    case "antt-open-data":
-      result = await jsonFrom(
-        "https://dados.antt.gov.br/api/3/action/package_search?q=rntrc&rows=1",
-        {},
-        "ANTT",
-      );
-      break;
     case "aneel-open-data":
       result = await jsonFrom(
         "https://dadosabertos.aneel.gov.br/api/3/action/package_search?q=tarifa&rows=1",
@@ -333,6 +352,20 @@ export async function probeTodoGreenExternalIntegration(env = {}, provider) {
       break;
     case "anp-open-data":
       result = await probeUrl(urlPrecosAnp(env), { headers: { range: "bytes=0-255" } }, "ANP");
+      break;
+    case "pncp":
+      result = await jsonFrom(urlBuscaPncp(env, "transporte", { tamanho: 10 }), {}, "PNCP");
+      break;
+    case "compras-gov": {
+      const hoje = new Date().toISOString().slice(0, 10);
+      result = await jsonFrom(urlContratacoesComprasGov(env, { inicio: hoje, fim: hoje, modalidade: 5, tamanho: 10 }), {}, "Compras.gov.br");
+      break;
+    }
+    case "gdelt":
+      result = await jsonFrom(urlGdelt(env, '"frota elétrica"', { maxrecords: 5, timespan: "1d" }), {}, "GDELT");
+      break;
+    case "antt-open-data":
+      result = await jsonFrom(urlPacoteAntt(env), {}, "ANTT");
       break;
     case "open-charge-map":
       result = await jsonFrom(

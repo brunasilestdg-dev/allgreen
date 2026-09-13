@@ -40,6 +40,9 @@ import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenSystemHealth } from "./todogreen-system-health.js";
 import { handleTodoGreenEnergy } from "./todogreen-energy-reference.js";
+import { handleTodoGreenMarketRadar } from "./todogreen-market-radar.js";
+import { handleTodoGreenMarketSignals } from "./todogreen-market-signals.js";
+import { handleTodoGreenRoadRisk } from "./todogreen-road-risk.js";
 import { handleTodoGreenViability } from "./todogreen-viability.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
@@ -233,6 +236,31 @@ export async function routeTodoGreenApi(request, env, ctx) {
   if (path.startsWith("/api/todogreen/tracker"))
     return guarded("To Do Green Tracker error", "Não foi possível processar o rastreamento veicular.",
       () => handleTodoGreenTracker(request, env));
+  // Radar por busca web (a tela "RFQs / RFIs" chama este endpoint; estava sem
+  // rota no roteador) e sinais estruturados (PNCP · Compras.gov · GDELT).
+  if (path === "/api/todogreen/market-radar") {
+    return guarded("To Do Green market radar error", "Não foi possível pesquisar RFQs, RFIs e licitações agora.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenMarketRadar(request, env, resolved.access);
+    });
+  }
+  if (path.startsWith("/api/todogreen/market-signals")) {
+    return guarded("To Do Green market signals error", "Não foi possível carregar os sinais de mercado.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenMarketSignals(request, env, resolved.access, resolved.user, url);
+    });
+  }
+  // Risk Map (P6): risco viário histórico (PRF/ANTT) por traçado e ingestão.
+  if (path.startsWith("/api/todogreen/risk")) {
+    return guarded("To Do Green road risk error", "Não foi possível calcular o risco viário.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenRoadRisk(request, env, resolved.access, resolved.user, url);
+    });
+  }
+
   // Energia (P4): perfil do espaço, referências públicas (ANEEL/ANP/ONS) e o
   // plano composto (tarifa → melhor hora → recarga por veículo → diesel).
   if (path.startsWith("/api/todogreen/energy")) {

@@ -5028,3 +5028,16 @@
 .tdg-eref-refs button { align-items: center; display: inline-flex; gap: 5px; font-size: .74rem; padding: 4px 9px; }
 .tdg-eref-msg { color: var(--tdg-green); font-weight: 600; }
 .tdg-eref-form-wrap form { margin-top: 10px; }
+
+/* Roteirização — risco viário histórico (PRF/ANTT) e alternativas (P6) */
+.tdg-roteirizacao-risco { border: 1px solid var(--tdg-line); border-radius: 12px; display: grid; gap: 6px; margin-top: 12px; padding: 12px 14px; }
+.tdg-roteirizacao-risco strong { font-size: .92rem; }
+.tdg-roteirizacao-risco small { color: var(--tdg-muted); font-size: .76rem; }
+.tdg-roteirizacao-risco-score { border-radius: 999px; display: inline-block; font-weight: 800; padding: 3px 10px; width: fit-content; }
+.tdg-roteirizacao-risco-score.nivel-baixo { background: rgba(23, 98, 79, .12); color: var(--tdg-green); }
+.tdg-roteirizacao-risco-score.nivel-medio { background: #fff4d6; color: #8a5a00; }
+.tdg-roteirizacao-risco-score.nivel-alto { background: #fde8e6; color: var(--tdg-danger, #b3261e); }
+.tdg-roteirizacao-alternativas { display: grid; gap: 6px; list-style: none; margin: 4px 0 0; padding: 0; }
+.tdg-roteirizacao-alternativas li { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; font-size: .8rem; justify-content: space-between; }
+.tdg-roteirizacao-alternativas li button { font-size: .74rem; padding: 4px 10px; }
+.tdg-roteirizacao-alternativas-nota { color: #8a5a00; font-size: .74rem; }

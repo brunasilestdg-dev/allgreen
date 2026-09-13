@@ -6,6 +6,8 @@
 
 const PUBLIC_NOMINATIM = "https://nominatim.openstreetmap.org/";
 import { rotearComProvider } from "./routing-providers.js";
+import { riscoDoTracado } from "./todogreen-road-risk.js";
+import { rankRouteAlternatives } from "../../src/features/logistics/routeAlternativesDomain.js";
 
 const USER_AGENT = "ToDoGreen-TMS-Routing/1";
 
@@ -96,12 +98,43 @@ export async function geocodeTodoGreen(body, env) {
 // Traçado: o backend escolhe o motor pelo veículo (seções 28–35). Pesado sem
 // Valhalla recebe NO_SAFE_ROUTING_ENGINE (409) — nunca uma rota de carro. A
 // resposta mantém o formato OSRM que a tela já lê + o metadado do motor.
+/**
+ * Risco viário por rota (Risk Map) + ranking de alternativas (seções 14–15,
+ * 83). O risco entra como CUSTO — nunca bloqueia; sem índice ingerido, cada
+ * rota traz `risk.riskScore = null` e o motivo (RISK_DATA_NOT_AVAILABLE).
+ */
+export async function enriquecerComRisco(corpo, body, env) {
+  const rotas = Array.isArray(corpo?.routes) ? corpo.routes : [];
+  if (!rotas.length || !env?.DB) return corpo;
+  const consumo = Number(body?.vehicle?.energyConsumptionKwhPerKm) || 0;
+  const riscos = await Promise.all(rotas.map((r) => riscoDoTracado(env, r?.geometry?.coordinates || [], { refs: r?.roadRefs || [] }).catch(() => ({ riskScore: null, reason: "RISK_LOOKUP_FAILED" }))));
+  const routes = rotas.map((r, i) => ({ ...r, risk: riscos[i] }));
+  const candidatas = routes.map((r, i) => ({
+    id: i === 0 ? "principal" : `alternativa-${i}`,
+    distanceKm: (Number(r.distance) || 0) / 1000,
+    durationMinutes: Math.round((Number(r.duration) || 0) / 60),
+    energyKwh: consumo > 0 ? Math.round(((Number(r.distance) || 0) / 1000) * consumo * 10) / 10 : 0,
+    tollCost: 0,
+    riskScore: Number.isFinite(Number(r.risk?.riskScore)) ? Number(r.risk.riskScore) : 0,
+    riskAvailable: Number.isFinite(Number(r.risk?.riskScore)),
+    restrictionsOk: true,
+  }));
+  const ranking = routes.length > 1 ? rankRouteAlternatives(candidatas) : null;
+  return {
+    ...corpo,
+    routes,
+    riskAvailable: candidatas.some((c) => c.riskAvailable),
+    ranking: ranking ? { ...ranking, nota: candidatas.every((c) => c.riskAvailable) ? "" : "Sem índice de risco ingerido para alguma rota: o critério de risco valeu 0 nela (RISK_DATA_NOT_AVAILABLE), não 'seguro'." } : null,
+  };
+}
+
 export async function routeTodoGreen(body, env) {
   const resultado = await rotearComProvider(
-    { coordinates: body?.coordinates, vehicle: body?.vehicle || {}, geometry: body?.geometry !== false },
+    { coordinates: body?.coordinates, vehicle: body?.vehicle || {}, geometry: body?.geometry !== false, alternatives: Boolean(body?.alternatives) },
     env,
   );
-  return json(resultado.body, resultado.status);
+  if (resultado.status !== 200 || body?.risk === false) return json(resultado.body, resultado.status);
+  return json(await enriquecerComRisco(resultado.body, body, env), 200);
 }
 
 export async function handleTodoGreenRoutingMaps(request, env) {

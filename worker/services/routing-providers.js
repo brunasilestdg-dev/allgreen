@@ -69,14 +69,16 @@ export function normalizarCoordenadas(coordinates) {
   return { ok: true, coordinates: normalized };
 }
 
-async function rotearOsrm({ coordinates, geometry }, env, motores, fetcher) {
+async function rotearOsrm({ coordinates, geometry, alternatives = false }, env, motores, fetcher) {
   const points = coordinates.map(([lon, lat]) => `${lon},${lat}`).join(";");
   const suffix = `route/v1/driving/${points}`;
   const query = new URLSearchParams({
     overview: geometry === false ? "false" : "full",
     geometries: geometry === false ? "polyline" : "geojson",
-    steps: "false",
+    // Com alternativas, os passos trazem as refs das vias (BR-116…) para o Risk Map.
+    steps: alternatives ? "true" : "false",
   });
+  if (alternatives) query.set("alternatives", "true");
   const chamar = async (base, selfHosted) => fetchJson(fetcher, `${unir(base, suffix)}?${query}`, { headers: cabecalhos(env, selfHosted) });
   try {
     const { data, latencyMs } = await chamar(motores.osrm.base, motores.osrm.selfHosted);
@@ -97,8 +99,8 @@ async function rotearOsrm({ coordinates, geometry }, env, motores, fetcher) {
   }
 }
 
-async function rotearValhalla({ coordinates, vehicle }, env, motores, fetcher) {
-  const { body, costing } = requisicaoValhalla(coordinates, vehicle);
+async function rotearValhalla({ coordinates, vehicle, alternatives = false }, env, motores, fetcher) {
+  const { body, costing } = requisicaoValhalla(coordinates, vehicle, { alternates: alternatives ? 2 : 0 });
   try {
     const { data, latencyMs } = await fetchJson(fetcher, unir(motores.valhalla.base, "route"), {
       method: "POST",
@@ -121,7 +123,7 @@ async function rotearValhalla({ coordinates, vehicle }, env, motores, fetcher) {
  * a resposta HTTP: 200 com formato OSRM-compatível + metadado do motor; 409
  * quando não há motor SEGURO; 400 coordenadas inválidas; 502 motor fora.
  */
-export async function rotearComProvider({ coordinates, vehicle = {}, geometry = true } = {}, env = {}, { fetcher = fetch } = {}) {
+export async function rotearComProvider({ coordinates, vehicle = {}, geometry = true, alternatives = false } = {}, env = {}, { fetcher = fetch } = {}) {
   const coords = normalizarCoordenadas(coordinates);
   if (!coords.ok) return { status: 400, body: { error: coords.error.code, code: coords.error.code, message: coords.error.message } };
 
@@ -144,8 +146,8 @@ export async function rotearComProvider({ coordinates, vehicle = {}, geometry = 
   }
 
   const resultado = selecao.engine === "valhalla"
-    ? await rotearValhalla({ coordinates: coords.coordinates, vehicle }, env, selecao.motores, fetcher)
-    : await rotearOsrm({ coordinates: coords.coordinates, geometry }, env, selecao.motores, fetcher);
+    ? await rotearValhalla({ coordinates: coords.coordinates, vehicle, alternatives }, env, selecao.motores, fetcher)
+    : await rotearOsrm({ coordinates: coords.coordinates, geometry, alternatives }, env, selecao.motores, fetcher);
 
   if (!resultado.ok) {
     return {
