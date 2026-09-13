@@ -136,6 +136,60 @@ test("importar paradas: funil padroniza, geocodifica e manda o torto pra confer�
   await expect(inputs.nth(2)).toHaveValue(/Campinas/);
 });
 
+// Bipagem de etiqueta no roteirizador: o leitor físico é, pro navegador, só um
+// teclado que digita e tecla Enter. Cada código lido entra no MESMO funil da
+// importação — etiqueta com endereço geocodifica; código seco vira referência e
+// cai na conferência. A câmera (ZXing) reusa o padrão já provado no TMS e exige
+// dispositivo real, então aqui se prova o caminho do leitor físico.
+test("bipagem no roteirizador: leitor físico alimenta o mesmo funil", async ({ page }) => {
+  await page.route(/\/api\/todogreen\/maps\/geocode$/, (rota) => {
+    const q = rota.request().postDataJSON()?.q || "";
+    const pontos = q.includes("Santos")
+      ? [{ lat: "-23.96", lon: "-46.33", display_name: "Santos, São Paulo, Brasil" }]
+      : [];
+    return rota.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pontos) });
+  });
+
+  await criarConta(page, contaNova("bip"));
+  await habilitarTodoGreen(page, "owner");
+  await page.goto("/todogreen/roteirizacao");
+  await expect(page.locator(".tdg-roteirizacao-mapa")).toHaveClass(/leaflet-container/);
+
+  await page.getByRole("button", { name: /Importar paradas/ }).click();
+  await page.getByRole("button", { name: /Bipar etiquetas/ }).click();
+
+  const campo = page.locator(".tdg-rot-bip-input");
+  // Etiqueta que traz o endereço → vira parada boa.
+  await campo.fill("Rua da Estação, 100, Santos SP");
+  await campo.press("Enter");
+  // Etiqueta com código seco → referência sem endereço (completa na conferência).
+  await campo.fill("PED-9988");
+  await campo.press("Enter");
+  // Bip repetido do mesmo código na janela curta é ignorado (não vira 3ª linha).
+  await campo.fill("PED-9988");
+  await campo.press("Enter");
+
+  await expect(page.locator(".tdg-rot-bip-lista li")).toHaveCount(2);
+  await expect(page.locator(".tdg-rot-bip-lista")).toContainText("PED-9988");
+  await expect(page.locator(".tdg-rot-bip-lista")).toContainText("informe o endereço na conferência");
+
+  await page.getByRole("button", { name: /Processar 2 etiqueta/ }).click();
+
+  // Mesmo funil: Santos entra pronta, o código seco cai na conferência.
+  await expect(page.locator(".tdg-rot-import-placar")).toContainText("1 pronta(s)");
+  await expect(page.locator(".tdg-rot-import-placar")).toContainText("1 em conferência");
+  await expect(page.locator(".tdg-rot-import-linha.is-falha")).toContainText("PED-9988");
+
+  // Completa o endereço do código e adiciona as duas à rota.
+  await page.locator(".tdg-rot-import-linha.is-falha .tdg-rot-import-corrige input").fill("Santos SP");
+  await page.locator(".tdg-rot-import-linha.is-falha .tdg-rot-import-corrige button").click();
+  await expect(page.locator(".tdg-rot-import-placar")).toContainText("2 pronta(s)");
+  await page.getByRole("button", { name: /Adicionar 2 à rota/ }).click();
+
+  await expect(page.locator(".tdg-rot-import")).toHaveCount(0);
+  await expect(page.locator(".tdg-roteirizacao-campo input")).toHaveCount(2);
+});
+
 // #90: carregadores elétricos no mapa. A busca agora é gratuita (OpenStreetMap
 // via backend, sem chave). A chamada ao backend é dublada para o teste ser
 // determinístico e não depender de rede — o formato já é o canônico do mapa.

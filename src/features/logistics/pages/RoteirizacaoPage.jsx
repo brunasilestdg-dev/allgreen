@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BatteryCharging, Clock, Coins, GripVertical, ListChecks, Navigation, Plug, Plus, Route, Shuffle, Sparkles, Trash2, Truck, Upload, UserCheck } from "lucide-react";
+import { BatteryCharging, Camera, Clock, Coins, GripVertical, ListChecks, Navigation, Plug, Plus, Route, ScanLine, Shuffle, Sparkles, Trash2, Truck, Upload, UserCheck, X } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import {
   classificarGeocodificacao,
   csvParaMatriz,
+  interpretarBipagem,
   parsearParadasColadas,
   parsearParadasDePlanilha,
   precisaConferencia,
   resumoImportacao,
 } from "../roteirizadorImportDomain.js";
+import { ehDuplicada, normalizarTrackId, registrarRecente } from "../tmsBipagemDomain.js";
 import {
   aplicarOrdemDoMeio,
   otimizarOrdemDeParadas,
@@ -141,6 +143,13 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
   const [importItens, setImportItens] = useState([]);
   const [importProgresso, setImportProgresso] = useState({ feito: 0, total: 0 });
   const [importErro, setImportErro] = useState("");
+  // Bipagem de etiqueta (barras/QR) por leitor físico (teclado) ou câmera. Cada
+  // código lido entra no MESMO funil da importação; `bipados` é a fila em
+  // preparação antes de geocodificar.
+  const [bipManual, setBipManual] = useState("");
+  const [bipados, setBipados] = useState([]);
+  const [bipCamera, setBipCamera] = useState(false);
+  const [bipErroCamera, setBipErroCamera] = useState("");
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
   const [mostrarProprios, setMostrarProprios] = useState(false);
   const [pedagios, setPedagios] = useState({ fase: "idle" });
@@ -168,6 +177,13 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
   // Com isso a rota usa o ponto exato do endereço completo, sem depender de o
   // Nominatim reencontrar o texto livre — resolve o "só cidade x cidade".
   const coordsResolvidasRef = useRef({});
+  // Bipagem: <video> da câmera, controles do leitor ZXing (para parar) e a
+  // janela anti-repetição (o mesmo código bipado duas vezes seguidas / a câmera
+  // relendo o quadro não vira duas paradas).
+  const bipVideoRef = useRef(null);
+  const bipControlesRef = useRef(null);
+  const bipRecentesRef = useRef([]);
+  const bipUltimaCamRef = useRef({ valor: "", quando: 0 });
 
   useEffect(() => {
     if (mapaRef.current || !containerRef.current) return undefined;
@@ -321,7 +337,83 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
     setImportItens([]);
     setImportErro("");
     setImportProgresso({ feito: 0, total: 0 });
+    setBipCamera(false);
+    setBipManual("");
+    setBipados([]);
+    setBipErroCamera("");
+    bipRecentesRef.current = [];
   };
+
+  // Bipagem: registra um código lido (leitor físico ou câmera) na fila de
+  // preparação. Ignora repetição dentro da janela curta (bip duplo / câmera
+  // relendo). Cada código vira { referencia, endereco } pelo mesmo interpretador.
+  const registrarBip = (texto) => {
+    const item = interpretarBipagem(texto);
+    if (!item) return;
+    const chave = normalizarTrackId(item.referencia || item.endereco);
+    const agora = Date.now();
+    if (ehDuplicada(chave, bipRecentesRef.current, agora)) return;
+    bipRecentesRef.current = registrarRecente(bipRecentesRef.current, chave, agora);
+    setBipados((atual) => [...atual, { ...item, id: `bip-${agora}-${atual.length}` }]);
+  };
+
+  const aoTeclarBip = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      registrarBip(bipManual);
+      setBipManual("");
+    }
+  };
+
+  const removerBip = (id) => setBipados((atual) => atual.filter((b) => b.id !== id));
+
+  const abrirBipagem = () => {
+    setImportErro("");
+    setBipados([]);
+    bipRecentesRef.current = [];
+    setImportFase("bipagem");
+  };
+
+  const voltarDaBipagem = () => {
+    setBipCamera(false);
+    setImportFase("idle");
+  };
+
+  const processarBipados = () => {
+    if (!bipados.length) {
+      setImportErro("Bipe ao menos uma etiqueta.");
+      return;
+    }
+    setBipCamera(false);
+    geocodificarImport(bipados.map(({ referencia, endereco }) => ({ referencia, endereco })));
+  };
+
+  // Câmera de bipagem (ZXing): abre o vídeo, lê barras/QR e manda cada código
+  // para o mesmo funil. Reusa o padrão já provado no TMS; para a câmera ao
+  // fechar. O import é dinâmico — quem não bipa não baixa a lib.
+  useEffect(() => {
+    if (!bipCamera) return undefined;
+    let cancelado = false;
+    import("@zxing/browser")
+      .then(({ BrowserMultiFormatReader }) => {
+        if (cancelado || !bipVideoRef.current) return;
+        const leitor = new BrowserMultiFormatReader();
+        leitor
+          .decodeFromVideoDevice(undefined, bipVideoRef.current, (resultado) => {
+            if (!resultado) return;
+            const texto = String(resultado.getText() || "").trim();
+            const agora = Date.now();
+            const ultima = bipUltimaCamRef.current;
+            if (texto === ultima.valor && agora - ultima.quando < 4000) return;
+            bipUltimaCamRef.current = { valor: texto, quando: agora };
+            registrarBip(texto);
+          })
+          .then((controles) => { bipControlesRef.current = controles; })
+          .catch((erro) => setBipErroCamera(erro?.message || "Não foi possível abrir a câmera."));
+      })
+      .catch(() => setBipErroCamera("Não foi possível carregar o leitor."));
+    return () => { cancelado = true; bipControlesRef.current?.stop?.(); bipControlesRef.current = null; };
+  }, [bipCamera]);
 
   const adicionarImportadasARota = () => {
     const prontas = importItens.filter((it) => it.escolhido && (it.status === "ok" || it.status === "resolvido"));
@@ -1117,9 +1209,10 @@ Regras:
             {importFase === "idle" && (
               <>
                 <p className="tdg-rot-import-intro">
-                  Cole os endereços (um por linha) ou envie um arquivo CSV/Excel. Cada endereço é
-                  padronizado e geocodificado; o que vier ambíguo ou sem localização cai na
-                  conferência antes de virar parada. Nada é gravado — é só para montar a rota.
+                  Cole os endereços (um por linha), envie um arquivo CSV/Excel ou bipe etiquetas
+                  (código de barras/QR). Cada endereço é padronizado e geocodificado; o que vier
+                  ambíguo ou sem localização cai na conferência antes de virar parada. Nada é
+                  gravado — é só para montar a rota.
                 </p>
                 <textarea
                   className="tdg-rot-import-textarea"
@@ -1137,8 +1230,69 @@ Regras:
                     <Upload size={16} /> Enviar CSV/Excel
                     <input type="file" accept=".csv,.txt,.xlsx,.xls" hidden onChange={(event) => processarArquivoImport(event.target.files?.[0])} />
                   </label>
+                  <button type="button" className="tdg-action tdg-action-ghost" onClick={abrirBipagem}>
+                    <ScanLine size={16} /> Bipar etiquetas
+                  </button>
                 </div>
               </>
+            )}
+
+            {importFase === "bipagem" && (
+              <div className="tdg-rot-bip">
+                <p className="tdg-rot-import-intro">
+                  Bipe as etiquetas com o leitor físico (o cursor fica no campo) ou pela câmera.
+                  Se a etiqueta traz o endereço, ele já é geocodificado; se traz só um código,
+                  ele entra como referência e você completa o endereço na conferência.
+                </p>
+                <div className="tdg-rot-bip-entrada">
+                  <input
+                    className="tdg-rot-bip-input"
+                    value={bipManual}
+                    onChange={(event) => setBipManual(event.target.value)}
+                    onKeyDown={aoTeclarBip}
+                    placeholder="Bipe aqui ou digite o código/endereço e tecle Enter"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className={`tdg-action ${bipCamera ? "" : "tdg-action-ghost"}`}
+                    onClick={() => { setBipErroCamera(""); setBipCamera((v) => !v); }}
+                  >
+                    <Camera size={16} /> {bipCamera ? "Fechar câmera" : "Usar câmera"}
+                  </button>
+                </div>
+                {bipCamera && (
+                  <div className="tdg-rot-bip-camera">
+                    <video ref={bipVideoRef} muted playsInline />
+                    {bipErroCamera ? <p className="tdg-roteirizacao-erro">{bipErroCamera}</p> : null}
+                  </div>
+                )}
+                <div className="tdg-rot-bip-placar">
+                  <span className="ok">{bipados.length} etiqueta(s) na fila</span>
+                </div>
+                {bipados.length > 0 && (
+                  <ul className="tdg-rot-bip-lista">
+                    {bipados.map((b) => (
+                      <li key={b.id}>
+                        <span>
+                          {b.referencia ? <strong>{b.referencia}</strong> : null}
+                          {b.endereco || <em>informe o endereço na conferência</em>}
+                        </span>
+                        <button type="button" onClick={() => removerBip(b.id)} aria-label="Remover etiqueta">
+                          <X size={15} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {importErro ? <p className="tdg-roteirizacao-erro">{importErro}</p> : null}
+                <div className="tdg-rot-import-acoes">
+                  <button type="button" className="tdg-action" onClick={processarBipados} disabled={!bipados.length}>
+                    <ListChecks size={16} /> Processar {bipados.length || ""} etiqueta(s)
+                  </button>
+                  <button type="button" className="tdg-action tdg-action-ghost" onClick={voltarDaBipagem}>Voltar</button>
+                </div>
+              </div>
             )}
 
             {importFase === "processando" && (

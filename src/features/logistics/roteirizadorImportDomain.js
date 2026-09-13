@@ -174,4 +174,30 @@ export function resumoImportacao(itens) {
   );
 }
 
+// Um token "seco" — sem espaço, só dígitos/letras/-._/ — parece um CÓDIGO
+// (chave de 44 dígitos, nº de nota, código interno da etiqueta), não um
+// endereço. Serve para a bipagem decidir se o que veio dá para geocodificar.
+export function pareceCodigoSeco(texto) {
+  const t = String(texto ?? "").trim();
+  if (!t) return false;
+  if (/\s/.test(t)) return false; // tem espaço → provável endereço
+  return /^[0-9A-Za-z\-._/]+$/.test(t);
+}
+
+// Um código bipado (barras/QR) vira { referencia, endereco }, entrando no MESMO
+// funil do colar/arquivo. Três casos, sem inventar nada:
+//   "PED-1; Rua X, 10"  → referência + endereço (etiqueta que traz os dois)
+//   "3524061234...44díg" → código seco: vira REFERÊNCIA, endereço fica vazio e
+//                          a pessoa completa na conferência (não dá pra
+//                          geocodificar um código)
+//   "Rua X, 10, Santos"  → endereço (algumas etiquetas embutem o endereço todo)
+export function interpretarBipagem(texto) {
+  const bruto = String(texto ?? "").replace(/\s+/g, " ").trim();
+  if (!bruto) return null;
+  const { referencia, endereco } = parsearLinhaColada(bruto);
+  if (referencia && endereco) return { referencia, endereco: padronizarEndereco(endereco) };
+  if (pareceCodigoSeco(bruto)) return { referencia: bruto, endereco: "" };
+  return { referencia: "", endereco: padronizarEndereco(bruto) };
+}
+
 export const TETO_PARADAS_IMPORT = TETO_PARADAS;
