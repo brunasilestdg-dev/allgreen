@@ -928,6 +928,13 @@ const COLECOES = {
       ultimaPosicaoEm: row.last_position_at || "",
       latitude: row.last_position_lat,
       longitude: row.last_position_lng,
+      // Coordenadas de coleta e ENTREGA (fixas, o destino) — o que o despacho
+      // precisa para roteirizar. Diferente de last_position (posição atual do
+      // veículo, telemetria).
+      coletaLat: row.pickup_lat,
+      coletaLng: row.pickup_lng,
+      entregaLat: row.delivery_lat,
+      entregaLng: row.delivery_lng,
       entregas: numero(parse(row.fields_json, {}).deliveries),
       pacotes: numero(parse(row.fields_json, {}).packages),
       viagens: numero(parse(row.fields_json, {}).trips),
@@ -970,6 +977,13 @@ const COLECOES = {
       last_position_at: texto(corpo.ultimaPosicaoEm, 40) || null,
       last_position_lat: corpo.latitude === "" || corpo.latitude == null ? null : numero(corpo.latitude),
       last_position_lng: corpo.longitude === "" || corpo.longitude == null ? null : numero(corpo.longitude),
+      // Coordenadas fixas de coleta/entrega — o que torna a operação
+      // roteirizável no despacho. Vêm da geocodificação do endereço no salvar.
+      // Em PATCH, o merge com daLinha(atual) preserva o que não for reenviado.
+      pickup_lat: corpo.coletaLat === "" || corpo.coletaLat == null ? null : numero(corpo.coletaLat),
+      pickup_lng: corpo.coletaLng === "" || corpo.coletaLng == null ? null : numero(corpo.coletaLng),
+      delivery_lat: corpo.entregaLat === "" || corpo.entregaLat == null ? null : numero(corpo.entregaLat),
+      delivery_lng: corpo.entregaLng === "" || corpo.entregaLng == null ? null : numero(corpo.entregaLng),
       status: texto(corpo.situacao, 40) || "active",
       fields_json: JSON.stringify({
         ...objeto(corpo.campos),
@@ -1082,6 +1096,34 @@ const COLECOES = {
       };
     },
     exigido: (corpo) => validarPontoRecarga(corpo),
+  },
+
+  // Modelo de rota recorrente: guarda o TEXTO das paradas (mesmo formato da
+  // importação em massa), não rotas prontas. Reaplicar geocodifica e cria
+  // operações novas para a data escolhida — que seguem o fluxo do despacho.
+  importTemplates: {
+    tabela: "todogreen_operation_import_templates",
+    permissao: "operations:manage",
+    permissoesLeitura: ["operations:manage", "planning:manage", "tms:manage", "fleet:manage", "audit:read"],
+    escopoDeCarteira: false,
+    ordem: "name ASC",
+    daLinha: (row) => ({
+      id: row.id,
+      nome: row.name || "",
+      clientId: row.client_id || "",
+      paradasTexto: row.stops_text || "",
+      campos: parse(row.fields_json, {}),
+      revision: row.revision,
+      criadoEm: row.created_at,
+      atualizadoEm: row.updated_at,
+    }),
+    colunas: (corpo) => ({
+      name: texto(corpo.nome, 160),
+      client_id: texto(corpo.clientId, 120),
+      stops_text: texto(corpo.paradasTexto, 20000),
+      fields_json: JSON.stringify(objeto(corpo.campos)),
+    }),
+    exigido: (corpo) => (texto(corpo.nome) ? "" : "Dê um nome ao modelo de rota."),
   },
 
   financial: {

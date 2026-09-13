@@ -326,6 +326,82 @@ describe("paginação e filtro no servidor", () => {
     const referencias = (await portal.json()).operacoes.map((item) => item.referencia);
     expect(referencias).toContain("OP-CANONICA-1");
   });
+
+  it("persiste coordenadas de coleta/entrega e as preserva em PATCH parcial", async () => {
+    const dono = await criarUsuario("rec-coords-dono", "coords-dono@parceiro.com.br");
+    await autorizar(dono);
+    await criarCliente(dono, "cli-coords", "Cliente coords");
+
+    // Criar já roteirizável: coordenada de entrega é o que o despacho exige.
+    const criada = await pedir("/api/todogreen/records/operations", {
+      metodo: "POST",
+      token: dono.token,
+      corpo: {
+        clientId: "cli-coords", referencia: "OP-COORDS-1", mesReferencia: "2026-09",
+        coletaLat: -23.52, coletaLng: -46.78, entregaLat: -23.55, entregaLng: -46.63,
+      },
+    });
+    expect(criada.status).toBe(201);
+    const registro = (await criada.json()).registro;
+    expect(registro).toMatchObject({ entregaLat: -23.55, entregaLng: -46.63, coletaLat: -23.52, coletaLng: -46.78 });
+
+    const linha = await env.DB.prepare(
+      "SELECT delivery_lat, delivery_lng, pickup_lat, pickup_lng FROM todogreen_client_operations WHERE id=?",
+    ).bind(registro.id).first();
+    expect(linha).toMatchObject({ delivery_lat: -23.55, delivery_lng: -46.63, pickup_lat: -23.52, pickup_lng: -46.78 });
+
+    // PATCH que NÃO reenvia coordenada não pode zerá-la (merge com daLinha).
+    const editada = await pedir(`/api/todogreen/records/operations/${registro.id}`, {
+      metodo: "PATCH",
+      token: dono.token,
+      corpo: { referencia: "OP-COORDS-1-EDIT", revision: registro.revision },
+    });
+    expect(editada.status).toBe(200);
+    const depois = await env.DB.prepare(
+      "SELECT delivery_lat, delivery_lng FROM todogreen_client_operations WHERE id=?",
+    ).bind(registro.id).first();
+    expect(depois).toMatchObject({ delivery_lat: -23.55, delivery_lng: -46.63 });
+  });
+});
+
+describe("modelos de rota (salvar e reusar)", () => {
+  it("cria, lista e devolve o texto das paradas, isolado por espaço", async () => {
+    const dono = await criarUsuario("rec-modelo-dono", "modelo-dono@parceiro.com.br");
+    const outro = await criarUsuario("rec-modelo-outro", "modelo-outro@parceiro.com.br");
+    await autorizar(dono);
+    await autorizar(outro);
+    await criarCliente(dono, "cli-modelo", "Cliente modelo");
+
+    const criado = await pedir("/api/todogreen/records/importTemplates", {
+      metodo: "POST",
+      token: dono.token,
+      corpo: {
+        nome: "Rota Zona Sul (diária)",
+        clientId: "cli-modelo",
+        paradasTexto: "NF 1; Rua A, 10\nNF 2; Rua B, 20",
+      },
+    });
+    expect(criado.status).toBe(201);
+    const modelo = (await criado.json()).registro;
+    expect(modelo).toMatchObject({ nome: "Rota Zona Sul (diária)", clientId: "cli-modelo" });
+    expect(modelo.paradasTexto).toContain("NF 2; Rua B, 20");
+
+    const lista = await pedir("/api/todogreen/records/importTemplates", { token: dono.token });
+    expect((await lista.json()).registros.map((m) => m.nome)).toContain("Rota Zona Sul (diária)");
+
+    // Outro espaço não enxerga o modelo (isolamento por workspace_owner_id).
+    const listaOutro = await pedir("/api/todogreen/records/importTemplates", { token: outro.token });
+    expect((await listaOutro.json()).registros.map((m) => m.id)).not.toContain(modelo.id);
+  });
+
+  it("recusa modelo sem nome", async () => {
+    const dono = await criarUsuario("rec-modelo-vazio", "modelo-vazio@parceiro.com.br");
+    await autorizar(dono);
+    const r = await pedir("/api/todogreen/records/importTemplates", {
+      metodo: "POST", token: dono.token, corpo: { paradasTexto: "Rua X" },
+    });
+    expect(r.status).toBe(400);
+  });
 });
 
 describe("escrita concorrente não apaga o trabalho alheio", () => {
@@ -918,6 +994,7 @@ describe("a vertical inteira numa chamada só", () => {
       "financial",
       "habilitacao",
       "habilitacaoKits",
+      "importTemplates",
       "interactions",
       "items",
       "legal",

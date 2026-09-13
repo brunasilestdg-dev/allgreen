@@ -6,6 +6,7 @@ import {
   geocodificar,
   normalizarCarregadores,
   normalizarCarregadoresOSM,
+  resolverCoordenadasDaOperacao,
   resumoDaDistancia,
   otimizarOrdemDeParadas,
   sugerirEnderecos,
@@ -476,5 +477,48 @@ describe("tracarRota com coordenada resolvida (endereço completo)", () => {
     expect(resultado.ok).toBe(true);
     expect(fetcher.mock.calls.every(([u]) => !String(u).includes("nominatim"))).toBe(true);
     expect(resultado.paradas[0].coord).toEqual([-23.5, -46.6]);
+  });
+});
+
+describe("resolverCoordenadasDaOperacao (tornar a operação roteirizável)", () => {
+  const geo = {
+    "CD Osasco SP": { lat: "-23.52", lon: "-46.78", display_name: "CD Osasco" },
+    "Loja Centro SP": { lat: "-23.55", lon: "-46.63", display_name: "Loja Centro" },
+  };
+
+  it("geocodifica origem→coleta e destino→entrega e marca entrega localizada", async () => {
+    const r = await resolverCoordenadasDaOperacao(
+      { origem: "CD Osasco SP", destino: "Loja Centro SP" },
+      { fetcher: fetchFalso({ geo }) },
+    );
+    expect(r).toMatchObject({
+      coletaLat: -23.52, coletaLng: -46.78, entregaLat: -23.55, entregaLng: -46.63,
+      entregaLocalizada: true,
+    });
+  });
+
+  it("destino que não geocodifica mantém a base e não marca localizada", async () => {
+    const r = await resolverCoordenadasDaOperacao(
+      { origem: "CD Osasco SP", destino: "Endereço inexistente", base: { entregaLat: -1, entregaLng: -2 } },
+      { fetcher: fetchFalso({ geo }) },
+    );
+    // Origem geocodificou; entrega caiu na base preservada.
+    expect(r).toMatchObject({ coletaLat: -23.52, entregaLat: -1, entregaLng: -2, entregaLocalizada: true });
+  });
+
+  it("serviço fora do ar não lança: preserva a base e fica sem localização", async () => {
+    const r = await resolverCoordenadasDaOperacao(
+      { origem: "CD Osasco SP", destino: "Loja Centro SP", base: {} },
+      { fetcher: fetchFalso({ geo, falhar: "nominatim" }) },
+    );
+    expect(r).toMatchObject({ entregaLat: null, entregaLocalizada: false });
+  });
+
+  it("sem endereço utilizável, devolve a base intacta", async () => {
+    const r = await resolverCoordenadasDaOperacao(
+      { origem: "", destino: "", base: { entregaLat: -3, entregaLng: -4 } },
+      { fetcher: fetchFalso({ geo }) },
+    );
+    expect(r).toMatchObject({ entregaLat: -3, entregaLng: -4, entregaLocalizada: true });
   });
 });
