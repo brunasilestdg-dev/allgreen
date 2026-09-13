@@ -21,7 +21,7 @@ npm run verify    # roda lint + todos os testes
 npm run build     # gera dist/ (não commitado)
 npm test          # executa a suíte Vitest isoladamente
 npm run deploy    # valida, compila, aplica migrações e publica
-npm run deploy:cloudflare                             # E2E crítico → migrações → publica
+npm run deploy:cloudflare                             # aplica migrações e publica (Workers Builds); deploy:cloudflare:gated = E2E crítico antes, onde há Chromium
 npx wrangler d1 migrations apply seu-funcionario-db --remote   # aplica migrações novas
 ```
 
@@ -31,7 +31,7 @@ npx wrangler d1 migrations apply seu-funcionario-db --remote   # aplica migraç�
 
 O Cloudflare Workers Builds está conectado ao repositório `brunapsiles/Seufuncionario`.
 Todo push na branch `main` deve executar `npm ci`, `npm run verify`,
-`npm run build` e, em seguida, `npm run deploy:cloudflare`; este último instala Chromium e roda `test:e2e:critical` antes de tocar no D1 remoto/publicar. O diretório raiz configurado é `/`; builds de branches que
+`npm run build` e, em seguida, `npm run deploy:cloudflare` (migrations + publicação). O gate de navegador (`test:e2e:critical`) roda **antes do merge** (local/sessão remota) e no fallback manual `deploy.yml`, que instala Chromium; dentro do build do Cloudflare não há como instalar o navegador — a tentativa de 13/09 (`cd8f90b`) travou a publicação da `main`. O diretório raiz configurado é `/`; builds de branches que
 não sejam a `main` também estão habilitados como versões de prévia. A validação completa não pode depender dos minutos do GitHub Actions. Se o Actions estiver vermelho por falta de runner/minutos, isso não bloqueia; se `verify`, `build`, Cloudflare Builds ou deploy manual falharem, bloqueia. O workflow `Publicar` do GitHub é apenas uma contingência manual e também precisa rodar o mesmo gate mínimo antes de publicar.
 
 ## Segredos (JÁ configurados no cofre do Worker — nunca commitar valores)

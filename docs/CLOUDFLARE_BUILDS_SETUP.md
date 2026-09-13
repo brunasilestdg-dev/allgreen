@@ -36,13 +36,17 @@ painel Cloudflare tem que ser exatamente esse. Banco D1: `seu-funcionario-db`.
 |---|---|---|
 | **Root directory** | `/` | O projeto está na raiz. |
 | **Build command** | `npm ci && npm run verify && npm run build` | Instala a árvore exata do lockfile, roda o **quality gate obrigatório** (`verify` = lint + testes de unidade + testes de worker) e só então gera o `dist/`. |
-| **Deploy command** | `npm run deploy:cloudflare` | Executa o **E2E crítico em Chromium**, depois aplica migrations no D1 e publica. Falha de navegador bloqueia antes de tocar no banco remoto. |
+| **Deploy command** | `npm run deploy:cloudflare` | Aplica as migrations no D1 **e** publica (`wrangler d1 migrations apply --remote && wrangler deploy`). O E2E de navegador **não** roda aqui: o container do Builds não instala Chromium (a tentativa `cd8f90b`, 13/09, deixou a `main` sem publicar); ele roda antes do merge e no `deploy.yml`. |
 | **Non-production branches** | **Preview** (build/preview, **sem** promover a produção) | PR/branch vira versão de prévia; **nunca** promovida sozinha. |
 
-> **E2E de navegador:** a suíte crítica (smoke, acesso, ERP↔TMS e portais autenticados)
-> roda no **deploy command** por `test:e2e:critical:ci`, que instala Chromium antes
-> de executar Playwright. Já a regressão visual completa por screenshots continua
-> separada, por ser mais pesada e depender dos baselines canônicos.
+> **E2E de navegador:** a suíte crítica (smoke, navegação ERP↔TMS, acesso e portais
+> autenticados — `npm run test:e2e:critical`) é gate **antes do merge** (local ou sessão
+> remota com Chromium) e roda no fallback manual `deploy.yml` (`test:e2e:critical:ci`
+> instala o Chromium no runner). No build do Cloudflare ela não roda: não há como
+> instalar navegador no container e a tentativa de 13/09 (`cd8f90b`) travou a
+> publicação. `npm run deploy:cloudflare:gated` encadeia E2E → migrations → publicação
+> para quem publica manualmente com navegador disponível. A regressão visual por
+> screenshots continua separada (mais pesada, baselines canônicos).
 
 Se o painel exigir **separar build e deploy**, use:
 - **Install command:** `npm ci` (se o painel oferecer esse campo)
@@ -75,8 +79,8 @@ o log distinguir "falhou na validação" de "falhou ao publicar".
 
 ## Segurança de migrations (importante)
 
-- O `deploy:cloudflare` roda primeiro o E2E crítico; somente se ele passar executa
-  `wrangler d1 migrations apply --remote` e então publica. O wrangler rastreia migrations **pelo nome do arquivo** e só aplica as
+- O `deploy:cloudflare` roda `wrangler d1 migrations apply --remote` **antes** de
+  publicar. O wrangler rastreia migrations **pelo nome do arquivo** e só aplica as
   que faltam — então uma migration já aplicada **não** é reaplicada.
 - **NUNCA** renomear, reordenar, reaplicar ou apagar uma migration já aplicada.
   Isso quebra o rastreamento e pode falhar o deploy.
@@ -113,8 +117,9 @@ Se o Cloudflare Builds estiver indisponível, dá para publicar do seu terminal
 npm ci
 npm run verify   # lint + testes de unidade + worker
 npm run build
-npm run test:e2e:critical:ci
-npm run deploy:cloudflare   # repete o gate crítico por segurança, depois migra/publica
+npm run test:e2e:critical:ci        # gate de navegador (instala Chromium)
+npm run deploy:cloudflare           # aplica migrations no D1 remoto e publica
+# ou, num só passo: npm run deploy:cloudflare:gated
 ```
 
 Alternativa sem terminal: **Actions → "Publicar" → Run workflow** (usa o

@@ -130,15 +130,17 @@ regressões que a rodada existe para eliminar.
 ```bash
 npm run verify                  # lint + testes unitários + testes de worker
 npm run build                   # gera dist/
-npm run test:e2e:critical:ci    # Chromium + jornadas críticas
+npm run test:e2e:critical       # jornadas críticas no Chromium (antes do merge; :ci instala o navegador)
 ```
 
 Em produção, comparar `GET /api/status` → `version` com o SHA de `main`. A
-publicação é automática via Cloudflare Workers Builds a cada push em `main`,
-mas só depois do gate: `npm ci`, `npm run verify`, `npm run build` e
-`npm run deploy:cloudflare`. O `deploy:cloudflare` roda o E2E crítico em Chromium
-antes de migrations/publicação. GitHub Actions vermelho por falta de minutos/runner
-não bloqueia; `verify`, `build`, E2E crítico, Cloudflare Build ou deploy manual vermelho bloqueia.
+publicação é automática via Cloudflare Workers Builds a cada push em `main`
+(`npm ci && npm run verify && npm run build` e depois `npm run deploy:cloudflare`,
+que aplica migrations e publica). O gate de navegador (`test:e2e:critical`) roda
+**antes do merge** e no fallback manual `deploy.yml`; não roda dentro do build do
+Cloudflare — o container não instala Chromium e a tentativa de 13/09 (`cd8f90b`) deixou a
+`main` sem publicar até ser desfeita. GitHub Actions vermelho por falta de minutos/runner
+não bloqueia; `verify`, `build`, E2E crítico local, Cloudflare Build ou deploy manual vermelho bloqueia.
 
 ## Regressões conhecidas
 
@@ -158,3 +160,6 @@ não bloqueia; `verify`, `build`, E2E crítico, Cloudflare Build ou deploy manua
   `npm run verify && npm run build` (ver `AUDITORIA_CONSOLIDACAO_TDG.md` §12.4 para a lista
   completa de decisões da titular: token, gate, teste do To Do, `TDG_ENVIRONMENT` em prévia,
   infra Valhalla/OSRM, CSV da PRF, perfil de energia por espaço, R2).
+- **Rodada 3** acrescentou três decisões (§13.4): Codex direto na `main` sem PR/gate (manter ou
+  exigir PR), baseline canônico da regressão visual via Docker (rodar uma vez numa máquina com
+  Docker) e estender o gate de pré-flight ao despacho automático.

@@ -345,5 +345,20 @@ Permanecem as de 12.4 (1–8). Novas:
 
 10. **Codex direto na `main`**: manter assim (rápido, sem gate) ou exigir PR com gate local declarado, como esta sessão faz. Enquanto for direto, cada rodada daqui absorve e gateia o que entrou.
 11. **Regressão visual canônica**: rodar uma vez `npm run test:visual:docker` numa máquina com Docker; se acusar só anti-aliasing, regenerar lá e passar a tratar o Docker como origem única dos baselines.
-12. **Gate de pré-flight no despacho automático**: estender (recomendado) ou aceitar que rotas do despacho nasçam sem `preflight_status`.
+12. ~~**Gate de pré-flight no despacho automático**~~ — **fechado pelo Codex** (`cd8f90b`): `/dispatch/aplicar` chama `registrarPreflight` + `gateDePreflightDaRota` (o mesmo serviço, sem duplicação) e a atribuição direta legada foi desativada (`CANONICAL_ROUTE_REQUIRED`).
+13. **Onde roda o gate de navegador** (`test:e2e:critical`): hoje antes do merge (sessão/local) e no `deploy.yml`; para virar gate automático de produção precisa do runner self-hosted ou de proteção da `main` com PR obrigatório (script `scripts/github/protect-main.sh`, que exige permissão administrativa) — dentro do Workers Builds não é possível (13.5).
+
+### 13.5 Rodada 3-bis (13/09, 17h UTC) — `main` do Codex absorvida e gateada depois do fato
+
+Enquanto esta sessão estava pausada (limite de uso da titular), o Codex publicou 5 commits direto na `main`, sem PR e sem gate: `a363850` (o conteúdo do PR #374, idêntico byte a byte), `bfcb2a1` (PR #372 recuperado: navegação reativa, Meu Dia, TMS, chunk recovery, **teste do To Do corrigido**), `e1de658` (Design System fase 1: Card, Table, Drawer, Tooltip, feedback), `037ab25` (hardenings: score determinístico, holerite, POD) e `cd8f90b` (pré-flight no despacho, E2E crítico, k6, docs). Verificação feita aqui:
+
+| Achado | Estado | Ação |
+| --- | --- | --- |
+| Migrations `0133` no D1 remoto | aplicada (`migrations list --remote` sem pendências) | — |
+| Despacho automático reutiliza o serviço de pré-flight | correto (sem implementação paralela) | decisão 12 fechada |
+| Matriz: gates Jurídico/assinatura/implantação/tabela de preço marcados REAL | coerente com o código (`juridicoConcluido`, cofre de evidência; `it.todo` restante só o CT-e) | — |
+| **Lint vermelho na `main`** | `MarketSignalsPanel.test.jsx`: um `\n` literal colado na linha (erro de parse) em `bfcb2a1` | corrigido nesta rodada |
+| **Produção presa em `037ab25`** | `cd8f90b` passou a rodar `npx playwright install --with-deps chromium` + E2E **dentro do deploy command do Workers Builds**; 30+ min depois nenhum deployment novo (`wrangler deployments list`), a API de builds não é legível com o token | `deploy:cloudflare` voltou a migrations + publicação; gate de navegador antes do merge e no `deploy.yml`; `deploy:cloudflare:gated` para publicação manual com Chromium; docs (AGENTS, CLOUDFLARE_BUILDS_SETUP, runbook, matriz P0, relatório) corrigidas para o estado real |
+| Regressão visual: `tms-mobile` oscila (fotografado no meio de "Carregando torre de controle…") | 2 de 5 execuções | `estabilizar` espera a rede assentar e o `.tms-loading` sumir (teto 45 s) |
+| Gate local do estado final da `main` (com as correções acima) | lint: 1 erro (o `\\n` literal) → 0 após a correção; unit: 356 ok + a guarda de tokens vermelha por `--tdg-warning-border` (token inexistente em `TodoGreenPages.css`, `cd8f90b`) → corrigida para `--tdg-warning`; worker/build/E2E crítico: resultado registrado no PR da rodada 3-bis | — |
 
