@@ -1,3 +1,5 @@
+import { urlCurvaCargaOns, urlPrecosAnp } from "./todogreen-energy-reference.js";
+
 const DEFAULT_TIMEOUT_MS = 7_000;
 
 const text = (value, max = 500) => String(value ?? "").trim().slice(0, max);
@@ -163,8 +165,24 @@ export function todoGreenExternalIntegrationCatalog(env = {}) {
         name: "ANEEL Dados Abertos",
         category: "intelligence",
         mode: "official-public",
-        detail: "Pesquisa de dados públicos do setor elétrico.",
-        capabilities: ["search"],
+        detail: "Tarifas homologadas (Tarifa de Aplicação) por distribuidora/subgrupo/modalidade — cache tarifário operacional — e pesquisa de datasets.",
+        capabilities: ["search", "tariffs"],
+      }),
+      item({
+        id: "ons-open-data",
+        name: "ONS Dados Abertos (curva de carga)",
+        category: "intelligence",
+        mode: "official-public",
+        detail: "Curva de carga horária do SIN por subsistema — perfil médio das 24 h para a janela energética de recarga.",
+        capabilities: ["load-curve"],
+      }),
+      item({
+        id: "anp-open-data",
+        name: "ANP Dados Abertos (preços de combustíveis)",
+        category: "intelligence",
+        mode: "official-public",
+        detail: "Levantamento semanal de preços por revenda, agregado em mediana por município/UF/região/país para o TCO.",
+        capabilities: ["fuel-prices"],
       }),
       item({
         id: "open-charge-map",
@@ -308,6 +326,13 @@ export async function probeTodoGreenExternalIntegration(env = {}, provider) {
         {},
         "ANEEL",
       );
+      break;
+    // ONS/ANP publicam arquivos (CSV): o teste pede só os primeiros bytes.
+    case "ons-open-data":
+      result = await probeUrl(urlCurvaCargaOns(env, new Date().getUTCFullYear()), { headers: { range: "bytes=0-255" } }, "ONS");
+      break;
+    case "anp-open-data":
+      result = await probeUrl(urlPrecosAnp(env), { headers: { range: "bytes=0-255" } }, "ANP");
       break;
     case "open-charge-map":
       result = await jsonFrom(

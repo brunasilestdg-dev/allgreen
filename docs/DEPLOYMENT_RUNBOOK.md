@@ -134,6 +134,12 @@ sem os opcionais — as integrações ficam `NOT_CONFIGURED` até a chave existi
 
 Já declarados em `wrangler.jsonc → triggers.crons`:
 
+> **Referências de energia (P4)** — o cron horário chama `runTodoGreenEnergyReferenceScheduled`
+> (auto-limitado): ONS 1×/dia, ANP 1×/semana, ANEEL 1×/semana por par
+> distribuidora/subgrupo/modalidade configurado (3 pares por disparo). Cada fonte grava
+> `last_attempt_at`/`last_success_at`/`source_updated_at` em `todogreen_energy_reference_sync`;
+> falha não apaga o último sucesso e reaparece em Administração → Saúde do sistema (grupo Energia).
+
 - `0 * * * *` — de hora em hora.
 - `0 12 * * 1` — segunda‑feira meio‑dia (UTC).
 
@@ -264,6 +270,10 @@ VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
 | `TODOGREEN_VROOM_BASE_URL` | VROOM via gateway de integrações (mesmo papel de `TDG_ROUTING_URL`) |
 | `TODOGREEN_NOMINATIM_BASE_URL` | geocodificação própria |
 | `TDG_WEATHER_DISABLED=1` (opcional) | desliga a consulta de clima (Open-Meteo) do modelo de energia; sem ela o modelo assume sem penalidade térmica e reduz a confiança |
+| `TDG_ANEEL_BASE_URL` / `TDG_ANEEL_TARIFAS_RESOURCE_ID` (opcionais) | portal CKAN da ANEEL e o recurso das *tarifas homologadas* usados pelo cache tarifário (`todogreen_energy_tariff_reference`); padrão: dados abertos públicos da ANEEL. Só a `distribuidora/subgrupo/modalidade` do perfil de energia do espaço é buscada |
+| `TDG_ONS_CURVA_CARGA_URL` (opcional, aceita `{ano}`) | CSV da curva de carga horária do ONS; padrão: bucket público de dados abertos do ONS (`CURVA_CARGA_<ano>.csv`, teto 8 MB) → perfil médio 24 h por subsistema (`todogreen_grid_load_profiles`) |
+| `TDG_ANP_DIESEL_URL` (opcional) | CSV do levantamento de preços da ANP; padrão: "últimas 4 semanas — diesel/GNV" (gov.br, ~3,6 MB, teto 16 MB) → mediana por município/UF/região/país e semana (`todogreen_fuel_price_reference`). Alternativa: `POST /api/todogreen/energy/anp/import` com o CSV |
+| `TDG_ENERGY_REFERENCE_DISABLED=1` (opcional) | desliga o cron e o botão de sincronização das referências de energia; a Saúde do sistema mostra as três fontes como não configuradas (nunca "conectado") |
 
 Sem essas URLs, a otimização responde `routing_not_configured` (503) e a
 seleção de motor reflete os motores disponíveis — nada é forjado como ativo

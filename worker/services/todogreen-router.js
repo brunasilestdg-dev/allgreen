@@ -39,6 +39,7 @@ import { handleTodoGreenSemente } from "./todogreen-semente.js";
 import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenSystemHealth } from "./todogreen-system-health.js";
+import { handleTodoGreenEnergy } from "./todogreen-energy-reference.js";
 import { handleTodoGreenViability } from "./todogreen-viability.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
@@ -232,6 +233,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
   if (path.startsWith("/api/todogreen/tracker"))
     return guarded("To Do Green Tracker error", "Não foi possível processar o rastreamento veicular.",
       () => handleTodoGreenTracker(request, env));
+  // Energia (P4): perfil do espaço, referências públicas (ANEEL/ANP/ONS) e o
+  // plano composto (tarifa → melhor hora → recarga por veículo → diesel).
+  if (path.startsWith("/api/todogreen/energy")) {
+    return guarded("To Do Green energy error", "Não foi possível montar o plano de energia.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenEnergy(request, env, resolved.access, resolved.user, url);
+    });
+  }
+
   if (path.startsWith("/api/todogreen/fleet")) {
     return guarded("To Do Green fleet error", "Não foi possível sincronizar a frota.", async () => {
       const resolved = await internalReadAccess(request, env);
