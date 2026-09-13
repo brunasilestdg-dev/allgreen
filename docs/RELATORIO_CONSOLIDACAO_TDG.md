@@ -118,7 +118,7 @@ regressões que a rodada existe para eliminar.
 | --- | --- | --- |
 | Design system / regressão visual (P1.4) | **Entregue (#371 + rodada 3)** | Tokens canônicos + aliases + guarda; suíte única de regressão visual em `e2e/visual/` com baselines (Chromium/Linux da sessão remota); caminho Docker documentado, ainda não exercitado |
 | Roteirizador em duas colunas (mapa) | Backlog | Depende de o Leaflet montar (`invalidateSize`/`ResizeObserver`) — só verificável em navegador |
-| Pré-flight persistido como gate de publicação de rota + Action Queue (P2 restante) | **Entregue (rodada 3)** | Gate na coleção `rotas` + fila de ação na Torre de Controle; falta estender o gate ao **despacho automático** (`todogreen-dispatch.js` cria rotas filtrando disponibilidade, sem persistir pré-flight) — decisão 12 da titular |
+| Pré-flight persistido + despacho automático | **Entregue** | Gate canônico na coleção `rotas`, fila de ação na Torre de Controle e `/dispatch/aplicar` usando `registrarPreflight` + a mesma `gateDePreflightDaRota`; BLOCK não grava, WARNING exige justificativa auditada e a rota persiste `preflight_id/status`. |
 | P7 — Green On (comandos OCPP), GreenPay repasse (SysPag), Core All Green / Greenmob | Externo | O Codex trouxe sessões/reservas de recarga, cobrança por kWh e GreenPay fase 2 (contratos) na `main` (`c38c627`, migrations 0130/0131); comandos OCPP exigem CSMS, repasse exige token SysPag e identidade multi-vertical exige decisão de arquitetura — nada disso é simulado |
 | Painel de observabilidade ("Administração > Saúde do sistema") | **Entregue (#358)** | Domínio puro `systemHealthDomain` + painel; integrações só ficam "Operacional" com teste/sincronização realtricas |
 | `viabilitySnapshot` no caminho conectado | **Entregue (#362)** | Tabela própria, versionamento por hash, gate 409 na proposta |
@@ -128,22 +128,23 @@ regressões que a rodada existe para eliminar.
 ## Como validar
 
 ```bash
-npm run verify   # lint + testes unitários + testes de worker
-npm run build    # gera dist/
+npm run verify                  # lint + testes unitários + testes de worker
+npm run build                   # gera dist/
+npm run test:e2e:critical:ci    # Chromium + jornadas críticas
 ```
 
 Em produção, comparar `GET /api/status` → `version` com o SHA de `main`. A
 publicação é automática via Cloudflare Workers Builds a cada push em `main`,
-mas só depois do gate mínimo: `npm ci`, `npm run verify`, `npm run build` e
-`npm run deploy:cloudflare`. GitHub Actions vermelho por falta de minutos/runner
-não bloqueia; teste local, Cloudflare Build ou deploy manual vermelho bloqueia.
+mas só depois do gate: `npm ci`, `npm run verify`, `npm run build` e
+`npm run deploy:cloudflare`. O `deploy:cloudflare` roda o E2E crítico em Chromium
+antes de migrations/publicação. GitHub Actions vermelho por falta de minutos/runner
+não bloqueia; `verify`, `build`, E2E crítico, Cloudflare Build ou deploy manual vermelho bloqueia.
 
-## Regressões da `main` fora do escopo desta sessão
+## Regressões conhecidas
 
-- `LogisticsVertical.test.jsx › abre o To Do diretamente pela jornada do espaço de trabalho`
-  está vermelho desde o To Do canônico (Codex): a tela perdeu o botão "Nova tarefa" que o
-  teste espera. Não alterado aqui; todos os gates da rodada registram só essa falha.
-- Lint vermelho no `PlannerPage` (mesmo commit) foi corrigido em #365 sem mudar comportamento.
+- O antigo vermelho de `LogisticsVertical.test.jsx › abre o To Do diretamente pela jornada do espaço de trabalho` foi **corrigido**: a jornada entra em `Hoje`, abre `Quadro` e então valida `Nova tarefa`.
+- O lint vermelho histórico no `PlannerPage` foi corrigido em #365 sem mudar comportamento.
+- Nesta rodada, nenhuma regressão interna conhecida é tratada como verde por documentação; falhas externas continuam declaradas como externas.
 
 ## Pendência de credencial (só a titular resolve)
 

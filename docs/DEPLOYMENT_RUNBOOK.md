@@ -31,15 +31,17 @@ npm ci
 ## 2. Validar localmente antes de tocar em produção
 
 ```bash
-npm run verify   # lint + testes (unit + worker)
-npm run build    # gera dist/
+npm run verify                  # lint + testes (unit + worker)
+npm run build                   # gera dist/
+npm run test:e2e:critical:ci    # Chromium + jornadas críticas reais
 ```
 
 Ambos precisam passar. Enquanto o GitHub Actions estiver sem minutos/runner, um
 check vermelho por falta de capacidade do Actions não bloqueia. O que bloqueia é
 `npm run verify` vermelho, `npm run build` vermelho ou falha no Cloudflare
-Builds/deploy manual. E2E visual (Playwright) continua sendo gate separado quando
-houver navegador disponível.
+Builds/deploy manual ou `test:e2e:critical` vermelho. A suíte crítica de Playwright
+é obrigatória antes de publicar; a regressão visual completa por screenshots continua
+separada, porque é mais pesada e depende dos baselines canônicos.
 
 ## 3. Autenticar o wrangler
 
@@ -173,11 +175,13 @@ novo cron aqui, com o handler no roteador do Worker.
   `steps: []`, workflow "Publicar" *skipped*), isso **não** é erro de código e o
   gate obrigatório passa a ser o **local** (seção 12a) ou o do Cloudflare Builds —
   `verify`, `build`, Cloudflare Builds ou deploy manual vermelho, esses sim, bloqueiam.
-- Cloudflare Workers Builds (conectado ao repo): em push na `main`, deve rodar
-  `npm ci && npm run verify && npm run build` e só depois
-  `npm run deploy:cloudflare`.
-- `.github/workflows/deploy.yml` (**Publicar**): contingência manual. Também roda
-  `npm ci`, `npm run verify` e `npm run build` antes de migrar/publicar.
+- Cloudflare Workers Builds (conectado ao repo): em push na `main`, roda
+  `npm ci && npm run verify && npm run build` e depois `npm run deploy:cloudflare`.
+  O próprio `deploy:cloudflare` instala Chromium e executa `test:e2e:critical`;
+  só depois aplica migrations e chama `wrangler deploy`. Assim, falha de navegação
+  não chega à produção mesmo que unitários/worker estejam verdes.
+- `.github/workflows/deploy.yml` (**Publicar**): contingência manual. Também instala
+  Chromium e executa `test:e2e:critical` antes de migrar/publicar.
 
 Para trocar o repositório: reconecte o Workers Builds ao novo repo e mantenha o
 mesmo pipeline (nada de específico do repositório está embutido nos workflows).
@@ -188,6 +192,7 @@ mesmo pipeline (nada de específico do repositório está embutido nos workflows
 npm ci
 npm run verify
 npm run build
+npm run test:e2e:critical:ci
 npm run deploy:cloudflare
 
 # Atalho equivalente depois do npm ci:
@@ -256,9 +261,12 @@ Produção ≠ `main` até prova em contrário. Após cada publicação, anote e
 | 2026-09-13 13:20 | `1a17c34d8cec` (merge do PR #371 P1.4 sobre `c38c627` do Codex) | Cloudflare Workers Builds | — | `/api/system/version` ok, `migrations.expected` 134, última `0131`; D1 remoto sem pendências; gate local do estado mesclado: lint 0 erros, worker 106/106, unit 352 ok (falha pré-existente do To Do), build ok |
 | 2026-09-13 13:48 | `fdcd3bd627b7` (PR #373, P2 pré-flight persistido + fila de ação + regressão visual consolidada) | Cloudflare Workers Builds | `0132` aplicada no D1 remoto antes do merge (`wrangler d1 migrations apply --remote`) | `/api/system/version` ok, `migrations.expected` 135, última `0132`; `/api/todogreen/preflight` responde 401 sem sessão; gate local: lint 0 erros, worker 107/107, unit 352 ok (falha pré-existente do To Do), build ok, visual 4/4 |
 
-> Os deploys automáticos do Workers Builds **não rodam o gate** (só `build` + `deploy:cloudflare`):
-> o gate desta rodada foi executado localmente antes de cada merge (logs completos guardados por PR).
-> Decisão pendente da titular: colocar `npm run verify && npm run build` como *build command* do Worker.
+> **Estado atual do gate:** `deploy:cloudflare` não é mais um atalho de publicação.
+> Antes de tocar no D1 remoto ou publicar, ele instala Chromium e executa
+> `test:e2e:critical` (smoke, acesso, navegação ERP↔TMS e portais autenticados).
+> O build command do Workers Builds continua devendo executar `npm ci && npm run verify && npm run build`;
+> o deploy command deve continuar sendo `npm run deploy:cloudflare`. A regressão visual
+> completa permanece como gate separado.
 
 Sempre diferenciar **LOCAL** (build do navegador), **MAIN** (branch) e
 **PRODUÇÃO** (o que `/api/system/version` devolve) — a tela Saúde do sistema faz

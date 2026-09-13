@@ -28,14 +28,16 @@ beforeAll(async () => {
   await env.DB.prepare(
     `INSERT INTO todogreen_drivers
        (id,tenant_id,workspace_owner_id,driver_code,full_name,document,employment_type,
-        availability_status,status,user_email,fields_json,revision,created_by,updated_by,created_at,updated_at)
+        availability_status,status,user_email,cnh_number,cnh_category,cnh_expires_at,fields_json,revision,created_by,updated_by,created_at,updated_at)
      VALUES ('dispatch-driver','todogreen',?,'DRV-D','João Despacho','123','employee',
-        'available','active',?,'{}',1,?,?,?,?)`,
+        'available','active',?,'99999999999','D','2030-01-01','{}',1,?,?,?,?)`,
   ).bind(ownerId, user.email, ownerId, ownerId, agora, agora).run();
   await env.DB.prepare(
     `INSERT INTO todogreen_fleet_vehicles
-       (id,tenant_id,workspace_owner_id,prefix,plate,status,fields_json,revision,created_by,updated_by,created_at,updated_at)
-     VALUES ('dispatch-vehicle','todogreen',?,'V-01','ABC1D23','available','{}',1,?,?,?,?)`,
+       (id,tenant_id,workspace_owner_id,prefix,plate,status,energy_type,payload_kg,battery_capacity_kwh,
+        battery_soh_percent,last_soc_percent,reference_consumption_kwh_km,fields_json,revision,created_by,updated_by,created_at,updated_at)
+     VALUES ('dispatch-vehicle','todogreen',?,'V-01','ABC1D23','available','electric',1500,100,
+        100,100,0.3,'{}',1,?,?,?,?)`,
   ).bind(ownerId, ownerId, ownerId, agora, agora).run();
   for (const [id, referencia, origem, destino, pickupLat, pickupLng, deliveryLat, deliveryLng] of [
     ["dispatch-op-1", "OS-101", "CD Osasco", "Loja Centro", -23.52, -46.78, -23.55, -46.63],
@@ -68,6 +70,66 @@ describe("despacho como cadeia transacional", () => {
     expect(paradas.map((p) => p.ordem)).toEqual([1, 2, 3]);
   });
 
+  it("não aplica rota quando o pré-flight retorna BLOCK", async () => {
+    await env.DB.prepare("UPDATE todogreen_drivers SET cnh_expires_at = '2020-01-01' WHERE id='dispatch-driver'").run();
+    const response = await aplicar({
+      planId: "00000000-0000-4000-8000-000000000108",
+      tours: [{
+        veiculoId: "dispatch-vehicle",
+        motoristaId: "dispatch-driver",
+        operacoes: ["dispatch-op-1", "dispatch-op-2"],
+        distanciaKm: 31.4,
+        duracaoMin: 87,
+        paradas: [
+          { operationId: "dispatch-op-1", tipo: "coleta" },
+          { operationId: "dispatch-op-1", tipo: "entrega" },
+          { operationId: "dispatch-op-2", tipo: "entrega" },
+        ],
+      }],
+    });
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.code).toBe("PREFLIGHT_BLOCKED");
+    expect(body.preflight?.status).toBe("BLOCK");
+    const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM todogreen_routes WHERE id LIKE 'dispatch-%'").first();
+    expect(total.n).toBe(0);
+    await env.DB.prepare("UPDATE todogreen_drivers SET cnh_expires_at = '2030-01-01' WHERE id='dispatch-driver'").run();
+  });
+
+  it("não aplica WARNING sem justificativa e não cria rota por fora do gate", async () => {
+    await env.DB.prepare("UPDATE todogreen_drivers SET cnh_expires_at = NULL WHERE id='dispatch-driver'").run();
+    const response = await aplicar({
+      planId: "00000000-0000-4000-8000-000000000107",
+      tours: [{
+        veiculoId: "dispatch-vehicle",
+        motoristaId: "dispatch-driver",
+        operacoes: ["dispatch-op-1", "dispatch-op-2"],
+        distanciaKm: 31.4,
+        duracaoMin: 87,
+        paradas: [
+          { operationId: "dispatch-op-1", tipo: "coleta" },
+          { operationId: "dispatch-op-1", tipo: "entrega" },
+          { operationId: "dispatch-op-2", tipo: "entrega" },
+        ],
+      }],
+    });
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.code).toBe("PREFLIGHT_WARNING_REQUIRES_JUSTIFICATION");
+    expect(body.preflight?.status).toBe("WARNING");
+    const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM todogreen_routes WHERE id LIKE 'dispatch-%'").first();
+    expect(total.n).toBe(0);
+    await env.DB.prepare("UPDATE todogreen_drivers SET cnh_expires_at = '2030-01-01' WHERE id='dispatch-driver'").run();
+  });
+
+  it("bloqueia o formato legado de atribuição direta sem rota/pré-flight", async () => {
+    const response = await aplicar({
+      atribuicoes: [{ operationId: "dispatch-op-1", driverId: "dispatch-driver", vehiclePlate: "ABC1D23" }],
+    });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("CANONICAL_ROUTE_REQUIRED");
+  });
+
   it("cria a rota, liga as operações e ocupa os recursos em um único plano", async () => {
     const response = await aplicar({
       planId,
@@ -93,6 +155,8 @@ describe("despacho como cadeia transacional", () => {
     expect(rota.workspace_owner_id).toBe(ownerId);
     expect(rota.driver_id).toBe("dispatch-driver");
     expect(rota.vehicle_plate).toBe("ABC1D23");
+    expect(rota.preflight_id).toBeTruthy();
+    expect(rota.preflight_status).toBe("PASS");
     expect(JSON.parse(rota.stops_json).map((p) => `${p.operationId}:${p.tipo}`)).toEqual([
       "dispatch-op-1:coleta", "dispatch-op-1:entrega", "dispatch-op-2:entrega",
     ]);

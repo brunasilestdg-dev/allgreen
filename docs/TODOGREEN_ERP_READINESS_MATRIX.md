@@ -1,10 +1,6 @@
 # Matriz de prontidão do ERP To Do Green
 
-Instantâneo de 30/08/2026, revisado em 01/09/2026 e ainda coerente com o estado
-atual: as fronteiras marcadas aqui como PARCIAL/EXTERNO são exatamente os gates
-guardados pelo teste transversal `test/todogreen-erp-journey.worker.test.js`
-(os `it.todo` do fim do arquivo). Reveja esta matriz sempre que um desses gates
-fechar.
+Instantâneo originalmente aberto em 30/08/2026 e **revalidado em 13/09/2026** contra o `main` atual. O teste transversal `test/todogreen-erp-journey.worker.test.js` é a fonte de regressão da jornada order-to-cash. Os quatro antigos atalhos internos (Jurídico, evidência de assinatura, implantação ativa e tabela de preço real) já foram fechados; o único `it.todo` remanescente é a autorização oficial de CT-e pela SEFAZ, uma fronteira externa.
 
 Esta matriz não mede se existe uma tela. Mede se o processo tem persistência real, regra de negócio no servidor, controle de acesso, trilha de auditoria e efeito verificável. Quando uma etapa depende de governo, banco, certificado, OAuth ou fornecedor, ela fica marcada como externa em vez de ganhar um falso status verde.
 
@@ -29,17 +25,17 @@ Esta matriz não mede se existe uma tela. Mede se o processo tem persistência r
 | Deal Desk | **REAL** | alçada calculada no servidor, segregação solicitante/decisor, versões e histórico | Nenhum gap estrutural encontrado |
 | Proposta | **REAL** | cenário obrigatório e bloqueio server-side quando Deal Desk não liberou | Aceite do cliente ainda é um estado de negócio informado ao ERP |
 | Contrato / versionamento | **REAL** | contrato só nasce de proposta aceita e cliente coerente, com SLA, faturamento, preço e auditoria | Aprovação, Jurídico e assinatura ainda têm gaps abaixo |
-| Jurídico no ciclo contratual | **PARCIAL** | workflow legal real, sequencial e auditável | O contrato ainda consegue ser aprovado/assinado sem o workflow jurídico ter terminado |
-| Assinatura contratual | **PARCIAL** | status e data ficam persistidos | `signature_status=signed` ainda pode entrar pelo payload sem evidência de assinatura obrigatória |
+| Jurídico no ciclo contratual | **REAL** | workflow legal real, sequencial e auditável; a transição do contrato para aprovado/assinado consulta a conclusão do Jurídico no servidor | Nenhum atalho interno conhecido |
+| Assinatura contratual | **REAL** | `signature_status=signed` exige documento assinado vinculado ao fluxo jurídico e registra status/data | Validade jurídica externa do provedor/certificado continua fora do ERP |
 | Provedor de assinatura | **EXTERNO** | estrutura de readiness existe | Depende do provedor e do método de identidade/certificado aplicável |
-| Implantação / go-live | **PARCIAL** | readiness, centro de custo, dashboard, portal, tracking, ESG e ativação são reais | `priceTableId` hoje é testado por presença, não por existência de tabela real; além disso a OS não exige implantação ativa |
+| Implantação / go-live | **REAL** | readiness, centro de custo, dashboard, portal, tracking e ESG são reais; o gate consulta a tabela de preço e exige que exista, esteja ativa e pertença ao cliente/contrato | Integrações externas continuam dependendo dos provedores correspondentes |
 | Portal do cliente | **REAL** | escopo vem da sessão/banco, com operações, solicitações, documentos e indicadores | Canais externos dependem dos provedores correspondentes |
 
 ## Operação, frota e execução
 
 | Processo | Status | O que já é real | Fronteira encontrada |
 | --- | --- | --- | --- |
-| Ordem de Serviço | **PARCIAL** | contrato aprovado+assinado é exigido, preço é herdado e há máquina de estados | Falta exigir `client_activation_state.status=active`; hoje a OS consegue pular implantação |
+| Ordem de Serviço | **REAL** | contrato aprovado+assinado e implantação ativa são exigidos no servidor; preço é herdado e há máquina de estados | Nenhum atalho interno conhecido |
 | Planejamento / aceite | **REAL** | capacidade, produto, risco e decisão persistidos | Fontes externas podem enriquecer rota/telemetria |
 | Operação / viagem | **REAL** | `todogreen_client_operations` é fonte canônica compartilhada com o portal | Sincronização automática depende da integração configurada |
 | Ocorrências / eventos | **REAL** | eventos, timeline, SLA e evidências persistidos | Nenhum gap estrutural encontrado |
@@ -115,7 +111,7 @@ A suíte `todogreen-purchasing.worker.test.js` já funciona como teste transvers
 | Green Score | **REAL** | score persistido, pesos versionados e componentes abertos | É indicador proprietário, não certificação |
 | Evidências ESG/operacionais | **REAL** | vínculo por cliente/cálculo e rastreabilidade | Evidência de terceiro depende da fonte |
 | Cofre de documentos | **REAL** | upload interno, SHA-256, versionamento, download autenticado e referência externa | Arquivos grandes usam referência externa |
-| Documento contratual | **PARCIAL** | arquivo pode ser guardado e versionado | `signed` ainda não exige apontar para a evidência assinada |
+| Documento contratual | **REAL** | arquivo pode ser guardado/versionado e a transição para `signed` exige evidência assinada vinculada ao fluxo jurídico | Provedor de assinatura/certificado permanece externo |
 
 ## Integrações
 
@@ -168,18 +164,16 @@ O teste transversal `test/todogreen-erp-journey.worker.test.js` percorre o camin
 21. baixa
 22. razão quitado
 
-### O que ainda impede chamar o ciclo de “sem atalhos”
+### Gates internos da jornada
 
-A auditoria encontrou quatro gates internos que precisam ser endurecidos:
+Os quatro atalhos internos que esta matriz registrava foram fechados e estão cobertos no happy path transversal:
 
-1. **Jurídico → contrato:** o workflow existe, mas o contrato ainda não consulta sua conclusão antes de aceitar `approved`/`signed`.
-2. **Assinatura → contrato:** `signature_status=signed` ainda não exige evidência de assinatura vinculada.
-3. **Implantação → OS:** a implantação pode ser feita corretamente, mas a criação da OS ainda não exige que ela esteja `active`.
-4. **Tabela de preço no go-live:** o readiness verifica se o contrato contém um `priceTableId`, mas ainda não confirma se essa tabela existe, está ativa e pertence ao mesmo espaço/cliente.
+1. **Jurídico → contrato:** aprovado/assinado exige workflow jurídico concluído.
+2. **Assinatura → evidência:** `signed` exige documento assinado vinculado.
+3. **Implantação → OS:** a OS exige `client_activation_state.status=active`.
+4. **Tabela de preço → go-live:** o readiness valida existência, estado ativo e vínculo correto da tabela.
 
-O quinto limite não é um bug interno: **CT-e autorizado é EXTERNO** e só deve aparecer como autorizado após retorno oficial da SEFAZ.
-
-O teste transversal segue deliberadamente o caminho correto e deixa esses cinco pontos como `it.todo`. Eles são backlog técnico explícito, não aprovação silenciosa de atalhos.
+O limite restante não é um bug interno: **CT-e autorizado é EXTERNO** e só pode aparecer como autorizado após retorno oficial da SEFAZ. O teste transversal mantém exatamente esse caso como `it.todo`.
 
 ## Jornadas internas auditadas
 
@@ -191,17 +185,15 @@ O teste transversal segue deliberadamente o caminho correto e deixa esses cinco 
 
 ## Prioridades resultantes
 
-**P0:** tornar o repositório privado.
+**P0:** impedir bypass do pré-flight no despacho automático — **FECHADO nesta rodada de hardening**: `/dispatch/aplicar` registra o pré-flight, aplica a mesma guarda canônica da rota, recusa BLOCK, exige justificativa para WARNING e grava `preflight_id/status`.
 
-**P0:** fechar os gates Jurídico → contrato, evidência → assinatura e implantação ativa → OS.
+**P0:** produção só publica após gate mínimo de navegador — **FECHADO no código**: `deploy:cloudflare` instala Chromium e roda `test:e2e:critical` antes de migrations/deploy; o fallback manual executa a mesma classe de teste.
 
-**P0:** manter CT-e/MDF-e com status local até confirmação oficial da SEFAZ.
+**P1:** proteger `main` por configuração administrativa do GitHub (PR obrigatório e bloqueio de push direto). Esta proteção não é representável apenas por código versionado.
 
-**P1:** validar existência/estado/escopo da tabela de preço no gate de implantação.
+**P1:** manter esta matriz sincronizada com `test/todogreen-erp-journey.worker.test.js` e com o runbook.
 
-**P1:** transformar alçadas de compras codificadas em configuração versionada e auditável.
-
-**P1:** manter testes transversais permanentes para order-to-cash, procure-to-pay e hire-to-pay, além das suítes por módulo.
+**P2:** medir capacidade com o harness k6 em `scripts/load/todogreen-smoke.k6.js`; sem execução controlada não existe número honesto de usuários simultâneos.
 
 ## Eletrificação, roteirização e viabilidade (camada de decisão)
 

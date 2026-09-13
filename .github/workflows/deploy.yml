@@ -77,6 +77,12 @@ jobs:
       - name: Construir o app
         run: npm run build
 
+      - name: Instalar Chromium do gate crítico
+        run: npx playwright install --with-deps chromium
+
+      - name: Validar jornadas críticas no navegador
+        run: npm run test:e2e:critical
+
       # A migração vem antes de publicar: código novo que espera coluna nova
       # não pode subir antes de a coluna existir.
       - name: Atualizar o banco

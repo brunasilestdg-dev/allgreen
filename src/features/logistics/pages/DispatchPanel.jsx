@@ -65,6 +65,8 @@ export default function DispatchPanel({ authHeaders, setToast }) {
   const [otimizando, setOtimizando] = useState(false);
   const [aplicando, setAplicando] = useState(false);
   const [resultado, setResultado] = useState(null);
+  const [alertaPreflight, setAlertaPreflight] = useState(null);
+  const [justificativaPreflight, setJustificativaPreflight] = useState("");
   const [aberto, setAberto] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -83,6 +85,8 @@ export default function DispatchPanel({ authHeaders, setToast }) {
   const otimizar = async () => {
     setOtimizando(true);
     setResultado(null);
+    setAlertaPreflight(null);
+    setJustificativaPreflight("");
     try {
       const headers = { ...(authHeaders?.() || {}), "content-type": "application/json" };
       const r = await fetch("/api/todogreen/dispatch/otimizar", { method: "POST", headers, body: JSON.stringify({}) });
@@ -99,7 +103,7 @@ export default function DispatchPanel({ authHeaders, setToast }) {
   const nomeDaOperacao = (opId) =>
     (cand?.operacoes || []).find((o) => o.id === opId)?.cliente || opId;
 
-  const aplicar = async () => {
+  const aplicar = async (justificativa = "") => {
     const tours = resultado?.tours || [];
     const aplicaveis = toursAplicaveis(tours);
     const semMotorista = toursSemMotorista(tours);
@@ -115,15 +119,28 @@ export default function DispatchPanel({ authHeaders, setToast }) {
       const r = await fetch("/api/todogreen/dispatch/aplicar", {
         method: "POST",
         headers,
-        body: JSON.stringify({ planId: resultado.planId, tours: aplicaveis }),
+        body: JSON.stringify({
+          planId: resultado.planId,
+          tours: aplicaveis,
+          ...(justificativa ? { justificativaPreflight: justificativa } : {}),
+        }),
       });
       const p = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(p.error || "Não foi possível aplicar as atribuições.");
+      if (!r.ok) {
+        if (p.code === "PREFLIGHT_WARNING_REQUIRES_JUSTIFICATION") {
+          setAlertaPreflight(p.preflight || { status: "WARNING", checks: [] });
+          setToast?.(p.error || "O pré-flight encontrou alertas. Registre a justificativa para autorizar.");
+          return;
+        }
+        throw new Error(p.error || "Não foi possível aplicar as atribuições.");
+      }
       const aviso = semMotorista
         ? ` ${semMotorista} rota(s) sem motorista livre ficou(aram) pendente(s).`
         : "";
       setToast?.(`${p.rotasCriadas || 0} rota(s) criada(s) e ${p.aplicados || 0} operação(ões) despachada(s).${aviso}`);
       setResultado(null);
+      setAlertaPreflight(null);
+      setJustificativaPreflight("");
       setCand(null);
       carregar();
     } catch (e) { setToast?.(e.message); }
@@ -201,7 +218,38 @@ export default function DispatchPanel({ authHeaders, setToast }) {
                 </div>
               )}
               {(resultado.tours || []).length > 0 && (
-                <button type="button" className="tdg-action" onClick={aplicar} disabled={aplicando}>{aplicando ? "Criando rotas…" : "Aplicar plano e criar rotas"}</button>
+                <>
+                  <button type="button" className="tdg-action" onClick={() => aplicar()} disabled={aplicando}>{aplicando ? "Validando pré-flight…" : "Aplicar plano e criar rotas"}</button>
+                  {alertaPreflight?.status === "WARNING" && (
+                    <div className="tdg-dispatch-preflight-warning" role="alert">
+                      <strong>Pré-flight com alertas</strong>
+                      <p>Revise os alertas abaixo. Para seguir mesmo assim, registre o motivo da decisão; ele ficará auditado.</p>
+                      <ul>
+                        {(alertaPreflight.checks || [])
+                          .filter((check) => check.severity === "WARNING")
+                          .map((check) => <li key={check.id}>{check.label}{check.reason ? `: ${check.reason}` : ""}</li>)}
+                      </ul>
+                      <label>
+                        <span>Justificativa da autorização</span>
+                        <textarea
+                          value={justificativaPreflight}
+                          onChange={(event) => setJustificativaPreflight(event.target.value)}
+                          minLength={10}
+                          rows={3}
+                          placeholder="Ex.: motorista confirmou documento e operação autorizou a saída."
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="tdg-action"
+                        disabled={aplicando || justificativaPreflight.trim().length < 10}
+                        onClick={() => aplicar(justificativaPreflight.trim())}
+                      >
+                        {aplicando ? "Autorizando…" : "Autorizar alertas e aplicar"}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

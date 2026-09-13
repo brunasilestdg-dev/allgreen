@@ -14,6 +14,7 @@
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
 import { optimizeTodoGreenRouting } from "./todogreen-public-routing-api.js";
+import { gateDePreflightDaRota, registrarPreflight } from "./todogreen-preflight.js";
 import {
   interpretarDespachoVroom,
   montarProblemaVroomDespacho,
@@ -490,7 +491,47 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
           dataServico: datas[0] || new Date().toISOString().slice(0, 10),
           distanciaKm: Math.max(0, numero(tour.distanciaKm) || 0),
           duracaoMin: Math.max(0, numero(tour.duracaoMin) || 0),
+          justificativaPreflight: texto(tour.justificativaPreflight, 1000),
         });
+      }
+
+      // P0: despacho automático passa pela MESMA régua do fluxo manual.
+      // O servidor cria um pré-flight persistido para cada rota preparada e
+      // chama a guarda canônica. BLOCK nunca grava; WARNING só segue com
+      // justificativa auditada. Isso elimina a antiga rota "criada pelo
+      // despacho" sem preflight_id/preflight_status.
+      const justificativaGlobal = texto(corpo.justificativaPreflight || corpo.overrideReason, 1000);
+      for (const rota of preparadas) {
+        const corpoRota = {
+          motoristaId: rota.motorista.id,
+          veiculoId: rota.veiculo.id,
+          placa: rota.veiculo.plate,
+          paradas: rota.paradas,
+          distanciaKm: rota.distanciaKm,
+          duracaoMin: rota.duracaoMin,
+          justificativaPreflight: texto(rota.justificativaPreflight || justificativaGlobal, 1000),
+        };
+        const preflight = await registrarPreflight(env, access, user, {
+          ...corpoRota,
+          rotaId: rota.id,
+        });
+        corpoRota.preflightId = preflight.id;
+        const impedimento = await gateDePreflightDaRota(env, {
+          access, user, corpo: corpoRota,
+        });
+        if (impedimento) {
+          return json({
+            error: impedimento,
+            code: preflight.blocked
+              ? "PREFLIGHT_BLOCKED"
+              : preflight.status === "WARNING"
+                ? "PREFLIGHT_WARNING_REQUIRES_JUSTIFICATION"
+                : "PREFLIGHT_REQUIRED",
+            preflight,
+          }, 409);
+        }
+        rota.preflightId = corpoRota.preflightId;
+        rota.preflightStatus = corpoRota.preflightStatusVerificado;
       }
 
       const agora = new Date().toISOString();
@@ -502,14 +543,15 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
           `INSERT INTO todogreen_routes
              (id,tenant_id,workspace_owner_id,name,driver_id,driver_name,vehicle_plate,service_date,status,
               origin,destination,distance_km,duration_min,toll_total,stops_json,notes,revision,
-              created_by,updated_by,created_at,updated_at,archived_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',1,?,?,?,?,NULL)`,
+              created_by,updated_by,created_at,updated_at,archived_at,preflight_id,preflight_status)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',1,?,?,?,?,NULL,?,?)`,
         ).bind(
           rota.id, TENANT_ID, access.ownerId,
           `Despacho ${rota.dataServico} · ${rota.motorista.full_name}`,
           rota.motorista.id, rota.motorista.full_name, rota.veiculo.plate, rota.dataServico, "planejada",
           primeira.endereco, ultima.endereco, rota.distanciaKm, rota.duracaoMin, 0,
           JSON.stringify(rota.paradas), user.id, user.id, agora, agora,
+          rota.preflightId, rota.preflightStatus,
         ));
         for (const operacao of rota.operacoes) {
           const ordem = rota.paradas.find((parada) => parada.operationId === operacao.id)?.ordem || null;
@@ -540,30 +582,22 @@ export async function handleTodoGreenDispatch(request, env, access, user) {
         aplicados: operacoesUsadas.size,
         rotasCriadas: preparadas.length,
         rotas: preparadas.map((rota) => rota.id),
+        preflights: preparadas.map((rota) => ({ rotaId: rota.id, preflightId: rota.preflightId, status: rota.preflightStatus })),
       });
     }
 
+    // O formato legado atribuía motorista/placa diretamente na operação sem
+    // criar rota e, portanto, sem pré-flight. Mantê-lo gravando reabriria o
+    // bypass que este endpoint acabou de fechar. Clientes antigos recebem um
+    // erro explícito e devem reotimizar para enviar `tours`.
     const atribuicoes = Array.isArray(corpo.atribuicoes) ? corpo.atribuicoes : [];
-    if (!atribuicoes.length) return json({ error: "Nenhuma atribuição para aplicar." }, 400);
-
-    const agora = new Date().toISOString();
-    let aplicados = 0;
-    for (const item of atribuicoes) {
-      const operationId = String(item.operationId || "");
-      if (!operationId) continue;
-      const resultado = await env.DB.prepare(
-        `UPDATE todogreen_client_operations
-            SET driver_id = ?, driver_name = ?, vehicle_plate = ?, revision = revision + 1,
-                updated_by = ?, updated_at = ?
-          WHERE id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
-      ).bind(
-        String(item.driverId || ""), String(item.driverName || ""), String(item.vehiclePlate || ""),
-        user.id, agora, operationId, access.ownerId,
-      ).run();
-      if (resultado.meta.changes > 0) aplicados += 1;
+    if (atribuicoes.length) {
+      return json({
+        error: "A atribuição direta foi desativada: otimize novamente e aplique o plano para criar rotas com pré-flight.",
+        code: "CANONICAL_ROUTE_REQUIRED",
+      }, 409);
     }
-
-    return json({ aplicados });
+    return json({ error: "Nenhuma rota para aplicar." }, 400);
   }
 
   return json({ error: "Rota de despacho não encontrada." }, 404);
