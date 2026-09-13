@@ -104,6 +104,8 @@ test("importar paradas: funil padroniza, geocodifica e manda o torto pra confer√
   await expect(page.locator(".tdg-roteirizacao-mapa")).toHaveClass(/leaflet-container/);
 
   await page.getByRole("button", { name: /Importar paradas/ }).click();
+  // As quatro formas de entrada est√£o na tela (colar, arquivo, OCR, bipagem).
+  await expect(page.getByText("Foto da etiqueta (OCR)")).toBeVisible();
   await page.locator(".tdg-rot-import-textarea").fill("Santos SP\nOsasco SP\nXyzinexistente 99999");
   await page.getByRole("button", { name: /Processar colados/ }).click();
 

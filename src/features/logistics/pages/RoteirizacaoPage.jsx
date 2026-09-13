@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BatteryCharging, Camera, Clock, Coins, GripVertical, ListChecks, Navigation, Plug, Plus, Route, ScanLine, Shuffle, Sparkles, Trash2, Truck, Upload, UserCheck, X } from "lucide-react";
+import { BatteryCharging, Camera, Clock, Coins, GripVertical, ListChecks, Navigation, Plug, Plus, Route, ScanLine, ScanText, Shuffle, Sparkles, Trash2, Truck, Upload, UserCheck, X } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import {
   classificarGeocodificacao,
   csvParaMatriz,
   interpretarBipagem,
+  limparTextoOCR,
   parsearParadasColadas,
   parsearParadasDePlanilha,
   precisaConferencia,
@@ -153,6 +154,10 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
   const [bipados, setBipados] = useState([]);
   const [bipCamera, setBipCamera] = useState(false);
   const [bipErroCamera, setBipErroCamera] = useState("");
+  // OCR: leitura do endereço por foto da etiqueta (tesseract.js, client-side,
+  // grátis). O texto lido cai no MESMO campo do colar para a pessoa revisar.
+  const [ocrLendo, setOcrLendo] = useState(false);
+  const [ocrProgresso, setOcrProgresso] = useState(0);
   const [carregadores, setCarregadores] = useState({ fase: "off", lista: [] });
   const [mostrarProprios, setMostrarProprios] = useState(false);
   const [pedagios, setPedagios] = useState({ fase: "idle" });
@@ -308,6 +313,36 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
     }
   };
 
+  // Foto da etiqueta → OCR (tesseract.js, grátis, roda no navegador; import
+  // dinâmico, quem não usa não baixa). O texto lido cai no MESMO campo do colar
+  // para a pessoa revisar antes de processar. OCR é sugestão, não verdade —
+  // nada entra na rota sem passar pelo funil e pela conferência.
+  const processarFotoOCR = async (arquivo) => {
+    if (!arquivo) return;
+    setImportErro("");
+    setOcrLendo(true);
+    setOcrProgresso(0);
+    try {
+      const { recognize } = await import("tesseract.js");
+      const { data } = await recognize(arquivo, "por", {
+        logger: (m) => {
+          if (m.status === "recognizing text") setOcrProgresso(Math.round((m.progress || 0) * 100));
+        },
+      });
+      const limpo = limparTextoOCR(data?.text || "");
+      if (!limpo) {
+        setImportErro("Não consegui ler texto na imagem. Tente uma foto mais nítida e reta.");
+        return;
+      }
+      setImportTexto((atual) => (atual.trim() ? `${atual.trim()}\n${limpo}` : limpo));
+      setToast?.("Texto lido da foto — revise e clique em Processar colados.");
+    } catch (erro) {
+      setImportErro(erro?.message || "Não foi possível ler a imagem.");
+    } finally {
+      setOcrLendo(false);
+    }
+  };
+
   const escolherCandidatoImport = (id, candidato) => {
     setImportItens((atual) => atual.map((it) => (it.id === id
       ? { ...it, escolhido: candidato, endereco: candidato.rotulo, status: "resolvido" }
@@ -345,6 +380,8 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
     setBipados([]);
     setBipErroCamera("");
     bipRecentesRef.current = [];
+    setOcrLendo(false);
+    setOcrProgresso(0);
   };
 
   // Bipagem: registra um código lido (leitor físico ou câmera) na fila de
@@ -1226,10 +1263,10 @@ Regras:
             {importFase === "idle" && (
               <>
                 <p className="tdg-rot-import-intro">
-                  Cole os endereços (um por linha), envie um arquivo CSV/Excel ou bipe etiquetas
-                  (código de barras/QR). Cada endereço é padronizado e geocodificado; o que vier
-                  ambíguo ou sem localização cai na conferência antes de virar parada. Nada é
-                  gravado — é só para montar a rota.
+                  Cole os endereços (um por linha), envie um arquivo CSV/Excel, fotografe a
+                  etiqueta (OCR) ou bipe o código de barras/QR. Cada endereço é padronizado e
+                  geocodificado; o que vier ambíguo ou sem localização cai na conferência antes de
+                  virar parada. Nada é gravado — é só para montar a rota.
                 </p>
                 <textarea
                   className="tdg-rot-import-textarea"
@@ -1239,15 +1276,25 @@ Regras:
                   placeholder={"Rua da Estação, 100, Santos SP\nAv. Brasil, 500, Campinas SP\nPED-123; Rua X, 10, Osasco SP"}
                 />
                 {importErro ? <p className="tdg-roteirizacao-erro">{importErro}</p> : null}
+                {ocrLendo && (
+                  <div className="tdg-rot-import-progresso">
+                    <p>Lendo o texto da foto… {ocrProgresso}%</p>
+                    <div className="tdg-rot-import-barra"><span style={{ width: `${ocrProgresso}%` }} /></div>
+                  </div>
+                )}
                 <div className="tdg-rot-import-acoes">
-                  <button type="button" className="tdg-action" onClick={processarColado}>
+                  <button type="button" className="tdg-action" onClick={processarColado} disabled={ocrLendo}>
                     <ListChecks size={16} /> Processar colados
                   </button>
-                  <label className="tdg-action tdg-action-ghost tdg-rot-import-arquivo">
+                  <label className={`tdg-action tdg-action-ghost tdg-rot-import-arquivo ${ocrLendo ? "is-desabilitado" : ""}`}>
                     <Upload size={16} /> Enviar CSV/Excel
-                    <input type="file" accept=".csv,.txt,.xlsx,.xls" hidden onChange={(event) => processarArquivoImport(event.target.files?.[0])} />
+                    <input type="file" accept=".csv,.txt,.xlsx,.xls" hidden disabled={ocrLendo} onChange={(event) => processarArquivoImport(event.target.files?.[0])} />
                   </label>
-                  <button type="button" className="tdg-action tdg-action-ghost" onClick={abrirBipagem}>
+                  <label className={`tdg-action tdg-action-ghost tdg-rot-import-arquivo ${ocrLendo ? "is-desabilitado" : ""}`}>
+                    <ScanText size={16} /> Foto da etiqueta (OCR)
+                    <input type="file" accept="image/*" capture="environment" hidden disabled={ocrLendo} onChange={(event) => processarFotoOCR(event.target.files?.[0])} />
+                  </label>
+                  <button type="button" className="tdg-action tdg-action-ghost" onClick={abrirBipagem} disabled={ocrLendo}>
                     <ScanLine size={16} /> Bipar etiquetas
                   </button>
                 </div>

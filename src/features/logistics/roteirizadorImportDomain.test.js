@@ -10,6 +10,7 @@ import {
   resumoImportacao,
   pareceCodigoSeco,
   interpretarBipagem,
+  limparTextoOCR,
 } from "./roteirizadorImportDomain.js";
 
 describe("padronizarEndereco", () => {
@@ -160,6 +161,20 @@ describe("interpretarBipagem", () => {
   it("texto vazio devolve null", () => {
     expect(interpretarBipagem("   ")).toBe(null);
     expect(interpretarBipagem(null)).toBe(null);
+  });
+});
+
+describe("limparTextoOCR", () => {
+  it("descarta linhas de ruído (poucas letras) e mantém endereços", () => {
+    const cru = "Rua da Estação, 100\n|\n12\n~\nAv. Brasil, 500 Campinas\n  \nCEP 13000-000 Osasco";
+    expect(limparTextoOCR(cru)).toBe("Rua da Estação, 100\nAv. Brasil, 500 Campinas\nCEP 13000-000 Osasco");
+  });
+  it("colapsa espaços e apara cada linha", () => {
+    expect(limparTextoOCR("  Rua   A ,  100  \n\n  Av   B  ")).toBe("Rua A , 100\nAv B");
+  });
+  it("texto vazio vira string vazia", () => {
+    expect(limparTextoOCR("")).toBe("");
+    expect(limparTextoOCR(null)).toBe("");
   });
 });
 

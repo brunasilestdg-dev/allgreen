@@ -200,4 +200,17 @@ export function interpretarBipagem(texto) {
   return { referencia: "", endereco: padronizarEndereco(bruto) };
 }
 
+// Limpa o texto CRU que o OCR (foto da etiqueta) devolveu, antes de a pessoa
+// revisar: apara, colapsa espaços e descarta linhas que são só ruído de leitura
+// (sem letras suficientes para ser um endereço — respingos como "|", "~", "12").
+// Não corrige nem inventa nada — só tira o lixo óbvio para sobrar menos pra
+// conferir. O texto limpo entra no MESMO funil do colar.
+export function limparTextoOCR(texto) {
+  return String(texto ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter((l) => (l.match(/[A-Za-zÀ-ÿ]/g) || []).length >= 2)
+    .join("\n");
+}
+
 export const TETO_PARADAS_IMPORT = TETO_PARADAS;
