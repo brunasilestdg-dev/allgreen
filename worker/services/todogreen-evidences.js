@@ -25,9 +25,12 @@ import { TENANT_ID, podeNaVertical, recorteDeCarteira } from "./todogreen-access
 import {
   documentoValido,
   enderecoAceito,
+  idDeArquivoInterno,
   linkExpirado,
+  PREFIXO_ARQUIVO_INTERNO,
   validadeDoLink,
 } from "../../src/features/logistics/documentVaultDomain.js";
+import { servirArquivoInterno } from "./todogreen-file-store.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -204,6 +207,23 @@ export async function emitirConcessao(env, { evidenceId = null, arquivoUrl = "",
 // segundo caminho de download seria uma segunda regra de expiração para alguém
 // esquecer de manter.
 export const emitirConcessaoDeArquivo = (env, { url, clientId, ownerId, para, nome }) => {
+  // Comprovante guardado no cofre INTERNO (POD/assinatura do motorista): guarda
+  // um sentinela com o id do arquivo em vez do endereço, e a entrega serve os
+  // bytes direto do cofre. `enderecoAceito` recusa esse caminho interno de
+  // propósito (relativo, rede interna) — era por isso que o cliente recebia erro
+  // ao pedir o comprovante de uma entrega real.
+  const fileId = idDeArquivoInterno(url);
+  if (fileId) {
+    return emitirConcessao(env, {
+      arquivoUrl: `${PREFIXO_ARQUIVO_INTERNO}${fileId}`,
+      arquivoNome: texto(nome, 240) || "comprovante",
+      clientId,
+      ownerId,
+      para,
+    });
+  }
+  // Endereço externo (ex.: PDF de nota fiscal): valida e guarda a URL; a entrega
+  // faz proxy por fetch, escondendo a origem do cliente.
   const endereco = enderecoAceito(url);
   if (!endereco.ok) throw new Error(endereco.motivo);
   return emitirConcessao(env, {
@@ -224,6 +244,7 @@ export async function entregarArquivo(env, token) {
   const linha = await env.DB
     .prepare(
       `SELECT g.id AS grant_id, g.expires_at, g.revoked_at, g.evidence_id, g.client_id,
+              g.workspace_owner_id,
               COALESCE(NULLIF(e.arquivo_url, ''), g.arquivo_url) AS arquivo_url,
               COALESCE(NULLIF(e.arquivo_nome, ''), g.arquivo_nome) AS arquivo_nome,
               COALESCE(e.hash_conteudo, '') AS hash_conteudo
@@ -246,6 +267,23 @@ export async function entregarArquivo(env, token) {
     linkExpirado({ expiraEm: linha.expires_at, revogadoEm: linha.revoked_at })
   )
     return json({ error: "Este link de download expirou. Peça um novo na tela de documentos." }, 410);
+
+  // Comprovante do cofre interno (POD/assinatura): serve os bytes direto do
+  // cofre, sem `fetch` de um endpoint que exige sessão da equipe. O token da
+  // concessão já é a autorização — temporário, escopado ao cliente/operação, e
+  // cada abertura fica registrada abaixo.
+  const fileIdInterno = idDeArquivoInterno(linha.arquivo_url);
+  if (fileIdInterno) {
+    const resposta = await servirArquivoInterno(env, linha.workspace_owner_id, fileIdInterno);
+    if (!resposta) return json({ error: "O arquivo não está acessível no momento." }, 410);
+    await env.DB.prepare(
+      "UPDATE todogreen_document_grants SET downloads = downloads + 1, last_used_at = ? WHERE id = ?",
+    )
+      .bind(new Date().toISOString(), linha.grant_id)
+      .run()
+      .catch(() => {});
+    return resposta;
+  }
 
   let origem;
   try {

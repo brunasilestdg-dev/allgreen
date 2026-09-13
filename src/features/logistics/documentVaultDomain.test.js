@@ -1,13 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
+  PREFIXO_ARQUIVO_INTERNO,
   VALIDADE_DO_LINK_MINUTOS,
   documentoValido,
   ehTipoValido,
   enderecoAceito,
+  idDeArquivoInterno,
   linkExpirado,
   tamanhoLegivel,
   validadeDoLink,
 } from "./documentVaultDomain.js";
+
+describe("comprovante do cofre interno (POD)", () => {
+  it("extrai o id do caminho de download do cofre", () => {
+    expect(idDeArquivoInterno("/api/todogreen/file-vault/abc-123/download")).toBe("abc-123");
+    // Tolera origem absoluta e barra final.
+    expect(idDeArquivoInterno("https://app.exemplo.com/api/todogreen/file-vault/xyz_9/download/")).toBe("xyz_9");
+  });
+
+  it("reconhece o sentinela guardado na concessão", () => {
+    expect(idDeArquivoInterno(`${PREFIXO_ARQUIVO_INTERNO}dossie-1`)).toBe("dossie-1");
+  });
+
+  it("devolve vazio para endereço externo ou lixo (aí vale o enderecoAceito)", () => {
+    expect(idDeArquivoInterno("https://arquivos.exemplo.com/pod.pdf")).toBe("");
+    expect(idDeArquivoInterno("")).toBe("");
+    expect(idDeArquivoInterno("/api/todogreen/outra-coisa")).toBe("");
+  });
+});
 
 describe("endereço do arquivo", () => {
   it("aceita http e https públicos", () => {
