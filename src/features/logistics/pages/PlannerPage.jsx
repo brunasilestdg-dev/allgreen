@@ -115,6 +115,12 @@ const tarefaVazia = (bucketId = "") => ({
   campos: { clientId: "", opportunityId: "" },
 });
 
+// Id de tarefa nova: UUID quando disponível; senão carimbo + aleatório. Fica
+// fora do componente porque é efeito de evento, não de render (React Compiler).
+const gerarIdDeTarefa = () => (typeof crypto !== "undefined" && crypto.randomUUID
+  ? crypto.randomUUID()
+  : `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+
 export default function PlannerPage({
   authHeaders,
   setToast,
@@ -319,18 +325,14 @@ export default function PlannerPage({
   const adicionarRapida = async (bucketId) => {
     const titulo = (rascunhoRapido[bucketId] || "").trim();
     if (!titulo || !planoAtivo) return;
-    const id = typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = gerarIdDeTarefa();
     onUpsertCanonicalTask?.({ ...tarefaVazia(bucketId), id, rawTaskId: id, canonicalTaskId: id, title: titulo, planId: planoAtivo.id }, planoAtivo);
     setRascunhoRapido((r) => ({ ...r, [bucketId]: "" }));
   };
 
   const salvarTarefa = async (tarefa) => {
     if (!planoAtivo) return;
-    const id = tarefa.rawTaskId || tarefa.id || (typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    const id = tarefa.rawTaskId || tarefa.id || gerarIdDeTarefa();
     onUpsertCanonicalTask?.({ ...tarefa, id, rawTaskId: id, canonicalTaskId: tarefa.canonicalTaskId || id, planId: planoAtivo.id }, planoAtivo);
     setTarefaEmEdicao(null);
     avisar("Tarefa salva.", "sucesso");
