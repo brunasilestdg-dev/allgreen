@@ -19,10 +19,12 @@ name: Publicar
 # primeiro e explica o que fazer, em vez de falhar com erro incompreensível.
 
 on:
-  workflow_run:
-    workflows: ["Qualidade"]
-    types: [completed]
-    branches: [main]
+  # O CI/CD principal passou a ser o Cloudflare Workers Builds (publica em push
+  # na main; ver docs/CLOUDFLARE_BUILDS_SETUP.md). Este fluxo fica como FALLBACK
+  # MANUAL — para republicar sem depender do Builds, ou quando os minutos do
+  # GitHub Actions voltarem. O gatilho automático (workflow_run da "Qualidade")
+  # foi removido de propósito para evitar PUBLICAÇÃO DUPLICADA (Actions +
+  # Cloudflare ao mesmo tempo). O workflow continua registrado para uso manual.
   workflow_dispatch:
 
 permissions:
@@ -35,11 +37,10 @@ concurrency:
 jobs:
   publicar:
     runs-on: ubuntu-latest
-    # Publicação manual passa direto; publicação automática exige que a
-    # Qualidade daquele commit tenha terminado em sucesso.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    # Só publicação manual (workflow_dispatch). O gatilho automático foi
+    # removido — quem publica automaticamente agora é o Cloudflare Workers
+    # Builds. Este job é o botão de emergência.
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 20
     steps:
       - name: Conferir se a chave da Cloudflare está cadastrada
