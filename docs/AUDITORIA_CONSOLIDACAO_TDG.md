@@ -280,9 +280,9 @@ salvo onde indicado.
 
 Ver a tabela de SHAs em `docs/DEPLOYMENT_RUNBOOK.md` §13a. Resumo: `58c0000` (início) →
 `d2396e44` (manual) → `700468c` (auto, **com teste do To Do vermelho**) → `401f7ec` (pin manual
-no último verde) → `cc4c0fe` → `2a4d459` → `c4f3637` → `2d65bdf` (autos, cada um com gate local
-verde exceto a falha pré-existente abaixo). D1 remoto acompanhou (0120→0124 aplicadas pelo
-`deploy:cloudflare` do build; 0125 após o merge de P5/P6). Nenhuma migration renomeada,
+no último verde) → `cc4c0fe` → `2a4d459` → `c4f3637` → `2d65bdf` → `bd402c3` (autos, cada um com gate local
+verde exceto a falha pré-existente abaixo). D1 remoto acompanhou (0120→0125 aplicadas pelo
+`deploy:cloudflare` do build; ao fecho, `wrangler d1 migrations list --remote` sem pendências). Nenhuma migration renomeada,
 reaplicada ou apagada; nenhum SQL destrutivo.
 
 ### 12.3 Regressões encontradas na `main` fora do escopo desta sessão

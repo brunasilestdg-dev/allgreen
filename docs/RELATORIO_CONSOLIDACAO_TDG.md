@@ -25,8 +25,9 @@ Restrições respeitadas em **todas** as entregas abaixo:
 
 - **Produção** (rodada 1): `GET /api/status` → `version` `58c0000535fe`. **Rodada 2 (13/09/2026)**:
   `GET /api/system/version` → `2d65bdfdf87b` (PR #365), `environment: production`,
-  `publishedBy: cloudflare-workers-builds`, `migrations.expected: 131` — e, após o merge de P5/P6,
-  o SHA daquele merge com `0125`. A tela **Administração → Saúde do sistema** mostra LOCAL × SERVIDOR
+  `publishedBy: cloudflare-workers-builds`, `migrations.expected: 131`; **fecho da rodada**:
+  `bd402c306939` (PR #367, P5/P6 + docs), `migrations.expected: 132`, última `0125`, D1 remoto sem
+  migration pendente. A tela **Administração → Saúde do sistema** mostra LOCAL × SERVIDOR
   × BANCO lado a lado (`docs/DEPLOYMENT_RUNBOOK.md` §13a tem o registro de cada publicação).
 - **Migrations**: rodada 1 até `0119`; rodada 2 acrescentou `0120`–`0125` (todas aditivas:
   métricas de integração, snapshots de viabilidade, cache geográfico, perfil energético do
