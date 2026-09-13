@@ -130,6 +130,7 @@ describe("espaço de trabalho To Do Green", () => {
     expect(board.metrics).toMatchObject({ open: 3, overdue: 1, blocked: 1, highPriority: 1 });
     expect(board.today.overdue[0]).toMatchObject({
       id: "planner:plan-1:t1",
+      rawId: "planner-t1",
       clientLabel: "DHL",
       priority: "Alta",
       blocked: true,
@@ -145,6 +146,25 @@ describe("espaço de trabalho To Do Green", () => {
     });
   });
 
+  it("resolve dependência por id canônico para não ressuscitar duas tarefas", () => {
+    const board = buildTodoGreenTaskBoard({
+      today: "2026-09-13",
+      db: {
+        tasks: [
+          { id: "todo-a", canonicalTaskId: "task:a", businessId: "todogreen", title: "A", status: "A fazer", dependsOn: ["task:b"] },
+          { id: "todo-b", canonicalTaskId: "task:b", businessId: "todogreen", title: "B", status: "Concluído" },
+        ],
+      },
+    });
+
+    expect(board.today.blocked).toHaveLength(0);
+    expect(board.tasks.find((task) => task.id === "task:a")).toMatchObject({
+      rawId: "todo-a",
+      dependsOn: ["task:b"],
+      dependencyLabels: ["B"],
+    });
+  });
+
   it("normaliza status e mantém uma saída canônica para qualquer visão", () => {
     expect(normalizeTodoGreenTaskStatus("completed")).toBe("Concluído");
     expect(normalizeTodoGreenTaskStatus("blocked")).toBe("Aguardando");
@@ -153,7 +173,7 @@ describe("espaço de trabalho To Do Green", () => {
     })).toMatchObject({
       canonicalId: "t1",
       clientLabel: "Vivara",
-      sourceLinks: { crm: { clientId: "cli-1", opportunityId: "" } },
+      sourceLinks: { todo: { taskId: "t1" }, crm: { clientId: "cli-1", opportunityId: "" } },
     });
   });
 
