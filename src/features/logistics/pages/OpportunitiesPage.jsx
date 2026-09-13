@@ -37,6 +37,7 @@ import {
   OBJETIVOS_ELETRIFICACAO,
   avaliarJornadaEletrificacao,
 } from "../electrificationJourneyDomain.js";
+import OpportunityViabilityPanel from "./OpportunityViabilityPanel.jsx";
 import "./TodoGreenPages.css";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
@@ -504,7 +505,7 @@ function BlocoAmbiental({ ambiental }) {
   );
 }
 
-function CartaoOportunidade({ registro, analise, jornada, aberta, alternar, onEdit, onSimulate, onAvancarEtapa }) {
+function CartaoOportunidade({ registro, analise, jornada, aberta, alternar, onEdit, onSimulate, onAvancarEtapa, cenarios = [], authHeaders, setToast }) {
   const { ambiental, greenScore, financeiro, operacional, expansao, riscos } = analise;
   const criticos = riscos.filter((risco) => risco.gravidade === "alta").length;
   return (
@@ -568,6 +569,8 @@ function CartaoOportunidade({ registro, analise, jornada, aberta, alternar, onEd
           </label>
 
           <JornadaEletrificacao jornada={jornada} onEdit={onEdit} onSimulate={onSimulate} />
+
+          <OpportunityViabilityPanel oportunidade={registro} cenarios={cenarios} authHeaders={authHeaders} setToast={setToast} />
 
           <BlocoAmbiental ambiental={ambiental} />
 
@@ -1146,6 +1149,9 @@ export default function OpportunitiesPage({
             aberta={abertaId === registro.id}
             alternar={() => setAbertaId((atual) => (atual === registro.id ? null : registro.id))}
             onEdit={() => setEditandoId(registro.id)}
+            cenarios={scenarios}
+            authHeaders={authHeaders}
+            setToast={setToast}
             onSimulate={() => onNavigate?.(`/todogreen/precificacao?opportunity=${encodeURIComponent(registro.id)}`)}
             onAvancarEtapa={(estagio) => { if (estagio !== registro.estagio) onUpdate?.(registro.id, { estagio, revision: registro.revision }); }}
           />

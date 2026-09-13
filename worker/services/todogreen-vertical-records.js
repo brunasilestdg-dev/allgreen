@@ -83,6 +83,7 @@ import {
 // POD do motorista (#120b): a foto/assinatura chega como data URL reduzido e é
 // guardada no cofre; a URL de download entra no comprovante da entrega.
 import { armazenarImagemBase64, descartarArquivos } from "./todogreen-file-store.js";
+import { STATUS_DE_LIBERACAO, viabilidadeDaProposta } from "./todogreen-viability.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -1755,6 +1756,16 @@ const noAlcanceDaCarteira = async (env, colecao, access, email, id) => {
 // Só que o guarda estava no componente React, e qualquer chamada direta a
 // este endpoint passava por cima dele. A régua é a mesma (liberacaoDaProposta,
 // de dealDeskDomain.js); o que muda é onde ela é aplicada.
+// O que a proposta liberada leva consigo: QUAL versão da viabilidade a
+// autorizou. É o elo auditável entre a promessa ao cliente e a fotografia
+// operacional que a sustentou (seção 49).
+const carimboDeViabilidade = (snap) => ({
+  snapshotId: snap?.id || "",
+  version: snap?.version ?? null,
+  contentHash: snap?.contentHash || "",
+  liberadaEm: new Date().toISOString(),
+});
+
 const proposalLiberada = async (env, access, cenarioId) => {
   const { results } = await env.DB.prepare(
     "SELECT * FROM todogreen_deal_desk_requests WHERE workspace_owner_id = ? AND scenario_id = ?",
@@ -1917,6 +1928,16 @@ const criar = async (env, colecao, access, user, corpo, email = "") => {
   if (colecao === COLECOES.proposals) {
     const liberacao = await proposalLiberada(env, access, texto(corpo.cenarioId, 120));
     if (!liberacao.liberada) return json({ error: liberacao.motivo }, 409);
+    // Viabilidade operacional (seções 47–50): proposta ligada a uma
+    // oportunidade só NASCE liberada (sent/approved/accepted) com snapshot sem
+    // faltas. Rascunho segue livre — o gate é na liberação, e é no servidor.
+    const situacaoInicial = (texto(corpo.situacao, 40) || "draft").toLowerCase();
+    const oportunidadeDaProposta = texto(corpo.oportunidadeId, 120);
+    if (STATUS_DE_LIBERACAO.has(situacaoInicial) && oportunidadeDaProposta) {
+      const viab = await viabilidadeDaProposta(env, access, { opportunityId: oportunidadeDaProposta, scenarioId: texto(corpo.cenarioId, 120) });
+      if (!viab.liberada) return json({ error: viab.motivo, code: "viability_required", blockers: viab.blockers || [] }, 409);
+      corpo = { ...corpo, campos: { ...objeto(corpo.campos), viabilidade: carimboDeViabilidade(viab.snapshot) } };
+    }
   }
 
   if (colecao === COLECOES.contracts) {
@@ -2055,6 +2076,18 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
       });
       if (!temDoc)
         return json({ error: "Anexe o contrato assinado ao fluxo jurídico antes de marcar a assinatura como concluída." }, 409);
+    }
+  }
+  if (colecao === COLECOES.proposals) {
+    // Gate de viabilidade só na TRANSIÇÃO para liberada (não a cada PATCH de
+    // uma proposta que já está liberada) — a mesma disciplina do gate jurídico.
+    const situacaoNova = texto(proximo.situacao, 40).toLowerCase();
+    const situacaoAtual = texto(atual.status, 40).toLowerCase();
+    const oportunidadeDaProposta = texto(proximo.oportunidadeId, 120);
+    if (STATUS_DE_LIBERACAO.has(situacaoNova) && !STATUS_DE_LIBERACAO.has(situacaoAtual) && oportunidadeDaProposta) {
+      const viab = await viabilidadeDaProposta(env, access, { opportunityId: oportunidadeDaProposta, scenarioId: texto(proximo.cenarioId, 120) });
+      if (!viab.liberada) return json({ error: viab.motivo, code: "viability_required", blockers: viab.blockers || [] }, 409);
+      proximo.campos = { ...objeto(proximo.campos), viabilidade: carimboDeViabilidade(viab.snapshot) };
     }
   }
   const erro = colecao.exigido(proximo);

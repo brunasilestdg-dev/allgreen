@@ -39,6 +39,7 @@ import { handleTodoGreenSemente } from "./todogreen-semente.js";
 import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenSystemHealth } from "./todogreen-system-health.js";
+import { handleTodoGreenViability } from "./todogreen-viability.js";
 import { handleTodoGreenMcpConnections } from "./mcp-connections.js";
 import { handleTodoGreenPricingPerformance } from "./todogreen-pricing-performance.js";
 import { handleTodoGreenGovernance } from "./todogreen-governance.js";
@@ -478,6 +479,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
       } catch (erro) {
         return json({ error: erro.message || "Carregadores indisponíveis agora." }, 400);
       }
+    });
+  }
+
+  if (path === "/api/todogreen/viability-snapshots") {
+    return guarded("To Do Green viability error", "Não foi possível registrar a viabilidade.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenViability(request, env, resolved.access, resolved.user, url);
     });
   }
 
