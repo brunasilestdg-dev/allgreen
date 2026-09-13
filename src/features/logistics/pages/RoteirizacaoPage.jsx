@@ -128,6 +128,9 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
   const [restricoes, setRestricoes] = useState("");
   const [iaEstado, setIaEstado] = useState({ fase: "idle" });
   const [estado, setEstado] = useState({ fase: "parado" });
+  // Classe do veículo que vai rodar a rota: decide OSRM × Valhalla no backend
+  // (seções 29–33). Pesado sem Valhalla configurado não recebe rota de carro.
+  const [classeVeiculo, setClasseVeiculo] = useState("van");
   const [otimizando, setOtimizando] = useState(false);
   const [sugestoes, setSugestoes] = useState({});
   // Qual parada está com a lista de sugestões aberta (a que está com foco).
@@ -450,7 +453,7 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
       coord: coordsResolvidasRef.current[String(endereco).trim()] || null,
     }));
     const resultado = await tracarRota(
-      { paradas: comCoords },
+      { paradas: comCoords, veiculo: { category: classeVeiculo } },
       { headers: authHeaders?.() || {} },
     );
     if (resultado.ok) {
@@ -897,6 +900,20 @@ Regras:
             <span>Considerar trânsito de pico (estimativa)</span>
           </label>
         </div>
+        <label className="tdg-roteirizacao-classe">
+          <span>Veículo da rota</span>
+          <select value={classeVeiculo} onChange={(event) => setClasseVeiculo(event.target.value)} aria-label="Classe do veículo da rota">
+            <option value="moto">Moto</option>
+            <option value="carro">Carro</option>
+            <option value="van">Van</option>
+            <option value="vuc">VUC</option>
+            <option value="3/4">3/4</option>
+            <option value="toco">Toco</option>
+            <option value="truck">Truck</option>
+            <option value="carreta">Carreta</option>
+          </select>
+          <small>Leve roteia por OSRM; pesado exige Valhalla (restrições viárias). Sem Valhalla, o sistema não traça rota de carro para pesado.</small>
+        </label>
         <div className="tdg-roteirizacao-acoes">
           <button type="button" className="tdg-action tdg-action-ghost" onClick={adicionarParada}>
             <Plus size={16} /> Adicionar parada

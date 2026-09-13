@@ -5,7 +5,8 @@
 // públicos apenas como contingência do MVP.
 
 const PUBLIC_NOMINATIM = "https://nominatim.openstreetmap.org/";
-const PUBLIC_OSRM = "https://router.project-osrm.org/";
+import { rotearComProvider } from "./routing-providers.js";
+
 const USER_AGENT = "ToDoGreen-TMS-Routing/1";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -92,51 +93,15 @@ export async function geocodeTodoGreen(body, env) {
   }
 }
 
+// Traçado: o backend escolhe o motor pelo veículo (seções 28–35). Pesado sem
+// Valhalla recebe NO_SAFE_ROUTING_ENGINE (409) — nunca uma rota de carro. A
+// resposta mantém o formato OSRM que a tela já lê + o metadado do motor.
 export async function routeTodoGreen(body, env) {
-  const coordinates = Array.isArray(body?.coordinates) ? body.coordinates : [];
-  if (coordinates.length < 2 || coordinates.length > 500)
-    return json({ error: "invalid_coordinates", message: "Informe entre 2 e 500 coordenadas." }, 400);
-
-  const normalized = [];
-  for (const pair of coordinates) {
-    if (!Array.isArray(pair) || pair.length < 2) {
-      return json({ error: "invalid_coordinates", message: "Coordenada inválida." }, 400);
-    }
-    const lon = Number(pair[0]);
-    const lat = Number(pair[1]);
-    if (!Number.isFinite(lon) || !Number.isFinite(lat) || lon < -180 || lon > 180 || lat < -90 || lat > 90) {
-      return json({ error: "invalid_coordinates", message: "Coordenada inválida." }, 400);
-    }
-    normalized.push([lon, lat]);
-  }
-
-  const configured = Boolean(String(env.TODOGREEN_OSRM_BASE_URL || "").trim());
-  const base = cleanBase(env.TODOGREEN_OSRM_BASE_URL, PUBLIC_OSRM);
-  const points = normalized.map(([lon, lat]) => `${lon},${lat}`).join(";");
-  const suffix = `route/v1/driving/${points}`;
-  const query = new URLSearchParams({
-    overview: body?.geometry === false ? "false" : "full",
-    geometries: body?.geometry === false ? "polyline" : "geojson",
-    steps: "false",
-  });
-
-  const call = async (targetBase, isPrivate) => {
-    const url = `${endpoint(targetBase, suffix)}?${query}`;
-    return fetchJson(url, { headers: upstreamHeaders(env, isPrivate) });
-  };
-
-  try {
-    return json(await call(base, configured), 200);
-  } catch {
-    if (configured) {
-      try {
-        return json(await call(PUBLIC_OSRM, false), 200);
-      } catch {
-        // cai para 502
-      }
-    }
-    return json({ error: "routing_map_unavailable", message: "Traçado rodoviário indisponível." }, 502);
-  }
+  const resultado = await rotearComProvider(
+    { coordinates: body?.coordinates, vehicle: body?.vehicle || {}, geometry: body?.geometry !== false },
+    env,
+  );
+  return json(resultado.body, resultado.status);
 }
 
 export async function handleTodoGreenRoutingMaps(request, env) {

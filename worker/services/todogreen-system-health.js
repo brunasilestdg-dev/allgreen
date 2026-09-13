@@ -32,6 +32,7 @@ import {
   IMPLEMENTATION,
   montarRelatorioDeSaude,
 } from "../../src/features/logistics/systemHealthDomain.js";
+import { motoresDisponiveis } from "../../src/features/logistics/routingProvidersDomain.js";
 
 const texto = (v, max = 300) => String(v ?? "").trim().slice(0, max);
 const urlValida = (value) => {
@@ -310,11 +311,12 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
   ];
 
   // ---- Integrações (seção 113) ----
+  const motores = motoresDisponiveis(env);
   const osrm = doGateway("osrm");
-  const osrmSelfHosted = Boolean(osrm?.configured) || urlValida(env?.TDG_OSRM_BASE_URL);
+  const osrmSelfHosted = motores.osrm.configured;
   const vroom = doGateway("vroom");
   const vroomSelfHosted = Boolean(vroom?.configured) || urlValida(env?.TDG_ROUTING_URL);
-  const valhallaUrl = urlValida(env?.TDG_VALHALLA_BASE_URL);
+  const valhalla = doGateway("valhalla");
   const nominatim = doGateway("nominatim");
   const clima = doGateway("open-meteo");
   const aneel = doGateway("aneel-open-data");
@@ -354,20 +356,18 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
           : "Sem servidor VROOM (TDG_ROUTING_URL / TODOGREEN_VROOM_BASE_URL): despacho usa o VRP local (WASM) — contingência.",
       }),
     },
-    {
-      id: "valhalla",
-      name: "Valhalla (pesados)",
-      group: "roteirizacao",
-      implementation: IMPLEMENTATION.PREPARED,
-      configured: valhallaUrl,
-      authenticated: valhallaUrl,
-      online: false,
-      checkedAt: null,
-      detail: valhallaUrl
-        ? "TDG_VALHALLA_BASE_URL presente; a seleção de motor por classe (routingEngineSelectionDomain) já o escolhe para pesados, mas o cliente HTTP de rota com truck costing ainda não está implementado."
-        : "Sem TDG_VALHALLA_BASE_URL. Pesados (VUC/truck/carreta) NÃO podem cair em OSRM perfil de carro: sem Valhalla, a resposta segura é NO_SAFE_ROUTING_ENGINE.",
-      requirement: "TDG_VALHALLA_BASE_URL (self-hosted, infra/tms-routing)",
-      canTest: false,
+    valhalla && {
+      ...doCatalogo(valhalla, saudePorId.get("valhalla"), {
+        group: "roteirizacao",
+        implementation: IMPLEMENTATION.REAL,
+        configured: motores.valhalla.configured,
+        authenticated: motores.valhalla.configured,
+        canTest: motores.valhalla.configured,
+        detail: motores.valhalla.configured
+          ? "Cliente real: pesados e veículos com restrição roteiam por truck costing (altura/largura/comprimento/peso/eixos). Teste lê /status."
+          : "Sem TDG_VALHALLA_BASE_URL. Pesados (VUC/truck/carreta) NÃO caem em OSRM perfil de carro: o backend responde NO_SAFE_ROUTING_ENGINE até o Valhalla existir (infra/tms-routing).",
+        requirement: "TDG_VALHALLA_BASE_URL (self-hosted, infra/tms-routing) + TDG_ROUTING_TOKEN no gateway",
+      }),
     },
     nominatim && {
       ...doCatalogo(nominatim, saudePorId.get("nominatim"), { group: "roteirizacao", implementation: IMPLEMENTATION.REAL }),

@@ -4,6 +4,7 @@ import { TENANT_ID } from "./todogreen-access.js";
 import { planElectricRoute } from "./todogreen-electric-routing.js";
 import { estimateRouteEnergy } from "../../src/features/logistics/energyEstimationDomain.js";
 import { selectRoutingEngine } from "../../src/features/logistics/routingEngineSelectionDomain.js";
+import { motoresDisponiveis } from "../../src/features/logistics/routingProvidersDomain.js";
 import { runPreflight } from "../../src/features/logistics/preflightDomain.js";
 
 const cors = {
@@ -111,11 +112,10 @@ async function electricPlan(request, env) {
   // disponíveis. É metadado informativo — a decisão de path fica no dispatch
   // quando a infra do motor estiver conectada. `available` reflete os motores
   // configurados por env (sem URL configurada, o motor não é oferecido).
-  const availableEngines = [];
-  if (String(env?.TDG_OSRM_BASE_URL || "").trim()) availableEngines.push("osrm");
-  if (String(env?.TDG_VALHALLA_BASE_URL || "").trim()) availableEngines.push("valhalla");
+  // A MESMA régua do gateway de rota (routingProvidersDomain): OSRM sempre
+  // disponível (endpoint público é contingência declarada), Valhalla só com URL.
   const routingEngineSelection = selectRoutingEngine(body.vehicle || {}, {
-    available: availableEngines.length ? availableEngines : undefined,
+    available: motoresDisponiveis(env).available,
   });
 
   // Pré-flight operacional (PASS / WARNING / BLOCK) sobre o MESMO par
