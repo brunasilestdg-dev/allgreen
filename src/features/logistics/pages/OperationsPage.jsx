@@ -4,6 +4,7 @@ import { AlertTriangle, Clock3, MapPin, PackageCheck, Plus, Route, Truck } from 
 import Modal from "../../../components/Modal.jsx";
 import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
 import { VEHICLE_CLASSES } from "../vehicleClassDomain.js";
+import { resolverCoordenadasDaOperacao } from "../distanciaRodoviariaDomain.js";
 
 const agoraLocal = () => new Date().toISOString().slice(0, 16);
 const EVENT_TYPES = ["coleta", "transito", "chegada", "entrega", "ocorrencia", "reagendamento", "documento"];
@@ -39,6 +40,9 @@ export default function OperationsPage({ operations = [], clients = [], contract
   // Demais campos livres (fields_json) da operação em edição — preservados no
   // save para a exigência de veículo não apagar o que outros fluxos gravaram.
   const [camposBase, setCamposBase] = useState({});
+  // Coordenadas já resolvidas da operação em edição — a base que a
+  // geocodificação preserva quando o endereço não muda ou o serviço cai.
+  const [coordsBase, setCoordsBase] = useState({});
   const [saving, setSaving] = useState(false);
   // Registro em janela própria (rodada "nada corta a tela", 30/08).
   const [novaAberta, setNovaAberta] = useState(false);
@@ -60,10 +64,14 @@ export default function OperationsPage({ operations = [], clients = [], contract
       status: "planned",
     });
     setCamposBase(operation.campos && typeof operation.campos === "object" ? operation.campos : {});
+    setCoordsBase({
+      coletaLat: operation.coletaLat, coletaLng: operation.coletaLng,
+      entregaLat: operation.entregaLat, entregaLng: operation.entregaLng,
+    });
     setConfirmando({ id: operation.id, revision: operation.revision });
     setNovaAberta(true);
   };
-  const fecharModal = () => { setNovaAberta(false); setConfirmando(null); setForm(empty); setCamposBase({}); };
+  const fecharModal = () => { setNovaAberta(false); setConfirmando(null); setForm(empty); setCamposBase({}); setCoordsBase({}); };
   const [selected, setSelected] = useState(null);
   const [events, setEvents] = useState([]);
   const [event, setEvent] = useState({ tipo: "transito", titulo: "", descricao: "", local: "", ocorridoEm: agoraLocal(), recebedor: "", comprovanteUrl: "" });
@@ -82,23 +90,37 @@ export default function OperationsPage({ operations = [], clients = [], contract
   const save = async (submitEvent) => {
     submitEvent.preventDefault();
     setSaving(true);
+    // Geocodifica origem→coleta e destino→entrega para a operação virar
+    // roteirizável (o despacho só enxerga quem tem coordenada de entrega).
+    // Best-effort: nunca bloqueia o salvamento; sem entrega localizada, avisa.
+    const coords = await resolverCoordenadasDaOperacao(
+      { origem: form.origin, destino: form.destination, base: coordsBase },
+      { headers: authHeaders?.() || {} },
+    );
     const payload = {
       clientId: form.clientId, contratoId: form.contractId, produtoId: form.productId,
       referencia: form.reference, dataServico: form.serviceDate, origem: form.origin, destino: form.destination,
       prometidoEm: form.promisedAt, etaEm: form.etaAt, placa: form.plate, motorista: form.driver, motoristaId: form.driverId,
       viagens: Number(form.trips), entregas: Number(form.deliveries), pacotes: Number(form.packages),
       distanciaKm: Number(form.distanceKm), ocupacaoPercent: Number(form.occupancyPercent), situacao: form.status,
+      coletaLat: coords.coletaLat, coletaLng: coords.coletaLng,
+      entregaLat: coords.entregaLat, entregaLng: coords.entregaLng,
       // Exigência de classe de veículo vai no fields_json (campos), preservando
       // o que já estava lá. Vazio → remove a exigência (undefined some no JSON).
       campos: { ...camposBase, requiredVehicleClass: form.requiredVehicleClass || undefined },
     };
+    // Sem coordenada de entrega a operação não entra no roteirizador — avisa
+    // em vez de deixar a pessoa achar que a colocou no despacho.
+    const aviso = !coords.entregaLocalizada && String(form.destination || "").trim()
+      ? " Não localizei o destino no mapa — ela não entra no roteirizador até ter endereço reconhecível."
+      : "";
     try {
       if (confirmando) {
         await atualizar("operations", confirmando.id, { ...payload, revision: confirmando.revision });
-        setToast?.("Operação confirmada. O gate de go-live está liberado.");
+        setToast?.(`Operação confirmada. O gate de go-live está liberado.${aviso}`);
       } else {
         await criar("operations", payload);
-        setToast?.("Operação registrada na mesma fonte do portal");
+        setToast?.(`Operação registrada na mesma fonte do portal.${aviso}`);
       }
       fecharModal();
     } catch (error) { setToast?.(error.message); }

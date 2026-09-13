@@ -326,6 +326,42 @@ describe("paginação e filtro no servidor", () => {
     const referencias = (await portal.json()).operacoes.map((item) => item.referencia);
     expect(referencias).toContain("OP-CANONICA-1");
   });
+
+  it("persiste coordenadas de coleta/entrega e as preserva em PATCH parcial", async () => {
+    const dono = await criarUsuario("rec-coords-dono", "coords-dono@parceiro.com.br");
+    await autorizar(dono);
+    await criarCliente(dono, "cli-coords", "Cliente coords");
+
+    // Criar já roteirizável: coordenada de entrega é o que o despacho exige.
+    const criada = await pedir("/api/todogreen/records/operations", {
+      metodo: "POST",
+      token: dono.token,
+      corpo: {
+        clientId: "cli-coords", referencia: "OP-COORDS-1", mesReferencia: "2026-09",
+        coletaLat: -23.52, coletaLng: -46.78, entregaLat: -23.55, entregaLng: -46.63,
+      },
+    });
+    expect(criada.status).toBe(201);
+    const registro = (await criada.json()).registro;
+    expect(registro).toMatchObject({ entregaLat: -23.55, entregaLng: -46.63, coletaLat: -23.52, coletaLng: -46.78 });
+
+    const linha = await env.DB.prepare(
+      "SELECT delivery_lat, delivery_lng, pickup_lat, pickup_lng FROM todogreen_client_operations WHERE id=?",
+    ).bind(registro.id).first();
+    expect(linha).toMatchObject({ delivery_lat: -23.55, delivery_lng: -46.63, pickup_lat: -23.52, pickup_lng: -46.78 });
+
+    // PATCH que NÃO reenvia coordenada não pode zerá-la (merge com daLinha).
+    const editada = await pedir(`/api/todogreen/records/operations/${registro.id}`, {
+      metodo: "PATCH",
+      token: dono.token,
+      corpo: { referencia: "OP-COORDS-1-EDIT", revision: registro.revision },
+    });
+    expect(editada.status).toBe(200);
+    const depois = await env.DB.prepare(
+      "SELECT delivery_lat, delivery_lng FROM todogreen_client_operations WHERE id=?",
+    ).bind(registro.id).first();
+    expect(depois).toMatchObject({ delivery_lat: -23.55, delivery_lng: -46.63 });
+  });
 });
 
 describe("escrita concorrente não apaga o trabalho alheio", () => {

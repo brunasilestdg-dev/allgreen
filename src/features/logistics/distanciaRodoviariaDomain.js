@@ -115,6 +115,44 @@ export async function geocodificar(
 }
 
 /**
+ * Resolve as coordenadas de COLETA (origem) e ENTREGA (destino) de uma operação
+ * para o despacho, geocodificando os endereços. É o que faz uma operação criada
+ * na mão virar roteirizável — sem coordenada de entrega ela nunca aparece como
+ * candidata no roteirizador.
+ *
+ * Best-effort e NUNCA lança: se um endereço não geocodifica ou o serviço cai,
+ * mantém a coordenada `base` que já existia (em edição) ou fica sem (em criação).
+ * A operação é salva de todo jeito — só não entra no roteirizador enquanto não
+ * tiver coordenada de entrega. `entregaLocalizada` diz à tela se deve avisar.
+ *
+ * Devolve { coletaLat, coletaLng, entregaLat, entregaLng, entregaLocalizada }.
+ */
+export async function resolverCoordenadasDaOperacao(
+  { origem, destino, base = {} } = {},
+  { fetcher = fetch, sinal, headers = {} } = {},
+) {
+  const num = (valor) => (valor === "" || valor == null ? null : Number(valor));
+  const resultado = {
+    coletaLat: num(base.coletaLat), coletaLng: num(base.coletaLng),
+    entregaLat: num(base.entregaLat), entregaLng: num(base.entregaLng),
+  };
+  const resolver = async (endereco) => {
+    const termo = texto(endereco);
+    if (termo.length < 3) return null;
+    try { return await geocodificar(termo, { fetcher, sinal, headers }); }
+    catch { return null; }
+  };
+
+  const entrega = await resolver(destino);
+  if (entrega) { resultado.entregaLat = entrega.latitude; resultado.entregaLng = entrega.longitude; }
+  const coleta = await resolver(origem);
+  if (coleta) { resultado.coletaLat = coleta.latitude; resultado.coletaLng = coleta.longitude; }
+
+  resultado.entregaLocalizada = resultado.entregaLat != null && resultado.entregaLng != null;
+  return resultado;
+}
+
+/**
  * Distância rodoviária entre origem e destino.
  *
  * Devolve sempre um objeto com `ok`, nunca lança — a precificação não pode

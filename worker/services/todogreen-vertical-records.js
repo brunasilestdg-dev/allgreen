@@ -928,6 +928,13 @@ const COLECOES = {
       ultimaPosicaoEm: row.last_position_at || "",
       latitude: row.last_position_lat,
       longitude: row.last_position_lng,
+      // Coordenadas de coleta e ENTREGA (fixas, o destino) — o que o despacho
+      // precisa para roteirizar. Diferente de last_position (posição atual do
+      // veículo, telemetria).
+      coletaLat: row.pickup_lat,
+      coletaLng: row.pickup_lng,
+      entregaLat: row.delivery_lat,
+      entregaLng: row.delivery_lng,
       entregas: numero(parse(row.fields_json, {}).deliveries),
       pacotes: numero(parse(row.fields_json, {}).packages),
       viagens: numero(parse(row.fields_json, {}).trips),
@@ -970,6 +977,13 @@ const COLECOES = {
       last_position_at: texto(corpo.ultimaPosicaoEm, 40) || null,
       last_position_lat: corpo.latitude === "" || corpo.latitude == null ? null : numero(corpo.latitude),
       last_position_lng: corpo.longitude === "" || corpo.longitude == null ? null : numero(corpo.longitude),
+      // Coordenadas fixas de coleta/entrega — o que torna a operação
+      // roteirizável no despacho. Vêm da geocodificação do endereço no salvar.
+      // Em PATCH, o merge com daLinha(atual) preserva o que não for reenviado.
+      pickup_lat: corpo.coletaLat === "" || corpo.coletaLat == null ? null : numero(corpo.coletaLat),
+      pickup_lng: corpo.coletaLng === "" || corpo.coletaLng == null ? null : numero(corpo.coletaLng),
+      delivery_lat: corpo.entregaLat === "" || corpo.entregaLat == null ? null : numero(corpo.entregaLat),
+      delivery_lng: corpo.entregaLng === "" || corpo.entregaLng == null ? null : numero(corpo.entregaLng),
       status: texto(corpo.situacao, 40) || "active",
       fields_json: JSON.stringify({
         ...objeto(corpo.campos),
