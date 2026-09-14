@@ -447,6 +447,12 @@ const BusinessProfileStudio = lazy(
   () => import("./features/business-profile/BusinessProfileStudio.jsx"),
 );
 const LegalHub = lazy(() => import("./features/legal/LegalHub.jsx"));
+const PermissionsPanel = lazy(
+  () => import("./features/permissions/PermissionsPanel.jsx"),
+);
+// Adaptador de permissões → papel do LegalHub. Fica no bundle principal (leve)
+// para o roteador não precisar aguardar o painel inteiro.
+import { permissionsToLegalRole } from "./features/permissions/permissionsDomain.js";
 // Movido para ./session/espacoVazio.js; reexportado para quem já importava daqui.
 export { LEGACY_STORAGE_KEY, ACTIVE_USER_KEY, STORAGE_PREFIX, AUTH_TOKEN_KEY, emptyDb };
 
@@ -551,6 +557,7 @@ const navSecondary = [
   ["personalizar-menu", "Personalizar menu", ListChecks],
   ["meu-plano", "Meu plano", Gauge],
   ["time", "Meu Time", Users],
+  ["permissoes", "Permissões", ShieldCheck],
   ["config", "Configurações", Settings],
 ];
 
@@ -14699,7 +14706,16 @@ export default function App() {
             />
           </Suspense>
         );
-      case "juridico":
+      case "juridico": {
+        // Deriva o papel do LegalHub a partir das permissões por área
+        // (`db.memberPermissions`) — mesma regra do painel "Permissões" no
+        // menu de Configurações. Sem permissão jurídica, cai em
+        // "solicitante" e ainda assim pode abrir/acompanhar as próprias.
+        const legalRole = permissionsToLegalRole(
+          db.memberPermissions || {},
+          db.user?.id,
+        );
+        const inheritedRole = db.user?.role || "colaborador";
         return (
           <Suspense
             fallback={<div className="inbox-loading">Carregando Jurídico...</div>}
@@ -14714,12 +14730,13 @@ export default function App() {
               viewer={{
                 userId: db.user?.id,
                 name: db.user?.name,
-                role: db.user?.legalRole || db.user?.role || "colaborador",
+                role: legalRole !== "solicitante" ? legalRole : inheritedRole,
                 isOwner: !activeSpaceId(),
               }}
             />
           </Suspense>
         );
+      }
       case "caixa":
         return (
           <InboxHub
@@ -15233,6 +15250,20 @@ export default function App() {
         );
       case "time":
         return <Team db={db} update={update} setToast={setToast} />;
+      case "permissoes":
+        return (
+          <Suspense
+            fallback={<div className="inbox-loading">Carregando permissões...</div>}
+          >
+            <PermissionsPanel
+              db={db}
+              update={update}
+              setToast={setToast}
+              authHeaders={authHeaders}
+              go={go}
+            />
+          </Suspense>
+        );
       case "config":
         return (
           <AccountSettings db={db} update={update} setToast={setToast} go={go} />
