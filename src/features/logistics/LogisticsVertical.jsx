@@ -100,6 +100,7 @@ import Semente from "./Semente.jsx";
 import Modal from "../../components/Modal.jsx";
 import ErpHome from "./ErpHome.jsx";
 import TodoGreenProfile from "./TodoGreenProfile.jsx";
+import ModuleBadge, { moduleByKey } from "../verticals/ModuleBadge.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
 import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
@@ -3329,6 +3330,16 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
       <header className="tdg-shell-header">
         <div className="tdg-shell-location">
+          {/* Símbolo do módulo (padrão All Green — bloco 04 Operations & Routing).
+              Clicar leva à tela inicial da To Do Green. */}
+          <ModuleBadge
+            module={moduleByKey("operations")}
+            href="/todogreen/dashboard"
+            size="sm"
+            showTitle={false}
+            className="tdg-shell-module-badge"
+            ariaLabel="Voltar à tela inicial da To Do Green"
+          />
           <span className="tdg-workspace-name">TO DO GREEN</span>
           <nav className="tdg-breadcrumb" aria-label="Trilha de navegação">
             {trilha.map((passo, indice) => {
