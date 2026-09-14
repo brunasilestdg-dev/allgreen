@@ -6,11 +6,14 @@ import {
   Building2,
   ClipboardList,
   Contact,
+  ExternalLink,
   Gauge,
   LayoutDashboard,
   Leaf,
   ListChecks,
+  Newspaper,
   Plus,
+  Star,
   Trash2,
   Users,
   Zap,
@@ -43,7 +46,14 @@ import {
   pipelineSummary,
   stageById,
   stageMetrics,
+  weightedAnnualRevenue,
 } from "./greenOnCrmDomain.js";
+import {
+  GREEN_ON_TEMAS_DE_NOTICIA,
+  createGreenOnNoticia,
+  filtrarFeedGreenOn,
+  resumirFeedGreenOn,
+} from "./greenOnNoticiaDomain.js";
 import "./greenOn.css";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
@@ -59,6 +69,7 @@ const NAV_TABS = [
   { id: "contatos", label: "Contatos", icon: Contact },
   { id: "oportunidades", label: "Oportunidades", icon: ClipboardList },
   { id: "pipeline", label: "Funil", icon: Gauge },
+  { id: "noticias", label: "Notícias", icon: Newspaper },
   { id: "sites", label: "Sites", icon: Building2 },
   { id: "operacao", label: "Operação", icon: Activity },
 ];
@@ -94,6 +105,7 @@ function readGreenOn(db) {
     contacts: Array.isArray(raw.contacts) ? raw.contacts : [],
     opportunities: Array.isArray(raw.opportunities) ? raw.opportunities : [],
     sites: Array.isArray(raw.sites) ? raw.sites : [],
+    noticias: Array.isArray(raw.noticias) ? raw.noticias : [],
   };
 }
 
@@ -237,6 +249,18 @@ const NEW_OPP = () => ({
 function OpportunitiesPanel({ data, update, setToast }) {
   const [form, setForm] = useState(NEW_OPP());
   const [saving, setSaving] = useState(false);
+  const [filtroEtapa, setFiltroEtapa] = useState("todas");
+
+  // Painel analítico da carteira — igual ao TDG, com resumo (abertas,
+  // ganhas, perdidas), CAPEX e forecast, e por-etapa. Fica no topo da aba.
+  const resumo = useMemo(() => pipelineSummary(data.opportunities), [data.opportunities]);
+  const metricasEtapa = useMemo(() => stageMetrics(data.opportunities), [data.opportunities]);
+
+  const listaFiltrada = useMemo(() => {
+    if (filtroEtapa === "todas") return data.opportunities;
+    if (filtroEtapa === "abertas") return data.opportunities.filter(isOpen);
+    return data.opportunities.filter((opp) => opp.stageId === filtroEtapa);
+  }, [data.opportunities, filtroEtapa]);
 
   const submit = (event) => {
     event.preventDefault();
@@ -277,8 +301,20 @@ function OpportunitiesPanel({ data, update, setToast }) {
     setToast?.("Oportunidade removida.");
   };
 
+  const nomeDaConta = (id) => {
+    const conta = data.accounts.find((c) => c.id === id);
+    return conta ? (conta.legalName || conta.tradeName) : "";
+  };
+
   return (
     <div className="green-on-crm">
+      <div className="green-on-grid">
+        <MetricCard label="Abertas" value={number.format(resumo.open)} hint={`${resumo.won} em operação · ${resumo.lost} perdidas`} icon={ClipboardList} />
+        <MetricCard label="CAPEX no pipeline" value={BRL.format(resumo.pipelineCapex)} hint="Somatório das oportunidades abertas" icon={Zap} />
+        <MetricCard label="Forecast anual" value={BRL.format(resumo.forecastAnnualRevenue)} hint="Receita anual esperada · ponderada" icon={Gauge} />
+        <MetricCard label="Carregadores planejados" value={number.format(resumo.plannedChargers)} hint="Em oportunidades abertas" icon={BatteryCharging} />
+      </div>
+
       <Card
         title="Nova oportunidade"
         kicker="Pipeline Green On (energia)"
@@ -384,54 +420,111 @@ function OpportunitiesPanel({ data, update, setToast }) {
 
       <Card
         title="Oportunidades registradas"
-        kicker={`${data.opportunities.length} no total`}
-      >
-        {data.opportunities.length === 0 && (
-          <p className="green-on-empty">Nenhuma oportunidade cadastrada ainda.</p>
+        kicker={`${listaFiltrada.length} / ${data.opportunities.length}`}
+        actions={(
+          <div className="green-on-filter" role="group" aria-label="Filtrar oportunidades por etapa">
+            {[
+              { id: "todas", label: "Todas" },
+              { id: "abertas", label: "Abertas" },
+              ...GREEN_ON_PIPELINE_STAGES.map((s) => ({ id: s.id, label: s.name })),
+            ].map((op) => (
+              <button
+                key={op.id}
+                type="button"
+                onClick={() => setFiltroEtapa(op.id)}
+                className={`green-on-filter-btn ${filtroEtapa === op.id ? "is-active" : ""}`}
+              >
+                {op.label}
+              </button>
+            ))}
+          </div>
         )}
-        {data.opportunities.length > 0 && (
+      >
+        {listaFiltrada.length === 0 && (
+          <p className="green-on-empty">Nenhuma oportunidade nesse filtro.</p>
+        )}
+        {listaFiltrada.length > 0 && (
           <table className="green-on-table">
             <thead>
               <tr>
-                <th>Título</th>
-                <th>Cliente</th>
+                <th>Título / Cliente</th>
+                <th>Conta Green On</th>
                 <th>Etapa</th>
                 <th>Receita/mês</th>
                 <th>CAPEX</th>
+                <th>Forecast anual (ponderado)</th>
+                <th>Alertas</th>
                 <th aria-label="ações" />
               </tr>
             </thead>
             <tbody>
-              {data.opportunities.map((opp) => (
-                <tr key={opp.id}>
-                  <td>{opp.title || "—"}</td>
-                  <td>{opp.clientName || "—"}</td>
-                  <td>
-                    <select
-                      value={opp.stageId}
-                      onChange={(event) => mudarEtapa(opp, event.target.value)}
-                    >
-                      {GREEN_ON_PIPELINE_STAGES.map((stage) => (
-                        <option key={stage.id} value={stage.id}>{stage.name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>{BRL.format(opp.monthlyRevenueBRL || 0)}</td>
-                  <td>{BRL.format(opp.capexBRL || 0)}</td>
-                  <td>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={Trash2}
-                      onClick={() => remover(opp)}
-                      aria-label={`Remover ${opp.title || opp.clientName || "oportunidade"}`}
-                    />
-                  </td>
-                </tr>
-              ))}
+              {listaFiltrada.map((opp) => {
+                const alertas = opportunityAlerts(opp);
+                const nomeConta = opp.accountId ? nomeDaConta(opp.accountId) : "";
+                return (
+                  <tr key={opp.id}>
+                    <td>
+                      <strong>{opp.title || "—"}</strong>
+                      <br />
+                      <small>{opp.clientName || "Cliente não informado"}</small>
+                    </td>
+                    <td>{nomeConta || <em>—</em>}</td>
+                    <td>
+                      <select
+                        value={opp.stageId}
+                        onChange={(event) => mudarEtapa(opp, event.target.value)}
+                      >
+                        {GREEN_ON_PIPELINE_STAGES.map((stage) => (
+                          <option key={stage.id} value={stage.id}>{stage.name}</option>
+                        ))}
+                      </select>
+                      <br />
+                      <small>{stageById(opp.stageId)?.probability || 0}% de probabilidade</small>
+                    </td>
+                    <td>{BRL.format(opp.monthlyRevenueBRL || 0)}</td>
+                    <td>{BRL.format(opp.capexBRL || 0)}</td>
+                    <td>{BRL.format(weightedAnnualRevenue(opp))}</td>
+                    <td>
+                      {alertas.length === 0 ? (
+                        <span className="green-on-saude green-on-saude--ok">OK</span>
+                      ) : (
+                        <ul className="green-on-list-alerts" aria-label="Alertas da oportunidade">
+                          {alertas.map((a) => (<li key={a}><span>{a}</span></li>))}
+                        </ul>
+                      )}
+                    </td>
+                    <td>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={Trash2}
+                        onClick={() => remover(opp)}
+                        aria-label={`Remover ${opp.title || opp.clientName || "oportunidade"}`}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
+      </Card>
+
+      <Card
+        title="Distribuição por etapa"
+        kicker="Ler a carteira etapa por etapa"
+      >
+        <div className="green-on-pipeline-summary">
+          {metricasEtapa.map((etapa) => (
+            <div key={etapa.id} className={`green-on-stage ${etapa.closed ? "is-closed" : ""}`}>
+              <div className="green-on-stage-title">{etapa.name}</div>
+              <div className="green-on-stage-count">{etapa.total}</div>
+              <div className="green-on-stage-hint">
+                CAPEX {BRL.format(etapa.pipelineCapex)} · Forecast {BRL.format(etapa.forecastRevenue)}
+              </div>
+            </div>
+          ))}
+        </div>
       </Card>
     </div>
   );
@@ -1133,6 +1226,196 @@ function OperationPanel() {
   );
 }
 
+// ===== Notícias Green On =====
+//
+// Feed local (persistido no espaço de trabalho), com léxico próprio do core
+// da vertical: recarga, energia, e-mobilidade e regulatório. Notícia de
+// logística pura é filtrada como fora-de-escopo (essa é da TDG). A liderança
+// pode destacar uma notícia (highlighted) para ela ficar no topo do feed e
+// aparecer no contador do painel.
+
+const NEW_NOTICIA = () => ({
+  title: "",
+  summary: "",
+  source: "",
+  url: "",
+  publishedAt: "",
+  accountId: "",
+  highlighted: false,
+});
+
+function NoticiasPanel({ data, update, setToast }) {
+  const [form, setForm] = useState(NEW_NOTICIA());
+  const [filtroTema, setFiltroTema] = useState("todas");
+  const feed = useMemo(
+    () => filtrarFeedGreenOn(data.noticias, filtroTema),
+    [data.noticias, filtroTema],
+  );
+  const resumo = useMemo(() => resumirFeedGreenOn(data.noticias), [data.noticias]);
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.title.trim() && !form.summary.trim()) {
+      setToast?.("Informe título ou resumo da notícia.");
+      return;
+    }
+    const nova = createGreenOnNoticia(form);
+    writeGreenOn(update, (current) => ({
+      ...current,
+      noticias: [...(current.noticias || []), nova],
+    }));
+    setForm(NEW_NOTICIA());
+    setToast?.("Notícia adicionada ao radar Green On.");
+  };
+
+  const destacar = (noticia) => {
+    writeGreenOn(update, (current) => ({
+      ...current,
+      noticias: (current.noticias || []).map((item) =>
+        item.id === noticia.id ? { ...item, highlighted: !item.highlighted, updatedAt: new Date().toISOString() } : item,
+      ),
+    }));
+  };
+
+  const remover = (noticia) => {
+    writeGreenOn(update, (current) => ({
+      ...current,
+      noticias: (current.noticias || []).filter((item) => item.id !== noticia.id),
+    }));
+    setToast?.("Notícia removida do radar.");
+  };
+
+  const nomeDaConta = (id) => {
+    const conta = data.accounts.find((c) => c.id === id);
+    return conta ? (conta.legalName || conta.tradeName) : "";
+  };
+
+  return (
+    <div className="green-on-crm">
+      <div className="green-on-grid">
+        <MetricCard label="Notícias no radar" value={number.format(resumo.total)} icon={Newspaper} hint={`${resumo.ultimos7dias} nos últimos 7 dias`} />
+        <MetricCard label="Destacadas" value={number.format(resumo.destacadas)} icon={Star} hint="Aparecem no topo do feed" />
+        <MetricCard label="Recarga" value={number.format(resumo.porTema.recarga || 0)} icon={BatteryCharging} hint={`Energia: ${resumo.porTema.energia || 0}`} />
+        <MetricCard label="Regulatório" value={number.format(resumo.porTema.regulatorio || 0)} icon={ListChecks} hint={`E-mobilidade: ${resumo.porTema["e-mobilidade"] || 0}`} />
+      </div>
+
+      <Card title="Nova notícia" kicker="Radar do core Green On (recarga, energia, e-mobilidade, regulatório)">
+        <form className="green-on-form" onSubmit={submit}>
+          <label className="green-on-form-full">
+            Título
+            <input
+              type="text"
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+              placeholder="Ex.: ANEEL abre consulta pública sobre tarifa branca"
+            />
+          </label>
+          <label className="green-on-form-full">
+            Resumo
+            <textarea
+              rows="2"
+              value={form.summary}
+              onChange={(event) => setForm({ ...form, summary: event.target.value })}
+            />
+          </label>
+          <label>
+            Fonte
+            <input type="text" value={form.source} onChange={(event) => setForm({ ...form, source: event.target.value })} placeholder="ex.: Canal Solar, ABVE, Valor" />
+          </label>
+          <label>
+            URL
+            <input type="url" value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} />
+          </label>
+          <label>
+            Data de publicação
+            <input type="date" value={form.publishedAt} onChange={(event) => setForm({ ...form, publishedAt: event.target.value })} />
+          </label>
+          <label>
+            Conta relacionada (opcional)
+            <select value={form.accountId} onChange={(event) => setForm({ ...form, accountId: event.target.value })}>
+              <option value="">Nenhuma</option>
+              {data.accounts.map((conta) => (
+                <option key={conta.id} value={conta.id}>{conta.legalName || conta.tradeName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="green-on-form-full green-on-form-inline">
+            <input type="checkbox" checked={form.highlighted} onChange={(event) => setForm({ ...form, highlighted: event.target.checked })} />
+            Marcar como destaque (fica no topo do radar)
+          </label>
+          <div className="green-on-form-actions">
+            <Button type="submit" icon={Plus}>Salvar notícia</Button>
+          </div>
+        </form>
+      </Card>
+
+      <Card
+        title="Radar Green On"
+        kicker={`${feed.length} notícia(s) · filtro: ${GREEN_ON_TEMAS_DE_NOTICIA.find(([k]) => k === filtroTema)?.[1] || "Todas"}`}
+        actions={(
+          <div className="green-on-filter" role="group" aria-label="Filtrar notícias por tema">
+            {GREEN_ON_TEMAS_DE_NOTICIA.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFiltroTema(key)}
+                className={`green-on-filter-btn ${filtroTema === key ? "is-active" : ""}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      >
+        {feed.length === 0 && (
+          <p className="green-on-empty">Sem notícias no radar (ou nada casou com o filtro). Notícias de logística/frete são filtradas como fora do escopo Green On.</p>
+        )}
+        {feed.length > 0 && (
+          <ul className="green-on-noticias">
+            {feed.map((noticia) => (
+              <li key={noticia.id} className={noticia.highlighted ? "is-highlighted" : ""}>
+                <div className="green-on-noticia-head">
+                  <strong>{noticia.title || "(sem título)"}</strong>
+                  <Badge>{GREEN_ON_TEMAS_DE_NOTICIA.find(([k]) => k === noticia.tema)?.[1] || "Outros"}</Badge>
+                </div>
+                {noticia.summary && <p className="green-on-noticia-body">{noticia.summary}</p>}
+                <div className="green-on-noticia-meta">
+                  {noticia.source && <span>{noticia.source}</span>}
+                  {noticia.publishedAt && <span>· {noticia.publishedAt}</span>}
+                  {noticia.accountId && <span>· Conta: {nomeDaConta(noticia.accountId)}</span>}
+                </div>
+                <div className="green-on-noticia-actions">
+                  {noticia.url && (
+                    <a href={noticia.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={14} aria-hidden="true" /> Abrir fonte
+                    </a>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={Star}
+                    onClick={() => destacar(noticia)}
+                    aria-label={noticia.highlighted ? "Remover destaque" : "Marcar como destaque"}
+                  >
+                    {noticia.highlighted ? "Destacado" : "Destacar"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={Trash2}
+                    onClick={() => remover(noticia)}
+                    aria-label={`Remover notícia ${noticia.title}`}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function GreenOnVertical({ db, update, setToast }) {
   const [tab, setTab] = useState("dashboard");
   const data = useMemo(() => readGreenOn(db), [db]);
@@ -1190,6 +1473,9 @@ export default function GreenOnVertical({ db, update, setToast }) {
           <OpportunitiesPanel data={data} update={update} setToast={setToast} />
         )}
         {tab === "pipeline" && <PipelineBoard data={data} />}
+        {tab === "noticias" && (
+          <NoticiasPanel data={data} update={update} setToast={setToast} />
+        )}
         {tab === "sites" && (
           <SitesPanel data={data} update={update} setToast={setToast} />
         )}

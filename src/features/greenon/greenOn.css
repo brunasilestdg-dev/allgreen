@@ -221,6 +221,49 @@
 .green-on-saude--warn { color: #8a5b13; background: rgba(255,191,71,.16); border-color: rgba(255,191,71,.32); }
 .green-on-saude--risk { color: #a01f14; background: rgba(203,58,42,.14);  border-color: rgba(203,58,42,.32); }
 
+/* Radar de notícias Green On */
+.green-on-noticias {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.green-on-noticias li {
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md, 8px);
+  padding: 12px 14px;
+  background: var(--ds-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.green-on-noticias li.is-highlighted {
+  border-color: var(--ds-accent, #92c83e);
+  box-shadow: 0 0 0 2px rgba(146, 200, 62, 0.12) inset;
+}
+.green-on-noticia-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
+.green-on-noticia-head strong { font-size: 15px; line-height: 1.3; }
+.green-on-noticia-body { margin: 0; color: var(--ds-ink-muted); font-size: 13px; line-height: 1.45; }
+.green-on-noticia-meta { color: var(--ds-ink-muted); font-size: 12px; display: flex; gap: 4px; flex-wrap: wrap; }
+.green-on-noticia-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.green-on-noticia-actions a {
+  align-items: center;
+  color: var(--ds-brand);
+  display: inline-flex;
+  font-size: 13px;
+  gap: 4px;
+  text-decoration: none;
+}
+.green-on-noticia-actions a:hover { text-decoration: underline; }
+.green-on-form-inline {
+  align-items: center;
+  display: flex;
+  flex-direction: row !important;
+  gap: 8px;
+}
+
 .green-on-op-card {
   display: flex;
   gap: 12px;
