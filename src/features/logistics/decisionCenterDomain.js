@@ -41,14 +41,35 @@ export const diaDaData = (valor) => {
 // é meia-noite UTC, sempre atrás do agora no Brasil) e, pior, divergia do filtro
 // "Ações atrasadas" do CRM, que sempre comparou dia: o aviso contava 2 contas e a
 // lista abria vazia. Agora é UMA definição, importada pelo CRM e pelo Meu Dia.
-export const contaComAcaoAtrasada = (cliente, hoje = diaDaData(new Date())) => {
+//
+// Reclamação da titular: "marquei concluído em uma ação e continua aparecendo
+// pendente". A conta continuava atrasada porque `crm.nextActionAt` não é
+// limpo quando a tarefa canônica correspondente vira "Concluído". Em vez de
+// mexer no caminho de escrita (que atravessaria TasksScreen, Meu Dia, Planner
+// e o backend do CRM), o painel passa a raciocinar sobre as tarefas fechadas
+// na leitura: se existe tarefa DESTA conta concluída DEPOIS da data planejada,
+// a promessa foi cumprida — o painel não acusa pendência.
+const foiConcluida = (tarefa) =>
+  /(conclu|feito|done|finaliz)/i.test(String(tarefa?.status || ""));
+
+export const contaComAcaoAtrasada = (cliente, hoje = diaDaData(new Date()), tarefas = []) => {
   const dia = diaDaData(cliente?.crm?.nextActionAt ?? cliente?.nextActionAt);
-  return Boolean(dia) && Boolean(hoje) && dia < hoje;
+  if (!dia || !hoje || dia >= hoje) return false;
+  const clientId = cliente?.id;
+  if (!clientId) return true;
+  const lista = Array.isArray(tarefas) ? tarefas : [];
+  const resolvidaDepois = lista.some((tarefa) => {
+    if (!foiConcluida(tarefa)) return false;
+    if (String(tarefa?.clientId || "") !== String(clientId)) return false;
+    const fechadaEm = diaDaData(tarefa?.updatedAt ?? tarefa?.completedAt ?? tarefa?.updated_at ?? "");
+    return Boolean(fechadaEm) && fechadaEm >= dia;
+  });
+  return !resolvidaDepois;
 };
 
-export const contasComAcaoAtrasada = (clientes = [], agora = new Date()) => {
+export const contasComAcaoAtrasada = (clientes = [], agora = new Date(), tarefas = []) => {
   const hoje = diaDaData(agora) || diaDaData(new Date());
-  return (Array.isArray(clientes) ? clientes : []).filter((item) => contaComAcaoAtrasada(item, hoje));
+  return (Array.isArray(clientes) ? clientes : []).filter((item) => contaComAcaoAtrasada(item, hoje, tarefas));
 };
 
 export const oportunidadeSemProximaAcao = (item) =>
@@ -123,7 +144,7 @@ export const buildTodoGreenDecisionCenter = ({ data = {}, dashboard = {}, tasks 
     0,
   );
 
-  const overdueClients = contasComAcaoAtrasada(clients, now);
+  const overdueClients = contasComAcaoAtrasada(clients, now, tasks);
   const opportunitiesWithoutAction = opportunities.filter(oportunidadeSemProximaAcao);
   const expiringContracts = contracts.filter((item) => {
     // Contrato sem renovação não gera aviso de renovação — acender aqui seria
