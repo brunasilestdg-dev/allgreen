@@ -29,6 +29,8 @@ import {
   construirXmlCte,
   construirXmlMdfe,
   fiscalTransmissionEnabled,
+  sefazTransmissionConfigured,
+  interpretarRetornoSefaz,
   gerarChaveDeAcesso,
   resumoFiscal,
   transicaoValida,
@@ -460,12 +462,84 @@ const atualizarDocumento = async (env, access, user, docId, corpo) => {
 };
 
 // ---------------------------------------------------------------------------
+// Transmissão real à SEFAZ via conector host-side.
+//
+// O Worker não assina ICP-Brasil nem faz o mTLS que a SEFAZ exige — quem faz é
+// um conector no servidor da titular (mesmo desenho do conector CIOT/ANTT). O
+// Worker manda o XML já montado + a referência do certificado; o conector
+// assina, transmite e devolve o cStat/protocolo OFICIAIS. Só então o documento
+// vira "autorizado". Sem protocolo real, nada avança — nunca se fabrica status.
+// ---------------------------------------------------------------------------
+
+const hostsConectorSefaz = (env) => String(env.SEFAZ_CONNECTOR_ALLOWED_HOSTS || "")
+  .split(/[\s,]+/).map((h) => h.trim().toLowerCase()).filter(Boolean);
+
+// A URL do conector é HTTPS e só pode apontar para um host autorizado no cofre —
+// o certificado sai daqui, então o destino não pode ser aberto.
+const conectorSefazRecusado = (env, valor) => {
+  let url;
+  try { url = new URL(valor); }
+  catch { return "Informe a URL HTTPS do conector SEFAZ."; }
+  if (url.protocol !== "https:") return "A URL do conector SEFAZ precisa ser HTTPS.";
+  const permitidos = hostsConectorSefaz(env);
+  if (!permitidos.length)
+    return "Nenhum host de conector SEFAZ foi autorizado. Cadastre SEFAZ_CONNECTOR_ALLOWED_HOSTS no cofre antes de transmitir.";
+  if (!permitidos.includes(url.hostname.toLowerCase()))
+    return `O host ${url.hostname} não está autorizado em SEFAZ_CONNECTOR_ALLOWED_HOSTS.`;
+  return "";
+};
+
+// Chama o conector e devolve o retorno JÁ INTERPRETADO (honesto): 'autorizado'
+// só com cStat 100/104 + protocolo; 'simulado' para ensaio; 'rejeitado'/'erro'
+// caso contrário. Nunca lança — falha vira status 'erro' com a mensagem.
+const transmitirSefaz = async (env, row) => {
+  const connectorUrl = texto(env.SEFAZ_CONNECTOR_URL, 500);
+  const recusa = conectorSefazRecusado(env, connectorUrl);
+  if (recusa) return { status: "erro", motivo: recusa, bloqueio: true };
+
+  const payload = {
+    docType: row.doc_type,
+    modelo: row.doc_type === "cte" ? "57" : "58",
+    ambiente: texto(env.SEFAZ_AMBIENTE, 20) || "homologacao",
+    chaveAcesso: texto(row.chave_acesso, 44),
+    xml: row.xml_content || "",
+    certificate: {
+      standard: "ICP-Brasil",
+      pfxBase64: env.NFE_CERT_PFX,
+      password: env.NFE_CERT_PASSWORD,
+    },
+  };
+  const headers = { "content-type": "application/json" };
+  const token = texto(env.SEFAZ_CONNECTOR_TOKEN, 500);
+  if (token) headers.authorization = `Bearer ${token}`;
+
+  let bruto = {};
+  try {
+    const resp = await fetch(connectorUrl, { method: "POST", headers, body: JSON.stringify(payload) });
+    const corpo = await resp.text().catch(() => "");
+    bruto = corpo ? parse(corpo, { text: corpo }) : {};
+    if (!resp.ok && !bruto.cStat && !bruto.cstat) {
+      return {
+        status: "erro",
+        motivo: texto(bruto.error || bruto.message || `Conector SEFAZ respondeu HTTP ${resp.status}.`, 500),
+        httpStatus: resp.status,
+      };
+    }
+  } catch (erro) {
+    return { status: "erro", motivo: texto(erro?.message || "Falha ao chamar o conector SEFAZ.", 500) };
+  }
+  return { ...interpretarRetornoSefaz(bruto), bruto };
+};
+
+// ---------------------------------------------------------------------------
 // Transição de status
 // ---------------------------------------------------------------------------
 
 const transitarDocumento = async (env, access, user, docId, corpo) => {
   const agora = new Date().toISOString();
-  const statusNovo = texto(corpo.statusNovo || corpo.status, 20);
+  // `let` porque uma transmissão real pode elevar "transmitido" → "autorizado"
+  // quando a SEFAZ devolve cStat 100/104 com protocolo. Nunca o contrário.
+  let statusNovo = texto(corpo.statusNovo || corpo.status, 20);
   const detalhes = texto(corpo.detalhes || corpo.motivo, 2000);
 
   const row = await env.DB.prepare(
@@ -479,28 +553,13 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
       error: `Transição de "${row.status}" para "${statusNovo}" não é permitida.`,
     }, 409);
 
-  // "Transmitido"/"autorizado" só existem de verdade com o certificado no
-  // cofre — o mesmo padrão do push e do WhatsApp. A única exceção é o registro
-  // de documento emitido FORA do ERP, que exige o protocolo de autorização e a
-  // chave devolvidos pelo autorizador. Sem esta guarda, um clique fabricava um
-  // "autorizado" que a SEFAZ nunca viu, e o DACTE e a cobrança confiavam nele.
-  if (["transmitido", "autorizado"].includes(statusNovo) && !fiscalTransmissionEnabled(env)) {
-    const protocolo = texto(corpo.protocoloAutorizacao || corpo.protocolo, 60);
-    const chaveExterna = texto(corpo.chaveAcesso, 44).replace(/\D/g, "");
-    const registroManual = protocolo && (chaveExterna.length === 44 || texto(row.chave_acesso, 44));
-    if (!registroManual)
-      return json({
-        error: "A transmissão à SEFAZ aguarda o certificado digital (NFE_CERT_PFX/NFE_CERT_PASSWORD no cofre). Para registrar um documento emitido fora do ERP, informe o protocolo de autorização e a chave de acesso.",
-        code: "fiscal_transmission_disabled",
-      }, 409);
-    await env.DB.prepare(
-      `UPDATE todogreen_fiscal_documents
-          SET chave_acesso = COALESCE(NULLIF(?, ''), chave_acesso),
-              protocolo_autorizacao = ?,
-              fields_json = json_set(fields_json, '$.registroManual', 1)
-        WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
-    ).bind(chaveExterna, protocolo, docId, TENANT_ID, access.ownerId).run();
-  }
+  // Colunas SEFAZ que a transição pode carimbar. Por padrão mantêm o valor
+  // atual; a transmissão (mais abaixo) as preenche com o retorno OFICIAL.
+  let statusSefaz = row.status_sefaz;
+  let motivoSefaz = row.motivo_sefaz;
+  let protocoloAutorizacao = row.protocolo_autorizacao;
+  let chaveNova = ""; // '' → mantém a chave atual (COALESCE/NULLIF no UPDATE)
+  let marcarRegistroManual = false;
 
   // Validar antes de avançar de rascunho para validado — e RECALCULAR os
   // impostos no servidor antes de validar. O corpo do POST podia trazer ICMS
@@ -683,6 +742,85 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
     }
   }
 
+  // Transmitir/autorizar: NUNCA se fabrica status. Com certificado + conector no
+  // cofre, o Worker chama o conector host-side (que assina e fala com a SEFAZ) e
+  // só avança para "autorizado" com cStat 100/104 + protocolo OFICIAL. Sem o
+  // conector, o ERP não fala com a SEFAZ: aceita apenas o registro de documento
+  // emitido FORA do ERP, com protocolo e chave devolvidos pelo autorizador.
+  if (["transmitido", "autorizado"].includes(statusNovo)) {
+    if (sefazTransmissionConfigured(env)) {
+      if (!xmlContent)
+        return json({ error: "Assine o documento (gerar XML) antes de transmitir à SEFAZ." }, 409);
+      const retorno = await transmitirSefaz(env, { ...row, xml_content: xmlContent });
+      // Bloqueio de configuração (host não autorizado, URL inválida) é problema
+      // do cofre, não recusa da SEFAZ — não carimba o documento como rejeitado.
+      if (retorno.bloqueio)
+        return json({ error: `Transmissão bloqueada. ${retorno.motivo}`, code: "sefaz_connector_config" }, 409);
+      statusSefaz = retorno.status;
+      motivoSefaz = texto([retorno.cStat, retorno.motivo].filter(Boolean).join(" · "), 500) || motivoSefaz;
+
+      if (retorno.status === "simulado") {
+        // Ensaio nunca vira autorização — status próprio, sem avançar o documento.
+        await env.DB.prepare(
+          `UPDATE todogreen_fiscal_documents SET status_sefaz = ?, motivo_sefaz = ?, updated_by = ?, updated_at = ?
+            WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+        ).bind("simulado", motivoSefaz, user.id, agora, docId, TENANT_ID, access.ownerId).run();
+        await registrarEvento(env, access.ownerId, user.id, docId, "transmissao_simulada", row.status, row.status,
+          "Conector SEFAZ respondeu em modo de ensaio: nenhum documento foi autorizado.");
+        const atual = await env.DB.prepare(
+          `SELECT * FROM todogreen_fiscal_documents WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+        ).bind(docId, TENANT_ID, access.ownerId).first();
+        return json({
+          documento: documentoDaLinha(atual),
+          simulado: true,
+          aviso: "O conector SEFAZ respondeu em modo de ensaio: nenhum CT-e/MDF-e foi autorizado. Desligue o ensaio no conector antes de operar.",
+        });
+      }
+
+      if (retorno.status !== "autorizado") {
+        // Rejeição ou falha real: carimba o motivo oficial e, se a máquina de
+        // estados permite, marca "rejeitado". Nunca "autorizado".
+        const viraRejeitado = transicaoValida(row.status, "rejeitado");
+        await env.DB.prepare(
+          `UPDATE todogreen_fiscal_documents
+              SET status = ?, status_sefaz = ?, motivo_sefaz = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+            WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+        ).bind(viraRejeitado ? "rejeitado" : row.status, retorno.status, motivoSefaz, user.id, agora, docId, TENANT_ID, access.ownerId).run();
+        await registrarEvento(env, access.ownerId, user.id, docId, "transmissao_rejeitada", row.status,
+          viraRejeitado ? "rejeitado" : row.status, motivoSefaz);
+        const atual = await env.DB.prepare(
+          `SELECT * FROM todogreen_fiscal_documents WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
+        ).bind(docId, TENANT_ID, access.ownerId).first();
+        return json({
+          error: retorno.motivo || "A SEFAZ não autorizou o documento.",
+          code: "sefaz_rejeitado",
+          cStat: retorno.cStat || "",
+          documento: documentoDaLinha(atual),
+        }, 502);
+      }
+
+      // Autorizado DE VERDADE: cStat 100/104 + protocolo oficial.
+      statusNovo = "autorizado";
+      statusSefaz = "autorizado";
+      protocoloAutorizacao = retorno.protocolo;
+      chaveNova = retorno.chave || "";
+      if (retorno.xmlProtocolo) xmlContent = retorno.xmlProtocolo;
+    } else {
+      const protocolo = texto(corpo.protocoloAutorizacao || corpo.protocolo, 60);
+      const chaveExterna = texto(corpo.chaveAcesso, 44).replace(/\D/g, "");
+      const registroManual = protocolo && (chaveExterna.length === 44 || texto(row.chave_acesso, 44));
+      if (!registroManual)
+        return json({
+          error: "A transmissão automática à SEFAZ exige certificado (NFE_CERT_PFX/NFE_CERT_PASSWORD) e o conector (SEFAZ_CONNECTOR_URL) no cofre. Para registrar um documento emitido fora do ERP, informe o protocolo de autorização e a chave de acesso.",
+          code: "fiscal_transmission_disabled",
+        }, 409);
+      protocoloAutorizacao = protocolo;
+      chaveNova = chaveExterna;
+      statusSefaz = statusNovo;
+      marcarRegistroManual = true;
+    }
+  }
+
   // Cancelar um documento fiscal ligado a uma fatura tem de desfazer o
   // recebível que ele gerou — senão receita e contas a receber ficam
   // superavaliadas (a fatura foi cancelada, mas o título segue cobrável). Só
@@ -715,9 +853,16 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
 
   await env.DB.prepare(
     `UPDATE todogreen_fiscal_documents
-      SET status = ?, xml_content = ?, revision = revision + 1, updated_by = ?, updated_at = ?
+      SET status = ?, xml_content = ?,
+          status_sefaz = ?, motivo_sefaz = ?, protocolo_autorizacao = ?,
+          chave_acesso = COALESCE(NULLIF(?, ''), chave_acesso),
+          fields_json = ${marcarRegistroManual ? "json_set(fields_json, '$.registroManual', 1)" : "fields_json"},
+          revision = revision + 1, updated_by = ?, updated_at = ?
       WHERE id = ? AND tenant_id = ? AND workspace_owner_id = ?`,
-  ).bind(statusNovo, xmlContent, user.id, agora, docId, TENANT_ID, access.ownerId).run();
+  ).bind(
+    statusNovo, xmlContent, statusSefaz, motivoSefaz, protocoloAutorizacao, chaveNova,
+    user.id, agora, docId, TENANT_ID, access.ownerId,
+  ).run();
 
   await registrarEvento(env, access.ownerId, user.id, docId, "transicao", row.status, statusNovo, detalhes);
 
@@ -941,8 +1086,15 @@ const obterResumo = async (env, access) => {
   ).bind(TENANT_ID, access.ownerId).all();
   // resumoFiscal lê as colunas do banco (doc_type, icms_valor, valor_total) —
   // passar o mapa camelCase zerava os três indicadores do painel para sempre.
-  const transmissaoHabilitada = fiscalTransmissionEnabled(env);
-  return json({ ...resumoFiscal(results || []), transmissaoHabilitada });
+  // "Transmissão habilitada" = transmissão REAL disponível (certificado E
+  // conector). Só certificado não basta: sem conector o ERP não fala com a SEFAZ.
+  const transmissaoHabilitada = sefazTransmissionConfigured(env);
+  return json({
+    ...resumoFiscal(results || []),
+    transmissaoHabilitada,
+    certificadoPresente: fiscalTransmissionEnabled(env),
+    conectorPresente: Boolean(env.SEFAZ_CONNECTOR_URL),
+  });
 };
 
 // ---------------------------------------------------------------------------

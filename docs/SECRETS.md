@@ -57,6 +57,23 @@ reserva gratuita. Ver `AGENTS.md` para a ordem da cascata.
 A seleção de motor (`routingEngineSelectionDomain`) usa a presença dessas URLs
 para saber quais motores estão disponíveis — sem forjar disponibilidade.
 
+## Emissão fiscal — SEFAZ (CT-e/MDF-e) e CIOT (ANTT)
+
+O Worker não assina ICP-Brasil nem faz mTLS: a transmissão real passa por um
+**conector host-side**. Nada é marcado como transmitido/autorizado sem a resposta
+oficial do órgão. Detalhes: `docs/todogreen-sefaz-connector.md` e
+`docs/todogreen-ciot-direct-connector.md`.
+
+| Variável | Uso | Sem ela |
+| --- | --- | --- |
+| `NFE_CERT_PFX` | Certificado A1 (PFX base64) enviado ao conector SEFAZ para assinar | ERP gera XML/DACTE, não transmite |
+| `NFE_CERT_PASSWORD` | Senha do PFX | idem |
+| `SEFAZ_CONNECTOR_URL` | URL HTTPS do conector SEFAZ host-side | transmissão real desligada; só registro manual com protocolo |
+| `SEFAZ_CONNECTOR_TOKEN` | Bearer do conector SEFAZ (opcional) | chamada sem autenticação |
+| `SEFAZ_CONNECTOR_ALLOWED_HOSTS` | Hosts autorizados do conector (o certificado sai daqui) | transmissão bloqueada (destino não pode ser aberto) |
+| `SEFAZ_AMBIENTE` | `homologacao` (padrão) ou `producao` | assume homologação |
+| `TODOGREEN_ANTT_CIOT_*` | Conector/cert do CIOT direto (ver doc CIOT) | CIOT depende do conector Windows/ANTT |
+
 ## Integrações de dados públicos (preparadas, ativam com credencial/infra)
 
 Quando os conectores de ANEEL, ONS, ANP, PNCP, Compras.gov, GDELT, PRF e ANTT

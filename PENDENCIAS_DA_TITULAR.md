@@ -270,10 +270,32 @@ parcial, ele já está construído e está dito abaixo.
   desenvolvedor Apple (US$ 99/ano) e Google (US$ 25 uma vez). Consequência
   prática: no iPhone, as notificações só funcionam depois de instalado na Tela
   de Início — é regra da Apple.
-- **Emissão fiscal (NF-e, CT-e, MDF-e) e assinatura com certificado
-  ICP-Brasil.** Exigem certificado digital A1 ou A3 no seu CNPJ e credenciamento
-  na SEFAZ do seu estado. A assinatura eletrônica **simples** (Lei 14.063/2020)
-  está pronta e vale entre as partes que a aceitam.
+- **Assinatura com certificado ICP-Brasil (documentos entre partes).** A
+  assinatura eletrônica **simples** (Lei 14.063/2020) está pronta e vale entre
+  as partes que a aceitam; a assinatura ICP-Brasil exige o certificado A1/A3 no
+  seu CNPJ.
+
+### Emissão fiscal real (CT-e, MDF-e e CIOT) — o ERP está pronto, falta ligar
+
+O lado do ERP das três emissões está **completo e honesto**: monta o documento,
+calcula os impostos, gera o XML e **nunca marca nada como transmitido/autorizado
+sem a resposta oficial do órgão**. O que falta é infraestrutura que só você pode
+prover — igual em CT-e/MDF-e (SEFAZ) e CIOT (ANTT), porque em nenhum dos dois o
+servidor assina ICP-Brasil ou faz o mTLS sozinho; quem faz é um **conector** no
+seu servidor.
+
+1. **Certificado digital A1 (ou A3) do seu CNPJ.** Base64 do PFX + senha vão para
+   o cofre (`NFE_CERT_PFX`/`NFE_CERT_PASSWORD` para SEFAZ; o CIOT usa o seu
+   próprio, veja `docs/todogreen-ciot-direct-connector.md`).
+2. **Conector SEFAZ** publicado no seu servidor (assina o XML e transmite à SEFAZ
+   da sua UF). Contrato e passos: `docs/todogreen-sefaz-connector.md`. Cadastre
+   `SEFAZ_CONNECTOR_URL`, `SEFAZ_CONNECTOR_ALLOWED_HOSTS`, `SEFAZ_CONNECTOR_TOKEN`
+   e `SEFAZ_AMBIENTE` no cofre.
+3. **Conector CIOT** (ANTT) publicado no seu servidor Windows, com o pacote
+   oficial da ANTT. Contrato e passos: `docs/todogreen-ciot-direct-connector.md`.
+4. **Valide em homologação** antes de operar em produção. Enquanto não estiver
+   ligado, o ERP gera XML/DACTE e só aceita registro manual com o protocolo e a
+   chave oficiais — nunca um "autorizado" que o órgão não deu.
 
 ### Depende de cadastro ou credencial sua
 

@@ -22,6 +22,8 @@ import {
   dadosDacte,
   escaparXml,
   fiscalTransmissionEnabled,
+  sefazTransmissionConfigured,
+  interpretarRetornoSefaz,
   gerarChaveDeAcesso,
   resumoFiscal,
   transicaoValida,
@@ -407,6 +409,64 @@ describe("transmissão desligada por ausência de certificado", () => {
     expect(fiscalTransmissionEnabled({})).toBe(false);
     expect(fiscalTransmissionEnabled({ NFE_CERT_PFX: "cert.pfx" })).toBe(false);
     expect(fiscalTransmissionEnabled(null)).toBe(false);
+  });
+});
+
+describe("transmissão real depende de certificado E conector", () => {
+  it("só configurada com certificado, senha e URL do conector", () => {
+    // Valores de teste (não são segredos): as funções só checam presença.
+    expect(sefazTransmissionConfigured({
+      NFE_CERT_PFX: "x", NFE_CERT_PASSWORD: "x",
+      SEFAZ_CONNECTOR_URL: "https://sefaz.todogreen.com.br/transmitir",
+    })).toBe(true);
+  });
+
+  it("certificado sem conector NÃO habilita transmissão automática", () => {
+    // O ponto exato da correção: cofre com certificado, mas sem conector, não
+    // pode fabricar autorização — o ERP cai no registro manual com protocolo.
+    expect(sefazTransmissionConfigured({ NFE_CERT_PFX: "x", NFE_CERT_PASSWORD: "x" })).toBe(false);
+    expect(sefazTransmissionConfigured({ SEFAZ_CONNECTOR_URL: "https://x" })).toBe(false);
+    expect(sefazTransmissionConfigured(null)).toBe(false);
+  });
+});
+
+describe("interpretação honesta do retorno da SEFAZ", () => {
+  it("autorizado só com cStat 100 E protocolo oficial", () => {
+    const r = interpretarRetornoSefaz({ cStat: "100", xMotivo: "Autorizado o uso do CT-e", protocolo: "135260000000123", chave: "35260112345678000199570010000000421000000428" });
+    expect(r.status).toBe("autorizado");
+    expect(r.protocolo).toBe("135260000000123");
+    expect(r.cStat).toBe("100");
+  });
+
+  it("aceita cStat 104 (lote processado) com protocolo dentro de result", () => {
+    const r = interpretarRetornoSefaz({ result: { cStat: "104", protocolo: "135260000000999", xMotivo: "Lote processado" } });
+    expect(r.status).toBe("autorizado");
+    expect(r.protocolo).toBe("135260000000999");
+  });
+
+  it("cStat de autorização SEM protocolo não é autorizado (não fabrica)", () => {
+    const r = interpretarRetornoSefaz({ cStat: "100", xMotivo: "Autorizado" });
+    expect(r.status).not.toBe("autorizado");
+    // Sem protocolo oficial não há autorização de verdade — fica retido.
+    expect(r.status).toBe("rejeitado");
+  });
+
+  it("cStat de rejeição vira 'rejeitado' com motivo", () => {
+    const r = interpretarRetornoSefaz({ cStat: "236", xMotivo: "Chave de Acesso com dígito verificador inválido" });
+    expect(r.status).toBe("rejeitado");
+    expect(r.motivo).toMatch(/dígito verificador/i);
+  });
+
+  it("resposta de ensaio nunca vira autorizado", () => {
+    expect(interpretarRetornoSefaz({ simulated: true, cStat: "100", protocolo: "1" }).status).toBe("simulado");
+    expect(interpretarRetornoSefaz({ dryRun: true }).status).toBe("simulado");
+    expect(interpretarRetornoSefaz({ cStat: "100", protocolo: "DRYRUN-123" }).status).toBe("simulado");
+  });
+
+  it("resposta vazia/sem status é 'erro', nunca autorizado", () => {
+    expect(interpretarRetornoSefaz({}).status).toBe("erro");
+    expect(interpretarRetornoSefaz(null).status).toBe("erro");
+    expect(interpretarRetornoSefaz({ error: "conector offline" }).status).toBe("erro");
   });
 });
 

@@ -309,9 +309,11 @@ export default function FiscalPage({ authHeaders, setToast }) {
           <ShieldAlert size={18} />
           <span>
             <strong>Transmissão à SEFAZ desligada.</strong>{" "}
-            Falta instalar o certificado digital (A1/A3) e a senha dele no cofre do servidor. Enquanto isso,
-            o sistema prepara o documento, calcula os impostos e gera o XML e o DACTE — só não transmite.
-            Instalado o certificado, o mesmo documento segue à SEFAZ sem retrabalho.
+            {resumo?.certificadoPresente && !resumo?.conectorPresente
+              ? "O certificado já está no cofre, mas falta o conector SEFAZ (SEFAZ_CONNECTOR_URL) que assina e transmite no servidor. "
+              : "Falta instalar o certificado digital (A1/A3) e a senha no cofre, e o conector SEFAZ que assina e transmite no servidor. "}
+            Enquanto isso, o sistema prepara o documento, calcula os impostos e gera o XML e o DACTE — só não transmite.
+            Nenhum documento é marcado como autorizado sem o protocolo oficial da SEFAZ.
           </span>
         </div>
       )}
