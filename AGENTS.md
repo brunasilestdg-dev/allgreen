@@ -823,6 +823,29 @@ quantos resultados vieram.
   tela. Não protege nada: quem quisesse burlar não passaria por ela. A checagem
   que vale é a do servidor.
 
+- **Jurídico canônico — UM só, ancorado no TDG**: `src/features/legal/`
+  (`LegalHub.jsx`, `legalHubDomain.js`, `tdgLegalBridge.js`,
+  `useTdgLegalRecords.js`) é a Central Jurídica geral, mas a persistência de
+  **CONTRATOS/MINUTAS** vive em `todogreen_legal_records` (D1) — a mesma
+  tabela que dois gates operacionais reais do backend leem:
+  `juridicoConcluido()` (proposta/contrato só avança com documento jurídico
+  vinculado APROVADO ou ASSINADO) e `documentoDeAssinaturaVinculado()`
+  (contrato não é marcado como assinado sem anexo `context_type='legal'` no
+  cofre). Se o espaço tiver acesso à vertical TDG
+  (`isTdgLegalAvailable(db)`), a aba **Contratos** da LegalHub carrega e
+  grava via `/api/todogreen/records/legal` (não no blob), preservando os
+  vínculos `campos.contractId`/`campos.proposalId` que os gates olham.
+  **Vocabulário canônico é o do TDG** (`legalDomain.js` da vertical) —
+  `tdgLegalBridge.js` traduz o rótulo da UI nova para os 7 status, 8 tipos e
+  3 riscos que o backend valida, e preserva `originalType`/`uiRisk` em
+  `fields_json` para restaurar depois. Demandas, processos, procurações,
+  prazos, honorários e compliance seguem no blob (sem gate operacional
+  hoje). **Nunca criar um terceiro Jurídico com coleção própria**: mudança
+  aqui muda o TDG, e vice-versa; a titular alinhou que Jurídico canônico é
+  UM só. O Planner/Meu Trabalho consome prazos jurídicos via
+  `buildPlannerItemsFromLegal(records, viewer)` — a seção "Jurídico" em
+  `MyWork` mostra prazos, audiências e prazos processuais respeitando a
+  confidencialidade do viewer (via `permissionsToLegalRole`).
 - **A entrada do app é pedir, não procurar**: `src/features/home/askDomain.js`
   (puro) + a seção `.home-pedido` no topo do `HomeHub`, e a rota `conversar`
   com o `UniversalRequest` em tela própria.

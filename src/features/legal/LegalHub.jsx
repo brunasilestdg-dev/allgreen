@@ -96,6 +96,8 @@ import {
   validatePowerOfAttorney,
   validateProcess,
 } from "./legalHubDomain.js";
+import { isTdgLegalAvailable } from "./tdgLegalBridge.js";
+import { useTdgLegalRecords } from "./useTdgLegalRecords.js";
 import "./legalHub.css";
 
 // Ordem das abas. Cada uma declara se é RESTRITA ao Jurídico ("staff"): a UI
@@ -2999,7 +3001,17 @@ export default function LegalHub({
   const [tab, setTab] = useState(defaultTab);
   const [nowFallback] = useState(() => Date.now());
   const now = typeof nowProp === "number" ? nowProp : nowFallback;
-  const records = useMemo(() => readonlyLegal(db), [db]);
+  const baseRecords = useMemo(() => readonlyLegal(db), [db]);
+  // Quando o TDG está disponível, os contratos são LIDOS do backend TDG
+  // (via hook `useTdgLegalRecords`) — o blob não é mais fonte da verdade
+  // aqui, para não haver "dois Jurídicos" divergentes.
+  const records = useMemo(
+    () => ({
+      ...baseRecords,
+      contracts: tdgLegal ? tdgLegalRecords.records : baseRecords.contracts,
+    }),
+    [baseRecords, tdgLegal, tdgLegalRecords.records],
+  );
 
   // Duas visões: a "staff" enxerga tudo conforme confidencialidade; o
   // solicitante enxerga só as próprias submissões via `canAccessRequest`.
@@ -3025,8 +3037,31 @@ export default function LegalHub({
   }, [records, viewer, legalStaff]);
 
   const matters = useCollection(update, "legalMatters");
-  const contracts = useCollection(update, "legalContracts");
+  const blobContracts = useCollection(update, "legalContracts");
   const processes = useCollection(update, "legalProcesses");
+  // JURÍDICO CANÔNICO: quando o espaço tem acesso à vertical To Do Green, os
+  // CONTRATOS deixam de viver no blob e passam a viver em `todogreen_legal_records`
+  // (D1) — a mesma tabela que os gates operacionais do backend leem
+  // (`juridicoConcluido`, `documentoDeAssinaturaVinculado`). Sem isso, um
+  // contrato aprovado na UI nova jamais destravaria a proposta.
+  const tdgLegal = isTdgLegalAvailable(db);
+  const tdgLegalRecords = useTdgLegalRecords({
+    authHeaders,
+    enabled: tdgLegal,
+    setToast,
+  });
+  const contracts = tdgLegal
+    ? {
+        add: (record) =>
+          tdgLegalRecords.add(record).catch((err) => setToast?.(err.message)),
+        replace: (id, patch) =>
+          tdgLegalRecords
+            .replace(id, patch)
+            .catch((err) => setToast?.(err.message)),
+        remove: (id) =>
+          tdgLegalRecords.remove(id).catch((err) => setToast?.(err.message)),
+      }
+    : blobContracts;
   const powersOfAttorney = useCollection(update, "legalPowersOfAttorney");
   const deadlines = useCollection(update, "legalDeadlines");
   const offices = useCollection(update, "legalOffices");
@@ -3109,6 +3144,14 @@ export default function LegalHub({
             <span className="lgl-chip">
               <Bell size={13} />
               {alertsCount} alertas
+            </span>
+          )}
+          {tdgLegal && (
+            <span
+              className="lgl-chip"
+              title="Contratos e minutas gravam no Jurídico canônico da To Do Green (D1) — os gates operacionais (juridicoConcluido, documentoDeAssinaturaVinculado) leem daqui."
+            >
+              <ShieldCheck size={13} /> Jurídico canônico TDG
             </span>
           )}
           <span className="lgl-chip">
