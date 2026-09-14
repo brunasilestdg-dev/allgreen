@@ -872,4 +872,15 @@ describe("pontes entre as superfícies de trabalho", () => {
     expect(window.location.search).toBe("?ferramenta=tarefas");
     expect(await screen.findByRole("navigation", { name: /Entrada principal/ }, { timeout: 5000 })).toBeTruthy();
   });
+
+  it.each([
+    ["/todogreen/sessoes-recarga", "Sessões de recarga"],
+    ["/todogreen/reservas-recarga", "Reservas de carregador"],
+    ["/todogreen/cobranca-recarga", "Cobrança de recarga (kWh)"],
+  ])("mantém a operação de recarga acessível em %s", async (rota, titulo) => {
+    window.history.pushState({}, "", rota);
+    await renderarAutorizada();
+    expect(await screen.findByRole("heading", { name: titulo })).toBeTruthy();
+  });
+
 });
