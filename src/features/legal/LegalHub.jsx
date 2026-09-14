@@ -2995,6 +2995,10 @@ export default function LegalHub({
   viewer,
   now: nowProp,
   pushNotification,
+  // Quando `true`, força a UI a considerar o Jurídico canônico do TDG mesmo
+  // que a detecção pelo `db` falhe — a `LogisticsVertical` monta a UI aqui
+  // já sabendo que está no ERP e o backend responde `/api/todogreen/records/legal`.
+  tdgAvailable: tdgForced,
 }) {
   const legalStaff = isLegalStaff(viewer || {});
   const defaultTab = legalStaff ? "dashboard" : "solicitar";
@@ -3002,9 +3006,10 @@ export default function LegalHub({
   const [nowFallback] = useState(() => Date.now());
   const now = typeof nowProp === "number" ? nowProp : nowFallback;
   const baseRecords = useMemo(() => readonlyLegal(db), [db]);
-  // Quando o TDG está disponível, os contratos são LIDOS do backend TDG
-  // (via hook `useTdgLegalRecords`) — o blob não é mais fonte da verdade
-  // aqui, para não haver "dois Jurídicos" divergentes.
+  // Quando o TDG está disponível (detectado ou forçado pela vertical), os
+  // contratos são LIDOS do backend TDG (via hook `useTdgLegalRecords`) — o
+  // blob não é mais fonte da verdade aqui, para não haver "dois Jurídicos"
+  // divergentes.
   const records = useMemo(
     () => ({
       ...baseRecords,
@@ -3043,8 +3048,10 @@ export default function LegalHub({
   // CONTRATOS deixam de viver no blob e passam a viver em `todogreen_legal_records`
   // (D1) — a mesma tabela que os gates operacionais do backend leem
   // (`juridicoConcluido`, `documentoDeAssinaturaVinculado`). Sem isso, um
-  // contrato aprovado na UI nova jamais destravaria a proposta.
-  const tdgLegal = isTdgLegalAvailable(db);
+  // contrato aprovado na UI nova jamais destravaria a proposta. O ERP monta
+  // essa UI já sabendo do TDG (`tdgForced`); fora do ERP a detecção fica com
+  // `isTdgLegalAvailable(db)`.
+  const tdgLegal = Boolean(tdgForced) || isTdgLegalAvailable(db);
   const tdgLegalRecords = useTdgLegalRecords({
     authHeaders,
     enabled: tdgLegal,
