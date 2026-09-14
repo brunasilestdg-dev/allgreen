@@ -5,6 +5,7 @@ import {
   RESULTADOS_DA_INTERACAO,
   TIPOS_DE_INTERACAO,
   diasSemContato,
+  interacaoAgendada,
   proximosPassos,
   rotuloDoTipo,
 } from "../interacoesDomain.js";
@@ -66,10 +67,30 @@ export default function InteracoesPanel({
   const dias = diasSemContato(interacoes);
   const compromissos = proximosPassos(interacoes);
 
+  // Próxima ação com prazo ou responsável = tarefa canônica obrigatória.
+  // Sem essa trava a interação sabia do compromisso, mas Planner/To Do/Meu Dia
+  // não. Registrar sem virar tarefa só faz sentido quando é observação livre
+  // (sem prazo, sem responsável).
+  const proximoPassoTexto = form.proximoPasso.trim();
+  const proximaAcaoExecutavel = Boolean(proximoPassoTexto) && Boolean(form.proximoPassoEm);
+  const responsavelExigido = proximaAcaoExecutavel && !form.responsavelId;
+  const integracaoDisponivel = Boolean(onCriarTarefa && pessoas.length);
   const registrar = async (evento) => {
     evento.preventDefault();
     if (!onRegistrar) return;
     if (salvando) return;
+    if (proximaAcaoExecutavel && !integracaoDisponivel) {
+      const mensagem = "Próxima ação com prazo precisa virar tarefa, mas nenhum responsável está disponível. Remova o prazo para registrar como observação.";
+      setErroRegistro(mensagem);
+      setToast?.(mensagem);
+      return;
+    }
+    if (responsavelExigido) {
+      const mensagem = "Próxima ação com prazo precisa de responsável — ela vira tarefa. Escolha alguém ou remova o prazo para registrar como observação.";
+      setErroRegistro(mensagem);
+      setToast?.(mensagem);
+      return;
+    }
     setSalvando(true);
     setErroRegistro("");
     let contatoSalvo = interacaoSalva;
@@ -79,10 +100,10 @@ export default function InteracoesPanel({
         contatoSalvo = true;
         setInteracaoSalva(true);
       }
-      if (form.proximoPasso.trim() && form.responsavelId && onCriarTarefa) {
+      if (proximoPassoTexto && form.responsavelId && onCriarTarefa) {
         await onCriarTarefa({
           opportunityId: form.opportunityId,
-          title: form.proximoPasso.trim(),
+          title: proximoPassoTexto,
           due: form.proximoPassoEm,
           assigneeId: form.responsavelId,
           assignee: pessoas.find((pessoa) => pessoa.id === form.responsavelId)?.name || "",
@@ -132,24 +153,27 @@ export default function InteracoesPanel({
       )}
 
       <ol className="tdg-interacoes-lista">
-        {interacoes.map((item) => (
-          <li key={item.id} data-origem={item.opportunityId ? "oportunidade" : "conta"}>
-            <span className="tdg-interacao-tag">{rotuloDoTipo(item.tipo)}</span>
-            <div>
-              <strong>{item.assunto || rotuloDoTipo(item.tipo)}</strong>
-              <small>
-                {dataBR(item.ocorridaEm)}
-                {item.participantes ? ` · ${item.participantes}` : ""}
-                {item.autorEmail ? ` · registrada por ${item.autorEmail}` : ""}
-                {!item.opportunityId && " · interação da conta"}
-              </small>
-              {item.ata && <p>{item.ata}</p>}
-              {item.proximoPasso && (
-                <small className="tdg-interacao-passo">Próximo passo: {item.proximoPasso}{item.proximoPassoEm ? ` (${dataBR(item.proximoPassoEm)})` : ""}</small>
-              )}
-            </div>
-          </li>
-        ))}
+        {interacoes.map((item) => {
+          const agendada = interacaoAgendada(item);
+          return (
+            <li key={item.id} data-origem={item.opportunityId ? "oportunidade" : "conta"} data-agendada={agendada || undefined}>
+              <span className="tdg-interacao-tag">{rotuloDoTipo(item.tipo)}{agendada ? " · agendada" : ""}</span>
+              <div>
+                <strong>{item.assunto || rotuloDoTipo(item.tipo)}</strong>
+                <small>
+                  {agendada ? "Agendada para " : ""}{dataBR(item.ocorridaEm)}
+                  {item.participantes ? ` · ${item.participantes}` : ""}
+                  {item.autorEmail ? ` · registrada por ${item.autorEmail}` : ""}
+                  {!item.opportunityId && " · interação da conta"}
+                </small>
+                {item.ata && <p>{item.ata}</p>}
+                {item.proximoPasso && (
+                  <small className="tdg-interacao-passo">Próximo passo: {item.proximoPasso}{item.proximoPassoEm ? ` (${dataBR(item.proximoPassoEm)})` : ""}</small>
+                )}
+              </div>
+            </li>
+          );
+        })}
         {interacoes.length === 0 && (
           <li className="tdg-interacoes-vazio">
             Nada registrado ainda. Reunião, ligação, visita e até a tentativa sem retorno entram aqui.
@@ -168,8 +192,9 @@ export default function InteracoesPanel({
               </select>
             </label>
             <label>
-              <span>Quando aconteceu</span>
+              <span>Quando aconteceu (ou vai acontecer)</span>
               <input disabled={salvando || interacaoSalva} type="date" required value={form.ocorridaEm} onChange={(e) => campo("ocorridaEm", e.target.value)} />
+              <small>Data no futuro entra como "reunião agendada" — vai para os próximos compromissos, não conta como contato já feito.</small>
             </label>
             {escopo === "conta" && oportunidades.length > 0 && (
               <label>
@@ -207,12 +232,12 @@ export default function InteracoesPanel({
               <input disabled={salvando || interacaoSalva} type="date" value={form.proximoPassoEm} onChange={(e) => campo("proximoPassoEm", e.target.value)} />
             </label>
             <label>
-              <span>Responsável pelo follow-up</span>
+              <span>Responsável pelo follow-up{proximaAcaoExecutavel ? " *" : ""}</span>
               <select aria-label="Responsável pelo follow-up" value={form.responsavelId} onChange={(e) => campo("responsavelId", e.target.value)} disabled={salvando || interacaoSalva || !form.proximoPasso.trim() || !onCriarTarefa || !pessoas.length}>
-                <option value="">Sem criar tarefa</option>
+                <option value="">{proximaAcaoExecutavel ? "Escolha um responsável" : "Sem criar tarefa (observação livre)"}</option>
                 {pessoas.map((pessoa) => <option value={pessoa.id} key={pessoa.id}>{pessoa.name}{pessoa.email ? ` · ${pessoa.email}` : ""}</option>)}
               </select>
-              <small>{!onCriarTarefa ? "O próximo passo será registrado no histórico, sem criar tarefa." : !pessoas.length ? "Nenhum usuário disponível para atribuir uma tarefa." : "Ao escolher alguém, o próximo passo também entra na To-do."}</small>
+              <small>{!onCriarTarefa ? "O próximo passo será registrado no histórico, sem criar tarefa." : !pessoas.length ? "Nenhum usuário disponível para atribuir uma tarefa." : proximaAcaoExecutavel ? "Próxima ação com prazo vira tarefa canônica (aparece no Planner, To Do e Meu Dia)." : "Ao escolher alguém, o próximo passo também entra na To-do; sem responsável e sem prazo, fica só no histórico."}</small>
             </label>
             <div className="tdg-form-actions">
               <button type="button" disabled={salvando} onClick={() => setAberta(false)}>{interacaoSalva ? "Fechar e tentar depois" : "Cancelar"}</button>

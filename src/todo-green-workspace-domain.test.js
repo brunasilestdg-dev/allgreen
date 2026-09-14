@@ -208,6 +208,93 @@ describe("espaço de trabalho To Do Green", () => {
     });
   });
 
+  it("marca 'minha' pelo responsável — o criador (ownerId) não conta quando existe assigneeId", () => {
+    // Cenário do CRM: Bruna registra a interação e escolhe João como responsável
+    // pelo follow-up. Antes do ajuste, o Meu Dia da Bruna contava a tarefa como
+    // dela porque o ownerId (criador) coincidia com o usuário logado.
+    const board = buildTodoGreenTaskBoard({
+      today: "2026-09-14",
+      currentUserId: "bruna",
+      db: {
+        tasks: [
+          {
+            id: "crm-follow-1",
+            businessId: "todogreen",
+            source: "todogreen-crm",
+            title: "Enviar proposta",
+            status: "A fazer",
+            due: "2026-09-18",
+            assigneeId: "joao",
+            ownerId: "bruna",
+          },
+        ],
+      },
+    });
+    expect(board.today.mine.map((task) => task.id)).not.toContain("crm-follow-1");
+    expect(board.tasks[0]).toMatchObject({ assigneeId: "joao", flags: { mine: false } });
+
+    const boardJoao = buildTodoGreenTaskBoard({
+      today: "2026-09-14",
+      currentUserId: "joao",
+      db: {
+        tasks: [{
+          id: "crm-follow-1",
+          businessId: "todogreen",
+          source: "todogreen-crm",
+          title: "Enviar proposta",
+          status: "A fazer",
+          due: "2026-09-18",
+          assigneeId: "joao",
+          ownerId: "bruna",
+        }],
+      },
+    });
+    expect(boardJoao.today.mine.map((task) => task.id)).toContain("crm-follow-1");
+  });
+
+  it("cai no ownerId como fallback só quando não existe responsável", () => {
+    const board = buildTodoGreenTaskBoard({
+      today: "2026-09-14",
+      currentUserId: "bruna",
+      db: {
+        tasks: [
+          {
+            id: "sem-responsavel",
+            businessId: "todogreen",
+            source: "todogreen-crm",
+            title: "Definir escopo",
+            status: "A fazer",
+            due: "2026-09-15",
+            ownerId: "bruna",
+          },
+        ],
+      },
+    });
+    expect(board.today.mine.map((task) => task.id)).toContain("sem-responsavel");
+  });
+
+  it("respeita assignees[] quando a tarefa lista vários responsáveis, mesmo com ownerId diferente", () => {
+    const board = buildTodoGreenTaskBoard({
+      today: "2026-09-14",
+      currentUserId: "bruna",
+      db: {
+        tasks: [
+          {
+            id: "multi",
+            businessId: "todogreen",
+            source: "todogreen-crm",
+            title: "Preparar reunião",
+            status: "A fazer",
+            due: "2026-09-16",
+            ownerId: "outro",
+            assignees: [{ id: "bruna", name: "Bruna" }, { id: "joao", name: "João" }],
+          },
+        ],
+      },
+    });
+    expect(board.today.mine.map((task) => task.id)).toContain("multi");
+  });
+
   it("liga uma nota ao registro canônico do CRM", () => {
     const entity = linkedEntityFor("client", { id: "cli 1", name: "Mercado Real" });
     expect(entity).toEqual({

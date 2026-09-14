@@ -2079,11 +2079,15 @@
 .tdg-menu-mostrar:hover,
 .tdg-menu-mostrar:focus-visible { border-color: var(--tdg-green); color: var(--tdg-green); outline: none; }
 .tdg-erp-layout.menu-oculto { grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
+/* Cartão neutro por padrão: como o "Início" logo acima, ele é atalho, não
+   indicador de página atual. Vira cartão escuro só quando a pessoa está de
+   fato em Projetos e tarefas (`.active`) ou no hover — assim a área ativa
+   do menu (ex.: "Comercial > Clientes") não some visualmente para este CTA. */
 .tdg-work-entry {
-  background: #173d31;
-  border: 0;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #dce7e2);
   border-radius: 9px;
-  color: #fff;
+  color: var(--tdg-ink);
   cursor: pointer;
   display: grid;
   gap: 3px;
@@ -2094,12 +2098,12 @@
   width: 100%;
 }
 .tdg-work-entry strong {
-  color: #fff;
+  color: var(--tdg-ink);
   font-size: .86rem;
   letter-spacing: 0;
 }
 .tdg-work-entry small {
-  color: #cfe5d9;
+  color: var(--tdg-muted);
   font-size: .69rem;
   line-height: 1.25;
 }
@@ -2107,8 +2111,16 @@
 .tdg-work-entry:hover,
 .tdg-work-entry:focus-visible {
   background: var(--tdg-green);
+  border-color: transparent;
+  color: #fff;
   outline: none;
 }
+.tdg-work-entry.active strong,
+.tdg-work-entry:hover strong,
+.tdg-work-entry:focus-visible strong { color: #fff; }
+.tdg-work-entry.active small,
+.tdg-work-entry:hover small,
+.tdg-work-entry:focus-visible small { color: #cfe5d9; }
 /* "Início": atalho de casa sempre visível no topo do menu. Cartão claro com
    ícone, distinto da entrada escura de "Projetos e tarefas" logo abaixo. */
 .tdg-home-entry {
@@ -2790,14 +2802,21 @@
   min-height: 42px;
 }
 
+/* Refinamento do cartão neutro. O visual escuro só aparece quando ativo/hover
+   (regra `.tdg-work-entry.active` / `:hover` acima), evitando destacar o
+   atalho quando ele NÃO é a página atual. */
 .tdg-work-entry {
+  border-radius: 12px;
+  min-height: 62px;
+  padding: 14px;
+}
+.tdg-work-entry.active,
+.tdg-work-entry:hover,
+.tdg-work-entry:focus-visible {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent 34%),
     linear-gradient(135deg, #10352b, #17624f);
-  border-radius: 12px;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.14), 0 10px 24px rgba(16, 36, 31, 0.12);
-  min-height: 62px;
-  padding: 14px;
 }
 
 .tdg-nav-area-cabeca > button:first-child {
