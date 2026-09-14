@@ -1093,6 +1093,11 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // nunca "Workspace" (rotulosNaoBanidos). `jornadasInternas`: o menu não
   // repete o que o Espaço já mostra dentro.
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
+  // Área dedicada às 11 telas do roadmap All Green (rodadas de 14/09). A
+  // titular pediu para agrupar tudo o que foi construído aqui embaixo do
+  // "Green Tech Core" — assim as telas ficam num único menu visível no topo,
+  // sem depender de expandir os grupos antigos (Administração, Operação…).
+  { id: "green-tech-core", label: "Green Tech Core", route: "/todogreen/core-grupo", pages: ["core-grupo", "tenant-acessos", "green-on-empresa", "roaming-ocpi", "energia-peak", "fila-alertas", "greenmob-locacao", "saas-billing", "ocpp-console", "green-on-app", "seguranca-fisica"] },
   { id: "espaco-trabalho", label: "Espaço de trabalho", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"], jornadasInternas: ["central-trabalho", "visualizacoes", "agentes-funcoes"] },
   // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
   // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
@@ -1102,9 +1107,9 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
   // indicadores) existia no menu. Um nome, um lugar.
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga", "roaming-ocpi", "fila-alertas", "ocpp-console", "green-on-app", "seguranca-fisica"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
-  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "energia-peak", "metodologia"] },
+  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
@@ -1115,9 +1120,9 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // de preço no Comercial, bases/rotas na Operação. A página completa
   // continua em Administração como o "ver tudo".
   { id: "suprimentos", label: "Compras", route: "/todogreen/compras", pages: ["compras", "estoque"], extras: [["Cadastro · Materiais", "/todogreen/cadastros?secao=items"], ["Cadastro · Depósitos", "/todogreen/cadastros?secao=warehouses"], ["Cadastro · Fornecedores e parceiros", "/todogreen/cadastros?secao=parties"]] },
-  { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "ciot", "greenmob-locacao"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
+  { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "ciot"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
   { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
-  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "greenpay", "green-on-empresa"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
+  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "greenpay"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
   { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "motor-operacao"] },
@@ -1126,7 +1131,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // área nem no menu de Compliance (pedido da titular).
   // Integrações e "Usuários e acessos" vivem no menu Configurações (topo), o
   // lar convencional das configurações — não repetimos aqui na lateral.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema", "tenant-acessos", "saas-billing", "core-grupo"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
@@ -3014,7 +3019,10 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   // Menu em acordeão (pedido da titular): áreas na frente; dentro de cada
   // área, o segundo nível com as funcionalidades dela. A área da tela atual
   // abre sozinha; as que a pessoa abrir à mão ficam na sessão.
-  const [areasAbertas, setAreasAbertas] = useState(() => new Set());
+  // Green Tech Core vem ABERTA por padrão para as 11 telas do roadmap
+  // aparecerem sem depender de expandir um chevron (pedido da titular:
+  // "eu acesso a plataforma e não vejo as alterações").
+  const [areasAbertas, setAreasAbertas] = useState(() => new Set(["green-tech-core"]));
   const abrirArea = useCallback((id) => {
     setAreasAbertas((atual) => (atual.has(id) ? atual : new Set([...atual, id])));
   }, []);

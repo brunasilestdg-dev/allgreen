@@ -129,7 +129,10 @@ describe("propriedade das abas principais", () => {
     // "Espaço de trabalho", nunca "Workspace": o polidor apaga a palavra
     // banida e o botão ficava com fundo e sem nome (31/08).
     expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Espaço de trabalho"[^\n]+implantacao/);
-    expect(blocoDaNavegacaoPrincipal).toMatch(/^const PRIMARY_NAVIGATION[\s\S]{0,700}label: "Espaço de trabalho"/);
+    // "Espaço de trabalho" continua no topo do menu; o limite foi ampliado
+    // depois que "Green Tech Core" (11 páginas do roadmap All Green) entrou
+    // no bloco de topo com uma lista longa de páginas na mesma linha.
+    expect(blocoDaNavegacaoPrincipal).toMatch(/^const PRIMARY_NAVIGATION[\s\S]{0,1400}label: "Espaço de trabalho"/);
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Documentos"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Administração"');
     expect(blocoDaNavegacaoPrincipal).toContain('label: "Operação", route: "/todogreen/operacoes"');
@@ -138,7 +141,11 @@ describe("propriedade das abas principais", () => {
     expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Ocorrências"/);
     expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Operação"[^\n]+ocorrencias/);
     expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Documentos"[^\n]+relatorios/);
-    expect(blocoDaNavegacaoPrincipal).toContain('label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "energia-peak", "metodologia"]');
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"]');
+    // As 11 telas do roadmap All Green agora moram numa área dedicada
+    // "Green Tech Core" no topo do menu — junta o que era espalhado.
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "Green Tech Core"');
+    expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Green Tech Core"[^\n]+core-grupo/);
   });
 });
 
