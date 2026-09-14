@@ -676,6 +676,49 @@ export const TODO_GREEN_MODULE_CATALOG = [
     order: 70,
     description: "O dossiê que a IA lê antes de responder: identidade, proposta, operação, números com fonte e habilitação.",
   }),
+  // Blocos das 6 lacunas dos 26 blocos All Green (aprimoramentos aditivos).
+  module("tenant-acessos", "Perfis e permissões", "administracao", "/todogreen/tenant-acessos", {
+    icon: "LockKeyhole",
+    order: 66.5,
+    description: "Matriz de papéis e capacidades do grupo (Core All Green): quem enxerga o quê, com blindagem contra capacidade interna em papel externo.",
+    permissions: ["read", "audit:read"],
+  }),
+  module("green-on-b2b", "Green On · B2B", "financeiro", "/todogreen/green-on-b2b", {
+    icon: "WalletCards",
+    order: 39.56,
+    description: "Conta corporativa Green On: limite por sessão/dia/mês, autorização antes de cobrar, fatura consolidada e custo por km.",
+    permissions: ["read", "finance:manage"],
+  }),
+  module("roaming-ocpi", "Roaming OCPI", "operacao", "/todogreen/roaming-ocpi", {
+    icon: "Handshake",
+    order: 42.9,
+    description: "Interoperabilidade entre redes de eletroposto: identificador OCPI, whitelist de token e rateio CPO/eMSP/cliente.",
+    permissions: ["read", "operations:manage"],
+  }),
+  module("energia-peak", "Energia · BESS e pico", "esg", "/todogreen/energia-peak", {
+    icon: "Zap",
+    order: 50.5,
+    description: "Peak shaving contra a demanda contratada, mix rede/solar/BESS, fração renovável efetiva e perda tomada→bateria.",
+    permissions: ["read"],
+  }),
+  module("fila-alertas", "Fila de alertas", "administracao", "/todogreen/fila-alertas", {
+    icon: "AlertTriangle",
+    order: 51.5,
+    description: "Alertas com severidade, SLA por criticidade, teto por operador (crítico nunca rebaixa) e taxa de falso positivo por regra.",
+    permissions: ["read", "operations:manage"],
+  }),
+  module("greenmob-locacao", "Greenmob · Locação", "operacao", "/todogreen/greenmob-locacao", {
+    icon: "Truck",
+    order: 44.5,
+    description: "Contratos de locação, avarias com momento (pré-existente vs. durante), cobrança final derivada e devolução do veículo.",
+    permissions: ["read", "operations:manage", "finance:manage"],
+  }),
+  module("saas-billing", "SaaS · Billing", "administracao", "/todogreen/saas-billing", {
+    icon: "PackageCheck",
+    order: 66.7,
+    description: "Contratação e faturamento por módulo/métrica: base + excedente sobre franquia, desconto anual e análise de downgrade.",
+    permissions: ["read", "finance:manage"],
+  }),
 ];
 
 export const TODO_GREEN_FEATURE_COUNT = TODO_GREEN_MODULE_CATALOG.length;

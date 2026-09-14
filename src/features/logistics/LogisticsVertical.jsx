@@ -177,6 +177,14 @@ const FluxosPage = lazy(() => import("./pages/FluxosPage.jsx"));
 const ErpManualPage = lazy(() => import("./pages/ErpManualPage.jsx"));
 const ClientActivationPage = lazy(() => import("./ClientActivationPage.jsx"));
 const DriverFleetCenterPage = lazy(() => import("./pages/DriverFleetCenterPage.jsx"));
+// Páginas das 6 lacunas dos 26 blocos (aprimoramentos aditivos).
+const TenantAccessPage = lazy(() => import("./pages/TenantAccessPage.jsx"));
+const CorporateAccountPage = lazy(() => import("./pages/CorporateAccountPage.jsx"));
+const RoamingPage = lazy(() => import("./pages/RoamingPage.jsx"));
+const EnergyPeakSavingsPage = lazy(() => import("./pages/EnergyPeakSavingsPage.jsx"));
+const AlertQueuePage = lazy(() => import("./pages/AlertQueuePage.jsx"));
+const GreenmobRentalPage = lazy(() => import("./pages/GreenmobRentalPage.jsx"));
+const SaasBillingPage = lazy(() => import("./pages/SaasBillingPage.jsx"));
 
 const iconMap = {
   Activity,
@@ -3542,6 +3550,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </Suspense>
       )}
       {page === "energia" && <Suspense fallback={<section className="tdg-panel">Carregando energia...</section>}><EnergyPage authHeaders={authHeaders} /></Suspense>}
+      {page === "tenant-acessos" && <Suspense fallback={<section className="tdg-panel">Carregando perfis...</section>}><TenantAccessPage /></Suspense>}
+      {page === "green-on-b2b" && <Suspense fallback={<section className="tdg-panel">Carregando conta corporativa...</section>}><CorporateAccountPage /></Suspense>}
+      {page === "roaming-ocpi" && <Suspense fallback={<section className="tdg-panel">Carregando roaming...</section>}><RoamingPage /></Suspense>}
+      {page === "energia-peak" && <Suspense fallback={<section className="tdg-panel">Carregando BESS e pico...</section>}><EnergyPeakSavingsPage /></Suspense>}
+      {page === "fila-alertas" && <Suspense fallback={<section className="tdg-panel">Carregando fila de alertas...</section>}><AlertQueuePage /></Suspense>}
+      {page === "greenmob-locacao" && <Suspense fallback={<section className="tdg-panel">Carregando Greenmob...</section>}><GreenmobRentalPage /></Suspense>}
+      {page === "saas-billing" && <Suspense fallback={<section className="tdg-panel">Carregando billing...</section>}><SaasBillingPage /></Suspense>}
       {page === "central-esg" && (
         <Suspense fallback={<section className="tdg-panel">Carregando Central ESG...</section>}>
           <EsgCenter authHeaders={authHeaders} setToast={setToast} />
