@@ -3210,7 +3210,6 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   const isWorkCenter = page === "espaco";
   const activeManagement = MANAGEMENT_TOOLS.find((item) => item.id === page) || null;
   const currentPage = activeManagement || MODULE_IMPLEMENTATION[page] || MODULE_IMPLEMENTATION.dashboard;
-  const trilha = trilhaDaPagina(page, secaoDeCadastro);
   // A permissão da tela é conferida AQUI, na rota, e não só no menu: o menu
   // esconde o botão, mas voltar no histórico, atualizar ou digitar a URL
   // chegam à tela sem passar por ele. A fonte é a mesma que o menu usa.
@@ -3334,24 +3333,21 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
       <header className="tdg-shell-header">
         <div className="tdg-shell-location">
-          <span className="tdg-workspace-name">TO DO GREEN</span>
-          <nav className="tdg-breadcrumb" aria-label="Trilha de navegação">
-            {trilha.map((passo, indice) => {
-              const ultimo = indice === trilha.length - 1;
-              return (
-                <span className="tdg-breadcrumb-item" key={passo.route}>
-                  {ultimo ? (
-                    <span aria-current="page">{passo.label}</span>
-                  ) : (
-                    <button type="button" onClick={() => navigate(passo.route)}>{passo.label}</button>
-                  )}
-                  {!ultimo && <span className="tdg-breadcrumb-sep" aria-hidden="true">›</span>}
-                </span>
-              );
-            })}
-          </nav>
-          <h1 id="tdg-title">{currentPage.title}</h1>
-          <p title={currentPage.description}>{currentPage.description}</p>
+          {/* O logo virou o retorno para o início a partir de qualquer tela: o
+              texto do workspace + trilha + título + descrição saiu daqui a
+              pedido da titular. O h1 e o parágrafo continuam no DOM como
+              conteúdo acessível (sr-only) para o aria-labelledby="tdg-title"
+              do <main> e para o leitor de tela ainda anunciar a página. */}
+          <button
+            type="button"
+            className="tdg-shell-logo"
+            onClick={() => navigate("/todogreen/dashboard")}
+            aria-label="Início — Painel To Do Green"
+          >
+            <img src="/logo-todo-green.svg" alt="To Do Green" width="72" height="50" />
+          </button>
+          <h1 id="tdg-title" className="tdg-shell-sr-only">{currentPage.title}</h1>
+          <p className="tdg-shell-sr-only">{currentPage.description}</p>
         </div>
         <div className="tdg-shell-actions">
           <TodoGreenProfile db={db} update={update} authHeaders={authHeaders} setToast={setToast} />
