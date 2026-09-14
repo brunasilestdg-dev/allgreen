@@ -683,7 +683,7 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Matriz de papéis e capacidades do grupo (Core All Green): quem enxerga o quê, com blindagem contra capacidade interna em papel externo.",
     permissions: ["read", "audit:read"],
   }),
-  module("green-on-b2b", "Green On · B2B", "financeiro", "/todogreen/green-on-b2b", {
+  module("green-on-empresa", "Green On · B2B", "financeiro", "/todogreen/green-on-empresa", {
     icon: "WalletCards",
     order: 39.56,
     description: "Conta corporativa Green On: limite por sessão/dia/mês, autorização antes de cobrar, fatura consolidada e custo por km.",

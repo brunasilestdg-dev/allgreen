@@ -979,6 +979,68 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: "planner:manage",
     description: "Planos com tarefas, prazo, prioridade e checklist.",
   },
+  // Blocos das 6 lacunas dos 26 blocos All Green — cada tela abre uma rota
+  // canônica de módulo do TODO_GREEN_MODULE_CATALOG e mora na área dona do
+  // assunto. Read-only + simulador; a conexão com dado real vem em rodadas
+  // seguintes.
+  "tenant-acessos": {
+    title: "Perfis e permissões",
+    navLabel: "Perfis e permissões",
+    route: "/todogreen/tenant-acessos",
+    area: "administracao",
+    status: "functional",
+    description: "Matriz de papéis internos/externos, capacidades por papel e blindagem contra vazamento de capacidade interna em papel externo.",
+  },
+  "green-on-empresa": {
+    title: "Green On · B2B",
+    navLabel: "Green On · B2B",
+    route: "/todogreen/green-on-empresa",
+    area: "financeiro",
+    status: "functional",
+    permission: "finance:manage",
+    description: "Conta corporativa Green On: limite por sessão/dia/mês, autorização antes de cobrar, fatura consolidada e custo por km.",
+  },
+  "roaming-ocpi": {
+    title: "Roaming OCPI",
+    navLabel: "Roaming OCPI",
+    route: "/todogreen/roaming-ocpi",
+    area: "operacao",
+    status: "functional",
+    description: "Identificador OCPI, whitelist do token da rede parceira e rateio de sessão CPO / eMSP / cliente.",
+  },
+  "energia-peak": {
+    title: "Energia · BESS e pico",
+    navLabel: "BESS e pico",
+    route: "/todogreen/energia-peak",
+    area: "esg",
+    status: "functional",
+    description: "Peak shaving contra a demanda contratada, mix rede/solar/BESS, fração renovável efetiva e perda tomada→bateria.",
+  },
+  "fila-alertas": {
+    title: "Fila de alertas",
+    navLabel: "Fila de alertas",
+    route: "/todogreen/fila-alertas",
+    area: "operacao",
+    status: "functional",
+    description: "Alertas com severidade e SLA por criticidade, teto por operador (crítico nunca rebaixa) e taxa de falso positivo por regra.",
+  },
+  "greenmob-locacao": {
+    title: "Greenmob · Locação",
+    navLabel: "Greenmob · Locação",
+    route: "/todogreen/greenmob-locacao",
+    area: "frota",
+    status: "functional",
+    description: "Contrato de locação, avaria por momento (pré-existente ≠ cobrança), cobrança final derivada e devolução.",
+  },
+  "saas-billing": {
+    title: "SaaS · Billing",
+    navLabel: "SaaS · Billing",
+    route: "/todogreen/saas-billing",
+    area: "administracao",
+    status: "functional",
+    permission: "finance:manage",
+    description: "Contratação por módulo e métrica: base + excedente sobre franquia, desconto anual só se anual, análise de downgrade.",
+  },
 });
 
 // A taxonomia de áreas é a da titular (mensagem de 30/08): cada área da
@@ -1002,9 +1064,9 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
   // indicadores) existia no menu. Um nome, um lugar.
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga", "roaming-ocpi", "fila-alertas"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
-  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"] },
+  { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "energia-peak", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
   { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
@@ -1015,9 +1077,9 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // de preço no Comercial, bases/rotas na Operação. A página completa
   // continua em Administração como o "ver tudo".
   { id: "suprimentos", label: "Compras", route: "/todogreen/compras", pages: ["compras", "estoque"], extras: [["Cadastro · Materiais", "/todogreen/cadastros?secao=items"], ["Cadastro · Depósitos", "/todogreen/cadastros?secao=warehouses"], ["Cadastro · Fornecedores e parceiros", "/todogreen/cadastros?secao=parties"]] },
-  { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "ciot"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
+  { id: "frota", label: "Frota", route: "/todogreen/motorista-frota", pages: ["motorista-frota", "ciot", "greenmob-locacao"], extras: [["Cadastro · Veículos", "/todogreen/cadastros?secao=vehicles"], ["Cadastro · Motoristas", "/todogreen/cadastros?secao=drivers"]] },
   { id: "qualidade", label: "Qualidade", route: "/todogreen/qualidade", pages: ["qualidade"] },
-  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "greenpay"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
+  { id: "finance", label: "Financeiro", route: "/todogreen/faturamento", pages: ["faturamento", "titulos", "rateios", "receita", "custos", "comissoes", "tesouraria", "greenpay", "green-on-empresa"], extras: [["Cadastro · Centros de custo", "/todogreen/cadastros?secao=costCenters"], ["Cadastro · Plano de contas", "/todogreen/cadastros?secao=accounts"], ["Cadastro · Contas bancárias", "/todogreen/cadastros?secao=bankAccounts"]] },
   { id: "dp", label: "Departamento Pessoal", route: "/todogreen/dp-rh", pages: ["dp-rh"], extras: [["Cadastro · Colaboradores", "/todogreen/cadastros?secao=employees"]] },
   { id: "rh", label: "Recursos Humanos", route: "/todogreen/rh", pages: ["rh"] },
   { id: "products", label: "Produtos", route: "/todogreen/produtos", pages: ["produtos", "motor-operacao"] },
@@ -1026,7 +1088,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // área nem no menu de Compliance (pedido da titular).
   // Integrações e "Usuários e acessos" vivem no menu Configurações (topo), o
   // lar convencional das configurações — não repetimos aqui na lateral.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema", "tenant-acessos", "saas-billing"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
@@ -3551,7 +3613,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       )}
       {page === "energia" && <Suspense fallback={<section className="tdg-panel">Carregando energia...</section>}><EnergyPage authHeaders={authHeaders} /></Suspense>}
       {page === "tenant-acessos" && <Suspense fallback={<section className="tdg-panel">Carregando perfis...</section>}><TenantAccessPage /></Suspense>}
-      {page === "green-on-b2b" && <Suspense fallback={<section className="tdg-panel">Carregando conta corporativa...</section>}><CorporateAccountPage /></Suspense>}
+      {page === "green-on-empresa" && <Suspense fallback={<section className="tdg-panel">Carregando conta corporativa...</section>}><CorporateAccountPage /></Suspense>}
       {page === "roaming-ocpi" && <Suspense fallback={<section className="tdg-panel">Carregando roaming...</section>}><RoamingPage /></Suspense>}
       {page === "energia-peak" && <Suspense fallback={<section className="tdg-panel">Carregando BESS e pico...</section>}><EnergyPeakSavingsPage /></Suspense>}
       {page === "fila-alertas" && <Suspense fallback={<section className="tdg-panel">Carregando fila de alertas...</section>}><AlertQueuePage /></Suspense>}

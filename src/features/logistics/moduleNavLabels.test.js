@@ -138,7 +138,7 @@ describe("propriedade das abas principais", () => {
     expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Ocorrências"/);
     expect(blocoDaNavegacaoPrincipal).toMatch(/label: "Operação"[^\n]+ocorrencias/);
     expect(blocoDaNavegacaoPrincipal).not.toMatch(/label: "Documentos"[^\n]+relatorios/);
-    expect(blocoDaNavegacaoPrincipal).toContain('label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"]');
+    expect(blocoDaNavegacaoPrincipal).toContain('label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "energia-peak", "metodologia"]');
   });
 });
 
