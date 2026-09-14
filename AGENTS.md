@@ -331,9 +331,21 @@ quantos resultados vieram.
     (requisição → RFQ → pedido → recebimento). É outro que o
     `features/procurement/` do app geral; recebimento vira entrada no estoque e
     conta a pagar.
-  - **Fiscal To Do Green** — `fiscalDomain.js` + `pages/FiscalPage.jsx`:
-    CT-e/MDF-e/NFS-e (não NF-e). Transmissão desligada por ausência de segredo
-    (padrão `pushEnabled`); sem credencial, gera XML/DANFE e diz o que falta.
+  - **Fiscal To Do Green** — `fiscalDomain.js` + `pages/FiscalPage.jsx` +
+    `worker/services/todogreen-fiscal.js`: CT-e/MDF-e/NFS-e (não NF-e). Ciclo
+    `rascunho→validado→assinado→transmitido→autorizado`; impostos calculados no
+    servidor; XML montado no domínio. **Transmissão real à SEFAZ via conector
+    host-side** (mesmo desenho do CIOT/ANTT — o Worker não assina ICP-Brasil nem
+    faz mTLS): liga só com certificado **E** conector (`sefazTransmissionConfigured`
+    = `NFE_CERT_PFX`+`NFE_CERT_PASSWORD`+`SEFAZ_CONNECTOR_URL`). `interpretarRetornoSefaz`
+    (puro, testado) só reconhece `autorizado` com cStat 100/104 **+ protocolo
+    oficial**; ensaio (`simulated`/`dryRun`/`DRYRUN`) vira status `simulado` e
+    **nunca** avança; rejeição vira `rejeitado` com o motivo. **Nada é marcado
+    como transmitido/autorizado sem resposta oficial do órgão** — sem conector, o
+    ERP gera XML/DACTE e só aceita registro manual com protocolo+chave. Contrato do
+    conector: `docs/todogreen-sefaz-connector.md`. Segredos:
+    `SEFAZ_CONNECTOR_URL`, `SEFAZ_CONNECTOR_TOKEN`, `SEFAZ_CONNECTOR_ALLOWED_HOSTS`,
+    `SEFAZ_AMBIENTE`.
   - **Folha/DP To Do Green** — `payrollDomain.js` + `pages/PeoplePage.jsx`.
     Dado sensível (CPF, salário): só `rh`/`admin`/`owner`, nunca no portal do
     cliente. Faixas de INSS/IRRF testadas na fronteira. Vocabulário "colaborador".

@@ -13,6 +13,7 @@ describe("integrações da vertical", () => {
       EVOLUTION_INSTANCE: "todo-green",
       NFE_CERT_PFX: "certificado-secreto",
       NFE_CERT_PASSWORD: "senha-certificado",
+      SEFAZ_CONNECTOR_URL: "https://sefaz.example.com/transmitir",
     });
 
     expect(status.ai.find((item) => item.id === "cloudflare")?.configured).toBe(true);
@@ -54,6 +55,20 @@ describe("integrações da vertical", () => {
     expect(JSON.stringify(status)).not.toContain("segredo-evolution");
     expect(JSON.stringify(status)).not.toContain("certificado-secreto");
     expect(JSON.stringify(status)).not.toContain("senha-certificado");
+  });
+
+  it("SEFAZ com certificado mas SEM conector não conta como configurada", () => {
+    // A honestidade do módulo: só o certificado não transmite (falta o conector
+    // que assina e faz o mTLS). A régua não pode dizer "configurada".
+    const status = todoGreenIntegrationStatus({
+      DB: { prepare: vi.fn() },
+      // Valores de teste (não são segredos): a régua só checa presença.
+      NFE_CERT_PFX: "x",
+      NFE_CERT_PASSWORD: "x",
+    });
+    const sefaz = status.operational.find((item) => item.id === "sefaz-fiscal");
+    expect(sefaz.configured).toBe(false);
+    expect(sefaz.status).toBe("external_dependency");
   });
 
   it("recusa teste de provedor sem permissão de integração", async () => {

@@ -220,15 +220,21 @@ async function ciotStatusForOwner(env, ownerId) {
 
 const sefazStatus = (env = {}) => {
   const certificate = Boolean(env.NFE_CERT_PFX && env.NFE_CERT_PASSWORD);
+  const connector = Boolean(env.SEFAZ_CONNECTOR_URL);
+  // Transmissão real exige certificado E conector host-side (o Worker não faz o
+  // mTLS/assinatura ICP-Brasil sozinho). Só certificado não é "configurado".
+  const configured = certificate && connector;
   return withReadiness({
     id: "sefaz-fiscal",
     name: "SEFAZ · CT-e e MDF-e",
-    configured: certificate,
-    detail: certificate
-      ? "Certificado fiscal disponível. O módulo pode assinar documentos, mas a transmissão deve permanecer sujeita à validação/homologação do serviço SEFAZ."
-      : "Sem certificado digital o ERP mantém geração, cálculo e validação local, mas não transmite CT-e/MDF-e à SEFAZ.",
-    requirement: "Certificado A1 + homologação/transmissão SEFAZ",
-  }, { external: !certificate });
+    configured,
+    detail: configured
+      ? "Certificado e conector SEFAZ presentes. A emissão real ainda deve ser validada em homologação antes de produção; nenhum documento vira autorizado sem protocolo oficial."
+      : certificate
+        ? "Certificado no cofre, mas falta o conector SEFAZ (SEFAZ_CONNECTOR_URL) que assina e transmite. O ERP gera XML/DACTE e não fabrica autorização."
+        : "Sem certificado digital nem conector, o ERP mantém geração, cálculo e validação local, mas não transmite CT-e/MDF-e à SEFAZ.",
+    requirement: configured ? "Teste real em homologação SEFAZ" : "Certificado A1/A3 + conector SEFAZ (host-side) + homologação",
+  }, { external: !configured });
 };
 
 const sistemasTrackerDefaultStatus = () => withReadiness({

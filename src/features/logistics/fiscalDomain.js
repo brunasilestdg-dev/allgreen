@@ -315,8 +315,70 @@ export function cfopPadraoCte(ufOrigem, ufDestino) {
 
 // ─── Transmissão ─────────────────────────────────────────────
 
+// Certificado presente no cofre. Só isto NÃO basta para transmitir: a SEFAZ
+// exige assinatura ICP-Brasil e mTLS que o Worker não faz sozinho — quem assina
+// e fala com a SEFAZ é o conector host-side (mesmo desenho do CIOT/ANTT).
 export function fiscalTransmissionEnabled(env) {
   return !!(env && env.NFE_CERT_PFX && env.NFE_CERT_PASSWORD);
+}
+
+// Transmissão REAL disponível: certificado no cofre E conector host-side
+// configurado. Sem o conector não há como assinar e falar com a SEFAZ, então o
+// ERP não avança status sozinho — registra manualmente com protocolo oficial.
+export function sefazTransmissionConfigured(env) {
+  return !!(env && env.NFE_CERT_PFX && env.NFE_CERT_PASSWORD && env.SEFAZ_CONNECTOR_URL);
+}
+
+// cStat que a SEFAZ devolve para CT-e/MDF-e efetivamente autorizados.
+// 100 = autorizado o uso; 104 = lote processado (o protocolo interno traz o 100).
+const SEFAZ_CSTAT_AUTORIZADO = new Set(["100", "104"]);
+
+const primeiroValor = (fontes, chaves) => {
+  for (const fonte of fontes) {
+    if (!fonte || typeof fonte !== "object") continue;
+    for (const chave of chaves) {
+      const valor = fonte[chave];
+      if (valor !== undefined && valor !== null && valor !== "") return valor;
+    }
+  }
+  return "";
+};
+
+// Interpreta a resposta do conector SEFAZ de forma HONESTA e pura:
+//   • 'simulado'  → o conector respondeu em modo de ensaio (nunca vira autorizado);
+//   • 'autorizado'→ cStat 100/104 COM protocolo oficial;
+//   • 'rejeitado' → a SEFAZ recusou (traz cStat + motivo);
+//   • 'erro'      → não veio status utilizável (falha de rede/conector).
+// Não fabrica nada: sem protocolo real, nunca devolve 'autorizado'.
+export function interpretarRetornoSefaz(payload) {
+  const raiz = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const data = raiz.data && typeof raiz.data === "object" ? raiz.data : {};
+  const result = raiz.result && typeof raiz.result === "object" ? raiz.result : {};
+  const fontes = [raiz, data, result];
+
+  const cStat = soNumeros(primeiroValor(fontes, ["cStat", "cstat", "statusCode", "codigoStatus"]));
+  const motivo = String(primeiroValor(fontes, ["xMotivo", "motivo", "mensagem", "message"]) || "").trim();
+  const protocolo = String(
+    primeiroValor(fontes, ["protocolo", "protocol", "nProt", "numeroProtocolo", "protocoloAutorizacao"]) || "",
+  ).trim();
+  const chave = soNumeros(primeiroValor(fontes, ["chave", "chaveAcesso", "chCTe", "chMDFe"]));
+  const xmlProtocolo = String(
+    primeiroValor(fontes, ["xmlProtocolo", "protNFe", "protCTe", "protMDFe", "xmlRetorno", "xml"]) || "",
+  );
+  const ambiente = String(primeiroValor(fontes, ["ambiente", "tpAmb", "environment"]) || "").trim();
+
+  const simulado = raiz.simulated === true || raiz.dryRun === true
+    || data.simulated === true || data.dryRun === true
+    || result.simulated === true || result.dryRun === true
+    || protocolo.toUpperCase().startsWith("DRYRUN");
+
+  let status;
+  if (simulado) status = "simulado";
+  else if (SEFAZ_CSTAT_AUTORIZADO.has(cStat) && protocolo) status = "autorizado";
+  else if (cStat) status = "rejeitado";
+  else status = "erro";
+
+  return { status, simulado, cStat, motivo, protocolo, chave, xmlProtocolo, ambiente };
 }
 
 // ─── XML CT-e (layout 4.00, modelo 57) ──────────────────────
