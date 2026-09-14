@@ -37,3 +37,31 @@ it("não promete criar tarefa quando a integração não está disponível", () 
   expect(screen.getByLabelText("Responsável pelo follow-up")).toBeDisabled();
   expect(screen.getByText("O próximo passo será registrado no histórico, sem criar tarefa.")).toBeInTheDocument();
 });
+
+it("bloqueia próxima ação com prazo sem responsável — vira tarefa canônica obrigatória", async () => {
+  const onRegistrar = vi.fn().mockResolvedValue(undefined);
+  const onCriarTarefa = vi.fn().mockResolvedValue(undefined);
+  render(<InteracoesPanel onRegistrar={onRegistrar} onCriarTarefa={onCriarTarefa}
+    pessoas={[{ id: "u1", name: "João" }]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Registrar interação" }));
+  fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Reunião de alinhamento" } });
+  fireEvent.change(screen.getByLabelText("Próximo passo"), { target: { value: "Enviar proposta" } });
+  fireEvent.change(screen.getByLabelText("Data do próximo passo"), { target: { value: "2026-09-18" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salvar interação" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(/precisa de responsável/i);
+  expect(onRegistrar).not.toHaveBeenCalled();
+  expect(onCriarTarefa).not.toHaveBeenCalled();
+});
+
+it("aceita próximo passo sem prazo e sem responsável — segue como observação livre", async () => {
+  const onRegistrar = vi.fn().mockResolvedValue(undefined);
+  const onCriarTarefa = vi.fn();
+  render(<InteracoesPanel onRegistrar={onRegistrar} onCriarTarefa={onCriarTarefa}
+    pessoas={[{ id: "u1", name: "João" }]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Registrar interação" }));
+  fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Ligação de retorno" } });
+  fireEvent.change(screen.getByLabelText("Próximo passo"), { target: { value: "Retornar quando o time voltar" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salvar interação" }));
+  await waitFor(() => expect(onRegistrar).toHaveBeenCalledTimes(1));
+  expect(onCriarTarefa).not.toHaveBeenCalled();
+});
