@@ -665,7 +665,22 @@
   position: absolute;
   right: 0;
   top: calc(100% + 7px);
-  z-index: 30;
+  /* z-index alto para não ficar atrás de painel/toolbar irmãos, e o
+     container .tdg-space-tabs no LogisticsVertical.css usa overflow-x: auto
+     que força overflow-y implícito — a regra `:has` abaixo desliga isso
+     enquanto o menu está aberto. */
+  z-index: 100;
+}
+
+/* Quando o menu "Mais funções" está aberto, o overflow-x: auto do
+   .tdg-space-tabs (definido em LogisticsVertical.css para scroll horizontal
+   dos botões quando não cabem) força overflow-y implícito no browser e
+   CORTA o dropdown que abre logo abaixo do container. Removendo o overflow
+   nesse instante, o menu aparece por inteiro. Uma vez fechado, o scroll
+   horizontal volta ao normal. */
+.tdg .tdg-space-tabs:has(.tdg-space-more.is-open),
+.tdg-space-tabs:has(.tdg-space-more.is-open) {
+  overflow: visible;
 }
 
 .tdg-space-more > div > button {
