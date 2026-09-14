@@ -2,21 +2,30 @@ import { describe, expect, it } from "vitest";
 import {
   LEGAL_TEMPLATES,
   accessLevelFor,
+  appendLegalEvent,
   approvalActionsFor,
   buildLegalAiPrompt,
+  buildLegalNotifications,
+  buildPlannerItemsFromLegal,
+  canAccessRequest,
   canRead,
   complianceGaps,
   complianceScore,
   contractStatusIsClosed,
   createContract,
+  createLegalRequest,
   createMatter,
   createProcess,
   createPowerOfAttorney,
   daysUntil,
   deadlineUrgency,
+  exportContractsCsv,
+  exportMattersCsv,
+  filterOwnOrLegal,
   filterVisible,
   fillLegalTemplate,
   formatMoneyBR,
+  isLegalStaff,
   labelContractStatus,
   labelMatterType,
   legalAlerts,
@@ -30,8 +39,10 @@ import {
   parseMoney,
   processStatusIsClosed,
   resolveApprovalAction,
+  riskExposureSeries,
   riskMatrix,
   searchLegal,
+  templateToDocument,
   validateContract,
   validateDeadline,
   validateFee,
@@ -386,6 +397,150 @@ describe("status encerrado", () => {
     expect(contractStatusIsClosed("vigente")).toBe(false);
     expect(processStatusIsClosed("ganho")).toBe(true);
     expect(processStatusIsClosed("recurso")).toBe(false);
+  });
+});
+
+describe("permissão de solicitações (Head Jurídico e adm veem tudo; solicitante só a própria)", () => {
+  const alice = { userId: "u-alice", role: "colaborador" };
+  const bob = { userId: "u-bob", role: "colaborador" };
+  const juridico = { userId: "u-jur", role: "juridico" };
+  const admin = { userId: "u-adm", role: "admin" };
+  const head = { userId: "u-head", role: "head_juridico" };
+  const owner = { userId: "u-owner", isOwner: true };
+
+  const aliceMatter = { id: "1", title: "Análise", confidentiality: "interno", submitterId: "u-alice" };
+  const bobMatter = { id: "2", title: "Outra", confidentiality: "interno", submitterId: "u-bob" };
+  const restrito = { id: "3", title: "Restrito", confidentiality: "restrito" };
+
+  it("isLegalStaff aceita jurídico, head_juridico, admin, diretor e owner", () => {
+    expect(isLegalStaff(alice)).toBe(false);
+    expect(isLegalStaff(juridico)).toBe(true);
+    expect(isLegalStaff(head)).toBe(true);
+    expect(isLegalStaff(admin)).toBe(true);
+    expect(isLegalStaff({ role: "diretor" })).toBe(true);
+    expect(isLegalStaff(owner)).toBe(true);
+  });
+
+  it("solicitante enxerga a própria demanda, não a de outros", () => {
+    expect(canAccessRequest(aliceMatter, alice)).toBe(true);
+    expect(canAccessRequest(bobMatter, alice)).toBe(false);
+    expect(canAccessRequest(restrito, alice)).toBe(false);
+  });
+
+  it("jurídico, head e admin veem a fila inteira dentro da confidencialidade", () => {
+    expect(canAccessRequest(aliceMatter, juridico)).toBe(true);
+    expect(canAccessRequest(bobMatter, juridico)).toBe(true);
+    expect(canAccessRequest(restrito, juridico)).toBe(true);
+    expect(canAccessRequest(restrito, admin)).toBe(true);
+    expect(canAccessRequest(restrito, head)).toBe(true);
+  });
+
+  it("filterOwnOrLegal filtra a lista pela visão do viewer", () => {
+    const list = [aliceMatter, bobMatter, restrito];
+    expect(filterOwnOrLegal(list, alice).map((m) => m.id)).toEqual(["1"]);
+    expect(filterOwnOrLegal(list, admin).map((m) => m.id).sort()).toEqual(["1", "2", "3"]);
+  });
+
+  it("createLegalRequest carimba submitter e nasce em 'aberto'/interno", () => {
+    const req = createLegalRequest(
+      { title: "Ajuda", description: "Preciso", area: "TI" },
+      alice,
+    );
+    expect(req.submitterId).toBe("u-alice");
+    expect(req.status).toBe("aberto");
+    expect(req.confidentiality).toBe("interno");
+    expect(req.submitterArea).toBe("TI");
+  });
+});
+
+describe("eventos e timeline", () => {
+  it("appendLegalEvent adiciona ao histórico sem alterar id do registro", () => {
+    const record = { id: "m1", title: "X" };
+    const updated = appendLegalEvent(record, { kind: "parecer", message: "Ok" });
+    expect(updated.id).toBe("m1");
+    expect(updated.events).toHaveLength(1);
+    expect(updated.events[0].kind).toBe("parecer");
+    expect(updated.events[0].message).toBe("Ok");
+    expect(updated.events[0].createdAt).toBeDefined();
+  });
+
+  it("preserva eventos existentes", () => {
+    const record = { id: "m1", events: [{ id: "e0", kind: "note", message: "a" }] };
+    const updated = appendLegalEvent(record, { kind: "decisao", message: "b" });
+    expect(updated.events).toHaveLength(2);
+    expect(updated.events[0].id).toBe("e0");
+  });
+});
+
+describe("exportação CSV", () => {
+  it("gera cabeçalho e linhas com separador ';' e BOM UTF-8", () => {
+    const csv = exportMattersCsv([
+      { title: "Análise", type: "consultivo", status: "aberto", risk: "medio", confidentiality: "interno", amountAtRisk: 1250.5 },
+    ]);
+    expect(csv.charCodeAt(0)).toBe(0xfeff); // BOM
+    expect(csv).toContain("Título;Tipo;Situação");
+    expect(csv).toContain("Análise;Consultivo;Aberto");
+    expect(csv).toContain("1250,50");
+  });
+
+  it("escapa aspas e ponto-e-vírgula no CSV", () => {
+    const csv = exportContractsCsv([
+      { title: 'Con "trato"; especial', type: "prestacao_servicos", status: "vigente", risk: "medio", confidentiality: "interno", counterparty: "ACME", amount: 100 },
+    ]);
+    expect(csv).toContain('"Con ""trato""; especial"');
+  });
+});
+
+describe("templates → documento e séries do dashboard", () => {
+  it("templateToDocument produz shape que o módulo Documents entende", () => {
+    const template = LEGAL_TEMPLATES[0];
+    const doc = templateToDocument(template, { parte_1: "ACME", parte_2: "XPTO" });
+    expect(doc.type).toBe(template.kind);
+    expect(doc.content).toContain("ACME");
+    expect(doc.content).toContain("XPTO");
+    expect(doc.templateId).toBe(template.id);
+  });
+
+  it("riskExposureSeries agrega valor por nível e mantém 4 níveis", () => {
+    const series = riskExposureSeries({
+      matters: [{ status: "em_andamento", risk: "alto", amountAtRisk: 500 }],
+      processes: [{ status: "em_andamento", risk: "critico", amount: 1000 }],
+    });
+    expect(series).toHaveLength(4);
+    expect(series.find((s) => s.id === "alto")?.value).toBe(500);
+    expect(series.find((s) => s.id === "critico")?.value).toBe(1000);
+    expect(series.find((s) => s.id === "baixo")?.value).toBe(0);
+  });
+});
+
+describe("notificações e planner", () => {
+  const FIXED = Date.parse("2026-09-14T12:00:00Z");
+  const records = {
+    contracts: [{ id: "c1", title: "V", status: "vigente", endDate: "2026-09-20", counterparty: "A", renewalNoticeDays: 30, confidentiality: "interno" }],
+    deadlines: [{ id: "d1", title: "Contestação", status: "pendente", dueDate: "2026-09-16", fatal: true }],
+    powersOfAttorney: [],
+    processes: [{ id: "p1", title: "Ação", status: "em_andamento", nextHearing: "2026-09-25", nextDeadline: "2026-09-19", risk: "alto", confidentiality: "interno" }],
+  };
+
+  it("buildLegalNotifications carimba recipientId e link para 'juridico'", () => {
+    const notifs = buildLegalNotifications(records, { userId: "u1", role: "juridico" }, FIXED);
+    expect(notifs.length).toBeGreaterThan(0);
+    for (const n of notifs) {
+      expect(n.recipientId).toBe("u1");
+      expect(n.link).toBe("juridico");
+      expect(n.id.startsWith("legal-")).toBe(true);
+    }
+  });
+
+  it("buildPlannerItemsFromLegal ordena por prazo e traz prazo, audiência e prazo processual", () => {
+    const items = buildPlannerItemsFromLegal(records, { role: "juridico" }, FIXED);
+    const kinds = items.map((i) => i.kind);
+    expect(kinds).toContain("deadline");
+    expect(kinds).toContain("hearing");
+    expect(kinds).toContain("process-deadline");
+    for (let i = 1; i < items.length; i++) {
+      expect(items[i - 1].dueDate <= items[i].dueDate).toBe(true);
+    }
   });
 });
 

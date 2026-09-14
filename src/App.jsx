@@ -14710,8 +14710,11 @@ export default function App() {
               business={business}
               setToast={setToast}
               authHeaders={authHeaders}
+              pushNotification={pushNotification}
               viewer={{
-                role: db.user?.role || "colaborador",
+                userId: db.user?.id,
+                name: db.user?.name,
+                role: db.user?.legalRole || db.user?.role || "colaborador",
                 isOwner: !activeSpaceId(),
               }}
             />
