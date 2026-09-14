@@ -105,6 +105,53 @@ describe("centro de decisão To Do Green", () => {
       expect(contaComAcaoAtrasada({})).toBe(false);
       expect(contasComAcaoAtrasada([{ crm: { nextActionAt: "2020-01-01" } }, {}])).toHaveLength(1);
     });
+
+    it("tarefa concluída DEPOIS do prazo tira a conta da lista de atrasadas", () => {
+      // Reclamação da titular: "marquei concluído em uma ação e continua
+      // aparecendo pendente". A conta DHL tem nextActionAt vencido, mas o
+      // usuário concluiu a tarefa correspondente — a promessa foi cumprida.
+      const cliente = { id: "dhl", name: "DHL", crm: { nextActionAt: "2026-09-01" } };
+      const hoje = "2026-09-14";
+      // Sem tarefa fechada: continua atrasada.
+      expect(contaComAcaoAtrasada(cliente, hoje)).toBe(true);
+      // Tarefa da conta concluída depois do prazo: some da lista.
+      expect(contaComAcaoAtrasada(cliente, hoje, [
+        { clientId: "dhl", status: "Concluído", updatedAt: "2026-09-05T12:00:00Z" },
+      ])).toBe(false);
+      // Tarefa fechada ANTES do prazo não conta — a promessa é posterior.
+      expect(contaComAcaoAtrasada(cliente, hoje, [
+        { clientId: "dhl", status: "Concluído", updatedAt: "2026-08-20T12:00:00Z" },
+      ])).toBe(true);
+      // Tarefa de outra conta não zera esta.
+      expect(contaComAcaoAtrasada(cliente, hoje, [
+        { clientId: "outra", status: "Concluído", updatedAt: "2026-09-10T12:00:00Z" },
+      ])).toBe(true);
+      // Tarefa da conta ainda em andamento não conta.
+      expect(contaComAcaoAtrasada(cliente, hoje, [
+        { clientId: "dhl", status: "Em andamento", updatedAt: "2026-09-10T12:00:00Z" },
+      ])).toBe(true);
+    });
+
+    it("o painel de pendências some quando a tarefa da conta atrasada foi concluída", () => {
+      const centro = buildTodoGreenDecisionCenter({
+        now: new Date("2026-09-14T12:00:00Z"),
+        data: {
+          clients: [
+            { id: "dhl", name: "DHL", crm: { nextActionAt: "2026-09-01" } },
+            { id: "corações", name: "Grupo 3 Corações", crm: { nextActionAt: "2026-09-02" } },
+          ],
+        },
+        tasks: [
+          // DHL: tarefa da conta concluída DEPOIS do prazo — sai da lista.
+          { id: "t-dhl", clientId: "dhl", status: "Concluído", updatedAt: "2026-09-08T15:00:00Z" },
+          // Corações: nada concluído — permanece atrasada.
+        ],
+      });
+      const alerta = centro.alerts.find((a) => a.id === "clients-overdue");
+      expect(alerta.title).toBe("1 cliente com ação atrasada");
+      expect(alerta.detail).toContain("Grupo 3 Corações");
+      expect(alerta.detail).not.toContain("DHL");
+    });
   });
 
   it("oportunidade sem próximo passo nomeia o negócio e filtra o pipeline", () => {
