@@ -400,4 +400,119 @@
   color: color-mix(in srgb, var(--lgl-warn) 60%, var(--lgl-ink));
   border: 1px solid color-mix(in srgb, var(--lgl-warn) 30%, var(--border));
   font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legal-hub .lgl-chart {
+  display: grid;
+  gap: 8px;
+}
+
+.legal-hub .lgl-chart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 130px) minmax(0, 1fr) minmax(0, 120px);
+  align-items: center;
+  gap: 10px;
+}
+
+.legal-hub .lgl-chart-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.legal-hub .lgl-chart-track {
+  background: color-mix(in srgb, var(--lgl-accent) 8%, var(--surface));
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.legal-hub .lgl-chart-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.legal-hub .lgl-chart-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.legal-hub .lgl-timeline {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--lgl-accent) 4%, var(--surface));
+  display: grid;
+  gap: 10px;
+}
+
+.legal-hub .lgl-timeline-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.legal-hub .lgl-timeline-ev {
+  border-left: 3px solid color-mix(in srgb, var(--lgl-accent) 40%, var(--border));
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.legal-hub .lgl-timeline-ev.kind-parecer {
+  border-left-color: var(--lgl-accent);
+}
+
+.legal-hub .lgl-timeline-ev.kind-decisao {
+  border-left-color: var(--lgl-warn);
+}
+
+.legal-hub .lgl-timeline-ev.kind-status {
+  border-left-color: var(--lgl-ok);
+}
+
+.legal-hub .lgl-timeline-ev header {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.legal-hub .lgl-timeline-ev p {
+  margin: 4px 0 0;
+}
+
+.legal-hub .lgl-timeline-add {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.legal-hub .lgl-timeline-add input,
+.legal-hub .lgl-timeline-add select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--lgl-ink);
+}
+
+@media (max-width: 640px) {
+  .legal-hub .lgl-chart-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .legal-hub .lgl-chart-value {
+    text-align: left;
+  }
+  .legal-hub .lgl-timeline-add {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
