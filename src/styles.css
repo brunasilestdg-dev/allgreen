@@ -321,6 +321,13 @@
   gap: 16px;
 }
 
+/* Botão "Nova tarefa" alinhado à direita no topo das abas Hoje/Próximas.
+   Espelha a posição que o botão já tem na aba Quadro (dentro do TasksScreen). */
+.tdg-task-tab-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .tdg-task-section {
   display: flex;
   flex-direction: column;
