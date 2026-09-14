@@ -550,6 +550,20 @@ export default function Tasks({
     setDeadlineCalc({ open: false, base: today(), days: "5" });
     setModal(true);
   };
+  // ?nova=1 no URL abre o modal de "Nova tarefa" ao entrar na tela. É o
+  // mesmo padrão do ?task=<id>: telas fora do TasksScreen (Hoje/Próximas do
+  // TodoGreenWorkspace) precisam de um botão "Nova tarefa" e navegam para cá
+  // com esse param. Rodamos uma vez na montagem e limpamos o param para o
+  // reload não reabrir o modal sozinho.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("nova") !== "1") return;
+    openTask();
+    url.searchParams.delete("nova");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const applyTaskStructure = (structure) => {
     const suggestedSpecialist = digitalCollaborators.includes(
       structure.suggestedSpecialist,

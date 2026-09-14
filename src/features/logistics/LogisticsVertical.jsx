@@ -3337,7 +3337,9 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               texto do workspace + trilha + título + descrição saiu daqui a
               pedido da titular. O h1 e o parágrafo continuam no DOM como
               conteúdo acessível (sr-only) para o aria-labelledby="tdg-title"
-              do <main> e para o leitor de tela ainda anunciar a página. */}
+              do <main> e para o leitor de tela ainda anunciar a página.
+              Substituiu o ModuleBadge genérico numerado — a titular pediu o
+              logo da marca To Do Green, não o símbolo do bloco 04. */}
           <button
             type="button"
             className="tdg-shell-logo"

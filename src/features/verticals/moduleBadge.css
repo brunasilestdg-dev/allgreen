@@ -1,0 +1,58 @@
+/* ===== Símbolo do módulo (All Green — 9 blocos) =====
+   Reproduz o cartão numerado do material institucional: disco lime com o
+   número do módulo (01-09) e o nome curto à direita. Usa tokens do DS. */
+
+.module-badge {
+  align-items: center;
+  color: var(--ds-ink, #10241f);
+  display: inline-flex;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.module-badge--clickable {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 6px;
+  border-radius: 999px;
+  transition: background .12s ease-in-out, box-shadow .12s ease-in-out;
+}
+.module-badge--clickable:hover,
+.module-badge--clickable:focus-visible {
+  background: var(--ds-surface-soft, rgba(146, 200, 62, 0.12));
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ds-accent, #92c83e) inset;
+}
+
+.module-badge__disc {
+  align-items: center;
+  background: var(--ds-accent, #92c83e);
+  border-radius: 50%;
+  color: var(--ds-accent-ink, #10241f);
+  display: inline-flex;
+  flex: none;
+  font-weight: 700;
+  justify-content: center;
+}
+.module-badge--sm .module-badge__disc { height: 28px; width: 28px; font-size: .74rem; }
+.module-badge--md .module-badge__disc { height: 36px; width: 36px; font-size: .82rem; }
+.module-badge--lg .module-badge__disc { height: 44px; width: 44px; font-size: .92rem; }
+
+.module-badge__number { letter-spacing: .02em; }
+
+.module-badge__label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.15;
+  min-width: 0;
+}
+.module-badge__short { font-size: .82rem; font-weight: 700; color: var(--ds-ink, #10241f); }
+.module-badge__name  { font-size: .68rem; color: var(--ds-ink-muted, #52645c); }
+
+/* Em telas pequenas o nome longo pode sumir sem afetar a leitura. */
+@media (max-width: 520px) {
+  .module-badge__name { display: none; }
+}
