@@ -210,6 +210,15 @@ function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNav
     onNavigate?.(`/todogreen/espaco?${params.toString()}`);
     setTab("quadro");
   };
+  // Reclamação da titular: em Hoje e Próximas não tinha o botão "Nova tarefa"
+  // — a única forma era ir até o Quadro. As duas abas são derivadas do
+  // mesmo `db.tasks`, então criar a tarefa em qualquer aba resolve. Este
+  // botão troca a aba para Quadro e passa `?nova=1`, que o TasksScreen
+  // reconhece para abrir o modal de nova tarefa direto.
+  const abrirNovaTarefa = () => {
+    onNavigate?.("/todogreen/espaco?ferramenta=tarefas&nova=1");
+    setTab("quadro");
+  };
   const renderLegacyTasks = () => (
     <TasksScreen
       {...commonProps}
@@ -248,6 +257,11 @@ function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNav
 
       {tab === "hoje" && (
         <div className="tdg-task-home">
+          <div className="tdg-task-tab-actions">
+            <button type="button" className="tdg-action" onClick={abrirNovaTarefa}>
+              <Plus size={15} />Nova tarefa
+            </button>
+          </div>
           <TodoGreenTaskSection title="Atrasadas" description="Prazos que já passaram e ainda estão abertos." tasks={board.today.overdue} onOpenAdvanced={openAdvanced} />
           <TodoGreenTaskSection title="Vencendo hoje" description="O que precisa ser resolvido até o fim do dia." tasks={board.today.dueToday} onOpenAdvanced={openAdvanced} />
           <TodoGreenTaskSection title="Bloqueadas" description="Tarefas presas por dependência aberta ou ausente." tasks={board.today.blocked} onOpenAdvanced={openAdvanced} />
@@ -258,12 +272,19 @@ function TodoGreenTaskWorkspace({ commonProps, db, verticalData, business, onNav
       )}
 
       {tab === "proximas" && (
-        <TodoGreenTaskSection
-          title="Próximas"
-          description="Tarefas futuras abertas, ordenadas por prioridade e prazo."
-          tasks={board.upcoming}
-          onOpenAdvanced={openAdvanced}
-        />
+        <div className="tdg-task-home">
+          <div className="tdg-task-tab-actions">
+            <button type="button" className="tdg-action" onClick={abrirNovaTarefa}>
+              <Plus size={15} />Nova tarefa
+            </button>
+          </div>
+          <TodoGreenTaskSection
+            title="Próximas"
+            description="Tarefas futuras abertas, ordenadas por prioridade e prazo."
+            tasks={board.upcoming}
+            onOpenAdvanced={openAdvanced}
+          />
+        </div>
       )}
 
       {tab === "quadro" && renderLegacyTasks()}
