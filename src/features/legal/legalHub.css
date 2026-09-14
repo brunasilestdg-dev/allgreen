@@ -1,7 +1,11 @@
 .legal-hub {
-  --lgl-accent: #6c5ce7;
-  --lgl-warn: #c98a09;
-  --lgl-danger: #b8231c;
+  /* Paleta alinhada à TDG (verde #17624f). Fora do ERP, o token
+     `--tdg-green` não existe e o `var()` cai no fallback — nunca fica sem cor.
+     Dentro do vertical (`.tdg`), herda a variável, então dark mode e verde
+     escuro/claro seguem o restante da tela. */
+  --lgl-accent: var(--tdg-green, #17624f);
+  --lgl-warn: #b06400;
+  --lgl-danger: #a11d16;
   --lgl-ok: #0e9d7a;
   --lgl-ink: var(--ink, #17152b);
   display: grid;
@@ -12,16 +16,27 @@
 
 .legal-hub .lgl-header {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   padding: 24px;
   border: 1px solid var(--border);
   background:
-    radial-gradient(circle at 95% 0, color-mix(in srgb, var(--lgl-accent) 22%, transparent), transparent 42%),
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--lgl-accent) 16%, transparent), transparent 55%),
     var(--surface);
-  border-radius: 22px;
+  border-radius: 20px;
   box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+.legal-hub .lgl-header > div:first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.legal-hub .lgl-header .lgl-badges {
+  flex: 0 1 auto;
+  justify-content: flex-end;
 }
 
 .legal-hub .lgl-header h1 {
@@ -46,8 +61,8 @@
 
 .legal-hub .lgl-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
   padding: 6px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -66,12 +81,28 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  min-height: 36px;
+  line-height: 1;
+}
+
+.legal-hub .lgl-tabs button:hover:not(.active) {
+  border-color: color-mix(in srgb, var(--lgl-accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--lgl-accent) 5%, var(--surface));
 }
 
 .legal-hub .lgl-tabs button.active {
   border-color: color-mix(in srgb, var(--lgl-accent) 40%, var(--border));
   background: color-mix(in srgb, var(--lgl-accent) 10%, var(--surface));
   color: var(--lgl-accent);
+}
+
+/* No celular a lista de abas rola dentro do próprio quadro — não empurra
+   o layout como fazia com wrap solto. */
+@media (max-width: 640px) {
+  .legal-hub .lgl-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
 }
 
 .legal-hub .lgl-metrics {
@@ -137,10 +168,14 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .legal-hub .lgl-actions button,
 .legal-hub .lgl-form-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 14px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -148,6 +183,15 @@
   color: var(--lgl-ink);
   font-weight: 600;
   cursor: pointer;
+  min-height: 38px;
+  line-height: 1;
+  font-size: 0.9rem;
+}
+
+.legal-hub .lgl-actions button:hover:not(.primary):not([disabled]),
+.legal-hub .lgl-form-actions button:hover:not(.primary):not([disabled]) {
+  border-color: color-mix(in srgb, var(--lgl-accent) 25%, var(--border));
+  background: color-mix(in srgb, var(--lgl-accent) 5%, var(--surface));
 }
 
 .legal-hub .lgl-actions button.primary,
@@ -157,13 +201,24 @@
   border-color: transparent;
 }
 
+.legal-hub .lgl-actions button.primary:hover:not([disabled]),
+.legal-hub .lgl-form-actions button.primary:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--lgl-accent) 85%, black);
+}
+
 .legal-hub .lgl-actions button.danger {
   color: var(--lgl-danger);
 }
 
+.legal-hub .lgl-actions button[disabled],
+.legal-hub .lgl-form-actions button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .legal-hub .lgl-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(minmax(0, 220px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
@@ -229,17 +284,18 @@
   color: var(--muted);
 }
 
-.legal-hub .lgl-card .lgl-chip {
+.legal-hub .lgl-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lgl-accent) 12%, var(--surface));
+  background: color-mix(in srgb, var(--lgl-accent) 10%, var(--surface));
   color: var(--lgl-accent);
   font-size: 0.75rem;
   font-weight: 700;
   border: 1px solid color-mix(in srgb, var(--lgl-accent) 20%, var(--border));
+  white-space: nowrap;
 }
 
 .legal-hub .lgl-chip.risco-baixo { color: var(--lgl-ok); background: color-mix(in srgb, var(--lgl-ok) 10%, var(--surface)); border-color: color-mix(in srgb, var(--lgl-ok) 25%, var(--border)); }
@@ -300,7 +356,7 @@
 
 .legal-hub .lgl-risk-matrix {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(minmax(0, 180px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
 }
 
@@ -337,20 +393,38 @@
 
 .legal-hub .lgl-template-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(minmax(0, 220px), 1fr));
+  /* `minmax(220px, 1fr)` empilha os cartões em colunas de ~220px de largura.
+     Antes tinha `minmax(minmax(0, 220px), 1fr)` (minmax aninhado) que o
+     browser interpretava como fallback e resultava em UM cartão por linha,
+     ocupando toda a largura — foi o que a titular viu ("botão tudo torto"). */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 10px;
 }
 
 .legal-hub .lgl-template-card {
-  padding: 12px 14px;
+  padding: 14px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--surface);
   display: grid;
-  gap: 6px;
+  gap: 4px;
+  justify-items: start;
   cursor: pointer;
   text-align: left;
   color: var(--lgl-ink);
+  min-height: 76px;
+}
+
+.legal-hub .lgl-template-card strong {
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.legal-hub .lgl-template-card small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .legal-hub .lgl-template-card:hover {
