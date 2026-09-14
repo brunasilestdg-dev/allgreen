@@ -331,9 +331,21 @@ quantos resultados vieram.
     (requisição → RFQ → pedido → recebimento). É outro que o
     `features/procurement/` do app geral; recebimento vira entrada no estoque e
     conta a pagar.
-  - **Fiscal To Do Green** — `fiscalDomain.js` + `pages/FiscalPage.jsx`:
-    CT-e/MDF-e/NFS-e (não NF-e). Transmissão desligada por ausência de segredo
-    (padrão `pushEnabled`); sem credencial, gera XML/DANFE e diz o que falta.
+  - **Fiscal To Do Green** — `fiscalDomain.js` + `pages/FiscalPage.jsx` +
+    `worker/services/todogreen-fiscal.js`: CT-e/MDF-e/NFS-e (não NF-e). Ciclo
+    `rascunho→validado→assinado→transmitido→autorizado`; impostos calculados no
+    servidor; XML montado no domínio. **Transmissão real à SEFAZ via conector
+    host-side** (mesmo desenho do CIOT/ANTT — o Worker não assina ICP-Brasil nem
+    faz mTLS): liga só com certificado **E** conector (`sefazTransmissionConfigured`
+    = `NFE_CERT_PFX`+`NFE_CERT_PASSWORD`+`SEFAZ_CONNECTOR_URL`). `interpretarRetornoSefaz`
+    (puro, testado) só reconhece `autorizado` com cStat 100/104 **+ protocolo
+    oficial**; ensaio (`simulated`/`dryRun`/`DRYRUN`) vira status `simulado` e
+    **nunca** avança; rejeição vira `rejeitado` com o motivo. **Nada é marcado
+    como transmitido/autorizado sem resposta oficial do órgão** — sem conector, o
+    ERP gera XML/DACTE e só aceita registro manual com protocolo+chave. Contrato do
+    conector: `docs/todogreen-sefaz-connector.md`. Segredos:
+    `SEFAZ_CONNECTOR_URL`, `SEFAZ_CONNECTOR_TOKEN`, `SEFAZ_CONNECTOR_ALLOWED_HOSTS`,
+    `SEFAZ_AMBIENTE`.
   - **Folha/DP To Do Green** — `payrollDomain.js` + `pages/PeoplePage.jsx`.
     Dado sensível (CPF, salário): só `rh`/`admin`/`owner`, nunca no portal do
     cliente. Faixas de INSS/IRRF testadas na fronteira. Vocabulário "colaborador".
@@ -823,6 +835,29 @@ quantos resultados vieram.
   tela. Não protege nada: quem quisesse burlar não passaria por ela. A checagem
   que vale é a do servidor.
 
+- **Jurídico canônico — UM só, ancorado no TDG**: `src/features/legal/`
+  (`LegalHub.jsx`, `legalHubDomain.js`, `tdgLegalBridge.js`,
+  `useTdgLegalRecords.js`) é a Central Jurídica geral, mas a persistência de
+  **CONTRATOS/MINUTAS** vive em `todogreen_legal_records` (D1) — a mesma
+  tabela que dois gates operacionais reais do backend leem:
+  `juridicoConcluido()` (proposta/contrato só avança com documento jurídico
+  vinculado APROVADO ou ASSINADO) e `documentoDeAssinaturaVinculado()`
+  (contrato não é marcado como assinado sem anexo `context_type='legal'` no
+  cofre). Se o espaço tiver acesso à vertical TDG
+  (`isTdgLegalAvailable(db)`), a aba **Contratos** da LegalHub carrega e
+  grava via `/api/todogreen/records/legal` (não no blob), preservando os
+  vínculos `campos.contractId`/`campos.proposalId` que os gates olham.
+  **Vocabulário canônico é o do TDG** (`legalDomain.js` da vertical) —
+  `tdgLegalBridge.js` traduz o rótulo da UI nova para os 7 status, 8 tipos e
+  3 riscos que o backend valida, e preserva `originalType`/`uiRisk` em
+  `fields_json` para restaurar depois. Demandas, processos, procurações,
+  prazos, honorários e compliance seguem no blob (sem gate operacional
+  hoje). **Nunca criar um terceiro Jurídico com coleção própria**: mudança
+  aqui muda o TDG, e vice-versa; a titular alinhou que Jurídico canônico é
+  UM só. O Planner/Meu Trabalho consome prazos jurídicos via
+  `buildPlannerItemsFromLegal(records, viewer)` — a seção "Jurídico" em
+  `MyWork` mostra prazos, audiências e prazos processuais respeitando a
+  confidencialidade do viewer (via `permissionsToLegalRole`).
 - **A entrada do app é pedir, não procurar**: `src/features/home/askDomain.js`
   (puro) + a seção `.home-pedido` no topo do `HomeHub`, e a rota `conversar`
   com o `UniversalRequest` em tela própria.

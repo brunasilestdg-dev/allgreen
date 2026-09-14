@@ -857,6 +857,21 @@
 /* O painel de "Mais ações" abre por cima do hero (verde): mantém fundo claro e
    texto escuro próprios, não os do hero. */
 .tdg-crm-detail-actions .tdg-crm-more-actions > div { color: var(--tdg-ink); }
+/* Os botões dentro do popover DEVEM sobrescrever o estilo de botão do hero
+   (color: #fff sobre bg translúcido): sem isto ficam texto branco em painel
+   branco — invisíveis (só o "Excluir cliente", que tem .tdg-danger-action
+   própria, aparecia). Pesquisar empresa / Atualizar contatos / Ver como
+   cliente ficavam sumidos apesar de renderizados. */
+.tdg-crm-detail-actions .tdg-crm-more-actions > div button:not(.tdg-danger-action) {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  color: var(--tdg-ink);
+  min-height: 36px;
+}
+.tdg-crm-detail-actions .tdg-crm-more-actions > div button:not(.tdg-danger-action):hover:not(:disabled) {
+  background: var(--tdg-soft);
+  color: var(--tdg-green);
+}
 .tdg-crm-temp-inline { align-items: center; display: inline-flex; gap: 6px; }
 .tdg-crm-temp-inline span { color: #ffffffcc; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
 /* A temperatura vive no hero verde escuro: o SegmentedControl usa tokens

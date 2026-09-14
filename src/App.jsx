@@ -447,6 +447,13 @@ const BusinessProfileStudio = lazy(
   () => import("./features/business-profile/BusinessProfileStudio.jsx"),
 );
 const LegalHub = lazy(() => import("./features/legal/LegalHub.jsx"));
+const PermissionsPanel = lazy(
+  () => import("./features/permissions/PermissionsPanel.jsx"),
+);
+// Adaptador de permissões → papel do LegalHub. Fica no bundle principal (leve)
+// para o roteador não precisar aguardar o painel inteiro.
+import { permissionsToLegalRole } from "./features/permissions/permissionsDomain.js";
+import { buildPlannerItemsFromLegal } from "./features/legal/legalHubDomain.js";
 // Movido para ./session/espacoVazio.js; reexportado para quem já importava daqui.
 export { LEGACY_STORAGE_KEY, ACTIVE_USER_KEY, STORAGE_PREFIX, AUTH_TOKEN_KEY, emptyDb };
 
@@ -551,6 +558,7 @@ const navSecondary = [
   ["personalizar-menu", "Personalizar menu", ListChecks],
   ["meu-plano", "Meu plano", Gauge],
   ["time", "Meu Time", Users],
+  ["permissoes", "Permissões", ShieldCheck],
   ["config", "Configurações", Settings],
 ];
 
@@ -5328,6 +5336,20 @@ const TASK_STATUS_TONE = {
 function MyWork({ db, business, setToast: _setToast, go }) {
   const userId = db.user?.id;
   const work = computeMyWork(db, userId, business);
+  // Prazos, audiências e prazos processuais do Jurídico já são convertidos em
+  // itens compatíveis pelo domínio (`buildPlannerItemsFromLegal`). Aqui
+  // trazemos para o Meu Trabalho, respeitando a confidencialidade do viewer:
+  // colaborador só vê o que a permissão de leitura permite.
+  const legalRole = permissionsToLegalRole(db.memberPermissions || {}, userId);
+  const legalPlannerItems = buildPlannerItemsFromLegal(
+    {
+      deadlines: db.legalDeadlines || [],
+      processes: db.legalProcesses || [],
+      powersOfAttorney: db.legalPowersOfAttorney || [],
+      contracts: db.legalContracts || [],
+    },
+    { userId, role: legalRole !== "solicitante" ? legalRole : db.user?.role || "colaborador" },
+  );
   const gamificationEnabled = db.preferences?.gamificationEnabled !== false;
   const points = computeUserPoints(db.tasks, userId);
   const level = levelForPoints(points, db.levels || DEFAULT_LEVELS);
@@ -5415,6 +5437,44 @@ function MyWork({ db, business, setToast: _setToast, go }) {
           </div>
         )}
       </section>
+      {legalPlannerItems.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">JURÍDICO</span>
+              <h2>Prazos, audiências e vencimentos</h2>
+            </div>
+            <button className="text-button" onClick={() => go("juridico")}>
+              Abrir Jurídico
+            </button>
+          </div>
+          <div className="mywork-tasks">
+            {legalPlannerItems.slice(0, 6).map((item) => (
+              <button
+                key={item.id}
+                className="mywork-task"
+                onClick={() => go("juridico")}
+              >
+                <span
+                  className={`mywork-dot ${item.priority === "Alta" ? "warn" : "muted"}`}
+                />
+                <span className="mywork-task-body">
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.priority} · prazo {item.dueDate}
+                    {item.kind === "hearing" ? " · audiência" : ""}
+                    {item.kind === "process-deadline" ? " · processo" : ""}
+                  </small>
+                </span>
+                {item.dueDate && item.dueDate < today() && (
+                  <span className="mywork-late">Atrasada</span>
+                )}
+                <ArrowUpRight />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       {gamificationEnabled && (
         <section className="section">
           <div className="section-head">
@@ -14699,7 +14759,16 @@ export default function App() {
             />
           </Suspense>
         );
-      case "juridico":
+      case "juridico": {
+        // Deriva o papel do LegalHub a partir das permissões por área
+        // (`db.memberPermissions`) — mesma regra do painel "Permissões" no
+        // menu de Configurações. Sem permissão jurídica, cai em
+        // "solicitante" e ainda assim pode abrir/acompanhar as próprias.
+        const legalRole = permissionsToLegalRole(
+          db.memberPermissions || {},
+          db.user?.id,
+        );
+        const inheritedRole = db.user?.role || "colaborador";
         return (
           <Suspense
             fallback={<div className="inbox-loading">Carregando Jurídico...</div>}
@@ -14714,12 +14783,13 @@ export default function App() {
               viewer={{
                 userId: db.user?.id,
                 name: db.user?.name,
-                role: db.user?.legalRole || db.user?.role || "colaborador",
+                role: legalRole !== "solicitante" ? legalRole : inheritedRole,
                 isOwner: !activeSpaceId(),
               }}
             />
           </Suspense>
         );
+      }
       case "caixa":
         return (
           <InboxHub
@@ -15233,6 +15303,20 @@ export default function App() {
         );
       case "time":
         return <Team db={db} update={update} setToast={setToast} />;
+      case "permissoes":
+        return (
+          <Suspense
+            fallback={<div className="inbox-loading">Carregando permissões...</div>}
+          >
+            <PermissionsPanel
+              db={db}
+              update={update}
+              setToast={setToast}
+              authHeaders={authHeaders}
+              go={go}
+            />
+          </Suspense>
+        );
       case "config":
         return (
           <AccountSettings db={db} update={update} setToast={setToast} go={go} />
