@@ -39,6 +39,19 @@ export const tipoValido = (tipo) => (POR_ID.has(String(tipo || "").trim()) ? Str
 
 const texto = (valor) => String(valor ?? "").trim();
 
+const dataHoje = (agora = new Date()) => agora.toISOString().slice(0, 10);
+
+// Reunião marcada para o futuro é interação AGENDADA — a titular pediu para
+// registrar "vou reunir com fulano semana que vem". Derivado da data para não
+// precisar de coluna nova: ocorridaEm > hoje ⇒ agendada. Uma agendada NÃO
+// conta como contato feito (não zera o "dias sem contato") e aparece na lista
+// de próximos compromissos.
+export const interacaoAgendada = (interacao = {}, agora = new Date()) => {
+  const quando = texto(interacao.ocorridaEm);
+  if (!quando) return false;
+  return quando > dataHoje(agora);
+};
+
 // O corte que cada tela faz. Passar opportunityId significa "estou dentro desta
 // oportunidade": vejo o que é dela MAIS o que foi registrado na conta. Passar só
 // clientId significa "estou na conta": vejo o que é da conta, sem puxar para cá
@@ -71,9 +84,12 @@ export const ultimaInteracao = (interacoes = []) => ordenarInteracoes(interacoes
 
 // Dias desde a última interação registrada. Devolve null (nunca 0) quando não há
 // interação nenhuma: "nunca falamos" e "falamos hoje" não podem virar o mesmo
-// número na tela.
+// número na tela. Reunião AGENDADA (data futura) não conta como contato feito —
+// se a única coisa registrada é uma reunião marcada para semana que vem, ainda
+// é "nunca falamos".
 export const diasSemContato = (interacoes = [], agora = new Date()) => {
-  const ultima = ultimaInteracao(interacoes);
+  const passadas = interacoes.filter((item) => !interacaoAgendada(item, agora));
+  const ultima = ultimaInteracao(passadas);
   if (!ultima || !texto(ultima.ocorridaEm)) return null;
   const quando = new Date(ultima.ocorridaEm);
   if (Number.isNaN(quando.getTime())) return null;
@@ -81,19 +97,31 @@ export const diasSemContato = (interacoes = [], agora = new Date()) => {
   return dias < 0 ? 0 : dias;
 };
 
-// Próximos passos combinados numa interação e ainda com data no futuro (ou hoje).
-// É o compromisso que a equipe assumiu diante do cliente — some da tela quando
-// vence, porque aí ele já virou ação atrasada da conta.
+// Compromissos combinados: próximo passo textual com data futura MAIS reuniões
+// agendadas (a própria interação com ocorridaEm no futuro). Some da tela quando
+// vence — próximo passo vencido vira ação atrasada, reunião passada vira
+// histórico.
 export const proximosPassos = (interacoes = [], agora = new Date()) => {
-  const hoje = agora.toISOString().slice(0, 10);
-  return ordenarInteracoes(
-    interacoes.filter((item) => texto(item.proximoPasso) && texto(item.proximoPassoEm) >= hoje),
-  ).map((item) => ({
-    id: item.id,
-    passo: texto(item.proximoPasso),
-    quando: texto(item.proximoPassoEm),
-    origem: texto(item.opportunityId) ? "oportunidade" : "conta",
-  }));
+  const hoje = dataHoje(agora);
+  const passos = interacoes
+    .filter((item) => texto(item.proximoPasso) && texto(item.proximoPassoEm) >= hoje)
+    .map((item) => ({
+      id: `passo:${item.id}`,
+      passo: texto(item.proximoPasso),
+      quando: texto(item.proximoPassoEm),
+      origem: texto(item.opportunityId) ? "oportunidade" : "conta",
+      tipo: "proximo-passo",
+    }));
+  const agendadas = interacoes
+    .filter((item) => interacaoAgendada(item, agora))
+    .map((item) => ({
+      id: `agendada:${item.id}`,
+      passo: `${rotuloDoTipo(item.tipo)}${texto(item.assunto) ? ` · ${texto(item.assunto)}` : ""}`,
+      quando: texto(item.ocorridaEm),
+      origem: texto(item.opportunityId) ? "oportunidade" : "conta",
+      tipo: "agendada",
+    }));
+  return [...passos, ...agendadas].sort((a, b) => a.quando.localeCompare(b.quando));
 };
 
 // Uma linha de resumo por interação, do jeito que aparece no histórico.

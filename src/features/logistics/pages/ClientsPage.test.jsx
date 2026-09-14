@@ -202,7 +202,7 @@ describe("página de clientes", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Registrar interação/ }));
     fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "tentativa" } });
-    fireEvent.change(screen.getByLabelText("Quando aconteceu"), { target: { value: "2026-08-30" } });
+    fireEvent.change(screen.getByLabelText(/Quando aconteceu/), { target: { value: "2026-08-30" } });
     fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Liguei, sem retorno" } });
     fireEvent.click(screen.getByRole("button", { name: /Salvar interação/ }));
 
@@ -402,6 +402,49 @@ describe("página de clientes", () => {
     expect(await screen.findAllByText(/Não há próxima ação confiável/i)).not.toHaveLength(0);
     await waitFor(() => expect(patchBody).not.toBeNull());
     expect(patchBody.crm.completedSuggestedActions).toContain("request-procurement-referral");
+    // Marcar feita LIMPA nextAction/nextActionAt: sem isso a pendência
+    // "clientes com ação atrasada" ficava acesa mesmo depois de concluir a
+    // ação (reclamação da titular).
+    expect(patchBody.crm.nextAction).toBe("");
+    expect(patchBody.crm.nextActionAt).toBe("");
+  });
+
+  it("marcar feita numa conta com ação atrasada limpa a data para tirar do painel Pendências", async () => {
+    const clienteAtrasado = {
+      id: "atrasado", name: "Conta Atrasada", segment: "Varejo", status: "ativo", revision: 4,
+      vendedores: [], crm: {
+        nextAction: "Ligar pro comprador",
+        nextActionAt: "2020-01-01",
+        contacts: [{ id: "1", name: "Fernanda", department: "Procurement de Logística", email: "f@x.com" }],
+      },
+    };
+    const clienteDepois = {
+      ...clienteAtrasado, revision: 5,
+      crm: { ...clienteAtrasado.crm, nextAction: "", nextActionAt: "", completedSuggestedActions: ["crm-next-action:ligar pro comprador"] },
+    };
+    let patchBody = null;
+    const fetchMock = vi.fn((url, options = {}) => {
+      const alvo = String(url);
+      if (alvo.includes("/planner/pessoas") || alvo.includes("/collab")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      if (options.method === "PATCH") {
+        patchBody = JSON.parse(options.body);
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, id: "atrasado" }), { status: 200 }));
+      }
+      const cliente = patchBody ? clienteDepois : clienteAtrasado;
+      return Promise.resolve(new Response(JSON.stringify({ clientes: [cliente], acesso: { podeEditar: true } }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ClientsPage authHeaders={() => ({})} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Conta Atrasada/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Marcar feita e ver próxima" }));
+
+    await waitFor(() => expect(patchBody).not.toBeNull());
+    expect(patchBody.crm.nextAction).toBe("");
+    expect(patchBody.crm.nextActionAt).toBe("");
+    expect(patchBody.crm.completedSuggestedActions).toEqual(expect.arrayContaining([expect.stringMatching(/^crm-next-action:/)]));
   });
 });
 

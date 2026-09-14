@@ -245,7 +245,7 @@ describe("página de oportunidades", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Registrar interação/ }));
     fireEvent.change(screen.getByLabelText("Assunto"), { target: { value: "Reunião de fechamento" } });
-    fireEvent.change(screen.getByLabelText("Quando aconteceu"), { target: { value: "2026-08-30" } });
+    fireEvent.change(screen.getByLabelText(/Quando aconteceu/), { target: { value: "2026-08-30" } });
     fireEvent.change(screen.getByLabelText("Ata / o que foi tratado"), { target: { value: "Cliente aceitou o preço com 12 meses." } });
     fireEvent.click(screen.getByRole("button", { name: /Salvar interação/ }));
 
