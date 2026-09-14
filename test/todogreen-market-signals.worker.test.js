@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../worker-entry.js";
 import {
   TERMOS_GDELT,
@@ -132,10 +132,21 @@ describe("sincronizações", () => {
 });
 
 describe("endpoints e triagem por espaço", () => {
+  // O estado das fontes (ok/stale) é medido contra o RELÓGIO REAL: a rota de
+  // listagem usa `new Date()` de propósito, para dizer a verdade sobre o quão
+  // fresco está o dado em produção. Como o fixture é datado em NOW, sem congelar
+  // o relógio o teste passa a ler "stale" alguns dias depois de escrito (o dado
+  // ultrapassa o `frescor`). Congelamos só o Date (não os timers) em NOW para o
+  // teste ficar determinístico sem mudar o comportamento real da rota.
   beforeAll(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
     await sincronizarPncp(env, { fetcher: fetcher(), now: NOW });
     await sincronizarComprasGov(env, { fetcher: fetcher(), now: NOW });
     await sincronizarGdelt(env, { fetcher: fetcher(), now: NOW });
+  });
+  afterAll(() => {
+    vi.useRealTimers();
   });
 
   it("GET lista por score com estado das fontes; sem market:read → 403", async () => {
