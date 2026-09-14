@@ -84,13 +84,30 @@ export const buildTodoGreenCanonicalTask = (task = {}, {
   const status = normalizeTodoGreenTaskStatus(task.status);
   const priority = normalizePriority(task.priority);
   const due = firstText(task.due, task.dueDate, task.deadline);
-  const assigneeId = firstText(task.assigneeId, task.assignedTo, task.ownerId, task.userId);
+  // Responsável explícito: quem foi atribuído à tarefa (CRM/Planner/To Do
+  // gravam nesses campos). Só quando NÃO existe responsável cai para ownerId.
+  // O CRM cria follow-up com assigneeId = responsável e ownerId = criador; sem
+  // essa separação, "Minha tarefa" contava a tarefa também para o criador.
+  const explicitAssigneeId = firstText(
+    task.assigneeId,
+    task.assignedTo,
+    task.assigneeUserId,
+    task.assignee_user_id,
+  );
+  const explicitAssigneeIds = list(task.assignees)
+    .map((item) => String(item?.id || item?.userId || item || "").trim())
+    .filter(Boolean);
+  const hasExplicitAssignee = Boolean(explicitAssigneeId || explicitAssigneeIds.length);
+  const assigneeId = firstText(explicitAssigneeId, task.ownerId, task.userId);
   const assignee = firstText(task.assignee, task.assigneeLabel, task.ownerName, assigneeId);
   const normalizedCurrentUserId = String(currentUserId || "").trim();
+  const responsibleIdentifiers = hasExplicitAssignee
+    ? [explicitAssigneeId, ...explicitAssigneeIds, task.assignee, task.assigneeLabel]
+    : [assigneeId, assignee, task.ownerId, task.userId];
   const mine = Boolean(
     task.mine ||
     task.assignedToMe ||
-    (normalizedCurrentUserId && [assigneeId, assignee, task.ownerId, task.userId].map(String).includes(normalizedCurrentUserId)),
+    (normalizedCurrentUserId && responsibleIdentifiers.map(String).includes(normalizedCurrentUserId)),
   );
   const blocked = Boolean(task.blocked || dependsOn.length && (dependencyOpen || missingDependency));
   const open = status !== "Concluído";
