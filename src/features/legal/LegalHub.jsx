@@ -3006,10 +3006,28 @@ export default function LegalHub({
   const [nowFallback] = useState(() => Date.now());
   const now = typeof nowProp === "number" ? nowProp : nowFallback;
   const baseRecords = useMemo(() => readonlyLegal(db), [db]);
+
+  // JURÍDICO CANÔNICO: quando o espaço tem acesso à vertical To Do Green, os
+  // CONTRATOS deixam de viver no blob e passam a viver em `todogreen_legal_records`
+  // (D1) — a mesma tabela que os gates operacionais do backend leem
+  // (`juridicoConcluido`, `documentoDeAssinaturaVinculado`). Sem isso, um
+  // contrato aprovado na UI nova jamais destravaria a proposta. O ERP monta
+  // essa UI já sabendo do TDG (`tdgForced`); fora do ERP a detecção fica com
+  // `isTdgLegalAvailable(db)`.
+  //
+  // ATENÇÃO: `tdgLegal` e `tdgLegalRecords` PRECISAM ser declarados ANTES do
+  // `records` (linha abaixo) e do `useCollection` do contrato — o useMemo de
+  // `records` referencia os dois. Declarar depois causava TDZ (ReferenceError)
+  // e crashava a página ao abrir.
+  const tdgLegal = Boolean(tdgForced) || isTdgLegalAvailable(db);
+  const tdgLegalRecords = useTdgLegalRecords({
+    authHeaders,
+    enabled: tdgLegal,
+    setToast,
+  });
+
   // Quando o TDG está disponível (detectado ou forçado pela vertical), os
-  // contratos são LIDOS do backend TDG (via hook `useTdgLegalRecords`) — o
-  // blob não é mais fonte da verdade aqui, para não haver "dois Jurídicos"
-  // divergentes.
+  // contratos são LIDOS do backend TDG — o blob não é mais fonte da verdade.
   const records = useMemo(
     () => ({
       ...baseRecords,
@@ -3044,19 +3062,6 @@ export default function LegalHub({
   const matters = useCollection(update, "legalMatters");
   const blobContracts = useCollection(update, "legalContracts");
   const processes = useCollection(update, "legalProcesses");
-  // JURÍDICO CANÔNICO: quando o espaço tem acesso à vertical To Do Green, os
-  // CONTRATOS deixam de viver no blob e passam a viver em `todogreen_legal_records`
-  // (D1) — a mesma tabela que os gates operacionais do backend leem
-  // (`juridicoConcluido`, `documentoDeAssinaturaVinculado`). Sem isso, um
-  // contrato aprovado na UI nova jamais destravaria a proposta. O ERP monta
-  // essa UI já sabendo do TDG (`tdgForced`); fora do ERP a detecção fica com
-  // `isTdgLegalAvailable(db)`.
-  const tdgLegal = Boolean(tdgForced) || isTdgLegalAvailable(db);
-  const tdgLegalRecords = useTdgLegalRecords({
-    authHeaders,
-    enabled: tdgLegal,
-    setToast,
-  });
   const contracts = tdgLegal
     ? {
         add: (record) =>
