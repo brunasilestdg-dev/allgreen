@@ -242,6 +242,7 @@ import {
   ListChecks,
   GitBranch,
   Handshake,
+  Gavel,
   WalletCards,
   Workflow,
   PanelsTopLeft,
@@ -445,6 +446,7 @@ const PlatformSuite = lazy(
 const BusinessProfileStudio = lazy(
   () => import("./features/business-profile/BusinessProfileStudio.jsx"),
 );
+const LegalHub = lazy(() => import("./features/legal/LegalHub.jsx"));
 // Movido para ./session/espacoVazio.js; reexportado para quem já importava daqui.
 export { LEGACY_STORAGE_KEY, ACTIVE_USER_KEY, STORAGE_PREFIX, AUTH_TOKEN_KEY, emptyDb };
 
@@ -500,6 +502,7 @@ const nav = [
   ["automacoes", "Automações", Zap],
   ["financeiro", "Financeiro", WalletCards],
   ["contas", "Contas a receber e pagar", ReceiptText],
+  ["juridico", "Jurídico", Gavel],
   ["funil", "Funil de vendas", TrendingUp],
   ["resultado-mes", "Resultado do mês", BarChart3],
   ["reunioes", "Reuniões", Mic],
@@ -599,6 +602,7 @@ const navGroups = [
       "automacoes",
       "notebook",
       "integracoes",
+      "juridico",
     ],
   },
   {
@@ -14692,6 +14696,24 @@ export default function App() {
               setToast={setToast}
               extractDocumentText={extractDocumentText}
               authHeaders={authHeaders}
+            />
+          </Suspense>
+        );
+      case "juridico":
+        return (
+          <Suspense
+            fallback={<div className="inbox-loading">Carregando Jurídico...</div>}
+          >
+            <LegalHub
+              db={db}
+              update={update}
+              business={business}
+              setToast={setToast}
+              authHeaders={authHeaders}
+              viewer={{
+                role: db.user?.role || "colaborador",
+                isOwner: !activeSpaceId(),
+              }}
             />
           </Suspense>
         );
