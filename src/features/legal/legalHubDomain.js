@@ -57,6 +57,17 @@ export const LEGAL_CONFIDENTIALITY = Object.freeze([
   { id: "confidencial", label: "Confidencial (Diretoria)", minLevel: 3 },
 ]);
 
+// Papéis reconhecidos pelo Jurídico. Quem NÃO tem papel jurídico só solicita
+// (e só enxerga a própria fila); Jurídico e Head enxergam a fila inteira.
+// `head` inclui o "Head Jurídico" que também pode ver o financeiro/exposição.
+export const LEGAL_ROLES = Object.freeze([
+  { id: "solicitante", label: "Solicitante" },
+  { id: "juridico", label: "Funcionário jurídico" },
+  { id: "head_juridico", label: "Head Jurídico" },
+  { id: "diretor", label: "Diretor(a)" },
+  { id: "admin", label: "Administrador(a)" },
+]);
+
 export const LEGAL_CONTRACT_TYPES = Object.freeze([
   { id: "prestacao_servicos", label: "Prestação de serviços" },
   { id: "fornecimento", label: "Fornecimento" },
@@ -306,6 +317,9 @@ export const createMatter = (data = {}) => ({
   risk: normalizeRisk(data.risk),
   confidentiality: normalizeConfidentiality(data.confidentiality),
   ownerId: data.ownerId || null,
+  submitterId: data.submitterId || null,
+  submitterName: String(data.submitterName || "").trim(),
+  submitterArea: String(data.submitterArea || "").trim(),
   responsibleId: data.responsibleId || null,
   externalOfficeId: data.externalOfficeId || null,
   links: Array.isArray(data.links) ? data.links.filter(Boolean) : [],
@@ -318,6 +332,25 @@ export const createMatter = (data = {}) => ({
   createdAt: baseTimestamp(),
   updatedAt: baseTimestamp(),
 });
+
+// Cria uma solicitação simplificada para quem NÃO é do Jurídico: entra na
+// fila em "aberto", carrega quem pediu, área e um resumo. O Jurídico depois
+// enriquece com tipo, risco, provisão, responsável, escritório etc.
+export const createLegalRequest = (data = {}, viewer = {}) =>
+  createMatter({
+    title: data.title,
+    description: data.description,
+    type: data.type || "consultivo",
+    status: "aberto",
+    risk: data.risk || "medio",
+    // Solicitação nasce "interna" — o Jurídico eleva se o assunto pedir.
+    confidentiality: "interno",
+    submitterId: viewer.userId || null,
+    submitterName: viewer.name || "",
+    submitterArea: data.area || viewer.area || "",
+    dueDate: data.dueDate,
+    ownerId: data.ownerId || null,
+  });
 
 export const createContract = (data = {}) => ({
   id: uid(),
@@ -449,10 +482,17 @@ export const createFee = (data = {}) => ({
 // para cá — a domínio não lê identidade nem chama backend.
 export const accessLevelFor = ({ role = "colaborador", isOwner = false } = {}) => {
   if (isOwner || role === "admin" || role === "diretor") return 3;
+  if (role === "head_juridico") return 3;
   if (role === "juridico" || role === "gestor") return 2;
-  if (role === "colaborador") return 1;
+  if (role === "colaborador" || role === "solicitante") return 1;
   return 0;
 };
+
+// Papel jurídico "de verdade" — só ele enxerga a fila inteira; solicitantes
+// veem apenas as próprias demandas. Head e admin também entram.
+export const isLegalStaff = (viewer = {}) =>
+  viewer.isOwner === true ||
+  ["juridico", "head_juridico", "admin", "diretor"].includes(viewer.role);
 
 export const canRead = (record, viewer = {}) => {
   const level = accessLevelFor(viewer);
@@ -462,8 +502,22 @@ export const canRead = (record, viewer = {}) => {
   return level >= (requirement?.minLevel ?? 1);
 };
 
+// Regra específica para DEMANDAS ("solicitações"): a pessoa vê as que ela
+// mesma submeteu (`submitterId === viewer.userId`) OU se for do Jurídico.
+// Complementada, ainda assim, pela confidencialidade do registro.
+export const canAccessRequest = (record, viewer = {}) => {
+  if (!record) return false;
+  if (isLegalStaff(viewer) && canRead(record, viewer)) return true;
+  if (viewer.userId && record.submitterId && record.submitterId === viewer.userId)
+    return true;
+  return false;
+};
+
 export const filterVisible = (records, viewer = {}) =>
   (records || []).filter((r) => canRead(r, viewer));
+
+export const filterOwnOrLegal = (records, viewer = {}) =>
+  (records || []).filter((r) => canAccessRequest(r, viewer));
 
 // ---------- Dashboard e agregados ----------
 
@@ -924,6 +978,268 @@ export const summarizeEventTimeline = (record) => {
     total: list.length,
     lastEvent: last,
   };
+};
+
+// Tipos de evento que aparecem na timeline. Cada um leva um rótulo e um "peso"
+// visual usado pelas cores da UI (parecer, decisão e status pesam mais que uma
+// nota simples).
+export const LEGAL_EVENT_KINDS = Object.freeze([
+  { id: "note", label: "Nota / comentário" },
+  { id: "parecer", label: "Parecer" },
+  { id: "decisao", label: "Decisão" },
+  { id: "status", label: "Mudança de situação" },
+  { id: "assinatura", label: "Assinatura" },
+  { id: "reuniao", label: "Reunião / audiência" },
+  { id: "arquivamento", label: "Arquivamento" },
+]);
+
+// ---------- Notificações e integração com Planner / Meu trabalho ----------
+
+// Converte alertas em notificações no padrão `pushNotification` do App.
+// Cada alerta gera uma notificação idempotente por `id` — a UI dedupa por id
+// antes de gravar em `db.notifications`.
+export const buildLegalNotifications = (records = {}, viewer = {}, now = Date.now()) => {
+  const alerts = legalAlerts(records, now);
+  return alerts.map((alert) => ({
+    id: `legal-${alert.id}`,
+    recipientId: viewer.userId || null,
+    message: alert.title + (alert.subtitle ? ` — ${alert.subtitle}` : ""),
+    link: "juridico",
+    kind: alert.kind,
+    level: alert.level,
+  }));
+};
+
+// Prazos + audiências em aberto viram itens da agenda "Meu trabalho" / Planner.
+// Devolve `[{id, title, dueDate, priority, area}]` — a UI monta o link para
+// abrir o registro correspondente no Jurídico.
+export const buildPlannerItemsFromLegal = (records = {}, viewer = {}, now = Date.now()) => {
+  const items = [];
+  const level = accessLevelFor(viewer);
+  const canSee = (record) => {
+    const req = LEGAL_CONFIDENTIALITY.find((c) => c.id === (record?.confidentiality || "interno"));
+    return level >= (req?.minLevel ?? 1);
+  };
+  for (const d of records.deadlines || []) {
+    if (d.status === "cumprido") continue;
+    if (!d.dueDate) continue;
+    items.push({
+      id: `legal-deadline-${d.id}`,
+      title: d.title,
+      dueDate: d.dueDate,
+      priority: d.fatal ? "Alta" : deadlineUrgency(daysUntil(d.dueDate, now)).level === "urgente" ? "Alta" : "Média",
+      area: "Jurídico",
+      kind: "deadline",
+      sourceId: d.id,
+    });
+  }
+  for (const p of records.processes || []) {
+    if (processStatusIsClosed(p.status) || !canSee(p)) continue;
+    if (p.nextHearing) {
+      items.push({
+        id: `legal-hearing-${p.id}`,
+        title: `Audiência: ${p.title}`,
+        dueDate: p.nextHearing,
+        priority: "Alta",
+        area: "Jurídico",
+        kind: "hearing",
+        sourceId: p.id,
+      });
+    }
+    if (p.nextDeadline) {
+      items.push({
+        id: `legal-process-${p.id}`,
+        title: `Prazo processual: ${p.title}`,
+        dueDate: p.nextDeadline,
+        priority: p.risk === "alto" || p.risk === "critico" ? "Alta" : "Média",
+        area: "Jurídico",
+        kind: "process-deadline",
+        sourceId: p.id,
+      });
+    }
+  }
+  return items.sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+};
+
+// ---------- Exportação CSV ----------
+
+// Escapa um campo CSV no padrão brasileiro (separador ';', aspas duplas
+// escapadas). Reaproveita a mesma regra usada em `buildCsv` do módulo Planilhas
+// — mantém consistência para quem abre no Excel pt-BR.
+const csvField = (value) => {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  if (/[";\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+};
+
+const csvRow = (fields) => fields.map(csvField).join(";");
+
+// Adiciona BOM UTF-8 para o Excel pt-BR abrir com acentos.
+const withUtf8Bom = (csv) => "﻿" + csv;
+
+export const exportMattersCsv = (matters = []) => {
+  const header = [
+    "Título",
+    "Tipo",
+    "Situação",
+    "Risco",
+    "Confidencialidade",
+    "Valor em risco (R$)",
+    "Provisão",
+    "Prazo interno",
+    "Aberta em",
+    "Responsável",
+    "Escritório externo",
+    "Descrição",
+  ];
+  const rows = matters.map((m) => [
+    m.title,
+    labelMatterType(m.type),
+    labelMatterStatus(m.status),
+    labelRisk(m.risk),
+    labelConfidentiality(m.confidentiality),
+    Number(m.amountAtRisk || 0).toFixed(2).replace(".", ","),
+    labelProvision(m.provision),
+    m.dueDate || "",
+    m.openedAt || "",
+    m.responsibleId || "",
+    m.externalOfficeId || "",
+    m.description || "",
+  ]);
+  return withUtf8Bom([csvRow(header), ...rows.map(csvRow)].join("\r\n"));
+};
+
+export const exportContractsCsv = (contracts = []) => {
+  const header = [
+    "Título",
+    "Tipo",
+    "Situação",
+    "Risco",
+    "Confidencialidade",
+    "Contraparte",
+    "CPF/CNPJ",
+    "Valor",
+    "Moeda",
+    "Início",
+    "Fim",
+    "Renovação",
+    "Aviso prévio (dias)",
+    "Aprovação",
+  ];
+  const rows = contracts.map((c) => [
+    c.title,
+    labelContractType(c.type),
+    labelContractStatus(c.status),
+    labelRisk(c.risk),
+    labelConfidentiality(c.confidentiality),
+    c.counterparty || "",
+    c.counterpartyDocument || "",
+    Number(c.amount || 0).toFixed(2).replace(".", ","),
+    c.currency || "BRL",
+    c.startDate || "",
+    c.endDate || "",
+    c.renewalMode === "automatic" ? "Automática" : "Manual",
+    Number(c.renewalNoticeDays || 0),
+    c.approvalStatus || "",
+  ]);
+  return withUtf8Bom([csvRow(header), ...rows.map(csvRow)].join("\r\n"));
+};
+
+export const exportProcessesCsv = (processes = []) => {
+  const header = [
+    "Título",
+    "Nº processo",
+    "Natureza",
+    "Situação",
+    "Instância",
+    "Papel",
+    "Risco",
+    "Provisão",
+    "Valor causa (R$)",
+    "Provisionado (R$)",
+    "Órgão / vara",
+    "Foro",
+    "Distribuição",
+    "Audiência",
+    "Próximo prazo",
+  ];
+  const rows = processes.map((p) => [
+    p.title,
+    p.number || "",
+    labelProcessNature(p.nature),
+    labelProcessStatus(p.status),
+    p.instance || "",
+    p.role || "",
+    labelRisk(p.risk),
+    labelProvision(p.provision),
+    Number(p.amount || 0).toFixed(2).replace(".", ","),
+    Number(p.provisionAmount || 0).toFixed(2).replace(".", ","),
+    p.court || "",
+    p.jurisdiction || "",
+    p.filedAt || "",
+    p.nextHearing || "",
+    p.nextDeadline || "",
+  ]);
+  return withUtf8Bom([csvRow(header), ...rows.map(csvRow)].join("\r\n"));
+};
+
+export const exportDeadlinesCsv = (deadlines = []) => {
+  const header = ["Título", "Tipo", "Vencimento", "Fatal?", "Responsável", "Situação", "Notas"];
+  const rows = deadlines.map((d) => [
+    d.title,
+    d.kind || "",
+    d.dueDate || "",
+    d.fatal ? "Sim" : "Não",
+    d.responsibleId || "",
+    d.status === "cumprido" ? "Cumprido" : "Pendente",
+    d.notes || "",
+  ]);
+  return withUtf8Bom([csvRow(header), ...rows.map(csvRow)].join("\r\n"));
+};
+
+// ---------- Templates → documento ----------
+
+// Converte um template preenchido em `db.documents` no formato que o
+// componente `Documents` já entende — para reaproveitar histórico, exportação
+// PDF e assinatura eletrônica.
+export const templateToDocument = (template, context = {}) => ({
+  title: `${template.label} — ${new Date().toLocaleDateString("pt-BR")}`,
+  type: template.kind || "juridico",
+  content: fillLegalTemplate(template.body || "", context),
+  source: "legal-template",
+  templateId: template.id,
+});
+
+// ---------- Séries para gráficos ----------
+
+// Distribuição de valor em aberto por nível de risco (baixo/medio/alto/critico).
+export const riskExposureSeries = (records = {}) => {
+  const buckets = { baixo: 0, medio: 0, alto: 0, critico: 0 };
+  for (const m of records.matters || []) {
+    if (matterStatusIsClosed(m.status)) continue;
+    buckets[normalizeRisk(m.risk)] += Number(m.amountAtRisk || 0);
+  }
+  for (const p of records.processes || []) {
+    if (processStatusIsClosed(p.status)) continue;
+    buckets[normalizeRisk(p.risk)] += Number(p.amount || 0);
+  }
+  return LEGAL_RISK_LEVELS.map((r) => ({
+    label: r.label,
+    id: r.id,
+    color: r.color,
+    value: buckets[r.id] || 0,
+  }));
+};
+
+// Composição da exposição total (contingente + provisão + honorários).
+export const exposureComposition = (records = {}, now = Date.now()) => {
+  const dashboard = legalDashboard(records, now);
+  return [
+    { id: "contingent", label: "Contingente", value: dashboard.exposure.contingent, color: "#c94209" },
+    { id: "provisioned", label: "Provisionado", value: dashboard.exposure.provisioned, color: "#c98a09" },
+    { id: "fees", label: "Honorários", value: dashboard.exposure.fees, color: "#6c5ce7" },
+  ];
 };
 
 // ---------- Fluxo IA ----------

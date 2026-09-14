@@ -1090,17 +1090,31 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
       ...(selected.crm?.completedSuggestedActions || []),
       selectedIntelligence.nextTaskKey,
     ])];
+    // Marcar feita PRECISA fechar a pendência: se só marcarmos a
+    // completedSuggestedActions, `crm.nextAction`/`nextActionAt` ficam com o
+    // texto e a data antigos e a conta continua aparecendo no painel
+    // "Pendências" (contaComAcaoAtrasada olha nextActionAt no passado). O
+    // usuário disse "concluído" — o compromisso anterior foi resolvido; a
+    // próxima ação será redefinida quando existir uma nova. Limpamos os dois
+    // campos aqui e a inteligência recalcula a nova sugestão a partir dos
+    // registros existentes.
+    const crmAtualizado = {
+      ...(selected.crm || {}),
+      completedSuggestedActions: completed,
+      nextAction: "",
+      nextActionAt: "",
+    };
     setCompletingSuggestion(true);
     try {
       await api(`clients/${encodeURIComponent(selected.id)}`, authHeaders, {
         method: "PATCH",
         body: JSON.stringify({
           revision: selected.revision,
-          crm: { ...selected.crm, completedSuggestedActions: completed },
+          crm: crmAtualizado,
         }),
       });
       setClients((atuais) => atuais.map((cliente) => cliente.id === selected.id
-        ? { ...cliente, crm: { ...(cliente.crm || {}), completedSuggestedActions: completed } }
+        ? { ...cliente, crm: { ...(cliente.crm || {}), ...crmAtualizado } }
         : cliente));
       setToast?.("Ação marcada como concluída. A próxima foi recalculada.");
       await load();
@@ -1408,11 +1422,13 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
         }}
       />
       {selectedAccount.contacts.length === 0 && <section className="tdg-crm-contact-cta"><Users size={18} /><div><strong>Nenhum contato comercial cadastrado</strong><span>Cadastre pessoas do cliente, como Compras, Logística, ESG, influenciadores e decisores.</span></div><button type="button" className="tdg-action" onClick={() => { setDetailTab("relationship"); setQuickContactOpen(true); }}><UserPlus size={14} />Adicionar contato comercial</button></section>}
-      {/* Cliente "não tratado": ainda sem nenhuma interação registrada nem
-          oportunidade aberta. O primeiro passo comercial é se apresentar — por
-          isso o CTA leva direto ao envio da apresentação com a abordagem por
-          perfil (temperatura). */}
-      {access.podeEditar && interacoesVisiveis({ interacoes: interactions, clientId: selected.id }).length === 0 && (selectedSummary.openOpportunities || 0) === 0 && <section className="tdg-crm-contact-cta tdg-crm-untreated-cta"><Send size={18} /><div><strong>Cliente ainda não tratado</strong><span>Nenhum contato registrado nem oportunidade aberta. Comece se apresentando: a mensagem já vem pronta pela temperatura da conta.</span></div><button type="button" className="tdg-action" onClick={() => setApresentacaoAberta(true)}><Send size={14} />Enviar apresentação</button></section>}
+      {/* Sem histórico registrado na plataforma: nenhuma interação nem
+          oportunidade aberta. NÃO afirmamos que o cliente "não foi tratado" —
+          o contato pode ter acontecido fora do sistema (WhatsApp, ligação
+          direta, presencial). O CTA principal continua sendo apresentar-se,
+          mas oferecemos também a via de registrar um contato existente para
+          o histórico não perder memória. */}
+      {access.podeEditar && interacoesVisiveis({ interacoes: interactions, clientId: selected.id }).length === 0 && (selectedSummary.openOpportunities || 0) === 0 && <section className="tdg-crm-contact-cta tdg-crm-untreated-cta"><Send size={18} /><div><strong>Sem histórico registrado na plataforma</strong><span>Nenhum contato nem oportunidade aparecem aqui — se o cliente já foi contatado fora do sistema, registre para o histórico não perder memória. Senão, comece se apresentando: a mensagem já vem pronta pela temperatura da conta.</span></div><div className="tdg-crm-untreated-actions"><button type="button" className="tdg-action" onClick={() => setApresentacaoAberta(true)}><Send size={14} />Enviar apresentação</button>{onInteraction && <button type="button" onClick={() => { setDetailTab("activity"); setInteractionFormRequest((valor) => valor + 1); }}><MessageCircle size={14} />Já falei — registrar contato existente</button>}</div></section>}
       <section className="tdg-crm-next"><Target size={17} /><div><small>PRÓXIMA AÇÃO SUGERIDA</small><strong>{selectedIntelligence.nextTask}</strong><span>{suggestionContext(selectedIntelligence.nextTaskKey)}</span></div><button type="button" onClick={() => { setDetailTab("relationship"); setQuickContactOpen(true); }}><UserPlus size={14} />Adicionar contato comercial</button><button type="button" onClick={() => setTaskClientId(selected.id)}>Transformar em tarefa</button><button type="button" onClick={completeSuggestedAction} disabled={!selectedIntelligence.nextTaskCanComplete || completingSuggestion}>{completingSuggestion ? "Atualizando..." : "Marcar feita e ver próxima"}</button></section>
       {portalPreviewOpen && <ClientPortalPreview client={selected} authHeaders={authHeaders} open onClose={() => setPortalPreviewOpen(false)} />}
       {apresentacaoAberta && <EnviarApresentacao

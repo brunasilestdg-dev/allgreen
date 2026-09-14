@@ -5,6 +5,7 @@ import {
   RESULTADOS_DA_INTERACAO,
   TIPOS_DE_INTERACAO,
   diasSemContato,
+  interacaoAgendada,
   proximosPassos,
   rotuloDoTipo,
 } from "../interacoesDomain.js";
@@ -152,24 +153,27 @@ export default function InteracoesPanel({
       )}
 
       <ol className="tdg-interacoes-lista">
-        {interacoes.map((item) => (
-          <li key={item.id} data-origem={item.opportunityId ? "oportunidade" : "conta"}>
-            <span className="tdg-interacao-tag">{rotuloDoTipo(item.tipo)}</span>
-            <div>
-              <strong>{item.assunto || rotuloDoTipo(item.tipo)}</strong>
-              <small>
-                {dataBR(item.ocorridaEm)}
-                {item.participantes ? ` · ${item.participantes}` : ""}
-                {item.autorEmail ? ` · registrada por ${item.autorEmail}` : ""}
-                {!item.opportunityId && " · interação da conta"}
-              </small>
-              {item.ata && <p>{item.ata}</p>}
-              {item.proximoPasso && (
-                <small className="tdg-interacao-passo">Próximo passo: {item.proximoPasso}{item.proximoPassoEm ? ` (${dataBR(item.proximoPassoEm)})` : ""}</small>
-              )}
-            </div>
-          </li>
-        ))}
+        {interacoes.map((item) => {
+          const agendada = interacaoAgendada(item);
+          return (
+            <li key={item.id} data-origem={item.opportunityId ? "oportunidade" : "conta"} data-agendada={agendada || undefined}>
+              <span className="tdg-interacao-tag">{rotuloDoTipo(item.tipo)}{agendada ? " · agendada" : ""}</span>
+              <div>
+                <strong>{item.assunto || rotuloDoTipo(item.tipo)}</strong>
+                <small>
+                  {agendada ? "Agendada para " : ""}{dataBR(item.ocorridaEm)}
+                  {item.participantes ? ` · ${item.participantes}` : ""}
+                  {item.autorEmail ? ` · registrada por ${item.autorEmail}` : ""}
+                  {!item.opportunityId && " · interação da conta"}
+                </small>
+                {item.ata && <p>{item.ata}</p>}
+                {item.proximoPasso && (
+                  <small className="tdg-interacao-passo">Próximo passo: {item.proximoPasso}{item.proximoPassoEm ? ` (${dataBR(item.proximoPassoEm)})` : ""}</small>
+                )}
+              </div>
+            </li>
+          );
+        })}
         {interacoes.length === 0 && (
           <li className="tdg-interacoes-vazio">
             Nada registrado ainda. Reunião, ligação, visita e até a tentativa sem retorno entram aqui.
@@ -188,8 +192,9 @@ export default function InteracoesPanel({
               </select>
             </label>
             <label>
-              <span>Quando aconteceu</span>
+              <span>Quando aconteceu (ou vai acontecer)</span>
               <input disabled={salvando || interacaoSalva} type="date" required value={form.ocorridaEm} onChange={(e) => campo("ocorridaEm", e.target.value)} />
+              <small>Data no futuro entra como "reunião agendada" — vai para os próximos compromissos, não conta como contato já feito.</small>
             </label>
             {escopo === "conta" && oportunidades.length > 0 && (
               <label>

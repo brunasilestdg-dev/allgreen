@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock,
   BarChart3,
@@ -7,10 +7,13 @@ import {
   CalendarClock,
   ClipboardCheck,
   Copy,
+  Download,
   FileCheck2,
+  FilePlus,
   FileSearch,
   Gavel,
   Handshake,
+  History,
   ListChecks,
   Plus,
   ScrollText,
@@ -28,6 +31,7 @@ import {
   LEGAL_CONFIDENTIALITY,
   LEGAL_CONTRACT_STATUSES,
   LEGAL_CONTRACT_TYPES,
+  LEGAL_EVENT_KINDS,
   LEGAL_MATTER_STATUSES,
   LEGAL_MATTER_TYPES,
   LEGAL_PROCESS_INSTANCES,
@@ -37,8 +41,10 @@ import {
   LEGAL_PROVISION_LEVELS,
   LEGAL_RISK_LEVELS,
   LEGAL_TEMPLATES,
+  appendLegalEvent,
   approvalActionsFor,
   buildLegalAiPrompt,
+  buildLegalNotifications,
   canRead,
   complianceGaps,
   complianceScore,
@@ -46,14 +52,22 @@ import {
   createContract,
   createDeadline,
   createFee,
+  createLegalRequest,
   createMatter,
   createOffice,
   createPowerOfAttorney,
   createProcess,
   daysUntil,
   deadlineUrgency,
+  exposureComposition,
+  exportContractsCsv,
+  exportDeadlinesCsv,
+  exportMattersCsv,
+  exportProcessesCsv,
   fillLegalTemplate,
+  filterOwnOrLegal,
   formatMoneyBR,
+  isLegalStaff,
   labelConfidentiality,
   labelContractStatus,
   labelContractType,
@@ -70,8 +84,10 @@ import {
   matterStatusIsClosed,
   parseLegalAiResponse,
   processStatusIsClosed,
+  riskExposureSeries,
   riskMatrix,
   searchLegal,
+  templateToDocument,
   validateContract,
   validateDeadline,
   validateFee,
@@ -82,9 +98,16 @@ import {
 } from "./legalHubDomain.js";
 import "./legalHub.css";
 
+// Ordem das abas. Cada uma declara se é RESTRITA ao Jurídico ("staff"): a UI
+// esconde do solicitante quando ele não tem papel jurídico. "Solicitar" e
+// "Minhas solicitações" ficam disponíveis para todo mundo — respeitando a
+// regra da titular: qualquer pessoa pode solicitar, mas só o Jurídico vê a
+// fila completa.
 const TABS = [
+  { id: "solicitar", label: "Solicitar ao Jurídico", icon: FilePlus, forAll: true },
+  { id: "minhas", label: "Minhas solicitações", icon: ClipboardCheck, forAll: true },
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { id: "demandas", label: "Demandas", icon: ClipboardCheck },
+  { id: "demandas", label: "Fila do Jurídico", icon: ClipboardCheck },
   { id: "contratos", label: "Contratos", icon: FileCheck2 },
   { id: "processos", label: "Processos", icon: Gavel },
   { id: "procuracoes", label: "Procurações", icon: ScrollText },
@@ -92,9 +115,9 @@ const TABS = [
   { id: "escritorios", label: "Escritórios e advogados", icon: Users },
   { id: "honorarios", label: "Honorários e provisões", icon: Handshake },
   { id: "compliance", label: "Compliance", icon: ShieldCheck },
-  { id: "modelos", label: "Modelos", icon: ScrollText },
-  { id: "ia", label: "IA jurídica", icon: Sparkles },
-  { id: "busca", label: "Busca", icon: Search },
+  { id: "modelos", label: "Modelos", icon: ScrollText, forAll: true },
+  { id: "ia", label: "IA jurídica", icon: Sparkles, forAll: true },
+  { id: "busca", label: "Busca", icon: Search, forAll: true },
   { id: "relatorios", label: "Relatórios", icon: ListChecks },
 ];
 
@@ -103,6 +126,111 @@ const dataBR = (value) => {
   const d = new Date(String(value).length <= 10 ? `${value}T00:00:00` : value);
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("pt-BR");
 };
+
+const dataHoraBR = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("pt-BR");
+};
+
+// Baixa uma string CSV como arquivo. Reaproveita o padrão dos módulos
+// Planilhas/Contatos — usa Blob + link temporário, sem lib externa.
+function downloadCsv(content, filename) {
+  try {
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Gráfico simples em SVG puro — barras horizontais para risco/exposição.
+// Sem lib. `series` é `[{label, value, color}]`. Valor sempre positivo.
+function LegalBarChart({ series, format = (v) => formatMoneyBR(v) }) {
+  const max = Math.max(1, ...series.map((s) => Number(s.value) || 0));
+  return (
+    <div className="lgl-chart">
+      {series.map((row) => {
+        const width = Math.max(2, Math.round(((Number(row.value) || 0) / max) * 100));
+        return (
+          <div className="lgl-chart-row" key={row.id || row.label}>
+            <span className="lgl-chart-label">{row.label}</span>
+            <div className="lgl-chart-track">
+              <div
+                className="lgl-chart-bar"
+                style={{ width: `${width}%`, background: row.color || "var(--lgl-accent)" }}
+              />
+            </div>
+            <strong className="lgl-chart-value">{format(row.value)}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Timeline compacta de eventos do registro (nota, parecer, decisão…).
+function LegalTimeline({ record, onAddEvent }) {
+  const [message, setMessage] = useState("");
+  const [kind, setKind] = useState("note");
+  const events = Array.isArray(record?.events) ? record.events : [];
+  const submit = () => {
+    if (!message.trim()) return;
+    onAddEvent({ kind, message: message.trim() });
+    setMessage("");
+    setKind("note");
+  };
+  return (
+    <div className="lgl-timeline">
+      <div className="lgl-timeline-list">
+        {events.length === 0 && <small>Sem eventos ainda.</small>}
+        {events.map((ev) => (
+          <article key={ev.id} className={`lgl-timeline-ev kind-${ev.kind}`}>
+            <header>
+              <strong>
+                {LEGAL_EVENT_KINDS.find((k) => k.id === ev.kind)?.label || ev.kind}
+              </strong>
+              <small>
+                {ev.author ? `${ev.author} · ` : ""}
+                {dataHoraBR(ev.createdAt)}
+              </small>
+            </header>
+            {ev.message && <p>{ev.message}</p>}
+          </article>
+        ))}
+      </div>
+      <div className="lgl-timeline-add">
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          {LEGAL_EVENT_KINDS.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+        <input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Escrever nota, parecer ou decisão"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
+        <button type="button" className="primary" onClick={submit}>
+          Registrar
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const readonlyLegal = (db) => ({
   matters: Array.isArray(db?.legalMatters) ? db.legalMatters : [],
@@ -115,6 +243,26 @@ const readonlyLegal = (db) => ({
   templates: Array.isArray(db?.legalTemplates) ? db.legalTemplates : [],
   compliance: Array.isArray(db?.legalCompliance) ? db.legalCompliance : [],
 });
+
+// Combina contatos + leads + oportunidades num único array para os pickers de
+// "vínculo". A UI mostra rótulo `nome · categoria`, e grava o próprio texto —
+// preserva o formato atual das colecões existentes sem exigir migração.
+function useLinkedEntities(db) {
+  return useMemo(() => {
+    const items = [];
+    for (const c of db?.contacts || []) {
+      const label = c.name + (c.company ? ` · ${c.company}` : "");
+      items.push({ id: c.id, label, kind: "contato" });
+    }
+    for (const l of db?.leads || []) {
+      items.push({ id: l.id, label: `${l.name || "Lead"} · Lead`, kind: "lead" });
+    }
+    for (const o of db?.opportunities || []) {
+      items.push({ id: o.id, label: `${o.title || "Oportunidade"} · Oportunidade`, kind: "oportunidade" });
+    }
+    return items;
+  }, [db]);
+}
 
 // Auxiliar para inserir/remover/atualizar coleções por chave. Reaproveitado
 // em várias abas — mantém a semântica de update do App (que trabalha com
@@ -170,6 +318,8 @@ function DashboardTab({ records, now }) {
     [records.matters, records.processes],
   );
   const alerts = useMemo(() => legalAlerts(records, now), [records, now]);
+  const exposureBars = useMemo(() => exposureComposition(records, now), [records, now]);
+  const riskBars = useMemo(() => riskExposureSeries(records), [records]);
 
   const { counts, exposure, riskCounts } = dashboard;
   return (
@@ -230,6 +380,12 @@ function DashboardTab({ records, now }) {
         ))}
       </div>
 
+      <h2>Composição da exposição</h2>
+      <LegalBarChart series={exposureBars} />
+
+      <h2>Valor em aberto por risco</h2>
+      <LegalBarChart series={riskBars} />
+
       <h2>Matriz de risco × exposição</h2>
       {matrix.length === 0 ? (
         <p className="hint">Nenhum risco em aberto ainda.</p>
@@ -271,6 +427,197 @@ function DashboardTab({ records, now }) {
 }
 
 // -----------------------------------------------------------------------
+// Solicitar ao Jurídico (formulário simplificado, disponível a todos)
+// -----------------------------------------------------------------------
+
+const emptyRequest = {
+  title: "",
+  description: "",
+  type: "consultivo",
+  risk: "medio",
+  area: "",
+  dueDate: "",
+};
+
+function RequestTab({ collection, setToast, viewer, allRecords }) {
+  const [form, setForm] = useState(emptyRequest);
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.title.trim()) return setToast?.("Descreva a solicitação no título.");
+    if (!form.description.trim())
+      return setToast?.("Escreva um pequeno resumo do que precisa do Jurídico.");
+    const request = createLegalRequest(form, viewer);
+    collection.add(request);
+    setForm(emptyRequest);
+    setToast?.("Solicitação enviada ao Jurídico.");
+  };
+  const own = useMemo(
+    () =>
+      (allRecords.matters || []).filter(
+        (m) => m.submitterId && m.submitterId === viewer.userId,
+      ).length,
+    [allRecords.matters, viewer.userId],
+  );
+  return (
+    <div className="lgl-panel">
+      <header>
+        <h2>Solicitar ao Jurídico</h2>
+        <p className="hint">
+          Qualquer pessoa pode registrar uma solicitação. Ela entra na fila do Jurídico e você
+          acompanha o status na aba &ldquo;Minhas solicitações&rdquo;. O Jurídico complementa com
+          risco, prazo, responsável e escritório externo depois de analisar.
+          {own > 0 ? ` Você tem ${own} solicitaç${own === 1 ? "ão" : "ões"} registrada${own === 1 ? "" : "s"}.` : ""}
+        </p>
+      </header>
+      <form className="lgl-form" onSubmit={submit}>
+        <label className="wide">
+          <span>Assunto</span>
+          <input
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder="Ex.: Revisar minuta de contrato com fornecedor XPTO"
+          />
+        </label>
+        <label>
+          <span>Tipo</span>
+          <select
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+          >
+            {LEGAL_MATTER_TYPES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Urgência percebida</span>
+          <select
+            value={form.risk}
+            onChange={(e) => setForm({ ...form, risk: e.target.value })}
+          >
+            {LEGAL_RISK_LEVELS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Área / setor solicitante</span>
+          <input
+            value={form.area}
+            onChange={(e) => setForm({ ...form, area: e.target.value })}
+            placeholder="Comercial, TI, RH..."
+          />
+        </label>
+        <label>
+          <span>Prazo desejado (opcional)</span>
+          <input
+            type="date"
+            value={form.dueDate}
+            onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+          />
+        </label>
+        <label className="wide">
+          <span>Contexto e o que você precisa</span>
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Explique o que gerou a demanda, o que você espera do Jurídico e prazos externos que vale respeitar."
+          />
+        </label>
+        <div className="lgl-form-actions" style={{ gridColumn: "1 / -1" }}>
+          <button className="primary" type="submit">
+            Enviar ao Jurídico
+          </button>
+        </div>
+      </form>
+      <p className="lgl-notice">
+        <ShieldAlert size={13} /> Solicitações não substituem parecer formal — o Jurídico analisa
+        e responde na sua caixa de notificações.
+      </p>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
+// Minhas solicitações (visão do solicitante — só as próprias)
+// -----------------------------------------------------------------------
+
+function MyRequestsTab({ records, viewer, now }) {
+  const mine = useMemo(
+    () =>
+      (records.matters || [])
+        .filter((m) => m.submitterId && m.submitterId === viewer.userId)
+        .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))),
+    [records.matters, viewer.userId],
+  );
+  return (
+    <div className="lgl-panel">
+      <header>
+        <h2>Minhas solicitações</h2>
+        <p className="hint">
+          Aqui você acompanha o que registrou. A fila completa fica visível só para o Jurídico.
+        </p>
+      </header>
+      {mine.length === 0 ? (
+        <div className="lgl-empty">
+          <ClipboardCheck size={22} /> Você ainda não registrou nenhuma solicitação.
+        </div>
+      ) : (
+        <div className="lgl-list">
+          {mine.map((m) => (
+            <article key={m.id} className={`lgl-card risk-${m.risk}`}>
+              <header style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <div>
+                  <h3>{m.title}</h3>
+                  <small>
+                    {labelMatterType(m.type)} · {labelMatterStatus(m.status)}
+                  </small>
+                </div>
+                <div className="lgl-badges">
+                  <RiskBadge id={m.risk} />
+                </div>
+              </header>
+              {m.description && <p>{m.description}</p>}
+              <div className="lgl-badges">
+                {m.dueDate && <UrgencyBadge dueDate={m.dueDate} now={now} />}
+                {m.responsibleId && (
+                  <span className="lgl-chip">Responsável: {m.responsibleId}</span>
+                )}
+                <span className="lgl-chip">Enviada em {dataBR(m.openedAt)}</span>
+              </div>
+              {Array.isArray(m.events) && m.events.length > 0 && (
+                <details>
+                  <summary>
+                    <History size={12} /> Histórico ({m.events.length})
+                  </summary>
+                  <div className="lgl-timeline-list" style={{ marginTop: 8 }}>
+                    {m.events.slice(-6).map((ev) => (
+                      <article key={ev.id} className={`lgl-timeline-ev kind-${ev.kind}`}>
+                        <header>
+                          <strong>
+                            {LEGAL_EVENT_KINDS.find((k) => k.id === ev.kind)?.label || ev.kind}
+                          </strong>
+                          <small>{dataHoraBR(ev.createdAt)}</small>
+                        </header>
+                        {ev.message && <p>{ev.message}</p>}
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------
 // Demandas jurídicas
 // -----------------------------------------------------------------------
 
@@ -289,10 +636,11 @@ const emptyMatter = {
   notes: "",
 };
 
-function MattersTab({ records, collection, now, setToast }) {
+function MattersTab({ records, collection, now, setToast, linkedEntities, offices, viewer }) {
   const [form, setForm] = useState(emptyMatter);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("abertas");
+  const [expandedId, setExpandedId] = useState(null);
 
   const list = useMemo(() => {
     const items = [...(records.matters || [])].sort((a, b) =>
@@ -313,18 +661,37 @@ function MattersTab({ records, collection, now, setToast }) {
     setToast?.("Demanda jurídica registrada.");
   };
 
+  const exportCsv = () => {
+    const ok = downloadCsv(exportMattersCsv(list), `juridico-demandas-${new Date().toISOString().slice(0, 10)}.csv`);
+    setToast?.(ok ? "CSV exportado." : "Não foi possível exportar o CSV.");
+  };
+
+  const addEventTo = (matter, event) => {
+    const updated = appendLegalEvent(matter, {
+      ...event,
+      author: viewer.name || viewer.userId || "Jurídico",
+    });
+    collection.replace(matter.id, updated);
+  };
+
   return (
     <div className="lgl-panel">
       <header className="lgl-actions" style={{ justifyContent: "space-between" }}>
         <div>
-          <h2>Demandas jurídicas</h2>
+          <h2>Fila do Jurídico</h2>
           <p className="hint">
-            Consultas, ações e projetos jurídicos, com responsável, risco e prazo.
+            Demandas (internas e solicitadas por outras áreas) com responsável, risco e prazo. Só o
+            time jurídico enxerga esta fila completa.
           </p>
         </div>
-        <button className="primary" onClick={() => setOpen((v) => !v)}>
-          <Plus size={14} /> Nova demanda
-        </button>
+        <div className="lgl-actions">
+          <button type="button" onClick={exportCsv} title="Exportar lista atual em CSV">
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button className="primary" onClick={() => setOpen((v) => !v)}>
+            <Plus size={14} /> Nova demanda
+          </button>
+        </div>
       </header>
 
       <div className="lgl-tabs" role="tablist" aria-label="Filtro de demandas">
@@ -429,20 +796,42 @@ function MattersTab({ records, collection, now, setToast }) {
             />
           </label>
           <label>
-            <span>Responsável (id ou nome)</span>
+            <span>Responsável pela demanda</span>
             <input
               value={form.responsibleId}
               onChange={(e) => setForm({ ...form, responsibleId: e.target.value })}
-              placeholder="Responsável pela demanda"
+              placeholder="Nome de quem toca a demanda"
             />
           </label>
           <label>
-            <span>Escritório externo (id)</span>
-            <input
+            <span>Vinculado a (contato / lead / oportunidade)</span>
+            <select
+              value={(form.links && form.links[0]) || ""}
+              onChange={(e) =>
+                setForm({ ...form, links: e.target.value ? [e.target.value] : [] })
+              }
+            >
+              <option value="">Sem vínculo</option>
+              {(linkedEntities || []).map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Escritório externo</span>
+            <select
               value={form.externalOfficeId}
               onChange={(e) => setForm({ ...form, externalOfficeId: e.target.value })}
-              placeholder="Vincula a um escritório da aba"
-            />
+            >
+              <option value="">Sem escritório externo</option>
+              {(offices || []).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="wide">
             <span>Descrição / pedido</span>
@@ -509,13 +898,24 @@ function MattersTab({ records, collection, now, setToast }) {
               )}
               {m.externalOfficeId && (
                 <span className="lgl-chip">
-                  <Building2 size={12} /> Escritório: {m.externalOfficeId}
+                  <Building2 size={12} /> Escritório:{" "}
+                  {(offices || []).find((o) => o.id === m.externalOfficeId)?.name || m.externalOfficeId}
+                </span>
+              )}
+              {m.submitterName && (
+                <span className="lgl-chip">
+                  Solicitante: {m.submitterName}
+                  {m.submitterArea ? ` · ${m.submitterArea}` : ""}
                 </span>
               )}
             </div>
             <footer>
               <small>Atualizada em {new Date(m.updatedAt).toLocaleString("pt-BR")}</small>
               <div className="lgl-actions">
+                <button onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}>
+                  <History size={12} />
+                  {expandedId === m.id ? "Fechar histórico" : "Histórico"}
+                </button>
                 <button
                   onClick={() =>
                     collection.replace(m.id, {
@@ -530,6 +930,9 @@ function MattersTab({ records, collection, now, setToast }) {
                 </button>
               </div>
             </footer>
+            {expandedId === m.id && (
+              <LegalTimeline record={m} onAddEvent={(ev) => addEventTo(m, ev)} />
+            )}
           </article>
         ))}
       </div>
@@ -563,6 +966,7 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
   const [form, setForm] = useState(emptyContract);
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [timelineId, setTimelineId] = useState(null);
 
   const list = useMemo(
     () =>
@@ -584,6 +988,19 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
     setToast?.("Contrato registrado.");
   };
 
+  const exportCsv = () => {
+    const ok = downloadCsv(exportContractsCsv(list), `juridico-contratos-${new Date().toISOString().slice(0, 10)}.csv`);
+    setToast?.(ok ? "CSV exportado." : "Não foi possível exportar o CSV.");
+  };
+
+  const addEventTo = (contract, event) => {
+    const updated = appendLegalEvent(contract, {
+      ...event,
+      author: viewer.name || viewer.userId || "Jurídico",
+    });
+    collection.replace(contract.id, updated);
+  };
+
   const actions = selected ? approvalActionsFor(selected.status, viewer) : [];
 
   return (
@@ -595,9 +1012,14 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
             Vigência, contraparte, valor, status de assinatura e vínculo com o fluxo de aprovação.
           </p>
         </div>
-        <button className="primary" onClick={() => setOpen((v) => !v)}>
-          <Plus size={14} /> Novo contrato
-        </button>
+        <div className="lgl-actions">
+          <button type="button" onClick={exportCsv}>
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button className="primary" onClick={() => setOpen((v) => !v)}>
+            <Plus size={14} /> Novo contrato
+          </button>
+        </div>
       </header>
 
       {open && (
@@ -806,6 +1228,10 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
                   <button onClick={() => setSelectedId(c.id === selectedId ? null : c.id)}>
                     {selectedId === c.id ? "Fechar fluxo" : "Fluxo de aprovação"}
                   </button>
+                  <button onClick={() => setTimelineId(timelineId === c.id ? null : c.id)}>
+                    <History size={12} />
+                    {timelineId === c.id ? "Fechar histórico" : "Histórico"}
+                  </button>
                   {!contractStatusIsClosed(c.status) && (
                     <button
                       onClick={() =>
@@ -822,6 +1248,9 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
                   </button>
                 </div>
               </footer>
+              {timelineId === c.id && (
+                <LegalTimeline record={c} onAddEvent={(ev) => addEventTo(c, ev)} />
+              )}
               {selectedId === c.id && (
                 <div className="lgl-approval-flow">
                   <header>
@@ -902,9 +1331,10 @@ const emptyProcess = {
   notes: "",
 };
 
-function ProcessesTab({ records, collection, now, setToast }) {
+function ProcessesTab({ records, collection, now, setToast, viewer }) {
   const [form, setForm] = useState(emptyProcess);
   const [open, setOpen] = useState(false);
+  const [timelineId, setTimelineId] = useState(null);
 
   const list = useMemo(
     () =>
@@ -924,6 +1354,19 @@ function ProcessesTab({ records, collection, now, setToast }) {
     setToast?.("Processo cadastrado.");
   };
 
+  const exportCsv = () => {
+    const ok = downloadCsv(exportProcessesCsv(list), `juridico-processos-${new Date().toISOString().slice(0, 10)}.csv`);
+    setToast?.(ok ? "CSV exportado." : "Não foi possível exportar o CSV.");
+  };
+
+  const addEventTo = (process, event) => {
+    const updated = appendLegalEvent(process, {
+      ...event,
+      author: viewer.name || viewer.userId || "Jurídico",
+    });
+    collection.replace(process.id, updated);
+  };
+
   return (
     <div className="lgl-panel">
       <header className="lgl-actions" style={{ justifyContent: "space-between" }}>
@@ -934,9 +1377,14 @@ function ProcessesTab({ records, collection, now, setToast }) {
             valor de causa e provisão.
           </p>
         </div>
-        <button className="primary" onClick={() => setOpen((v) => !v)}>
-          <Plus size={14} /> Novo processo
-        </button>
+        <div className="lgl-actions">
+          <button type="button" onClick={exportCsv}>
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button className="primary" onClick={() => setOpen((v) => !v)}>
+            <Plus size={14} /> Novo processo
+          </button>
+        </div>
       </header>
 
       {open && (
@@ -1150,6 +1598,10 @@ function ProcessesTab({ records, collection, now, setToast }) {
             <footer>
               <small>Atualizado em {new Date(p.updatedAt).toLocaleString("pt-BR")}</small>
               <div className="lgl-actions">
+                <button onClick={() => setTimelineId(timelineId === p.id ? null : p.id)}>
+                  <History size={12} />
+                  {timelineId === p.id ? "Fechar histórico" : "Histórico"}
+                </button>
                 <button
                   onClick={() =>
                     collection.replace(p.id, {
@@ -1164,6 +1616,9 @@ function ProcessesTab({ records, collection, now, setToast }) {
                 </button>
               </div>
             </footer>
+            {timelineId === p.id && (
+              <LegalTimeline record={p} onAddEvent={(ev) => addEventTo(p, ev)} />
+            )}
           </article>
         ))}
       </div>
@@ -1438,6 +1893,11 @@ function DeadlinesTab({ records, collection, now, setToast }) {
     setToast?.("Prazo cadastrado.");
   };
 
+  const exportCsv = () => {
+    const ok = downloadCsv(exportDeadlinesCsv(list), `juridico-prazos-${new Date().toISOString().slice(0, 10)}.csv`);
+    setToast?.(ok ? "CSV exportado." : "Não foi possível exportar o CSV.");
+  };
+
   return (
     <div className="lgl-panel">
       <header className="lgl-actions" style={{ justifyContent: "space-between" }}>
@@ -1448,9 +1908,14 @@ function DeadlinesTab({ records, collection, now, setToast }) {
             distante.
           </p>
         </div>
-        <button className="primary" onClick={() => setOpen((v) => !v)}>
-          <Plus size={14} /> Novo prazo
-        </button>
+        <div className="lgl-actions">
+          <button type="button" onClick={exportCsv}>
+            <Download size={14} /> Exportar CSV
+          </button>
+          <button className="primary" onClick={() => setOpen((v) => !v)}>
+            <Plus size={14} /> Novo prazo
+          </button>
+        </div>
       </header>
 
       {open && (
@@ -2195,7 +2660,7 @@ function ComplianceTab({ records, update, setToast }) {
 // Modelos (templates)
 // -----------------------------------------------------------------------
 
-function TemplatesTab({ setToast }) {
+function TemplatesTab({ setToast, saveAsDocument }) {
   const [selectedId, setSelectedId] = useState(LEGAL_TEMPLATES[0]?.id || null);
   const template = LEGAL_TEMPLATES.find((t) => t.id === selectedId) || LEGAL_TEMPLATES[0];
   const fields = useMemo(() => legalTemplateFields(template?.body || ""), [template]);
@@ -2213,6 +2678,12 @@ function TemplatesTab({ setToast }) {
     } catch {
       setToast?.("Não foi possível copiar. Copie o texto manualmente.");
     }
+  };
+
+  const saveDoc = () => {
+    if (!template) return;
+    saveAsDocument?.(templateToDocument(template, context));
+    setToast?.("Modelo salvo em Documentos.");
   };
 
   return (
@@ -2261,6 +2732,11 @@ function TemplatesTab({ setToast }) {
             <button className="primary" onClick={copy}>
               <Copy size={14} /> Copiar texto
             </button>
+            {saveAsDocument && (
+              <button onClick={saveDoc}>
+                <FilePlus size={14} /> Salvar em Documentos
+              </button>
+            )}
           </div>
           <p className="lgl-notice">
             <ShieldAlert size={13} /> Este modelo NÃO constitui aconselhamento jurídico e exige
@@ -2508,21 +2984,45 @@ function ReportsTab({ records, now }) {
 // Componente raiz
 // -----------------------------------------------------------------------
 
-export default function LegalHub({ db, update, setToast, authHeaders, business, viewer, now: nowProp }) {
-  const [tab, setTab] = useState("dashboard");
-  // Instantâneo do "agora" fixado no primeiro render — assim as urgências
-  // renderizadas nesta sessão são estáveis (evita chamar `Date.now()` na render,
-  // que a regra `react-hooks/purity` proíbe por virar resultado imprevisível).
+export default function LegalHub({
+  db,
+  update,
+  setToast,
+  authHeaders,
+  business,
+  viewer,
+  now: nowProp,
+  pushNotification,
+}) {
+  const legalStaff = isLegalStaff(viewer || {});
+  const defaultTab = legalStaff ? "dashboard" : "solicitar";
+  const [tab, setTab] = useState(defaultTab);
   const [nowFallback] = useState(() => Date.now());
   const now = typeof nowProp === "number" ? nowProp : nowFallback;
   const records = useMemo(() => readonlyLegal(db), [db]);
-  const scoped = useMemo(() => ({
-    ...records,
-    matters: records.matters.filter((r) => canRead(r, viewer || {})),
-    contracts: records.contracts.filter((r) => canRead(r, viewer || {})),
-    processes: records.processes.filter((r) => canRead(r, viewer || {})),
-    powersOfAttorney: records.powersOfAttorney.filter((r) => canRead(r, viewer || {})),
-  }), [records, viewer]);
+
+  // Duas visões: a "staff" enxerga tudo conforme confidencialidade; o
+  // solicitante enxerga só as próprias submissões via `canAccessRequest`.
+  const scoped = useMemo(() => {
+    if (legalStaff) {
+      return {
+        ...records,
+        matters: records.matters.filter((r) => canRead(r, viewer || {})),
+        contracts: records.contracts.filter((r) => canRead(r, viewer || {})),
+        processes: records.processes.filter((r) => canRead(r, viewer || {})),
+        powersOfAttorney: records.powersOfAttorney.filter((r) => canRead(r, viewer || {})),
+      };
+    }
+    return {
+      ...records,
+      matters: filterOwnOrLegal(records.matters, viewer || {}),
+      contracts: [],
+      processes: [],
+      powersOfAttorney: [],
+      deadlines: [],
+      fees: [],
+    };
+  }, [records, viewer, legalStaff]);
 
   const matters = useCollection(update, "legalMatters");
   const contracts = useCollection(update, "legalContracts");
@@ -2532,6 +3032,66 @@ export default function LegalHub({ db, update, setToast, authHeaders, business, 
   const offices = useCollection(update, "legalOffices");
   const fees = useCollection(update, "legalFees");
 
+  const linkedEntities = useLinkedEntities(db);
+
+  // Salvar template como documento reaproveita a coleção `documents` já
+  // existente; o módulo Documentos já sabe listar, editar, exportar e assinar.
+  const saveAsDocument = useMemo(() => {
+    if (!update) return null;
+    return (doc) =>
+      update((prev) => ({
+        ...prev,
+        documents: [
+          {
+            id: crypto?.randomUUID?.() || `d-${Math.random().toString(36).slice(2)}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            ownerId: viewer?.userId || null,
+            ...doc,
+          },
+          ...(prev?.documents || []),
+        ],
+      }));
+  }, [update, viewer?.userId]);
+
+  // Alertas viram notificações in-app, deduplicadas por id. Só empurra
+  // notificações NOVAS (id ainda não presente em `db.notifications`).
+  // Reaproveita o mesmo `pushNotification` que o restante do app usa.
+  const seenAlertIdsRef = useRef(new Set());
+  const legalNotifications = useMemo(
+    () => (legalStaff ? buildLegalNotifications(scoped, viewer, now) : []),
+    [legalStaff, scoped, viewer, now],
+  );
+  // Chave estável para o useEffect: os ids dos alertas atuais concatenados.
+  // Sem isso o efeito rodaria em toda renderização e o React reclamaria da
+  // dependência calculada inline.
+  const legalNotificationsKey = legalNotifications.map((n) => n.id).join("|");
+  useEffect(() => {
+    if (!legalStaff || !pushNotification || !update || !viewer?.userId) return;
+    const existing = new Set((db?.notifications || []).map((n) => n.id));
+    const fresh = legalNotifications.filter(
+      (n) => n.recipientId && !existing.has(n.id) && !seenAlertIdsRef.current.has(n.id),
+    );
+    if (fresh.length === 0) return;
+    fresh.forEach((n) => seenAlertIdsRef.current.add(n.id));
+    update((prev) => ({
+      ...prev,
+      notifications: fresh.reduce(
+        (list, n) =>
+          pushNotification(list, {
+            recipientId: n.recipientId,
+            message: n.message,
+            link: n.link,
+            createdBy: viewer.userId,
+          }),
+        prev?.notifications || [],
+      ),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [legalStaff, viewer?.userId, legalNotificationsKey]);
+
+  const alertsCount = useMemo(() => legalAlerts(scoped, now).length, [scoped, now]);
+
   return (
     <div className="legal-hub">
       <header className="lgl-header">
@@ -2539,16 +3099,18 @@ export default function LegalHub({ db, update, setToast, authHeaders, business, 
           <span className="lgl-eyebrow">Jurídico</span>
           <h1>Central Jurídica</h1>
           <p>
-            Demandas, contratos, processos, prazos, procurações, compliance e exposição financeira
-            num só lugar. Modelos de documentos, fluxo de aprovação e alertas automáticos, integrados
-            aos contatos, contratos e áreas do negócio.
+            {legalStaff
+              ? "Demandas, contratos, processos, prazos, procurações, compliance e exposição financeira num só lugar. Modelos, fluxo de aprovação e alertas — tudo integrado aos contatos, contratos e áreas do negócio."
+              : "Peça uma análise ao Jurídico, acompanhe suas solicitações e use os modelos de documentos. A fila completa do Jurídico é vista só pela equipe da área."}
           </p>
         </div>
         <div className="lgl-badges">
-          <span className="lgl-chip">
-            <Bell size={13} />
-            {legalAlerts(scoped, now).length} alertas
-          </span>
+          {legalStaff && (
+            <span className="lgl-chip">
+              <Bell size={13} />
+              {alertsCount} alertas
+            </span>
+          )}
           <span className="lgl-chip">
             <Building2 size={13} />
             {business?.name || "Negócio"}
@@ -2557,35 +3119,55 @@ export default function LegalHub({ db, update, setToast, authHeaders, business, 
       </header>
 
       <nav className="lgl-tabs" aria-label="Seções do Jurídico">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {TABS.filter((t) => legalStaff || t.forAll).map(({ id, label, icon: Icon }) => (
           <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
             <Icon size={14} /> {label}
           </button>
         ))}
       </nav>
 
-      {tab === "dashboard" && <DashboardTab records={scoped} now={now} />}
-      {tab === "demandas" && (
-        <MattersTab records={scoped} collection={matters} now={now} setToast={setToast} />
+      {tab === "solicitar" && (
+        <RequestTab
+          collection={matters}
+          setToast={setToast}
+          viewer={viewer || {}}
+          allRecords={records}
+        />
       )}
-      {tab === "contratos" && (
+      {tab === "minhas" && (
+        <MyRequestsTab records={records} viewer={viewer || {}} now={now} />
+      )}
+      {tab === "dashboard" && legalStaff && <DashboardTab records={scoped} now={now} />}
+      {tab === "demandas" && legalStaff && (
+        <MattersTab
+          records={scoped}
+          collection={matters}
+          now={now}
+          setToast={setToast}
+          linkedEntities={linkedEntities}
+          offices={scoped.offices}
+          viewer={viewer || {}}
+        />
+      )}
+      {tab === "contratos" && legalStaff && (
         <ContractsTab
           records={scoped}
           collection={contracts}
           now={now}
           setToast={setToast}
-          viewer={viewer}
+          viewer={viewer || {}}
         />
       )}
-      {tab === "processos" && (
+      {tab === "processos" && legalStaff && (
         <ProcessesTab
           records={scoped}
           collection={processes}
           now={now}
           setToast={setToast}
+          viewer={viewer || {}}
         />
       )}
-      {tab === "procuracoes" && (
+      {tab === "procuracoes" && legalStaff && (
         <PowersOfAttorneyTab
           records={scoped}
           collection={powersOfAttorney}
@@ -2593,22 +3175,24 @@ export default function LegalHub({ db, update, setToast, authHeaders, business, 
           setToast={setToast}
         />
       )}
-      {tab === "prazos" && (
+      {tab === "prazos" && legalStaff && (
         <DeadlinesTab records={scoped} collection={deadlines} now={now} setToast={setToast} />
       )}
-      {tab === "escritorios" && (
+      {tab === "escritorios" && legalStaff && (
         <OfficesTab records={records} collection={offices} setToast={setToast} />
       )}
-      {tab === "honorarios" && (
+      {tab === "honorarios" && legalStaff && (
         <FeesTab records={records} collection={fees} now={now} setToast={setToast} />
       )}
-      {tab === "compliance" && (
+      {tab === "compliance" && legalStaff && (
         <ComplianceTab records={records} update={update} setToast={setToast} />
       )}
-      {tab === "modelos" && <TemplatesTab setToast={setToast} />}
+      {tab === "modelos" && (
+        <TemplatesTab setToast={setToast} saveAsDocument={saveAsDocument} />
+      )}
       {tab === "ia" && <AiTab authHeaders={authHeaders} setToast={setToast} />}
-      {tab === "busca" && <SearchTab records={records} viewer={viewer} />}
-      {tab === "relatorios" && <ReportsTab records={scoped} now={now} />}
+      {tab === "busca" && <SearchTab records={records} viewer={viewer || {}} />}
+      {tab === "relatorios" && legalStaff && <ReportsTab records={scoped} now={now} />}
     </div>
   );
 }
