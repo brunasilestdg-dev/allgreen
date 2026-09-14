@@ -4612,6 +4612,35 @@
   color: #35603c;
 }
 
+/* Duas vias na mesma linha: "Enviar apresentação" (primária, verde) e
+   "Já falei — registrar contato existente" (secundária). Empilha no mobile. */
+.tdg-crm-untreated-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.tdg-crm-untreated-actions button:not(.tdg-action) {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #9fd4a8;
+  border-radius: 8px;
+  color: #16391f;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 500;
+  gap: 6px;
+  padding: 8px 12px;
+}
+
+.tdg-crm-untreated-actions button:not(.tdg-action):hover,
+.tdg-crm-untreated-actions button:not(.tdg-action):focus-visible {
+  background: #dcefdd;
+  outline: none;
+}
+
 @media (max-width: 760px) {
   .tdg-crm-contact-cta {
     align-items: flex-start;
@@ -4619,6 +4648,15 @@
   }
 
   .tdg-crm-contact-cta .tdg-action {
+    width: 100%;
+  }
+
+  .tdg-crm-untreated-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .tdg-crm-untreated-actions button {
     width: 100%;
   }
 }

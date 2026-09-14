@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   diasSemContato,
+  interacaoAgendada,
   interacoesVisiveis,
   ordenarInteracoes,
   proximosPassos,
@@ -81,7 +82,32 @@ describe("silêncio e compromissos", () => {
       { id: "futuro", proximoPasso: "Enviar minuta", proximoPassoEm: "2026-09-05", ocorridaEm: "2026-08-30", opportunityId: "opp-1" },
     ], agora);
     expect(passos).toEqual([
-      { id: "futuro", passo: "Enviar minuta", quando: "2026-09-05", origem: "oportunidade" },
+      { id: "passo:futuro", passo: "Enviar minuta", quando: "2026-09-05", origem: "oportunidade", tipo: "proximo-passo" },
     ]);
+  });
+
+  it("interação com data no futuro é agendada — não conta como contato feito", () => {
+    const agora = new Date("2026-08-30T12:00:00Z");
+    expect(interacaoAgendada({ ocorridaEm: "2026-09-05" }, agora)).toBe(true);
+    expect(interacaoAgendada({ ocorridaEm: "2026-08-30" }, agora)).toBe(false);
+    expect(interacaoAgendada({ ocorridaEm: "2026-07-01" }, agora)).toBe(false);
+    expect(interacaoAgendada({ ocorridaEm: "" }, agora)).toBe(false);
+    // Reunião marcada para semana que vem não pode zerar o silêncio da conta.
+    const dias = diasSemContato([
+      { id: "reuniao-antiga", ocorridaEm: "2026-08-10" },
+      { id: "reuniao-marcada", ocorridaEm: "2026-09-05", tipo: "reuniao", assunto: "Alinhamento" },
+    ], agora);
+    expect(dias).toBe(20);
+  });
+
+  it("reunião agendada entra nos próximos compromissos ao lado do próximo passo", () => {
+    const agora = new Date("2026-08-30T12:00:00Z");
+    const passos = proximosPassos([
+      { id: "reun-1", tipo: "reuniao", assunto: "Diagnóstico ESG", ocorridaEm: "2026-09-03", clientId: "cli-1" },
+      { id: "passo-1", proximoPasso: "Enviar minuta", proximoPassoEm: "2026-09-05", ocorridaEm: "2026-08-28", opportunityId: "opp-1" },
+    ], agora);
+    expect(passos.map((item) => item.id)).toEqual(["agendada:reun-1", "passo:passo-1"]);
+    expect(passos[0]).toMatchObject({ tipo: "agendada", passo: "Reunião · Diagnóstico ESG", quando: "2026-09-03", origem: "conta" });
+    expect(passos[1]).toMatchObject({ tipo: "proximo-passo", quando: "2026-09-05", origem: "oportunidade" });
   });
 });
