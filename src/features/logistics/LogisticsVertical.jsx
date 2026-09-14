@@ -180,6 +180,19 @@ const FluxosPage = lazy(() => import("./pages/FluxosPage.jsx"));
 const ErpManualPage = lazy(() => import("./pages/ErpManualPage.jsx"));
 const ClientActivationPage = lazy(() => import("./ClientActivationPage.jsx"));
 const DriverFleetCenterPage = lazy(() => import("./pages/DriverFleetCenterPage.jsx"));
+// Páginas das 6 lacunas dos 26 blocos (aprimoramentos aditivos).
+const TenantAccessPage = lazy(() => import("./pages/TenantAccessPage.jsx"));
+const CorporateAccountPage = lazy(() => import("./pages/CorporateAccountPage.jsx"));
+const RoamingPage = lazy(() => import("./pages/RoamingPage.jsx"));
+const EnergyPeakSavingsPage = lazy(() => import("./pages/EnergyPeakSavingsPage.jsx"));
+const AlertQueuePage = lazy(() => import("./pages/AlertQueuePage.jsx"));
+const GreenmobRentalPage = lazy(() => import("./pages/GreenmobRentalPage.jsx"));
+const SaasBillingPage = lazy(() => import("./pages/SaasBillingPage.jsx"));
+// Páginas do roadmap P0/P1/P2 (rodada seguinte, também aditiva).
+const GroupEntitiesPage = lazy(() => import("./pages/GroupEntitiesPage.jsx"));
+const OcppConsolePage = lazy(() => import("./pages/OcppConsolePage.jsx"));
+const GreenOnAppPage = lazy(() => import("./pages/GreenOnAppPage.jsx"));
+const PhysicalSafetyPage = lazy(() => import("./pages/PhysicalSafetyPage.jsx"));
 
 const iconMap = {
   Activity,
@@ -1004,6 +1017,101 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: "planner:manage",
     description: "Planos com tarefas, prazo, prioridade e checklist.",
   },
+  // Blocos das 6 lacunas dos 26 blocos All Green — cada tela abre uma rota
+  // canônica de módulo do TODO_GREEN_MODULE_CATALOG e mora na área dona do
+  // assunto. Read-only + simulador; a conexão com dado real vem em rodadas
+  // seguintes.
+  "tenant-acessos": {
+    title: "Perfis e permissões",
+    navLabel: "Perfis e permissões",
+    route: "/todogreen/tenant-acessos",
+    area: "administracao",
+    status: "functional",
+    description: "Matriz de papéis internos/externos, capacidades por papel e blindagem contra vazamento de capacidade interna em papel externo.",
+  },
+  "green-on-empresa": {
+    title: "Green On · B2B",
+    navLabel: "Green On · B2B",
+    route: "/todogreen/green-on-empresa",
+    area: "financeiro",
+    status: "functional",
+    permission: "finance:manage",
+    description: "Conta corporativa Green On: limite por sessão/dia/mês, autorização antes de cobrar, fatura consolidada e custo por km.",
+  },
+  "roaming-ocpi": {
+    title: "Roaming OCPI",
+    navLabel: "Roaming OCPI",
+    route: "/todogreen/roaming-ocpi",
+    area: "operacao",
+    status: "functional",
+    description: "Identificador OCPI, whitelist do token da rede parceira e rateio de sessão CPO / eMSP / cliente.",
+  },
+  "energia-peak": {
+    title: "Energia · BESS e pico",
+    navLabel: "BESS e pico",
+    route: "/todogreen/energia-peak",
+    area: "esg",
+    status: "functional",
+    description: "Peak shaving contra a demanda contratada, mix rede/solar/BESS, fração renovável efetiva e perda tomada→bateria.",
+  },
+  "fila-alertas": {
+    title: "Fila de alertas",
+    navLabel: "Fila de alertas",
+    route: "/todogreen/fila-alertas",
+    area: "operacao",
+    status: "functional",
+    description: "Alertas com severidade e SLA por criticidade, teto por operador (crítico nunca rebaixa) e taxa de falso positivo por regra.",
+  },
+  "greenmob-locacao": {
+    title: "Greenmob · Locação",
+    navLabel: "Greenmob · Locação",
+    route: "/todogreen/greenmob-locacao",
+    area: "frota",
+    status: "functional",
+    description: "Contrato de locação, avaria por momento (pré-existente ≠ cobrança), cobrança final derivada e devolução.",
+  },
+  "saas-billing": {
+    title: "SaaS · Billing",
+    navLabel: "SaaS · Billing",
+    route: "/todogreen/saas-billing",
+    area: "administracao",
+    status: "functional",
+    permission: "finance:manage",
+    description: "Contratação por módulo e métrica: base + excedente sobre franquia, desconto anual só se anual, análise de downgrade.",
+  },
+  // Rodada P0/P1/P2 — bases arquiteturais e produtos externos.
+  "core-grupo": {
+    title: "Core All Green",
+    navLabel: "Core do Grupo",
+    route: "/todogreen/core-grupo",
+    area: "administracao",
+    status: "functional",
+    description: "Veículo, motorista, carregador e conta como registros do Grupo — cada negócio (TDG, Green On, Greenmob) enxerga por exposição declarada. UMA linha compartilhada em vez de três duplicadas.",
+  },
+  "ocpp-console": {
+    title: "OCPP Console",
+    navLabel: "OCPP Console",
+    route: "/todogreen/ocpp-console",
+    area: "operacao",
+    status: "functional",
+    description: "Valida CALL do carregador, gera CALLRESULT, monta comandos CSMS-initiated (RemoteStart/Stop, UnlockConnector) e simula a máquina de estado do conector segundo OCPP 1.6-J.",
+  },
+  "green-on-app": {
+    title: "Green On App · B2C",
+    navLabel: "Green On App",
+    route: "/todogreen/green-on-app",
+    area: "operacao",
+    status: "functional",
+    description: "Jornada do usuário fim-a-fim: buscar estação, reservar com tolerância, autenticar por QR, sessão ao vivo com preço travado, pagamento e recibo.",
+  },
+  "seguranca-fisica": {
+    title: "Segurança física",
+    navLabel: "Segurança física",
+    route: "/todogreen/seguranca-fisica",
+    area: "operacao",
+    status: "functional",
+    description: "Bloqueio remoto com barreiras (contexto proibido, velocidade, dupla autorização), senha de coação e escalonamento por inexecução de contato.",
+  },
 });
 
 // A taxonomia de áreas é a da titular (mensagem de 30/08): cada área da
@@ -1018,6 +1126,11 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // nunca "Workspace" (rotulosNaoBanidos). `jornadasInternas`: o menu não
   // repete o que o Espaço já mostra dentro.
   { id: "principal", label: "Principal", route: "/todogreen/dashboard", pages: ["dashboard"] },
+  // Área dedicada às 11 telas do roadmap All Green (rodadas de 14/09). A
+  // titular pediu para agrupar tudo o que foi construído aqui embaixo do
+  // "Green Tech Core" — assim as telas ficam num único menu visível no topo,
+  // sem depender de expandir os grupos antigos (Administração, Operação…).
+  { id: "green-tech-core", label: "Green Tech Core", route: "/todogreen/core-grupo", pages: ["core-grupo", "tenant-acessos", "green-on-empresa", "roaming-ocpi", "energia-peak", "fila-alertas", "greenmob-locacao", "saas-billing", "ocpp-console", "green-on-app", "seguranca-fisica"] },
   { id: "espaco-trabalho", label: "Espaço de trabalho", route: "/todogreen/espaco", pages: ["espaco", "central-trabalho", "visualizacoes", "agentes-funcoes", "avancos", "planner", "implantacao", "solicitacoes"], jornadasInternas: ["central-trabalho", "visualizacoes", "agentes-funcoes"] },
   // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
   // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
@@ -2939,7 +3052,10 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
   // Menu em acordeão (pedido da titular): áreas na frente; dentro de cada
   // área, o segundo nível com as funcionalidades dela. A área da tela atual
   // abre sozinha; as que a pessoa abrir à mão ficam na sessão.
-  const [areasAbertas, setAreasAbertas] = useState(() => new Set());
+  // Green Tech Core vem ABERTA por padrão para as 11 telas do roadmap
+  // aparecerem sem depender de expandir um chevron (pedido da titular:
+  // "eu acesso a plataforma e não vejo as alterações").
+  const [areasAbertas, setAreasAbertas] = useState(() => new Set(["green-tech-core"]));
   const abrirArea = useCallback((id) => {
     setAreasAbertas((atual) => (atual.has(id) ? atual : new Set([...atual, id])));
   }, []);
@@ -2981,6 +3097,50 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       return proximo;
     });
   }, []);
+  // Ordem PERSONALIZADA das áreas do menu (por usuário, persistida). Vazio =
+  // ordem canônica do PRIMARY_NAVIGATION. Ao mover, salvamos a lista INTEIRA
+  // (todas as áreas na ordem que a pessoa escolheu) — quando uma área nova
+  // aparece no catálogo, ela vai para o fim automaticamente.
+  const [areasOrdem, setAreasOrdem] = useState(() => {
+    try {
+      const salvo = JSON.parse(localStorage.getItem("todogreen-menu-areas-ordem") || "[]");
+      return Array.isArray(salvo) ? salvo : [];
+    } catch { return []; }
+  });
+  const salvarOrdem = useCallback((lista) => {
+    try { localStorage.setItem("todogreen-menu-areas-ordem", JSON.stringify(lista)); } catch { /* ok */ }
+  }, []);
+  const moverArea = useCallback((id, direcao) => {
+    setAreasOrdem((atual) => {
+      const idsCanonicos = PRIMARY_NAVIGATION.map((a) => a.id);
+      // Se a pessoa ainda não personalizou, começamos da ordem canônica —
+      // assim o primeiro clique já vira uma lista completa e persistente.
+      const base = atual.length ? atual.filter((x) => idsCanonicos.includes(x)) : idsCanonicos.slice();
+      for (const canon of idsCanonicos) if (!base.includes(canon)) base.push(canon);
+      const idx = base.indexOf(id);
+      if (idx < 0) return atual;
+      const alvo = idx + direcao;
+      if (alvo < 0 || alvo >= base.length) return atual;
+      const proximo = base.slice();
+      [proximo[idx], proximo[alvo]] = [proximo[alvo], proximo[idx]];
+      salvarOrdem(proximo);
+      return proximo;
+    });
+  }, [salvarOrdem]);
+  const restaurarOrdem = useCallback(() => {
+    setAreasOrdem([]);
+    try { localStorage.removeItem("todogreen-menu-areas-ordem"); } catch { /* ok */ }
+  }, []);
+  const areasOrdenadas = useMemo(() => {
+    if (!areasOrdem.length) return PRIMARY_NAVIGATION;
+    const idsCanonicos = PRIMARY_NAVIGATION.map((a) => a.id);
+    const listaValida = areasOrdem.filter((id) => idsCanonicos.includes(id));
+    const emOrdem = listaValida
+      .map((id) => PRIMARY_NAVIGATION.find((a) => a.id === id))
+      .filter(Boolean);
+    const resto = PRIMARY_NAVIGATION.filter((a) => !listaValida.includes(a.id));
+    return [...emOrdem, ...resto];
+  }, [areasOrdem]);
   // `access` chega vazio hoje; se um dia vier preenchido, ainda precisa passar
   // pela mesma leitura — a origem é que decide, não o formato.
   const [remoteAccess, setRemoteAccess] = useState(() => lerRespostaDeAcesso(access) || {});
@@ -3303,8 +3463,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                 className={`tdg-menu-personalizar${personalizando ? " ativo" : ""}`}
                 onClick={() => setPersonalizando((v) => !v)}
                 aria-pressed={personalizando}
-                aria-label="Escolher o que aparece no menu"
-                title="Escolher o que aparece no menu"
+                aria-label="Escolher o que aparece e a ordem do menu"
+                title="Escolher o que aparece e a ordem do menu"
               >
                 <SlidersHorizontal size={15} />
               </button>
@@ -3314,9 +3474,16 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             </div>
           </div>
           {personalizando && (
-            <p className="tdg-menu-personalizar-dica">
-              Marque o que quer ver no menu. O que ficar desmarcado some daqui — mas continua no buscador e por link direto.
-            </p>
+            <div className="tdg-menu-personalizar-caixa">
+              <p className="tdg-menu-personalizar-dica">
+                Marque o que quer ver no menu; use ↑ ↓ para escolher a ordem. O que ficar desmarcado some daqui — mas continua no buscador e por link direto.
+              </p>
+              {areasOrdem.length > 0 && (
+                <button type="button" className="tdg-menu-restaurar-ordem" onClick={restaurarOrdem}>
+                  Restaurar ordem padrão
+                </button>
+              )}
+            </div>
           )}
           {/* "Início": a titular sentiu falta de um botão de casa sempre à mão.
               "Principal" existe como área no meio da lista, mas de dentro de uma
@@ -3338,6 +3505,20 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <strong>Projetos e tarefas</strong>
             <small>Boards, Kanban, Gantt e Workload</small>
           </button>
+          {/* Verticais irmãs (Green On e Greenmob): quem opera nas três precisa
+              trocar de ambiente sem digitar URL. A vertical de origem (To Do
+              Green) preserva TODAS as suas telas; estes atalhos abrem apenas o
+              shell específico de cada vertical. */}
+          <div className="tdg-verticais-links" role="group" aria-label="Outras verticais da plataforma">
+            <a href="/greenon" className="tdg-vertical-link">
+              <strong>Green On</strong>
+              <small>Recarga e energia — CRM, sites, operação</small>
+            </a>
+            <a href="/greenmob" className="tdg-vertical-link">
+              <strong>Greenmob</strong>
+              <small>Locação de veículos elétricos — CRM, frota, contratos</small>
+            </a>
+          </div>
           {/* Um menu só, do jeito que a titular pediu: as áreas na frente e,
               dentro de cada área, o segundo nível com todas as funcionalidades
               dela. A busca fica sempre à mão e, enquanto há termo digitado,
@@ -3366,7 +3547,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             </nav>
           ) : (
             <nav className="tdg-nav-areas" aria-label="Navegação To Do Green">
-              {PRIMARY_NAVIGATION.map((item) => {
+              {areasOrdenadas.map((item, idxNaLista) => {
                 const ocultaDaLista = areasOcultas.has(item.id);
                 // Fora do modo personalizar, área desmarcada não aparece.
                 if (ocultaDaLista && !personalizando) return null;
@@ -3402,6 +3583,30 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                           aria-label={`Mostrar ${item.label} no menu`}
                           title={ocultaDaLista ? `Mostrar ${item.label}` : `Esconder ${item.label}`}
                         />
+                      )}
+                      {personalizando && (
+                        <span className="tdg-nav-area-ordem" role="group" aria-label={`Reordenar ${item.label}`}>
+                          <button
+                            type="button"
+                            className="tdg-nav-area-mover"
+                            aria-label={`Mover ${item.label} para cima`}
+                            title="Mover para cima"
+                            disabled={idxNaLista === 0}
+                            onClick={() => moverArea(item.id, -1)}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="tdg-nav-area-mover"
+                            aria-label={`Mover ${item.label} para baixo`}
+                            title="Mover para baixo"
+                            disabled={idxNaLista === areasOrdenadas.length - 1}
+                            onClick={() => moverArea(item.id, 1)}
+                          >
+                            ↓
+                          </button>
+                        </span>
                       )}
                       <button
                         type="button"
@@ -3575,6 +3780,17 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </Suspense>
       )}
       {page === "energia" && <Suspense fallback={<section className="tdg-panel">Carregando energia...</section>}><EnergyPage authHeaders={authHeaders} /></Suspense>}
+      {page === "tenant-acessos" && <Suspense fallback={<section className="tdg-panel">Carregando perfis...</section>}><TenantAccessPage /></Suspense>}
+      {page === "green-on-empresa" && <Suspense fallback={<section className="tdg-panel">Carregando conta corporativa...</section>}><CorporateAccountPage /></Suspense>}
+      {page === "roaming-ocpi" && <Suspense fallback={<section className="tdg-panel">Carregando roaming...</section>}><RoamingPage /></Suspense>}
+      {page === "energia-peak" && <Suspense fallback={<section className="tdg-panel">Carregando BESS e pico...</section>}><EnergyPeakSavingsPage /></Suspense>}
+      {page === "fila-alertas" && <Suspense fallback={<section className="tdg-panel">Carregando fila de alertas...</section>}><AlertQueuePage /></Suspense>}
+      {page === "greenmob-locacao" && <Suspense fallback={<section className="tdg-panel">Carregando Greenmob...</section>}><GreenmobRentalPage /></Suspense>}
+      {page === "saas-billing" && <Suspense fallback={<section className="tdg-panel">Carregando billing...</section>}><SaasBillingPage /></Suspense>}
+      {page === "core-grupo" && <Suspense fallback={<section className="tdg-panel">Carregando Core All Green...</section>}><GroupEntitiesPage /></Suspense>}
+      {page === "ocpp-console" && <Suspense fallback={<section className="tdg-panel">Carregando OCPP...</section>}><OcppConsolePage /></Suspense>}
+      {page === "green-on-app" && <Suspense fallback={<section className="tdg-panel">Carregando Green On App...</section>}><GreenOnAppPage /></Suspense>}
+      {page === "seguranca-fisica" && <Suspense fallback={<section className="tdg-panel">Carregando segurança...</section>}><PhysicalSafetyPage /></Suspense>}
       {page === "central-esg" && (
         <Suspense fallback={<section className="tdg-panel">Carregando Central ESG...</section>}>
           <EsgCenter authHeaders={authHeaders} setToast={setToast} />

@@ -49,6 +49,18 @@ describe("roteador principal", () => {
   it("entrega as demais rotas ao ambiente principal", () => {
     expect(resolvePrimaryRoute("/", true).kind).toBe("workspace");
   });
+
+  it("reconhece as verticais irmãs Green On e Greenmob quando autenticado", () => {
+    expect(resolvePrimaryRoute("/greenon", true).kind).toBe("greenon");
+    expect(resolvePrimaryRoute("/greenon/crm", true).kind).toBe("greenon");
+    expect(resolvePrimaryRoute("/greenmob", true).kind).toBe("greenmob");
+    expect(resolvePrimaryRoute("/greenmob/contratos", true).kind).toBe("greenmob");
+  });
+
+  it("Green On e Greenmob caem no login padrão sem sessão (não confundem com portais externos)", () => {
+    expect(resolvePrimaryRoute("/greenon", false).kind).toBe("login");
+    expect(resolvePrimaryRoute("/greenmob", false).kind).toBe("login");
+  });
 });
 
 // Seções 22–23 da consolidação: ERP, TMS e Central de Frota compartilham UMA
