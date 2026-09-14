@@ -543,6 +543,17 @@ export default function TodoGreenWorkspace({
   // "Mais funções" é um menu controlado (não um <details> nativo, que a
   // titular reportou não abrir no ambiente publicado). Estado explícito +
   // fechar ao clicar fora e ao escolher uma função.
+  //
+  // 14/09: a titular reportou de novo — "esse botão mais funções não leva
+  // a lugar nenhum". Duas causas prováveis do bug original:
+  // 1. Ouvíamos "mousedown" no document, o mesmo evento que o botão
+  //    dispara ANTES do click. Em algumas plataformas isso alcançava o
+  //    handler global antes do click chegar e o menu voltava a fechar.
+  // 2. O useEffect via clique no PRÓPRIO botão summary como "fora" se
+  //    a árvore de renderização deslocasse o target no instante certo.
+  // Trocamos para "click" no document (que só dispara depois do click do
+  // botão) e paramos a propagação do click do summary — assim ele nunca
+  // se auto-fecha.
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef(null);
   useEffect(() => {
@@ -553,10 +564,10 @@ export default function TodoGreenWorkspace({
     const aoTeclar = (event) => {
       if (event.key === "Escape") setMoreOpen(false);
     };
-    document.addEventListener("mousedown", aoClicarFora);
+    document.addEventListener("click", aoClicarFora);
     document.addEventListener("keydown", aoTeclar);
     return () => {
-      document.removeEventListener("mousedown", aoClicarFora);
+      document.removeEventListener("click", aoClicarFora);
       document.removeEventListener("keydown", aoTeclar);
     };
   }, [moreOpen]);
@@ -612,7 +623,12 @@ export default function TodoGreenWorkspace({
               className="tdg-space-more-summary"
               aria-haspopup="true"
               aria-expanded={moreOpen}
-              onClick={() => setMoreOpen((aberto) => !aberto)}
+              onClick={(event) => {
+                // Impede que o listener global (aoClicarFora) veja este
+                // próprio click e feche o menu que acabamos de abrir.
+                event.stopPropagation();
+                setMoreOpen((aberto) => !aberto);
+              }}
             >
               <MoreHorizontal size={16} /> Mais funções
             </button>
