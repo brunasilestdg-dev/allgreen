@@ -1156,6 +1156,15 @@
   padding: 0 6px;
 }
 
+/* Filho marcado como `.full` ocupa a linha inteira do grid do formulário —
+   sem essa regra o "Itens" e o "tdg-form-actions" caíam em colunas irmãs e
+   os botões viravam torres esticadas (visto em Compras, 14/09). Mesmo padrão
+   já usado em .tdg-automation-builder, .tdg-detail-form e .tdg-board-config. */
+.tdg-access-form > .full,
+.tdg-form > .full {
+  grid-column: 1 / -1;
+}
+
 .tdg label { display: grid; gap: 6px; }
 .tdg label span { color: var(--tdg-ink); font-size: 12px; font-weight: 760; }
 

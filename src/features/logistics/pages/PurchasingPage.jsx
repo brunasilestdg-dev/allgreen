@@ -392,33 +392,51 @@ export default function PurchasingPage({ authHeaders, setToast, registros }) {
           da tela (rodada "nada corta a tela", 30/08). */}
       {mostrarForm && (
         <Modal title="Nova requisição" onClose={() => setMostrarForm(false)} wide>
-        <form className="tdg-form tdg-form-em-modal" onSubmit={enviar}>
+        <form className="tdg-form tdg-form-em-modal tdg-req-form" onSubmit={enviar}>
           <label className="full"><span>O que precisa ser comprado</span><input value={form.title} onChange={(e) => alterar("title", e.target.value)} required maxLength={160} /></label>
           <label><span>Área solicitante</span><select value={form.area} onChange={(e) => alterar("area", e.target.value)}><option value="">Não informada</option>{AREAS_SOLICITANTES.map((a) => <option value={a} key={a}>{a}</option>)}</select></label>
           <label><span>Prioridade</span><select value={form.prioridade} onChange={(e) => alterar("prioridade", e.target.value)}><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></label>
           <label><span>Precisa em</span><input type="date" value={form.precisaEm} onChange={(e) => alterar("precisaEm", e.target.value)} /></label>
           <label><span>Centro de custo</span><select value={form.costCenterId} onChange={(e) => alterar("costCenterId", e.target.value)}><option value="">Não informado</option>{centrosDeCusto.map((centro) => <option value={centro.id} key={centro.id}>{centro.nome}</option>)}</select></label>
-          <label className="full"><span>Justificativa</span><input value={form.justificativa} onChange={(e) => alterar("justificativa", e.target.value)} maxLength={400} /></label>
-          <div className="full">
-            <strong>Itens</strong>
+          <label className="wide"><span>Justificativa</span><input value={form.justificativa} onChange={(e) => alterar("justificativa", e.target.value)} maxLength={400} placeholder="Por que essa compra é necessária" /></label>
+          <div className="full tdg-req-itens">
+            <div className="tdg-req-itens-head">
+              <strong>Itens</strong>
+              <small>Preencha material, quantidade e preço estimado de cada linha.</small>
+            </div>
             {form.linhas.map((linha, indice) => (
-              <div className="tdg-form-row" key={`linha-${indice}`}>
-                <select value={linha.itemId} onChange={(e) => alterarLinha(indice, "itemId", e.target.value)} aria-label="Material">
-                  <option value="">Selecione o material</option>
-                  {itens.map((item) => <option value={item.id} key={item.id}>{nomeDoItem(item.id)}</option>)}
-                </select>
-                <input placeholder="Descrição livre" aria-label="Descrição do item" value={linha.descricao} onChange={(e) => alterarLinha(indice, "descricao", e.target.value)} />
-                <input type="number" step="0.001" min="0" placeholder="Quantidade" aria-label="Quantidade" value={linha.quantity} onChange={(e) => alterarLinha(indice, "quantity", e.target.value)} />
-                <input type="number" step="0.01" min="0" placeholder="Preço estimado" aria-label="Preço unitário estimado" value={linha.estimatedUnitPrice} onChange={(e) => alterarLinha(indice, "estimatedUnitPrice", e.target.value)} />
-                <span>{dinheiro(totalDaLinha({ quantity: Number(linha.quantity || 0), unitPrice: Number(linha.estimatedUnitPrice || 0) }))}</span>
-                <button type="button" onClick={() => removerLinha(indice)} disabled={form.linhas.length === 1}>Remover</button>
+              <div className="tdg-req-item-row" key={`linha-${indice}`}>
+                <label className="tdg-req-col-material">
+                  <span>Material</span>
+                  <select value={linha.itemId} onChange={(e) => alterarLinha(indice, "itemId", e.target.value)}>
+                    <option value="">Selecione o material</option>
+                    {itens.map((item) => <option value={item.id} key={item.id}>{nomeDoItem(item.id)}</option>)}
+                  </select>
+                </label>
+                <label className="tdg-req-col-desc">
+                  <span>Descrição livre</span>
+                  <input value={linha.descricao} onChange={(e) => alterarLinha(indice, "descricao", e.target.value)} placeholder="Detalhe se o material não está no cadastro" />
+                </label>
+                <label className="tdg-req-col-qty">
+                  <span>Quantidade</span>
+                  <input type="number" step="0.001" min="0" value={linha.quantity} onChange={(e) => alterarLinha(indice, "quantity", e.target.value)} />
+                </label>
+                <label className="tdg-req-col-price">
+                  <span>Preço estimado</span>
+                  <input type="number" step="0.01" min="0" value={linha.estimatedUnitPrice} onChange={(e) => alterarLinha(indice, "estimatedUnitPrice", e.target.value)} />
+                </label>
+                <div className="tdg-req-col-total">
+                  <span>Total</span>
+                  <strong>{dinheiro(totalDaLinha({ quantity: Number(linha.quantity || 0), unitPrice: Number(linha.estimatedUnitPrice || 0) }))}</strong>
+                </div>
+                <button type="button" className="tdg-req-remover" onClick={() => removerLinha(indice)} disabled={form.linhas.length === 1} aria-label={`Remover item ${indice + 1}`}>Remover</button>
               </div>
             ))}
-            <button type="button" onClick={novaLinha}>+ Adicionar item</button>
+            <button type="button" className="tdg-req-add" onClick={novaLinha}>+ Adicionar item</button>
           </div>
           <div className="tdg-form-actions full">
-            <button className="tdg-action" type="submit" disabled={ocupado === "salvando"}>{ocupado === "salvando" ? "Registrando..." : "Registrar requisição"}</button>
             <button type="button" onClick={() => setMostrarForm(false)}>Cancelar</button>
+            <button className="tdg-action" type="submit" disabled={ocupado === "salvando"}>{ocupado === "salvando" ? "Registrando..." : "Registrar requisição"}</button>
           </div>
         </form>
         </Modal>
