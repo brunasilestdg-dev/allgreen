@@ -2121,6 +2121,33 @@
 .tdg-work-entry.active small,
 .tdg-work-entry:hover small,
 .tdg-work-entry:focus-visible small { color: #cfe5d9; }
+/* Atalhos para as verticais irmãs (Green On / Greenmob). Ficam abaixo do
+   "Projetos e tarefas", em cartões claros para diferenciar da vertical em
+   uso; só levam à raiz de cada uma — nenhuma tela da To Do Green muda. */
+.tdg-verticais-links {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.tdg-vertical-link {
+  align-items: flex-start;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  color: var(--tdg-ink, #143229);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+.tdg-vertical-link:hover,
+.tdg-vertical-link:focus-visible {
+  border-color: var(--tdg-green, #1b7a5a);
+  outline: none;
+  background: var(--tdg-soft, #e8f5ef);
+}
+.tdg-vertical-link strong { font-size: .8rem; color: var(--tdg-green, #1b7a5a); }
+.tdg-vertical-link small { font-size: .68rem; color: var(--tdg-muted, #52645c); line-height: 1.3; }
 /* "Início": atalho de casa sempre visível no topo do menu. Cartão claro com
    ícone, distinto da entrada escura de "Projetos e tarefas" logo abaixo. */
 .tdg-home-entry {

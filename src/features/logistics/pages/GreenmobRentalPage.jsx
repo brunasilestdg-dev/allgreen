@@ -1,12 +1,17 @@
 import { useMemo, useState } from "react";
 import { CarFront, ClipboardList, Wrench } from "lucide-react";
+// P0 (14/09): consolidado com o PR #383 do Codex — o domínio agora vive
+// em src/features/greenmob/greenmobRentalDomain.js junto com a API do
+// CRM/frota (createRentalContract, fleetStatusSummary, excessKmCharge).
+// A vertical /greenmob usa a API em inglês; esta página do TDG usa a API
+// pt-BR (fluxo operacional) do MESMO arquivo — nada mais duplicado.
 import {
   criarContrato,
   registrarAvaria,
   cobrancaFinal,
   registrarDevolucao,
   kmRodados,
-} from "../greenmobRentalDomain.js";
+} from "../../greenmob/greenmobRentalDomain.js";
 import "./TodoGreenPages.css";
 
 // Greenmob — locação (bloco 21). Contrato, avaria com momento (pré/durante),

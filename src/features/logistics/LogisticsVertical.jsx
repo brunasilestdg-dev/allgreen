@@ -3472,6 +3472,20 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <strong>Projetos e tarefas</strong>
             <small>Boards, Kanban, Gantt e Workload</small>
           </button>
+          {/* Verticais irmãs (Green On e Greenmob): quem opera nas três precisa
+              trocar de ambiente sem digitar URL. A vertical de origem (To Do
+              Green) preserva TODAS as suas telas; estes atalhos abrem apenas o
+              shell específico de cada vertical. */}
+          <div className="tdg-verticais-links" role="group" aria-label="Outras verticais da plataforma">
+            <a href="/greenon" className="tdg-vertical-link">
+              <strong>Green On</strong>
+              <small>Recarga e energia — CRM, sites, operação</small>
+            </a>
+            <a href="/greenmob" className="tdg-vertical-link">
+              <strong>Greenmob</strong>
+              <small>Locação de veículos elétricos — CRM, frota, contratos</small>
+            </a>
+          </div>
           {/* Um menu só, do jeito que a titular pediu: as áreas na frente e,
               dentro de cada área, o segundo nível com todas as funcionalidades
               dela. A busca fica sempre à mão e, enquanto há termo digitado,
