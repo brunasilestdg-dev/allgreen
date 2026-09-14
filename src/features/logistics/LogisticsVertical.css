@@ -2030,6 +2030,36 @@
 }
 .tdg-nav-area-check { accent-color: var(--tdg-green, #1b7a5a); flex: none; height: 16px; width: 16px; cursor: pointer; }
 .tdg-nav-area.oculta-preview { opacity: .5; }
+.tdg-nav-area-ordem { display: inline-flex; gap: 2px; margin-right: 4px; }
+.tdg-nav-area-mover {
+  align-items: center;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #d8e0da);
+  border-radius: 4px;
+  color: var(--tdg-ink, #1a2b21);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 20px;
+}
+.tdg-nav-area-mover:hover:not(:disabled) { background: var(--tdg-soft, #eef6f1); color: var(--tdg-green, #1b7a5a); }
+.tdg-nav-area-mover:disabled { cursor: not-allowed; opacity: .35; }
+.tdg-menu-personalizar-caixa { display: flex; flex-direction: column; gap: 6px; }
+.tdg-menu-restaurar-ordem {
+  align-self: start;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #d8e0da);
+  border-radius: 6px;
+  color: var(--tdg-ink, #1a2b21);
+  cursor: pointer;
+  font-size: .72rem;
+  padding: 4px 8px;
+}
+.tdg-menu-restaurar-ordem:hover { background: var(--tdg-soft, #eef6f1); color: var(--tdg-green, #1b7a5a); }
 .tdg-menu-mostrar {
   align-items: center;
   align-self: start;
@@ -2091,6 +2121,33 @@
 .tdg-work-entry.active small,
 .tdg-work-entry:hover small,
 .tdg-work-entry:focus-visible small { color: #cfe5d9; }
+/* Atalhos para as verticais irmãs (Green On / Greenmob). Ficam abaixo do
+   "Projetos e tarefas", em cartões claros para diferenciar da vertical em
+   uso; só levam à raiz de cada uma — nenhuma tela da To Do Green muda. */
+.tdg-verticais-links {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.tdg-vertical-link {
+  align-items: flex-start;
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line, #dce7e2);
+  border-radius: 9px;
+  color: var(--tdg-ink, #143229);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+.tdg-vertical-link:hover,
+.tdg-vertical-link:focus-visible {
+  border-color: var(--tdg-green, #1b7a5a);
+  outline: none;
+  background: var(--tdg-soft, #e8f5ef);
+}
+.tdg-vertical-link strong { font-size: .8rem; color: var(--tdg-green, #1b7a5a); }
+.tdg-vertical-link small { font-size: .68rem; color: var(--tdg-muted, #52645c); line-height: 1.3; }
 /* "Início": atalho de casa sempre visível no topo do menu. Cartão claro com
    ícone, distinto da entrada escura de "Projetos e tarefas" logo abaixo. */
 .tdg-home-entry {

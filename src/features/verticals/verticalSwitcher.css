@@ -1,0 +1,47 @@
+/* ===== Seletor de verticais compartilhado ===== */
+
+.verticais-switcher {
+  display: grid;
+  gap: var(--ds-space-3, 12px);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.verticais-switcher.is-compact {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.verticais-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md, 8px);
+  background: var(--ds-surface);
+  color: var(--ds-ink);
+  text-decoration: none;
+}
+.verticais-item:hover { border-color: var(--ds-brand); background: var(--ds-surface-soft); }
+.verticais-item.is-current {
+  border-color: var(--ds-brand);
+  background: var(--ds-surface-soft);
+  box-shadow: 0 0 0 2px rgba(23, 98, 79, 0.08);
+}
+
+.verticais-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.verticais-item-head strong { font-size: 16px; }
+.verticais-item-subtitle { margin: 0; color: var(--ds-ink-muted); font-size: 13px; }
+.verticais-item-modules {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 0;
+  color: var(--ds-ink-muted);
+  font-size: 12px;
+}
+.verticais-item-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ds-brand);
+  font-weight: 600;
+}
