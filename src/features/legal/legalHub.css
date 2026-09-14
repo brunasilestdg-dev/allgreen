@@ -1,0 +1,403 @@
+.legal-hub {
+  --lgl-accent: #6c5ce7;
+  --lgl-warn: #c98a09;
+  --lgl-danger: #b8231c;
+  --lgl-ok: #0e9d7a;
+  --lgl-ink: var(--ink, #17152b);
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  color: var(--lgl-ink);
+}
+
+.legal-hub .lgl-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 95% 0, color-mix(in srgb, var(--lgl-accent) 22%, transparent), transparent 42%),
+    var(--surface);
+  border-radius: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.legal-hub .lgl-header h1 {
+  margin: 4px 0 6px;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  letter-spacing: -0.03em;
+}
+
+.legal-hub .lgl-header p {
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.legal-hub .lgl-eyebrow {
+  color: var(--lgl-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.legal-hub .lgl-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 14px;
+}
+
+.legal-hub .lgl-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--lgl-ink);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.legal-hub .lgl-tabs button.active {
+  border-color: color-mix(in srgb, var(--lgl-accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--lgl-accent) 10%, var(--surface));
+  color: var(--lgl-accent);
+}
+
+.legal-hub .lgl-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.legal-hub .lgl-metrics article {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.legal-hub .lgl-metrics small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.legal-hub .lgl-metrics strong {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.legal-hub .lgl-metrics article.warn strong {
+  color: var(--lgl-warn);
+}
+
+.legal-hub .lgl-metrics article.danger strong {
+  color: var(--lgl-danger);
+}
+
+.legal-hub .lgl-metrics article.ok strong {
+  color: var(--lgl-ok);
+}
+
+.legal-hub .lgl-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.legal-hub .lgl-panel h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.legal-hub .lgl-panel p.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.legal-hub .lgl-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.legal-hub .lgl-actions button,
+.legal-hub .lgl-form-actions button {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--lgl-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.legal-hub .lgl-actions button.primary,
+.legal-hub .lgl-form-actions button.primary {
+  background: var(--lgl-accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.legal-hub .lgl-actions button.danger {
+  color: var(--lgl-danger);
+}
+
+.legal-hub .lgl-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(minmax(0, 220px), 1fr));
+  gap: 12px;
+}
+
+.legal-hub .lgl-form label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.legal-hub .lgl-form label.wide {
+  grid-column: 1 / -1;
+}
+
+.legal-hub .lgl-form input,
+.legal-hub .lgl-form textarea,
+.legal-hub .lgl-form select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--lgl-ink);
+  font-size: 1rem;
+  min-height: 40px;
+}
+
+.legal-hub .lgl-form textarea {
+  min-height: 100px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.legal-hub .lgl-list {
+  display: grid;
+  gap: 10px;
+}
+
+.legal-hub .lgl-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.legal-hub .lgl-card.risk-alto {
+  border-left: 4px solid var(--lgl-warn);
+}
+
+.legal-hub .lgl-card.risk-critico {
+  border-left: 4px solid var(--lgl-danger);
+}
+
+.legal-hub .lgl-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.legal-hub .lgl-card small {
+  color: var(--muted);
+}
+
+.legal-hub .lgl-card .lgl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lgl-accent) 12%, var(--surface));
+  color: var(--lgl-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--lgl-accent) 20%, var(--border));
+}
+
+.legal-hub .lgl-chip.risco-baixo { color: var(--lgl-ok); background: color-mix(in srgb, var(--lgl-ok) 10%, var(--surface)); border-color: color-mix(in srgb, var(--lgl-ok) 25%, var(--border)); }
+.legal-hub .lgl-chip.risco-medio { color: var(--lgl-warn); background: color-mix(in srgb, var(--lgl-warn) 10%, var(--surface)); border-color: color-mix(in srgb, var(--lgl-warn) 25%, var(--border)); }
+.legal-hub .lgl-chip.risco-alto { color: var(--lgl-warn); background: color-mix(in srgb, var(--lgl-warn) 14%, var(--surface)); border-color: color-mix(in srgb, var(--lgl-warn) 30%, var(--border)); }
+.legal-hub .lgl-chip.risco-critico { color: var(--lgl-danger); background: color-mix(in srgb, var(--lgl-danger) 12%, var(--surface)); border-color: color-mix(in srgb, var(--lgl-danger) 30%, var(--border)); }
+
+.legal-hub .lgl-chip.urgencia-vencido { color: var(--lgl-danger); background: color-mix(in srgb, var(--lgl-danger) 12%, var(--surface)); }
+.legal-hub .lgl-chip.urgencia-urgente { color: var(--lgl-warn); background: color-mix(in srgb, var(--lgl-warn) 15%, var(--surface)); }
+.legal-hub .lgl-chip.urgencia-atencao { color: var(--lgl-warn); background: color-mix(in srgb, var(--lgl-warn) 8%, var(--surface)); }
+.legal-hub .lgl-chip.urgencia-programado { color: var(--lgl-accent); background: color-mix(in srgb, var(--lgl-accent) 10%, var(--surface)); }
+
+.legal-hub .lgl-card footer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.legal-hub .lgl-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.legal-hub .lgl-alert-list {
+  display: grid;
+  gap: 8px;
+}
+
+.legal-hub .lgl-alert {
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--lgl-accent) 4%, var(--surface));
+}
+
+.legal-hub .lgl-alert.level-vencido { border-left: 4px solid var(--lgl-danger); }
+.legal-hub .lgl-alert.level-urgente { border-left: 4px solid var(--lgl-warn); }
+.legal-hub .lgl-alert.level-atencao { border-left: 4px solid #d4b407; }
+.legal-hub .lgl-alert.level-programado { border-left: 4px solid var(--lgl-accent); }
+
+.legal-hub .lgl-alert strong {
+  font-size: 0.95rem;
+}
+
+.legal-hub .lgl-alert small {
+  color: var(--muted);
+}
+
+.legal-hub .lgl-risk-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(minmax(0, 180px), 1fr));
+  gap: 10px;
+}
+
+.legal-hub .lgl-risk-cell {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: grid;
+  gap: 4px;
+}
+
+.legal-hub .lgl-search {
+  display: grid;
+  gap: 10px;
+}
+
+.legal-hub .lgl-search input {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--lgl-ink);
+  font-size: 1rem;
+}
+
+.legal-hub .lgl-search .result-kind {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--lgl-accent);
+  font-weight: 700;
+}
+
+.legal-hub .lgl-template-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(minmax(0, 220px), 1fr));
+  gap: 10px;
+}
+
+.legal-hub .lgl-template-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--lgl-ink);
+}
+
+.legal-hub .lgl-template-card:hover {
+  background: color-mix(in srgb, var(--lgl-accent) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--lgl-accent) 30%, var(--border));
+}
+
+.legal-hub .lgl-template-preview {
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lgl-accent) 5%, var(--surface));
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.legal-hub .lgl-approval-flow {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--lgl-accent) 5%, var(--surface));
+}
+
+.legal-hub .lgl-approval-flow header {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.legal-hub .lgl-badges {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.legal-hub .lgl-notice {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lgl-warn) 12%, var(--surface));
+  color: color-mix(in srgb, var(--lgl-warn) 60%, var(--lgl-ink));
+  border: 1px solid color-mix(in srgb, var(--lgl-warn) 30%, var(--border));
+  font-size: 0.85rem;
+}
