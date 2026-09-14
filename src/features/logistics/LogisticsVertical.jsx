@@ -171,7 +171,12 @@ const OperationEnginePage = lazy(() => import("./pages/OperationEnginePage.jsx")
 const GreenPayAdminPage = lazy(() => import("./pages/GreenPayAdminPage.jsx"));
 const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
 const QualityPage = lazy(() => import("./pages/QualityPage.jsx"));
-const LegalPage = lazy(() => import("./pages/LegalPage.jsx"));
+// TDG LegalPage (antigo) permanece disponível como fallback do fluxo legado
+// (aba "Fluxo antigo" dentro do LegalHub, se voltar). O menu do ERP passou
+// a montar a Central Jurídica nova (`LegalHub`) por cima da mesma tabela
+// canônica `todogreen_legal_records`. UM Jurídico só.
+const LegalPage = lazy(() => import("./pages/LegalPage.jsx")); // eslint-disable-line no-unused-vars
+const LegalHub = lazy(() => import("../legal/LegalHub.jsx"));
 const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
 const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
 const EnterpriseAreaPage = lazy(() => import("./pages/EnterpriseAreaPage.jsx"));
@@ -3863,7 +3868,31 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} interactions={verticalData.interactions} onComment={(registro) => criar("comments", registro)} onNavigate={navigate} setToast={setToast} /></Suspense>}
       {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><QualityPage registros={registros.quality} clients={clientes} operations={registros.operations} criar={criar} atualizar={atualizar} setToast={setToast} /></Suspense>}
       {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando inteligência de mercado...</section>}><TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={navigate} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "juridico" && <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}><LegalPage registros={registros.legal} clients={clientes} proposals={registros.proposals} criar={criar} setToast={setToast} authHeaders={authHeaders} listarSubrecurso={listarSubrecurso} recarregar={recarregarRegistros} juridico={hasTodoGreenPermission(role, "compliance:manage", remoteAccess.permissions)} /></Suspense>}
+      {page === "juridico" && (
+        <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}>
+          <LegalHub
+            db={db}
+            update={update}
+            business={db?.businesses?.find?.((b) => b.id === db?.activeBusiness) || null}
+            setToast={setToast}
+            authHeaders={authHeaders}
+            tdgAvailable
+            viewer={{
+              userId: db?.user?.id,
+              name: db?.user?.name,
+              // O jurídico canônico do TDG usa `compliance:manage` para saber
+              // quem valida/aprova. Aqui traduzimos para o papel que a nova
+              // UI entende (head_juridico = fila completa + aprovar).
+              role: hasTodoGreenPermission(role, "compliance:manage", remoteAccess.permissions)
+                ? "head_juridico"
+                : hasTodoGreenPermission(role, "compliance:read", remoteAccess.permissions)
+                  ? "juridico"
+                  : "solicitante",
+              isOwner: role === "owner",
+            }}
+          />
+        </Suspense>
+      )}
       {page === "indicadores" && <Suspense fallback={<section className="tdg-panel">Carregando indicadores...</section>}><EnterpriseAreaPage area="indicators" onNavigate={navigate} /></Suspense>}
       {page === "administracao" && <Suspense fallback={<section className="tdg-panel">Carregando administração...</section>}><EnterpriseAreaPage area="admin" onNavigate={navigate} /></Suspense>}
       {page === "relatorios" && <Suspense fallback={<section className="tdg-panel">Carregando relatórios...</section>}><ReportsPage dashboard={dashboard} data={verticalData} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
