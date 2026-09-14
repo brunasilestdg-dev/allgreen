@@ -3064,6 +3064,50 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       return proximo;
     });
   }, []);
+  // Ordem PERSONALIZADA das áreas do menu (por usuário, persistida). Vazio =
+  // ordem canônica do PRIMARY_NAVIGATION. Ao mover, salvamos a lista INTEIRA
+  // (todas as áreas na ordem que a pessoa escolheu) — quando uma área nova
+  // aparece no catálogo, ela vai para o fim automaticamente.
+  const [areasOrdem, setAreasOrdem] = useState(() => {
+    try {
+      const salvo = JSON.parse(localStorage.getItem("todogreen-menu-areas-ordem") || "[]");
+      return Array.isArray(salvo) ? salvo : [];
+    } catch { return []; }
+  });
+  const salvarOrdem = useCallback((lista) => {
+    try { localStorage.setItem("todogreen-menu-areas-ordem", JSON.stringify(lista)); } catch { /* ok */ }
+  }, []);
+  const moverArea = useCallback((id, direcao) => {
+    setAreasOrdem((atual) => {
+      const idsCanonicos = PRIMARY_NAVIGATION.map((a) => a.id);
+      // Se a pessoa ainda não personalizou, começamos da ordem canônica —
+      // assim o primeiro clique já vira uma lista completa e persistente.
+      const base = atual.length ? atual.filter((x) => idsCanonicos.includes(x)) : idsCanonicos.slice();
+      for (const canon of idsCanonicos) if (!base.includes(canon)) base.push(canon);
+      const idx = base.indexOf(id);
+      if (idx < 0) return atual;
+      const alvo = idx + direcao;
+      if (alvo < 0 || alvo >= base.length) return atual;
+      const proximo = base.slice();
+      [proximo[idx], proximo[alvo]] = [proximo[alvo], proximo[idx]];
+      salvarOrdem(proximo);
+      return proximo;
+    });
+  }, [salvarOrdem]);
+  const restaurarOrdem = useCallback(() => {
+    setAreasOrdem([]);
+    try { localStorage.removeItem("todogreen-menu-areas-ordem"); } catch { /* ok */ }
+  }, []);
+  const areasOrdenadas = useMemo(() => {
+    if (!areasOrdem.length) return PRIMARY_NAVIGATION;
+    const idsCanonicos = PRIMARY_NAVIGATION.map((a) => a.id);
+    const listaValida = areasOrdem.filter((id) => idsCanonicos.includes(id));
+    const emOrdem = listaValida
+      .map((id) => PRIMARY_NAVIGATION.find((a) => a.id === id))
+      .filter(Boolean);
+    const resto = PRIMARY_NAVIGATION.filter((a) => !listaValida.includes(a.id));
+    return [...emOrdem, ...resto];
+  }, [areasOrdem]);
   // `access` chega vazio hoje; se um dia vier preenchido, ainda precisa passar
   // pela mesma leitura — a origem é que decide, não o formato.
   const [remoteAccess, setRemoteAccess] = useState(() => lerRespostaDeAcesso(access) || {});
@@ -3386,8 +3430,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                 className={`tdg-menu-personalizar${personalizando ? " ativo" : ""}`}
                 onClick={() => setPersonalizando((v) => !v)}
                 aria-pressed={personalizando}
-                aria-label="Escolher o que aparece no menu"
-                title="Escolher o que aparece no menu"
+                aria-label="Escolher o que aparece e a ordem do menu"
+                title="Escolher o que aparece e a ordem do menu"
               >
                 <SlidersHorizontal size={15} />
               </button>
@@ -3397,9 +3441,16 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             </div>
           </div>
           {personalizando && (
-            <p className="tdg-menu-personalizar-dica">
-              Marque o que quer ver no menu. O que ficar desmarcado some daqui — mas continua no buscador e por link direto.
-            </p>
+            <div className="tdg-menu-personalizar-caixa">
+              <p className="tdg-menu-personalizar-dica">
+                Marque o que quer ver no menu; use ↑ ↓ para escolher a ordem. O que ficar desmarcado some daqui — mas continua no buscador e por link direto.
+              </p>
+              {areasOrdem.length > 0 && (
+                <button type="button" className="tdg-menu-restaurar-ordem" onClick={restaurarOrdem}>
+                  Restaurar ordem padrão
+                </button>
+              )}
+            </div>
           )}
           {/* "Início": a titular sentiu falta de um botão de casa sempre à mão.
               "Principal" existe como área no meio da lista, mas de dentro de uma
@@ -3449,7 +3500,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             </nav>
           ) : (
             <nav className="tdg-nav-areas" aria-label="Navegação To Do Green">
-              {PRIMARY_NAVIGATION.map((item) => {
+              {areasOrdenadas.map((item, idxNaLista) => {
                 const ocultaDaLista = areasOcultas.has(item.id);
                 // Fora do modo personalizar, área desmarcada não aparece.
                 if (ocultaDaLista && !personalizando) return null;
@@ -3485,6 +3536,30 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                           aria-label={`Mostrar ${item.label} no menu`}
                           title={ocultaDaLista ? `Mostrar ${item.label}` : `Esconder ${item.label}`}
                         />
+                      )}
+                      {personalizando && (
+                        <span className="tdg-nav-area-ordem" role="group" aria-label={`Reordenar ${item.label}`}>
+                          <button
+                            type="button"
+                            className="tdg-nav-area-mover"
+                            aria-label={`Mover ${item.label} para cima`}
+                            title="Mover para cima"
+                            disabled={idxNaLista === 0}
+                            onClick={() => moverArea(item.id, -1)}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="tdg-nav-area-mover"
+                            aria-label={`Mover ${item.label} para baixo`}
+                            title="Mover para baixo"
+                            disabled={idxNaLista === areasOrdenadas.length - 1}
+                            onClick={() => moverArea(item.id, 1)}
+                          >
+                            ↓
+                          </button>
+                        </span>
                       )}
                       <button
                         type="button"

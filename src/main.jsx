@@ -194,7 +194,13 @@ const checkPublishedVersion = async () => {
 // pessoa nunca mais ser avisada de uma versão nova. Uma aba pode ficar aberta
 // por dias.
 checkPublishedVersion();
-window.setInterval(checkPublishedVersion, 5 * 60_000);
+// A titular pediu 14/09: "precisa que todos os usuários sempre vejam a
+// última atualização". Reduzimos o intervalo de 5 min → 60 s: o custo é
+// uma requisição /api/status pequena a cada minuto (aba em foco), e o
+// benefício é que a versão nova aparece perto do imediato para quem
+// deixou a aba aberta. A janela de descoberta pelo SW já cai junto no
+// bloco abaixo.
+window.setInterval(checkPublishedVersion, 60_000);
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (event) => {
@@ -225,9 +231,12 @@ if ("serviceWorker" in navigator) {
         if (controlled) announceUpdate();
         controlled = true;
       });
+      // Mesma cadência do checkPublishedVersion (60 s): o SW procura versão
+      // nova ao mesmo tempo em que o app pergunta a versão publicada, para
+      // as duas coisas convergirem juntas.
       window.setInterval(() => {
         registration.update().catch(() => {});
-      }, 5 * 60_000);
+      }, 60_000);
     } catch {
       // O aplicativo continua funcionando normalmente sem o modo instalável.
     }
