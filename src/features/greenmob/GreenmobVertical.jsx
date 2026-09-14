@@ -19,6 +19,7 @@ import {
   PageHeader,
 } from "../../design-system/index.js";
 import VerticalSwitcher from "../verticals/VerticalSwitcher.jsx";
+import ModuleBadge, { moduleByKey } from "../verticals/ModuleBadge.jsx";
 import {
   GREENMOB_CLIENT_TYPES,
   GREENMOB_LOSS_REASONS,
@@ -923,11 +924,14 @@ export default function GreenmobVertical({ db, update, setToast }) {
 
   return (
     <div className="greenmob-shell">
+      <div className="greenmob-topbar">
+        <ModuleBadge module={moduleByKey("fleet")} href="/greenmob" size="md" />
+        <AtalhoVoltar />
+      </div>
       <PageHeader
         kicker="Greenmob"
         title="Locação de veículos elétricos"
         subtitle="CRM próprio, frota, contratos e devolução — a experiência da locação sem confundir com o CRM logístico."
-        actions={<AtalhoVoltar />}
       />
       <nav className="greenmob-tabs" aria-label="Áreas da vertical Greenmob">
         {NAV_TABS.map(({ id, label, icon: Icon }) => (

@@ -132,6 +132,13 @@
   overflow: hidden;
 }
 
+/* Símbolo do módulo (bloco 04 do material institucional All Green) no canto
+   superior esquerdo. Fica acima do breadcrumb e clica para o dashboard. */
+.tdg-shell-module-badge {
+  margin: 0 0 4px;
+  justify-self: start;
+}
+
 .tdg-shell-location span {
   color: var(--tdg-green);
   font-size: 10px;

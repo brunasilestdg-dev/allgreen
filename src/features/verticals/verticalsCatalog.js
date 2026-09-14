@@ -31,9 +31,9 @@ export const VERTICAIS = Object.freeze([
     status: "parcial",
     kicker: "Vertical de energia",
     modules: [
-      "CRM Green On (funil de energia)",
-      "Cadastro de sites",
-      "Painel de operação",
+      "CRM comercial completo (contas, contatos, oportunidades, funil)",
+      "Saúde da conta com pesos específicos de energia",
+      "Cadastro de sites e painel operacional",
       "Pontos, sessões e energia (reutilizados)",
     ],
   },

@@ -11,6 +11,15 @@
   color: var(--ds-ink);
 }
 
+/* Barra do topo: símbolo do módulo à esquerda, atalhos à direita. */
+.greenmob-topbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
 .greenmob-back {
   display: inline-flex;
   align-items: center;
