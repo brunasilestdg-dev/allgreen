@@ -719,6 +719,31 @@ export const TODO_GREEN_MODULE_CATALOG = [
     description: "Contratação e faturamento por módulo/métrica: base + excedente sobre franquia, desconto anual e análise de downgrade.",
     permissions: ["read", "finance:manage"],
   }),
+  // Rodada P0/P1/P2 do roadmap All Green.
+  module("core-grupo", "Core All Green", "administracao", "/todogreen/core-grupo", {
+    icon: "Network",
+    order: 66.3,
+    description: "Registros do Grupo (veículo, motorista, carregador, conta). UMA linha compartilhada entre TDG, Green On e Greenmob, com exposição declarada por período e escopo.",
+    permissions: ["read", "audit:read"],
+  }),
+  module("ocpp-console", "OCPP Console", "operacao", "/todogreen/ocpp-console", {
+    icon: "Zap",
+    order: 42.65,
+    description: "CSMS OCPP 1.6-J: valida CALL do carregador, gera CALLRESULT, monta comandos CSMS-initiated e simula a máquina de estado do conector.",
+    permissions: ["read", "operations:manage"],
+  }),
+  module("green-on-app", "Green On App B2C", "operacao", "/todogreen/green-on-app", {
+    icon: "Zap",
+    order: 42.75,
+    description: "Jornada B2C: buscar estação, reservar com tolerância, autenticar por QR, sessão ao vivo com preço travado, pagamento e recibo.",
+    permissions: ["read"],
+  }),
+  module("seguranca-fisica", "Segurança física", "operacao", "/todogreen/seguranca-fisica", {
+    icon: "ShieldCheck",
+    order: 51.4,
+    description: "Bloqueio remoto com barreiras (contexto, velocidade, dupla autorização), senha de coação e escalonamento por inexecução de contato.",
+    permissions: ["read", "operations:manage"],
+  }),
 ];
 
 export const TODO_GREEN_FEATURE_COUNT = TODO_GREEN_MODULE_CATALOG.length;

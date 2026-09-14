@@ -14,6 +14,11 @@ const NOVAS = [
   { id: "fila-alertas", area: "administracao" }, // no menu vive em Operação; a área do módulo é administracao pelo catálogo
   { id: "greenmob-locacao", area: "operacao" },
   { id: "saas-billing", area: "administracao" },
+  // Rodada P0/P1/P2 do roadmap.
+  { id: "core-grupo", area: "administracao" },
+  { id: "ocpp-console", area: "operacao" },
+  { id: "green-on-app", area: "operacao" },
+  { id: "seguranca-fisica", area: "operacao" },
 ];
 
 const catalogById = new Map(TODO_GREEN_MODULE_CATALOG.map((m) => [m.id, m]));

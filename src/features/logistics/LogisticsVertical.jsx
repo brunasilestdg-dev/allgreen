@@ -185,6 +185,11 @@ const EnergyPeakSavingsPage = lazy(() => import("./pages/EnergyPeakSavingsPage.j
 const AlertQueuePage = lazy(() => import("./pages/AlertQueuePage.jsx"));
 const GreenmobRentalPage = lazy(() => import("./pages/GreenmobRentalPage.jsx"));
 const SaasBillingPage = lazy(() => import("./pages/SaasBillingPage.jsx"));
+// Páginas do roadmap P0/P1/P2 (rodada seguinte, também aditiva).
+const GroupEntitiesPage = lazy(() => import("./pages/GroupEntitiesPage.jsx"));
+const OcppConsolePage = lazy(() => import("./pages/OcppConsolePage.jsx"));
+const GreenOnAppPage = lazy(() => import("./pages/GreenOnAppPage.jsx"));
+const PhysicalSafetyPage = lazy(() => import("./pages/PhysicalSafetyPage.jsx"));
 
 const iconMap = {
   Activity,
@@ -1041,6 +1046,39 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: "finance:manage",
     description: "Contratação por módulo e métrica: base + excedente sobre franquia, desconto anual só se anual, análise de downgrade.",
   },
+  // Rodada P0/P1/P2 — bases arquiteturais e produtos externos.
+  "core-grupo": {
+    title: "Core All Green",
+    navLabel: "Core do Grupo",
+    route: "/todogreen/core-grupo",
+    area: "administracao",
+    status: "functional",
+    description: "Veículo, motorista, carregador e conta como registros do Grupo — cada negócio (TDG, Green On, Greenmob) enxerga por exposição declarada. UMA linha compartilhada em vez de três duplicadas.",
+  },
+  "ocpp-console": {
+    title: "OCPP Console",
+    navLabel: "OCPP Console",
+    route: "/todogreen/ocpp-console",
+    area: "operacao",
+    status: "functional",
+    description: "Valida CALL do carregador, gera CALLRESULT, monta comandos CSMS-initiated (RemoteStart/Stop, UnlockConnector) e simula a máquina de estado do conector segundo OCPP 1.6-J.",
+  },
+  "green-on-app": {
+    title: "Green On App · B2C",
+    navLabel: "Green On App",
+    route: "/todogreen/green-on-app",
+    area: "operacao",
+    status: "functional",
+    description: "Jornada do usuário fim-a-fim: buscar estação, reservar com tolerância, autenticar por QR, sessão ao vivo com preço travado, pagamento e recibo.",
+  },
+  "seguranca-fisica": {
+    title: "Segurança física",
+    navLabel: "Segurança física",
+    route: "/todogreen/seguranca-fisica",
+    area: "operacao",
+    status: "functional",
+    description: "Bloqueio remoto com barreiras (contexto proibido, velocidade, dupla autorização), senha de coação e escalonamento por inexecução de contato.",
+  },
 });
 
 // A taxonomia de áreas é a da titular (mensagem de 30/08): cada área da
@@ -1064,7 +1102,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
   // indicadores) existia no menu. Um nome, um lugar.
-  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga", "roaming-ocpi", "fila-alertas"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
+  { id: "operations", label: "Operação", route: "/todogreen/operacoes", pages: ["operacoes", "ordens-servico", "ocorrencias", "roteirizacao", "pontos-recarga", "roaming-ocpi", "fila-alertas", "ocpp-console", "green-on-app", "seguranca-fisica"], extras: [["Cadastro · Bases e unidades", "/todogreen/cadastros?secao=operationalUnits"], ["Cadastro · Rotas padrão", "/todogreen/cadastros?secao=routes"]] },
   { id: "planejamento", label: "Planejamento", route: "/todogreen/planejamento", pages: ["planejamento"] },
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "energia-peak", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
@@ -1088,7 +1126,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // área nem no menu de Compliance (pedido da titular).
   // Integrações e "Usuários e acessos" vivem no menu Configurações (topo), o
   // lar convencional das configurações — não repetimos aqui na lateral.
-  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema", "tenant-acessos", "saas-billing"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
+  { id: "administracao", label: "Administração", route: "/todogreen/administracao", pages: ["administracao", "rasci", "sobre-o-negocio", "saude-sistema", "tenant-acessos", "saas-billing", "core-grupo"], extras: [["Cadastro · Dados da empresa", "/todogreen/cadastros?secao=companyProfiles"]] },
 ]);
 
 // Cada cadastro no galho da sua área (regra da titular). O atalho já nascia na
@@ -3619,6 +3657,10 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "fila-alertas" && <Suspense fallback={<section className="tdg-panel">Carregando fila de alertas...</section>}><AlertQueuePage /></Suspense>}
       {page === "greenmob-locacao" && <Suspense fallback={<section className="tdg-panel">Carregando Greenmob...</section>}><GreenmobRentalPage /></Suspense>}
       {page === "saas-billing" && <Suspense fallback={<section className="tdg-panel">Carregando billing...</section>}><SaasBillingPage /></Suspense>}
+      {page === "core-grupo" && <Suspense fallback={<section className="tdg-panel">Carregando Core All Green...</section>}><GroupEntitiesPage /></Suspense>}
+      {page === "ocpp-console" && <Suspense fallback={<section className="tdg-panel">Carregando OCPP...</section>}><OcppConsolePage /></Suspense>}
+      {page === "green-on-app" && <Suspense fallback={<section className="tdg-panel">Carregando Green On App...</section>}><GreenOnAppPage /></Suspense>}
+      {page === "seguranca-fisica" && <Suspense fallback={<section className="tdg-panel">Carregando segurança...</section>}><PhysicalSafetyPage /></Suspense>}
       {page === "central-esg" && (
         <Suspense fallback={<section className="tdg-panel">Carregando Central ESG...</section>}>
           <EsgCenter authHeaders={authHeaders} setToast={setToast} />
