@@ -203,12 +203,16 @@ export const tdgLegalToContract = (row = {}) => {
 // Payload no formato `colunas` do TDG. Preservamos `originalType`, `uiRisk`
 // e demais campos "novos" em `fields_json` — o backend não os olha, mas na
 // próxima leitura a UI restaura tudo.
+//
+// Importante: quando `contract.revision` está presente, ele viaja no payload
+// para o backend fazer optimistic locking (`If-Match`-like). Sem revision no
+// PATCH, edições concorrentes de dois membros sobreescreviam-se em silêncio.
 export const contractToTdgLegal = (contract = {}) => {
   const uiRisk = contract.risk || "medio";
   const risco = RISCO_UI_PARA_TDG[uiRisk] || "medio";
   const situacao = SITUACAO_UI_PARA_TDG[contract.status] || "rascunho";
   const tipo = TIPO_UI_PARA_TDG[contract.type] || "contrato";
-  return {
+  const payload = {
     titulo: cleanText(contract.title, 240),
     clientId: cleanText(contract.clientId, 120),
     contraparte: cleanText(contract.counterparty, 240),
@@ -240,6 +244,11 @@ export const contractToTdgLegal = (contract = {}) => {
       proposalId: cleanText(contract.proposalId, 120),
     },
   };
+  // Revision só entra quando existe (rows recém-lidas trazem; forms novos
+  // deixam undefined e o backend cria com revision=1).
+  if (contract.revision !== undefined && contract.revision !== null)
+    payload.revision = Number(contract.revision) || 0;
+  return payload;
 };
 
 // -----------------------------------------------------------------------
