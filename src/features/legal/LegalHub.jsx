@@ -45,6 +45,7 @@ import {
   approvalActionsFor,
   buildLegalAiPrompt,
   buildLegalNotifications,
+  buildSubmitterNotifications,
   canRead,
   complianceGaps,
   complianceScore,
@@ -91,6 +92,7 @@ import {
   validateContract,
   validateDeadline,
   validateFee,
+  validateLegalRequest,
   validateMatter,
   validateOffice,
   validatePowerOfAttorney,
@@ -249,6 +251,16 @@ const readonlyLegal = (db) => ({
 // Combina contatos + leads + oportunidades num único array para os pickers de
 // "vínculo". A UI mostra rótulo `nome · categoria`, e grava o próprio texto —
 // preserva o formato atual das colecões existentes sem exigir migração.
+// Wrapper para confirmar antes de remover. `label` entra na mensagem para o
+// usuário saber o que ele está apagando. Se cancelar, nada acontece.
+function confirmRemove(label, run) {
+  const message = `Remover ${label}? Esta ação não pode ser desfeita.`;
+  if (typeof window !== "undefined" && typeof window.confirm === "function") {
+    if (!window.confirm(message)) return;
+  }
+  run();
+}
+
 function useLinkedEntities(db) {
   return useMemo(() => {
     const items = [];
@@ -445,9 +457,11 @@ function RequestTab({ collection, setToast, viewer, allRecords }) {
   const [form, setForm] = useState(emptyRequest);
   const submit = (event) => {
     event.preventDefault();
-    if (!form.title.trim()) return setToast?.("Descreva a solicitação no título.");
-    if (!form.description.trim())
-      return setToast?.("Escreva um pequeno resumo do que precisa do Jurídico.");
+    // Validador central: garante título ≤240 chars e descrição mínima de 20
+    // caracteres para não abrir demandas vazias que geram ping-pong com o
+    // Jurídico. Mesma regra rodada aqui e no worker.
+    const err = validateLegalRequest(form);
+    if (err) return setToast?.(err);
     const request = createLegalRequest(form, viewer);
     collection.add(request);
     setForm(emptyRequest);
@@ -927,7 +941,10 @@ function MattersTab({ records, collection, now, setToast, linkedEntities, office
                 >
                   {matterStatusIsClosed(m.status) ? "Reabrir" : "Concluir"}
                 </button>
-                <button className="danger" onClick={() => collection.remove(m.id)}>
+                <button
+                  className="danger"
+                  onClick={() => confirmRemove(`a demanda "${m.title}"`, () => collection.remove(m.id))}
+                >
                   <Trash2 size={12} /> Remover
                 </button>
               </div>
@@ -964,11 +981,25 @@ const emptyContract = {
   notes: "",
 };
 
-function ContractsTab({ records, collection, now, setToast, viewer }) {
+function ContractsTab({
+  records,
+  collection,
+  now,
+  setToast,
+  viewer,
+  // Sinais do hook `useTdgLegalRecords` (só chegam quando `tdgLegal` está
+  // ligado). Se ausentes, a aba se comporta como antes (blob).
+  tdgLoading = false,
+  tdgError = null,
+  tdgRefresh = null,
+  tdgListEvents = null,
+  tdgPostEvent = null,
+}) {
   const [form, setForm] = useState(emptyContract);
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [timelineId, setTimelineId] = useState(null);
+  const [tdgEvents, setTdgEvents] = useState({}); // {contractId: [{id,tipo,mensagem,...}]}
 
   const list = useMemo(
     () =>
@@ -1012,9 +1043,22 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
           <h2>Contratos</h2>
           <p className="hint">
             Vigência, contraparte, valor, status de assinatura e vínculo com o fluxo de aprovação.
+            {tdgPostEvent
+              ? " Aprovar, reprovar, pedir ajuste e comentar vão pelo fluxo oficial do backend (todogreen_legal_events)."
+              : ""}
           </p>
         </div>
         <div className="lgl-actions">
+          {tdgRefresh && (
+            <button
+              type="button"
+              onClick={tdgRefresh}
+              disabled={tdgLoading}
+              title="Recarregar contratos do backend (útil quando outro membro editou em paralelo)"
+            >
+              {tdgLoading ? "Atualizando..." : "Atualizar"}
+            </button>
+          )}
           <button type="button" onClick={exportCsv}>
             <Download size={14} /> Exportar CSV
           </button>
@@ -1023,6 +1067,11 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
           </button>
         </div>
       </header>
+      {tdgError && (
+        <div className="lgl-notice" style={{ background: "color-mix(in srgb, var(--lgl-danger) 12%, var(--surface))", borderColor: "color-mix(in srgb, var(--lgl-danger) 30%, var(--border))", color: "var(--lgl-danger)" }}>
+          <ShieldAlert size={13} /> Falha ao carregar contratos do backend: {tdgError}. Toque em &ldquo;Atualizar&rdquo; para tentar de novo.
+        </div>
+      )}
 
       {open && (
         <form className="lgl-form" onSubmit={save}>
@@ -1245,13 +1294,25 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
                       {c.status === "vigente" ? "Encerrar" : "Marcar vigente"}
                     </button>
                   )}
-                  <button className="danger" onClick={() => collection.remove(c.id)}>
+                  <button
+                    className="danger"
+                    onClick={() => confirmRemove(`o contrato "${c.title}"`, () => collection.remove(c.id))}
+                  >
                     <Trash2 size={12} /> Remover
                   </button>
                 </div>
               </footer>
               {timelineId === c.id && (
-                <LegalTimeline record={c} onAddEvent={(ev) => addEventTo(c, ev)} />
+                <TdgContractTimeline
+                  contract={c}
+                  fallbackRecord={c}
+                  onAddLocalEvent={(ev) => addEventTo(c, ev)}
+                  tdgListEvents={tdgListEvents}
+                  tdgPostEvent={tdgPostEvent}
+                  eventsCache={tdgEvents}
+                  setEventsCache={setTdgEvents}
+                  setToast={setToast}
+                />
               )}
               {selectedId === c.id && (
                 <div className="lgl-approval-flow">
@@ -1267,7 +1328,38 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
                         <button
                           key={action.id}
                           className={action.juridico ? "primary" : ""}
-                          onClick={() =>
+                          onClick={async () => {
+                            const tdgActionMap = {
+                              submeter: "submeter",
+                              solicitar_ajuste: "solicitar_ajuste",
+                              aprovar: "aprovar",
+                              reprovar: "reprovar",
+                              comentar: "comentar",
+                            };
+                            // Caminho canônico: quando o hook TDG está
+                            // disponível, a ação passa pelo endpoint oficial
+                            // de eventos — o backend valida a máquina de
+                            // estados, grava o evento imutável em
+                            // `todogreen_legal_events` e move a situação em
+                            // `todogreen_legal_records`. Sem isso os gates
+                            // `juridicoConcluido`/`documentoDeAssinaturaVinculado`
+                            // não destravariam a proposta.
+                            if (tdgPostEvent && tdgActionMap[action.id]) {
+                              try {
+                                const body = await tdgPostEvent(c.id, tdgActionMap[action.id], {});
+                                if (Array.isArray(body?.eventos))
+                                  setTdgEvents((cache) => ({
+                                    ...cache,
+                                    [c.id]: body.eventos,
+                                  }));
+                                setToast?.(`Ação "${action.label}" registrada no fluxo jurídico.`);
+                                return;
+                              } catch (err) {
+                                setToast?.(err.message);
+                                return;
+                              }
+                            }
+                            // Fallback (fora do TDG): só muda o status local.
                             collection.replace(c.id, {
                               status:
                                 action.id === "submeter"
@@ -1287,18 +1379,25 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
                                     : action.id === "solicitar_ajuste"
                                       ? "ajuste_solicitado"
                                       : "pendente",
-                            })
-                          }
+                            });
+                          }}
                         >
                           {action.label}
                         </button>
                       ))}
                     </div>
                   )}
-                  <p className="hint">
-                    Cada ação registra na atualização; para linha do tempo completa, use um evento
-                    na aba &ldquo;IA jurídica&rdquo; ou anexe um parecer nas notas do contrato.
-                  </p>
+                  {tdgPostEvent ? (
+                    <p className="hint">
+                      Ações passam pelo backend oficial e ficam registradas
+                      na timeline (`todogreen_legal_events`) com autor e data.
+                    </p>
+                  ) : (
+                    <p className="hint">
+                      Fora do modo TDG, a ação só muda o status local — a
+                      timeline canônica não é gravada.
+                    </p>
+                  )}
                 </div>
               )}
             </article>
@@ -1308,6 +1407,121 @@ function ContractsTab({ records, collection, now, setToast, viewer }) {
     </div>
   );
 }
+
+// Timeline dedicada a contratos: quando `tdgListEvents` está disponível,
+// carrega e mostra a timeline canônica de `todogreen_legal_events`, com
+// autor, data, mensagem e anexo — a fonte da verdade que o backend gravou.
+// Fora do TDG, cai para `LegalTimeline` que grava em `record.events[]`.
+function TdgContractTimeline({
+  contract,
+  fallbackRecord,
+  onAddLocalEvent,
+  tdgListEvents,
+  tdgPostEvent,
+  eventsCache,
+  setEventsCache,
+  setToast,
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [message, setMessage] = useState("");
+  const cached = eventsCache?.[contract.id];
+
+  useEffect(() => {
+    if (!tdgListEvents) return;
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    tdgListEvents(contract.id)
+      .then((res) => {
+        if (!alive) return;
+        setEventsCache((cache) => ({ ...cache, [contract.id]: res.eventos || [] }));
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setError(err.message);
+      })
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [contract.id, tdgListEvents, setEventsCache]);
+
+  if (!tdgListEvents) {
+    // Fluxo antigo (blob): reaproveita o componente original.
+    return <LegalTimeline record={fallbackRecord} onAddEvent={onAddLocalEvent} />;
+  }
+
+  const submit = async () => {
+    if (!message.trim()) return;
+    try {
+      const body = await tdgPostEvent(contract.id, "comentar", { mensagem: message.trim() });
+      if (Array.isArray(body?.eventos))
+        setEventsCache((cache) => ({ ...cache, [contract.id]: body.eventos }));
+      setMessage("");
+    } catch (err) {
+      setToast?.(err.message);
+    }
+  };
+
+  return (
+    <div className="lgl-timeline">
+      <div className="lgl-timeline-list">
+        {loading && <small>Carregando histórico…</small>}
+        {error && <small style={{ color: "var(--lgl-danger)" }}>{error}</small>}
+        {!loading && !error && (cached || []).length === 0 && (
+          <small>Sem movimentações ainda. Envie ao Jurídico ou registre um comentário.</small>
+        )}
+        {(cached || []).map((ev) => (
+          <article key={ev.id} className={`lgl-timeline-ev kind-${ev.tipo}`}>
+            <header>
+              <strong>{ROTULO_EVENTO_TDG[ev.tipo] || ev.tipo}</strong>
+              <small>
+                {ev.autor ? `${ev.autor} · ` : ""}
+                {dataHoraBR(ev.criadoEm)}
+                {ev.de && ev.para ? ` · ${ev.de} → ${ev.para}` : ""}
+              </small>
+            </header>
+            {ev.mensagem && <p>{ev.mensagem}</p>}
+            {ev.anexoUrl && (
+              <a href={ev.anexoUrl} target="_blank" rel="noreferrer noopener">
+                {ev.anexoNome || "Anexo"}
+              </a>
+            )}
+          </article>
+        ))}
+      </div>
+      <div className="lgl-timeline-add">
+        <input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Escrever comentário no fluxo jurídico"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
+        <button type="button" className="primary" onClick={submit} disabled={!message.trim()}>
+          Comentar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const ROTULO_EVENTO_TDG = {
+  submissao: "Enviado ao Jurídico",
+  reenvio: "Reenviado",
+  validado: "Validado",
+  reprovado: "Reprovado",
+  ajuste_solicitado: "Ajustes solicitados",
+  comentario: "Comentário",
+  assinatura: "Assinado",
+  arquivamento: "Arquivado",
+  conclusao: "Concluído",
+};
 
 // -----------------------------------------------------------------------
 // Processos judiciais e administrativos
@@ -1613,7 +1827,10 @@ function ProcessesTab({ records, collection, now, setToast, viewer }) {
                 >
                   {processStatusIsClosed(p.status) ? "Reabrir" : "Arquivar"}
                 </button>
-                <button className="danger" onClick={() => collection.remove(p.id)}>
+                <button
+                  className="danger"
+                  onClick={() => confirmRemove(`o processo "${p.title}"`, () => collection.remove(p.id))}
+                >
                   <Trash2 size={12} /> Remover
                 </button>
               </div>
@@ -1846,7 +2063,10 @@ function PowersOfAttorneyTab({ records, collection, now, setToast }) {
                     Revogar
                   </button>
                 )}
-                <button className="danger" onClick={() => collection.remove(p.id)}>
+                <button
+                  className="danger"
+                  onClick={() => confirmRemove(`a procuração de "${p.title}"`, () => collection.remove(p.id))}
+                >
                   <Trash2 size={12} /> Remover
                 </button>
               </div>
@@ -2054,7 +2274,10 @@ function DeadlinesTab({ records, collection, now, setToast }) {
                 >
                   {d.status === "cumprido" ? "Reabrir" : "Marcar cumprido"}
                 </button>
-                <button className="danger" onClick={() => collection.remove(d.id)}>
+                <button
+                  className="danger"
+                  onClick={() => confirmRemove(`o prazo "${d.title}"`, () => collection.remove(d.id))}
+                >
                   <Trash2 size={12} /> Remover
                 </button>
               </div>
@@ -2257,7 +2480,10 @@ function OfficesTab({ records, collection, setToast }) {
                 <button onClick={() => collection.replace(o.id, { active: !o.active })}>
                   {o.active ? "Desativar" : "Ativar"}
                 </button>
-                <button className="danger" onClick={() => collection.remove(o.id)}>
+                <button
+                  className="danger"
+                  onClick={() => confirmRemove(`o escritório "${o.name}"`, () => collection.remove(o.id))}
+                >
                   <Trash2 size={12} /> Remover
                 </button>
               </div>
@@ -2485,7 +2711,10 @@ function FeesTab({ records, collection, now, setToast }) {
                 >
                   {f.paid ? "Marcar em aberto" : "Marcar como pago"}
                 </button>
-                <button className="danger" onClick={() => collection.remove(f.id)}>
+                <button
+                  className="danger"
+                  onClick={() => confirmRemove(`o lançamento "${f.title}"`, () => collection.remove(f.id))}
+                >
                   <Trash2 size={12} /> Remover
                 </button>
               </div>
@@ -2644,7 +2873,10 @@ function ComplianceTab({ records, update, setToast }) {
                   </header>
                   {c.notes && <p>{c.notes}</p>}
                   <footer style={{ justifyContent: "flex-end" }}>
-                    <button className="danger" onClick={() => remove(c.id)}>
+                    <button
+                      className="danger"
+                      onClick={() => confirmRemove(`o item "${c.title}"`, () => remove(c.id))}
+                    >
                       <Trash2 size={12} /> Remover
                     </button>
                   </footer>
@@ -3109,14 +3341,25 @@ export default function LegalHub({
     () => (legalStaff ? buildLegalNotifications(scoped, viewer, now) : []),
     [legalStaff, scoped, viewer, now],
   );
+  // Notificações para o SOLICITANTE quando o Jurídico muda a situação da
+  // demanda dele. É o outro lado da moeda: o solicitante fica sabendo que sua
+  // demanda foi aceita, está em análise, precisa de ajuste ou foi concluída.
+  const submitterNotifications = useMemo(
+    () => (legalStaff ? buildSubmitterNotifications(scoped.matters || [], 0) : []),
+    [legalStaff, scoped.matters],
+  );
   // Chave estável para o useEffect: os ids dos alertas atuais concatenados.
   // Sem isso o efeito rodaria em toda renderização e o React reclamaria da
   // dependência calculada inline.
-  const legalNotificationsKey = legalNotifications.map((n) => n.id).join("|");
+  const legalNotificationsKey = [
+    ...legalNotifications.map((n) => n.id),
+    ...submitterNotifications.map((n) => n.id),
+  ].join("|");
   useEffect(() => {
     if (!legalStaff || !pushNotification || !update || !viewer?.userId) return;
     const existing = new Set((db?.notifications || []).map((n) => n.id));
-    const fresh = legalNotifications.filter(
+    const combined = [...legalNotifications, ...submitterNotifications];
+    const fresh = combined.filter(
       (n) => n.recipientId && !existing.has(n.id) && !seenAlertIdsRef.current.has(n.id),
     );
     if (fresh.length === 0) return;
@@ -3211,6 +3454,11 @@ export default function LegalHub({
           now={now}
           setToast={setToast}
           viewer={viewer || {}}
+          tdgLoading={tdgLegal ? tdgLegalRecords.loading : false}
+          tdgError={tdgLegal ? tdgLegalRecords.error : null}
+          tdgRefresh={tdgLegal ? tdgLegalRecords.refresh : null}
+          tdgListEvents={tdgLegal ? tdgLegalRecords.listEvents : null}
+          tdgPostEvent={tdgLegal ? tdgLegalRecords.postEvent : null}
         />
       )}
       {tab === "processos" && legalStaff && (

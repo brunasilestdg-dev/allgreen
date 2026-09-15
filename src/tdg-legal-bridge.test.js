@@ -142,6 +142,14 @@ describe("contractToTdgLegal", () => {
     expect(contractToTdgLegal({ renewalNoticeDays: -5 }).campos.renewalNoticeDays).toBe(0);
   });
 
+  it("carrega `revision` no payload quando a nova UI já leu (optimistic lock)", () => {
+    const payload = contractToTdgLegal({ ...contract, revision: 7 });
+    expect(payload.revision).toBe(7);
+    // Sem revision, o campo não aparece — evita gravar 0/NaN no primeiro POST.
+    const first = contractToTdgLegal(contract);
+    expect(first.revision).toBeUndefined();
+  });
+
   it("ida e volta preserva os campos que a UI já mostrava", () => {
     const payload = contractToTdgLegal(contract);
     // Simula uma linha vinda do backend depois do POST — em teste unitário

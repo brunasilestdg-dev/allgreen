@@ -7,6 +7,7 @@ import {
   buildLegalAiPrompt,
   buildLegalNotifications,
   buildPlannerItemsFromLegal,
+  buildSubmitterNotifications,
   canAccessRequest,
   canRead,
   complianceGaps,
@@ -46,6 +47,7 @@ import {
   validateContract,
   validateDeadline,
   validateFee,
+  validateLegalRequest,
   validateMatter,
   validateProcess,
   validatePowerOfAttorney,
@@ -593,5 +595,77 @@ describe("prompt e parser da IA", () => {
 
   it("parser devolve null quando resposta não é JSON válido", () => {
     expect(parseLegalAiResponse("clausulas", "texto sem estrutura")).toBeNull();
+  });
+});
+
+describe("validações mais rígidas", () => {
+  it("validateLegalRequest exige descrição mínima de 20 caracteres", () => {
+    expect(validateLegalRequest({})).toMatch(/título/i);
+    expect(validateLegalRequest({ title: "Ajuda" })).toMatch(/contexto|20/i);
+    expect(validateLegalRequest({ title: "Ajuda", description: "curto" })).toMatch(/20/);
+    expect(
+      validateLegalRequest({ title: "Ajuda", description: "Isto tem mais de vinte caracteres" }),
+    ).toBe("");
+  });
+
+  it("validateContract recusa vigência com fim anterior ao início", () => {
+    expect(
+      validateContract({
+        title: "X",
+        startDate: "2026-05-01",
+        endDate: "2026-04-01",
+      }),
+    ).toMatch(/data fim/i);
+    expect(
+      validateContract({
+        title: "X",
+        startDate: "2026-01-01",
+        endDate: "2026-12-31",
+      }),
+    ).toBe("");
+    // Sem uma das datas, não valida a coerência (aceita esboço).
+    expect(validateContract({ title: "X" })).toBe("");
+  });
+
+  it("validateMatter e validateContract limitam título em 240", () => {
+    const longo = "x".repeat(241);
+    expect(validateMatter({ title: longo })).toMatch(/240/);
+    expect(validateContract({ title: longo })).toMatch(/240/);
+  });
+});
+
+describe("notificações ao solicitante quando a demanda muda de situação", () => {
+  const base = {
+    id: "m1",
+    title: "Análise contrato",
+    submitterId: "u-alice",
+    updatedAt: "2026-09-14T12:00:00Z",
+  };
+
+  it("gera notificação idempotente por (id, status, updatedAt)", () => {
+    const notifs = buildSubmitterNotifications([{ ...base, status: "aprovado" }], 0);
+    expect(notifs).toHaveLength(0); // "aprovado" não está na lista de estados que notificam
+    const emAnalise = buildSubmitterNotifications([{ ...base, status: "em_analise" }], 0);
+    expect(emAnalise).toHaveLength(1);
+    expect(emAnalise[0].recipientId).toBe("u-alice");
+    expect(emAnalise[0].id).toContain("m1");
+    expect(emAnalise[0].id).toContain("em_analise");
+  });
+
+  it("respeita o cursor `since` — não repete o mesmo evento", () => {
+    const t = Date.parse("2026-09-14T12:00:00Z");
+    const notifs = buildSubmitterNotifications(
+      [{ ...base, status: "ajuste_solicitado" }],
+      t + 1,
+    );
+    expect(notifs).toHaveLength(0);
+  });
+
+  it("nunca notifica quando não há submitterId (jurídico criou direto)", () => {
+    const notifs = buildSubmitterNotifications(
+      [{ id: "m2", title: "X", status: "em_analise", submitterId: null }],
+      0,
+    );
+    expect(notifs).toEqual([]);
   });
 });

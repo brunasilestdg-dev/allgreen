@@ -267,12 +267,36 @@ const uid = () => {
 // Toda entidade jurídica exige um TÍTULO. Sem título, nada é rastreável e o
 // dashboard fica cheio de "sem título" — pior do que recusar na entrada.
 export const validateMatter = (data = {}) => {
-  if (!String(data.title || "").trim()) return "Descreva a demanda no título.";
+  const title = String(data.title || "").trim();
+  if (!title) return "Descreva a demanda no título.";
+  if (title.length > 240) return "O título fica em até 240 caracteres.";
+  return "";
+};
+
+// Valida uma SOLICITAÇÃO (form simplificado do solicitante). Exige
+// descrição mínima porque uma solicitação sem contexto vira ping-pong com o
+// Jurídico — a exigência não é UX chata, é reduzir retrabalho.
+export const validateLegalRequest = (data = {}) => {
+  const title = String(data.title || "").trim();
+  if (!title) return "Descreva a solicitação no título.";
+  if (title.length > 240) return "O título fica em até 240 caracteres.";
+  const description = String(data.description || "").trim();
+  if (description.length < 20)
+    return "Descreva o pedido com um pouco mais de contexto (mínimo 20 caracteres).";
   return "";
 };
 
 export const validateContract = (data = {}) => {
-  if (!String(data.title || "").trim()) return "Descreva o contrato no título.";
+  const title = String(data.title || "").trim();
+  if (!title) return "Descreva o contrato no título.";
+  if (title.length > 240) return "O título fica em até 240 caracteres.";
+  // Data fim precisa ser >= data início quando ambas estão preenchidas.
+  // Sem esta trava um contrato podia nascer com vigência negativa e
+  // aparecer como "vencido há X dias" no dashboard sem ter começado.
+  const start = onlyDate(data.startDate);
+  const end = onlyDate(data.endDate);
+  if (start && end && end < start)
+    return "A data fim da vigência não pode ser anterior à data de início.";
   return "";
 };
 
@@ -1021,6 +1045,43 @@ export const buildLegalNotifications = (records = {}, viewer = {}, now = Date.no
     kind: alert.kind,
     level: alert.level,
   }));
+};
+
+// Notificações endereçadas ao SOLICITANTE quando o Jurídico moveu a situação
+// da demanda dele. Idempotente pelo par (matterId, updatedAt) — se o
+// Jurídico aprovar duas vezes no mesmo instante, só uma notificação sobe.
+// A UI usa isto para gravar em `db.notifications` (padrão do App) e o
+// solicitante vê o sino piscar.
+export const buildSubmitterNotifications = (matters = [], since = 0) => {
+  const out = [];
+  for (const m of matters) {
+    if (!m.submitterId) continue;
+    const updatedAt = Date.parse(m.updatedAt || "") || 0;
+    if (updatedAt <= since) continue;
+    // Só notifica em situações "interessantes" — quando o Jurídico
+    // efetivamente moveu a bola. `aberto` (recém criada) não notifica.
+    const situations = {
+      em_analise: "sua solicitação está em análise no Jurídico",
+      ajuste_solicitado: "o Jurídico pediu ajustes na sua solicitação",
+      aguardando_cliente: "a solicitação está aguardando seu retorno",
+      concluido: "sua solicitação foi concluída",
+      arquivado: "sua solicitação foi arquivada",
+    };
+    const status = m.status;
+    const msg = situations[status];
+    if (!msg) continue;
+    out.push({
+      // ID determinístico: id + status + updatedAt → mesma transição não
+      // duplica notificação.
+      id: `legal-submitter-${m.id}-${status}-${updatedAt}`,
+      recipientId: m.submitterId,
+      message: `${m.title}: ${msg}.`,
+      link: "juridico",
+      kind: "matter-update",
+      matterId: m.id,
+    });
+  }
+  return out;
 };
 
 // Prazos + audiências em aberto viram itens da agenda "Meu trabalho" / Planner.
