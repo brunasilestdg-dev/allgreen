@@ -16,6 +16,7 @@ import {
   detectConflicts,
   formatDuration,
   freeSlots,
+  isTaskCompleted,
   minutesToTime,
   parseTaskInput,
   rescheduleOverdue,
@@ -40,7 +41,7 @@ export default function DayPlanner({ db, update, business, setToast }) {
       (db.tasks || []).filter(
         (t) =>
           (!business || t.businessId === business.id) &&
-          t.status !== "concluida",
+          !isTaskCompleted(t.status),
       ),
     [db.tasks, business],
   );
@@ -84,7 +85,7 @@ export default function DayPlanner({ db, update, business, setToast }) {
     const tarefa = {
       id: newId(),
       title: previa.title,
-      status: "pendente",
+      status: "A fazer",
       due: previa.due || "",
       time: previa.time || "",
       durationMinutes: previa.durationMinutes || null,

@@ -7,6 +7,7 @@ import {
   detectConflicts,
   formatDuration,
   freeSlots,
+  isTaskCompleted,
   mergeIntervals,
   minutesToTime,
   nextWeekday,
@@ -418,11 +419,12 @@ describe("dayLoad", () => {
 });
 
 describe("rescheduleOverdue", () => {
-  it("traz o atrasado para o próximo dia útil", () => {
+  it("traz o atrasado para o próximo dia útil e preserva concluídas canônicas e legadas", () => {
     const tarefas = [
-      { id: "a", due: "2026-07-20", status: "pendente" },
-      { id: "b", due: "2026-08-10", status: "pendente" },
+      { id: "a", due: "2026-07-20", status: "A fazer" },
+      { id: "b", due: "2026-08-10", status: "Em andamento" },
       { id: "c", due: "2026-07-20", status: "concluida" },
+      { id: "d", due: "2026-07-20", status: "Concluído" },
     ];
     const r = rescheduleOverdue(tarefas, HOJE);
     expect(r[0].due).toBe(HOJE);
@@ -430,6 +432,13 @@ describe("rescheduleOverdue", () => {
     expect(r[1].due).toBe("2026-08-10");
     // Concluída não é reagendada.
     expect(r[2].due).toBe("2026-07-20");
+    expect(r[3].due).toBe("2026-07-20");
+  });
+
+  it("reconhece o status canônico e os legados como concluídos", () => {
+    expect(isTaskCompleted("Concluído")).toBe(true);
+    expect(isTaskCompleted("concluida")).toBe(true);
+    expect(isTaskCompleted("A fazer")).toBe(false);
   });
 
   it("no fim de semana joga para segunda", () => {

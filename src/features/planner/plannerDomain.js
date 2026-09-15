@@ -44,6 +44,11 @@ export const PRIORITIES = [
   { id: "baixa", label: "Baixa", rank: 3 },
 ];
 
+const COMPLETED_TASK_STATUSES = new Set(["concluído", "concluido", "concluída", "concluida"]);
+
+export const isTaskCompleted = (status) =>
+  COMPLETED_TASK_STATUSES.has(String(status || "").trim().toLocaleLowerCase("pt-BR"));
+
 const semAcento = (s) =>
   String(s || "")
     .normalize("NFD")
@@ -502,7 +507,7 @@ export const rescheduleOverdue = (tasks, today, workHours = DEFAULT_WORK_HOURS) 
     return today;
   })();
   return (tasks || []).map((t) =>
-    isDate(t?.due) && t.due < today && t.status !== "concluida"
+    isDate(t?.due) && t.due < today && !isTaskCompleted(t.status)
       ? { ...t, due: proximoUtil, reagendada: true }
       : t,
   );

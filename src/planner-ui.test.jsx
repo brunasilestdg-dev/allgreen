@@ -196,6 +196,7 @@ describe("Planejar o dia", () => {
       expect(criada.time).toBe("10:00");
       expect(criada.durationMinutes).toBe(45);
       expect(criada.priority).toBe("alta");
+      expect(criada.status).toBe("A fazer");
     });
   });
 
