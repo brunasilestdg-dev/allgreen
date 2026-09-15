@@ -21,14 +21,36 @@ export default function SharingFields({
   useEffect(() => {
     let cancelled = false;
     const space = activeSpaceId();
-    fetch(`/api/collab${space ? `?owner=${encodeURIComponent(space)}` : ""}`, {
+    // Duas fontes precisam ser reunidas — sem isso, quem foi cadastrado só na
+    // vertical (ex.: To Do Green, `tenant_users` via /planner/pessoas) some
+    // do picker de compartilhamento, enquanto quem entrou pelo colab do Seu
+    // Funcionário continua aparecendo. Reclamação da titular: "aparece o
+    // Breno (Seu Funcionário) mas não o Jeberson (vertical)". Se algum lado
+    // não responder (ex.: usuário fora de qualquer vertical), o outro segue.
+    const doCollab = fetch(`/api/collab${space ? `?owner=${encodeURIComponent(space)}` : ""}`, {
       headers: authHeaders(),
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled) setMembers(d?.members || []);
-      })
-      .catch(() => {});
+      .then((d) => d?.members || [])
+      .catch(() => []);
+    const daVertical = fetch("/api/todogreen/planner/pessoas", {
+      headers: authHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.registros || [])
+      .catch(() => []);
+    Promise.all([doCollab, daVertical]).then(([collab, vertical]) => {
+      if (cancelled) return;
+      const vistos = new Set();
+      const juntos = [];
+      for (const pessoa of [...collab, ...vertical]) {
+        const id = pessoa?.id;
+        if (!id || vistos.has(id) || !pessoa?.name) continue;
+        vistos.add(id);
+        juntos.push({ id, name: pessoa.name, email: pessoa.email || "" });
+      }
+      setMembers(juntos);
+    });
     return () => {
       cancelled = true;
     };

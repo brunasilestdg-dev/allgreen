@@ -2473,6 +2473,7 @@ export default function Tasks({
         <Modal
           title={editing ? "Editar tarefa" : "Criar tarefa"}
           onClose={() => setModal(false)}
+          wide
         >
           <form className="modal-body" onSubmit={save}>
             <Field label="Título">
