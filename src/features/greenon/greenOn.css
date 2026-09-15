@@ -37,10 +37,9 @@
   transform: translateY(-1px);
 }
 .green-on-brand img {
-  border-radius: 8px;
   display: block;
   height: 44px;
-  width: 44px;
+  width: auto;
 }
 
 .green-on-back {

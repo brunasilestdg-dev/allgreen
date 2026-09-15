@@ -929,7 +929,7 @@ export default function GreenmobVertical({ db, update, setToast }) {
             atual, mantendo o gesto "logo = início" consistente. Substituiu o
             ModuleBadge numerado a pedido da titular. */}
         <a href="/greenmob" className="greenmob-brand" aria-label="Início — Greenmob">
-          <img src="/logo-todo-green.svg" alt="To Do Green" width="44" height="44" />
+          <img src="/logo-todo-green.png" alt="To Do Green" width="66" height="44" />
         </a>
         <AtalhoVoltar />
       </div>
