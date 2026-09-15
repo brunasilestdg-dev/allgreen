@@ -154,9 +154,10 @@
 }
 
 .tdg-shell-logo img {
+  border-radius: 8px;
   display: block;
   height: 44px;
-  width: auto;
+  width: 44px;
 }
 
 /* Conteúdo apenas para leitor de tela: preserva o título/descrição da página

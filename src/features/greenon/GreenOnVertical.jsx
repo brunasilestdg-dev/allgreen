@@ -26,7 +26,6 @@ import {
   PageHeader,
 } from "../../design-system/index.js";
 import VerticalSwitcher from "../verticals/VerticalSwitcher.jsx";
-import ModuleBadge, { moduleByKey } from "../verticals/ModuleBadge.jsx";
 import {
   GREEN_ON_ACCOUNT_STAGES,
   GREEN_ON_ACCOUNT_TEMPERATURES,
@@ -1431,7 +1430,13 @@ export default function GreenOnVertical({ db, update, setToast }) {
   return (
     <div className="green-on-shell">
       <div className="green-on-topbar">
-        <ModuleBadge module={moduleByKey("charging")} href="/greenon" size="md" />
+        {/* Logo da To Do Green (marca do grupo) — mesma arte que aparece em
+            todas as verticais; clicar volta ao painel principal da vertical
+            atual, mantendo o gesto "logo = início" consistente. Substituiu o
+            ModuleBadge numerado a pedido da titular. */}
+        <a href="/greenon" className="green-on-brand" aria-label="Início — Green On">
+          <img src="/logo-todo-green.svg" alt="To Do Green" width="44" height="44" />
+        </a>
         <AtalhoVoltar />
       </div>
       <PageHeader

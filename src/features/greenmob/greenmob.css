@@ -20,6 +20,27 @@
   flex-wrap: wrap;
 }
 
+/* Logo da To Do Green: mesma marca em todas as verticais, clique volta ao
+   início da vertical atual. Sem borda/fundo — o próprio SVG já traz o
+   fundo verde-escuro. */
+.greenmob-brand {
+  border-radius: 10px;
+  display: inline-flex;
+  padding: 2px;
+  transition: transform .15s ease;
+}
+.greenmob-brand:hover,
+.greenmob-brand:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+.greenmob-brand img {
+  border-radius: 8px;
+  display: block;
+  height: 44px;
+  width: 44px;
+}
+
 .greenmob-back {
   display: inline-flex;
   align-items: center;
