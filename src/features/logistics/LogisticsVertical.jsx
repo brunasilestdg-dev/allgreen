@@ -3505,8 +3505,8 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             className={`tdg-work-entry ${isWorkCenter ? "active" : ""}`}
             onClick={() => navigate("/todogreen/espaco?ferramenta=tarefas")}
           >
-            <strong>Projetos e tarefas</strong>
-            <small>Boards, Kanban, Gantt e Workload</small>
+            <ListTodo size={18} />
+            <span><strong>Projetos e tarefas</strong><small>Boards, Kanban, Gantt e Workload</small></span>
           </button>
           {/* Verticais irmãs (Green On e Greenmob): quem opera nas três precisa
               trocar de ambiente sem digitar URL. A vertical de origem (To Do
