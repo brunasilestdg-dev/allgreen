@@ -107,23 +107,30 @@ import "./legalHub.css";
 // "Minhas solicitações" ficam disponíveis para todo mundo — respeitando a
 // regra da titular: qualquer pessoa pode solicitar, mas só o Jurídico vê a
 // fila completa.
-const TABS = [
-  { id: "solicitar", label: "Solicitar ao Jurídico", icon: FilePlus, forAll: true },
-  { id: "minhas", label: "Minhas solicitações", icon: ClipboardCheck, forAll: true },
-  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { id: "demandas", label: "Fila do Jurídico", icon: ClipboardCheck },
-  { id: "contratos", label: "Contratos", icon: FileCheck2 },
-  { id: "processos", label: "Processos", icon: Gavel },
-  { id: "procuracoes", label: "Procurações", icon: ScrollText },
-  { id: "prazos", label: "Prazos", icon: AlarmClock },
-  { id: "escritorios", label: "Escritórios e advogados", icon: Users },
-  { id: "honorarios", label: "Honorários e provisões", icon: Handshake },
-  { id: "compliance", label: "Compliance", icon: ShieldCheck },
-  { id: "modelos", label: "Modelos", icon: ScrollText, forAll: true },
-  { id: "ia", label: "IA jurídica", icon: Sparkles, forAll: true },
-  { id: "busca", label: "Busca", icon: Search, forAll: true },
-  { id: "relatorios", label: "Relatórios", icon: ListChecks },
+// Lista de seções do Jurídico. `forAll: true` = todo mundo vê (sem ser staff);
+// as demais só aparecem para o time jurídico. `label` curto = versão do menu
+// da sidebar do ERP (que precisa ser mais compacta que a aba interna).
+// Exportado como `LEGAL_HUB_TABS` para a `LogisticsVertical` montar os
+// sub-itens (a "listinha da central") sem duplicar rótulos.
+export const LEGAL_HUB_TABS = [
+  { id: "solicitar", label: "Solicitar ao Jurídico", short: "Solicitar", icon: FilePlus, forAll: true },
+  { id: "minhas", label: "Minhas solicitações", short: "Minhas solicitações", icon: ClipboardCheck, forAll: true },
+  { id: "dashboard", label: "Dashboard", short: "Dashboard", icon: BarChart3 },
+  { id: "demandas", label: "Fila do Jurídico", short: "Fila", icon: ClipboardCheck },
+  { id: "contratos", label: "Contratos", short: "Contratos", icon: FileCheck2 },
+  { id: "processos", label: "Processos", short: "Processos", icon: Gavel },
+  { id: "procuracoes", label: "Procurações", short: "Procurações", icon: ScrollText },
+  { id: "prazos", label: "Prazos", short: "Prazos", icon: AlarmClock },
+  { id: "escritorios", label: "Escritórios e advogados", short: "Escritórios", icon: Users },
+  { id: "honorarios", label: "Honorários e provisões", short: "Honorários", icon: Handshake },
+  { id: "compliance", label: "Compliance", short: "Compliance", icon: ShieldCheck },
+  { id: "modelos", label: "Modelos", short: "Modelos", icon: ScrollText, forAll: true },
+  { id: "ia", label: "IA jurídica", short: "IA jurídica", icon: Sparkles, forAll: true },
+  { id: "busca", label: "Busca", short: "Busca", icon: Search, forAll: true },
+  { id: "relatorios", label: "Relatórios", short: "Relatórios", icon: ListChecks },
 ];
+
+const TABS = LEGAL_HUB_TABS;
 
 const dataBR = (value) => {
   if (!value) return "—";
@@ -3231,10 +3238,35 @@ export default function LegalHub({
   // que a detecção pelo `db` falhe — a `LogisticsVertical` monta a UI aqui
   // já sabendo que está no ERP e o backend responde `/api/todogreen/records/legal`.
   tdgAvailable: tdgForced,
+  // Aba inicial (opcional). A LogisticsVertical passa a aba lida da query
+  // `?aba=xxx` para que os sub-itens da sidebar do ERP levem direto para a
+  // seção certa. Sem isso, cai no default (dashboard para staff, solicitar
+  // para o resto). A URL fica em sincronia quando o usuário troca de aba.
+  initialTab,
 }) {
   const legalStaff = isLegalStaff(viewer || {});
   const defaultTab = legalStaff ? "dashboard" : "solicitar";
-  const [tab, setTab] = useState(defaultTab);
+  const [tab, setTab] = useState(() => initialTab || defaultTab);
+  // Quando o pai muda a `initialTab` (ex.: sub-item da sidebar do ERP),
+  // sincroniza. Não roda em cada render — só quando a prop muda.
+  useEffect(() => {
+    if (initialTab && initialTab !== tab) setTab(initialTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTab]);
+  // Reflete a aba ativa na query string, para o menu do ERP (que casa a
+  // sidebar com a URL) marcar o sub-item correto. Só mexe em `?aba=`,
+  // preserva o resto.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("aba") === tab) return;
+      url.searchParams.set("aba", tab);
+      window.history.replaceState({}, "", url.toString());
+    } catch {
+      // sem query API: ok, seguimos sem sincronizar
+    }
+  }, [tab]);
   const [nowFallback] = useState(() => Date.now());
   const now = typeof nowProp === "number" ? nowProp : nowFallback;
   const baseRecords = useMemo(() => readonlyLegal(db), [db]);

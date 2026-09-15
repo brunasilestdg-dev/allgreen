@@ -1150,7 +1150,32 @@ const PRIMARY_NAVIGATION = Object.freeze([
   { id: "esg", label: "ESG", route: "/todogreen/central-esg", pages: ["central-esg", "esg", "energia", "metodologia"] },
   { id: "estudio", label: "Estúdio", route: "/todogreen/estudio-criativo", pages: ["estudio-criativo", "midia", "editor-codigo", "analise-texto", "mapa-ideias"] },
   { id: "compliance", label: "Compliance", route: "/todogreen/auditoria", pages: ["auditoria", "fiscal", "manual", "fluxos"] },
-  { id: "juridico", label: "Jurídico", route: "/todogreen/juridico", pages: ["juridico"] },
+  // Cada seção da Central Jurídica vira um sub-item da sidebar; o LegalHub
+  // lê `?aba=xxx` para abrir na seção certa. Sem estes `extras`, o Jurídico
+  // aparecia como um item só e todo o conteúdo ficava numa tela — a titular
+  // pediu "a listinha da central" como o resto do ERP tem.
+  {
+    id: "juridico",
+    label: "Jurídico",
+    route: "/todogreen/juridico?aba=dashboard",
+    pages: ["juridico"],
+    extras: [
+      ["Solicitar", "/todogreen/juridico?aba=solicitar"],
+      ["Minhas solicitações", "/todogreen/juridico?aba=minhas"],
+      ["Fila", "/todogreen/juridico?aba=demandas"],
+      ["Contratos", "/todogreen/juridico?aba=contratos"],
+      ["Processos", "/todogreen/juridico?aba=processos"],
+      ["Procurações", "/todogreen/juridico?aba=procuracoes"],
+      ["Prazos", "/todogreen/juridico?aba=prazos"],
+      ["Escritórios", "/todogreen/juridico?aba=escritorios"],
+      ["Honorários", "/todogreen/juridico?aba=honorarios"],
+      ["Compliance", "/todogreen/juridico?aba=compliance"],
+      ["Modelos", "/todogreen/juridico?aba=modelos"],
+      ["IA jurídica", "/todogreen/juridico?aba=ia"],
+      ["Busca", "/todogreen/juridico?aba=busca"],
+      ["Relatórios", "/todogreen/juridico?aba=relatorios"],
+    ],
+  },
   { id: "indicadores", label: "Indicadores", route: "/todogreen/indicadores", pages: ["indicadores", "dashboards", "relatorios"] },
   // Cada cadastro mora na área dona do dado (atalhos "Cadastro · ..." no
   // segundo nível): materiais/depósitos/fornecedores em Compras, contas no
@@ -3875,6 +3900,17 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             setToast={setToast}
             authHeaders={authHeaders}
             tdgAvailable
+            // Cada sub-item da sidebar do ERP aponta para /juridico?aba=xxx;
+            // lemos a query aqui para abrir a Central na aba certa. Se não
+            // vier query, o LegalHub cai no default (dashboard/solicitar).
+            initialTab={(() => {
+              if (typeof window === "undefined") return undefined;
+              try {
+                return new URL(window.location.href).searchParams.get("aba") || undefined;
+              } catch {
+                return undefined;
+              }
+            })()}
             viewer={{
               userId: db?.user?.id,
               name: db?.user?.name,
