@@ -2108,19 +2108,22 @@
    fato em Projetos e tarefas (`.active`) ou no hover — assim a área ativa
    do menu (ex.: "Comercial > Clientes") não some visualmente para este CTA. */
 .tdg-work-entry {
+  align-items: center;
   background: var(--tdg-card, #fff);
   border: 1px solid var(--tdg-line, #dce7e2);
   border-radius: 9px;
   color: var(--tdg-ink);
   cursor: pointer;
-  display: grid;
-  gap: 3px;
+  display: flex;
+  gap: 10px;
   margin: 10px 0;
   min-width: 0;
   padding: 11px 12px;
   text-align: left;
   width: 100%;
 }
+.tdg-work-entry > svg { color: var(--tdg-green, #1b7a5a); flex: none; }
+.tdg-work-entry > span { display: grid; gap: 2px; min-width: 0; }
 .tdg-work-entry strong {
   color: var(--tdg-ink);
   font-size: .86rem;
@@ -2139,6 +2142,9 @@
   color: #fff;
   outline: none;
 }
+.tdg-work-entry.active > svg,
+.tdg-work-entry:hover > svg,
+.tdg-work-entry:focus-visible > svg { color: #fff; }
 .tdg-work-entry.active strong,
 .tdg-work-entry:hover strong,
 .tdg-work-entry:focus-visible strong { color: #fff; }
