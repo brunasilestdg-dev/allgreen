@@ -854,27 +854,51 @@
   padding: 0 12px;
 }
 .tdg-crm-detail-actions .tdg-crm-more-actions > summary:hover { background: var(--tdg-card); color: #174638; }
-/* O painel de "Mais ações" abre por cima do hero (verde): mantém fundo claro e
-   texto escuro próprios, não os do hero. */
-.tdg-crm-detail-actions .tdg-crm-more-actions > div { color: var(--tdg-ink); }
-/* Os botões dentro do popover DEVEM sobrescrever o estilo de botão do hero
-   (color: #fff sobre bg translúcido): sem isto ficam texto branco em painel
-   branco — invisíveis (só o "Excluir cliente", que tem .tdg-danger-action
-   própria, aparecia). Pesquisar empresa / Atualizar contatos / Ver como
-   cliente ficavam sumidos apesar de renderizados. */
+/* Padronização total (a titular apontou que topo e popover eram famílias
+   diferentes de botão): o popover herda o TOM do hero — fundo verde-escuro
+   sólido, borda translúcida — e os botões dentro dele ficam idênticos aos
+   do topo (34px, raio 9px, texto branco, fundo translúcido). PR #415
+   alinhou dentro de cada grupo; esta é a mudança que faz os dois grupos
+   virarem um só. */
+.tdg-crm-detail-actions .tdg-crm-more-actions > div {
+  background: #10352b;
+  border-color: #ffffff33;
+  color: #fff;
+}
 .tdg-crm-detail-actions .tdg-crm-more-actions > div button:not(.tdg-danger-action) {
-  background: var(--tdg-card);
-  border: 1px solid var(--tdg-line);
-  color: var(--tdg-ink);
-  min-height: 36px;
+  background: #ffffff0d;
+  border: 1px solid #ffffff4d;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 750;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
 }
 .tdg-crm-detail-actions .tdg-crm-more-actions > div button:not(.tdg-danger-action):hover:not(:disabled) {
-  background: var(--tdg-soft);
-  color: var(--tdg-green);
+  background: var(--tdg-card);
+  color: #174638;
 }
-/* "Excluir cliente" mantém a cor de perigo, mas casa a altura dos vizinhos do
-   popover (36px) para a fileira não ficar em degrau. */
-.tdg-crm-detail-actions .tdg-crm-more-actions > div .tdg-danger-action { min-height: 36px; }
+/* "Excluir cliente" continua diferenciado (ação destrutiva), mas agora
+   sobre o fundo verde-escuro do popover: vermelho-claro sobre translúcido
+   no repouso, invertendo para vermelho sólido no hover. */
+.tdg-crm-detail-actions .tdg-crm-more-actions > div .tdg-danger-action {
+  background: #ffffff0d;
+  border: 1px solid #f5c8be80;
+  border-radius: 9px;
+  color: #f5c8be;
+  font-size: 11px;
+  font-weight: 750;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+.tdg-crm-detail-actions .tdg-crm-more-actions > div .tdg-danger-action:hover:not(:disabled) {
+  background: #943325;
+  border-color: #943325;
+  color: #fff;
+}
 .tdg-crm-temp-inline { align-items: center; display: inline-flex; gap: 6px; }
 .tdg-crm-temp-inline span { color: #ffffffcc; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
 /* A temperatura vive no hero verde escuro: o SegmentedControl usa tokens
