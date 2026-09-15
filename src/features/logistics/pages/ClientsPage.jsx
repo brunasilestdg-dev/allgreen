@@ -676,7 +676,7 @@ const quickFilterFromLocation = () => typeof window === "undefined"
   : FILTROS_DA_ROTA[new URLSearchParams(window.location.search).get("filtro") || ""] || "all";
 const contatoVazio = () => ({ name: "", title: "", email: "", phone: "", linkedinUrl: "", relationshipRole: "Influenciador" });
 
-export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, onCompletarTarefa, currentUserId, remetenteNome = "", assinaturaEmail = "", espacoId = "", onClientContextChange }) {
+export default function ClientsPage({ authHeaders, opportunities = [], contracts = [], operations = [], financial = [], tasks = [], comments = [], onComment, interactions = [], onInteraction, onNavigate, setToast, onCreateTask, onCompletarTarefa, currentUserId, remetenteNome = "", assinaturaEmail = "", espacoId = "", onClientContextChange, onClientesChange }) {
   const [clients, setClients] = useState([]);
   const [pessoas, setPessoas] = useState([]);
   const [access, setAccess] = useState({ podeGerenciar: false, podeEditar: true, somenteCarteira: true });
@@ -747,6 +747,10 @@ export default function ClientsPage({ authHeaders, opportunities = [], contracts
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (loading) return;
+    onClientesChange?.(clients);
+  }, [clients, loading, onClientesChange]);
   useEffect(() => {
     let ativo = true;
     // Duas portas de "gente do espaço" — as MESMAS que o servidor aceita como

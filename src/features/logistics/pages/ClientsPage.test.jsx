@@ -446,6 +446,48 @@ describe("página de clientes", () => {
     expect(patchBody.crm.nextActionAt).toBe("");
     expect(patchBody.crm.completedSuggestedActions).toEqual(expect.arrayContaining([expect.stringMatching(/^crm-next-action:/)]));
   });
+
+  it("reporta a carteira atualizada ao shell para recalcular Pendências sem refresh", async () => {
+    const clienteAtrasado = {
+      id: "atrasado", name: "Conta Atrasada", segment: "Varejo", status: "ativo", revision: 4,
+      vendedores: [], crm: {
+        nextAction: "Ligar pro comprador",
+        nextActionAt: "2020-01-01",
+        contacts: [{ id: "1", name: "Fernanda", department: "Procurement de Logística", email: "f@x.com" }],
+      },
+    };
+    const clienteDepois = {
+      ...clienteAtrasado, revision: 5,
+      crm: { ...clienteAtrasado.crm, nextAction: "", nextActionAt: "", completedSuggestedActions: ["crm-next-action:ligar pro comprador"] },
+    };
+    let patched = false;
+    const fetchMock = vi.fn((url, options = {}) => {
+      const alvo = String(url);
+      if (alvo.includes("/planner/pessoas") || alvo.includes("/collab")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      if (options.method === "PATCH") {
+        patched = true;
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, id: "atrasado" }), { status: 200 }));
+      }
+      const cliente = patched ? clienteDepois : clienteAtrasado;
+      return Promise.resolve(new Response(JSON.stringify({ clientes: [cliente], acesso: { podeEditar: true } }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const onClientesChange = vi.fn();
+    render(<ClientsPage authHeaders={() => ({})} onClientesChange={onClientesChange} />);
+
+    await waitFor(() => expect(onClientesChange).toHaveBeenCalled());
+    expect(onClientesChange.mock.calls.at(-1)[0][0].crm.nextActionAt).toBe("2020-01-01");
+
+    fireEvent.click(await screen.findByRole("button", { name: /Conta Atrasada/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Marcar feita e ver próxima" }));
+
+    await waitFor(() => {
+      expect(onClientesChange.mock.calls.at(-1)[0][0].crm.nextActionAt).toBe("");
+    });
+  });
 });
 
 // ===== O cache da pesquisa 360 precisa poder valer =====
