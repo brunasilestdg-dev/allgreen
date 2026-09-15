@@ -126,43 +126,51 @@
 }
 
 .tdg-shell-location {
-  display: grid;
+  align-items: center;
+  display: flex;
   gap: 3px;
   min-width: 0;
+}
+
+/* O logo é o botão de "voltar ao início": aparece em toda tela da vertical
+   e leva ao painel principal. Sem borda/fundo para o logo respirar; o hover
+   dá o feedback de que é clicável. */
+.tdg-shell-logo {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px 6px;
+  transition: transform .15s ease, background .15s ease;
+}
+
+.tdg-shell-logo:hover,
+.tdg-shell-logo:focus-visible {
+  background: var(--tdg-soft);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.tdg-shell-logo img {
+  display: block;
+  height: 44px;
+  width: auto;
+}
+
+/* Conteúdo apenas para leitor de tela: preserva o título/descrição da página
+   (usados pelo aria-labelledby do <main>) sem ocupar espaço visual. */
+.tdg-shell-sr-only {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
   overflow: hidden;
-}
-
-/* Símbolo do módulo (bloco 04 do material institucional All Green) no canto
-   superior esquerdo. Fica acima do breadcrumb e clica para o dashboard. */
-.tdg-shell-module-badge {
-  margin: 0 0 4px;
-  justify-self: start;
-}
-
-.tdg-shell-location span {
-  color: var(--tdg-green);
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: .12em;
-}
-
-.tdg-shell-location h1 {
-  font-size: clamp(1.05rem, 2vw, 1.35rem);
-  letter-spacing: -.02em;
-  line-height: 1.2;
-  margin: 0;
-}
-
-.tdg-shell-location p {
-  color: var(--tdg-muted);
-  display: -webkit-box;
-  font-size: .78rem;
-  line-height: 1.4;
-  margin: 0;
-  max-width: 760px;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 /* A trilha lê a mesma configuração do menu: área e tela sempre concordam. */

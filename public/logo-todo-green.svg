@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" role="img" aria-label="TO DO Green">
+  <title>TO DO Green</title>
+  <g fill="#17624f">
+    <!-- T (topo esquerda), levemente inclinado -->
+    <g transform="translate(18 10) rotate(-10 40 30)">
+      <rect x="0" y="0" width="72" height="17" rx="2"/>
+      <rect x="26" y="15" width="19" height="48" rx="2"/>
+    </g>
+    <!-- O (topo direita) -->
+    <circle cx="152" cy="40" r="30"/>
+    <!-- D (base esquerda) — semicírculo cheio -->
+    <path d="M 22 82 L 22 132 A 25 25 0 0 0 72 132 L 72 82 Z"/>
+    <!-- O (base direita) -->
+    <circle cx="152" cy="107" r="30"/>
+  </g>
+</svg>
