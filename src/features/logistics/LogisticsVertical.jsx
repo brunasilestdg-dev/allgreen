@@ -3346,7 +3346,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             onClick={() => navigate("/todogreen/dashboard")}
             aria-label="Início — Painel To Do Green"
           >
-            <img src="/logo-todo-green.svg" alt="To Do Green" width="72" height="50" />
+            <img src="/logo-todo-green.svg" alt="To Do Green" width="48" height="48" />
           </button>
           <h1 id="tdg-title" className="tdg-shell-sr-only">{currentPage.title}</h1>
           <p className="tdg-shell-sr-only">{currentPage.description}</p>

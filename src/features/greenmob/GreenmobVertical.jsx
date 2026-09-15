@@ -19,7 +19,6 @@ import {
   PageHeader,
 } from "../../design-system/index.js";
 import VerticalSwitcher from "../verticals/VerticalSwitcher.jsx";
-import ModuleBadge, { moduleByKey } from "../verticals/ModuleBadge.jsx";
 import {
   GREENMOB_CLIENT_TYPES,
   GREENMOB_LOSS_REASONS,
@@ -925,7 +924,13 @@ export default function GreenmobVertical({ db, update, setToast }) {
   return (
     <div className="greenmob-shell">
       <div className="greenmob-topbar">
-        <ModuleBadge module={moduleByKey("fleet")} href="/greenmob" size="md" />
+        {/* Logo da To Do Green (marca do grupo) — mesma arte que aparece em
+            todas as verticais; clicar volta ao painel principal da vertical
+            atual, mantendo o gesto "logo = início" consistente. Substituiu o
+            ModuleBadge numerado a pedido da titular. */}
+        <a href="/greenmob" className="greenmob-brand" aria-label="Início — Greenmob">
+          <img src="/logo-todo-green.svg" alt="To Do Green" width="44" height="44" />
+        </a>
         <AtalhoVoltar />
       </div>
       <PageHeader
