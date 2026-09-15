@@ -401,6 +401,8 @@ function WorkspaceOverview({ summary, onOpenTool, onNavigate, mostrarIntegracoes
     automacoes: "Ao vivo",
     ajuda: "Abrir",
     estrutura: summary.workNodes,
+    tarefas: summary.openTasks,
+    visoes: "Abrir",
     bases: summary.bases,
     processos: summary.processes,
     capacidade: summary.resources,
