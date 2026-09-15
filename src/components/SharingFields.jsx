@@ -21,24 +21,45 @@ export default function SharingFields({
   useEffect(() => {
     let cancelled = false;
     const space = activeSpaceId();
-    // Duas fontes precisam ser reunidas — sem isso, quem foi cadastrado só na
-    // vertical (ex.: To Do Green, `tenant_users` via /planner/pessoas) some
-    // do picker de compartilhamento, enquanto quem entrou pelo colab do Seu
-    // Funcionário continua aparecendo. Reclamação da titular: "aparece o
-    // Breno (Seu Funcionário) mas não o Jeberson (vertical)". Se algum lado
-    // não responder (ex.: usuário fora de qualquer vertical), o outro segue.
+    // Duas fontes reunidas por id:
+    //   1) `/api/collab`: dono + membros invitados via Seu Funcionário
+    //   2) `/api/todogreen/planner/pessoas`: dono + memberships + tenant_users
+    //      (quem entrou pela vertical To Do Green — Jeberson e afins).
+    // Reclamação da titular: "aparece o Breno (Seu Funcionário) mas não o
+    // Jeberson (vertical)". Se uma rota estiver fora do escopo do usuário
+    // (ex.: fora da vertical), devolve vazio; a outra segue valendo.
+    // Loga a razão de falha no console — sem isso, o picker "só vinha vazio"
+    // e a titular ficava sem entender de onde a lista viria.
     const doCollab = fetch(`/api/collab${space ? `?owner=${encodeURIComponent(space)}` : ""}`, {
       headers: authHeaders(),
     })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.members || [])
-      .catch(() => []);
+      .then(async (r) => {
+        if (!r.ok) {
+          console.warn(`[SharingFields] /api/collab respondeu ${r.status}`);
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => (d ? [d.owner, ...(d.members || [])] : []))
+      .catch((err) => {
+        console.warn("[SharingFields] /api/collab falhou", err);
+        return [];
+      });
     const daVertical = fetch("/api/todogreen/planner/pessoas", {
       headers: authHeaders(),
     })
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        if (!r.ok) {
+          console.warn(`[SharingFields] /api/todogreen/planner/pessoas respondeu ${r.status}`);
+          return null;
+        }
+        return r.json();
+      })
       .then((d) => d?.registros || [])
-      .catch(() => []);
+      .catch((err) => {
+        console.warn("[SharingFields] /api/todogreen/planner/pessoas falhou", err);
+        return [];
+      });
     Promise.all([doCollab, daVertical]).then(([collab, vertical]) => {
       if (cancelled) return;
       const vistos = new Set();

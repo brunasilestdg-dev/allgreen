@@ -2592,7 +2592,7 @@ h3,
 .modal-body {
   display: grid;
   gap: 16px;
-  padding: 22px 28px 22px 24px;
+  padding: 22px 28px;
 }
 .modal-actions {
   display: flex;
