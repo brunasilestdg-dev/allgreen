@@ -35,10 +35,9 @@
   transform: translateY(-1px);
 }
 .greenmob-brand img {
-  border-radius: 8px;
   display: block;
   height: 44px;
-  width: 44px;
+  width: auto;
 }
 
 .greenmob-back {
