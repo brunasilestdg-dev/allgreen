@@ -47,6 +47,29 @@ describe("LegalHub — abertura da página (regressão de TDZ)", () => {
     expect(await screen.findByText(/Jurídico canônico TDG/i)).toBeInTheDocument();
   });
 
+  it("abre na aba passada por `initialTab` (subitem da sidebar do ERP)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ registros: [] }) })),
+    );
+    render(
+      <Suspense fallback={<span>carregando</span>}>
+        <LegalHub
+          db={{ user: { id: "u1", name: "Bruna" } }}
+          update={() => {}}
+          setToast={() => {}}
+          authHeaders={() => ({})}
+          business={{ name: "TDG" }}
+          viewer={{ userId: "u1", role: "head_juridico", isOwner: false }}
+          tdgAvailable
+          initialTab="contratos"
+        />
+      </Suspense>,
+    );
+    // Aba Contratos renderiza o botão "Novo contrato" no header.
+    expect(await screen.findByText(/Novo contrato/i)).toBeInTheDocument();
+  });
+
   it("abre no modo solicitante (fora do ERP) sem crashar", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) })));
     render(
