@@ -360,8 +360,12 @@ describe("fluxo de aprovação", () => {
 describe("busca centralizada", () => {
   const records = {
     matters: [
-      { id: "m1", title: "Análise do contrato Alfa", confidentiality: "interno" },
+      // Demanda que a Alice submeteu.
+      { id: "m1", title: "Análise do contrato Alfa", confidentiality: "interno", submitterId: "u-alice" },
+      // Demanda restrita (só Jurídico).
       { id: "m2", title: "Contencioso Beta", confidentiality: "restrito" },
+      // Demanda de outra pessoa — Alice NÃO deve descobrir isso via busca.
+      { id: "m3", title: "Auditoria Delta", confidentiality: "interno", submitterId: "u-bob" },
     ],
     contracts: [
       { id: "c1", title: "Contrato Gamma", counterparty: "Empresa Gamma", confidentiality: "interno" },
@@ -372,16 +376,46 @@ describe("busca centralizada", () => {
     offices: [],
   };
 
-  it("acha por trecho no título e ordena por relevância", () => {
-    const r = searchLegal(records, "gamma", { role: "colaborador" });
+  it("Jurídico acha contratos e demandas por trecho", () => {
+    const r = searchLegal(records, "gamma", { role: "juridico" });
     expect(r[0].id).toBe("c1");
   });
 
-  it("respeita confidencialidade: colaborador não vê restrito", () => {
-    const r = searchLegal(records, "beta", { role: "colaborador" });
+  it("respeita confidencialidade: solicitante não vê demanda restrita", () => {
+    const r = searchLegal(records, "beta", { userId: "u-alice", role: "colaborador" });
     expect(r).toHaveLength(0);
     const rj = searchLegal(records, "beta", { role: "juridico" });
     expect(rj.map((x) => x.id)).toContain("m2");
+  });
+
+  it("solicitante NÃO descobre demandas de outra pessoa via busca (brecha corrigida)", () => {
+    // Alice procura "delta" — a demanda existe, mas foi submetida pelo Bob.
+    // Antes vazava porque `canRead` só olha confidencialidade.
+    const alice = { userId: "u-alice", role: "colaborador" };
+    const r = searchLegal(records, "delta", alice);
+    expect(r).toHaveLength(0);
+    // Bob (dono) acha a própria.
+    const rBob = searchLegal(records, "delta", { userId: "u-bob", role: "colaborador" });
+    expect(rBob.map((x) => x.id)).toEqual(["m3"]);
+    // Jurídico também acha (staff).
+    const rJur = searchLegal(records, "delta", { role: "juridico" });
+    expect(rJur.map((x) => x.id)).toEqual(["m3"]);
+  });
+
+  it("solicitante NÃO descobre contratos por busca (só o Jurídico)", () => {
+    const alice = { userId: "u-alice", role: "colaborador" };
+    // Alice procura "gamma" — o contrato existe, mas não é dela.
+    const r = searchLegal(records, "gamma", alice);
+    expect(r).toHaveLength(0);
+    // Jurídico acha.
+    const rJur = searchLegal(records, "gamma", { role: "juridico" });
+    expect(rJur.map((x) => x.id)).toContain("c1");
+  });
+
+  it("solicitante acha as PRÓPRIAS demandas", () => {
+    const alice = { userId: "u-alice", role: "colaborador" };
+    const r = searchLegal(records, "alfa", alice);
+    expect(r.map((x) => x.id)).toEqual(["m1"]);
   });
 
   it("busca vazia devolve lista vazia", () => {

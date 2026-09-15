@@ -892,19 +892,32 @@ const scoreMatch = (text, query) => {
 export const searchLegal = (records = {}, query, viewer = {}) => {
   const q = String(query || "").trim();
   if (!q) return [];
+  const staff = isLegalStaff(viewer);
   const results = [];
   const push = (kind, r, fields) => {
     const bestScore = Math.max(0, ...fields.map((f) => scoreMatch(f, q)));
     if (bestScore > 0) results.push({ kind, id: r.id, title: r.title || r.name || "Sem título", score: bestScore, record: r });
   };
   for (const m of records.matters || []) push("matter", m, [m.title, m.description, m.notes, m.number]);
-  for (const c of records.contracts || []) push("contract", c, [c.title, c.counterparty, c.counterpartyDocument, c.notes]);
-  for (const p of records.processes || []) push("process", p, [p.title, p.number, p.court, p.notes]);
-  for (const p of records.powersOfAttorney || [])
-    push("power-of-attorney", p, [p.title, p.grantor, p.attorney, p.purpose]);
-  for (const d of records.deadlines || []) push("deadline", d, [d.title, d.notes]);
-  for (const o of records.offices || []) push("office", o, [o.name, o.contactName, o.email, o.oab]);
-  const visible = results.filter((r) => canRead(r.record, viewer));
+  // Contratos, processos, procurações, prazos e escritórios só entram na busca
+  // quando o viewer é do time jurídico. Um solicitante não deveria descobrir a
+  // existência de um contrato ou processo por termo digitado na busca.
+  if (staff) {
+    for (const c of records.contracts || []) push("contract", c, [c.title, c.counterparty, c.counterpartyDocument, c.notes]);
+    for (const p of records.processes || []) push("process", p, [p.title, p.number, p.court, p.notes]);
+    for (const p of records.powersOfAttorney || [])
+      push("power-of-attorney", p, [p.title, p.grantor, p.attorney, p.purpose]);
+    for (const d of records.deadlines || []) push("deadline", d, [d.title, d.notes]);
+    for (const o of records.offices || []) push("office", o, [o.name, o.contactName, o.email, o.oab]);
+  }
+  const visible = results.filter((r) => {
+    // Demanda ("matter") é regida por `canAccessRequest`: ou é a própria
+    // submissão do usuário OU ele é do time jurídico E a confidencialidade
+    // permite. Só a `canRead` deixaria vazar demanda "interna" de outra
+    // pessoa para o solicitante — foi a brecha que a titular apontou.
+    if (r.kind === "matter") return canAccessRequest(r.record, viewer);
+    return canRead(r.record, viewer);
+  });
   return visible.sort((a, b) => b.score - a.score).slice(0, 50);
 };
 
