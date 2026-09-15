@@ -2562,6 +2562,9 @@ h3,
   width: min(620px, 100%);
   max-height: 92vh;
   overflow: auto;
+  /* Reserva o espaço do scrollbar para o conteúdo não colar na barra quando
+     precisar rolar (regra herdada: "o texto não fica colado com a aba"). */
+  scrollbar-gutter: stable;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -2589,7 +2592,7 @@ h3,
 .modal-body {
   display: grid;
   gap: 16px;
-  padding: 22px 24px;
+  padding: 22px 28px 22px 24px;
 }
 .modal-actions {
   display: flex;
