@@ -550,6 +550,20 @@ export default function Tasks({
     setDeadlineCalc({ open: false, base: today(), days: "5" });
     setModal(true);
   };
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("open") !== "1" || !targetTaskId) return;
+    const task = db.tasks.find((item) => item.id === targetTaskId);
+    if (!task) return;
+    const openId = setTimeout(() => openTask(task), 0);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("open");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    return () => clearTimeout(openId);
+    // Só deve reagir ao id recebido na navegação, não às sincronizações da task.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetTaskId]);
   // ?nova=1 no URL abre o modal de "Nova tarefa" ao entrar na tela. É o
   // mesmo padrão do ?task=<id>: telas fora do TasksScreen (Hoje/Próximas do
   // TodoGreenWorkspace) precisam de um botão "Nova tarefa" e navegam para cá

@@ -782,6 +782,58 @@
   }
 }
 
+/* ── Meu Dia — filtros e ações inline ────────────────────────────────── */
+.myday-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 14px;
+}
+.myday-filter,
+.myday-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.myday-filter { padding: 6px 12px; border-radius: 999px; font-size: 0.82rem; }
+.myday-filter span {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--line));
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.myday-filter.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
+.myday-filter.active span { background: var(--primary); color: var(--onPrimary, #fff); }
+.myday-task {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 2%, var(--surface));
+}
+.myday-task .mywork-task { margin: 0; border: 0; background: transparent; }
+.myday-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 6px 4px 34px; }
+.myday-action { padding: 4px 10px; border-radius: 999px; font-size: 0.76rem; }
+.myday-action svg { width: 14px; }
+.myday-action:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--line)); }
+.myday-action.ghost { background: transparent; color: var(--muted); }
+.myday-reschedule { display: inline-flex; align-items: center; gap: 6px; }
+.myday-reschedule input[type="date"] {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+}
+@media (max-width: 720px) { .myday-actions { padding-left: 6px; } }
+
 /* ── Saúde do espaço (breakdown) ────────────────────────────────────── */
 .space-breakdown {
   display: grid;

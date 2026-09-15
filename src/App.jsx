@@ -5333,7 +5333,65 @@ const TASK_STATUS_TONE = {
   Concluído: "ok",
 };
 
-function MyWork({ db, business, setToast: _setToast, go }) {
+export const MYDAY_FILTERS = [
+  { id: "all", label: "Todas" },
+  { id: "overdue", label: "Atrasadas" },
+  { id: "today", label: "Hoje" },
+  { id: "week", label: "Esta semana" },
+  { id: "next", label: "Próximas" },
+  { id: "undated", label: "Sem prazo" },
+];
+
+const addDaysYmdIso = (ymd, days) => {
+  const base = Date.parse(`${ymd}T00:00:00Z`);
+  if (!Number.isFinite(base)) return ymd;
+  return new Date(base + days * 86400000).toISOString().slice(0, 10);
+};
+
+const endOfWeekYmd = (ymd) => {
+  const base = Date.parse(`${ymd}T00:00:00Z`);
+  if (!Number.isFinite(base)) return ymd;
+  return addDaysYmdIso(ymd, 6 - new Date(base).getUTCDay());
+};
+
+export const isMyDayTaskDone = (status) =>
+  ["concluído", "concluido", "concluída", "concluida"].includes(
+    String(status || "").trim().toLocaleLowerCase("pt-BR"),
+  );
+
+export const applyMyDayFilter = (tasks, filterId, ymd) => {
+  const endOfWeek = endOfWeekYmd(ymd);
+  const validDate = (value) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value));
+  return (tasks || []).filter((task) => {
+    const raw = String(task.due || "").slice(0, 10);
+    const due = validDate(raw) ? raw : "";
+    if (filterId === "today") return due === ymd;
+    if (filterId === "overdue") return Boolean(due) && due < ymd;
+    if (filterId === "week") return Boolean(due) && due > ymd && due <= endOfWeek;
+    if (filterId === "next") return Boolean(due) && due > endOfWeek;
+    if (filterId === "undated") return !due;
+    return true;
+  });
+};
+
+export const taskOriginLabel = (task) => {
+  const source = String(task?.source || "").toLocaleLowerCase("pt-BR");
+  if (source.includes("greenon")) return "Green On";
+  if (source.includes("todogreen") || source.includes("tdg")) return "CRM TDG";
+  if (task?.sourceLeadId || task?.leadId || task?.opportunityId) return "CRM";
+  if (task?.projectId || task?.project) return "Planner";
+  if (task?.sourceQuoteId) return "Orçamento";
+  if (task?.sourceOrderId) return "Pedido";
+  return "To Do";
+};
+
+export const updateCanonicalTask = (tasks, id, patch, updatedAt) =>
+  (tasks || []).map((task) =>
+    task.id === id ? { ...task, ...patch, updatedAt } : task,
+  );
+
+function MyWork({ db, update, business, setToast, go }) {
   const userId = db.user?.id;
   const work = computeMyWork(db, userId, business);
   // Prazos, audiências e prazos processuais do Jurídico já são convertidos em
@@ -5366,6 +5424,42 @@ function MyWork({ db, business, setToast: _setToast, go }) {
     [work.corrections, "Correções pedidas", CircleAlert],
     [work.overdue, "Atrasadas", CalendarDays],
   ];
+  const [filter, setFilter] = useState("all");
+  const [rescheduleId, setRescheduleId] = useState("");
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const now = today();
+  const filtered = applyMyDayFilter(work.all, filter, now);
+  const filterCounts = MYDAY_FILTERS.reduce((counts, item) => ({
+    ...counts,
+    [item.id]: applyMyDayFilter(work.all, item.id, now).length,
+  }), {});
+  const patchTask = (id, patch) => {
+    const updatedAt = new Date().toISOString();
+    update((current) => ({
+      ...current,
+      tasks: updateCanonicalTask(current.tasks, id, patch, updatedAt),
+    }));
+  };
+  const openTaskDetail = (task) => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("task", task.id);
+      url.searchParams.set("open", "1");
+      window.history.pushState({}, "", `${url.pathname}${url.search}`);
+    }
+    go("operacao");
+  };
+  const startReschedule = (task) => {
+    setRescheduleId(task.id);
+    setRescheduleDate(String(task.due || "").slice(0, 10) || now);
+  };
+  const saveReschedule = (task) => {
+    if (!rescheduleDate) return;
+    patchTask(task.id, { due: rescheduleDate });
+    setRescheduleId("");
+    setRescheduleDate("");
+    setToast?.("Prazo atualizado");
+  };
   return (
     <PageTitle
       eyebrow="MEU TRABALHO"
@@ -5395,44 +5489,69 @@ function MyWork({ db, business, setToast: _setToast, go }) {
         <div className="section-head">
           <div>
             <span className="eyebrow">MINHAS TAREFAS</span>
-            <h2>Próximas a fazer</h2>
+            <h2>Meu dia</h2>
           </div>
-          <button className="text-button" onClick={() => go("operacao")}>
-            Ver todas
+          <button className="text-button" onClick={() => go("planejar")}>
+            Planejar meu dia
           </button>
         </div>
-        {work.active.length === 0 ? (
+        <div className="myday-filters" role="group" aria-label="Filtrar minhas tarefas por prazo">
+          {MYDAY_FILTERS.map((item) => (
+            <button key={item.id} type="button" className={filter === item.id ? "myday-filter active" : "myday-filter"} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+              {item.label} <span>{filterCounts[item.id] || 0}</span>
+            </button>
+          ))}
+        </div>
+        {filtered.length === 0 ? (
           <Empty
             icon={BriefcaseBusiness}
-            title="Nada na sua fila"
-            text="Quando alguém atribuir uma tarefa a você (ou você assumir uma missão), ela aparece aqui."
-            action="Ver missões disponíveis"
+            title={work.all.length === 0 ? "Nada na sua fila" : "Nada neste filtro"}
+            text={work.all.length === 0 ? "Quando alguém atribuir uma tarefa a você, ela aparece aqui." : "Escolha outro filtro ou abra o To Do para ver a tarefa."}
+            action="Abrir To Do"
             onAction={() => go("operacao")}
           />
         ) : (
           <div className="mywork-tasks">
-            {work.active.slice(0, 8).map((t) => (
-              <button
-                key={t.id}
-                className="mywork-task"
-                onClick={() => go("operacao")}
-              >
-                <span
-                  className={`mywork-dot ${TASK_STATUS_TONE[t.status] || "muted"}`}
-                />
-                <span className="mywork-task-body">
-                  <strong>{t.title}</strong>
-                  <small>
-                    {t.status}
-                    {t.priority ? ` · ${t.priority}` : ""}
-                    {t.due ? ` · prazo ${t.due}` : ""}
-                  </small>
-                </span>
-                {t.due && t.due < today() && t.status !== "Concluído" && (
-                  <span className="mywork-late">Atrasada</span>
-                )}
-                <ArrowUpRight />
-              </button>
+            {filtered.map((t) => (
+              <div key={t.id} className="myday-task">
+                <button className="mywork-task" type="button" onClick={() => openTaskDetail(t)}>
+                  <span className={`mywork-dot ${TASK_STATUS_TONE[t.status] || "muted"}`} />
+                  <span className="mywork-task-body">
+                    <strong>{t.title || "Sem título"}</strong>
+                    <small>
+                      {taskOriginLabel(t)}
+                      {t.clientName || t.accountName ? ` · ${t.clientName || t.accountName}` : ""}
+                      {t.due ? ` · prazo ${String(t.due).slice(0, 10)}` : " · sem prazo"}
+                    </small>
+                    <small>
+                      {t.assigneeName || t.assignee || (t.assigneeId === userId ? "Você" : "Sem responsável")}
+                      {t.priority ? ` · prioridade ${t.priority}` : ""}
+                      {t.status ? ` · ${t.status}` : ""}
+                    </small>
+                  </span>
+                  {t.due && String(t.due).slice(0, 10) < now && !isMyDayTaskDone(t.status) && <span className="mywork-late">Atrasada</span>}
+                  <ArrowUpRight />
+                </button>
+                <div className="myday-actions" role="group" aria-label={`Ações para ${t.title || "tarefa"}`}>
+                  <button type="button" className="myday-action" onClick={() => {
+                    patchTask(t.id, { status: isMyDayTaskDone(t.status) ? "A fazer" : "Concluído" });
+                    setToast?.(isMyDayTaskDone(t.status) ? "Tarefa reaberta" : "Tarefa concluída");
+                  }}>
+                    {isMyDayTaskDone(t.status) ? <RotateCcw /> : <CheckCircle2 />}
+                    {isMyDayTaskDone(t.status) ? "Reabrir" : "Concluir"}
+                  </button>
+                  {rescheduleId === t.id ? (
+                    <span className="myday-reschedule">
+                      <input type="date" aria-label="Novo prazo" value={rescheduleDate} onChange={(event) => setRescheduleDate(event.target.value)} />
+                      <button type="button" className="myday-action" onClick={() => saveReschedule(t)}>Salvar</button>
+                      <button type="button" className="myday-action ghost" onClick={() => setRescheduleId("")}>Cancelar</button>
+                    </span>
+                  ) : (
+                    <button type="button" className="myday-action" onClick={() => startReschedule(t)}><Clock3 /> Reagendar</button>
+                  )}
+                  <button type="button" className="myday-action" onClick={() => openTaskDetail(t)}><ArrowUpRight /> Abrir</button>
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -14682,7 +14801,7 @@ export default function App() {
         );
       case "meu-trabalho":
         return (
-          <MyWork db={db} business={business} setToast={setToast} go={go} />
+          <MyWork db={db} update={update} business={business} setToast={setToast} go={go} />
         );
       case "resultados":
         return (

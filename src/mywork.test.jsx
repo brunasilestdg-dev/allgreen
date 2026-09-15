@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeMyWork } from "./App";
+import {
+  MYDAY_FILTERS,
+  applyMyDayFilter,
+  computeMyWork,
+  isMyDayTaskDone,
+  taskOriginLabel,
+  updateCanonicalTask,
+} from "./App";
 
 const business = { id: "b1" };
 const mk = (over) => ({
@@ -45,5 +52,43 @@ describe("computeMyWork", () => {
   it("ordena as ativas por prazo mais próximo", () => {
     const w = computeMyWork(db, "u1", business, "2026-07-24");
     expect(w.active[0].due).toBe("2000-01-01");
+  });
+});
+
+describe("Meu Dia", () => {
+  const hoje = "2026-09-04";
+  const tarefas = [
+    { id: "atrasada", due: "2026-09-03" },
+    { id: "hoje", due: hoje },
+    { id: "semana", due: "2026-09-05" },
+    { id: "proxima", due: "2026-09-15" },
+    { id: "sem-prazo" },
+  ];
+
+  it("separa todas as tarefas pelos filtros de prazo sem limitar a lista", () => {
+    expect(applyMyDayFilter(tarefas, "all", hoje)).toHaveLength(5);
+    expect(applyMyDayFilter(tarefas, "overdue", hoje).map((item) => item.id)).toEqual(["atrasada"]);
+    expect(applyMyDayFilter(tarefas, "today", hoje).map((item) => item.id)).toEqual(["hoje"]);
+    expect(applyMyDayFilter(tarefas, "week", hoje).map((item) => item.id)).toEqual(["semana"]);
+    expect(applyMyDayFilter(tarefas, "next", hoje).map((item) => item.id)).toEqual(["proxima"]);
+    expect(applyMyDayFilter(tarefas, "undated", hoje).map((item) => item.id)).toEqual(["sem-prazo"]);
+    expect(MYDAY_FILTERS).toHaveLength(6);
+  });
+
+  it("conclui e reabre a mesma entidade sem duplicar", () => {
+    const concluida = updateCanonicalTask(tarefas, "hoje", { status: "Concluído" }, "agora");
+    expect(concluida).toHaveLength(tarefas.length);
+    expect(concluida.find((item) => item.id === "hoje").status).toBe("Concluído");
+    const reaberta = updateCanonicalTask(concluida, "hoje", { status: "A fazer" }, "depois");
+    expect(reaberta.filter((item) => item.id === "hoje")).toHaveLength(1);
+    expect(reaberta.find((item) => item.id === "hoje").status).toBe("A fazer");
+  });
+
+  it("reconhece conclusão canônica e legada e informa a origem", () => {
+    expect(isMyDayTaskDone("Concluído")).toBe(true);
+    expect(isMyDayTaskDone("concluida")).toBe(true);
+    expect(taskOriginLabel({ source: "greenon-crm-followup" })).toBe("Green On");
+    expect(taskOriginLabel({ opportunityId: "o1" })).toBe("CRM");
+    expect(taskOriginLabel({ projectId: "p1" })).toBe("Planner");
   });
 });
