@@ -1,29 +1,43 @@
 /* VIS-02B — acabamento do shell enterprise.
    Apenas apresentação: mantém rotas, ações, dados e permissões intactos. */
 
-/* A coluna escura deve fechar visualmente a lateral inteira abaixo da topbar. */
+/* A coluna escura precisa acompanhar a ALTURA REAL da página, não apenas a
+   viewport. O CSS antigo limitava a sidebar a 100vh e por isso o verde acabava
+   antes do conteúdo em páginas mais longas. A linha do grid agora é a fonte da
+   altura; o fundo do próprio layout funciona como continuidade visual segura. */
 @media (min-width: 901px) {
   .tdg.tdg-module-page .tdg-erp-layout,
   .tdg.tdg-overview-page .tdg-erp-layout {
     align-items: stretch;
+    background: linear-gradient(
+      90deg,
+      #10241f 0,
+      #10241f 286px,
+      var(--tdg-bg) 286px,
+      var(--tdg-bg) 100%
+    );
     grid-template-columns: 286px minmax(0, 1fr);
     min-height: calc(100vh - 73px);
     min-height: calc(100dvh - 73px);
+  }
+
+  .tdg.tdg-module-page .tdg-erp-layout.menu-oculto,
+  .tdg.tdg-overview-page .tdg-erp-layout.menu-oculto {
+    background: var(--tdg-bg);
   }
 
   .tdg.tdg-module-page .tdg-erp-sidebar,
   .tdg.tdg-overview-page .tdg-erp-sidebar {
     align-self: stretch;
     background: #10241f;
-    height: calc(100vh - 73px);
-    height: calc(100dvh - 73px);
-    max-height: calc(100vh - 73px);
-    max-height: calc(100dvh - 73px);
-    min-height: calc(100vh - 73px);
-    min-height: calc(100dvh - 73px);
+    bottom: auto;
+    height: auto;
+    max-height: none;
+    min-height: 100%;
     overflow-x: hidden;
-    overflow-y: auto;
-    top: 0;
+    overflow-y: visible;
+    position: relative;
+    top: auto;
   }
 
   .tdg.tdg-module-page .tdg-erp-stage,
