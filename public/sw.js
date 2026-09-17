@@ -4,7 +4,8 @@ const SERVICE_VERSION =
 // cache e baixar a nova: mudar o nome do cache faz o `activate` apagar tudo o
 // que não é este cache — cura o caso de telas que "não fazem nada" porque o JS
 // em cache aponta para pedaços que já não existem.
-const CACHE = `seu-funcionario-v260-${SERVICE_VERSION}`;
+const CACHE = `seu-funcionario-v261-${SERVICE_VERSION}`;
+const IS_ALL_GREEN_HOST = /(^|\.)orianone\.app$/i.test(self.location.hostname);
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -67,7 +68,7 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {}
-  const title = data.title || "Seu Funcionário";
+  const title = data.title || (IS_ALL_GREEN_HOST ? "All Green" : "Seu Funcionário");
   const link = data.link || "/";
   const extra = data.count > 1 ? ` (+${data.count - 1} outra${data.count > 2 ? "s" : ""})` : "";
   event.waitUntil(

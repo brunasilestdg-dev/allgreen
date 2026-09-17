@@ -13,7 +13,16 @@
     <meta name="apple-mobile-web-app-title" content="Seu Funcionário" />
     <title>Seu Funcionário</title>
     <script>
-      if (/^\/todogreen(?:\/|$)/.test(location.pathname)) {
+      const hostAllGreen = /(^|\.)orianone\.app$/i.test(location.hostname);
+
+      // O domínio institucional do All Green entra direto na vertical. Isso
+      // evita que a raiz monte por alguns instantes o workspace genérico do
+      // Seu Funcionário antes de o roteador React assumir a navegação.
+      if (hostAllGreen && location.pathname === "/") {
+        history.replaceState({}, "", `/todogreen${location.search}${location.hash}`);
+      }
+
+      if (hostAllGreen || /^\/todogreen(?:\/|$)/.test(location.pathname)) {
         const aplicarIdentidadeAllGreen = () => {
           if (document.title === "Seu Funcionário" || document.title === "To Do Green") {
             document.title = "All Green";
@@ -26,8 +35,8 @@
         document.querySelector('meta[name="description"]').content = "All Green — comercial, operação, financeiro, gestão e ESG no mesmo fluxo.";
         document.querySelector('meta[name="apple-mobile-web-app-title"]').content = "All Green";
         document.querySelector('link[rel="manifest"]').href = "/manifest-allgreen.webmanifest";
-        document.querySelector('link[rel="icon"]').href = "/logo-todo-green.png?v=1";
-        document.querySelector('link[rel="apple-touch-icon"]').href = "/logo-todo-green.png?v=1";
+        document.querySelector('link[rel="icon"]').href = "/logo-todo-green.png?v=2";
+        document.querySelector('link[rel="apple-touch-icon"]').href = "/logo-todo-green.png?v=2";
 
         const titulo = document.querySelector("title");
         if (titulo) {
