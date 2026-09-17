@@ -35,7 +35,7 @@ describe("acesso à conta", () => {
     render(<App />);
 
     expect(
-      screen.getByRole("heading", { name: "Entre no ambiente To Do Green" }),
+      screen.getByRole("heading", { name: "Entrar" }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("E-mail"), {
       target: { value: "BRUNA@example.com" },
