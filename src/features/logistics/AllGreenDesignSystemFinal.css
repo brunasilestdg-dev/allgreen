@@ -1,0 +1,452 @@
+/*
+ * All Green Design System Final
+ *
+ * Camada canônica de acabamento visual da vertical To Do Green / All Green.
+ * Não remove nem altera comportamento de componentes. Consolida tokens e
+ * contratos visuais para que CRM, Pricing, TMS, Planner, Financeiro, Jurídico
+ * e demais módulos pareçam partes do mesmo ERP.
+ *
+ * As camadas visuais anteriores permanecem no repositório como fallback e
+ * histórico. Esta folha é carregada por último e deve ser a referência para
+ * novas telas.
+ */
+
+.tdg {
+  --ag-canvas: #f4f7f6;
+  --ag-surface: #ffffff;
+  --ag-surface-soft: #f8faf9;
+  --ag-surface-muted: #eef3f1;
+  --ag-ink: #10241f;
+  --ag-ink-soft: #314b43;
+  --ag-muted: #657870;
+  --ag-line: #d9e3df;
+  --ag-line-strong: #c5d4ce;
+  --ag-brand: #17624f;
+  --ag-brand-hover: #124f41;
+  --ag-brand-soft: #e9f3ef;
+  --ag-brand-deep: #10241f;
+  --ag-positive: #23765e;
+  --ag-warning: #a56a18;
+  --ag-danger: #9c3434;
+  --ag-info: #315f79;
+  --ag-focus: rgba(23, 98, 79, .2);
+  --ag-radius-control: 7px;
+  --ag-radius-panel: 9px;
+  --ag-radius-modal: 10px;
+  --ag-shadow-float: 0 18px 48px rgba(16, 36, 31, .16);
+  --ag-shadow-soft: 0 1px 2px rgba(16, 36, 31, .05);
+  --ag-space-1: 4px;
+  --ag-space-2: 8px;
+  --ag-space-3: 12px;
+  --ag-space-4: 16px;
+  --ag-space-5: 20px;
+  --ag-space-6: 24px;
+  --ag-space-7: 32px;
+  --ag-control-height: 38px;
+  color: var(--ag-ink);
+}
+
+/* Canvas e ritmo de página */
+.tdg [data-tdg-page-content="true"],
+.tdg .tdg-page,
+.tdg .tdg-space,
+.tdg .tdg-task-workspace {
+  min-width: 0;
+}
+
+.tdg [data-tdg-page-content="true"] {
+  gap: var(--ag-space-5);
+}
+
+.tdg .tdg-erp-stage {
+  background: var(--ag-canvas);
+}
+
+/* Títulos de página. O texto explicativo continua disponível no DOM quando
+   necessário para acessibilidade, mas a interface visual prioriza título,
+   contexto e ação. */
+.tdg .page-title,
+.tdg .tdg-page-title {
+  align-items: flex-end;
+  gap: var(--ag-space-5);
+  margin: 0;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--ag-line);
+  background: transparent;
+  box-shadow: none;
+}
+
+.tdg .page-title h1,
+.tdg .page-title h2,
+.tdg .tdg-page-title h1,
+.tdg .tdg-page-title h2 {
+  color: var(--ag-ink);
+  font-size: clamp(22px, 2.1vw, 28px);
+  font-weight: 780;
+  line-height: 1.12;
+  letter-spacing: -.028em;
+}
+
+.tdg .page-title .eyebrow,
+.tdg .tdg-page-title .tdg-kicker,
+.tdg .tdg-kicker {
+  color: var(--ag-brand);
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: .09em;
+}
+
+.tdg .page-title > div > p,
+.tdg .tdg-page-title > div > p {
+  display: none;
+}
+
+/* Botões */
+.tdg .button,
+.tdg .tdg-action,
+.tdg .btn,
+.tdg .modal-actions button,
+.tdg .page-title button,
+.tdg .tdg-page-actions button {
+  min-height: var(--ag-control-height);
+  padding: 8px 13px;
+  border: 1px solid var(--ag-line-strong);
+  border-radius: var(--ag-radius-control);
+  background: var(--ag-surface);
+  color: var(--ag-ink);
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.15;
+  transition: background-color .14s ease, border-color .14s ease, color .14s ease, box-shadow .14s ease;
+}
+
+.tdg .button.primary,
+.tdg .tdg-action,
+.tdg .btn:not(.ghost):not(.secondary),
+.tdg button[type="submit"]:not(.ghost):not(.secondary) {
+  border-color: var(--ag-brand);
+  background: var(--ag-brand);
+  color: #fff;
+}
+
+.tdg .button.primary:hover:not(:disabled),
+.tdg .tdg-action:hover:not(:disabled),
+.tdg .btn:not(.ghost):not(.secondary):hover:not(:disabled),
+.tdg button[type="submit"]:not(.ghost):not(.secondary):hover:not(:disabled) {
+  border-color: var(--ag-brand-hover);
+  background: var(--ag-brand-hover);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(23, 98, 79, .14);
+  transform: none;
+}
+
+.tdg .button.secondary,
+.tdg .button.ghost,
+.tdg .btn.secondary,
+.tdg .btn.ghost {
+  border-color: var(--ag-line-strong);
+  background: var(--ag-surface);
+  color: var(--ag-ink-soft);
+}
+
+.tdg .button.secondary:hover:not(:disabled),
+.tdg .button.ghost:hover:not(:disabled),
+.tdg .btn.secondary:hover:not(:disabled),
+.tdg .btn.ghost:hover:not(:disabled) {
+  border-color: #9fb9af;
+  background: var(--ag-brand-soft);
+  color: var(--ag-brand);
+  transform: none;
+}
+
+.tdg :is(.danger, [class*="danger"], [class*="delete"], [class*="remove"]) {
+  border-color: #e2c0c0;
+  background: #fffafa;
+  color: var(--ag-danger);
+}
+
+.tdg :is(.button, .tdg-action, .btn, button):focus-visible {
+  outline: 3px solid var(--ag-focus);
+  outline-offset: 2px;
+}
+
+/* Campos */
+.tdg .field {
+  gap: 6px;
+}
+
+.tdg .field > span,
+.tdg .filter-select-label,
+.tdg .tdg-enterprise-form label > span,
+.tdg .tdg-form-em-modal label > span {
+  color: var(--ag-ink-soft);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: .005em;
+}
+
+.tdg :is(input, select, textarea),
+.tdg .filter-select-control,
+.tdg .tdg-search,
+.tdg .tdg-intelligence-search {
+  border-color: var(--ag-line-strong);
+  border-radius: var(--ag-radius-control);
+  background: var(--ag-surface);
+  color: var(--ag-ink);
+  box-shadow: none;
+}
+
+.tdg :is(input, select) {
+  min-height: var(--ag-control-height);
+}
+
+.tdg textarea {
+  min-height: 82px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.tdg :is(input, select, textarea):focus {
+  border-color: var(--ag-brand);
+  outline: 3px solid var(--ag-focus);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+.tdg .field > small,
+.tdg .form-hint,
+.tdg .filter-hint {
+  color: var(--ag-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Superfícies */
+.tdg :is(.card, .panel, .tdg-panel, .tdg-section, .tdg-account-panel, .tdg-task-section) {
+  border-color: var(--ag-line);
+  border-radius: var(--ag-radius-panel);
+  background: var(--ag-surface);
+  box-shadow: var(--ag-shadow-soft);
+}
+
+.tdg .tdg-task-section,
+.tdg .tdg-space-context,
+.tdg .tdg-space-tools,
+.tdg .tdg-space-routines {
+  padding: var(--ag-space-5);
+}
+
+/* Métricas */
+.tdg :is(.tdg-metric, .tdg-kpi, .tdg-crm-metric-card, .tdg-home-kpi, .tdg-task-metrics > span) {
+  border-color: var(--ag-line);
+  border-radius: var(--ag-radius-panel);
+  background: var(--ag-surface);
+  box-shadow: none;
+}
+
+.tdg :is(.tdg-metric, .tdg-kpi, .tdg-crm-metric-card, .tdg-home-kpi) strong,
+.tdg :is(.tdg-metric, .tdg-kpi, .tdg-crm-metric-card, .tdg-home-kpi) b {
+  color: var(--ag-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabelas. Sem transformar listas em cards. */
+.tdg table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--ag-line);
+  border-radius: var(--ag-radius-panel);
+  background: var(--ag-surface);
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.tdg table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--ag-line-strong);
+  background: #f1f5f3;
+  color: var(--ag-ink-soft);
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: .035em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tdg table tbody td {
+  padding: 9px 11px;
+  border-bottom: 1px solid #edf1ef;
+  color: var(--ag-ink-soft);
+  vertical-align: middle;
+}
+
+.tdg table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tdg table tbody tr:hover td {
+  background: #f8fbfa;
+}
+
+/* Tabs e segmentação */
+.tdg :is(.tdg-task-tabs, .tdg-space-tabs, .tdg-intelligence-tabs) {
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--ag-line);
+  border-radius: var(--ag-radius-panel);
+  background: var(--ag-surface-muted);
+}
+
+.tdg :is(.tdg-task-tabs, .tdg-space-tabs, .tdg-intelligence-tabs) button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ag-muted);
+  box-shadow: none;
+}
+
+.tdg :is(.tdg-task-tabs, .tdg-space-tabs, .tdg-intelligence-tabs) button.active {
+  background: var(--ag-surface);
+  color: var(--ag-brand);
+  box-shadow: 0 1px 3px rgba(16, 36, 31, .08);
+}
+
+/* Modais. Conteúdo rola; cabeçalho e ações permanecem previsíveis. */
+.tdg .modal-backdrop {
+  background: rgba(12, 28, 24, .58);
+  backdrop-filter: blur(2px);
+}
+
+.tdg .modal {
+  border: 1px solid var(--ag-line-strong);
+  border-radius: var(--ag-radius-modal);
+  background: var(--ag-surface);
+  box-shadow: var(--ag-shadow-float);
+}
+
+.tdg .modal-head {
+  min-height: 58px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--ag-line);
+  background: var(--ag-surface);
+}
+
+.tdg .modal-head h2 {
+  color: var(--ag-ink);
+  font-size: 17px;
+  font-weight: 780;
+  letter-spacing: -.015em;
+}
+
+.tdg .modal-head .icon-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ag-muted);
+}
+
+.tdg .modal-head .icon-button:hover {
+  background: var(--ag-surface-muted);
+  color: var(--ag-ink);
+}
+
+.tdg .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  gap: 8px;
+  margin-top: var(--ag-space-4);
+  padding: 12px 0 0;
+  border-top: 1px solid var(--ag-line);
+  background: var(--ag-surface);
+}
+
+/* Empty states */
+.tdg .empty,
+.tdg .tdg-task-empty,
+.tdg .tdg-nav-vazio {
+  color: var(--ag-muted);
+}
+
+.tdg .empty {
+  min-height: 180px;
+  padding: 28px;
+  border: 1px dashed var(--ag-line-strong);
+  border-radius: var(--ag-radius-panel);
+  background: var(--ag-surface-soft);
+}
+
+.tdg .empty-icon {
+  background: var(--ag-brand-soft);
+  color: var(--ag-brand);
+}
+
+/* Scrollbars discretas, mas sempre disponíveis quando o conteúdo exceder a
+   área. Não ocultar rolagem de menus, tabelas ou modais. */
+.tdg * {
+  scrollbar-width: thin;
+  scrollbar-color: #9cb6ac transparent;
+}
+
+.tdg *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.tdg *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #9cb6ac;
+  background-clip: padding-box;
+}
+
+.tdg *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Feedback de interação sem excesso de animação. */
+.tdg :is(.card, .panel, .tdg-panel, .tdg-task-card, .tdg-account-panel) {
+  transition: border-color .14s ease, background-color .14s ease, box-shadow .14s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdg *,
+  .tdg *::before,
+  .tdg *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .tdg .page-title,
+  .tdg .tdg-page-title {
+    align-items: flex-start;
+  }
+
+  .tdg table {
+    font-size: 11px;
+  }
+
+  .tdg table :is(th, td) {
+    padding-inline: 9px;
+  }
+
+  .tdg .modal-actions {
+    position: static;
+  }
+}
