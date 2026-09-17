@@ -12,6 +12,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Seu Funcionário" />
     <title>Seu Funcionário</title>
+    <style>
+      /* All Green: cabeçalhos devem ser objetivos. Mantém título, seção e ações,
+         mas não exibe os textos explicativos longos abaixo do título. */
+      .tdg-page-title p { display: none !important; }
+    </style>
     <script>
       const hostAllGreen = /(^|\.)orianone\.app$/i.test(location.hostname);
 
