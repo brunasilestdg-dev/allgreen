@@ -850,3 +850,27 @@ body:has(.tdg-overview-page) .task-editor-form > .modal-actions:last-child {
     padding-inline: 14px !important;
   }
 }
+
+
+/* ==========================================================================
+   6. SIDEBAR — seleção principal neutra
+   Remove o verde esmeralda dos atalhos/verticais do topo. A seleção das
+   opções internas (.tdg-nav-area-itens, ex.: "Visão geral") permanece intacta.
+   ========================================================================== */
+
+.tdg .tdg-erp-sidebar .tdg-home-entry.active,
+.tdg .tdg-erp-sidebar .tdg-work-entry.active,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button.active,
+.tdg .tdg-erp-sidebar .tdg-vertical-link[aria-current="page"] {
+  background: rgba(229, 239, 234, .11) !important;
+  border: 1px solid rgba(229, 239, 234, .10) !important;
+  color: #f4faf7 !important;
+  box-shadow: inset 3px 0 0 #91a89f !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry.active > svg,
+.tdg .tdg-erp-sidebar .tdg-work-entry.active > svg,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button.active > svg,
+.tdg .tdg-erp-sidebar .tdg-vertical-link[aria-current="page"] > svg {
+  color: #dce9e4 !important;
+}
