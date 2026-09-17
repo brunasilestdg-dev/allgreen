@@ -2489,7 +2489,7 @@ export default function Tasks({
           onClose={() => setModal(false)}
           wide
         >
-          <form className="modal-body" onSubmit={save}>
+          <form className="modal-body task-editor-form" onSubmit={save}>
             <Field label="Título">
               <input
                 autoFocus
@@ -2595,7 +2595,14 @@ export default function Tasks({
                 }
               />
             </div>
-            <div className="form-grid">
+            <section className="task-editor-section">
+              <div className="task-editor-section-heading">
+                <div>
+                  <strong>Planejamento e atribuição</strong>
+                  <small>Defina quando acontece, quem executa e onde a tarefa se encaixa.</small>
+                </div>
+              </div>
+              <div className="form-grid task-editor-core-grid">
               <Field label="Prioridade">
                 <select
                   value={form.priority}
@@ -2851,7 +2858,20 @@ export default function Tasks({
                   placeholder="Ex.: Lançamento de julho"
                 />
               </Field>
-            </div>
+              </div>
+            </section>
+            <details className="task-editor-advanced">
+              <summary>
+                <div>
+                  <strong>Mais opções</strong>
+                  <small>
+                    {form.isMission ? "Missão ativa · " : ""}
+                    {(form.acceptanceCriteria || []).length} critérios ·{" "}
+                    {(form.subtasks || []).length} etapas
+                  </small>
+                </div>
+              </summary>
+              <div className="task-editor-advanced-body">
             {db.tasks.filter((t) => t.id !== editing).length > 0 && (
               <div className="field">
                 <span>Depende de</span>
@@ -3171,6 +3191,8 @@ export default function Tasks({
                 </div>
               )}
             </div>
+              </div>
+            </details>
             {editingTask && (form.aiOutputs || []).length > 0 && (
               <div className="field task-ai-outputs">
                 <span>Entregas produzidas pela IA</span>
