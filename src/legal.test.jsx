@@ -164,7 +164,7 @@ describe("termos de uso, política de privacidade e exclusão de conta", () => {
     fireEvent.click(confirmButton);
 
     expect(
-      await screen.findByRole("heading", { name: "Entre no ambiente To Do Green" }),
+      await screen.findByRole("heading", { name: "Entrar" }),
     ).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/account",
