@@ -3,6 +3,7 @@ import {
   passwordHash,
   randomHex,
   sha256,
+  withSessionCookie,
 } from "../auth/credenciais.js";
 import { emailEnabled, escMail, sendEmail } from "../mensageria/envio.js";
 import { TENANT_ID } from "./todogreen-access.js";
@@ -177,8 +178,12 @@ export async function handleTodoGreenAccessInvite(request, env, url) {
     ).bind(now, now, invite.id),
   ]);
 
-  return json({
-    user: { id: userId, name, email: invite.email },
-    token: await createSession(env, userId),
-  });
+  const sessionToken = await createSession(env, userId);
+  return withSessionCookie(
+    json({
+      user: { id: userId, name, email: invite.email },
+      token: sessionToken,
+    }),
+    sessionToken,
+  );
 }
