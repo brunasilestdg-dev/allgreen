@@ -1681,6 +1681,40 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
           : entryPortal === "colaborador"
             ? "Entre no Portal do Colaborador"
             : "Entre no ambiente To Do Green";
+  const contextoDoAcesso =
+    entryPortal === "cliente"
+      ? {
+          kicker: "PORTAL DO CLIENTE",
+          helper:
+            "Acompanhe pedidos, entregas, ocorrências, comprovantes e indicadores da sua operação.",
+          secondary: "Primeiro acesso",
+        }
+      : entryPortal === "motorista"
+        ? {
+            kicker: "PORTAL DO MOTORISTA",
+            helper:
+              "Acesse viagens, coletas, entregas, ocorrências, documentos e comprovantes operacionais.",
+            secondary: "Primeiro acesso",
+          }
+        : entryPortal === "tms"
+          ? {
+              kicker: "TMS",
+              helper:
+                "Gerencie cargas, viagens, roteirização, ocorrências, POD e faturamento operacional.",
+              secondary: "Alterar senha inicial",
+            }
+          : entryPortal === "colaborador"
+            ? {
+                kicker: "PORTAL DO COLABORADOR",
+                helper: "Acesse suas rotinas, documentos e informações de trabalho.",
+                secondary: "Primeiro acesso",
+              }
+            : {
+                kicker: "LOGIN PRIVADO",
+                helper:
+                  "Use o e-mail e a senha inicial recebidos. No primeiro acesso, altere a senha antes de usar a operação.",
+                secondary: "Alterar senha inicial",
+              };
   const [mode, setMode] = useState("login");
   // Simulador de impacto ESG: público, aberto por um botão na tela de entrada,
   // sem exigir login (pedido da titular).
@@ -2066,6 +2100,186 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
         </div>
       </main>
     );
+  if (entradaToDoGreen)
+    return (
+      <main className={`auth-shell tdg-auth-entry tdg-auth-entry-${entryPortal || "erp"}`}>
+        <section className="tdg-auth-panel" aria-label={tituloDoAcesso}>
+          <div className="tdg-auth-brand-panel" aria-label="To Do Green">
+            <img src="/logo-todo-green.png" alt="To Do Green" />
+          </div>
+          <div className="tdg-auth-form-panel">
+            <div className="auth-card tdg-auth-card">
+              <span className="eyebrow tdg-auth-kicker">{contextoDoAcesso.kicker}</span>
+              <h2>Entrar</h2>
+              <p className="tdg-auth-helper">{contextoDoAcesso.helper}</p>
+
+              <form onSubmit={submit}>
+                <Field label="E-mail">
+                  <input
+                    required
+                    autoFocus
+                    autoComplete="email"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="seu@exemplo.com"
+                  />
+                </Field>
+                <Field label="Senha">
+                  <span className="auth-password">
+                    <input
+                      required
+                      minLength="8"
+                      autoComplete="current-password"
+                      type={showPassword ? "text" : "password"}
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      placeholder="Digite sua senha"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? <EyeOff /> : <Eye />}
+                    </button>
+                  </span>
+                </Field>
+
+                {error && (
+                  <div className="auth-error" role="alert">
+                    <CircleAlert />
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  className="full tdg-auth-primary"
+                  type="submit"
+                  disabled={busy}
+                >
+                  {busy ? "Aguarde..." : "Entrar"}
+                </Button>
+              </form>
+
+              <button
+                type="button"
+                className="tdg-auth-secondary"
+                onClick={forgot}
+                disabled={busy}
+              >
+                {contextoDoAcesso.secondary}
+              </button>
+
+              {!entryPortal && !pedindoAcesso && pedidoStatus !== "enviado" && (
+                <button
+                  type="button"
+                  className="tdg-auth-request-link"
+                  onClick={() => setPedindoAcesso(true)}
+                >
+                  Ainda não tem acesso? Solicitar acesso
+                </button>
+              )}
+
+              {!entryPortal && pedindoAcesso && pedidoStatus !== "enviado" && (
+                <form className="tdg-auth-pedido tdg-auth-pedido-inline" onSubmit={enviarPedidoDeAcesso}>
+                  <strong>Solicitar acesso à To Do Green</strong>
+                  <label>
+                    <span>Nome</span>
+                    <input
+                      type="text"
+                      required
+                      maxLength={160}
+                      value={pedidoForm.nome}
+                      onChange={(e) => setPedidoForm((f) => ({ ...f, nome: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    <span>E-mail corporativo</span>
+                    <input
+                      type="email"
+                      required
+                      maxLength={160}
+                      value={pedidoForm.email}
+                      onChange={(e) => setPedidoForm((f) => ({ ...f, email: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    <span>Empresa / área</span>
+                    <input
+                      type="text"
+                      maxLength={160}
+                      value={pedidoForm.empresa}
+                      onChange={(e) => setPedidoForm((f) => ({ ...f, empresa: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    <span>Telefone (opcional)</span>
+                    <input
+                      type="text"
+                      maxLength={40}
+                      value={pedidoForm.telefone}
+                      onChange={(e) => setPedidoForm((f) => ({ ...f, telefone: e.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    <span>Por que precisa de acesso?</span>
+                    <textarea
+                      rows={3}
+                      maxLength={1000}
+                      value={pedidoForm.mensagem}
+                      onChange={(e) => setPedidoForm((f) => ({ ...f, mensagem: e.target.value }))}
+                    />
+                  </label>
+                  {pedidoStatus && pedidoStatus !== "enviando" && (
+                    <p className="tdg-auth-pedido-erro">{pedidoStatus}</p>
+                  )}
+                  <div className="tdg-auth-pedido-acoes">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPedindoAcesso(false);
+                        setPedidoStatus("");
+                      }}
+                    >
+                      Voltar
+                    </button>
+                    <button
+                      type="submit"
+                      className="tdg-auth-solicitar"
+                      disabled={pedidoStatus === "enviando"}
+                    >
+                      {pedidoStatus === "enviando" ? "Enviando..." : "Enviar pedido"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {!entryPortal && pedidoStatus === "enviado" && (
+                <p className="tdg-auth-request-status">
+                  Pedido enviado. Você receberá um convite por e-mail se for aprovado.
+                </p>
+              )}
+
+              <p className="auth-legal tdg-auth-legal">
+                <button type="button" onClick={() => setShowLegal(true)}>
+                  Termos de Uso e Política de Privacidade
+                </button>
+              </p>
+            </div>
+          </div>
+        </section>
+        {showLegal && (
+          <Modal
+            title="Termos de Uso e Política de Privacidade"
+            onClose={() => setShowLegal(false)}
+          >
+            <LegalContent />
+          </Modal>
+        )}
+      </main>
+    );
+
   return (
     <main className="auth-shell">
       {simuladorEsgAberto && (
