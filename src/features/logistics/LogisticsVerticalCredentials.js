@@ -24,26 +24,13 @@ const postJson = async (url, payload) => {
 };
 
 const saveSession = (payload) => {
-  if (!payload?.user?.id || !payload?.user?.email) throw new Error("Login sem sessão válida.");
+  if (!payload?.token || !payload?.user?.id || !payload?.user?.email)
+    throw new Error("Login sem sessão válida.");
+  // Compatibilidade temporária: o App principal ainda usa este token para
+  // decidir se deve validar a sessão. O cookie HttpOnly continua ativo em
+  // paralelo e será o caminho definitivo quando o gate global for migrado.
+  localStorage.setItem(LEGACY_AUTH_TOKEN_KEY, payload.token);
   startUserSession(payload.user);
-};
-
-// Migração silenciosa para quem já entrou antes da sessão HttpOnly virar o
-// padrão. Se o cookie atual é válido, o Bearer antigo não tem mais função e é
-// removido. Se a pessoa só possui o token legado, ele é preservado para não
-// derrubar a sessão no meio do expediente; o próximo login migra de vez.
-const clearLegacyTokenWhenCookieIsValid = async () => {
-  let legacyToken = "";
-  try {
-    legacyToken = localStorage.getItem(LEGACY_AUTH_TOKEN_KEY) || "";
-  } catch {
-    return;
-  }
-  if (!legacyToken) return;
-  try {
-    const response = await fetch("/api/auth/session");
-    if (response.ok) localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
-  } catch {}
 };
 
 const isTodoGreenRoute = () =>
@@ -199,8 +186,7 @@ const scheduleEnsure = (tentativa = 0) => {
 };
 
 if (typeof window !== "undefined") {
-  const start = async () => {
-    await clearLegacyTokenWhenCookieIsValid();
+  const start = () => {
     ensureCredentialsLogin();
     observer?.disconnect();
     observer = new MutationObserver(() => ensureCredentialsLogin());
@@ -215,7 +201,6 @@ if (typeof window !== "undefined") {
     });
     scheduleEnsure();
   };
-  if (document.readyState === "loading")
-    document.addEventListener("DOMContentLoaded", () => void start(), { once: true });
-  else void start();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
 }
