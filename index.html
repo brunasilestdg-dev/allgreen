@@ -14,9 +14,29 @@
     <title>Seu Funcionário</title>
     <script>
       if (/^\/todogreen(?:\/|$)/.test(location.pathname)) {
-        document.title = "To Do Green";
-        document.querySelector('meta[name="description"]').content = "To Do Green — comercial, operação, financeiro, gestão e ESG no mesmo fluxo.";
-        document.querySelector('meta[name="apple-mobile-web-app-title"]').content = "To Do Green";
+        const aplicarIdentidadeAllGreen = () => {
+          if (document.title === "Seu Funcionário" || document.title === "To Do Green") {
+            document.title = "All Green";
+          } else if (document.title.endsWith(" | To Do Green")) {
+            document.title = document.title.replace(/ \| To Do Green$/, " | All Green");
+          }
+        };
+
+        aplicarIdentidadeAllGreen();
+        document.querySelector('meta[name="description"]').content = "All Green — comercial, operação, financeiro, gestão e ESG no mesmo fluxo.";
+        document.querySelector('meta[name="apple-mobile-web-app-title"]').content = "All Green";
+        document.querySelector('link[rel="manifest"]').href = "/manifest-allgreen.webmanifest";
+        document.querySelector('link[rel="icon"]').href = "/logo-todo-green.png?v=1";
+        document.querySelector('link[rel="apple-touch-icon"]').href = "/logo-todo-green.png?v=1";
+
+        const titulo = document.querySelector("title");
+        if (titulo) {
+          new MutationObserver(aplicarIdentidadeAllGreen).observe(titulo, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        }
       }
     </script>
   </head>
