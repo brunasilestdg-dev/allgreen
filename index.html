@@ -13,21 +13,61 @@
     <meta name="apple-mobile-web-app-title" content="Seu Funcionário" />
     <title>Seu Funcionário</title>
     <style>
-      /* All Green: cabeçalhos devem ser objetivos. Mantém título, seção e ações,
-         mas não exibe os textos explicativos longos abaixo do título. */
-      .tdg-page-title p { display: none !important; }
+      /* All Green: cabeçalhos devem ser objetivos. Mantém seção, título e ações,
+         mas retira os textos explicativos longos usados como subtítulo/lead. */
+      html.allgreen-experience .tdg-page-title p,
+      html.allgreen-experience .tdg-home-welcome > div > p,
+      html.allgreen-experience .tdg-intelligence-hero p,
+      html.allgreen-experience .ds-pagehead__subtitle {
+        display: none !important;
+      }
+
+      /* No domínio All Green, o app real só aparece depois que o React montou
+         uma experiência que não seja a interface genérica do Seu Funcionário. */
+      #allgreen-boot { display: none; }
+      html.allgreen-experience:not(.allgreen-ready) #root { visibility: hidden; }
+      html.allgreen-experience:not(.allgreen-ready) #allgreen-boot {
+        align-items: center;
+        background: #f4faf7;
+        color: #123b2f;
+        display: flex;
+        flex-direction: column;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        gap: 12px;
+        inset: 0;
+        justify-content: center;
+        position: fixed;
+        z-index: 99999;
+      }
+      html.allgreen-experience:not(.allgreen-ready) #allgreen-boot img {
+        height: 56px;
+        max-width: 180px;
+        object-fit: contain;
+        width: auto;
+      }
+      html.allgreen-experience:not(.allgreen-ready) #allgreen-boot strong {
+        font-size: 22px;
+        letter-spacing: .01em;
+      }
+      html.allgreen-experience.allgreen-ready #allgreen-boot { display: none; }
+      html.allgreen-experience.allgreen-ready #root { visibility: visible; }
     </style>
     <script>
       const hostAllGreen = /(^|\.)orianone\.app$/i.test(location.hostname);
 
-      // O domínio institucional do All Green entra direto na vertical. Isso
-      // evita que a raiz monte por alguns instantes o workspace genérico do
-      // Seu Funcionário antes de o roteador React assumir a navegação.
+      // O domínio institucional do All Green entra direto na vertical antes de
+      // qualquer render do React. Assim a raiz nunca precisa montar o workspace
+      // genérico para só depois trocar de produto.
       if (hostAllGreen && location.pathname === "/") {
         history.replaceState({}, "", `/todogreen${location.search}${location.hash}`);
       }
 
-      if (hostAllGreen || /^\/todogreen(?:\/|$)/.test(location.pathname)) {
+      const rotaAllGreen = /^\/(?:todogreen|greenon|greenmob)(?:\/|$)/.test(location.pathname);
+      const experienciaAllGreen = hostAllGreen || rotaAllGreen;
+
+      if (experienciaAllGreen) {
+        document.documentElement.classList.add("allgreen-experience");
+
         const aplicarIdentidadeAllGreen = () => {
           if (document.title === "Seu Funcionário" || document.title === "To Do Green") {
             document.title = "All Green";
@@ -40,8 +80,8 @@
         document.querySelector('meta[name="description"]').content = "All Green — comercial, operação, financeiro, gestão e ESG no mesmo fluxo.";
         document.querySelector('meta[name="apple-mobile-web-app-title"]').content = "All Green";
         document.querySelector('link[rel="manifest"]').href = "/manifest-allgreen.webmanifest";
-        document.querySelector('link[rel="icon"]').href = "/logo-todo-green.png?v=2";
-        document.querySelector('link[rel="apple-touch-icon"]').href = "/logo-todo-green.png?v=2";
+        document.querySelector('link[rel="icon"]').href = "/logo-todo-green.png?v=3";
+        document.querySelector('link[rel="apple-touch-icon"]').href = "/logo-todo-green.png?v=3";
 
         const titulo = document.querySelector("title");
         if (titulo) {
@@ -51,10 +91,38 @@
             subtree: true,
           });
         }
+
+        // Evita o flash da interface antiga: o root fica invisível até ter
+        // conteúdo real que não carregue a identidade genérica do produto-base.
+        window.addEventListener("DOMContentLoaded", () => {
+          const root = document.getElementById("root");
+          if (!root) return;
+
+          const liberar = () => {
+            const texto = String(root.innerText || root.textContent || "");
+            const temConteudo = root.childElementCount > 0 && texto.trim().length > 0;
+            const identidadeLegada = /Seu Funcionário|Tenha o funcionário que sua empresa precisa|Como você pretende usar o Seu Funcionário/i.test(texto);
+            if (!temConteudo || identidadeLegada) return false;
+
+            document.documentElement.classList.add("allgreen-ready");
+            document.getElementById("allgreen-boot")?.remove();
+            return true;
+          };
+
+          if (liberar()) return;
+          const observer = new MutationObserver(() => {
+            if (liberar()) observer.disconnect();
+          });
+          observer.observe(root, { childList: true, subtree: true, characterData: true });
+        });
       }
     </script>
   </head>
   <body>
+    <div id="allgreen-boot" aria-hidden="true">
+      <img src="/logo-todo-green.png?v=3" alt="" />
+      <strong>All Green</strong>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
