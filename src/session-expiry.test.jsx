@@ -97,7 +97,7 @@ describe("sincronização falha de forma visível, não silenciosa", () => {
       screen.getByRole("button", { name: "Entrar novamente" }),
     );
     expect(
-      await screen.findByRole("heading", { name: "Entre no ambiente To Do Green" }),
+      await screen.findByRole("heading", { name: "Entrar" }),
     ).toBeInTheDocument();
     expect(localStorage.getItem("seu-funcionario-auth-token")).toBeNull();
   });
