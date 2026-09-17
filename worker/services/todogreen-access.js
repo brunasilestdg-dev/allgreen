@@ -22,6 +22,7 @@
 // nunca da requisição.**
 
 import { verticalPermite } from "../../src/features/logistics/logisticsVerticalDomain.js";
+import { sessionUser } from "../auth/credenciais.js";
 
 export const TENANT_ID = "todogreen";
 
@@ -50,30 +51,12 @@ const parse = (value, fallback) => {
   }
 };
 
-const sha256 = async (value) => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-};
-
+// Usa a mesma sessão canônica do restante do Worker. Ela aceita o cookie
+// __Host-sf_session (HttpOnly/Secure/SameSite=Strict) e mantém compatibilidade
+// temporária com Bearer enquanto o front da vertical termina a migração.
+// Assim a All Green deixa de depender exclusivamente do token legível pelo JS.
 export async function authenticatedUser(request, env) {
-  const auth = request.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token || !env.DB) return null;
-  return env.DB
-    .prepare(
-      `SELECT u.id, u.name, u.email
-         FROM sessions s
-         JOIN users u ON u.id = s.user_id
-        WHERE s.token_hash = ? AND s.expires_at > ?`,
-    )
-    .bind(await sha256(token), new Date().toISOString())
-    .first()
-    .catch(() => null);
+  return sessionUser(request, env).catch(() => null);
 }
 
 const administradoresDaEnv = (env) =>
