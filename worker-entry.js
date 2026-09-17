@@ -1,4 +1,5 @@
 import appWorker from "./worker.js";
+import { withInternalSessionAuthorization } from "./worker/auth/internal-session-request.js";
 import {
   runTodoGreenTrackerScheduled,
 } from "./worker/services/todogreen-tracker.js";
@@ -169,7 +170,13 @@ export default {
       if (resolved.response) return resolved.response;
       return handleTodoGreenFileVault(request, env, resolved.access, resolved.user);
     }
-    const todoGreenResponse = await routeTodoGreenApi(request, env, ctx);
+
+    // Os handlers antigos ainda podem procurar Authorization por conta própria.
+    // A credencial sai do cookie HttpOnly somente aqui, dentro do Worker, e não
+    // volta ao JavaScript do navegador. Isto mantém compatibilidade enquanto os
+    // serviços são consolidados na autenticação central.
+    const internalRequest = withInternalSessionAuthorization(request);
+    const todoGreenResponse = await routeTodoGreenApi(internalRequest, env, ctx);
     if (todoGreenResponse) return todoGreenResponse;
     return appWorker.fetch(request, env, ctx);
   },
