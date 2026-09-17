@@ -116,6 +116,10 @@ export function loadInitialDb() {
 }
 
 export function startUserSession(user) {
+  // A sessão nova já está no cookie HttpOnly emitido pelo servidor. Remover um
+  // token antigo daqui evita que um Bearer vencido tenha prioridade sobre o
+  // cookie válido nas requisições de código legado.
+  localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.setItem(ACTIVE_USER_KEY, user.id);
   localStorage.removeItem("sf-space");
   localStorage.removeItem("sf-space-name");
@@ -133,11 +137,12 @@ export function endSession() {
   localStorage.removeItem(ACTIVE_USER_KEY);
   localStorage.removeItem("sf-space");
   localStorage.removeItem("sf-space-name");
-  if (token)
-    fetch("/api/auth/session", {
-      method: "DELETE",
-      headers: { authorization: `Bearer ${token}` },
-    }).catch(() => {});
+  // Mesmo sem Bearer no navegador, o fetch same-origin envia o cookie HttpOnly
+  // automaticamente. Isso garante que sair realmente revogue a sessão atual.
+  fetch("/api/auth/session", {
+    method: "DELETE",
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  }).catch(() => {});
 }
 
 export function mergeMedia(localItems = [], remoteItems = []) {
