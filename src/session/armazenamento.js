@@ -120,10 +120,17 @@ export function startUserSession(user) {
   // decidir se deve validar a sessão. O cookie HttpOnly continua sendo emitido
   // e aceito pelo servidor, mas o token legado só poderá ser removido depois
   // que esse gate do App também for migrado para cookie.
+  //
+  // O login privado da All Green recarrega a página após autenticar. Por isso
+  // o usuário também precisa estar persistido antes do reload; caso contrário,
+  // loadInitialDb() encontra o activeId, mas não encontra saved.user e trata a
+  // sessão válida como anônima.
+  const sessionDb = readUserDb(user);
+  localStorage.setItem(userStorageKey(user.id), JSON.stringify(sessionDb));
   localStorage.setItem(ACTIVE_USER_KEY, user.id);
   localStorage.removeItem("sf-space");
   localStorage.removeItem("sf-space-name");
-  return readUserDb(user);
+  return sessionDb;
 }
 
 export function authHeaders() {
