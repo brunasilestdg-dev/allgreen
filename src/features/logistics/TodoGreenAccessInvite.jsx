@@ -38,7 +38,6 @@ export default function TodoGreenAccessInvite({ token, onAuthenticated = () => {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Não foi possível concluir seu acesso.");
-      localStorage.setItem("seu-funcionario-auth-token", body.token);
       startUserSession(body.user);
       onAuthenticated();
       window.location.assign("/todogreen");
