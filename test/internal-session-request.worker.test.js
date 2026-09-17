@@ -14,6 +14,23 @@ describe("ponte interna da sessão HttpOnly", () => {
     expect(interna.headers.get("cookie")).toContain("__Host-sf_session=sessao-cookie");
   });
 
+  it("preserva o corpo original de POST ao criar a Request interna", async () => {
+    const payload = { email: "brunapsiles@gmail.com", password: "SenhaForte2026!" };
+    const original = new Request("https://app.test/api/auth/login", {
+      method: "POST",
+      headers: {
+        cookie: "__Host-sf_session=sessao-cookie",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const interna = withInternalSessionAuthorization(original);
+
+    await expect(interna.clone().json()).resolves.toEqual(payload);
+    await expect(original.json()).resolves.toEqual(payload);
+  });
+
   it("não sobrescreve Authorization que já veio explicitamente", () => {
     const original = new Request("https://app.test/api/todogreen/portal", {
       headers: {
