@@ -1,0 +1,319 @@
+/* VIS-03 — Home executiva / Command Center
+   Camada apenas visual sobre a home existente. Mantém dados, rotas, ações,
+   preferências, permissões e widgets atuais. */
+
+.tdg .tdg-erp-home {
+  gap: 16px;
+}
+
+/* Hero executivo: forte, compacto e coerente com a navegação lateral. */
+.tdg .tdg-home-welcome {
+  min-height: 154px;
+  padding: 26px 28px;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 86% 16%, rgba(50, 132, 108, .18), transparent 34%),
+    linear-gradient(135deg, #10241f 0%, #123128 54%, #176b57 100%);
+  border: 1px solid rgba(16, 36, 31, .18);
+  box-shadow: 0 8px 24px rgba(10, 28, 24, .10);
+}
+
+.tdg .tdg-home-welcome h2 {
+  font-size: clamp(1.85rem, 2.7vw, 2.45rem);
+  letter-spacing: -.045em;
+  margin: 6px 0 0;
+}
+
+.tdg .tdg-home-welcome .tdg-kicker {
+  font-size: .72rem;
+  letter-spacing: .08em;
+}
+
+.tdg .tdg-home-identity {
+  gap: 7px;
+}
+
+.tdg .tdg-home-identity > span {
+  color: rgba(255, 255, 255, .68);
+  font-size: .72rem;
+  letter-spacing: .02em;
+}
+
+.tdg .tdg-home-identity button {
+  min-height: 38px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.075);
+  border: 1px solid rgba(255,255,255,.16);
+  color: #f4faf7;
+  box-shadow: none;
+}
+
+.tdg .tdg-home-identity button:hover {
+  background: rgba(255,255,255,.13);
+  border-color: rgba(255,255,255,.24);
+}
+
+/* Os três acessos principais viram uma faixa de comando, não três cartões soltos. */
+.tdg .tdg-workday-routes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(10, 40, 30, .025);
+}
+
+.tdg .tdg-workday-routes > button {
+  min-height: 104px;
+  padding: 18px 22px;
+  border: 0;
+  border-right: 1px solid var(--tdg-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color .14s ease, color .14s ease;
+}
+
+.tdg .tdg-workday-routes > button:last-child {
+  border-right: 0;
+}
+
+.tdg .tdg-workday-routes > button:hover {
+  background: var(--tdg-soft);
+  border-color: var(--tdg-line);
+}
+
+.tdg .tdg-workday-routes strong {
+  color: var(--tdg-ink);
+  font-size: .96rem;
+  font-weight: 760;
+}
+
+.tdg .tdg-workday-routes span {
+  color: var(--tdg-muted);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+
+/* KPIs em uma faixa única: densidade de ERP, sem cardificação excessiva. */
+.tdg .tdg-home-metrics {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(10, 40, 30, .025);
+}
+
+.tdg .tdg-home-metrics article,
+.tdg .tdg-home-metrics .tdg-home-metric-link {
+  position: relative;
+  min-height: 104px;
+  padding: 17px 18px 15px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--tdg-line);
+  border-radius: 0;
+  box-shadow: none;
+  transition: background-color .14s ease;
+}
+
+.tdg .tdg-home-metrics article:last-child,
+.tdg .tdg-home-metrics .tdg-home-metric-link:last-child {
+  border-right: 0;
+}
+
+.tdg .tdg-home-metrics .tdg-home-metric-link:hover {
+  background: var(--tdg-soft);
+}
+
+.tdg .tdg-home-metrics .tdg-home-metric-link::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  background: transparent;
+}
+
+.tdg .tdg-home-metrics .tdg-home-metric-link:hover::before {
+  background: var(--tdg-green);
+}
+
+.tdg .tdg-home-metrics span {
+  color: var(--tdg-muted);
+  font-size: .71rem;
+  font-weight: 760;
+  letter-spacing: .025em;
+}
+
+.tdg .tdg-home-metrics strong {
+  color: var(--tdg-ink);
+  font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+  font-weight: 760;
+  letter-spacing: -.035em;
+  line-height: 1.08;
+}
+
+.tdg .tdg-home-metrics small {
+  color: var(--tdg-muted);
+  font-size: .69rem;
+  line-height: 1.35;
+}
+
+/* Seções de trabalho: menos "cartão", mais painel operacional. */
+.tdg .tdg-home-grid {
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, .55fr);
+}
+
+.tdg .tdg-home-section {
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 2px rgba(10, 40, 30, .025);
+}
+
+.tdg .tdg-home-section > header {
+  align-items: center;
+  margin-bottom: 6px;
+  padding-bottom: 11px;
+}
+
+.tdg .tdg-home-section > header span {
+  font-size: .64rem;
+  letter-spacing: .09em;
+}
+
+.tdg .tdg-home-section h3 {
+  font-size: .98rem;
+  letter-spacing: -.012em;
+}
+
+/* Fila de atenção: leitura rápida, com linhas densas e ação previsível. */
+.tdg .tdg-home-queue > button {
+  min-height: 58px;
+  padding: 11px 2px;
+  gap: 11px;
+}
+
+.tdg .tdg-home-queue > button > span:first-child {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.tdg .tdg-home-queue strong {
+  font-size: .81rem;
+}
+
+.tdg .tdg-home-queue small {
+  font-size: .7rem;
+}
+
+.tdg .tdg-home-queue > button > b {
+  font-size: .69rem;
+  opacity: .78;
+}
+
+.tdg .tdg-home-queue > button:hover > b {
+  opacity: 1;
+}
+
+/* Painel analítico: gráficos continuam sendo o foco, não as caixas. */
+.tdg .tdg-home-painel {
+  gap: 10px;
+}
+
+.tdg .tdg-home-painel-card {
+  border-radius: 8px;
+  padding: 13px;
+  background: color-mix(in srgb, var(--tdg-bg) 68%, var(--tdg-card));
+  box-shadow: none;
+}
+
+.tdg .tdg-home-painel-cab strong {
+  font-size: .79rem;
+}
+
+.tdg .tdg-home-painel-cab small {
+  font-size: .66rem;
+}
+
+/* Atalhos finais: compactos e subordinados ao conteúdo executivo. */
+.tdg .tdg-home-shortcuts > div {
+  gap: 6px;
+}
+
+.tdg .tdg-home-shortcuts > div button {
+  min-height: 38px;
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: transparent;
+  font-size: .75rem;
+  box-shadow: none;
+}
+
+.tdg .tdg-home-shortcuts > div button:hover {
+  background: var(--tdg-soft);
+}
+
+/* Dark mode sem superfícies claras forçadas. */
+:root[data-theme="dark"] .tdg .tdg-workday-routes,
+:root[data-theme="dark"] .tdg .tdg-home-metrics,
+:root[data-theme="dark"] .tdg .tdg-home-section {
+  background: var(--tdg-card);
+}
+
+@media (max-width: 1100px) {
+  .tdg .tdg-home-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .tdg .tdg-workday-routes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tdg .tdg-workday-routes > button {
+    min-height: 82px;
+    border-right: 0;
+    border-bottom: 1px solid var(--tdg-line);
+  }
+
+  .tdg .tdg-workday-routes > button:last-child {
+    border-bottom: 0;
+  }
+
+  .tdg .tdg-home-welcome {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 620px) {
+  .tdg .tdg-home-welcome {
+    min-height: auto;
+    padding: 20px;
+  }
+
+  .tdg .tdg-home-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tdg .tdg-home-metrics article,
+  .tdg .tdg-home-metrics .tdg-home-metric-link {
+    min-height: 86px;
+    border-right: 0;
+    border-bottom: 1px solid var(--tdg-line);
+  }
+
+  .tdg .tdg-home-metrics article:last-child,
+  .tdg .tdg-home-metrics .tdg-home-metric-link:last-child {
+    border-bottom: 0;
+  }
+}
