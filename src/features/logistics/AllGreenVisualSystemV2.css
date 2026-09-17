@@ -1,0 +1,511 @@
+/* ALL GREEN — Visual System V2
+   Camada final de coesão visual sobre o shell existente.
+   Apenas aparência: não altera rotas, permissões, dados, integrações ou regras. */
+
+/* -------------------------------------------------------------------------- */
+/* 1. HOME / SHELL: faixa integrada, sem aparência de card flutuante          */
+/* -------------------------------------------------------------------------- */
+
+.tdg.tdg-overview-page .tdg-erp-stage {
+  padding-top: 0;
+}
+
+.tdg.tdg-overview-page .tdg-erp-home {
+  gap: 14px;
+}
+
+@media (min-width: 901px) {
+  .tdg.tdg-overview-page .tdg-home-welcome {
+    margin-inline: -28px;
+    width: calc(100% + 56px);
+  }
+}
+
+.tdg .tdg-home-welcome {
+  background: linear-gradient(112deg, #10241f 0%, #12352d 56%, #17624f 100%);
+  border: 0;
+  border-bottom: 1px solid rgba(8, 35, 28, .22);
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  min-height: 148px;
+}
+
+.tdg .tdg-home-welcome .tdg-kicker {
+  color: #c9f26d;
+}
+
+.tdg .tdg-home-welcome h2 {
+  color: #fff;
+}
+
+.tdg .tdg-home-welcome > div > p {
+  display: none;
+}
+
+.tdg .tdg-home-identity > span {
+  color: rgba(255,255,255,.72);
+}
+
+.tdg .tdg-home-identity button {
+  background: rgba(255,255,255,.075) !important;
+  border: 1px solid rgba(255,255,255,.18) !important;
+  border-radius: 6px !important;
+  color: #f7fbf9 !important;
+  box-shadow: none !important;
+  min-height: 40px;
+}
+
+.tdg .tdg-home-identity button:hover,
+.tdg .tdg-home-identity button:focus-visible {
+  background: rgba(255,255,255,.13) !important;
+  border-color: rgba(255,255,255,.30) !important;
+}
+
+/* A fila tinha uma segunda coluna reservada sem conteúdo. Em home ela passa a
+   ocupar a largura inteira; quando houver um painel lateral real, ele deve ser
+   declarado explicitamente em vez de deixar um vazio cinza. */
+.tdg .tdg-home-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. SIDEBAR: uma única linguagem, sem cards brancos                          */
+/* -------------------------------------------------------------------------- */
+
+.tdg.tdg-module-page .tdg-erp-sidebar,
+.tdg.tdg-overview-page .tdg-erp-sidebar {
+  background: #10241f !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry,
+.tdg .tdg-erp-sidebar .tdg-work-entry,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button,
+.tdg .tdg-erp-sidebar .tdg-vertical-link {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(255,255,255,.06) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  color: #dbe8e2 !important;
+  min-height: 40px !important;
+  padding: 8px 10px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry:hover,
+.tdg .tdg-erp-sidebar .tdg-work-entry:hover,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button:hover,
+.tdg .tdg-erp-sidebar .tdg-vertical-link:hover {
+  background: rgba(255,255,255,.07) !important;
+  border-color: rgba(255,255,255,.10) !important;
+  color: #fff !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry.active,
+.tdg .tdg-erp-sidebar .tdg-work-entry.active,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button.active,
+.tdg .tdg-erp-sidebar .tdg-vertical-link[aria-current="page"] {
+  background: #1b745e !important;
+  border-color: #1b745e !important;
+  color: #fff !important;
+}
+
+/* Subtítulos do menu saem da leitura visual. O nome continua no DOM e a
+   navegação não muda. */
+.tdg .tdg-erp-sidebar .tdg-home-entry small,
+.tdg .tdg-erp-sidebar .tdg-work-entry small,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button small,
+.tdg .tdg-erp-sidebar .tdg-vertical-link small,
+.tdg .tdg-erp-sidebar .tdg-vertical-link > span:not(:first-child) {
+  display: none !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry strong,
+.tdg .tdg-erp-sidebar .tdg-work-entry strong,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button strong,
+.tdg .tdg-erp-sidebar .tdg-vertical-link strong {
+  color: inherit !important;
+  font-size: .79rem !important;
+  font-weight: 720 !important;
+  line-height: 1.2 !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-switch,
+.tdg .tdg-erp-sidebar .tdg-verticais-links {
+  gap: 4px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area {
+  margin: 0 !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-cabeca,
+.tdg .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child {
+  min-height: 30px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child,
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens button {
+  padding-block: 5px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens {
+  margin-bottom: 2px !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. PADRÃO DE PÁGINA: cabeçalho enxuto, botões e superfícies consistentes    */
+/* -------------------------------------------------------------------------- */
+
+.tdg .page-title,
+.tdg .page-head,
+.tdg .tdg-page-title,
+.tdg .tdg-page-header,
+.tdg .ds-pagehead {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--tdg-line, #dce5e1) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin-bottom: 16px !important;
+  padding: 0 0 14px !important;
+}
+
+.tdg .page-title h1,
+.tdg .page-head h1,
+.tdg .tdg-page-title h2,
+.tdg .tdg-page-heading h1,
+.tdg .ds-pagehead__title {
+  color: var(--tdg-ink, #10241f) !important;
+  font-size: clamp(1.45rem, 2vw, 1.9rem) !important;
+  font-weight: 760 !important;
+  letter-spacing: -.035em !important;
+  line-height: 1.1 !important;
+  margin-block: 3px 0 !important;
+}
+
+/* Mantém o pedido anterior: sem parágrafo explicativo ocupando o topo de cada
+   tela. O conteúdo funcional da página permanece. */
+.tdg .page-title p,
+.tdg .page-head p,
+.tdg .tdg-page-title p,
+.tdg .tdg-page-heading p,
+.tdg .ds-pagehead__description {
+  display: none !important;
+}
+
+.tdg .eyebrow,
+.tdg .tdg-page-title > div > span,
+.tdg .tdg-page-heading > span,
+.tdg .ds-pagehead__eyebrow {
+  color: #17624f !important;
+  font-size: .68rem !important;
+  font-weight: 820 !important;
+  letter-spacing: .085em !important;
+}
+
+/* Botões: primário verde, secundário neutro. Evita branco/verde aleatórios. */
+.tdg .button,
+.tdg .tdg-action,
+.tdg .ds-btn,
+.tdg .page-actions button,
+.tdg .tdg-page-actions button {
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  font-weight: 720 !important;
+  min-height: 38px;
+}
+
+.tdg .button.primary,
+.tdg .tdg-action,
+.tdg .ds-btn--primary {
+  background: #17624f !important;
+  border-color: #17624f !important;
+  color: #fff !important;
+}
+
+.tdg .button.primary:hover,
+.tdg .tdg-action:hover,
+.tdg .ds-btn--primary:hover {
+  background: #124d3f !important;
+  border-color: #124d3f !important;
+}
+
+.tdg .button.secondary,
+.tdg .button.ghost,
+.tdg .page-actions button:not(.primary),
+.tdg .tdg-page-actions button:not(.tdg-action) {
+  background: #fff !important;
+  border: 1px solid var(--tdg-line, #dce5e1) !important;
+  color: #174f42 !important;
+}
+
+.tdg .button.secondary:hover,
+.tdg .button.ghost:hover,
+.tdg .page-actions button:not(.primary):hover,
+.tdg .tdg-page-actions button:not(.tdg-action):hover {
+  background: #f1f5f3 !important;
+  border-color: #b7c9c1 !important;
+}
+
+/* Menos arredondamento no produto inteiro, sem zerar badges e chips. */
+.tdg .tdg-panel,
+.tdg .tdg-section,
+.tdg .card,
+.tdg .panel,
+.tdg .task-focus-card,
+.tdg .tdg-home-section,
+.tdg .tdg-planner-col,
+.tdg .tdg-planner-card {
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.tdg input:not([type="checkbox"]):not([type="radio"]),
+.tdg select,
+.tdg textarea {
+  border-radius: 5px !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 4. TAREFAS / TODO: deixa de parecer tela legada                            */
+/* -------------------------------------------------------------------------- */
+
+.tdg .tdg-task-workspace {
+  gap: 14px !important;
+}
+
+.tdg .tdg-task-hero,
+.tdg .task-focus-card {
+  background: #fff !important;
+  border: 1px solid var(--tdg-line, #dce5e1) !important;
+  box-shadow: none !important;
+}
+
+.tdg .tdg-task-hero {
+  border-left: 3px solid #17624f !important;
+  border-radius: 0 6px 6px 0 !important;
+  padding: 18px 20px !important;
+}
+
+.tdg .tabs,
+.tdg .view-tabs,
+.tdg .filter-tabs,
+.tdg .filters,
+.tdg .toolbar {
+  border-color: var(--tdg-line, #dce5e1) !important;
+  box-shadow: none !important;
+}
+
+.tdg .kanban {
+  gap: 12px !important;
+}
+
+.tdg .kanban-column,
+.tdg .kanban-col {
+  background: #f3f6f4 !important;
+  border: 1px solid var(--tdg-line, #dce5e1) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.tdg .task-card,
+.tdg .kanban-card {
+  background: #fff !important;
+  border: 1px solid var(--tdg-line, #dce5e1) !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+
+/* Modal corporativo: cabeçalho fixo, formulário respirado e campos consistentes. */
+.tdg .modal-backdrop {
+  background: rgba(9, 23, 20, .54) !important;
+  backdrop-filter: blur(2px);
+}
+
+.tdg .modal {
+  background: #fff !important;
+  border: 1px solid #cfdad5 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 24px 70px rgba(5, 24, 19, .24) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: calc(100dvh - 56px) !important;
+  overflow: hidden !important;
+  width: min(720px, calc(100vw - 48px)) !important;
+}
+
+.tdg .modal.wide {
+  width: min(980px, calc(100vw - 48px)) !important;
+}
+
+.tdg .modal-head {
+  align-items: center !important;
+  background: #fff !important;
+  border-bottom: 1px solid var(--tdg-line, #dce5e1) !important;
+  display: flex !important;
+  flex: 0 0 auto;
+  justify-content: space-between !important;
+  padding: 16px 20px 14px !important;
+}
+
+.tdg .modal-head h2 {
+  color: #10241f !important;
+  font-size: 1rem !important;
+  font-weight: 780 !important;
+  margin: 0 !important;
+}
+
+.tdg .modal-head .icon-button {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 5px !important;
+  color: #4f675f !important;
+  height: 34px !important;
+  width: 34px !important;
+}
+
+.tdg .modal-head .icon-button:hover {
+  background: #eef3f0 !important;
+  border-color: #dce5e1 !important;
+}
+
+.tdg .modal > form,
+.tdg .modal > .modal-body,
+.tdg .modal > div:not(.modal-head) {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tdg .modal form {
+  gap: 14px !important;
+  padding: 18px 20px 20px !important;
+}
+
+.tdg .modal label {
+  color: #29463d !important;
+  font-size: .72rem !important;
+  font-weight: 720 !important;
+}
+
+.tdg .modal input:not([type="checkbox"]):not([type="radio"]),
+.tdg .modal select,
+.tdg .modal textarea {
+  background: #fff !important;
+  border: 1px solid #cfdad5 !important;
+  color: #10241f !important;
+  min-height: 40px !important;
+  padding: 9px 11px !important;
+}
+
+.tdg .modal input:focus,
+.tdg .modal select:focus,
+.tdg .modal textarea:focus {
+  border-color: #17624f !important;
+  box-shadow: 0 0 0 3px rgba(23,98,79,.10) !important;
+  outline: none !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. PLANNER: board e formulário passam para a mesma linguagem enterprise    */
+/* -------------------------------------------------------------------------- */
+
+.tdg .tdg-planner-page {
+  gap: 14px !important;
+}
+
+.tdg .tdg-planner-board {
+  gap: 12px !important;
+  align-items: start !important;
+}
+
+.tdg .tdg-planner-col {
+  background: #f3f6f4 !important;
+  border: 1px solid var(--tdg-line, #dce5e1) !important;
+  overflow: hidden;
+}
+
+.tdg .tdg-planner-col > header {
+  background: #edf2ef !important;
+  border-bottom: 1px solid var(--tdg-line, #dce5e1) !important;
+  padding: 11px 12px !important;
+}
+
+.tdg .tdg-planner-col-body {
+  padding: 10px !important;
+}
+
+.tdg .tdg-planner-card {
+  background: #fff !important;
+  border: 1px solid #d9e2de !important;
+  padding: 12px !important;
+}
+
+.tdg .tdg-planner-card:hover {
+  border-color: #9ab9ad !important;
+  box-shadow: 0 4px 14px rgba(16,36,31,.06) !important;
+}
+
+.tdg .tdg-planner-status-chip,
+.tdg .tdg-planner-analise-btn,
+.tdg .tdg-planner-share-btn,
+.tdg .tdg-planner-icon {
+  border-radius: 5px !important;
+}
+
+.tdg .tdg-planner-form {
+  display: grid !important;
+  gap: 14px !important;
+}
+
+.tdg .tdg-planner-form label {
+  display: grid !important;
+  gap: 6px !important;
+}
+
+.tdg .tdg-planner-grid3 {
+  gap: 12px !important;
+}
+
+.tdg .tdg-planner-business-context {
+  background: #f7f9f8 !important;
+  border: 1px solid var(--tdg-line, #dce5e1) !important;
+  border-radius: 6px !important;
+  padding: 14px !important;
+}
+
+.tdg .tdg-form-actions {
+  border-top: 1px solid var(--tdg-line, #dce5e1) !important;
+  gap: 8px !important;
+  justify-content: flex-end !important;
+  margin-top: 4px !important;
+  padding-top: 14px !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 6. RESPONSIVO                                                              */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .tdg.tdg-overview-page .tdg-erp-stage {
+    padding-top: 16px;
+  }
+
+  .tdg .tdg-home-welcome {
+    border-radius: 0 !important;
+  }
+
+  .tdg .modal,
+  .tdg .modal.wide {
+    max-height: calc(100dvh - 20px) !important;
+    width: calc(100vw - 20px) !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .tdg .tdg-planner-grid3 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .tdg .modal form {
+    padding: 16px !important;
+  }
+}
