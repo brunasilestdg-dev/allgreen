@@ -1,7 +1,6 @@
+import { startUserSession } from "../../session/armazenamento.js";
 import "./LogisticsVerticalCredentials.css";
 
-const AUTH_TOKEN_KEY = "seu-funcionario-auth-token";
-const ACTIVE_USER_KEY = "seu-funcionario-active-user";
 let observer;
 let retryTimer;
 
@@ -24,9 +23,8 @@ const postJson = async (url, payload) => {
 };
 
 const saveSession = (payload) => {
-  if (!payload?.token || !payload?.user?.email) throw new Error("Login sem sessão válida.");
-  localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-  localStorage.setItem(ACTIVE_USER_KEY, payload.user.email);
+  if (!payload?.user?.id || !payload?.user?.email) throw new Error("Login sem sessão válida.");
+  startUserSession(payload.user);
 };
 
 const isTodoGreenRoute = () =>
