@@ -571,3 +571,282 @@ body:has(.tdg-overview-page) .modal-body:has(.task-ai-actions) .modal-actions {
     max-height: calc(100dvh - 16px) !important;
   }
 }
+
+
+/* ==========================================================================
+   5. MODAL DE TAREFA — correção de composição e progressividade
+   O <form> é o próprio .modal-body. As regras V3 anteriores esperavam um
+   <form> filho e, por isso, não aplicavam o respiro/grid planejado.
+   ========================================================================== */
+
+body:has(.tdg-module-page) .modal:has(.task-editor-form),
+body:has(.tdg-overview-page) .modal:has(.task-editor-form) {
+  width: min(980px, calc(100vw - 48px)) !important;
+}
+
+body:has(.tdg-module-page) .task-editor-form,
+body:has(.tdg-overview-page) .task-editor-form {
+  display: grid !important;
+  gap: 14px !important;
+  width: 100% !important;
+  max-height: none !important;
+  padding: 18px 20px 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  background: #f5f7f6 !important;
+  box-sizing: border-box;
+}
+
+body:has(.tdg-module-page) .task-editor-form > .field,
+body:has(.tdg-overview-page) .task-editor-form > .field {
+  min-width: 0;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-ai-actions,
+body:has(.tdg-overview-page) .task-editor-form .task-ai-actions {
+  position: static !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center !important;
+  gap: 10px 14px !important;
+  margin: 0 !important;
+  padding: 11px 12px !important;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-ai-actions small,
+body:has(.tdg-overview-page) .task-editor-form .task-ai-actions small {
+  color: #5d726a;
+  line-height: 1.35;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-section,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d3ddd9;
+  border-radius: 6px;
+  background: #fff;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-section-heading,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e4ebe8;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-section-heading > div,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-section-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-section-heading strong,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-section-heading strong {
+  color: #17372e;
+  font-size: .82rem;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-section-heading small,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-section-heading small {
+  color: #6a7e77;
+  font-size: .68rem;
+  font-weight: 500;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-core-grid,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-core-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 11px 14px !important;
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-core-grid > *,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-core-grid > * {
+  min-width: 0;
+}
+
+body:has(.tdg-module-page) .task-editor-form .deadline-calc-wrap,
+body:has(.tdg-overview-page) .task-editor-form .deadline-calc-wrap {
+  grid-column: 1 / -1;
+  padding: 10px 12px !important;
+  border-radius: 5px !important;
+}
+
+body:has(.tdg-module-page) .task-editor-form .notify-row,
+body:has(.tdg-overview-page) .task-editor-form .notify-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+body:has(.tdg-module-page) .task-editor-form .cost-check,
+body:has(.tdg-overview-page) .task-editor-form .cost-check {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body:has(.tdg-module-page) .task-editor-form .cost-check input[type="checkbox"],
+body:has(.tdg-overview-page) .task-editor-form .cost-check input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px !important;
+  height: 18px;
+  min-height: 18px !important;
+  margin: 0;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d3ddd9;
+  border-radius: 6px;
+  background: #fff;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced > summary,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 54px;
+  padding: 11px 14px;
+  cursor: pointer;
+  list-style: none;
+  color: #17372e;
+  user-select: none;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced > summary::-webkit-details-marker,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced > summary > div,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced > summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced > summary strong,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced > summary strong {
+  font-size: .8rem;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced > summary small,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced > summary small {
+  color: #71837d;
+  font-size: .66rem;
+  font-weight: 500;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced > summary::after,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced > summary::after {
+  content: "+";
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #cbd8d3;
+  border-radius: 5px;
+  color: #31584d;
+  background: #f6f9f7;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced[open] > summary,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced[open] > summary {
+  border-bottom: 1px solid #e1e8e5;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced[open] > summary::after,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced[open] > summary::after {
+  content: "−";
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced-body,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced-body {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+body:has(.tdg-module-page) .task-editor-form .task-editor-advanced-body > .field,
+body:has(.tdg-overview-page) .task-editor-form .task-editor-advanced-body > .field {
+  padding: 12px;
+  border: 1px solid #e0e7e4;
+  border-radius: 5px;
+  background: #fafcfb;
+}
+
+body:has(.tdg-module-page) .task-editor-form > .modal-actions:last-child,
+body:has(.tdg-overview-page) .task-editor-form > .modal-actions:last-child {
+  position: sticky !important;
+  z-index: 8;
+  bottom: 0 !important;
+  grid-column: 1 / -1;
+  justify-content: flex-end !important;
+  margin: 0 -20px !important;
+  padding: 12px 20px !important;
+  border-top: 1px solid #d7e0dc !important;
+  background: rgba(255,255,255,.97) !important;
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 720px) {
+  body:has(.tdg-module-page) .modal:has(.task-editor-form),
+  body:has(.tdg-overview-page) .modal:has(.task-editor-form) {
+    width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+
+  body:has(.tdg-module-page) .task-editor-form,
+  body:has(.tdg-overview-page) .task-editor-form {
+    padding: 14px 14px 0 !important;
+  }
+
+  body:has(.tdg-module-page) .task-editor-form .task-editor-core-grid,
+  body:has(.tdg-overview-page) .task-editor-form .task-editor-core-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body:has(.tdg-module-page) .task-editor-form .task-ai-actions,
+  body:has(.tdg-overview-page) .task-editor-form .task-ai-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body:has(.tdg-module-page) .task-editor-form .task-ai-actions .button,
+  body:has(.tdg-overview-page) .task-editor-form .task-ai-actions .button {
+    width: 100%;
+  }
+
+  body:has(.tdg-module-page) .task-editor-form > .modal-actions:last-child,
+  body:has(.tdg-overview-page) .task-editor-form > .modal-actions:last-child {
+    margin-inline: -14px !important;
+    padding-inline: 14px !important;
+  }
+}
