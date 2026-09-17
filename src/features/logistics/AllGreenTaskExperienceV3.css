@@ -882,8 +882,11 @@ body:has(.tdg-overview-page) .task-editor-form > .modal-actions:last-child {
    ========================================================================== */
 
 .modal:has(.task-editor-form) {
+  display: flex !important;
+  flex-direction: column !important;
   width: min(920px, calc(100vw - 40px)) !important;
   max-height: min(90dvh, 900px) !important;
+  overflow: hidden !important;
   border: 1px solid #d8e1dd !important;
   border-radius: 12px !important;
   background: #f6f8f7 !important;
@@ -914,10 +917,38 @@ body:has(.tdg-overview-page) .task-editor-form > .modal-actions:last-child {
 
 .task-editor-form {
   display: grid !important;
+  flex: 1 1 auto !important;
   gap: 16px !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   padding: 20px 22px 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
   background: #f6f8f7 !important;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable !important;
+  scrollbar-width: thin;
+  scrollbar-color: #bccbc5 transparent;
+}
+
+.task-editor-form::-webkit-scrollbar {
+  width: 9px;
+}
+
+.task-editor-form::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.task-editor-form::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #bccbc5;
+  background-clip: padding-box;
+}
+
+.task-editor-form::-webkit-scrollbar-thumb:hover {
+  background: #9faea8;
+  background-clip: padding-box;
 }
 
 .task-editor-form .field {
@@ -1252,7 +1283,10 @@ body:has(.tdg-overview-page) .task-editor-form > .modal-actions:last-child {
   }
 
   .task-editor-form {
+    min-height: 0 !important;
     padding: 14px 14px 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
   }
 
   .task-editor-tools,
