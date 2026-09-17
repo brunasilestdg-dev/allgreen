@@ -9,8 +9,11 @@ import {
   passwordHash,
   randomHex,
   sameHash,
+  sessionToken,
   sessionUser,
   sha256,
+  withClearedSessionCookie,
+  withSessionCookie,
 } from "../auth/credenciais.js";
 import { allowed, edgeIp, json } from "../lib/http.js";
 import {
@@ -19,6 +22,11 @@ import {
   sendEmail,
   sixDigitCode,
 } from "../mensageria/envio.js";
+
+async function issueSession(env, user, status = 200) {
+  const token = await createSession(env, user.id);
+  return withSessionCookie(json({ user, token }, status), token);
+}
 
 export async function handleAuth(request, env, url) {
   if (!env.DB)
@@ -40,15 +48,17 @@ export async function handleAuth(request, env, url) {
     );
 
   if (url.pathname === "/api/auth/session") {
-    const token =
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
-    if (!token) return json({ error: "Sessão não encontrada." }, 401);
+    const token = sessionToken(request);
+    if (!token)
+      return withClearedSessionCookie(
+        json({ error: "Sessão não encontrada." }, 401),
+      );
     const tokenHash = await sha256(token);
     if (request.method === "DELETE") {
       await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?")
         .bind(tokenHash)
         .run();
-      return json({ ok: true });
+      return withClearedSessionCookie(json({ ok: true }));
     }
     if (request.method !== "GET")
       return json({ error: "Método não permitido." }, 405);
@@ -73,7 +83,9 @@ export async function handleAuth(request, env, url) {
     }
     return user
       ? json({ user })
-      : json({ error: "Sua sessão expirou. Entre novamente." }, 401);
+      : withClearedSessionCookie(
+          json({ error: "Sua sessão expirou. Entre novamente." }, 401),
+        );
   }
 
   // Derruba TODAS as sessões da conta, em todos os aparelhos — o remédio
@@ -87,7 +99,7 @@ export async function handleAuth(request, env, url) {
     await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?")
       .bind(account.id)
       .run();
-    return json({ ok: true });
+    return withClearedSessionCookie(json({ ok: true }));
   }
 
   if (url.pathname === "/api/auth/account") {
@@ -132,7 +144,7 @@ export async function handleAuth(request, env, url) {
       ),
       env.DB.prepare("DELETE FROM users WHERE id = ?").bind(account.id),
     ]);
-    return json({ ok: true });
+    return withClearedSessionCookie(json({ ok: true }));
   }
 
   if (request.method !== "POST")
@@ -211,11 +223,9 @@ export async function handleAuth(request, env, url) {
     await env.DB.prepare("DELETE FROM pending_signups WHERE email = ?")
       .bind(vemail)
       .run();
-    return json(
-      {
-        user: { id, name: p.name, email: vemail },
-        token: await createSession(env, id),
-      },
+    return issueSession(
+      env,
+      { id, name: p.name, email: vemail },
       201,
     );
   }
@@ -354,9 +364,10 @@ export async function handleAuth(request, env, url) {
         .run();
       account = { id, name: gName, email: gEmail };
     }
-    return json({
-      user: { id: account.id, name: account.name, email: account.email },
-      token: await createSession(env, account.id),
+    return issueSession(env, {
+      id: account.id,
+      name: account.name,
+      email: account.email,
     });
   }
 
@@ -490,9 +501,10 @@ export async function handleAuth(request, env, url) {
     await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?")
       .bind(account.id)
       .run();
-    return json({
-      user: { id: account.id, name: account.name, email },
-      token: await createSession(env, account.id),
+    return issueSession(env, {
+      id: account.id,
+      name: account.name,
+      email,
     });
   }
 
@@ -566,7 +578,7 @@ export async function handleAuth(request, env, url) {
         );
       throw error;
     }
-    return json({ user, token: await createSession(env, user.id) }, 201);
+    return issueSession(env, user, 201);
   }
 
   if (url.pathname === "/api/auth/login") {
@@ -594,7 +606,7 @@ export async function handleAuth(request, env, url) {
       );
     if (!valid) return json({ error: "E-mail ou senha incorretos." }, 401);
     const user = { id: account.id, name: account.name, email: account.email };
-    return json({ user, token: await createSession(env, user.id) });
+    return issueSession(env, user);
   }
 
   return json({ error: "Rota de acesso não encontrada." }, 404);
