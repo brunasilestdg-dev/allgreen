@@ -1,0 +1,169 @@
+/* ALL GREEN — correção de densidade do menu lateral
+   Mantém a faixa verde ocupando a coluna inteira do shell, mas deixa as
+   funcionalidades compactas no topo. A rolagem aparece apenas quando o
+   conteúdo realmente ultrapassa a altura disponível. */
+
+/* A coluna verde pertence ao layout, não ao tamanho do conteúdo do menu. */
+@media (min-width: 901px) {
+  .tdg.tdg-module-page .tdg-erp-layout,
+  .tdg.tdg-overview-page .tdg-erp-layout {
+    align-items: stretch !important;
+    background: linear-gradient(90deg, #10241f 0, #10241f 286px, transparent 286px) !important;
+    min-height: calc(100vh - 64px) !important;
+    min-height: calc(100dvh - 64px) !important;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar,
+  .tdg.tdg-overview-page .tdg-erp-sidebar {
+    align-self: start !important;
+    display: block !important;
+    height: auto !important;
+    max-height: calc(100vh - 64px) !important;
+    max-height: calc(100dvh - 64px) !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    position: sticky !important;
+    top: 0 !important;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(213, 232, 223, .28) transparent;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar::-webkit-scrollbar,
+  .tdg.tdg-overview-page .tdg-erp-sidebar::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar::-webkit-scrollbar-track,
+  .tdg.tdg-overview-page .tdg-erp-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar::-webkit-scrollbar-thumb,
+  .tdg.tdg-overview-page .tdg-erp-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(213, 232, 223, .22);
+    border-radius: 999px;
+  }
+}
+
+/* O conteúdo fica no topo e em ritmo compacto. Nada é esticado para preencher
+   a lateral; se sobrar altura, sobra apenas fundo verde. */
+.tdg .tdg-erp-sidebar .tdg-erp-sidebar-head {
+  margin-bottom: 6px !important;
+  padding-bottom: 9px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry,
+.tdg .tdg-erp-sidebar .tdg-work-entry,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button,
+.tdg .tdg-erp-sidebar .tdg-vertical-link {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+  min-height: 34px !important;
+  padding: 5px 8px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry:hover,
+.tdg .tdg-erp-sidebar .tdg-work-entry:hover,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button:hover,
+.tdg .tdg-erp-sidebar .tdg-vertical-link:hover {
+  background: rgba(255, 255, 255, .065) !important;
+  border: 0 !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry.active,
+.tdg .tdg-erp-sidebar .tdg-work-entry.active,
+.tdg .tdg-erp-sidebar .tdg-nav-switch button.active,
+.tdg .tdg-erp-sidebar .tdg-vertical-link[aria-current="page"] {
+  background: #1b745e !important;
+  border: 0 !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-home-entry + .tdg-work-entry {
+  margin-top: 1px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-verticais-links {
+  gap: 1px !important;
+  margin: 2px 0 4px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-switch {
+  gap: 1px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-sidebar-search {
+  margin: 5px 0 4px !important;
+  min-height: 36px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-sidebar-search input {
+  min-height: 32px !important;
+  padding-block: 5px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-areas {
+  align-content: start !important;
+  display: grid !important;
+  gap: 0 !important;
+  padding: 3px 0 10px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-cabeca {
+  gap: 2px !important;
+  min-height: 28px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child {
+  min-height: 28px !important;
+  padding: 4px 6px !important;
+  line-height: 1.15 !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-seta,
+.tdg .tdg-erp-sidebar .tdg-nav-area-mover {
+  min-height: 26px !important;
+  min-width: 26px !important;
+  padding: 3px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens {
+  margin: 0 0 2px 9px !important;
+  padding: 0 0 1px 8px !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens button,
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens a {
+  min-height: 27px !important;
+  padding: 4px 6px !important;
+  line-height: 1.15 !important;
+}
+
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens button + button,
+.tdg .tdg-erp-sidebar .tdg-nav-area-itens a + a {
+  margin-top: 0 !important;
+}
+
+/* A área ativa continua fácil de localizar sem aumentar a altura do item. */
+.tdg .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child.active {
+  color: #ffffff !important;
+  font-weight: 760 !important;
+}
+
+/* Mobile continua usando o fluxo natural; não criamos uma caixa de rolagem
+   interna que competiria com a rolagem da página. */
+@media (max-width: 900px) {
+  .tdg .tdg-erp-sidebar {
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+}
