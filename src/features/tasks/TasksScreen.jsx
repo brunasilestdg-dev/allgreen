@@ -2490,245 +2490,302 @@ export default function Tasks({
           wide
         >
           <form className="modal-body task-editor-form" onSubmit={save}>
-            <Field label="Título">
-              <input
-                autoFocus
-                required
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-              />
-            </Field>
-            <Field label="Descrição">
-              <textarea
-                value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
-              />
-            </Field>
-            <div className="task-ai-actions">
-              <Button
-                type="button"
-                variant="secondary"
-                icon={taskAiBusy ? RefreshCw : WandSparkles}
-                disabled={taskAiBusy}
-                onClick={structureTaskWithAi}
-              >
-                {taskAiBusy ? "Estruturando..." : "Estruturar tarefa com IA"}
-              </Button>
-              <small>
-                Organiza o rascunho em etapas, critérios, prioridade e
-                responsável sugerido. Você revisa tudo antes de salvar.
-              </small>
-            </div>
-            {(taskAiError ||
-              form.aiSuggestedSpecialist ||
-              (form.aiRisks || []).length > 0 ||
-              (form.aiQuestions || []).length > 0) && (
-              <div className="task-ai-insights" role="status">
-                {taskAiError && <p>{taskAiError}</p>}
-                {form.aiSuggestedSpecialist && (
-                  <p>
-                    <strong>Colaborador sugerido:</strong>{" "}
-                    {form.aiSuggestedSpecialist}
-                  </p>
-                )}
-                {(form.aiRisks || []).length > 0 && (
-                  <div>
-                    <strong>Riscos para revisar</strong>
-                    <ul>
-                      {form.aiRisks.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {(form.aiQuestions || []).length > 0 && (
-                  <div>
-                    <strong>Informações que podem melhorar a execução</strong>
-                    <ul>
-                      {form.aiQuestions.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+            <section className="task-editor-basics">
+              <div className="task-editor-basics-grid">
+                <Field label="Título">
+                  <input
+                    autoFocus
+                    required
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    placeholder="O que precisa ser feito?"
+                  />
+                </Field>
+                <Field label="Descrição">
+                  <textarea
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value })
+                    }
+                    placeholder="Contexto, objetivo e informações importantes para executar bem."
+                  />
+                </Field>
               </div>
-            )}
-            <div className="field">
-              <span>Anexos</span>
-              <input
-                ref={taskAttachRef}
-                className="visually-hidden"
-                type="file"
-                multiple
-                accept="image/*,.pdf,.docx,.txt,.md,.markdown,.csv"
-                aria-label="Anexar arquivo à tarefa"
-                onChange={async (e) => {
-                  const files = e.target.files;
-                  e.target.value = "";
-                  const next = await addAttachmentsFromFiles(
-                    files,
-                    form.attachments || [],
-                    setToast,
-                  );
-                  setForm((current) => ({ ...current, attachments: next }));
-                }}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                icon={Paperclip}
-                onClick={() => taskAttachRef.current?.click()}
-              >
-                Anexar arquivo
-              </Button>
-              <AttachmentList
-                attachments={form.attachments}
-                onRemove={(id) =>
-                  setForm((current) => ({
-                    ...current,
-                    attachments: (current.attachments || []).filter(
-                      (a) => a.id !== id,
-                    ),
-                  }))
-                }
-              />
-            </div>
+
+              <div className="task-editor-tools">
+                <div className="task-ai-actions">
+                  <div className="task-editor-tool-copy">
+                    <strong>Organizar com IA</strong>
+                    <small>
+                      Transforma o rascunho em etapas, critérios, prioridade e
+                      responsável sugerido.
+                    </small>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    icon={taskAiBusy ? RefreshCw : WandSparkles}
+                    disabled={taskAiBusy}
+                    onClick={structureTaskWithAi}
+                  >
+                    {taskAiBusy ? "Estruturando..." : "Estruturar"}
+                  </Button>
+                </div>
+
+                <div className="task-editor-attachment">
+                  <input
+                    ref={taskAttachRef}
+                    className="visually-hidden"
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.docx,.txt,.md,.markdown,.csv"
+                    aria-label="Anexar arquivo à tarefa"
+                    onChange={async (e) => {
+                      const files = e.target.files;
+                      e.target.value = "";
+                      const next = await addAttachmentsFromFiles(
+                        files,
+                        form.attachments || [],
+                        setToast,
+                      );
+                      setForm((current) => ({ ...current, attachments: next }));
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    icon={Paperclip}
+                    onClick={() => taskAttachRef.current?.click()}
+                  >
+                    Anexar
+                  </Button>
+                  <AttachmentList
+                    attachments={form.attachments}
+                    onRemove={(id) =>
+                      setForm((current) => ({
+                        ...current,
+                        attachments: (current.attachments || []).filter(
+                          (a) => a.id !== id,
+                        ),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {(taskAiError ||
+                form.aiSuggestedSpecialist ||
+                (form.aiRisks || []).length > 0 ||
+                (form.aiQuestions || []).length > 0) && (
+                <div className="task-ai-insights" role="status">
+                  {taskAiError && <p>{taskAiError}</p>}
+                  {form.aiSuggestedSpecialist && (
+                    <p>
+                      <strong>Colaborador sugerido:</strong>{" "}
+                      {form.aiSuggestedSpecialist}
+                    </p>
+                  )}
+                  {(form.aiRisks || []).length > 0 && (
+                    <div>
+                      <strong>Riscos para revisar</strong>
+                      <ul>
+                        {form.aiRisks.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(form.aiQuestions || []).length > 0 && (
+                    <div>
+                      <strong>Informações que podem melhorar a execução</strong>
+                      <ul>
+                        {form.aiQuestions.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
             <section className="task-editor-section">
               <div className="task-editor-section-heading">
                 <div>
                   <strong>Planejamento e atribuição</strong>
-                  <small>Defina quando acontece, quem executa e onde a tarefa se encaixa.</small>
+                  <small>Organize prioridade, prazo e responsável sem excesso de campos na mesma linha.</small>
                 </div>
               </div>
-              <div className="form-grid task-editor-core-grid">
-              <Field label="Prioridade">
-                <select
-                  value={form.priority}
-                  onChange={(e) =>
-                    setForm({ ...form, priority: e.target.value })
-                  }
-                >
-                  <option>Baixa</option>
-                  <option>Média</option>
-                  <option>Alta</option>
-                </select>
-              </Field>
-              <Field label="Status">
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  {statuses.map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Prazo">
-                <input
-                  type="date"
-                  value={form.due}
-                  onChange={(e) => setForm({ ...form, due: e.target.value })}
-                />
-              </Field>
-              <Field label="Início planejado">
-                <input
-                  type="date"
-                  value={form.startDate || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, startDate: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Duração estimada (dias úteis)">
-                <input
-                  type="number"
-                  min="1"
-                  value={form.estimatedDays || "1"}
-                  onChange={(e) =>
-                    setForm({ ...form, estimatedDays: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Repetir">
-                <select
-                  value={form.recurrence?.frequency || "none"}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      recurrence: {
-                        frequency: e.target.value,
-                        seriesId: form.recurrence?.seriesId,
-                      },
-                    })
-                  }
-                >
-                  {RECURRENCE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {editing &&
-                  form.recurrence?.frequency &&
-                  form.recurrence.frequency !== "none" &&
-                  form.recurrence.seriesId && (
-                    <p className="recurrence-note">
-                      Parte de uma série recorrente (
-                      {
-                        db.tasks.filter(
-                          (t) =>
-                            t.recurrence?.seriesId === form.recurrence.seriesId,
-                        ).length
-                      }{" "}
-                      no total).{" "}
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            recurrence: { frequency: "none" },
-                          })
-                        }
-                      >
-                        Cancelar recorrência
-                      </button>
-                    </p>
-                  )}
-              </Field>
-              <div className="deadline-calc-wrap">
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() =>
-                    setDeadlineCalc((c) => ({ ...c, open: !c.open }))
-                  }
-                >
-                  {deadlineCalc.open
-                    ? "Fechar calculadora"
-                    : "Calcular em dias úteis"}
-                </button>
-                {deadlineCalc.open && (
-                  <div className="deadline-calc">
+
+              <div className="task-editor-subsection">
+                <span className="task-editor-subtitle">Organização</span>
+                <div className="task-editor-grid task-editor-grid-3">
+                  <Field label="Prioridade">
+                    <select
+                      value={form.priority}
+                      onChange={(e) =>
+                        setForm({ ...form, priority: e.target.value })
+                      }
+                    >
+                      <option>Baixa</option>
+                      <option>Média</option>
+                      <option>Alta</option>
+                    </select>
+                  </Field>
+                  <Field label="Status">
+                    <select
+                      value={form.status}
+                      onChange={(e) =>
+                        setForm({ ...form, status: e.target.value })
+                      }
+                    >
+                      {statuses.map((x) => (
+                        <option key={x}>{x}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Área">
+                    <select
+                      value={form.area}
+                      onChange={(e) =>
+                        setForm({ ...form, area: e.target.value })
+                      }
+                    >
+                      <option>Operação</option>
+                      <option>Estratégia</option>
+                      <option>Vendas</option>
+                      <option>Marketing</option>
+                      <option>Atendimento</option>
+                      <option>Financeiro</option>
+                      <option>Jurídico</option>
+                      <option>RH / Pessoas</option>
+                      <option>TI / Tecnologia</option>
+                      <option>Logística</option>
+                      <option>Compras</option>
+                      <option>Administrativo</option>
+                      <option>Outra</option>
+                    </select>
+                  </Field>
+                </div>
+              </div>
+
+              <div className="task-editor-subsection">
+                <div className="task-editor-subsection-head">
+                  <span className="task-editor-subtitle">Prazo e recorrência</span>
+                  <button
+                    type="button"
+                    className="task-editor-calc-trigger"
+                    onClick={() =>
+                      setDeadlineCalc((c) => ({ ...c, open: !c.open }))
+                    }
+                  >
+                    {deadlineCalc.open ? "Fechar calculadora" : "Calcular em dias úteis"}
+                  </button>
+                </div>
+                <div className="task-editor-grid task-editor-grid-2">
+                  <Field label="Início planejado">
                     <input
                       type="date"
-                      aria-label="Data base do prazo"
-                      value={deadlineCalc.base}
+                      value={form.startDate || ""}
                       onChange={(e) =>
-                        setDeadlineCalc((c) => ({ ...c, base: e.target.value }))
+                        setForm({ ...form, startDate: e.target.value })
                       }
                     />
+                  </Field>
+                  <Field label="Prazo">
+                    <input
+                      type="date"
+                      value={form.due}
+                      onChange={(e) =>
+                        setForm({ ...form, due: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Duração estimada (dias úteis)">
                     <input
                       type="number"
                       min="1"
-                      aria-label="Dias úteis"
-                      value={deadlineCalc.days}
+                      value={form.estimatedDays || "1"}
                       onChange={(e) =>
-                        setDeadlineCalc((c) => ({ ...c, days: e.target.value }))
+                        setForm({ ...form, estimatedDays: e.target.value })
                       }
                     />
+                  </Field>
+                  <Field label="Repetir">
+                    <select
+                      value={form.recurrence?.frequency || "none"}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          recurrence: {
+                            frequency: e.target.value,
+                            seriesId: form.recurrence?.seriesId,
+                          },
+                        })
+                      }
+                    >
+                      {RECURRENCE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    {editing &&
+                      form.recurrence?.frequency &&
+                      form.recurrence.frequency !== "none" &&
+                      form.recurrence.seriesId && (
+                        <p className="recurrence-note">
+                          Parte de uma série recorrente (
+                          {
+                            db.tasks.filter(
+                              (t) =>
+                                t.recurrence?.seriesId ===
+                                form.recurrence.seriesId,
+                            ).length
+                          }{" "}
+                          no total).{" "}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() =>
+                              setForm({
+                                ...form,
+                                recurrence: { frequency: "none" },
+                              })
+                            }
+                          >
+                            Cancelar recorrência
+                          </button>
+                        </p>
+                      )}
+                  </Field>
+                </div>
+                {deadlineCalc.open && (
+                  <div className="deadline-calc task-editor-deadline-calc">
+                    <Field label="Data base">
+                      <input
+                        type="date"
+                        value={deadlineCalc.base}
+                        onChange={(e) =>
+                          setDeadlineCalc((c) => ({
+                            ...c,
+                            base: e.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field label="Dias úteis">
+                      <input
+                        type="number"
+                        min="1"
+                        value={deadlineCalc.days}
+                        onChange={(e) =>
+                          setDeadlineCalc((c) => ({
+                            ...c,
+                            days: e.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
                     <Button
                       type="button"
                       variant="secondary"
@@ -2737,127 +2794,122 @@ export default function Tasks({
                       Usar como prazo
                     </Button>
                     <small>
-                      Conta apenas dias úteis (sem sábado e domingo). Feriados
-                      nacionais não são descontados automaticamente.
+                      Conta apenas dias úteis. Feriados nacionais não são
+                      descontados automaticamente.
                     </small>
                   </div>
                 )}
               </div>
-              <Field label="Área">
-                <select
-                  value={form.area}
-                  onChange={(e) => setForm({ ...form, area: e.target.value })}
-                >
-                  <option>Operação</option>
-                  <option>Estratégia</option>
-                  <option>Vendas</option>
-                  <option>Marketing</option>
-                  <option>Atendimento</option>
-                  <option>Financeiro</option>
-                  <option>Jurídico</option>
-                  <option>RH / Pessoas</option>
-                  <option>TI / Tecnologia</option>
-                  <option>Logística</option>
-                  <option>Compras</option>
-                  <option>Administrativo</option>
-                  <option>Outra</option>
-                </select>
-              </Field>
-              <Field label="Responsável">
-                <select
-                  value={form.assigneeType || "real"}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      assigneeType: e.target.value,
-                      assignee: "",
-                    })
-                  }
-                >
-                  <option value="real">Funcionário real</option>
-                  <option value="digital">Colaborador digital</option>
-                </select>
-              </Field>
-              {form.assigneeType === "digital" ? (
-                <Field label="Colaborador digital">
-                  <select
-                    value={form.assignee || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, assignee: e.target.value })
-                    }
-                  >
-                    <option value="">Escolha quem executará</option>
-                    {digitalCollaborators.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              ) : (
-                <Field label="Nome do responsável">
-                  <input
-                    list="real-team-members"
-                    value={form.assignee || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const member = realMembers.find((m) => m.name === value);
-                      setForm({
-                        ...form,
-                        assignee: value,
-                        assigneeId: member ? member.id : "",
-                        notifyTo: member ? member.email : form.notifyTo || "",
-                      });
-                    }}
-                    placeholder="Nome da pessoa (ou escolha da equipe)"
-                  />
-                  <datalist id="real-team-members">
-                    {realMembers.map((member) => (
-                      <option key={member.id} value={member.name}>
-                        {member.email}
-                      </option>
-                    ))}
-                  </datalist>
-                </Field>
-              )}
-              {form.assigneeType !== "digital" && (
-                <Field
-                  label="Avisar por e-mail"
-                  hint="A pessoa recebe os detalhes da tarefa mesmo sem usar o app"
-                >
-                  <div className="notify-row">
-                    <label className="cost-check">
-                      <input
-                        type="checkbox"
-                        checked={!!form.notify}
+
+              <div className="task-editor-subsection">
+                <span className="task-editor-subtitle">Responsável e projeto</span>
+                <div className="task-editor-grid task-editor-grid-2">
+                  <Field label="Tipo de responsável">
+                    <select
+                      value={form.assigneeType || "real"}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          assigneeType: e.target.value,
+                          assignee: "",
+                        })
+                      }
+                    >
+                      <option value="real">Funcionário real</option>
+                      <option value="digital">Colaborador digital</option>
+                    </select>
+                  </Field>
+                  {form.assigneeType === "digital" ? (
+                    <Field label="Colaborador digital">
+                      <select
+                        value={form.assignee || ""}
                         onChange={(e) =>
-                          setForm({ ...form, notify: e.target.checked })
+                          setForm({ ...form, assignee: e.target.value })
                         }
-                      />
-                      <span>Enviar aviso</span>
-                    </label>
-                    {form.notify && (
+                      >
+                        <option value="">Escolha quem executará</option>
+                        {digitalCollaborators.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : (
+                    <Field label="Nome do responsável">
                       <input
-                        type="email"
-                        value={form.notifyTo || ""}
-                        onChange={(e) =>
-                          setForm({ ...form, notifyTo: e.target.value })
-                        }
-                        placeholder="email@dapessoa.com"
+                        list="real-team-members"
+                        value={form.assignee || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const member = realMembers.find(
+                            (m) => m.name === value,
+                          );
+                          setForm({
+                            ...form,
+                            assignee: value,
+                            assigneeId: member ? member.id : "",
+                            notifyTo: member
+                              ? member.email
+                              : form.notifyTo || "",
+                          });
+                        }}
+                        placeholder="Nome da pessoa"
                       />
-                    )}
-                  </div>
-                </Field>
-              )}
-              <Field label="Projeto">
-                <input
-                  value={form.project || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, project: e.target.value })
-                  }
-                  placeholder="Ex.: Lançamento de julho"
-                />
-              </Field>
+                      <datalist id="real-team-members">
+                        {realMembers.map((member) => (
+                          <option key={member.id} value={member.name}>
+                            {member.email}
+                          </option>
+                        ))}
+                      </datalist>
+                    </Field>
+                  )}
+                  <Field label="Projeto">
+                    <input
+                      value={form.project || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, project: e.target.value })
+                      }
+                      placeholder="Ex.: Implantação Maersk"
+                    />
+                  </Field>
+                  {form.assigneeType !== "digital" && (
+                    <Field
+                      label="Aviso por e-mail"
+                      hint="Opcional. A pessoa recebe os detalhes mesmo sem usar o app."
+                    >
+                      <div className="notify-row">
+                        <label className="cost-check">
+                          <input
+                            type="checkbox"
+                            checked={!!form.notify}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                notify: e.target.checked,
+                              })
+                            }
+                          />
+                          <span>Enviar aviso</span>
+                        </label>
+                        {form.notify && (
+                          <input
+                            type="email"
+                            value={form.notifyTo || ""}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                notifyTo: e.target.value,
+                              })
+                            }
+                            placeholder="email@dapessoa.com"
+                          />
+                        )}
+                      </div>
+                    </Field>
+                  )}
+                </div>
               </div>
             </section>
             <details className="task-editor-advanced">
