@@ -1,0 +1,172 @@
+/* VIS-04A — compactação e coerência do menu lateral do All Green.
+   Camada exclusivamente visual: não altera rotas, permissões, dados ou regras. */
+
+/* Os cinco acessos iniciais usam a mesma linguagem visual. */
+.tdg.tdg-module-page .tdg-home-entry,
+.tdg.tdg-overview-page .tdg-home-entry,
+.tdg.tdg-module-page .tdg-work-entry,
+.tdg.tdg-overview-page .tdg-work-entry,
+.tdg.tdg-module-page .tdg-nav-switch button,
+.tdg.tdg-overview-page .tdg-nav-switch button,
+.tdg.tdg-module-page .tdg-vertical-link,
+.tdg.tdg-overview-page .tdg-vertical-link {
+  align-items: center;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px;
+  box-shadow: none !important;
+  color: #d9e6e0 !important;
+  display: flex;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 9px;
+  text-align: left;
+  text-decoration: none;
+  transform: none !important;
+  width: 100%;
+}
+
+.tdg.tdg-module-page .tdg-home-entry:hover,
+.tdg.tdg-overview-page .tdg-home-entry:hover,
+.tdg.tdg-module-page .tdg-work-entry:hover,
+.tdg.tdg-overview-page .tdg-work-entry:hover,
+.tdg.tdg-module-page .tdg-nav-switch button:hover,
+.tdg.tdg-overview-page .tdg-nav-switch button:hover,
+.tdg.tdg-module-page .tdg-vertical-link:hover,
+.tdg.tdg-overview-page .tdg-vertical-link:hover {
+  background: rgba(255, 255, 255, .07) !important;
+  border-color: rgba(255, 255, 255, .08) !important;
+  color: #ffffff !important;
+}
+
+.tdg.tdg-module-page .tdg-home-entry.active,
+.tdg.tdg-overview-page .tdg-home-entry.active,
+.tdg.tdg-module-page .tdg-work-entry.active,
+.tdg.tdg-overview-page .tdg-work-entry.active,
+.tdg.tdg-module-page .tdg-nav-switch button.active,
+.tdg.tdg-overview-page .tdg-nav-switch button.active,
+.tdg.tdg-module-page .tdg-vertical-link[aria-current="page"],
+.tdg.tdg-overview-page .tdg-vertical-link[aria-current="page"] {
+  background: #176b57 !important;
+  border-color: #176b57 !important;
+  color: #ffffff !important;
+}
+
+.tdg.tdg-module-page .tdg-home-entry:focus-visible,
+.tdg.tdg-overview-page .tdg-home-entry:focus-visible,
+.tdg.tdg-module-page .tdg-work-entry:focus-visible,
+.tdg.tdg-overview-page .tdg-work-entry:focus-visible,
+.tdg.tdg-module-page .tdg-nav-switch button:focus-visible,
+.tdg.tdg-overview-page .tdg-nav-switch button:focus-visible,
+.tdg.tdg-module-page .tdg-vertical-link:focus-visible,
+.tdg.tdg-overview-page .tdg-vertical-link:focus-visible {
+  outline: 2px solid #bfe56b;
+  outline-offset: 1px;
+}
+
+.tdg.tdg-module-page .tdg-vertical-link strong,
+.tdg.tdg-overview-page .tdg-vertical-link strong,
+.tdg.tdg-module-page .tdg-home-entry strong,
+.tdg.tdg-overview-page .tdg-home-entry strong,
+.tdg.tdg-module-page .tdg-work-entry strong,
+.tdg.tdg-overview-page .tdg-work-entry strong,
+.tdg.tdg-module-page .tdg-nav-switch button strong,
+.tdg.tdg-overview-page .tdg-nav-switch button strong {
+  color: inherit !important;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Subtítulos permanecem no DOM para contexto/acessibilidade, mas não pesam no menu. */
+.tdg.tdg-module-page .tdg-home-entry small,
+.tdg.tdg-overview-page .tdg-home-entry small,
+.tdg.tdg-module-page .tdg-work-entry small,
+.tdg.tdg-overview-page .tdg-work-entry small,
+.tdg.tdg-module-page .tdg-nav-switch button small,
+.tdg.tdg-overview-page .tdg-nav-switch button small,
+.tdg.tdg-module-page .tdg-vertical-link > span,
+.tdg.tdg-overview-page .tdg-vertical-link > span {
+  border: 0 !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  position: absolute !important;
+  white-space: nowrap !important;
+  width: 1px !important;
+}
+
+/* Menos vazios entre itens: a navegação fica densa sem esticar as funcionalidades. */
+.tdg.tdg-module-page .tdg-nav-switch,
+.tdg.tdg-overview-page .tdg-nav-switch,
+.tdg.tdg-module-page .tdg-verticais-links,
+.tdg.tdg-overview-page .tdg-verticais-links {
+  gap: 2px !important;
+}
+
+.tdg.tdg-module-page .tdg-verticais-links,
+.tdg.tdg-overview-page .tdg-verticais-links {
+  display: grid;
+  margin: 2px 0 5px;
+}
+
+.tdg.tdg-module-page .tdg-nav-area,
+.tdg.tdg-overview-page .tdg-nav-area {
+  margin: 0 !important;
+}
+
+.tdg.tdg-module-page .tdg-nav-area-cabeca,
+.tdg.tdg-overview-page .tdg-nav-area-cabeca {
+  min-height: 31px !important;
+}
+
+.tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child,
+.tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child {
+  min-height: 31px !important;
+  padding: 5px 7px !important;
+}
+
+.tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-itens,
+.tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-itens {
+  margin: 0 0 4px 10px !important;
+  padding-left: 8px !important;
+}
+
+.tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-itens button,
+.tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-itens button {
+  min-height: 30px !important;
+  padding: 5px 7px !important;
+}
+
+.tdg.tdg-module-page .tdg-sidebar-search,
+.tdg.tdg-overview-page .tdg-sidebar-search {
+  margin: 7px 0 6px !important;
+}
+
+/* A faixa verde pertence ao shell, não ao tamanho do conteúdo da sidebar. */
+@media (min-width: 901px) {
+  .tdg.tdg-module-page .tdg-erp-layout,
+  .tdg.tdg-overview-page .tdg-erp-layout {
+    align-items: start !important;
+    background: linear-gradient(90deg, #10241f 0, #10241f 286px, transparent 286px) !important;
+    min-height: calc(100vh - 73px);
+    min-height: calc(100dvh - 73px);
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar,
+  .tdg.tdg-overview-page .tdg-erp-sidebar {
+    align-self: start !important;
+    background: #10241f;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 73px) !important;
+    max-height: calc(100dvh - 73px) !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+  }
+}
