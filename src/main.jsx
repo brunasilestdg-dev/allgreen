@@ -15,6 +15,7 @@ import "./features/logistics/LogisticsVerticalEnterpriseRefinement.css";
 import "./features/logistics/LogisticsVerticalEnterpriseShellPolish.css";
 import "./features/logistics/ErpHomeEnterprise.css";
 import "./features/logistics/LogisticsVerticalMenuCompact.css";
+import "./features/logistics/AllGreenVisualSystemV2.css";
 import "./features/logistics/allGreenMenuEnhancements.js";
 import "./features/logistics/LogisticsVerticalRecovery.js";
 import "./features/logistics/LogisticsVerticalCredentials.js";
