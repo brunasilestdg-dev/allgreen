@@ -14,5 +14,12 @@ export function withInternalSessionAuthorization(request) {
 
   const headers = new Headers(request.headers);
   headers.set("authorization", `Bearer ${token}`);
-  return new Request(request, { headers });
+
+  // Criar uma Request diretamente a partir da original pode transferir o
+  // stream do corpo para a cópia interna. Isso deixa a Request original sem
+  // corpo e quebra rotas POST que são encaminhadas depois, como /api/auth/login.
+  // Clonar primeiro mantém os dois fluxos independentes: a vertical recebe a
+  // cópia interna com Authorization e o app principal continua podendo ler o
+  // JSON original normalmente.
+  return new Request(request.clone(), { headers });
 }
