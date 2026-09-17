@@ -116,10 +116,10 @@ export function loadInitialDb() {
 }
 
 export function startUserSession(user) {
-  // A sessão nova já está no cookie HttpOnly emitido pelo servidor. Remover um
-  // token antigo daqui evita que um Bearer vencido tenha prioridade sobre o
-  // cookie válido nas requisições de código legado.
-  localStorage.removeItem(AUTH_TOKEN_KEY);
+  // Compatibilidade temporária: o App principal ainda usa AUTH_TOKEN_KEY para
+  // decidir se deve validar a sessão. O cookie HttpOnly continua sendo emitido
+  // e aceito pelo servidor, mas o token legado só poderá ser removido depois
+  // que esse gate do App também for migrado para cookie.
   localStorage.setItem(ACTIVE_USER_KEY, user.id);
   localStorage.removeItem("sf-space");
   localStorage.removeItem("sf-space-name");
