@@ -179,3 +179,318 @@
   .tdg-crm-grid { grid-template-columns: minmax(0, 1fr); }
   .tdg-routine-card { min-height: auto; }
 }
+
+/* ========================================================================== */
+/* VIS-01 — Enterprise visual hardening                                      */
+/*                                                                            */
+/* Esta camada muda apenas a PERCEPÇÃO do shell. Rotas, dados, permissões,    */
+/* módulos e componentes continuam os mesmos. O escopo explícito evita       */
+/* contaminar landing page, login e telas públicas da vertical.              */
+/* ========================================================================== */
+
+:root:not([data-theme="dark"]) .tdg.tdg-module-page,
+:root:not([data-theme="dark"]) .tdg.tdg-overview-page {
+  --tdg-bg: #f5f7f6;
+  --tdg-soft: #eef3f0;
+  --tdg-line: #dce5e1;
+  --tdg-line-strong: #c5d2cc;
+  --tdg-surface2: #f1f4f2;
+  --tdg-surface-muted: #f8faf9;
+  --tdg-border: #dfe6e2;
+  --tdg-shadow: 0 10px 28px rgba(16, 36, 31, 0.055);
+}
+
+.tdg.tdg-module-page,
+.tdg.tdg-overview-page {
+  background: var(--tdg-bg);
+  gap: 0;
+  margin: 0;
+  max-width: none;
+  min-height: 100vh;
+  padding: 0;
+  width: 100%;
+}
+
+/* Topbar estrutural, não mais um cartão flutuando sobre a aplicação. */
+.tdg.tdg-module-page .tdg-shell-header,
+.tdg.tdg-overview-page .tdg-shell-header {
+  background: var(--tdg-card);
+  border: 0;
+  border-bottom: 1px solid var(--tdg-line);
+  border-radius: 0;
+  box-shadow: 0 1px 8px rgba(16, 36, 31, 0.045);
+  min-height: 64px;
+  padding: 10px 22px;
+  position: relative;
+  z-index: 12;
+}
+
+.tdg.tdg-module-page .tdg-shell-logo,
+.tdg.tdg-overview-page .tdg-shell-logo {
+  border-radius: 7px;
+  padding: 2px 4px;
+}
+
+.tdg.tdg-module-page .tdg-shell-logo img,
+.tdg.tdg-overview-page .tdg-shell-logo img {
+  height: 38px;
+}
+
+/* Controles do shell mais compactos e com geometria de aplicação corporativa. */
+.tdg.tdg-module-page .tdg-shell-search,
+.tdg.tdg-overview-page .tdg-shell-search,
+.tdg.tdg-module-page .tdg-shell-theme,
+.tdg.tdg-overview-page .tdg-shell-theme,
+.tdg.tdg-module-page .tdg-shell-pendencias,
+.tdg.tdg-overview-page .tdg-shell-pendencias,
+.tdg.tdg-module-page .tdg-shell-sair,
+.tdg.tdg-overview-page .tdg-shell-sair,
+.tdg.tdg-module-page .tdg-perfil-chip,
+.tdg.tdg-overview-page .tdg-perfil-chip,
+.tdg.tdg-module-page .tdg-management-menu summary,
+.tdg.tdg-overview-page .tdg-management-menu summary,
+.tdg.tdg-module-page .tdg-menu-mostrar,
+.tdg.tdg-overview-page .tdg-menu-mostrar {
+  border-radius: 7px;
+}
+
+.tdg.tdg-module-page .tdg-shell-search,
+.tdg.tdg-overview-page .tdg-shell-search,
+.tdg.tdg-module-page .tdg-shell-theme,
+.tdg.tdg-overview-page .tdg-shell-theme {
+  background: var(--tdg-surface-muted);
+  border-color: var(--tdg-line);
+}
+
+/* Palco de trabalho neutro: a marca aparece nos estados e ações, não tingindo
+   toda a superfície do sistema. */
+.tdg.tdg-module-page .tdg-erp-stage,
+.tdg.tdg-overview-page .tdg-erp-stage {
+  background: var(--tdg-bg);
+  min-width: 0;
+  padding: 24px 28px 40px;
+}
+
+.tdg.tdg-module-page [data-tdg-page-content="true"],
+.tdg.tdg-overview-page [data-tdg-page-content="true"] {
+  gap: 16px;
+}
+
+/* Hierarquia tipográfica: evita que navegação e contexto pareçam notas miúdas. */
+.tdg.tdg-module-page .tdg-breadcrumb button,
+.tdg.tdg-module-page .tdg-breadcrumb [aria-current="page"],
+.tdg.tdg-overview-page .tdg-breadcrumb button,
+.tdg.tdg-overview-page .tdg-breadcrumb [aria-current="page"] {
+  font-size: 11px;
+  letter-spacing: 0.075em;
+}
+
+.tdg.tdg-module-page .tdg-kicker,
+.tdg.tdg-overview-page .tdg-kicker {
+  font-size: 12px;
+  letter-spacing: 0.075em;
+}
+
+.tdg.tdg-module-page .tdg-page-title h2,
+.tdg.tdg-overview-page .tdg-page-title h2,
+.tdg.tdg-module-page .ds-pagehead__title,
+.tdg.tdg-overview-page .ds-pagehead__title {
+  font-size: clamp(1.55rem, 2.15vw, 2rem);
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+/* Menos "cardificação": mesma informação, com contornos mais discretos e
+   raios menores. Nenhum componente é removido ou escondido. */
+.tdg.tdg-module-page .tdg-panel,
+.tdg.tdg-module-page .tdg-section,
+.tdg.tdg-overview-page .tdg-panel,
+.tdg.tdg-overview-page .tdg-section,
+.tdg.tdg-module-page .tdg-work-map,
+.tdg.tdg-overview-page .tdg-work-map,
+.tdg.tdg-module-page .tdg-tool-catalog,
+.tdg.tdg-overview-page .tdg-tool-catalog,
+.tdg.tdg-module-page .tdg-home-section,
+.tdg.tdg-overview-page .tdg-home-section,
+.tdg.tdg-module-page .ds-card,
+.tdg.tdg-overview-page .ds-card {
+  border-color: var(--tdg-line);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(16, 36, 31, 0.025);
+}
+
+.tdg.tdg-module-page .tdg-metric,
+.tdg.tdg-overview-page .tdg-metric,
+.tdg.tdg-module-page .tdg-module-card,
+.tdg.tdg-overview-page .tdg-module-card,
+.tdg.tdg-module-page .tdg-product-card,
+.tdg.tdg-overview-page .tdg-product-card,
+.tdg.tdg-module-page .tdg-operation-card,
+.tdg.tdg-overview-page .tdg-operation-card,
+.tdg.tdg-module-page .tdg-home-metric-link,
+.tdg.tdg-overview-page .tdg-home-metric-link,
+.tdg.tdg-module-page .tdg-home-painel-card,
+.tdg.tdg-overview-page .tdg-home-painel-card {
+  border-color: var(--tdg-line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+/* Entradas, selects e botões deixam de competir visualmente com badges/pills. */
+.tdg.tdg-module-page input:not([type="checkbox"]):not([type="radio"]),
+.tdg.tdg-module-page select,
+.tdg.tdg-module-page textarea,
+.tdg.tdg-overview-page input:not([type="checkbox"]):not([type="radio"]),
+.tdg.tdg-overview-page select,
+.tdg.tdg-overview-page textarea,
+.tdg.tdg-module-page .ds-input,
+.tdg.tdg-overview-page .ds-input,
+.tdg.tdg-module-page .ds-select__control,
+.tdg.tdg-overview-page .ds-select__control {
+  border-radius: 7px;
+}
+
+.tdg.tdg-module-page .tdg-action,
+.tdg.tdg-overview-page .tdg-action,
+.tdg.tdg-module-page .ds-btn,
+.tdg.tdg-overview-page .ds-btn {
+  border-radius: 7px;
+}
+
+/* Em software operacional, estabilidade visual pesa mais que cards entrando
+   em cascata. Mantemos hover, focus, loading, modais e feedbacks interativos. */
+.tdg.tdg-module-page .tdg-panel,
+.tdg.tdg-module-page .tdg-section,
+.tdg.tdg-module-page .tdg-metric,
+.tdg.tdg-module-page .tdg-operation-card,
+.tdg.tdg-module-page .tdg-module-card,
+.tdg.tdg-module-page .tdg-product-card,
+.tdg.tdg-module-page .tdg-home-metric-link,
+.tdg.tdg-module-page .tdg-home-metrics > article,
+.tdg.tdg-module-page .tdg-home-painel-card,
+.tdg.tdg-overview-page .tdg-panel,
+.tdg.tdg-overview-page .tdg-section,
+.tdg.tdg-overview-page .tdg-metric,
+.tdg.tdg-overview-page .tdg-operation-card,
+.tdg.tdg-overview-page .tdg-module-card,
+.tdg.tdg-overview-page .tdg-product-card,
+.tdg.tdg-overview-page .tdg-home-metric-link,
+.tdg.tdg-overview-page .tdg-home-metrics > article,
+.tdg.tdg-overview-page .tdg-home-painel-card {
+  animation: none !important;
+}
+
+/* Desktop: menu vira coluna estrutural da aplicação. Não usamos sticky para
+   preservar os testes/fluxos atuais de navegação e rolagem. */
+@media (min-width: 901px) {
+  .tdg.tdg-module-page .tdg-erp-layout,
+  .tdg.tdg-overview-page .tdg-erp-layout {
+    align-items: stretch;
+    gap: 0;
+    grid-template-columns: 258px minmax(0, 1fr);
+  }
+
+  .tdg.tdg-module-page .tdg-erp-layout.menu-oculto,
+  .tdg.tdg-overview-page .tdg-erp-layout.menu-oculto {
+    gap: 12px;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar,
+  .tdg.tdg-overview-page .tdg-erp-sidebar {
+    background: #10241f;
+    border: 0;
+    border-radius: 0;
+    color: #eef7f3;
+    min-height: calc(100vh - 64px);
+    scrollbar-color: rgba(215, 235, 226, 0.35) transparent;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar-head,
+  .tdg.tdg-overview-page .tdg-erp-sidebar-head {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar-head strong,
+  .tdg.tdg-overview-page .tdg-erp-sidebar-head strong {
+    color: #ffffff;
+    font-size: 0.9rem;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar-head small,
+  .tdg.tdg-overview-page .tdg-erp-sidebar-head small,
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-vazio,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-vazio {
+    color: #a9bdb5;
+  }
+
+  .tdg.tdg-module-page .tdg-sidebar-search,
+  .tdg.tdg-overview-page .tdg-sidebar-search {
+    background: rgba(255, 255, 255, 0.075);
+    border-color: rgba(255, 255, 255, 0.12);
+    border-radius: 7px;
+    color: #dce9e4;
+  }
+
+  .tdg.tdg-module-page .tdg-sidebar-search input,
+  .tdg.tdg-overview-page .tdg-sidebar-search input {
+    color: #ffffff;
+  }
+
+  .tdg.tdg-module-page .tdg-sidebar-search input::placeholder,
+  .tdg.tdg-overview-page .tdg-sidebar-search input::placeholder {
+    color: #a9bdb5;
+  }
+
+  .tdg.tdg-module-page .tdg-sidebar-search svg,
+  .tdg.tdg-overview-page .tdg-sidebar-search svg {
+    color: #a9bdb5;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-tabs button,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-tabs button,
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-cabeca > button,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-cabeca > button,
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-itens button,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-itens button {
+    background: transparent;
+    border-color: transparent;
+    border-radius: 6px;
+    color: #c9d9d2;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-cabeca > button:hover,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-cabeca > button:hover,
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-itens button:hover,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-itens button:hover,
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-tabs button:hover,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-tabs button:hover {
+    background: rgba(255, 255, 255, 0.075);
+    color: #ffffff;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-itens button.active,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-itens button.active,
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-tabs button.active,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-tabs button.active {
+    background: rgba(146, 200, 62, 0.15);
+    color: #d9f29b;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-sidebar .tdg-nav-area-itens,
+  .tdg.tdg-overview-page .tdg-erp-sidebar .tdg-nav-area-itens {
+    border-left-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+@media (max-width: 900px) {
+  .tdg.tdg-module-page .tdg-shell-header,
+  .tdg.tdg-overview-page .tdg-shell-header {
+    padding-inline: 14px;
+  }
+
+  .tdg.tdg-module-page .tdg-erp-stage,
+  .tdg.tdg-overview-page .tdg-erp-stage {
+    padding: 18px 14px 32px;
+  }
+}
