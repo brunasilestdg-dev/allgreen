@@ -405,6 +405,7 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
           : env?.GEOAPIFY_API_KEY
             ? "OSRM público mantido somente como contingência para veículos leves; Geoapify é o motor cloud primário."
             : "Sem servidor próprio: usando o endpoint público do OSRM (contingência).",
+        requirement: env?.GEOAPIFY_API_KEY ? "" : osrm.requirement,
       }),
     },
     vroom && {
@@ -416,7 +417,8 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
         fallbackActive: !vroomSelfHosted,
         detail: vroomSelfHosted
           ? "VROOM próprio: alocação veículo/motorista, sequência, capacidade, janelas."
-          : "Sem servidor VROOM: o despacho usa o otimizador VRP nativo no Cloudflare Worker (WASM) — sem depender de PC local.",
+          : "O despacho usa o otimizador VRP nativo no Cloudflare Worker (WASM): capacidade, janelas, frota e sequência sem servidor local.",
+        requirement: "",
       }),
     },
     valhalla && {
@@ -431,11 +433,21 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
           : env?.GEOAPIFY_API_KEY
             ? "Valhalla próprio é opcional: pesados usam Geoapify Cloud enquanto a chave estiver operacional; sem Geoapify, o backend volta a exigir motor seguro para pesados."
             : "Sem TDG_VALHALLA_BASE_URL. Pesados (VUC/truck/carreta) NÃO caem em OSRM perfil de carro: o backend responde NO_SAFE_ROUTING_ENGINE.",
-        requirement: "TDG_VALHALLA_BASE_URL (self-hosted, infra/tms-routing) + TDG_ROUTING_TOKEN no gateway",
+        requirement: env?.GEOAPIFY_API_KEY
+          ? ""
+          : "TDG_VALHALLA_BASE_URL (self-hosted, infra/tms-routing) + TDG_ROUTING_TOKEN no gateway",
       }),
     },
     nominatim && {
-      ...doCatalogo(nominatim, saudePorId.get("nominatim"), { group: "roteirizacao", implementation: IMPLEMENTATION.REAL }),
+      ...doCatalogo(nominatim, saudePorId.get("nominatim"), {
+        group: "roteirizacao",
+        implementation: IMPLEMENTATION.REAL,
+        detail: env?.GEOAPIFY_API_KEY
+          ? "Nominatim próprio é opcional; a geocodificação principal roda online pela Geoapify no Cloudflare Worker."
+          : nominatim.detail,
+        requirement: env?.GEOAPIFY_API_KEY ? "" : nominatim.requirement,
+        canTest: !env?.GEOAPIFY_API_KEY && Boolean(nominatim.configured),
+      }),
     },
     naoImplementada("postgis", "PostGIS (restrições OSM, índice geográfico)", "roteirizacao",
       "Sem grafo OSM/PostGIS carregado: restrições viárias (maxheight/maxweight/hgv) são avaliadas só quando as tags chegam pelo chamador.",
@@ -456,8 +468,11 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
         : motores.valhalla.configured
           ? "Perfil de elevação pelo /height do Valhalla, com cache de 30 dias."
           : "Sem fonte de elevação: o modelo assume perfil plano e reduz a confiança (ELEVATION_NOT_AVAILABLE).",
-      requirement: "GEOAPIFY_API_KEY ou TDG_VALHALLA_BASE_URL",
-      canTest: Boolean(env?.GEOAPIFY_API_KEY) || motores.valhalla.configured,
+      requirement: env?.GEOAPIFY_API_KEY ? "" : "GEOAPIFY_API_KEY ou TDG_VALHALLA_BASE_URL",
+      // O teste da fonte cloud é feito na própria linha "Geoapify Cloud".
+      // "elevation" não é um provider independente do gateway e não deve
+      // expor um botão que chamaria um id inexistente.
+      canTest: false,
     },
 
     // Operação e telemetria

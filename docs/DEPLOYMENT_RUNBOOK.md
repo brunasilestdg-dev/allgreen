@@ -317,9 +317,22 @@ aditiva, a antiga continua funcionando (colunas extras são ignoradas). Nunca
 "reverter" migration com SQL destrutivo em produção — crie uma migration nova
 quando precisar corrigir schema.
 
-## 14. Motores de roteirização auto‑hospedados (opcional)
+## 14. Roteirização cloud e motores auto‑hospedados opcionais
 
-VROOM/OSRM/Valhalla são infraestrutura própria (seção 35) — ver
+Em produção, quando `GEOAPIFY_API_KEY` existe no cofre do Worker, a Geoapify é
+a fonte cloud primária de geocodificação, roteamento de leves/pesados e elevação.
+O otimizador de despacho permanece nativo no próprio Cloudflare Worker (WASM),
+sem depender de PC, VPS ou servidor no escritório.
+
+OSRM/Nominatim/Valhalla/VROOM próprios continuam disponíveis como contingência
+ou opção de infraestrutura futura, mas **não são requisito** para o ambiente
+cloud com Geoapify ativo.
+
+| Variável | Uso |
+| --- | --- |
+| `GEOAPIFY_API_KEY` | geocodificação, roteamento cloud e elevação; segredo do Worker |
+
+VROOM/OSRM/Valhalla auto-hospedados são infraestrutura própria (seção 35) — ver
 `infra/tms-routing/`. Endpoints são lidos de `env` (sem hardcode):
 
 | Variável | Uso |
