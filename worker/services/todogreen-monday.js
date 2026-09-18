@@ -156,7 +156,10 @@ async function startOauth(request, env, access, user) {
   auth.searchParams.set("code_challenge", challenge);
   auth.searchParams.set("code_challenge_method", "S256");
 
-  return Response.redirect(auth.toString(), 302);
+  // Devolve a URL em JSON para o front (autenticado por Bearer, como o resto do
+  // app) fazer a navegação de topo. Um 302 direto obrigaria a rota a depender do
+  // cookie de sessão e um fetch nem conseguiria segui-lo (redirect cross-origin).
+  return json({ authorizeUrl: auth.toString() });
 }
 
 async function exchangeOauthCode(request, env) {

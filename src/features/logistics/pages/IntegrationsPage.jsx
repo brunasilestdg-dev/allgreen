@@ -120,10 +120,21 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
     window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
   }, []);
 
-  // Inicia o OAuth por navegação de topo (o cookie de sessão autentica a rota);
-  // um fetch não serve porque o passo seguinte é um redirect para o monday.com.
-  const connect = (item) => {
-    window.location.href = item?.connectPath || "/api/todogreen/integrations/monday/oauth/start";
+  // Inicia o OAuth: pede a URL de autorização (autenticado por Bearer, como o
+  // resto do app) e só então navega o navegador até o monday.com. Assim o botão
+  // não depende do cookie de sessão e falhas viram aviso, não tela em branco.
+  const connect = async (item) => {
+    const path = item?.connectPath || "/api/todogreen/integrations/monday/oauth/start";
+    try {
+      const response = await fetch(path, { headers: authHeaders?.() || {} });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.authorizeUrl) {
+        throw new Error(data.error || "Não foi possível iniciar a conexão com o monday.com.");
+      }
+      window.location.href = data.authorizeUrl;
+    } catch (error) {
+      setToast?.(error.message);
+    }
   };
 
   const resumoDaBusca = (t) => {
