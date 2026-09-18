@@ -2960,6 +2960,18 @@
 }
 .tdg-rfq-tabela th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--tdg-muted, var(--tdg-muted)); }
 .tdg-rfq-tabela td small { display: block; font-size: 11px; color: var(--tdg-muted, var(--tdg-muted)); margin-top: 2px; }
+.tdg-rfq-arquivo-link {
+  align-items: center;
+  color: var(--tdg-green, #17624f);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  margin-top: 3px;
+  max-width: 360px;
+  text-decoration: none;
+}
+.tdg-rfq-arquivo-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdg-rfq-arquivo-link:hover, .tdg-rfq-arquivo-link:focus-visible { text-decoration: underline; }
 .tdg-rfq-acoes { white-space: nowrap; }
 .tdg-rfq-acoes button {
   border: 1px solid var(--tdg-border, #e3e8e5);

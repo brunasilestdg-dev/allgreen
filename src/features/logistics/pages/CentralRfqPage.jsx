@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ClipboardList, FolderCheck, Package, Plus, Save, Send, Upload } from "lucide-react";
+import { AlertTriangle, ClipboardList, Download, ExternalLink, FolderCheck, Package, Plus, Save, Send, Upload } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import {
   CATALOGO_DE_HABILITACAO,
@@ -342,7 +342,21 @@ export default function CentralRfqPage({
                   <tr key={documento.id}>
                     <td>
                       <strong>{documento.titulo}</strong>
-                      {documento.arquivoNome && <small>{documento.arquivoNome}</small>}
+                      {documento.arquivoUrl ? (
+                        <a
+                          className="tdg-rfq-arquivo-link"
+                          href={documento.arquivoUrl}
+                          {...(documento.arquivoUrl.startsWith("/api/")
+                            ? { download: documento.arquivoNome || true }
+                            : { target: "_blank", rel: "noreferrer" })}
+                          title={documento.arquivoUrl.startsWith("/api/") ? "Baixar documento" : "Abrir documento"}
+                        >
+                          {documento.arquivoUrl.startsWith("/api/") ? <Download size={12} /> : <ExternalLink size={12} />}
+                          <span>{documento.arquivoNome || (documento.arquivoUrl.startsWith("/api/") ? "Baixar arquivo" : "Abrir arquivo")}</span>
+                        </a>
+                      ) : documento.arquivoNome ? (
+                        <small>{documento.arquivoNome}</small>
+                      ) : null}
                     </td>
                     <td>{documento.numero || "—"}</td>
                     <td>{documento.orgao || "—"}</td>

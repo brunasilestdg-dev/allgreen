@@ -30,6 +30,22 @@ describe("Central de RFQ", () => {
     expect(screen.getByText(/Venceu há/)).toBeInTheDocument();
   });
 
+  it("arquivo anexado no cofre aparece como download clicável no acervo", () => {
+    render(
+      <CentralRfqPage
+        habilitacao={[doc({
+          arquivoUrl: "/api/todogreen/file-vault/file-123/download",
+          arquivoNome: "03-SEG_APOLICE-RCTR-C_EMPRESA_V2026-08-13.pdf",
+        })]}
+        podeEditar
+      />,
+    );
+    const link = screen.getByRole("link", { name: /03-SEG_APOLICE-RCTR-C_EMPRESA_V2026-08-13\.pdf/ });
+    expect(link).toHaveAttribute("href", "/api/todogreen/file-vault/file-123/download");
+    expect(link).toHaveAttribute("download");
+    expect(link).toHaveAttribute("title", "Baixar documento");
+  });
+
   it("o painel destaca o que trava um RFQ agora", () => {
     render(<CentralRfqPage habilitacao={[doc()]} podeEditar />);
     expect(screen.getByText("Travando RFQ agora")).toBeInTheDocument();
