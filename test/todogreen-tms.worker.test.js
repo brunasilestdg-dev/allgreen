@@ -142,6 +142,14 @@ describe("configuração", () => {
     const corpo = await r.json();
     expect(corpo.integracao).toMatchObject({ provider: "track3r", syncMode: "arquivo" });
     expect(corpo.integracao.segredos).toMatchObject({ apiToken: false, webhookSecret: false });
+    expect(corpo.webhookKit.integrationId).toBe(corpo.integracao.id);
+    expect(corpo.webhookKit.endpoints).toHaveLength(13);
+    expect(corpo.webhookKit.endpoints[0].url).toBe(
+      `https://app.test/api/todogreen/tms/webhook/${corpo.integracao.id}/ocorrencias`,
+    );
+    expect(corpo.webhookKit.endpoints.at(-1).url).toBe(
+      `https://app.test/api/todogreen/tms/webhook/${corpo.integracao.id}/listas`,
+    );
     // O segredo em si nunca viaja.
     expect(JSON.stringify(corpo)).not.toMatch(/TODOGREEN_TRACK3R_API_TOKEN.*=/);
   });

@@ -36,6 +36,7 @@ import Modal from "../../components/Modal.jsx";
 import {
   authHeaders,
   checkTmsBillingItem,
+  configureTrack3rWebhook,
   createTmsApiKey,
   createTmsShipmentManual,
   listTmsFleetPositions,
@@ -1412,6 +1413,42 @@ function Integrations({ data, onReload, setToast }) {
   // A configuração do rastreador abre aqui mesmo, embaixo do botão — antes não
   // havia lugar nenhum para ligar a telemetria pelo TMS.
   const [configurando, setConfigurando] = useState(false);
+  const [track3rSaving, setTrack3rSaving] = useState(false);
+  const [track3rError, setTrack3rError] = useState("");
+  const track3r = data?.integrations?.track3r || {};
+  const webhookKit = track3r?.webhookKit;
+
+  const ativarTrack3r = async () => {
+    setTrack3rSaving(true);
+    setTrack3rError("");
+    try {
+      await configureTrack3rWebhook({
+        name: "TRACK3R",
+        syncMode: "webhook",
+        webhookSecretEnvKey: "TODOGREEN_TRACK3R_WEBHOOK_SECRET",
+        authHeaderName: "Token",
+        ...(track3r.revision ? { revision: track3r.revision } : {}),
+      });
+      setToast?.("Webhooks TRACK3R ativados. Endpoints prontos para enviar ao fornecedor.");
+      await onReload();
+    } catch (error) {
+      setTrack3rError(error?.message || "Não foi possível ativar os webhooks TRACK3R.");
+    } finally {
+      setTrack3rSaving(false);
+    }
+  };
+
+  const copiarEndpointsTrack3r = async () => {
+    if (!webhookKit?.endpoints?.length) return;
+    const texto = webhookKit.endpoints.map((item) => `${item.label}: ${item.url}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(texto);
+      setToast?.("13 endpoints TRACK3R copiados.");
+    } catch {
+      setTrack3rError("Não foi possível copiar automaticamente. Os endpoints continuam visíveis abaixo.");
+    }
+  };
+
   // As linhas (estado real, o que falta, ação que resolve) vêm do domínio
   // testado; aqui só executamos a ação que cada uma descreve.
   const rows = linhasDeIntegracaoTms(data?.integrations || {});
@@ -1446,6 +1483,49 @@ function Integrations({ data, onReload, setToast }) {
             <button type="button" className="tms-secondary-action" onClick={() => executar(row.acao)}>{row.acao.rotulo}</button>
           </div>
         ))}
+      </div>
+      <div className="tms-api-card" style={{ marginTop: 14 }}>
+        <div className="tms-panel-head">
+          <div>
+            <span>TRACK3R</span>
+            <h3>Webhooks oficiais</h3>
+            <p>Recepção online via POST + header Token. O segredo fica somente no cofre do Cloudflare.</p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {webhookKit?.endpoints?.length ? (
+              <button type="button" className="tms-secondary-action" onClick={copiarEndpointsTrack3r}>
+                <Copy size={14} /> Copiar 13 endpoints
+              </button>
+            ) : null}
+            {track3r.syncMode !== "webhook" ? (
+              <button type="button" className="tms-primary-action" disabled={track3rSaving} onClick={ativarTrack3r}>
+                <Cable size={15} /> {track3rSaving ? "Ativando..." : "Ativar modo webhook"}
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {track3rError ? <p className="tms-api-inline-error">{track3rError}</p> : null}
+        {webhookKit?.endpoints?.length ? (
+          <>
+            <p className="tms-api-note">
+              Integração <strong>{webhookKit.integrationId}</strong> · método {webhookKit.method} · autenticação no header <strong>{webhookKit.authHeader}</strong>.
+            </p>
+            <div className="tms-api-endpoints">
+              {webhookKit.endpoints.map((item) => (
+                <code key={item.type}>{item.label}: {item.url}</code>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="tms-api-note">
+            Para gerar os endpoints, salve uma integração TRACK3R. Para ativar o recebimento, cadastre <strong>TODOGREEN_TRACK3R_WEBHOOK_SECRET</strong> no cofre do Worker. O token nunca é salvo no GitHub.
+          </p>
+        )}
+        {webhookKit?.endpoints?.length && track3r.syncMode !== "webhook" ? (
+          <p className="tms-api-note">
+            Os endpoints já são estáveis, mas a integração ainda está no modo <strong>{track3r.syncMode || "arquivo"}</strong>. Ative o modo webhook antes de enviá-los para produção.
+          </p>
+        ) : null}
       </div>
       {configurando ? (
         <div className="tms-api-card" style={{ marginTop: 14 }}>

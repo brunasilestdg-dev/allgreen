@@ -36,6 +36,7 @@ import {
   validarDocumento,
 } from "../../src/features/logistics/track3rDomain.js";
 import { normalizarTipoEvento } from "../../src/features/logistics/operationTrackingDomain.js";
+import { montarKitWebhookTrack3r } from "../../src/features/logistics/track3rWebhookDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -168,12 +169,15 @@ const lerIntegracao = async (env, ownerId) => {
 // Configuração
 // ---------------------------------------------------------------------------
 
-const verConfiguracao = async (env, access) => {
+const verConfiguracao = async (env, access, request) => {
   const row = await lerIntegracao(env, access.ownerId);
   const integracao = row ? integracaoDaLinha(row, env) : null;
+  let origin = "";
+  try { origin = request ? new URL(request.url).origin : ""; } catch { origin = ""; }
   return json({
     integracao,
     modos: modoDisponivel(integracao, env),
+    webhookKit: integracao ? montarKitWebhookTrack3r({ origin, integrationId: integracao.id }) : null,
     // Estado real do otimizador de rotas, para a tela não fingir motor no ar.
     roteirizacao: estadoRoteirizacao(env),
     // Enquanto o fornecedor não responder, é isto que a tela mostra como
@@ -182,7 +186,7 @@ const verConfiguracao = async (env, access) => {
   });
 };
 
-const salvarConfiguracao = async (env, access, user, corpo) => {
+const salvarConfiguracao = async (env, access, user, corpo, request) => {
   const atual = await lerIntegracao(env, access.ownerId);
   const agora = new Date().toISOString();
   const modo = ["arquivo", "api", "webhook"].includes(texto(corpo.syncMode))
@@ -229,7 +233,7 @@ const salvarConfiguracao = async (env, access, user, corpo) => {
           last_error, fields_json, revision, created_by, updated_by, created_at, updated_at, archived_at)
        VALUES (?, ?, ?, 'track3r', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '{}', 1, ?, ?, ?, ?, NULL)`,
     ).bind(id, TENANT_ID, access.ownerId, ...campos, user.id, user.id, agora, agora).run();
-    return verConfiguracao(env, access);
+    return verConfiguracao(env, access, request);
   }
 
   const revisao = Number(corpo.revision);
@@ -249,7 +253,7 @@ const salvarConfiguracao = async (env, access, user, corpo) => {
     return json({
       error: "Esta configuração mudou enquanto você editava. Recarregue para ver a versão atual.",
     }, 409);
-  return verConfiguracao(env, access);
+  return verConfiguracao(env, access, request);
 };
 
 // ---------------------------------------------------------------------------
@@ -916,7 +920,7 @@ export async function handleTodoGreenTms(request, env, access, user) {
   const acao = texto(partes[4], 40);
 
   if (request.method === "GET") {
-    if (recurso === "configuracao" || !recurso) return verConfiguracao(env, access);
+    if (recurso === "configuracao" || !recurso) return verConfiguracao(env, access, request);
     if (recurso === "documentos") return listarDocumentos(env, access, url);
     if (recurso === "classes") return listarPorClasse(env, access, url);
     if (recurso === "sugestoes") return verSugestoes(env, access, url);
@@ -930,7 +934,7 @@ export async function handleTodoGreenTms(request, env, access, user) {
   const corpo = await request.json().catch(() => ({}));
 
   if (request.method === "POST") {
-    if (recurso === "configuracao") return salvarConfiguracao(env, access, user, corpo);
+    if (recurso === "configuracao") return salvarConfiguracao(env, access, user, corpo, request);
     if (recurso === "importacoes") return importarArquivo(env, access, user, corpo);
     if (recurso === "sincronizacoes") return sincronizarApi(env, access, user, corpo);
     if (recurso === "vinculos") {

@@ -34,6 +34,7 @@ async function fetchJson(path, { optional = false, method = "GET", body } = {}) 
 export const listTmsApiKeys = () => fetchJson("/api/todogreen/tms-api-keys");
 export const createTmsApiKey = (input) => fetchJson("/api/todogreen/tms-api-keys", { method: "POST", body: input });
 export const revokeTmsApiKey = (id) => fetchJson(`/api/todogreen/tms-api-keys/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const configureTrack3rWebhook = (input) => fetchJson("/api/todogreen/tms/configuracao", { method: "POST", body: input });
 
 // Cadastro manual de carga/pedido — a mesma regra de negócio da API pública
 // (/api/tms/v1/shipments), só que pela sessão de quem está no painel, sem
@@ -222,11 +223,24 @@ export async function loadTmsPortalData() {
     },
     integrations: {
       track3r: tmsConfig?.integracao ? {
+        id: tmsConfig.integracao.id,
         status: tmsConfig.integracao.status,
         syncMode: tmsConfig.integracao.syncMode,
         lastSyncAt: tmsConfig.integracao.lastSyncAt || "",
         lastError: tmsConfig.integracao.lastError || "",
-      } : null,
+        revision: Number(tmsConfig.integracao.revision || 0),
+        webhookReady: Boolean(tmsConfig?.modos?.webhook),
+        webhookKit: tmsConfig?.webhookKit || null,
+      } : {
+        id: "",
+        status: "nao_configurada",
+        syncMode: "",
+        lastSyncAt: "",
+        lastError: "",
+        revision: 0,
+        webhookReady: Boolean(tmsConfig?.modos?.webhook),
+        webhookKit: null,
+      },
       ciot: ciotConfig?.integration || null,
       fiscal: fiscalProfile ? {
         status: fiscalProfile.certificadoStatus === "ativo" ? "ativa" : "configurar",
