@@ -39,6 +39,7 @@ import { handleTodoGreenMarketIntelligence } from "./todogreen-market-intelligen
 import { handleTodoGreenSemente } from "./todogreen-semente.js";
 import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
+import { handleTodoGreenMondayManage, handleTodoGreenMondayPublic } from "./todogreen-monday.js";
 import { handleTodoGreenSystemHealth } from "./todogreen-system-health.js";
 import { handleTodoGreenEnergy } from "./todogreen-energy-reference.js";
 import { handleTodoGreenMarketRadar } from "./todogreen-market-radar.js";
@@ -106,6 +107,19 @@ export async function routeTodoGreenApi(request, env, ctx) {
   if (path === "/api/todogreen/solicitar-acesso") {
     return guarded("To Do Green access request error", "Não foi possível registrar o pedido de acesso.", () =>
       receberSolicitacaoDeAcesso(request, env),
+    );
+  }
+
+  // monday.com precisa alcançar callback OAuth e webhook sem uma sessão do ERP.
+  // O callback valida state/PKCE; eventos reais validam o JWT do monday.com.
+  if (
+    path === "/api/todogreen/integrations/monday/oauth/callback"
+    || path === "/api/todogreen/integrations/monday/webhook"
+  ) {
+    return guarded(
+      "To Do Green monday public integration error",
+      "Não foi possível concluir a integração com o monday.com.",
+      () => handleTodoGreenMondayPublic(request, env),
     );
   }
 
@@ -553,6 +567,9 @@ export async function routeTodoGreenApi(request, env, ctx) {
     return guarded("To Do Green integrations error", "Não foi possível carregar as integrações.", async () => {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
+      if (path === "/api/todogreen/integrations/monday/oauth/start") {
+        return handleTodoGreenMondayManage(request, env, resolved.access, resolved.user);
+      }
       return handleTodoGreenIntegrations(request, env, resolved.access);
     });
   }
