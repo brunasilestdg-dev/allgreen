@@ -174,14 +174,18 @@ async function exchangeOauthCode(request, env) {
 
   const clientId = String(env.MONDAY_CLIENT_ID || "").trim();
   const clientSecret = String(env.MONDAY_CLIENT_SECRET || "").trim();
-  const tokenKey = String(env.MONDAY_TOKEN_ENCRYPTION_KEY || "").trim();
-  if (!clientId || !clientSecret || !tokenKey) {
+  const signingSecret = String(env.MONDAY_SIGNING_SECRET || "").trim();
+  const explicitTokenKey = String(env.MONDAY_TOKEN_ENCRYPTION_KEY || "").trim();
+  const tokenKey = explicitTokenKey || (clientSecret && signingSecret
+    ? `${clientSecret}:${signingSecret}:todogreen:monday:token:v1`
+    : "");
+  if (!clientId || !clientSecret || !signingSecret || !tokenKey) {
     return json({
       error: "OAuth do monday.com ainda não está habilitado no Worker.",
       missing: [
         !clientId && "MONDAY_CLIENT_ID",
         !clientSecret && "MONDAY_CLIENT_SECRET",
-        !tokenKey && "MONDAY_TOKEN_ENCRYPTION_KEY",
+        !signingSecret && "MONDAY_SIGNING_SECRET",
       ].filter(Boolean),
     }, 503);
   }
