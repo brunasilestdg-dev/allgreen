@@ -224,6 +224,18 @@ export function todoGreenExternalIntegrationCatalog(env = {}) {
       }),
     ],
     routing: [
+      item({
+        id: "geoapify",
+        name: "Geoapify Cloud",
+        category: "routing",
+        mode: "credentialed-public",
+        configured: Boolean(env.GEOAPIFY_API_KEY),
+        detail: env.GEOAPIFY_API_KEY
+          ? "Cloud routing configurado no Worker: geocodificação e rotas para leves e pesados."
+          : "Conector cloud pronto; falta GEOAPIFY_API_KEY no cofre do Worker.",
+        requirement: "GEOAPIFY_API_KEY",
+        capabilities: ["search", "route", "truck-routing"],
+      }),
       selfHosted(env, {
         id: "osrm",
         name: "OSRM",
@@ -373,6 +385,15 @@ export async function probeTodoGreenExternalIntegration(env = {}, provider) {
         {},
         "Open Charge Map",
       );
+      break;
+    case "geoapify":
+      result = await jsonFrom(
+        `https://api.geoapify.com/v1/geocode/search?text=Avenida%20Paulista%201000%2C%20Sao%20Paulo%20SP&format=json&limit=1&filter=countrycode%3Abr&apiKey=${encodeURIComponent(env.GEOAPIFY_API_KEY)}`,
+        {},
+        "Geoapify",
+      );
+      if (!Array.isArray(result?.data?.results) || !result.data.results.length)
+        throw new Error("Geoapify respondeu sem resultados.");
       break;
     case "osrm": {
       const base = selfHostedBase(env, id);

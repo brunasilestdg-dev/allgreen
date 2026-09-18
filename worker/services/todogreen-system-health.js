@@ -354,6 +354,7 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
 
   // ---- Integrações (seção 113) ----
   const motores = motoresDisponiveis(env);
+  const geoapify = doGateway("geoapify");
   const osrm = doGateway("osrm");
   const osrmSelfHosted = motores.osrm.configured;
   const vroom = doGateway("vroom");
@@ -379,6 +380,19 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
 
   const integrations = [
     // Roteirização e geodados
+    geoapify && {
+      ...doCatalogo(geoapify, saudePorId.get("geoapify"), {
+        group: "roteirizacao",
+        implementation: IMPLEMENTATION.REAL,
+        configured: Boolean(env?.GEOAPIFY_API_KEY),
+        authenticated: Boolean(env?.GEOAPIFY_API_KEY),
+        canTest: Boolean(env?.GEOAPIFY_API_KEY),
+        detail: env?.GEOAPIFY_API_KEY
+          ? "Geoapify Cloud é o motor primário: geocodificação e roteamento online para motos, leves, vans e perfis de caminhão. OSRM/Nominatim/Valhalla próprios ficam opcionais."
+          : "Conector Geoapify pronto; falta GEOAPIFY_API_KEY no cofre do Worker.",
+        requirement: "GEOAPIFY_API_KEY",
+      }),
+    },
     osrm && {
       ...doCatalogo(osrm, saudePorId.get("osrm"), {
         group: "roteirizacao",
@@ -388,7 +402,9 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
         fallbackActive: !osrmSelfHosted,
         detail: osrmSelfHosted
           ? "OSRM próprio: distância, tempo, matriz e geometria para veículos leves."
-          : "Sem servidor próprio: usando o endpoint público do OSRM (contingência). Produção deve priorizar TODOGREEN_OSRM_BASE_URL.",
+          : env?.GEOAPIFY_API_KEY
+            ? "OSRM público mantido somente como contingência para veículos leves; Geoapify é o motor cloud primário."
+            : "Sem servidor próprio: usando o endpoint público do OSRM (contingência).",
       }),
     },
     vroom && {
@@ -400,7 +416,7 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
         fallbackActive: !vroomSelfHosted,
         detail: vroomSelfHosted
           ? "VROOM próprio: alocação veículo/motorista, sequência, capacidade, janelas."
-          : "Sem servidor VROOM (TDG_ROUTING_URL / TODOGREEN_VROOM_BASE_URL): despacho usa o VRP local (WASM) — contingência.",
+          : "Sem servidor VROOM: o despacho usa o otimizador VRP nativo no Cloudflare Worker (WASM) — sem depender de PC local.",
       }),
     },
     valhalla && {
@@ -412,7 +428,9 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
         canTest: motores.valhalla.configured,
         detail: motores.valhalla.configured
           ? "Cliente real: pesados e veículos com restrição roteiam por truck costing (altura/largura/comprimento/peso/eixos). Teste lê /status."
-          : "Sem TDG_VALHALLA_BASE_URL. Pesados (VUC/truck/carreta) NÃO caem em OSRM perfil de carro: o backend responde NO_SAFE_ROUTING_ENGINE até o Valhalla existir (infra/tms-routing).",
+          : env?.GEOAPIFY_API_KEY
+            ? "Valhalla próprio é opcional: pesados usam Geoapify Cloud enquanto a chave estiver operacional; sem Geoapify, o backend volta a exigir motor seguro para pesados."
+            : "Sem TDG_VALHALLA_BASE_URL. Pesados (VUC/truck/carreta) NÃO caem em OSRM perfil de carro: o backend responde NO_SAFE_ROUTING_ENGINE.",
         requirement: "TDG_VALHALLA_BASE_URL (self-hosted, infra/tms-routing) + TDG_ROUTING_TOKEN no gateway",
       }),
     },
@@ -424,20 +442,22 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
       "TODOGREEN_POSTGIS_URL (reservado) + ingestão batch de extracts OSM"),
     {
       id: "elevation",
-      name: "Elevação (DEM aberto via Valhalla /height)",
+      name: "Elevação da rota",
       group: "roteirizacao",
       implementation: IMPLEMENTATION.REAL,
-      configured: motores.valhalla.configured,
-      authenticated: motores.valhalla.configured,
-      online: Boolean(saudePorId.get("valhalla")?.online),
-      checkedAt: saudePorId.get("valhalla")?.checkedAt || null,
-      lastSuccessAt: saudePorId.get("valhalla")?.lastSuccessAt || null,
-      lastFailureAt: saudePorId.get("valhalla")?.lastFailureAt || null,
-      detail: motores.valhalla.configured
-        ? "Perfil de elevação (ganho/perda) pelo /height do Valhalla, cache local de 30 dias (todogreen_geo_cache). Sem relevo nos tiles, o modelo assume plano e reduz a confiança."
-        : "Sem fonte DEM: o modelo de energia assume perfil plano e diz isso (ELEVATION_NOT_AVAILABLE). Configure TDG_VALHALLA_BASE_URL com tiles de relevo (infra/tms-routing).",
-      requirement: "TDG_VALHALLA_BASE_URL (tiles com build_elevation)",
-      canTest: false,
+      configured: Boolean(env?.GEOAPIFY_API_KEY) || motores.valhalla.configured,
+      authenticated: Boolean(env?.GEOAPIFY_API_KEY) || motores.valhalla.configured,
+      online: Boolean(saudePorId.get("geoapify")?.online || saudePorId.get("valhalla")?.online),
+      checkedAt: saudePorId.get("geoapify")?.checkedAt || saudePorId.get("valhalla")?.checkedAt || null,
+      lastSuccessAt: saudePorId.get("geoapify")?.lastSuccessAt || saudePorId.get("valhalla")?.lastSuccessAt || null,
+      lastFailureAt: saudePorId.get("geoapify")?.lastFailureAt || saudePorId.get("valhalla")?.lastFailureAt || null,
+      detail: env?.GEOAPIFY_API_KEY
+        ? "Geoapify Elevation é a fonte primária online; até 100 pontos por perfil e cache de 30 dias no D1. Valhalla, se existir, fica como contingência."
+        : motores.valhalla.configured
+          ? "Perfil de elevação pelo /height do Valhalla, com cache de 30 dias."
+          : "Sem fonte de elevação: o modelo assume perfil plano e reduz a confiança (ELEVATION_NOT_AVAILABLE).",
+      requirement: "GEOAPIFY_API_KEY ou TDG_VALHALLA_BASE_URL",
+      canTest: Boolean(env?.GEOAPIFY_API_KEY) || motores.valhalla.configured,
     },
 
     // Operação e telemetria

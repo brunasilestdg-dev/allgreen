@@ -37,6 +37,28 @@ describe("ElevationProvider (Valhalla /height) com cache", () => {
     expect(r.detail).toContain("TDG_VALHALLA_BASE_URL");
   });
 
+  it("com Geoapify calcula ganho/perda online e cacheia por 30 dias", async () => {
+    let chamadas = 0;
+    const fetcher = async (url, options) => {
+      chamadas += 1;
+      expect(String(url)).toContain("api.geoapify.com/v1/geodata/elevation");
+      const body = JSON.parse(options.body);
+      expect(body.locations).toHaveLength(3);
+      expect(body.locations[0]).toEqual([-46.63, -23.55]);
+      return jsonResp({ results: [
+        { location: { lon: -46.63, lat: -23.55 }, elevation: 700, units: "m" },
+        { location: { lon: -46.64, lat: -23.555 }, elevation: 760, units: "m" },
+        { location: { lon: -46.65, lat: -23.56 }, elevation: 720, units: "m" },
+      ] });
+    };
+    const cfg = { ...env, GEOAPIFY_API_KEY: "geo-test-key" };
+    const primeira = await elevacaoDaRota(cfg, GEO, { fetcher });
+    expect(primeira).toMatchObject({ ok: true, elevationGainM: 60, elevationLossM: 40, source: "geoapify-elevation", cached: false, measurementType: "DERIVED" });
+    const segunda = await elevacaoDaRota(cfg, GEO, { fetcher });
+    expect(segunda).toMatchObject({ ok: true, elevationGainM: 60, cached: true });
+    expect(chamadas).toBe(1);
+  });
+
   it("com Valhalla calcula ganho/perda e a segunda chamada vem do cache", async () => {
     let chamadas = 0;
     const fetcher = async (url, options) => {

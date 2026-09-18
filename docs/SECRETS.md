@@ -49,6 +49,7 @@ reserva gratuita. Ver `AGENTS.md` para a ordem da cascata.
 
 | Variável | Uso | Sem ela |
 | --- | --- | --- |
+| `GEOAPIFY_API_KEY` | geocodificação e roteamento cloud para leves e pesados | usa Nominatim/OSRM/Valhalla conforme contingências configuradas |
 | `TDG_ROUTING_URL` | endpoint do otimizador VROOM (`/routes/optimize`) | otimização responde `routing_not_configured` (503) |
 | `TDG_ROUTING_TOKEN` | bearer do VROOM auto‑hospedado | chamada sem autenticação |
 | `TDG_OSRM_BASE_URL` | motor OSRM (perfil genérico) | OSRM não é oferecido na seleção de motor |

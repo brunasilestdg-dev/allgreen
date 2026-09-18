@@ -17,6 +17,7 @@ import { motoresDisponiveis } from "../../src/features/logistics/routingProvider
 import {
   GEO_ERRORS,
   alturasDaRespostaValhalla,
+  amostrarGeometria,
   chaveGeo,
   perfilDeElevacao,
   pontoMedio,
@@ -73,16 +74,56 @@ async function fetchJson(fetcher, url, options = {}) {
  */
 export async function elevacaoDaRota(env, geometry, { fetcher = fetch } = {}) {
   const motores = motoresDisponiveis(env);
-  if (!motores.valhalla.configured) {
-    return { ok: false, reason: GEO_ERRORS.ELEVATION_NOT_AVAILABLE, source: "none", detail: `Sem fonte de elevação: configure ${motores.valhalla.envKey} (Valhalla com tiles de relevo).` };
-  }
-  const req = requisicaoAlturaValhalla(geometry);
-  if (req.shape.length < 2) return { ok: false, reason: GEO_ERRORS.ELEVATION_NOT_AVAILABLE, source: "valhalla", detail: "Geometria insuficiente para o perfil." };
+  const amostra = amostrarGeometria(geometry, 100);
+  if (amostra.length < 2)
+    return { ok: false, reason: GEO_ERRORS.ELEVATION_NOT_AVAILABLE, source: "none", detail: "Geometria insuficiente para o perfil." };
 
-  const key = chaveGeo("elevation", { shape: req.shape });
+  const key = chaveGeo("elevation", { shape: amostra });
   const cached = await lerCache(env, key);
   if (cached) return { ...cached.payload, cached: true, ingestedAt: cached.ingestedAt, sourceUpdatedAt: cached.sourceUpdatedAt };
 
+  // Primário cloud: Geoapify Elevation API. Até 100 pontos = 1 crédito e o
+  // resultado é cacheado por 30 dias, então uma rota não consome a cota a cada tela.
+  if (String(env?.GEOAPIFY_API_KEY || "").trim()) {
+    try {
+      const url = `https://api.geoapify.com/v1/geodata/elevation?apiKey=${encodeURIComponent(String(env.GEOAPIFY_API_KEY))}`;
+      const data = await fetchJson(fetcher, url, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({
+          format: "json",
+          units: "metric",
+          includeDistance: false,
+          locations: amostra,
+        }),
+      });
+      const alturas = (Array.isArray(data?.results) ? data.results : [])
+        .map((item) => item?.elevation === null || item?.elevation === undefined ? null : Number(item.elevation));
+      const perfil = perfilDeElevacao(alturas);
+      if (perfil.ok) {
+        const payload = { ...perfil, source: "geoapify-elevation" };
+        const ingestedAt = new Date().toISOString();
+        await gravarCache(env, key, "elevation", payload, { source: "geoapify-elevation", ttlMs: TTL_ELEVACAO_MS });
+        return { ...payload, cached: false, ingestedAt, sourceUpdatedAt: null };
+      }
+    } catch {
+      // Cai para Valhalla somente se ele existir. Sem ele, a função devolve
+      // ELEVATION_NOT_AVAILABLE de forma explícita.
+    }
+  }
+
+  if (!motores.valhalla.configured) {
+    return {
+      ok: false,
+      reason: GEO_ERRORS.ELEVATION_NOT_AVAILABLE,
+      source: "none",
+      detail: env?.GEOAPIFY_API_KEY
+        ? "Geoapify não devolveu elevação e não há Valhalla de contingência."
+        : `Sem fonte de elevação: configure GEOAPIFY_API_KEY ou ${motores.valhalla.envKey}.`,
+    };
+  }
+
+  const req = requisicaoAlturaValhalla(geometry, { max: 100 });
   try {
     const headers = { accept: "application/json", "content-type": "application/json" };
     if (env?.TDG_ROUTING_TOKEN) headers.authorization = `Bearer ${String(env.TDG_ROUTING_TOKEN)}`;

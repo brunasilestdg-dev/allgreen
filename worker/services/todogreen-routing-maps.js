@@ -6,6 +6,7 @@
 
 const PUBLIC_NOMINATIM = "https://nominatim.openstreetmap.org/";
 import { rotearComProvider } from "./routing-providers.js";
+import { geocodificarGeoapify, rotearGeoapify } from "./geoapify-provider.js";
 import { consultarPedagiosDaRota } from "./todogreen-pedagios.js";
 import { riscoDoTracado } from "./todogreen-road-risk.js";
 import { rankRouteAlternatives } from "../../src/features/logistics/routeAlternativesDomain.js";
@@ -63,6 +64,18 @@ export async function geocodeTodoGreen(body, env) {
   if (query.length < 3) return json([]);
   const limit = Math.min(10, Math.max(1, Number(body?.limit) || 5));
 
+  // Cloud-first: quando a chave existe, Geoapify é o provedor primário. A chave
+  // fica somente no Worker e nunca chega ao browser.
+  if (String(env?.GEOAPIFY_API_KEY || "").trim()) {
+    try {
+      const result = await geocodificarGeoapify(query, env, { limit });
+      return json(result.items, 200);
+    } catch {
+      // Contingência declarada: se a API externa cair ou a cota acabar, seguimos
+      // para Nominatim próprio/público em vez de travar o ERP.
+    }
+  }
+
   const configured = Boolean(String(env.TODOGREEN_NOMINATIM_BASE_URL || "").trim());
   const base = cleanBase(env.TODOGREEN_NOMINATIM_BASE_URL, PUBLIC_NOMINATIM);
   const url = new URL(endpoint(base, "search"));
@@ -78,8 +91,7 @@ export async function geocodeTodoGreen(body, env) {
     });
     return json(data, 200);
   } catch (error) {
-    // Configuração própria caiu: tenta o público apenas como contingência do
-    // MVP. Em escala, basta remover este fallback e manter somente o host.
+    // Configuração própria caiu: tenta o público apenas como contingência do MVP.
     if (configured) {
       try {
         const fallback = new URL(endpoint(PUBLIC_NOMINATIM, "search"));
@@ -169,6 +181,23 @@ export async function enriquecerComRisco(corpo, body, env, { pedagios } = {}) {
 }
 
 export async function routeTodoGreen(body, env) {
+  // Cloud-first: Geoapify cobre leves e perfis de caminhão sem exigir servidor
+  // próprio. Em falha, o contrato antigo permanece como contingência segura.
+  if (String(env?.GEOAPIFY_API_KEY || "").trim()) {
+    try {
+      const corpo = await rotearGeoapify({
+        coordinates: body?.coordinates,
+        vehicle: body?.vehicle || {},
+        geometry: body?.geometry !== false,
+      }, env);
+      if (body?.risk === false) return json(corpo, 200);
+      return json(await enriquecerComRisco(corpo, body, env), 200);
+    } catch {
+      // Leves podem cair no OSRM; pesados só caem para outro motor quando o
+      // seletor atual considera tecnicamente seguro.
+    }
+  }
+
   const resultado = await rotearComProvider(
     { coordinates: body?.coordinates, vehicle: body?.vehicle || {}, geometry: body?.geometry !== false, alternatives: Boolean(body?.alternatives) },
     env,
