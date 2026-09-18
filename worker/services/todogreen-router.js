@@ -29,7 +29,8 @@ import { handleTodoGreenGreenPay } from "./todogreen-greenpay.js";
 import { handleTodoGreenFiscal } from "./todogreen-fiscal.js";
 import { handleTodoGreenPayroll } from "./todogreen-payroll.js";
 import { handleTodoGreenPlanner } from "./todogreen-planner.js";
-import { handleTodoGreenTms, receberOcorrenciaTrack3r } from "./todogreen-tms.js";
+import { handleTodoGreenTms } from "./todogreen-tms.js";
+import { receberWebhookTrack3r } from "./todogreen-tms-webhooks.js";
 import { receberSolicitacaoDeAcesso } from "./todogreen-access-requests.js";
 import { handleTodoGreenDealDesk } from "./todogreen-deal-desk.js";
 import { entregarArquivo, handleTodoGreenEvidences } from "./todogreen-evidences.js";
@@ -375,8 +376,8 @@ export async function routeTodoGreenApi(request, env, ctx) {
   if (path.startsWith("/api/todogreen/tms/webhook")) {
     return guarded(
       "To Do Green TMS webhook error",
-      "Não foi possível receber a ocorrência do TRACK3R.",
-      () => receberOcorrenciaTrack3r(request, env),
+      "Não foi possível receber o evento do TRACK3R.",
+      () => receberWebhookTrack3r(request, env),
     );
   }
 
