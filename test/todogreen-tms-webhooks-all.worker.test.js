@@ -132,6 +132,137 @@ describe("TRACK3R — webhooks documentados", () => {
     expect(Number(row.total)).toBeGreaterThanOrEqual(amostras.length + 2);
   });
 
+  it("projeta valores da encomenda para a base financeira TRACK3R", async () => {
+    const r = await chamar("valores-encomendas", {
+      data_hora_envio: "01/03/2024 15:21:19",
+      codigo_encomenda: 501,
+      codigo_produto: 8,
+      descricao_produto: "Same Day",
+      valor_mercadoria: 1500,
+      peso: 12.5,
+      frete: 120,
+      taxa_ad_valorem: 3.5,
+      taxa_gris: 2.4,
+      taxa_pedagio: 18,
+      icms: 14.4,
+      frete_total: 158.3,
+    });
+    expect(r.status).toBe(200);
+
+    const value = await env.DB.prepare(
+      `SELECT * FROM todogreen_track3r_order_values
+        WHERE integration_id='tmw-all-int' AND external_order_code='501'`,
+    ).first();
+    expect(value.product_description).toBe("Same Day");
+    expect(Number(value.freight)).toBe(120);
+    expect(Number(value.gris)).toBe(2.4);
+    expect(Number(value.toll_fee)).toBe(18);
+    expect(Number(value.total_freight)).toBe(158.3);
+
+    const event = await env.DB.prepare(
+      `SELECT status FROM todogreen_tms_webhook_events
+        WHERE integration_id='tmw-all-int' AND event_type='valores-encomendas'
+          AND external_ref='501' ORDER BY last_received_at DESC LIMIT 1`,
+    ).first();
+    expect(event.status).toBe("processed");
+  });
+
+  it("projeta fatura de cliente no contas a receber e no razão", async () => {
+    await chamar("tomadores", {
+      data_hora_envio: "01/07/2024 08:00:00",
+      codigo_tomador: 700,
+      nome: "Cliente Financeiro",
+      fantasia: "Cliente Financeiro",
+      cpf_cnpj: "12345678000190",
+    });
+    const r = await chamar("faturas", {
+      data_hora_envio: "01/07/2024 08:21:00",
+      codigo_fatura: 7001,
+      codigo_tomador: 700,
+      codigo_embarcador: 701,
+      detalhes: {
+        data_cobranca_inicial: "01/06/2024",
+        data_cobranca_final: "30/06/2024",
+        data_geracao: "30/06/2024 08:20:00",
+        data_vencimento: "15/07/2024",
+        valor: 2450.75,
+        encomendas: [{ codigo_encomenda: 501, tipo: 1, descricao: "Entrega" }],
+      },
+    });
+    expect(r.status).toBe(200);
+
+    const title = await env.DB.prepare(
+      `SELECT * FROM todogreen_financial_titles
+        WHERE workspace_owner_id='tmw-all-user'
+          AND json_extract(fields_json,'$.externalInvoiceId')='7001'`,
+    ).first();
+    expect(title.kind).toBe("receivable");
+    expect(Number(title.original_amount)).toBe(2450.75);
+    expect(title.due_date).toBe("2024-07-15");
+
+    const entry = await env.DB.prepare(
+      `SELECT * FROM todogreen_financial_entries WHERE id=?`,
+    ).bind(`entry-${title.id}`).first();
+    expect(entry.kind).toBe("revenue");
+    expect(entry.category).toBe("track3r_faturamento");
+    expect(entry.counterparty).toBe("Cliente Financeiro");
+    expect(Number(entry.amount)).toBe(2450.75);
+  });
+
+  it("projeta faturas de motorista e rede terceira como custos sem duplicar reenvio", async () => {
+    const driverPayload = {
+      data_hora_envio: "24/06/2024 09:21:19",
+      codigo_fatura: 8101,
+      motorista_empresa: { codigo: 1, nome: "Motoristas XPTO", cnpj: "12345678000190" },
+      motorista: { codigo: 2, nome: "João Felix", cpf: "00100200315" },
+      detalhes: {
+        tipo_operacao: 4,
+        data_pagamento_inicial: "01/06/2024",
+        data_pagamento_final: "30/06/2024",
+        data_geracao: "24/06/2024 09:20:15",
+        data_vencimento: "15/07/2024",
+        valor: 190.5,
+      },
+      documentos: [{ codigo_lista: 1, codigo_encomenda: 501, valor: 190.5 }],
+    };
+    await chamar("faturas-motorista", driverPayload);
+    await chamar("faturas-motorista", driverPayload);
+
+    const driverRows = await env.DB.prepare(
+      `SELECT * FROM todogreen_financial_entries
+        WHERE workspace_owner_id='tmw-all-user'
+          AND json_extract(fields_json,'$.externalInvoiceId')='8101'`,
+    ).all();
+    expect(driverRows.results).toHaveLength(1);
+    expect(driverRows.results[0].kind).toBe("cost");
+    expect(driverRows.results[0].category).toBe("track3r_motorista");
+    expect(driverRows.results[0].counterparty).toBe("Motoristas XPTO");
+    expect(Number(driverRows.results[0].amount)).toBe(190.5);
+
+    const network = await chamar("faturas-rede-terceira", {
+      data_hora_envio: "24/06/2024 09:21:19",
+      codigo_fatura: 8201,
+      unidade: { codigo: 1, nome: "Parceiro SP", sigla: "SAO", cnpj: "01169000000112" },
+      detalhes: {
+        data_pagamento_inicial: "01/06/2024",
+        data_pagamento_final: "30/06/2024",
+        data_geracao: "24/06/2024 09:21:19",
+        data_vencimento: "15/07/2024",
+        valor: 1900,
+        encomendas: [{ codigo_encomenda: 501, valor: 1900 }],
+      },
+    });
+    expect(network.status).toBe(200);
+    const networkRow = await env.DB.prepare(
+      `SELECT * FROM todogreen_financial_entries
+        WHERE workspace_owner_id='tmw-all-user'
+          AND json_extract(fields_json,'$.externalInvoiceId')='8201'`,
+    ).first();
+    expect(networkRow.category).toBe("track3r_rede_terceira");
+    expect(networkRow.counterparty).toBe("Parceiro SP");
+    expect(Number(networkRow.amount)).toBe(1900);
+  });
+
   it("não grava com Token incorreto", async () => {
     const antes = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM todogreen_tms_webhook_events WHERE integration_id = 'tmw-all-int'",

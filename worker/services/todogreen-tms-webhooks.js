@@ -10,6 +10,7 @@ import { TENANT_ID } from "./todogreen-access.js";
 import { sameHash } from "../auth/credenciais.js";
 import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
 import { receberOcorrenciaTrack3r } from "./todogreen-tms.js";
+import { projetarWebhookTrack3r } from "./todogreen-track3r-projectors.js";
 
 const jsonFornecedor = (ok, descricao, status) =>
   new Response(JSON.stringify({ status: ok, descricao }), {
@@ -219,8 +220,9 @@ export async function receberWebhookTrack3r(request, env) {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo))
     return jsonFornecedor(false, "Não foi possível ler o JSON enviado.", 400);
 
+  let inbox;
   try {
-    await gravarNaInbox(env, acesso.integracao, tipo, corpo);
+    inbox = await gravarNaInbox(env, acesso.integracao, tipo, corpo);
   } catch (error) {
     const agora = new Date().toISOString();
     await env.DB.prepare(
@@ -229,6 +231,41 @@ export async function receberWebhookTrack3r(request, env) {
         WHERE id = ? AND tenant_id = ?`,
     ).bind(texto(error?.message || error, 500), agora, acesso.integracao.id, TENANT_ID).run().catch(() => {});
     return jsonFornecedor(false, "Não foi possível registrar o evento.", 500);
+  }
+
+  // O evento já está durável na inbox. A projeção para o domínio canônico vem
+  // depois: se ela falhar, registramos o erro para reprocessamento, mas
+  // respondemos 200 ao fornecedor para evitar tempestade de reenvios. O payload
+  // não se perde e a falha fica visível no ERP.
+  try {
+    const projecao = await projetarWebhookTrack3r(env, acesso.integracao, tipo, corpo);
+    if (projecao.processed) {
+      const agora = new Date().toISOString();
+      await env.DB.prepare(
+        `UPDATE todogreen_tms_webhook_events
+            SET status='processed',processing_error='',updated_at=?
+          WHERE workspace_owner_id=? AND integration_id=? AND event_type=? AND payload_hash=?`,
+      ).bind(
+        agora, acesso.integracao.workspace_owner_id, acesso.integracao.id, tipo, inbox.payloadHash,
+      ).run();
+    }
+  } catch (error) {
+    const agora = new Date().toISOString();
+    const mensagem = texto(error?.message || error, 500);
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE todogreen_tms_webhook_events
+            SET status='error',processing_error=?,updated_at=?
+          WHERE workspace_owner_id=? AND integration_id=? AND event_type=? AND payload_hash=?`,
+      ).bind(
+        mensagem, agora, acesso.integracao.workspace_owner_id, acesso.integracao.id, tipo, inbox.payloadHash,
+      ),
+      env.DB.prepare(
+        `UPDATE todogreen_tms_integrations
+            SET last_error=?,updated_at=?
+          WHERE id=? AND tenant_id=?`,
+      ).bind(`Projeção ${tipo}: ${mensagem}`, agora, acesso.integracao.id, TENANT_ID),
+    ]).catch(() => {});
   }
 
   return jsonFornecedor(true, "Recebido com sucesso!", 200);
