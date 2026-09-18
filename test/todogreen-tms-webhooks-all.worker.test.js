@@ -63,6 +63,12 @@ beforeAll(async () => {
   ).bind(agora, agora).run();
   const usuario = await criarUsuario();
   await criarIntegracao(usuario);
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO todogreen_clients
+       (id,tenant_id,workspace_owner_id,name,document,status,portal_enabled,fields_json,
+        revision,created_by,updated_by,created_at,updated_at)
+     VALUES ('tmw-client','todogreen',?,'Cliente TRACK3R','05517785000198','ativo',0,'{}',1,?,?,?,?)`,
+  ).bind(usuario.id, usuario.id, usuario.id, agora, agora).run();
 });
 
 describe("TRACK3R — webhooks documentados", () => {
@@ -85,8 +91,117 @@ describe("TRACK3R — webhooks documentados", () => {
     ).first();
     expect(row.external_ref).toBe("123");
     expect(row.source_sent_at).toBe("01/03/2024 15:21:19");
-    expect(row.status).toBe("received");
+    expect(row.status).toBe("processed");
     expect(JSON.parse(row.payload_json).document.numero).toBe("12345678");
+  });
+
+  it("projeta lista e encomenda no TMS independentemente da ordem de chegada", async () => {
+    await chamar("embarcadores", {
+      data_hora_envio: "28/06/2024 13:00:00",
+      codigo_embarcador: 900,
+      nome: "Cliente TRACK3R",
+      fantasia: "Cliente TRACK3R",
+      cpf_cnpj: "05517785000198",
+    });
+
+    const lista = await chamar("listas", {
+      data_hora_envio: "28/06/2024 13:21:01",
+      codigo_lista: 300,
+      detalhes: {
+        tipo: 1,
+        codigo_servico: 10,
+        data_geracao: "28/06/2024 13:20:52",
+        quantidade_encomendas: 1,
+        unidade: { codigo: 1, nome: "Unidade São Paulo", sigla: "SAO", cnpj: "01456785000537" },
+        unidade_destino: { codigo: 2, nome: "Unidade Campinas", sigla: "CPQ", cnpj: "01456785000158" },
+        motorista: {
+          codigo: 20,
+          nome: "João Motorista",
+          cpf: "00047845877",
+          tipo_motorista: { codigo: 1, descricao: "CLT" },
+        },
+        veiculo: {
+          codigo: 30,
+          placa: "ABC1D23",
+          tipo_veiculo: { codigo: 4, descricao: "Furgão" },
+        },
+        encomendas: [{ codigo_encomenda: 9001, itens: [{ codigo: "SKU1", descricao: "Produto" }] }],
+      },
+    });
+    expect(lista.status).toBe(200);
+
+    const encomenda = await chamar("encomendas", {
+      data_hora_envio: "28/06/2024 13:22:00",
+      data_hora_cadastro: "28/06/2024 12:00:00",
+      codigo_encomenda: 9001,
+      codigo_embarcador: 900,
+      codigo_tomador: 901,
+      codigo_unidade_origem: 1,
+      codigo_unidade_destino: 2,
+      descricao_servico: "Entrega",
+      descricao_status: "Em transporte",
+      descricao_produto: "Entrega Padrão",
+      data_prevista: "29/06/2024",
+      documento: {
+        numero: "NF9001",
+        serie: "1",
+        chave: "CHAVE-NF-9001",
+        quantidade_volumes: 2,
+        volumes: [
+          { peso_manual: 3.2, peso_cubado: 2.5 },
+          { peso_manual: 1.8, peso_cubado: 1.5 },
+        ],
+      },
+    });
+    expect(encomenda.status).toBe(200);
+
+    const doc = await env.DB.prepare(
+      `SELECT * FROM todogreen_tms_documents
+        WHERE workspace_owner_id='tmw-all-user' AND external_id='9001'`,
+    ).first();
+    expect(doc.order_ref).toBe("9001");
+    expect(doc.client_id).toBe("tmw-client");
+    expect(doc.vehicle_plate).toBe("ABC1D23");
+    expect(doc.vehicle_class).toBe("van");
+    expect(doc.driver_name).toBe("João Motorista");
+    expect(Number(doc.packages)).toBe(2);
+    expect(Number(doc.weight_kg)).toBe(5);
+    expect(doc.invoice_key).toBe("CHAVE-NF-9001");
+
+    const list = await env.DB.prepare(
+      `SELECT * FROM todogreen_track3r_lists
+        WHERE integration_id='tmw-all-int' AND external_list_code='300'`,
+    ).first();
+    expect(list.vehicle_class).toBe("van");
+    expect(list.driver_name).toBe("João Motorista");
+
+    const link = await env.DB.prepare(
+      `SELECT * FROM todogreen_track3r_list_orders
+        WHERE integration_id='tmw-all-int' AND external_order_code='9001'`,
+    ).first();
+    expect(link.external_list_code).toBe("300");
+
+    await chamar("encomendas", {
+      data_hora_envio: "28/06/2024 14:00:00",
+      data_hora_cadastro: "28/06/2024 12:00:00",
+      codigo_encomenda: 9001,
+      codigo_embarcador: 900,
+      descricao_servico: "Entrega",
+      descricao_status: "Saiu para entrega",
+      documento: { numero: "NF9001", chave: "CHAVE-NF-9001", quantidade_volumes: 2 },
+    });
+    const count = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM todogreen_tms_documents
+        WHERE workspace_owner_id='tmw-all-user' AND external_id='9001'`,
+    ).first();
+    expect(Number(count.total)).toBe(1);
+    const updated = await env.DB.prepare(
+      `SELECT status,vehicle_plate,driver_name FROM todogreen_tms_documents
+        WHERE workspace_owner_id='tmw-all-user' AND external_id='9001'`,
+    ).first();
+    expect(updated.status).toBe("Saiu para entrega");
+    expect(updated.vehicle_plate).toBe("ABC1D23");
+    expect(updated.driver_name).toBe("João Motorista");
   });
 
   it("reenvio idêntico é idempotente e só aumenta receive_count", async () => {
