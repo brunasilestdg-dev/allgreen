@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import EnterpriseWorkflowPanel from "./pages/EnterpriseWorkflowPanel.jsx";
 import MarketSignalsPanel from "./MarketSignalsPanel.jsx";
+import { itemVisivelNaFilaDeInteligencia } from "./marketIntelligenceQueueDomain.js";
 import { buildTodoGreenWorkspaceIntelligence } from "./todoGreenWorkspaceDomain.js";
 import {
   TEMAS_DE_NOTICIA,
@@ -413,11 +414,16 @@ export default function TodoGreenIntelligenceHub({
 
   if (initialView === "contacts") return <Contacts items={intelligence.contacts} onNavigate={onNavigate} clients={verticalData.clients || []} authHeaders={authHeaders} setToast={setToast} />;
 
+  // A lista principal é uma fila de trabalho. Itens já revisados ou descartados
+  // saem dela imediatamente e continuam preservados no banco para auditoria.
+  // "Oportunidade" permanece visível porque ainda exige ação comercial.
+  const itensAtivos = decorados.filter(itemVisivelNaFilaDeInteligencia);
+
   const options = [
     ["campaigns", "Campanhas", "workflow"],
     ["radar", "RFQs / RFIs", "ao vivo"],
-    ["news", "Notícias", decorados.filter((item) => item.kind === "news").length],
-    ["decisors", "LinkedIn e decisores", decorados.filter((item) => item.kind === "decisors").length + (intelligence.decisors?.length || 0)],
+    ["news", "Notícias", itensAtivos.filter((item) => item.kind === "news").length],
+    ["decisors", "LinkedIn e decisores", itensAtivos.filter((item) => item.kind === "decisors").length + (intelligence.decisors?.length || 0)],
   ];
 
   const research = async () => {
@@ -461,7 +467,7 @@ export default function TodoGreenIntelligenceHub({
     }
   };
 
-  const mercadoDoTipo = decorados.filter((item) => item.kind === (view === "decisors" ? "decisors" : "news"));
+  const mercadoDoTipo = itensAtivos.filter((item) => item.kind === (view === "decisors" ? "decisors" : "news"));
   // A aba de decisores reaproveita quem a carteira já pesquisou (procurement de
   // cada conta), somado ao que a busca de mercado trouxe — deduplicado por URL.
   const doTipo = view === "decisors"
