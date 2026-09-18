@@ -40,7 +40,8 @@
 .ca-checks article a { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; color: #396449; font-size: .73rem; white-space: nowrap; }
 .ca-side { display: flex; flex-direction: column; gap: 14px; }
 .ca-side section { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.ca-side label:not(.ca-check) { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; color: #667068; }
+/* O upload de POC é um botão visual feito com <label>; não deve herdar o texto cinza dos campos da lateral. */
+.ca-side label:not(.ca-check):not(.tdg-poc-upload) { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; color: #667068; }
 .ca-check { display: flex; align-items: flex-start; gap: 8px; font-size: .8rem; color: #4e5750; line-height: 1.4; }
 .ca-check input { margin-top: 2px; }
 .ca-go-live { text-align: left; }
