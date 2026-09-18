@@ -26,7 +26,7 @@ const STATUS = {
   error: { label: "Erro na integração", Icon: AlertTriangle },
 };
 
-const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, healthById = new Map() }) => (
+const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, onConnect, healthById = new Map() }) => (
   <section className="tdg-panel">
     <div className="tdg-section-head">
       <div><span className="tdg-kicker">INTEGRAÇÕES</span><h2>{title}</h2></div>
@@ -60,6 +60,15 @@ const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, healthBy
               {health?.error && <small className="tdg-integration-error">Erro: {health.error}</small>}
               {health?.nextAction && <small>Ação disponível: {health.nextAction}</small>}
             </span>
+            {onConnect && item.canConnect && (
+              <button
+                type="button"
+                className="tdg-action"
+                onClick={() => onConnect(item)}
+              >
+                {item.status === "connected" ? "Reconectar" : "Conectar"}
+              </button>
+            )}
             {onTest && item.canTest && (
               <button
                 type="button"
@@ -96,6 +105,26 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
   };
 
   useEffect(() => { load(); }, []);
+
+  // O monday.com devolve o usuário para /todogreen/integracoes?monday=... após a
+  // autorização. Traduz o resultado num aviso e limpa o parâmetro para não repetir.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const monday = params.get("monday");
+    if (!monday) return;
+    if (monday === "connected") setToast?.("Conta monday.com conectada. Use “Testar” após mapear os boards.");
+    else if (monday === "denied") setToast?.("A autorização com o monday.com foi cancelada.");
+    else setToast?.("Não foi possível concluir a conexão com o monday.com.");
+    params.delete("monday");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+  }, []);
+
+  // Inicia o OAuth por navegação de topo (o cookie de sessão autentica a rota);
+  // um fetch não serve porque o passo seguinte é um redirect para o monday.com.
+  const connect = (item) => {
+    window.location.href = item?.connectPath || "/api/todogreen/integrations/monday/oauth/start";
+  };
 
   const resumoDaBusca = (t) => {
     if (!t) return "Não foi possível testar a busca.";
@@ -224,7 +253,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       <ProviderList title="Mensageria" icon={MessageCircle} items={status?.messaging} healthById={healthById} />
       <ProviderList title="Comunicação e produtividade" icon={Mail} items={status?.communication} healthById={healthById} />
       <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} healthById={healthById} />
-      <ProviderList title="Dados e gestão" icon={Database} items={status?.management} healthById={healthById} />
+      <ProviderList title="Dados e gestão" icon={Database} items={status?.management} testing={testing} onTest={test} onConnect={connect} healthById={healthById} />
       <ProviderList title="API e troca de dados" icon={Cable} items={status?.dataExchange} healthById={healthById} />
       <ProviderList title="Automação ativa na Cloudflare" icon={Workflow} items={status?.automation} healthById={healthById} />
 

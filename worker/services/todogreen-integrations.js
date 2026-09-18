@@ -159,6 +159,10 @@ const managementIntegrations = (env = {}) => {
       ? "Autorizar a conta monday.com + mapear boards e eventos"
       : "MONDAY_CLIENT_ID + MONDAY_CLIENT_SECRET + MONDAY_SIGNING_SECRET",
     canConfigure: true,
+    // Só oferece "Conectar" quando as três credenciais estão no cofre; sem elas
+    // o início do OAuth responde 503 e o botão só frustraria a titular.
+    canConnect: mondayConfigured,
+    connectPath: "/api/todogreen/integrations/monday/oauth/start",
   }, { external: !mondayConfigured }),
   withReadiness({
     id: "power-bi",
