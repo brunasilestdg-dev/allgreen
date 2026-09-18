@@ -141,14 +141,26 @@ const marketIntegrations = (search) => [
   }, { external: true }),
 ];
 
-const managementIntegrations = () => [
+const managementIntegrations = (env = {}) => {
+  const mondayConfigured = Boolean(
+    env.MONDAY_CLIENT_ID
+    && env.MONDAY_CLIENT_SECRET
+    && env.MONDAY_SIGNING_SECRET
+    && env.MONDAY_TOKEN_ENCRYPTION_KEY
+  );
+  return [
   withReadiness({
     id: "monday",
     name: "monday.com",
-    configured: false,
-    detail: "Ainda não há conector monday.com ativo no backend desta vertical.",
-    requirement: "OAuth/token monday.com + mapeamento de boards e eventos",
-  }, { external: true }),
+    configured: mondayConfigured,
+    detail: mondayConfigured
+      ? "Backend OAuth 2.1/PKCE e receptor de webhooks disponíveis. Falta autorizar a conta e mapear boards/campos para concluir a conexão."
+      : "Conector backend implementado. Cadastre as credenciais no cofre do Worker para habilitar OAuth e webhooks autenticados.",
+    requirement: mondayConfigured
+      ? "Autorizar a conta monday.com + mapear boards e eventos"
+      : "MONDAY_CLIENT_ID + MONDAY_CLIENT_SECRET + MONDAY_SIGNING_SECRET + MONDAY_TOKEN_ENCRYPTION_KEY",
+    canConfigure: true,
+  }, { external: !mondayConfigured }),
   withReadiness({
     id: "power-bi",
     name: "Power BI",
@@ -156,7 +168,8 @@ const managementIntegrations = () => [
     detail: "Ainda não há publicação ou leitura autenticada pelo Power BI no backend da vertical.",
     requirement: "Microsoft Entra ID + Power BI REST API ou dataset autorizado",
   }, { external: true }),
-];
+  ];
+};
 
 const ciotStatus = (env = {}) => {
   const certificate = Boolean(
@@ -378,7 +391,7 @@ export function todoGreenIntegrationStatus(env = {}, { activeWebhooks = 0 } = {}
     messaging: messagingIntegrations(env),
     communication: communicationIntegrations(env),
     operational: [track3rDefaultStatus(), sistemasTrackerDefaultStatus(), sefazStatus(env), ciotStatus(env), ocppStatus()],
-    management: managementIntegrations(),
+    management: managementIntegrations(env),
     dataExchange: dataExchangeIntegrations(env, activeWebhooks),
     automation: nativeAutomations(env),
     // Gateway de APIs públicas gratuitas (CEP, IBGE, Bacen, ANTT, ANEEL, Open
