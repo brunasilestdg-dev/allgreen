@@ -246,6 +246,7 @@ async function salvarEncomenda(env, integracao, corpo) {
       payload, importHash, codigo, actor, agora,
       existente.id, TENANT_ID, integracao.workspace_owner_id,
     ).run();
+    await reconciliarFiscalPorEncomenda(env, integracao, codigo);
     return true;
   }
 
@@ -268,6 +269,7 @@ async function salvarEncomenda(env, integracao, corpo) {
     prometido || null, cadastrado || null, payload, importHash, codigo,
     actor, actor, agora, agora,
   ).run();
+  await reconciliarFiscalPorEncomenda(env, integracao, codigo);
   return true;
 }
 
@@ -345,6 +347,184 @@ async function salvarLista(env, integracao, corpo) {
       texto(veiculo?.placa, 40), texto(veiculo?.placa, 40),
       classe, classe, texto(motorista?.nome, 160), texto(motorista?.nome, 160),
       ator(integracao), agora, TENANT_ID, integracao.workspace_owner_id, orderCode, orderCode,
+    ).run();
+  }
+  return true;
+}
+
+async function dadosTmsDaEncomenda(env, integracao, codigo) {
+  const code = texto(codigo, 120);
+  if (!code) return null;
+  return env.DB.prepare(
+    `SELECT client_id,operation_id FROM todogreen_tms_documents
+      WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+        AND (external_id=? OR order_ref=?)
+      ORDER BY updated_at DESC LIMIT 1`,
+  ).bind(TENANT_ID, integracao.workspace_owner_id, code, code).first();
+}
+
+async function ultimaAverbacao(env, integracao, codigo) {
+  const code = texto(codigo, 120);
+  if (!code) return null;
+  return env.DB.prepare(
+    `SELECT cte_number,cte_series,endorsed_at,protocol,message
+       FROM todogreen_track3r_endorsements
+      WHERE workspace_owner_id=? AND integration_id=? AND external_order_code=?
+      ORDER BY last_seen_at DESC LIMIT 1`,
+  ).bind(integracao.workspace_owner_id, integracao.id, code).first();
+}
+
+async function reconciliarFiscalPorEncomenda(env, integracao, codigo) {
+  const tms = await dadosTmsDaEncomenda(env, integracao, codigo);
+  if (!tms || (!tms.client_id && !tms.operation_id)) return;
+  await env.DB.prepare(
+    `UPDATE todogreen_fiscal_documents
+        SET client_id=CASE WHEN COALESCE(client_id,'')='' AND ?<>'' THEN ? ELSE client_id END,
+            operation_id=CASE WHEN COALESCE(operation_id,'')='' AND ?<>'' THEN ? ELSE operation_id END,
+            revision=revision+1,updated_at=?
+      WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+        AND json_extract(fields_json,'$.externalOrderCode')=?`,
+  ).bind(
+    texto(tms.client_id,120), texto(tms.client_id,120),
+    texto(tms.operation_id,120), texto(tms.operation_id,120),
+    new Date().toISOString(), TENANT_ID, integracao.workspace_owner_id, texto(codigo,120),
+  ).run();
+}
+
+async function salvarCte(env, integracao, corpo) {
+  const orderCode = texto(corpo?.codigo_encomenda, 120);
+  const cte = corpo?.cte || {};
+  const chave = texto(cte?.chave, 80);
+  const numeroCte = texto(cte?.numero, 40);
+  const serieCte = texto(cte?.serie, 20);
+  if (!orderCode || (!chave && !numeroCte)) return false;
+
+  const agora = new Date().toISOString();
+  const actor = ator(integracao);
+  const tms = await dadosTmsDaEncomenda(env, integracao, orderCode);
+  const endorsement = await ultimaAverbacao(env, integracao, orderCode);
+  const fields = {
+    source: "track3r",
+    integrationId: integracao.id,
+    eventType: "ctes",
+    externalOrderCode: orderCode,
+    externalEventCode: texto(corpo?.codigo_tipo_evento, 80),
+    xmlUrl: texto(cte?.caminho_xml, 2000),
+    dacteUrl: texto(cte?.caminho_dacte, 2000),
+    track3rSentAt: isoInstante(corpo?.data_hora_envio),
+    ...(endorsement ? {
+      track3rEndorsement: {
+        endorsedAt: endorsement.endorsed_at,
+        protocol: endorsement.protocol,
+        message: endorsement.message,
+      },
+    } : {}),
+  };
+
+  let existing = null;
+  if (chave) {
+    existing = await env.DB.prepare(
+      `SELECT id,status,fields_json FROM todogreen_fiscal_documents
+        WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL AND chave_acesso=?
+        ORDER BY created_at DESC LIMIT 1`,
+    ).bind(TENANT_ID, integracao.workspace_owner_id, chave).first();
+  }
+  const id = existing?.id || idSeguro(
+    "track3r-cte", integracao.id, chave || `${numeroCte}-${serieCte}-${orderCode}`,
+  );
+  const data = isoInstante(cte?.data || corpo?.data_hora_envio);
+  const numeroInt = Math.trunc(numero(numeroCte));
+  const serieInt = Math.trunc(numero(serieCte)) || 1;
+
+  if (!existing) {
+    await env.DB.prepare(
+      `INSERT INTO todogreen_fiscal_documents
+         (id,tenant_id,workspace_owner_id,doc_type,numero,serie,chave_acesso,status,
+          protocolo_autorizacao,data_emissao,operation_id,client_id,xml_content,
+          fields_json,revision,created_by,updated_by,created_at,updated_at,archived_at)
+       VALUES (?,?,?,'cte',?,?,?,'validado',?,?,?,?,NULL,?,1,?,?,?,?,NULL)`,
+    ).bind(
+      id, TENANT_ID, integracao.workspace_owner_id, numeroInt || null, serieInt,
+      chave || null, texto(cte?.protocolo, 120) || null, data || null,
+      texto(tms?.operation_id,120) || null, texto(tms?.client_id,120) || null,
+      JSON.stringify(fields), actor, actor, agora, agora,
+    ).run();
+  } else {
+    let atuais = {};
+    try { atuais = JSON.parse(existing.fields_json || "{}"); } catch { atuais = {}; }
+    const merged = JSON.stringify({ ...atuais, ...fields });
+    await env.DB.prepare(
+      `UPDATE todogreen_fiscal_documents
+          SET numero=CASE WHEN numero IS NULL OR numero=0 THEN ? ELSE numero END,
+              serie=CASE WHEN serie IS NULL OR serie=0 THEN ? ELSE serie END,
+              protocolo_autorizacao=CASE WHEN COALESCE(protocolo_autorizacao,'')='' THEN ? ELSE protocolo_autorizacao END,
+              data_emissao=CASE WHEN COALESCE(data_emissao,'')='' THEN ? ELSE data_emissao END,
+              operation_id=CASE WHEN COALESCE(operation_id,'')='' AND ?<>'' THEN ? ELSE operation_id END,
+              client_id=CASE WHEN COALESCE(client_id,'')='' AND ?<>'' THEN ? ELSE client_id END,
+              fields_json=?,revision=revision+1,updated_by=?,updated_at=?
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+    ).bind(
+      numeroInt || null, serieInt, texto(cte?.protocolo,120), data || null,
+      texto(tms?.operation_id,120), texto(tms?.operation_id,120),
+      texto(tms?.client_id,120), texto(tms?.client_id,120),
+      merged, actor, agora, id, TENANT_ID, integracao.workspace_owner_id,
+    ).run();
+  }
+  return true;
+}
+
+async function salvarAverbacao(env, integracao, corpo) {
+  const orderCode = texto(corpo?.codigo_encomenda, 120);
+  const averbacao = corpo?.averbacao || {};
+  const protocol = texto(averbacao?.protocolo, 240);
+  if (!orderCode || !protocol) return false;
+  const cte = corpo?.cte || {};
+  const agora = new Date().toISOString();
+  const id = idSeguro("track3r-endorsement", integracao.id, orderCode, protocol);
+
+  await env.DB.prepare(
+    `INSERT INTO todogreen_track3r_endorsements
+       (id,tenant_id,workspace_owner_id,integration_id,external_order_code,
+        external_cte_code,cte_number,cte_series,endorsed_at,protocol,message,
+        payload_json,first_seen_at,last_seen_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(workspace_owner_id,integration_id,external_order_code,protocol)
+     DO UPDATE SET
+       external_cte_code=excluded.external_cte_code,cte_number=excluded.cte_number,
+       cte_series=excluded.cte_series,endorsed_at=excluded.endorsed_at,
+       message=excluded.message,payload_json=excluded.payload_json,last_seen_at=excluded.last_seen_at`,
+  ).bind(
+    id,TENANT_ID,integracao.workspace_owner_id,integracao.id,orderCode,
+    texto(corpo?.codigo_encomenda_cte,120),texto(cte?.numero,40),texto(cte?.serie,20),
+    isoInstante(averbacao?.data || corpo?.data_hora_envio),protocol,
+    texto(averbacao?.mensagem,500),JSON.stringify(corpo),agora,agora,
+  ).run();
+
+  const { results } = await env.DB.prepare(
+    `SELECT id,fields_json FROM todogreen_fiscal_documents
+      WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+        AND (
+          json_extract(fields_json,'$.externalOrderCode')=?
+          OR (CAST(numero AS TEXT)=? AND CAST(serie AS TEXT)=?)
+        )`,
+  ).bind(
+    TENANT_ID,integracao.workspace_owner_id,orderCode,texto(cte?.numero,40),texto(cte?.serie,20),
+  ).all();
+
+  for (const row of results || []) {
+    let fields = {};
+    try { fields = JSON.parse(row.fields_json || "{}"); } catch { fields = {}; }
+    fields.track3rEndorsement = {
+      endorsedAt: isoInstante(averbacao?.data || corpo?.data_hora_envio),
+      protocol,
+      message: texto(averbacao?.mensagem,500),
+    };
+    await env.DB.prepare(
+      `UPDATE todogreen_fiscal_documents
+          SET fields_json=?,revision=revision+1,updated_by=?,updated_at=?
+        WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+    ).bind(
+      JSON.stringify(fields),ator(integracao),agora,row.id,TENANT_ID,integracao.workspace_owner_id,
     ).run();
   }
   return true;
@@ -595,6 +775,12 @@ export async function projetarWebhookTrack3r(env, integracao, tipo, corpo) {
 
   if (tipo === "listas")
     return { processed: await salvarLista(env, integracao, corpo), domain: "tms" };
+
+  if (tipo === "ctes")
+    return { processed: await salvarCte(env, integracao, corpo), domain: "fiscal" };
+
+  if (tipo === "averbacoes")
+    return { processed: await salvarAverbacao(env, integracao, corpo), domain: "fiscal" };
 
   if (["embarcadores", "tomadores", "unidades"].includes(tipo))
     return { processed: await salvarEntidade(env, integracao, tipo, corpo), domain: "cadastros" };

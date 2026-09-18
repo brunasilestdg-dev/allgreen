@@ -247,6 +247,87 @@ describe("TRACK3R — webhooks documentados", () => {
     expect(Number(row.total)).toBeGreaterThanOrEqual(amostras.length + 2);
   });
 
+  it("projeta CT-e e averbação no Fiscal mesmo se a averbação chegar primeiro", async () => {
+    await chamar("embarcadores", {
+      data_hora_envio: "20/06/2024 14:00:00",
+      codigo_embarcador: 902,
+      nome: "Cliente TRACK3R",
+      fantasia: "Cliente TRACK3R",
+      cpf_cnpj: "05517785000198",
+    });
+    await chamar("encomendas", {
+      data_hora_envio: "20/06/2024 14:10:00",
+      data_hora_cadastro: "20/06/2024 13:00:00",
+      codigo_encomenda: 9101,
+      codigo_embarcador: 902,
+      descricao_servico: "Entrega",
+      descricao_status: "Em transporte",
+      documento: { numero: "NF9101", chave: "NFE-9101", quantidade_volumes: 1 },
+    });
+
+    const aver = await chamar("averbacoes", {
+      data_hora_envio: "20/06/2024 15:21:19",
+      codigo_transportadora: 1,
+      codigo_encomenda: 9101,
+      codigo_encomenda_cte: 50,
+      cte: { numero: "12345678", serie: "1" },
+      averbacao: {
+        data: "20/06/2024 15:21:19",
+        protocolo: "PROTO-AVER-9101",
+        mensagem: "AVERBADO",
+      },
+    });
+    expect(aver.status).toBe(200);
+
+    const cteResponse = await chamar("ctes", {
+      data_hora_envio: "20/06/2024 15:25:00",
+      codigo_encomenda: 9101,
+      codigo_tipo_evento: 1,
+      cte: {
+        numero: "12345678",
+        serie: "1",
+        chave: "35260612345678000123570010012345671012345678",
+        caminho_xml: "https://track3r.test/cte/9101.xml",
+        caminho_dacte: "https://track3r.test/cte/9101.pdf",
+        protocolo: "PROTO-CTE-9101",
+        data: "20/06/2024 15:24:00",
+      },
+    });
+    expect(cteResponse.status).toBe(200);
+
+    const fiscal = await env.DB.prepare(
+      `SELECT * FROM todogreen_fiscal_documents
+        WHERE workspace_owner_id='tmw-all-user'
+          AND chave_acesso='35260612345678000123570010012345671012345678'`,
+    ).first();
+    expect(fiscal.doc_type).toBe("cte");
+    expect(fiscal.status).toBe("validado");
+    expect(String(fiscal.numero)).toBe("12345678");
+    expect(fiscal.protocolo_autorizacao).toBe("PROTO-CTE-9101");
+    expect(fiscal.client_id).toBe("tmw-client");
+    const fields = JSON.parse(fiscal.fields_json);
+    expect(fields.source).toBe("track3r");
+    expect(fields.externalOrderCode).toBe("9101");
+    expect(fields.xmlUrl).toBe("https://track3r.test/cte/9101.xml");
+    expect(fields.dacteUrl).toBe("https://track3r.test/cte/9101.pdf");
+    expect(fields.track3rEndorsement).toMatchObject({
+      protocol: "PROTO-AVER-9101",
+      message: "AVERBADO",
+    });
+
+    const endorsement = await env.DB.prepare(
+      `SELECT * FROM todogreen_track3r_endorsements
+        WHERE integration_id='tmw-all-int' AND external_order_code='9101'`,
+    ).first();
+    expect(endorsement.protocol).toBe("PROTO-AVER-9101");
+
+    const events = await env.DB.prepare(
+      `SELECT event_type,status FROM todogreen_tms_webhook_events
+        WHERE integration_id='tmw-all-int' AND external_ref IN ('9101','PROTO-AVER-9101')`,
+    ).all();
+    expect((events.results || []).every((row) => row.status === "processed")).toBe(true);
+  });
+
   it("projeta valores da encomenda para a base financeira TRACK3R", async () => {
     const r = await chamar("valores-encomendas", {
       data_hora_envio: "01/03/2024 15:21:19",
