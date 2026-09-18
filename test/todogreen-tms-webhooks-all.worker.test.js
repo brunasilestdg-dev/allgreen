@@ -328,6 +328,75 @@ describe("TRACK3R — webhooks documentados", () => {
     expect((events.results || []).every((row) => row.status === "processed")).toBe(true);
   });
 
+  it("projeta cotação TRACK3R como referência comercial sem criar cenário aprovado", async () => {
+    await chamar("embarcadores", {
+      data_hora_envio: "20/06/2024 14:00:00",
+      codigo_embarcador: 950,
+      nome: "Cliente TRACK3R",
+      fantasia: "Cliente TRACK3R",
+      cpf_cnpj: "05517785000198",
+    });
+
+    const r = await chamar("cotacoes", {
+      data_hora_envio: "20/06/2024 15:21:19",
+      codigo_cotacao: 9501,
+      nome_usuario: "João Felix",
+      codigo_tomador: 951,
+      codigo_embarcador: 950,
+      codigo_servico: 11,
+      codigo_produto: 22,
+      quantidade_volumes: 2,
+      volumes: [
+        { altura: 0.2, largura: 0.3, comprimento: 0.4, metragem_cubica: 0.024 },
+        { altura: 0.3, largura: 0.4, comprimento: 0.5, metragem_cubica: 0.06 },
+      ],
+      origem: { codigo_ibge: "3505708", cidade: "Barueri", uf: "SP" },
+      destino: { cep: "06454050" },
+      desconto: { frete_total: 5, percentual: 2.5 },
+      frete: {
+        frete_peso: 120,
+        taxa_coleta: 10,
+        taxa_entrega: 12,
+        taxa_despacho: 3,
+        ad_valorem: 4.5,
+        gris: 2.2,
+        valor: 151.7,
+      },
+      imposto: { tipo: 2, descricao: "ICMS", aliquota: 12, base_calculo: 151.7, valor: 18.204 },
+      prazo: { prazo: 2, tipo: "dias", data: "22/06/2024" },
+      peso: { digitado: 10, cubado: 12.4, taxado: 12.4 },
+    });
+    expect(r.status).toBe(200);
+
+    const quote = await env.DB.prepare(
+      `SELECT * FROM todogreen_track3r_quotes
+        WHERE integration_id='tmw-all-int' AND external_quote_code='9501'`,
+    ).first();
+    expect(quote.client_id).toBe("tmw-client");
+    expect(quote.origin_city).toBe("Barueri");
+    expect(quote.destination_zip).toBe("06454050");
+    expect(Number(quote.quoted_amount)).toBe(151.7);
+    expect(Number(quote.gris)).toBe(2.2);
+    expect(Number(quote.tax_rate)).toBe(12);
+    expect(Number(quote.lead_time_value)).toBe(2);
+    expect(quote.lead_time_unit).toBe("dias");
+    expect(quote.promised_date).toBe("2024-06-22");
+    expect(Number(quote.weight_charged)).toBe(12.4);
+    expect(JSON.parse(quote.volumes_json)).toHaveLength(2);
+
+    const event = await env.DB.prepare(
+      `SELECT status FROM todogreen_tms_webhook_events
+        WHERE integration_id='tmw-all-int' AND event_type='cotacoes'
+          AND external_ref='9501' ORDER BY last_received_at DESC LIMIT 1`,
+    ).first();
+    expect(event.status).toBe("processed");
+
+    const scenarios = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM pricing_scenarios WHERE workspace_owner_id='tmw-all-user'",
+    ).first();
+    expect(Number(scenarios.total)).toBe(0);
+  });
+
   it("projeta valores da encomenda para a base financeira TRACK3R", async () => {
     const r = await chamar("valores-encomendas", {
       data_hora_envio: "01/03/2024 15:21:19",

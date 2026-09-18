@@ -530,6 +530,73 @@ async function salvarAverbacao(env, integracao, corpo) {
   return true;
 }
 
+async function salvarCotacao(env, integracao, corpo) {
+  const codigo = texto(corpo?.codigo_cotacao, 120);
+  if (!codigo) return false;
+
+  const embarcador = await entidadeTrack3r(env, integracao, "embarcador", corpo?.codigo_embarcador);
+  const tomador = await entidadeTrack3r(env, integracao, "tomador", corpo?.codigo_tomador);
+  const clientId =
+    await clientePorDocumento(env, integracao, embarcador?.document) ||
+    await clientePorDocumento(env, integracao, tomador?.document);
+
+  const desconto = corpo?.desconto || {};
+  const frete = corpo?.frete || {};
+  const imposto = corpo?.imposto || {};
+  const prazo = corpo?.prazo || {};
+  const peso = corpo?.peso || {};
+  const origem = corpo?.origem || {};
+  const destino = corpo?.destino || {};
+  const agora = new Date().toISOString();
+  const id = idSeguro("track3r-quote", integracao.id, codigo);
+
+  await env.DB.prepare(
+    `INSERT INTO todogreen_track3r_quotes
+       (id,tenant_id,workspace_owner_id,integration_id,external_quote_code,client_id,
+        user_name,taker_code,shipper_code,service_code,product_code,volume_count,
+        volumes_json,origin_ibge,origin_city,origin_state,destination_zip,
+        discount_amount,discount_percent,freight_weight,pickup_fee,delivery_fee,
+        dispatch_fee,ad_valorem,gris,quoted_amount,tax_type,tax_description,tax_rate,
+        tax_base,tax_amount,lead_time_value,lead_time_unit,promised_date,
+        weight_entered,weight_cubed,weight_charged,payload_json,first_seen_at,last_seen_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(workspace_owner_id,integration_id,external_quote_code)
+     DO UPDATE SET
+       client_id=CASE WHEN excluded.client_id<>'' THEN excluded.client_id ELSE todogreen_track3r_quotes.client_id END,
+       user_name=excluded.user_name,taker_code=excluded.taker_code,shipper_code=excluded.shipper_code,
+       service_code=excluded.service_code,product_code=excluded.product_code,
+       volume_count=excluded.volume_count,volumes_json=excluded.volumes_json,
+       origin_ibge=excluded.origin_ibge,origin_city=excluded.origin_city,origin_state=excluded.origin_state,
+       destination_zip=excluded.destination_zip,discount_amount=excluded.discount_amount,
+       discount_percent=excluded.discount_percent,freight_weight=excluded.freight_weight,
+       pickup_fee=excluded.pickup_fee,delivery_fee=excluded.delivery_fee,
+       dispatch_fee=excluded.dispatch_fee,ad_valorem=excluded.ad_valorem,gris=excluded.gris,
+       quoted_amount=excluded.quoted_amount,tax_type=excluded.tax_type,
+       tax_description=excluded.tax_description,tax_rate=excluded.tax_rate,
+       tax_base=excluded.tax_base,tax_amount=excluded.tax_amount,
+       lead_time_value=excluded.lead_time_value,lead_time_unit=excluded.lead_time_unit,
+       promised_date=excluded.promised_date,weight_entered=excluded.weight_entered,
+       weight_cubed=excluded.weight_cubed,weight_charged=excluded.weight_charged,
+       payload_json=excluded.payload_json,last_seen_at=excluded.last_seen_at`,
+  ).bind(
+    id,TENANT_ID,integracao.workspace_owner_id,integracao.id,codigo,clientId,
+    texto(corpo?.nome_usuario,160),texto(corpo?.codigo_tomador,120),
+    texto(corpo?.codigo_embarcador,120),texto(corpo?.codigo_servico,80),
+    texto(corpo?.codigo_produto,80),Math.trunc(numero(corpo?.quantidade_volumes)),
+    JSON.stringify(Array.isArray(corpo?.volumes) ? corpo.volumes : []),
+    texto(origem?.codigo_ibge,40),texto(origem?.cidade,120),texto(origem?.uf,8),
+    texto(destino?.cep,20),numero(desconto?.frete_total),numero(desconto?.percentual),
+    numero(frete?.frete_peso),numero(frete?.taxa_coleta),numero(frete?.taxa_entrega),
+    numero(frete?.taxa_despacho),numero(frete?.ad_valorem),numero(frete?.gris),
+    numero(frete?.valor),texto(imposto?.tipo,40),texto(imposto?.descricao,120),
+    numero(imposto?.aliquota),numero(imposto?.base_calculo),numero(imposto?.valor),
+    numero(prazo?.prazo),texto(prazo?.tipo,40),isoData(prazo?.data),
+    numero(peso?.digitado),numero(peso?.cubado),numero(peso?.taxado),
+    JSON.stringify(corpo),agora,agora,
+  ).run();
+  return true;
+}
+
 async function salvarValorEncomenda(env, integracao, corpo) {
   const codigo = texto(corpo?.codigo_encomenda, 120);
   if (!codigo) return false;
@@ -784,6 +851,9 @@ export async function projetarWebhookTrack3r(env, integracao, tipo, corpo) {
 
   if (["embarcadores", "tomadores", "unidades"].includes(tipo))
     return { processed: await salvarEntidade(env, integracao, tipo, corpo), domain: "cadastros" };
+
+  if (tipo === "cotacoes")
+    return { processed: await salvarCotacao(env, integracao, corpo), domain: "comercial" };
 
   if (tipo === "valores-encomendas")
     return { processed: await salvarValorEncomenda(env, integracao, corpo), domain: "financeiro" };
