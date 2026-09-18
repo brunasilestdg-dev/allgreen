@@ -242,7 +242,7 @@ async function exchangeOauthCode(request, env) {
     `INSERT INTO todogreen_monday_connections
       (id,tenant_id,workspace_owner_id,monday_account_id,monday_account_name,monday_account_slug,
        connected_by,scopes,access_token_enc,refresh_token_enc,access_expires_at,status,created_at,updated_at)
-     VALUES (?,'todogreen',?,?,?,?,?,?,?,?,?,?,'connected',?,?)
+     VALUES (?,'todogreen',?,?,?,?,?,?,?,?,?,'connected',?,?)
      ON CONFLICT(tenant_id,workspace_owner_id,monday_account_id) DO UPDATE SET
        monday_account_name=excluded.monday_account_name,
        monday_account_slug=excluded.monday_account_slug,
