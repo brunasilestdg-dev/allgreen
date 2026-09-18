@@ -146,7 +146,6 @@ const managementIntegrations = (env = {}) => {
     env.MONDAY_CLIENT_ID
     && env.MONDAY_CLIENT_SECRET
     && env.MONDAY_SIGNING_SECRET
-    && env.MONDAY_TOKEN_ENCRYPTION_KEY
   );
   return [
   withReadiness({
@@ -158,7 +157,7 @@ const managementIntegrations = (env = {}) => {
       : "Conector backend implementado. Cadastre as credenciais no cofre do Worker para habilitar OAuth e webhooks autenticados.",
     requirement: mondayConfigured
       ? "Autorizar a conta monday.com + mapear boards e eventos"
-      : "MONDAY_CLIENT_ID + MONDAY_CLIENT_SECRET + MONDAY_SIGNING_SECRET + MONDAY_TOKEN_ENCRYPTION_KEY",
+      : "MONDAY_CLIENT_ID + MONDAY_CLIENT_SECRET + MONDAY_SIGNING_SECRET",
     canConfigure: true,
   }, { external: !mondayConfigured }),
   withReadiness({
