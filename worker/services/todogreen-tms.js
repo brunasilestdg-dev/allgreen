@@ -21,6 +21,7 @@
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
 import { sameHash } from "../auth/credenciais.js";
 import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
+import { safeExternalUrl, isTrack3rEnvKey, isSafeHeaderName } from "../lib/net.js";
 import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
 import {
   PERGUNTAS_AO_TRACK3R,
@@ -193,27 +194,48 @@ const salvarConfiguracao = async (env, access, user, corpo, request) => {
     ? texto(corpo.syncMode)
     : "arquivo";
 
+  // As chaves de segredo que a config aponta são LIDAS do cofre na
+  // sincronização e enviadas no cabeçalho da chamada externa. Se pudessem ser
+  // qualquer nome, um usuário `tms:manage` apontaria para BREVO/GEMINI/SEFAZ/
+  // SysPag/VAPID e receberia o valor do segredo. Por isso só aceitamos chaves do
+  // próprio conector (prefixo TODOGREEN_TRACK3R_).
+  const tokenEnvKey = texto(corpo.tokenEnvKey, 120) || "TODOGREEN_TRACK3R_API_TOKEN";
+  const webhookSecretEnvKey = texto(corpo.webhookSecretEnvKey, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET";
+  const authHeaderName = texto(corpo.authHeaderName, 60) || "authorization";
+  if (!isTrack3rEnvKey(tokenEnvKey) || !isTrack3rEnvKey(webhookSecretEnvKey))
+    return json({ error: "As chaves de segredo devem começar com TODOGREEN_TRACK3R_." }, 400);
+  if (!isSafeHeaderName(authHeaderName))
+    return json({ error: "Nome de cabeçalho de autenticação inválido." }, 400);
+
   // Não deixa marcar API ou webhook sem o que eles exigem. Salvar um modo que
   // não pode funcionar transformaria a tela num relatório de erro silencioso.
   if (modo === "api" && !texto(corpo.baseUrl))
     return json({ error: "O modo API precisa da URL base do TRACK3R." }, 400);
-  if (modo === "api" && !env[texto(corpo.tokenEnvKey) || "TODOGREEN_TRACK3R_API_TOKEN"])
+  // A URL base precisa ser HTTPS e pública — nada de apontar para a rede interna.
+  if (modo === "api" && texto(corpo.baseUrl)) {
+    try {
+      safeExternalUrl(corpo.baseUrl, texto(corpo.collectionsPath) || "/");
+    } catch (erro) {
+      return json({ error: erro.message }, 400);
+    }
+  }
+  if (modo === "api" && !env[tokenEnvKey])
     return json({
       error: "O modo API precisa do token no cofre do Worker. Cadastre o segredo e tente de novo.",
-      segredoFaltando: texto(corpo.tokenEnvKey) || "TODOGREEN_TRACK3R_API_TOKEN",
+      segredoFaltando: tokenEnvKey,
     }, 409);
-  if (modo === "webhook" && !env[texto(corpo.webhookSecretEnvKey) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET"])
+  if (modo === "webhook" && !env[webhookSecretEnvKey])
     return json({
       error: "O modo webhook precisa do segredo no cofre do Worker.",
-      segredoFaltando: texto(corpo.webhookSecretEnvKey) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET",
+      segredoFaltando: webhookSecretEnvKey,
     }, 409);
 
   const campos = [
     texto(corpo.name, 120) || "TRACK3R",
     texto(corpo.baseUrl, 400),
-    texto(corpo.tokenEnvKey, 120) || "TODOGREEN_TRACK3R_API_TOKEN",
-    texto(corpo.webhookSecretEnvKey, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET",
-    texto(corpo.authHeaderName, 60) || "authorization",
+    tokenEnvKey,
+    webhookSecretEnvKey,
+    authHeaderName,
     modo,
     texto(corpo.collectionsPath, 200),
     texto(corpo.invoicesPath, 200),
@@ -412,9 +434,23 @@ const sincronizarApi = async (env, access, user, corpo) => {
   const caminho = texto(corpo.caminho, 200) || integracao.collectionsPath;
   if (!caminho) return json({ error: "Informe o caminho da consulta na API." }, 400);
 
+  // Defesa em profundidade: mesmo que uma config antiga guarde uma chave fora do
+  // padrão, nunca lemos do cofre um segredo que não seja do conector TRACK3R.
+  if (!isTrack3rEnvKey(integracao.tokenEnvKey))
+    return json({ error: "A chave de token da integração é inválida. Reconfigure a integração." }, 400);
+
+  // `safeExternalUrl` exige HTTPS, host público, caminho relativo e MESMA origem
+  // da base — um caminho absoluto não redireciona o fetch para outro host.
+  let alvo;
+  try {
+    alvo = safeExternalUrl(integracao.baseUrl, caminho);
+  } catch (erro) {
+    return json({ error: erro.message }, 400);
+  }
+
   let payload;
   try {
-    const resposta = await fetch(new URL(caminho, integracao.baseUrl).href, {
+    const resposta = await fetch(alvo.href, {
       headers: {
         [integracao.authHeaderName]: String(env[integracao.tokenEnvKey]),
         accept: "application/json",

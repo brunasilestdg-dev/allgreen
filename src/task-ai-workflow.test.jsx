@@ -116,7 +116,7 @@ describe("tarefas aprofundadas pela IA", () => {
       target: { value: "usar o briefing recebido" },
     });
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Estruturar tarefa com IA" }),
+      within(dialog).getByRole("button", { name: "Estruturar" }),
     );
 
     expect(await within(dialog).findByText("Revisar briefing")).toBeInTheDocument();

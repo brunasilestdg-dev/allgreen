@@ -513,3 +513,46 @@ describe("a fila", () => {
     expect(pedidos.every((p) => p.situacao === "pendente")).toBe(true);
   });
 });
+
+// O gate de alçada tem de valer nas DUAS portas: ao criar a proposta e ao
+// liberá-la por PATCH. Sem a segunda, dava para nascer em rascunho (cenário
+// limpo), abrir o pedido de alçada e depois enviar por PATCH — contornando a
+// alçada no servidor. Sem oportunidade vinculada, um 409 aqui só pode ser o
+// Deal Desk (o gate de viabilidade nem roda), o que isola o que estamos testando.
+describe("o gate do Deal Desk vale ao criar E ao liberar a proposta por PATCH", () => {
+  it("cenário com pedido pendente bloqueia CRIAR proposta já enviada (409)", async () => {
+    const id = await cenario({ margem: 11, preco: 200000, dono: vendedor });
+    const abrir = await pedir("/api/todogreen/deal-desk", {
+      metodo: "POST", token: vendedor.token,
+      corpo: { cenarioId: id, justificativa: JUSTIFICATIVA },
+    });
+    expect(abrir.status).toBe(201);
+    const r = await pedir("/api/todogreen/records/proposals", {
+      metodo: "POST", token: dona.token,
+      corpo: { cenarioId: id, titulo: "Proposta", situacao: "sent" },
+    });
+    expect(r.status).toBe(409);
+  });
+
+  it("PATCH rascunho→enviada com pedido pendente é bloqueado (409)", async () => {
+    const id = await cenario({ margem: 11, preco: 200000, dono: vendedor });
+    // O rascunho nasce ANTES de existir pedido de alçada — passa.
+    const criar = await pedir("/api/todogreen/records/proposals", {
+      metodo: "POST", token: dona.token,
+      corpo: { cenarioId: id, titulo: "Proposta", situacao: "draft" },
+    });
+    expect(criar.status).toBe(201);
+    const proposta = (await criar.json()).registro;
+    // Agora o vendedor abre o pedido de alçada (fica pendente).
+    await pedir("/api/todogreen/deal-desk", {
+      metodo: "POST", token: vendedor.token,
+      corpo: { cenarioId: id, justificativa: JUSTIFICATIVA },
+    });
+    // Tentar liberar por PATCH tem de bater no gate. Antes da correção, saía 200.
+    const patch = await pedir(`/api/todogreen/records/proposals/${proposta.id}`, {
+      metodo: "PATCH", token: dona.token,
+      corpo: { revision: proposta.revision, situacao: "sent" },
+    });
+    expect(patch.status).toBe(409);
+  });
+});

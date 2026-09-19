@@ -2287,12 +2287,22 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
     }
   }
   if (colecao === COLECOES.proposals) {
-    // Gate de viabilidade só na TRANSIÇÃO para liberada (não a cada PATCH de
-    // uma proposta que já está liberada) — a mesma disciplina do gate jurídico.
+    // Os gates só valem na TRANSIÇÃO para liberada (não a cada PATCH de uma
+    // proposta que já está liberada) — a mesma disciplina do gate jurídico.
     const situacaoNova = texto(proximo.situacao, 40).toLowerCase();
     const situacaoAtual = texto(atual.status, 40).toLowerCase();
+    const entrandoEmLiberacao = STATUS_DE_LIBERACAO.has(situacaoNova) && !STATUS_DE_LIBERACAO.has(situacaoAtual);
+    // Gate do Deal Desk: a proposta de um cenário com pedido de alçada
+    // pendente/recusado não pode SAIR. No criar isto já era conferido; sem esta
+    // checagem, um PATCH rascunho→enviada contornava a alçada no servidor.
+    if (entrandoEmLiberacao) {
+      const liberacao = await proposalLiberada(env, access, texto(proximo.cenarioId, 120));
+      if (!liberacao.liberada) return json({ error: liberacao.motivo }, 409);
+    }
+    // Gate de viabilidade (seções 47–50): exige snapshot sem faltas quando a
+    // proposta está ligada a uma oportunidade.
     const oportunidadeDaProposta = texto(proximo.oportunidadeId, 120);
-    if (STATUS_DE_LIBERACAO.has(situacaoNova) && !STATUS_DE_LIBERACAO.has(situacaoAtual) && oportunidadeDaProposta) {
+    if (entrandoEmLiberacao && oportunidadeDaProposta) {
       const viab = await viabilidadeDaProposta(env, access, { opportunityId: oportunidadeDaProposta, scenarioId: texto(proximo.cenarioId, 120) });
       if (!viab.liberada) return json({ error: viab.motivo, code: "viability_required", blockers: viab.blockers || [] }, 409);
       proximo.campos = { ...objeto(proximo.campos), viabilidade: carimboDeViabilidade(viab.snapshot) };

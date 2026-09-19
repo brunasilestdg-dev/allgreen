@@ -8,6 +8,7 @@ import {
   leituraDeTelemetriaEletrica,
   normalizePlate,
 } from "../../src/features/logistics/todoGreenFleetDomain.js";
+import { isBlockedHost } from "../lib/net.js";
 
 const TENANT_ID = "todogreen";
 const MAX_PROVIDER_ITEMS = 1000;
@@ -129,14 +130,6 @@ const containsCredential = (value) => {
     if (/token|secret|password|credential|api.?key/i.test(key)) return true;
     return child && typeof child === "object" && containsCredential(child);
   });
-};
-
-const isBlockedHost = (hostname) => {
-  const host = String(hostname || "").toLowerCase();
-  if (!host || host === "localhost" || host.endsWith(".local") || host === "::1") return true;
-  if (/^127\./.test(host) || /^10\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return true;
-  const match = host.match(/^172\.(\d{1,3})\./);
-  return !!match && Number(match[1]) >= 16 && Number(match[1]) <= 31;
 };
 
 const safeExternalUrl = (baseUrl, path) => {
