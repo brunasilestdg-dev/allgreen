@@ -380,6 +380,24 @@ const IMPLEMENTED_MODULE_IDS = new Set([
   "notificacoes",
   "inbox",
   "saude-sistema",
+  // CAT-01 (2ª leva): módulos com página renderizada e entrada em
+  // MODULE_IMPLEMENTATION que apareciam como "Em implantação" por faltarem
+  // aqui. A área Green Tech Core inteira estava escondida do menu. O teste
+  // src/logistics-module-catalog.test.js barra essa divergência daqui pra
+  // frente (toda chave de MODULE_IMPLEMENTATION tem de estar neste conjunto).
+  "motor-operacao",
+  "ordens-servico",
+  "core-grupo",
+  "tenant-acessos",
+  "green-on-empresa",
+  "roaming-ocpi",
+  "energia-peak",
+  "fila-alertas",
+  "greenmob-locacao",
+  "saas-billing",
+  "ocpp-console",
+  "green-on-app",
+  "seguranca-fisica",
 ]);
 
 const MODULE_IMPLEMENTATION = Object.freeze({
@@ -3749,7 +3767,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "performance-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando performance comercial...</section>}><SalesPerformancePage authHeaders={authHeaders} onNavigate={navigate} /></Suspense>}
       {page === "playbook-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando playbook comercial...</section>}><TodoGreenGuides mode="playbook" onNavigate={navigate} /></Suspense>}
       {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} clientes={clientes} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
-      {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} setToast={setToast} secao={secaoDeCadastro} areaLabel={AREA_DO_CADASTRO[secaoDeCadastro] ? primaryNavigation.label : ""} /></Suspense>}
+      {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} secao={secaoDeCadastro} areaLabel={AREA_DO_CADASTRO[secaoDeCadastro] ? primaryNavigation.label : ""} /></Suspense>}
       {page === "implantacao" && (
         <Suspense fallback={<section className="tdg-panel">Carregando implantação...</section>}>
           <ClientActivationPage db={db} update={update} authHeaders={authHeaders} setToast={setToast} />
