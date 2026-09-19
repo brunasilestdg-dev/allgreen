@@ -183,6 +183,52 @@ async function gravarNaInbox(env, integracao, tipo, corpo) {
   return { payloadHash, externalRef };
 }
 
+// Dreno de reprocessamento (chamado pelo cron). Eventos cuja projeção para o
+// domínio canônico falhou ('error') ou que nunca projetaram ('received')
+// ficariam presos na inbox sem retry — o receptor responde 200 ao fornecedor e
+// só marca a falha. O payload é durável e a projeção é idempotente (mesma dedupe
+// por conteúdo do recebimento), então retentar é seguro. Limitado por lote e por
+// idade (acima do corte vira caso manual, para não retentar poison eternamente).
+export async function reprocessarWebhooksTrack3r(env, { limite = 50, corteDias = 7 } = {}) {
+  if (!env?.DB) return { tentados: 0, processados: 0, falhas: 0 };
+  const corte = new Date(Date.now() - corteDias * 24 * 3600 * 1000).toISOString();
+  const { results } = await env.DB.prepare(
+    `SELECT id, integration_id, event_type, payload_json
+       FROM todogreen_tms_webhook_events
+      WHERE tenant_id=? AND status IN ('received','error') AND updated_at > ?
+      ORDER BY updated_at ASC
+      LIMIT ?`,
+  ).bind(TENANT_ID, corte, limite).all().catch(() => ({ results: [] }));
+  const eventos = results || [];
+  let processados = 0;
+  let falhas = 0;
+  for (const ev of eventos) {
+    const integracao = await integracaoDoWebhook(env, ev.integration_id);
+    if (!integracao) continue;
+    let corpo;
+    try { corpo = JSON.parse(ev.payload_json || "{}"); } catch { corpo = null; }
+    if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) continue;
+    const agora = new Date().toISOString();
+    try {
+      const projecao = await projetarWebhookTrack3r(env, integracao, ev.event_type, corpo);
+      await env.DB.prepare(
+        `UPDATE todogreen_tms_webhook_events
+            SET status=?, processing_error='', updated_at=?
+          WHERE id=?`,
+      ).bind(projecao.processed ? "processed" : "received", agora, ev.id).run();
+      if (projecao.processed) processados += 1;
+    } catch (error) {
+      falhas += 1;
+      await env.DB.prepare(
+        `UPDATE todogreen_tms_webhook_events
+            SET status='error', processing_error=?, updated_at=?
+          WHERE id=?`,
+      ).bind(texto(error?.message || error, 500), agora, ev.id).run().catch(() => {});
+    }
+  }
+  return { tentados: eventos.length, processados, falhas };
+}
+
 /**
  * URLs:
  *   POST /api/todogreen/tms/webhook/:integrationId

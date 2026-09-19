@@ -254,6 +254,7 @@ describe("minhas viagens são só as minhas", () => {
       "/api/todogreen/work-center",
       "/api/todogreen/esg",
       "/api/todogreen/fleet",
+      "/api/todogreen/master-data/drivers",
     ];
     for (const rota of rotasInternas) {
       const r = await pedir(rota, { token: joao.token });
