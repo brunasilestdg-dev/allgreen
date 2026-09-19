@@ -616,6 +616,21 @@ describe("contrato nasce de proposta aceita", () => {
 });
 
 describe("oportunidade ganha abre handoff operacional", () => {
+  // Oportunidade que aponta um clientId agora exige que a conta exista no
+  // espaço (senão nasce órfã). As contas usadas por estes testes são semeadas.
+  beforeAll(async () => {
+    await criarCliente(gestora, "cli-impl-1", "Cliente Impl");
+    await criarCliente(gestora, "cli-idem", "Cliente Idem");
+  });
+
+  it("recusa oportunidade que aponta um cliente inexistente (404)", async () => {
+    const r = await pedir("/api/todogreen/records/opportunities", {
+      metodo: "POST", token: gestora.token,
+      corpo: { cliente: "Fantasma", clientId: "cli-nao-existe", estagio: "Negociação" },
+    });
+    expect(r.status).toBe(404);
+  });
+
   it("cria um único item na Central de Trabalho", async () => {
     const { registro } = await (await pedir("/api/todogreen/records/opportunities", {
       metodo: "POST", token: gestora.token, corpo: { cliente: "Cliente Handoff", estagio: "Negociação" },

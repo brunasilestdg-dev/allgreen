@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  LIMITE_DISTANCIA_KM_EVENTO,
+  LIMITE_ENERGIA_KWH_EVENTO,
   QUALIDADE_MEDICAO,
   SITUACOES_SLA,
   TIPOS_EVENTO_VALIDOS,
@@ -239,6 +241,18 @@ describe("medição do evento (km e energia como fato)", () => {
   it("zera valores negativos — não existe distância nem energia negativa num fato", () => {
     expect(medicaoDoEvento({ distanciaKm: -10, energiaKwh: -3 })).toEqual({
       distanciaKm: 0, distanciaOrigem: "medido", energiaKwh: 0, energiaOrigem: "medido",
+    });
+  });
+
+  it("limita valores absurdos ao teto de sanidade (anti-inflação de ganho/ESG)", () => {
+    const m = medicaoDoEvento({ distanciaKm: 9_999_999, energiaKwh: 9_999_999 });
+    expect(m.distanciaKm).toBe(LIMITE_DISTANCIA_KM_EVENTO);
+    expect(m.energiaKwh).toBe(LIMITE_ENERGIA_KWH_EVENTO);
+  });
+
+  it("forcarOrigem crava a qualidade (porta do motorista entra como 'presumido')", () => {
+    expect(medicaoDoEvento({ distanciaKm: 40, energiaKwh: 12, distanciaOrigem: "medido" }, { forcarOrigem: "presumido" })).toEqual({
+      distanciaKm: 40, distanciaOrigem: "presumido", energiaKwh: 12, energiaOrigem: "presumido",
     });
   });
 });

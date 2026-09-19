@@ -539,6 +539,9 @@ export async function handleTodoGreenDriverPortal(request, env, access, user) {
         local: texto(corpo.local, 300),
       },
       origem: url.origin,
+      // A medição vinda do app do motorista não é de medidor confiável: entra
+      // limitada e como "presumido", para não inflar ganho por km nem o ESG.
+      medicaoConfiavel: false,
     });
     if (resultado.erro) return json({ error: resultado.erro }, 400);
     // Entrega concluída gera o ganho do motorista (GreenPay), derivado da

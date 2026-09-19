@@ -172,15 +172,61 @@ async function idempotentResult(request, env, credential) {
   };
 }
 
-async function rememberIdempotency(env, credential, request, requestKey, status, payload) {
-  await env.DB.prepare(
+// Reserva a chave ANTES da operação, para a idempotência ser segura sob
+// concorrência: duas requisições simultâneas com a mesma Idempotency-Key não
+// podem AMBAS passar por um "check-then-act" e criar dois shipments. A reserva é
+// um INSERT OR IGNORE de um placeholder (status 0); quem grava vence, quem
+// perde ou já viu resposta pronta faz replay, senão recebe 409 "em andamento".
+async function reservarIdempotencia(env, credential, request, key) {
+  const res = await env.DB.prepare(
     `INSERT OR IGNORE INTO todogreen_tms_api_idempotency
       (id,api_key_id,request_key,method,path,response_status,response_json,created_at)
-     VALUES (?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,0,'',?)`,
   ).bind(
-    crypto.randomUUID(), credential.id, requestKey, request.method,
-    new URL(request.url).pathname, status, JSON.stringify(payload), new Date().toISOString(),
+    crypto.randomUUID(), credential.id, key, request.method,
+    new URL(request.url).pathname, new Date().toISOString(),
   ).run();
+  if (res?.meta?.changes) return { ok: true };
+  const existing = await env.DB.prepare(
+    `SELECT response_status,response_json FROM todogreen_tms_api_idempotency
+      WHERE api_key_id=? AND request_key=?`,
+  ).bind(credential.id, key).first();
+  if (existing && Number(existing.response_status) > 0)
+    return {
+      ok: false,
+      replay: apiJson(parse(existing.response_json, {}), Number(existing.response_status), { "idempotent-replayed": "true" }),
+    };
+  return { ok: false };
+}
+
+// A operação falhou depois da reserva: remove o placeholder (nunca uma resposta
+// já gravada) para o cliente poder repetir a chamada com a mesma chave.
+async function limparIdempotencia(env, credential, key) {
+  await env.DB.prepare(
+    `DELETE FROM todogreen_tms_api_idempotency
+      WHERE api_key_id=? AND request_key=? AND response_status=0`,
+  ).bind(credential.id, key).run();
+}
+
+async function rememberIdempotency(env, credential, request, requestKey, status, payload) {
+  const res = await env.DB.prepare(
+    `UPDATE todogreen_tms_api_idempotency
+        SET response_status=?, response_json=?, method=?, path=?
+      WHERE api_key_id=? AND request_key=?`,
+  ).bind(
+    status, JSON.stringify(payload), request.method, new URL(request.url).pathname,
+    credential.id, requestKey,
+  ).run();
+  // Retrocompatível: se por algum caminho não houve reserva, grava agora.
+  if (!res?.meta?.changes)
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO todogreen_tms_api_idempotency
+        (id,api_key_id,request_key,method,path,response_status,response_json,created_at)
+       VALUES (?,?,?,?,?,?,?,?)`,
+    ).bind(
+      crypto.randomUUID(), credential.id, requestKey, request.method,
+      new URL(request.url).pathname, status, JSON.stringify(payload), new Date().toISOString(),
+    ).run();
 }
 
 async function activeContract(env, workspaceOwnerId, clientId, requestedContractId = "") {
@@ -392,13 +438,19 @@ async function createShipment(request, env, credential) {
   if (credential.client_id && body.clientId && text(body.clientId, 120) !== credential.client_id)
     return apiJson({ error: "client_scope_violation", message: "Esta chave só pode criar shipments para o cliente vinculado." }, 403);
 
+  const reserva = await reservarIdempotencia(env, credential, request, idem.key);
+  if (!reserva.ok) return reserva.replay || apiJson({ error: "in_progress", message: "Uma requisição com esta Idempotency-Key ainda está em processamento." }, 409);
+
   const resultado = await criarPedidoTms(env, {
     workspaceOwnerId: credential.workspace_owner_id,
     clientId,
     createdBy: `api:${credential.id}`,
     body,
   });
-  if (resultado.error) return apiJson(resultado.error.payload, resultado.error.status);
+  if (resultado.error) {
+    await limparIdempotencia(env, credential, idem.key);
+    return apiJson(resultado.error.payload, resultado.error.status);
+  }
 
   await rememberIdempotency(env, credential, request, idem.key, 201, resultado.payload);
   return apiJson(resultado.payload, 201);
@@ -498,11 +550,17 @@ async function addTracking(request, env, credential, identifier) {
   const body = await request.json().catch(() => null);
   if (!body) return apiJson({ error: "invalid_json", message: "Corpo JSON inválido." }, 400);
 
+  const reserva = await reservarIdempotencia(env, credential, request, idem.key);
+  if (!reserva.ok) return reserva.replay || apiJson({ error: "in_progress", message: "Uma requisição com esta Idempotency-Key ainda está em processamento." }, 409);
+
   const resultado = await registrarTracking(env, {
     workspaceOwnerId: credential.workspace_owner_id, shipment, source: "external_api",
     createdBy: `api:${credential.id}`, body, externalEventId: text(body.externalEventId, 160),
   });
-  if (resultado.error) return apiJson(resultado.error.payload, resultado.error.status);
+  if (resultado.error) {
+    await limparIdempotencia(env, credential, idem.key);
+    return apiJson(resultado.error.payload, resultado.error.status);
+  }
 
   await rememberIdempotency(env, credential, request, idem.key, 201, resultado.payload);
   return apiJson(resultado.payload, 201);
@@ -605,6 +663,9 @@ async function addPod(request, env, credential, identifier) {
   const body = await request.json().catch(() => null);
   if (!body) return apiJson({ error: "invalid_json", message: "Corpo JSON inválido." }, 400);
 
+  const reserva = await reservarIdempotencia(env, credential, request, idem.key);
+  if (!reserva.ok) return reserva.replay || apiJson({ error: "in_progress", message: "Uma requisição com esta Idempotency-Key ainda está em processamento." }, 409);
+
   const resultado = await registrarPod(env, {
     workspaceOwnerId: credential.workspace_owner_id,
     shipment,
@@ -612,7 +673,10 @@ async function addPod(request, env, credential, identifier) {
     body,
     idempotencyKey: `api-pod:${credential.id}:${idem.key}`,
   });
-  if (resultado.error) return apiJson(resultado.error.payload, resultado.error.status);
+  if (resultado.error) {
+    await limparIdempotencia(env, credential, idem.key);
+    return apiJson(resultado.error.payload, resultado.error.status);
+  }
 
   await rememberIdempotency(env, credential, request, idem.key, resultado.status, resultado.payload);
   return apiJson(resultado.payload, resultado.status);
