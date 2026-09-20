@@ -8,7 +8,7 @@
 //   Operacional -> todogreen_tms_documents      (encomendas/ocorrências)
 //   Kanban      -> todogreen_opportunities       (pipeline nativo; Monday depois)
 import { TENANT_ID, podeNaVertical, podeVerTodaCarteira, recorteDeCarteira } from "./todogreen-access.js";
-import { montarPainelDoArtefato, montarPainelCanonicoMirror } from "../../src/features/logistics/commercialPanelDomain.js";
+import { montarPainelDoArtefato, montarPainelCanonicoMirror, montarKanbanDeOportunidades } from "../../src/features/logistics/commercialPanelDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -83,20 +83,24 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
 
   const lerOportunidades = async () => {
     const { results } = await env.DB.prepare(
-      `SELECT t.stage, t.monthly_value, t.contract_value, t.client_name, t.title,
-              t.owner_user_id, t.updated_at
+      `SELECT t.id, t.stage, t.monthly_value, t.contract_value, t.client_name, t.title,
+              t.owner_user_id, t.last_interaction_at, t.updated_at, t.fields_json
          FROM todogreen_opportunities t
         WHERE t.tenant_id = ? AND t.workspace_owner_id = ? AND t.archived_at IS NULL
           ${recorteOportunidades.sql}`,
     ).bind(TENANT_ID, ownerId, ...recorteOportunidades.params).all();
+    const parse = (v, fb) => { try { return JSON.parse(v || ""); } catch { return fb; } };
     return (results || []).map((r) => ({
+      id: texto(r.id),
       estagio: texto(r.stage),
       valorMensal: Number(r.monthly_value) || 0,
       valorContrato: Number(r.contract_value) || 0,
       cliente: texto(r.client_name),
       titulo: texto(r.title),
       responsavel: texto(r.owner_user_id),
+      ultimaInteracaoEm: texto(r.last_interaction_at),
       atualizadoEm: texto(r.updated_at),
+      texto: texto(parse(r.fields_json, {}).fupTexto),
     }));
   };
 
@@ -154,33 +158,41 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
   const retrato = valor(snapshot, "retrato", null);
   const hoje = new Date();
 
-  // Fatos canônicos mandam quando existem; senão espelha o artefato.
-  const temCanonico = dados.faturas.length > 0 || dados.encomendas.length > 0;
-  let modo = "canonico";
-  let painel;
-  if (temCanonico) {
-    painel = montarPainelCanonicoMirror(dados, hoje);
-  } else if (retrato) {
-    painel = montarPainelDoArtefato(retrato.artefato, hoje);
-    modo = "artefato_temporario";
-  } else {
-    painel = montarPainelCanonicoMirror(dados, hoje); // vazio honesto
-  }
+  // Cada aba escolhe a MELHOR fonte, de forma independente:
+  //  - Receita/Operacional: fatos canônicos do Track3R quando houver; senão o
+  //    espelho do artefato (temporário) enquanto os webhooks não entram.
+  //  - Kanban: SEMPRE as oportunidades nativas do ERP (editáveis). Só cai no
+  //    espelho do artefato se ainda não houver nenhuma oportunidade semeada.
+  const canon = montarPainelCanonicoMirror(dados, hoje);
+  const art = retrato ? montarPainelDoArtefato(retrato.artefato, hoje) : null;
+
+  const receitaCanonica = dados.faturas.length > 0;
+  const operacionalCanonico = dados.encomendas.length > 0;
+
+  const receita = receitaCanonica ? canon.receita : (art ? art.receita : canon.receita);
+  const operacional = operacionalCanonico ? canon.operacional : (art ? art.operacional : canon.operacional);
+
+  const kanbanEditavel = montarKanbanDeOportunidades(dados.oportunidades, hoje);
+  const kanban = kanbanEditavel.pipeline.disponivel ? kanbanEditavel : (art ? { ...art.kanban, editavel: false } : kanbanEditavel);
+
+  const fonte = (canonico, temArt) => (canonico ? "track3r" : temArt ? "artefato_temporario" : "vazio");
 
   return json({
-    modo,
-    ...painel,
+    modo: !receitaCanonica && art ? "artefato_temporario" : "canonico",
+    receita,
+    kanban,
+    operacional,
     fontes: {
       receita: {
-        fonte: modo === "artefato_temporario" ? "artefato_temporario" : "track3r_faturamento",
+        fonte: fonte(receitaCanonica, Boolean(art)),
         visivel: verTudo,
         registros: dados.faturas.length,
         retrato: retrato
           ? { de: retrato.capturedFrom, ate: retrato.capturedTo, total: retrato.totalReceita, importadoEm: retrato.importedAt, source: retrato.source }
           : null,
       },
-      operacional: { fonte: modo === "artefato_temporario" ? "artefato_temporario" : "track3r_tms", visivel: verTudo, registros: dados.encomendas.length },
-      kanban: { fonte: modo === "artefato_temporario" ? "artefato_temporario" : "oportunidades", visivel: true, registros: dados.oportunidades.length },
+      operacional: { fonte: fonte(operacionalCanonico, Boolean(art)), visivel: verTudo, registros: dados.encomendas.length },
+      kanban: { fonte: kanban.editavel ? "oportunidades" : "artefato_temporario", editavel: Boolean(kanban.editavel), registros: dados.oportunidades.length },
     },
     escopo: { verTudo, papel: access?.role || "" },
     erros,

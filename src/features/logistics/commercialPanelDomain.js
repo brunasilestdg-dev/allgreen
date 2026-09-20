@@ -712,6 +712,56 @@ function normalizarOpsArtefato(OPS = {}) {
   };
 }
 
+// Kanban EDITÁVEL a partir das oportunidades nativas do ERP (todogreen_opportunities).
+// Mesma forma "mirror" das outras fontes, mas cada card carrega o `id` da
+// oportunidade para permitir editar (mover etapa, valor, follow-up) na tela.
+export function montarKanbanDeOportunidades(oportunidades = [], hoje = new Date()) {
+  const ref = (hoje instanceof Date ? hoje : new Date(hoje)).getTime();
+  const porEtapa = new Map();
+  for (const o of oportunidades) {
+    const etapa = textoLimpo(o?.estagio) || "Sem etapa";
+    if (!porEtapa.has(etapa)) porEtapa.set(etapa, { etapa, quantidade: 0, valor: 0, itens: [] });
+    const r = porEtapa.get(etapa);
+    r.quantidade += 1;
+    r.valor += soNumero(o?.valorMensal);
+    r.itens.push({
+      id: textoLimpo(o?.id),
+      cliente: textoLimpo(o?.cliente) || textoLimpo(o?.titulo) || "Oportunidade",
+      valor: soNumero(o?.valorMensal),
+    });
+  }
+  const etapas = [...porEtapa.values()].sort((a, b) => b.valor - a.valor);
+  const pipeline = {
+    disponivel: etapas.length > 0,
+    etapas,
+    total: oportunidades.length,
+    valorTotal: etapas.reduce((s, e) => s + e.valor, 0),
+  };
+  const clientes = oportunidades
+    .map((o) => {
+      const base = textoLimpo(o?.ultimaInteracaoEm) || textoLimpo(o?.atualizadoEm);
+      const t = base ? Date.parse(base) : NaN;
+      const semFupDias = Number.isFinite(t) ? Math.max(0, Math.floor((ref - t) / 86400000)) : null;
+      return {
+        id: textoLimpo(o?.id),
+        cliente: textoLimpo(o?.cliente) || textoLimpo(o?.titulo) || "Oportunidade",
+        etapa: textoLimpo(o?.estagio) || "Sem etapa",
+        valor: soNumero(o?.valorMensal),
+        atualizadoEm: base,
+        semFupDias,
+        texto: textoLimpo(o?.texto),
+      };
+    })
+    .sort((a, b) => soNumero(b.semFupDias) - soNumero(a.semFupDias));
+  return {
+    atualizado: "",
+    editavel: true,
+    pipeline,
+    fup: { disponivel: clientes.length > 0, clientes },
+    updatesSemana: { disponivel: false, itens: [] },
+  };
+}
+
 // Espelho completo do artefato -> forma "mirror" das 3 abas.
 export function montarPainelDoArtefato(artefato = {}, hoje = new Date()) {
   const { DATA = {}, KANBAN = {}, UPDATES = {}, OPS = {} } = artefato || {};

@@ -5481,3 +5481,13 @@
 .tdg-td-texto { max-width: 320px; font-size: 0.8rem; color: var(--tdg-muted); }
 .tdg-ok { color: var(--tdg-green); font-weight: 600; }
 .tdg-alerta { color: var(--tdg-danger); font-weight: 600; }
+
+/* ===== Painel comercial · kanban editável ===== */
+.tdg-inline-input, .tdg-inline-select { width: 100%; margin-top: 4px; padding: 3px 6px; border: 1px solid var(--tdg-line); border-radius: 6px; background: var(--tdg-bg); color: var(--tdg-text); font-size: 0.78rem; }
+.tdg-inline-valor { margin-top: 2px; background: none; border: none; padding: 0; color: var(--tdg-green); font-size: 0.82rem; cursor: pointer; text-align: left; font-variant-numeric: tabular-nums; }
+.tdg-inline-valor:hover { text-decoration: underline; }
+.tdg-nova-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.tdg-nova-form input, .tdg-nova-form select { padding: 6px 10px; border: 1px solid var(--tdg-line); border-radius: 8px; background: var(--tdg-card); color: var(--tdg-text); }
+.tdg-nova-form input:first-child { flex: 1 1 200px; }
+.tdg-mini { padding: 3px 8px; border: 1px solid var(--tdg-green); border-radius: 6px; background: transparent; color: var(--tdg-green); cursor: pointer; font-size: 0.75rem; white-space: nowrap; }
+.tdg-mini:hover { background: var(--tdg-green); color: #fff; }

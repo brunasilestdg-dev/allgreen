@@ -176,12 +176,57 @@ function AbaReceita({ receita }) {
   );
 }
 
-// ===== Aba Kanban =====
-function AbaKanban({ kanban }) {
-  const { pipeline, fup, updatesSemana, atualizado } = kanban;
+// ===== Aba Kanban (editável quando vem das oportunidades do ERP) =====
+const ETAPAS_PADRAO = ["Prospecção", "Apresentação", "Negociação", "Proposta / BID", "Homologação", "Fechamento"];
+
+function CartaoKanban({ item, etapas, editavel, onMover, onValor }) {
+  const [editandoValor, setEditandoValor] = useState(false);
+  const [valor, setValor] = useState(item.valor);
+  useEffect(() => { setValor(item.valor); }, [item.valor]);
+  return (
+    <div className="tdg-kanban-cartao">
+      <strong>{item.cliente}</strong>
+      {editavel && item.id ? (
+        <>
+          {editandoValor ? (
+            <input className="tdg-inline-input" type="number" value={valor} autoFocus
+              onChange={(e) => setValor(e.target.value)}
+              onBlur={() => { setEditandoValor(false); if (Number(valor) !== item.valor) onValor(item.id, Number(valor) || 0); }}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+          ) : (
+            <button type="button" className="tdg-inline-valor" onClick={() => setEditandoValor(true)} title="Editar valor">{brl(item.valor)}</button>
+          )}
+          <select className="tdg-inline-select" value={item.etapa || ""} onChange={(e) => onMover(item.id, e.target.value)} title="Mover de etapa">
+            {etapas.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </>
+      ) : <small>{brl(item.valor)}</small>}
+    </div>
+  );
+}
+
+function AbaKanban({ kanban, onMover, onValor, onFup, onNova }) {
+  const { pipeline, fup, updatesSemana, atualizado, editavel } = kanban;
+  const etapas = useMemo(() => {
+    const doPipe = pipeline.etapas.map((e) => e.etapa);
+    return [...new Set([...ETAPAS_PADRAO, ...doPipe])];
+  }, [pipeline]);
+  const [novo, setNovo] = useState({ cliente: "", valor: "", etapa: ETAPAS_PADRAO[0] });
+  // A etapa fica no card (o domínio não devolve etapa por item do pipeline);
+  // injeta a etapa da coluna em cada item para o seletor abrir no lugar certo.
+  const etapasComEtapa = pipeline.etapas.map((e) => ({ ...e, itens: e.itens.map((i) => ({ ...i, etapa: e.etapa })) }));
+
   return (
     <>
-      <Secao titulo="Kanban — todos os clientes por etapa" kicker="PIPELINE" nota={atualizado ? `Atualizado em ${atualizado}.` : ""}>
+      <Secao titulo="Kanban — todos os clientes por etapa" kicker="PIPELINE" nota={atualizado ? `Atualizado em ${atualizado}.` : (editavel ? "Editável: mova o card de etapa, ajuste o valor ou registre follow-up." : "")}>
+        {editavel && (
+          <div className="tdg-nova-form">
+            <input placeholder="Novo cliente/oportunidade" value={novo.cliente} onChange={(e) => setNovo({ ...novo, cliente: e.target.value })} />
+            <input type="number" placeholder="Valor mensal" value={novo.valor} onChange={(e) => setNovo({ ...novo, valor: e.target.value })} />
+            <select value={novo.etapa} onChange={(e) => setNovo({ ...novo, etapa: e.target.value })}>{etapas.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+            <button type="button" className="tdg-action" onClick={() => { if (novo.cliente.trim()) { onNova({ cliente: novo.cliente.trim(), valor: Number(novo.valor) || 0, etapa: novo.etapa }); setNovo({ cliente: "", valor: "", etapa: ETAPAS_PADRAO[0] }); } }}>Adicionar</button>
+          </div>
+        )}
         {pipeline.disponivel ? (
           <>
             <div className="tdg-kpi-row">
@@ -189,19 +234,19 @@ function AbaKanban({ kanban }) {
               <div className="tdg-kpi"><span>Valor no pipeline</span><strong>{brl(pipeline.valorTotal)}</strong></div>
             </div>
             <div className="tdg-kanban">
-              {pipeline.etapas.map((e) => (
+              {etapasComEtapa.map((e) => (
                 <div className="tdg-kanban-coluna" key={e.etapa}>
                   <div className="tdg-kanban-cabeca"><strong>{e.etapa}</strong><small>{e.quantidade} · {brl(e.valor)}</small></div>
-                  {e.itens.slice(0, 12).map((i, idx) => <div className="tdg-kanban-cartao" key={idx}><strong>{i.cliente}</strong><small>{brl(i.valor)}</small></div>)}
+                  {e.itens.map((i, idx) => <CartaoKanban key={i.id || idx} item={i} etapas={etapas} editavel={editavel} onMover={onMover} onValor={onValor} />)}
                 </div>
               ))}
             </div>
           </>
-        ) : <Vazio>Sem oportunidades. Importe seu pipeline ou conecte os boards do monday.com.</Vazio>}
+        ) : <Vazio>Sem oportunidades. Adicione acima ou importe seu pipeline.</Vazio>}
       </Secao>
 
-      <Secao titulo="Atualização semanal" kicker="MOVIMENTAÇÕES">
-        {updatesSemana.disponivel ? (
+      {updatesSemana.disponivel && (
+        <Secao titulo="Atualização semanal" kicker="MOVIMENTAÇÕES">
           <div className="tdg-updates">
             {updatesSemana.itens.map((u, idx) => (
               <div className="tdg-update" key={idx}>
@@ -210,17 +255,18 @@ function AbaKanban({ kanban }) {
               </div>
             ))}
           </div>
-        ) : <Vazio>Sem atualizações semanais registradas.</Vazio>}
-      </Secao>
+        </Secao>
+      )}
 
       <Secao titulo="Clientes para FUP" kicker="SEM ACOMPANHAMENTO">
         {fup.disponivel ? (
           <table className="tdg-tabela">
-            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th>{editavel && <th></th>}</tr></thead>
             <tbody>{fup.clientes.map((c, idx) => (
-              <tr key={idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm || "—"}</td>
+              <tr key={c.id || idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
                 <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
-                <td className="tdg-td-texto">{c.texto || "—"}</td></tr>
+                <td className="tdg-td-texto">{c.texto || "—"}</td>
+                {editavel && <td>{c.id && <button type="button" className="tdg-mini" onClick={() => onFup(c.id)} title="Registrar follow-up hoje">✓ FUP</button>}</td>}</tr>
             ))}</tbody>
           </table>
         ) : <Vazio>Sem oportunidades para acompanhar.</Vazio>}
@@ -348,6 +394,32 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
 
   useEffect(() => { carregar(); }, []);
 
+  const patchOportunidade = async (id, patch) => {
+    try {
+      const resp = await fetch(`/api/todogreen/records/opportunities/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify(patch),
+      });
+      if (!resp.ok) { const d = await resp.json().catch(() => ({})); throw new Error(d.error || "Não foi possível salvar."); }
+      await carregar();
+    } catch (e) { setToast?.(e.message); }
+  };
+  const moverOportunidade = (id, etapa) => patchOportunidade(id, { estagio: etapa });
+  const valorOportunidade = (id, valor) => patchOportunidade(id, { valorMensal: valor });
+  const registrarFup = (id) => patchOportunidade(id, { ultimaInteracaoEm: new Date().toISOString() });
+  const novaOportunidade = async ({ cliente, valor, etapa }) => {
+    try {
+      const resp = await fetch(`/api/todogreen/records/opportunities`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
+        body: JSON.stringify({ cliente, estagio: etapa, valorMensal: valor }),
+      });
+      if (!resp.ok) { const d = await resp.json().catch(() => ({})); throw new Error(d.error || "Não foi possível criar."); }
+      await carregar();
+    } catch (e) { setToast?.(e.message); }
+  };
+
   const avisoFonte = useMemo(() => {
     if (!dados?.fontes) return "";
     if (!dados.fontes.receita?.visivel) return "Você vê o pipeline da sua carteira. Receita e operacional consolidados exigem visão de carteira.";
@@ -377,7 +449,7 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
       </div>
 
       {dados && aba === "receita" && <AbaReceita receita={dados.receita} />}
-      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} />}
+      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNova={novaOportunidade} />}
       {dados && aba === "operacional" && <AbaOperacional operacional={dados.operacional} />}
     </div>
   );

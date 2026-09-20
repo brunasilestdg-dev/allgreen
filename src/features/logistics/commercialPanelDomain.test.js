@@ -20,6 +20,7 @@ import {
   receitaDeSnapshot,
   montarPainelDoArtefato,
   montarPainelCanonicoMirror,
+  montarKanbanDeOportunidades,
   montarPainelComercial,
 } from "./commercialPanelDomain.js";
 
@@ -204,6 +205,22 @@ describe("montarPainelDoArtefato (espelho do artefato)", () => {
     expect(p.kanban.pipeline.disponivel).toBe(false);
     expect(p.operacional.otd).toHaveProperty("acumuladoPct");
     expect(p.operacional.slaRota).toHaveProperty("rows");
+  });
+});
+
+describe("montarKanbanDeOportunidades (kanban editável do ERP)", () => {
+  it("agrupa por etapa com id no card e ordena FUP pelo mais parado", () => {
+    const k = montarKanbanDeOportunidades([
+      { id: "o1", cliente: "Alfa", estagio: "Prospecção", valorMensal: 1000, ultimaInteracaoEm: "2026-09-01T00:00:00Z", texto: "ligar" },
+      { id: "o2", cliente: "Beta", estagio: "Proposta / BID", valorMensal: 3000, ultimaInteracaoEm: "2026-09-18T00:00:00Z" },
+    ], new Date(Date.UTC(2026, 8, 20)));
+    expect(k.editavel).toBe(true);
+    expect(k.pipeline.etapas[0].etapa).toBe("Proposta / BID");
+    expect(k.pipeline.etapas[0].itens[0].id).toBe("o2");
+    expect(k.pipeline.valorTotal).toBe(4000);
+    expect(k.fup.clientes[0].cliente).toBe("Alfa"); // mais parado
+    expect(k.fup.clientes[0].semFupDias).toBe(19);
+    expect(k.fup.clientes[0].texto).toBe("ligar");
   });
 });
 
