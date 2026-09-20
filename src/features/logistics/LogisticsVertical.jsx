@@ -3177,6 +3177,22 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       return proximo;
     });
   }, []);
+  // Itens (submenus) ocultos por usuária — ex.: "Aceito essa viagem?". Mesma
+  // régua das áreas, mas por página. Persistido só neste navegador/usuária.
+  const [itensOcultos, setItensOcultos] = useState(() => {
+    try {
+      const salvo = JSON.parse(localStorage.getItem("todogreen-menu-itens-ocultos") || "[]");
+      return new Set(Array.isArray(salvo) ? salvo : []);
+    } catch { return new Set(); }
+  });
+  const alternarItemVisivel = useCallback((id) => {
+    setItensOcultos((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) proximo.delete(id); else proximo.add(id);
+      try { localStorage.setItem("todogreen-menu-itens-ocultos", JSON.stringify([...proximo])); } catch { /* ok */ }
+      return proximo;
+    });
+  }, []);
   // Ordem PERSONALIZADA das áreas do menu (por usuário, persistida). Vazio =
   // ordem canônica do PRIMARY_NAVIGATION. Ao mover, salvamos a lista INTEIRA
   // (todas as áreas na ordem que a pessoa escolheu) — quando uma área nova
@@ -3717,18 +3733,31 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                         </button>
                       )}
                     </div>
-                    {aberta && (paginas.length > 1 || (item.extras || []).length > 0) && (
+                    {(aberta || personalizando) && (paginas.length > 1 || (item.extras || []).length > 0) && (
                       <nav className="tdg-nav-area-itens" aria-label={`Seções de ${item.label}`}>
-                        {paginas.length > 1 && paginas.map(([id, modulo]) => (
-                          <button
-                            type="button"
-                            className={page === id ? "active" : ""}
-                            onClick={() => navigate(modulo.route)}
-                            key={id}
-                          >
-                            {modulo.navLabel || modulo.title}
-                          </button>
-                        ))}
+                        {paginas.length > 1 && paginas.map(([id, modulo]) => {
+                          const itemOculto = itensOcultos.has(id);
+                          if (itemOculto && !personalizando) return null;
+                          if (personalizando) {
+                            return (
+                              <label className={`tdg-nav-item-personalizar${itemOculto ? " oculto-preview" : ""}`} key={id}>
+                                <input type="checkbox" checked={!itemOculto} onChange={() => alternarItemVisivel(id)}
+                                  aria-label={itemOculto ? `Mostrar ${modulo.navLabel || modulo.title}` : `Ocultar ${modulo.navLabel || modulo.title}`} />
+                                {modulo.navLabel || modulo.title}
+                              </label>
+                            );
+                          }
+                          return (
+                            <button
+                              type="button"
+                              className={page === id ? "active" : ""}
+                              onClick={() => navigate(modulo.route)}
+                              key={id}
+                            >
+                              {modulo.navLabel || modulo.title}
+                            </button>
+                          );
+                        })}
                         {(item.extras || []).map(([rotulo, rota]) => (
                           <button type="button" className="tdg-nav-extra" onClick={() => navigate(rota)} key={rota}>
                             {rotulo}

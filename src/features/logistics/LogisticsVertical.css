@@ -3085,3 +3085,9 @@
 .tdg-radios { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding-top: 4px; }
 .tdg-radio { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; color: var(--tdg-text); cursor: pointer; font-size: .9rem; }
 .tdg-radio input { width: auto; margin: 0; }
+
+/* ===== Ocultar submenus (personalização por item) ===== */
+.tdg-nav-item-personalizar { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: .82rem; color: var(--tdg-text); cursor: pointer; border-radius: 6px; }
+.tdg-nav-item-personalizar:hover { background: var(--tdg-soft); }
+.tdg-nav-item-personalizar input { width: auto; margin: 0; }
+.tdg-nav-item-personalizar.oculto-preview { opacity: .5; }
