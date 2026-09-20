@@ -215,7 +215,7 @@ export async function sendWebPush(env, subscription, message) {
   const vapid = {
     subject:
       env.VAPID_SUBJECT ||
-      "https://seufuncionario-expo.brunapsiles.workers.dev",
+      "https://orianone.app",
     publicKey: env.VAPID_PUBLIC_KEY,
     privateKey: env.VAPID_PRIVATE_KEY,
   };

@@ -233,21 +233,35 @@ async function askGemini(env, prompt, system, requestedModel) {
   if (!env.GEMINI_API_KEY) throw new Error("Gemini não configurado");
   const model =
     requestedModel || env.GEMINI_MODEL || "gemini-flash-lite-latest";
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-goog-api-key": env.GEMINI_API_KEY,
+  // Timeout próprio: como o Gemini lidera o fluxo padrão, um travamento dele
+  // sem abort seguraria a requisição inteira em vez de cair para o próximo
+  // provedor. Mesmo desenho do askOpenAICompatible.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-goog-api-key": env.GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 1800 },
+        }),
+        signal: controller.signal,
       },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 1800 },
-      }),
-    },
-  );
+    );
+  } catch (erro) {
+    if (erro?.name === "AbortError") throw new Error("Gemini demorou mais de 8s");
+    throw erro;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) throw new Error(`Gemini indisponível (${response.status})`);
   const data = await response.json();
   const content = data.candidates?.[0]?.content?.parts
@@ -262,21 +276,32 @@ async function askGemini(env, prompt, system, requestedModel) {
 async function askXai(env, prompt, system) {
   if (!env.XAI_API_KEY) throw new Error("Grok não configurado");
   const model = env.XAI_MODEL || "grok-4.3";
-  const response = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${env.XAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 1800,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${env.XAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 1800,
+      }),
+      signal: controller.signal,
+    });
+  } catch (erro) {
+    if (erro?.name === "AbortError") throw new Error("Grok demorou mais de 8s");
+    throw erro;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) throw new Error(`Grok indisponível (${response.status})`);
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content?.trim();
@@ -681,8 +706,8 @@ export function providerChain(
         model: "openrouter/free",
         provider: "OpenRouter Free",
         headers: {
-          "HTTP-Referer": "https://seufuncionario-expo.brunapsiles.workers.dev",
-          "X-Title": "Seu Funcionário",
+          "HTTP-Referer": env.PUBLIC_APP_URL || "https://orianone.app",
+          "X-Title": "All Green",
         },
       }),
     },

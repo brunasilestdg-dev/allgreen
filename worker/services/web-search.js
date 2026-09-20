@@ -7,7 +7,7 @@ const MAX_COMBINED_RESULTS = 12;
 // bloqueado — e o bloqueio chegaria justamente quando a reserva fosse
 // necessária.
 const WIKIMEDIA_USER_AGENT =
-  "SeuFuncionario/1.0 (https://seufuncionario-expo.brunapsiles.workers.dev)";
+  "AllGreen/1.0 (+https://orianone.app)";
 
 // Neste app "buscar", "pesquisar" e "procurar" quase sempre querem dizer
 // "acha no MEU workspace" — "busca o pedido 123", "procurar a nota da Ana".
