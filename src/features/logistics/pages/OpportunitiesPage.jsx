@@ -33,6 +33,16 @@ import {
   tituloDaOportunidade,
 } from "../opportunityIntelligenceDomain.js";
 import { forecastPor, montarForecast, pendenciasDoForecast, riscoDeConcentracao } from "../forecastDomain.js";
+import { LOGISTICS_PRODUCTS } from "../logisticsVerticalDomain.js";
+
+// Estrutura consolidada do cadastro (orientação Jeberson).
+const PROXIMAS_ACOES = [
+  "Agendar reunião", "Enviar apresentação", "Enviar proposta / BID", "Fazer follow-up",
+  "Aguardar retorno do cliente", "Coletar dados da operação", "Elaborar precificação",
+  "Negociar condições", "Agendar visita técnica", "Iniciar homologação", "Assinar contrato",
+];
+const TEMPERATURAS = ["Frio", "Morno", "Quente"];
+const TIPOS_FATURAMENTO = ["CT-e", "Nota fiscal", "Outro"];
 import {
   OBJETIVOS_ELETRIFICACAO,
   avaliarJornadaEletrificacao,
@@ -74,7 +84,7 @@ const FORM_VAZIO = {
   titulo: "",
   clientId: "",
   cliente: "",
-  productId: "middle-mile",
+  productId: "",
   tabelaPrecoId: "",
   // Começa na primeira etapa do funil. "Diagnóstico" era estágio de CONTA, não
   // de oportunidade — não existia no seletor e o servidor o rebaixava para
@@ -93,6 +103,14 @@ const FORM_VAZIO = {
   expectedCloseAt: "",
   source: "",
   priority: "media",
+  // Campos da estrutura consolidada (Jeberson).
+  temperatura: "Morno",
+  periodoContrato: "",
+  tipoFaturamento: "",
+  prazoPagamento: "",
+  previsaoReceitaMes1: "",
+  previsaoReceitaMes2: "",
+  previsaoReceitaMes3: "",
 };
 
 const gravidadeRotulo = { alta: "Crítico", media: "Atenção", baixa: "Observação" };
@@ -893,6 +911,7 @@ export default function OpportunitiesPage({
     event.preventDefault();
     setSalvando(true);
     try {
+      const servico = LOGISTICS_PRODUCTS.find((p) => p.id === form.productId);
       await onCreate?.({
         id: `opp-${Date.now()}`,
         createdAt: new Date().toISOString(),
@@ -903,6 +922,16 @@ export default function OpportunitiesPage({
         ...Object.fromEntries(
           [...CAMPOS_OPERACAO, ...CAMPOS_CONTRATO].map(({ key }) => [key, Number(form[key] || 0)]),
         ),
+        // Sem "Nome do negócio" no cadastro simplificado: o título vem do serviço
+        // escolhido (ou do cliente), para o card não nascer sem nome.
+        titulo: form.titulo || servico?.name || form.cliente || "Oportunidade",
+        // "Período de contrato" é texto livre ("12 meses"); o forecast ainda usa
+        // o número de meses, então extraímos o primeiro número.
+        mesesContrato: Number((String(form.periodoContrato || "").match(/\d+/) || [])[0] || form.mesesContrato || 0),
+        prazoPagamento: Number(form.prazoPagamento || 0),
+        previsaoReceitaMes1: Number(form.previsaoReceitaMes1 || 0),
+        previsaoReceitaMes2: Number(form.previsaoReceitaMes2 || 0),
+        previsaoReceitaMes3: Number(form.previsaoReceitaMes3 || 0),
       });
       // O servidor esquenta a conta Fria (ou sem classificação) quando a
       // oportunidade nasce vinculada a ela; o aviso aqui espelha essa régua
@@ -1025,76 +1054,111 @@ export default function OpportunitiesPage({
           continua aberto — nada digitado se perde. */}
       {novaAberta && <Modal title="Nova oportunidade" onClose={() => setNovaAberta(false)} wide>
       <form className="tdg-client-admin-form tdg-form-em-modal" onSubmit={salvar}>
-        <div className="tdg-form-row">
-          <label>
-            <span>Nome do negócio</span>
-            <input
-              value={form.titulo}
-              onChange={campo("titulo")}
-              placeholder="Middle Mile Sorocaba, Same Day, retomada..."
-            />
-          </label>
-          <label>
-            <span>Cliente</span>
-            {clients.length ? <select required value={form.clientId} onChange={(event) => { const client = clients.find((item) => item.id === event.target.value); setForm((current) => ({ ...current, clientId: event.target.value, cliente: client?.name || "" })); }}><option value="">Selecione a conta</option>{clients.map((client) => <option value={client.id} key={client.id}>{client.name}</option>)}</select> : <input required value={form.cliente} onChange={campo("cliente")} />}
-          </label>
-          <label>
-            <span>Estágio</span>
-            {/* Só etapas ABERTAS aqui: um negócio nasce no funil, não já ganho ou
-                perdido — fechar é ação deliberada no cartão da oportunidade. */}
-            <select value={form.estagio} onChange={campo("estagio")}>
-              {ESTAGIOS_FUNIL.map((estagio) => (
-                <option key={estagio} value={estagio}>
-                  {estagio}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Tipo de veículo</span>
-            <select value={form.tipoVeiculo} onChange={campo("tipoVeiculo")}>
-              <option value="elétrico">Elétrico</option>
-              <option value="diesel">Diesel</option>
-            </select>
-          </label>
-          <label>
-            <span>Tabela de preço</span>
-            <select value={form.tabelaPrecoId} onChange={campo("tabelaPrecoId")}>
-              <option value="">Sem tabela definida</option>
-              {tabelasDePreco.map((tabela) => (
-                <option value={tabela.id} key={tabela.id}>
-                  {tabela.name || tabela.code || tabela.id}{tabela.productId ? ` · ${tabela.productId}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="tdg-form-row tdg-opp-form-larga">
-          {CAMPOS_CONTRATO.map(({ key, label, type }) => (
-            <label key={key}>
-              <span>{label}</span>
-              <input type={type} value={form[key]} onChange={campo(key)} />
+        <fieldset className="tdg-cad-secao">
+          <legend>Dados comerciais</legend>
+          <div className="tdg-form-row">
+            <label>
+              <span>Tipo de operação</span>
+              <select value={form.productId} onChange={campo("productId")}>
+                <option value="">Selecione o serviço da Mandala</option>
+                {LOGISTICS_PRODUCTS.map((p) => <option value={p.id} key={p.id}>{p.name}</option>)}
+              </select>
             </label>
-          ))}
-        </div>
-        <div className="tdg-form-row tdg-opp-form-larga">
-          <label><span>Próximo passo</span><input value={form.nextStep} onChange={campo("nextStep")} placeholder="Ação concreta acordada" /></label>
-          <label><span>Previsão de fechamento</span><input type="date" value={form.expectedCloseAt} onChange={campo("expectedCloseAt")} /></label>
-          <label><span>Origem</span><input value={form.source} onChange={campo("source")} placeholder="Indicação, prospecção, evento..." /></label>
-          <label><span>Prioridade</span><select value={form.priority} onChange={campo("priority")}><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></label>
-        </div>
-        <div className="tdg-form-row tdg-opp-form-larga">
-          {CAMPOS_OPERACAO.map(({ key, label, type }) => (
-            <label key={key}>
-              <span>{label}</span>
-              <input type={type} value={form[key]} onChange={campo(key)} />
+            <label>
+              <span>Cliente</span>
+              <input list="tdg-clientes-datalist" value={form.cliente}
+                placeholder="Pesquisar cliente ou informar novo nome"
+                onChange={(event) => {
+                  const nome = event.target.value;
+                  const client = clients.find((item) => item.name === nome);
+                  setForm((current) => ({ ...current, cliente: nome, clientId: client?.id || "" }));
+                }} />
+              <datalist id="tdg-clientes-datalist">{clients.map((client) => <option value={client.name} key={client.id} />)}</datalist>
             </label>
-          ))}
-        </div>
-        <p className="tdg-opp-ressalva">
-          Distância e viagens por mês são o que destrava o cálculo ambiental. Sem elas a
-          oportunidade entra no pipeline, mas sem potencial ESG.
-        </p>
+            <label>
+              <span>Estágio</span>
+              <select value={form.estagio} onChange={campo("estagio")}>
+                {ESTAGIOS_FUNIL.map((estagio) => <option key={estagio} value={estagio}>{estagio}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Receita potencial mensal (R$)</span>
+              <input type="number" value={form.valorMensal} onChange={campo("valorMensal")} placeholder="0,00" />
+            </label>
+            <label>
+              <span>Período de contrato</span>
+              <input value={form.periodoContrato} onChange={campo("periodoContrato")} placeholder="Ex.: 12 meses" />
+            </label>
+            <label>
+              <span>Temperatura do cliente</span>
+              <span className="tdg-radios">
+                {TEMPERATURAS.map((t) => (
+                  <label className="tdg-radio" key={t}><input type="radio" name="temperatura" value={t} checked={form.temperatura === t} onChange={campo("temperatura")} />{t}</label>
+                ))}
+              </span>
+            </label>
+            <label>
+              <span>Próximo passo</span>
+              <select value={form.nextStep} onChange={campo("nextStep")}>
+                <option value="">Selecione a próxima ação</option>
+                {PROXIMAS_ACOES.map((a) => <option value={a} key={a}>{a}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Previsão de fechamento</span>
+              <input type="date" value={form.expectedCloseAt} onChange={campo("expectedCloseAt")} />
+            </label>
+            <label>
+              <span>Origem</span>
+              <input value={form.source} onChange={campo("source")} placeholder="Origem da oportunidade" />
+            </label>
+            <label>
+              <span>Prioridade</span>
+              <span className="tdg-radios">
+                {[["baixa", "Baixa"], ["media", "Média"], ["alta", "Alta"]].map(([v, l]) => (
+                  <label className="tdg-radio" key={v}><input type="radio" name="priority" value={v} checked={form.priority === v} onChange={campo("priority")} />{l}</label>
+                ))}
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="tdg-cad-secao">
+          <legend>Condições comerciais</legend>
+          <p className="tdg-cad-nota">Informações que podem ser preenchidas posteriormente.</p>
+          <div className="tdg-form-row">
+            <label>
+              <span>Tabela de preço</span>
+              <select value={form.tabelaPrecoId} onChange={campo("tabelaPrecoId")}>
+                <option value="">Vincular tabela existente</option>
+                {tabelasDePreco.map((tabela) => (
+                  <option value={tabela.id} key={tabela.id}>{tabela.name || tabela.code || tabela.id}{tabela.productId ? ` · ${tabela.productId}` : ""}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Tipo de faturamento</span>
+              <span className="tdg-radios">
+                {TIPOS_FATURAMENTO.map((t) => (
+                  <label className="tdg-radio" key={t}><input type="radio" name="tipoFaturamento" value={t} checked={form.tipoFaturamento === t} onChange={campo("tipoFaturamento")} />{t}</label>
+                ))}
+              </span>
+            </label>
+            <label>
+              <span>Prazo de pagamento (dias)</span>
+              <input type="number" value={form.prazoPagamento} onChange={campo("prazoPagamento")} placeholder="Ex.: 30" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="tdg-cad-secao">
+          <legend>Previsão de receita após fechamento</legend>
+          <div className="tdg-form-row">
+            <label><span>Mês 1</span><input type="number" value={form.previsaoReceitaMes1} onChange={campo("previsaoReceitaMes1")} placeholder="R$" /></label>
+            <label><span>Mês 2</span><input type="number" value={form.previsaoReceitaMes2} onChange={campo("previsaoReceitaMes2")} placeholder="R$" /></label>
+            <label><span>Mês 3</span><input type="number" value={form.previsaoReceitaMes3} onChange={campo("previsaoReceitaMes3")} placeholder="R$" /></label>
+          </div>
+        </fieldset>
         <div className="tdg-form-actions">
           <button type="button" onClick={() => setNovaAberta(false)}>Cancelar</button>
           <button className="tdg-action" type="submit" disabled={salvando}>
