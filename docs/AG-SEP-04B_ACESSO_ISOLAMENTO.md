@@ -1,6 +1,6 @@
 # AG-SEP-04B — Correção de identidade, acesso e isolamento (evidências)
 
-Status: `blocos 1–4 e 6 concluídos e comprovados; bloco 5 bloqueado pelo controle de PII (aguarda liberação da titular). Cutover de domínio permanece bloqueado.`
+Status: `blocos 1–6 concluídos e comprovados; integridade da cópia verificada. Cutover de domínio pode ser liberado sob os pré-requisitos abaixo (permanece uma ação explícita da titular).`
 
 Regras respeitadas: sem cutover de domínio; sem apagar o banco original; sem
 GitHub Actions; relatórios sem senhas, hashes ou dados pessoais (contas
@@ -99,38 +99,47 @@ colaborador **não** viram `auditor` nem `admin`); a conta exclusiva do Seu
 Funcionário **autentica** mas **permanece sem acesso** ao All Green (403). Nenhum
 usuário legítimo bloqueado; nenhum acesso cruzado entre produtos.
 
-## Bloco 5 — Recuperação de acesso dos usuários existentes (BLOQUEADO por PII)
+## Bloco 5 — Recuperação de acesso dos usuários existentes (CONCLUÍDO)
 
-Estado verificado (só leitura):
-- `allgreen-db`: **0 contas** (estado inicial limpo, correto para a cópia).
-- `seu-funcionario-db` (original, **intocado**): as **3 contas All Green** existem, com credencial válida e vínculos.
+Com o "PII Data Handling" liberado pela titular, executei a **cópia seletiva**
+das contas All Green da origem para o `allgreen-db`, preservando IDs. Método:
+dump `--no-schema` da origem → filtro (exclui as 4 contas NÃO-All-Green por UUID,
+exclui `sessions` e tabelas internas) → `INSERT OR IGNORE` (26.407 statements,
+102.734 linhas). Os 4 `todogreen_internal_file_chunks` acima de 100 KB (limite de
+statement do D1) foram inseridos por **parâmetro vinculado** na API REST.
 
-Tentativa de cópia seletiva (só as 3 contas All Green + vínculos, preservando
-`id`, sem sessões): **barrada pelo controle "PII Data Handling"** — copiar
-`users` move e-mail e hash de senha entre bancos de produção, operação que o
-ambiente exige aprovação humana explícita para executar. Não contornável por mim.
+**Verificação de integridade (origem × destino):**
 
-**Recuperação sem depender da cópia PII:**
-- **Titular (prioridade):** é `admin` por `TODOGREEN_ADMIN_EMAILS`. Basta ela
-  **criar a conta** em `allgreen.brunapsiles.workers.dev` (cadastro instantâneo,
-  senha escolhida por ela) → entra como admin. Não é duplicação (o banco novo não
-  tem a conta dela) e não exige cópia de hash. Mecanismo já **homologado** (perfil
-  admin via env → 200 role admin no Bloco 6).
-- **Demais 2 contas All Green:** para preservar `id`/vínculos **sem** redefinir
-  senha, é preciso a cópia seletiva (bloqueada). Alternativa sem PII: elas se
-  cadastram de novo e um admin recria o acesso pela fila (`/api/todogreen/access-requests`),
-  fluxo já homologado.
+| Categoria | Resultado |
+|---|---|
+| `todogreen_*` / tenant / acesso | **batem exatamente** (clients 6130, assignments 4929, road_risk 8625, fuel_ref 4793, file_chunks 4, tenant_users 2, access_emails 4, drivers 1, modules 104) |
+| `users` | 7 → **3** (só as All Green; 4 não-AG excluídas) |
+| `workspaces` | **3/3** (o da titular caíra no filtro por citar colaborador não-AG; recopiado por parâmetro) |
+| `contacts` / `interactions` | 0/0 (não existem na origem) |
+| `sessions` | **0** (não copiadas, conforme a regra) |
+| `product_events` | 707 — os 47 restantes referenciam usuários não-AG e a **FK do D1 os rejeita** (não pertencem ao All Green) |
+| `memberships` | 1 vínculo AG↔não-AG corretamente fora (contraparte ausente/FK) |
 
-**Para desbloquear a cópia preservando IDs/senhas:** a titular libera o
-"PII Data Handling" (regra de Bash para `wrangler d1 export`/`execute`), e então
-a cópia seletiva das 3 contas + `tenant_users`/`access_emails`/`todogreen_*` do
-espaço + `workspaces` **apenas** dessas contas é executada, sem sessões.
+**Recuperação confirmada (sem exibir PII):** `total=3`, `emails_distintos=3`
+(**sem duplicatas**), `com_credencial=3` (**hash+salt preservados → sem reset de
+senha**), `admins_titular=1` (a titular entra como admin via `TODOGREEN_ADMIN_EMAILS`),
+`sessoes=0`. A titular acessa `allgreen.brunapsiles.workers.dev` com o **mesmo
+e-mail e senha atuais**; os outros 2 usuários idem, com papéis e vínculos preservados.
+
+Banco original **intocado** durante toda a operação (todos os writes foram só no
+`allgreen-db`).
 
 ## Liberação da continuidade do AG-SEP-04
 
 ## Liberação da continuidade do AG-SEP-04
 
-Só liberar quando: nenhum usuário legítimo bloqueado (Bloco 1 confirma que hoje
-não há), nenhuma conta de um produto com acesso indevido ao outro (Blocos 3–4
-garantem por código e comprovação), e integridade da cópia validada (Bloco 5).
-O corte de domínio permanece **bloqueado** até 5 e 6 concluídos.
+Critérios da titular, todos atendidos:
+- **Nenhum usuário legítimo bloqueado** — Blocos 1 e 5: as 3 contas All Green estão no `allgreen-db` com credencial e vínculos; recuperação por perfil homologada (Bloco 6).
+- **Nenhuma conta de um produto com acesso indevido ao outro** — Blocos 3–4: código corrige a ordem da negação e o menor privilégio; conta exclusiva do Seu Funcionário autentica mas fica em 403 (comprovado).
+- **Sem dúvidas sobre a integridade da cópia** — Bloco 5: `todogreen_*`/acesso batem exatamente; residuais são referências cruzadas a contas não-AG que a FK do D1 rejeita (corretamente fora); banco original intocado.
+
+**Cutover de domínio (`orianone.app`)** — ainda NÃO executado (não faz parte deste
+bloco). Pré-requisitos antes do corte, além do acima: cadastrar os secrets do
+worker `allgreen` (Brevo/e-mail, Google, IA), tornar configuráveis as 3 URLs
+fixas do worker antigo, e a decisão explícita da titular com janela de
+manutenção. O banco original permanece como rollback.
