@@ -16,7 +16,9 @@ const mesLabel = (mes) => {
   return `${nomes[Number(m[2])] || m[2]}/${m[1].slice(2)}`;
 };
 
-const DONUT_CORES = ["#1f7a4d", "#37a06a", "#6cc191", "#2f6f8f", "#c9a227", "#b0b7bd"];
+// Paleta categórica validada (dataviz): distinta e CVD-safe em claro/escuro.
+// Cores por CSS var → o modo escuro troca sozinho. "Outros" fica neutro.
+const VIZ = ["var(--viz-1)", "var(--viz-2)", "var(--viz-3)", "var(--viz-4)", "var(--viz-5)", "var(--viz-outros)"];
 
 const Vazio = ({ children }) => <p className="tdg-panel-vazio">{children}</p>;
 
@@ -28,75 +30,108 @@ const Secao = ({ titulo, kicker, nota, children }) => (
   </section>
 );
 
-const Barras = ({ itens, valor, rotulo, formato = num }) => {
-  const max = Math.max(1, ...itens.map((i) => Number(valor(i)) || 0));
+// Barras horizontais. Suporta clique (drill/isolar), destaque do selecionado,
+// % do total e cor por item. Tooltip nativo com valor e %.
+const Barras = ({ itens, valor, rotulo, formato = num, onClick, selKey, keyOf, cor, comPct = false }) => {
+  const vals = itens.map((i) => Number(valor(i)) || 0);
+  const max = Math.max(1, ...vals);
+  const total = vals.reduce((s, v) => s + v, 0) || 1;
+  const temSel = selKey !== undefined && selKey !== null;
   return (
     <div className="tdg-barras">
-      {itens.map((i, idx) => (
-        <div className="tdg-barra-linha" key={idx}>
-          <span className="tdg-barra-rotulo" title={rotulo(i)}>{rotulo(i)}</span>
-          <span className="tdg-barra-trilho"><span className="tdg-barra-preenchida" style={{ width: `${((Number(valor(i)) || 0) / max) * 100}%` }} /></span>
-          <span className="tdg-barra-valor">{formato(valor(i))}</span>
-        </div>
-      ))}
+      {itens.map((i, idx) => {
+        const v = Number(valor(i)) || 0;
+        const pct = (v / total) * 100;
+        const k = keyOf ? keyOf(i, idx) : idx;
+        const sel = temSel && selKey === k;
+        const dim = temSel && !sel;
+        return (
+          <div className={`tdg-barra-linha${onClick ? " clicavel" : ""}${dim ? " esmaecida" : ""}${sel ? " sel" : ""}`} key={idx}
+            onClick={onClick ? () => onClick(i, k) : undefined}
+            title={`${rotulo(i)}: ${formato(v)}${comPct ? ` · ${pct.toFixed(1)}%` : ""}`}>
+            <span className="tdg-barra-rotulo">{rotulo(i)}</span>
+            <span className="tdg-barra-trilho"><span className="tdg-barra-preenchida" style={{ width: `${(v / max) * 100}%`, background: cor ? cor(i, idx) : undefined }} /></span>
+            <span className="tdg-barra-valor">{formato(v)}{comPct && <em className="tdg-barra-pct">{pct.toFixed(1)}%</em>}</span>
+          </div>
+        );
+      })}
     </div>
   );
 };
 
-// Gráfico de linha/área (inline SVG). série: [{label, y}]. meta opcional (linha).
-const LinhaSVG = ({ serie, meta = null, formatoY = num, altura = 120 }) => {
+// Gráfico de linha/área (inline SVG) com faixas de hover (tooltip nativo por ponto).
+const LinhaSVG = ({ serie, meta = null, formatoY = num, altura = 130 }) => {
   const largura = 720;
   const pad = { t: 8, r: 8, b: 8, l: 8 };
   const ys = serie.map((p) => Number(p.y) || 0);
   const yMax = Math.max(...ys, meta ?? 0) * 1.05 || 1;
-  const yMin = Math.min(...ys, meta ?? Infinity, 0);
-  const base = meta !== null ? Math.min(...ys, meta) * 0.98 : 0;
-  const lo = meta !== null ? base : 0;
+  const lo = meta !== null ? Math.min(...ys, meta) * 0.98 : 0;
   const span = yMax - lo || 1;
   const x = (i) => pad.l + (i / Math.max(1, serie.length - 1)) * (largura - pad.l - pad.r);
   const y = (v) => pad.t + (1 - (v - lo) / span) * (altura - pad.t - pad.b);
   const linha = serie.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(Number(p.y) || 0).toFixed(1)}`).join(" ");
   const area = `${linha} L${x(serie.length - 1).toFixed(1)},${(altura - pad.b).toFixed(1)} L${x(0).toFixed(1)},${(altura - pad.b).toFixed(1)} Z`;
   const metaY = meta !== null ? y(meta) : null;
+  const seg = serie.length > 1 ? (largura - pad.l - pad.r) / (serie.length - 1) : largura;
   return (
     <div className="tdg-chart">
       <svg viewBox={`0 0 ${largura} ${altura}`} preserveAspectRatio="none" role="img" aria-label="gráfico de linha">
         <path d={area} className="tdg-chart-area" />
         <path d={linha} className="tdg-chart-linha" />
         {metaY !== null && <line x1={pad.l} x2={largura - pad.r} y1={metaY} y2={metaY} className="tdg-chart-meta" />}
+        {serie.map((p, i) => (
+          <rect key={i} className="tdg-chart-hit" x={x(i) - seg / 2} y={0} width={seg} height={altura} fill="transparent">
+            <title>{`${p.label}: ${formatoY(Number(p.y) || 0)}`}</title>
+          </rect>
+        ))}
       </svg>
       <div className="tdg-chart-eixo"><span>{serie[0]?.label}</span>{meta !== null && <span className="tdg-chart-meta-rot">meta {formatoY(meta)}</span>}<span>{serie[serie.length - 1]?.label}</span></div>
     </div>
   );
 };
 
-// Donut (inline SVG). segmentos: [{label, valor}]. Agrupa cauda em "Outros".
-const Donut = ({ segmentos, formato = brl }) => {
+// Donut clicável. segmentos: [{label, valor}]. Clicar isola a fatia (dim nas
+// demais); legenda também clica. Agrupa a cauda em "Outros" (neutro, não filtra).
+const Donut = ({ segmentos, formato = brl, selecionado = null, onSelecionar }) => {
   const total = segmentos.reduce((s, x) => s + (Number(x.valor) || 0), 0) || 1;
   const top = segmentos.slice(0, 5);
   const resto = segmentos.slice(5).reduce((s, x) => s + (Number(x.valor) || 0), 0);
-  const dados = resto > 0 ? [...top, { label: "Outros", valor: resto }] : top;
-  const R = 60;
-  const C = 2 * Math.PI * R;
+  const dados = resto > 0 ? [...top, { label: "Outros", valor: resto, outros: true }] : top;
+  const R = 60, C = 2 * Math.PI * R;
   let offset = 0;
+  const clicar = (d) => { if (onSelecionar && !d.outros) onSelecionar(selecionado === d.label ? null : d.label); };
   return (
     <div className="tdg-donut-wrap">
-      <svg viewBox="0 0 160 160" className="tdg-donut" role="img" aria-label="gráfico de rosca">
+      <svg viewBox="0 0 160 160" className="tdg-donut" role="img" aria-label="rosca de concentração">
         <g transform="translate(80,80) rotate(-90)">
           <circle r={R} className="tdg-donut-trilho" fill="none" strokeWidth="26" />
           {dados.map((d, i) => {
             const frac = (Number(d.valor) || 0) / total;
             const dash = `${(frac * C).toFixed(2)} ${(C - frac * C).toFixed(2)}`;
-            const el = <circle key={i} r={R} fill="none" strokeWidth="26" stroke={DONUT_CORES[i % DONUT_CORES.length]} strokeDasharray={dash} strokeDashoffset={(-offset * C).toFixed(2)} />;
+            const dim = selecionado !== null && selecionado !== d.label;
+            const el = (
+              <circle key={i} r={R} fill="none" strokeWidth={selecionado === d.label ? 31 : 26}
+                stroke={VIZ[i % VIZ.length]} strokeDasharray={dash} strokeDashoffset={(-offset * C).toFixed(2)}
+                opacity={dim ? 0.28 : 1} style={{ cursor: onSelecionar && !d.outros ? "pointer" : "default" }}
+                onClick={() => clicar(d)}>
+                <title>{`${d.label}: ${formato(d.valor)} · ${(frac * 100).toFixed(1)}%`}</title>
+              </circle>
+            );
             offset += frac;
             return el;
           })}
         </g>
       </svg>
       <ul className="tdg-donut-legenda">
-        {dados.map((d, i) => (
-          <li key={i}><span className="tdg-donut-cor" style={{ background: DONUT_CORES[i % DONUT_CORES.length] }} />{d.label}<b>{((Number(d.valor) || 0) / total * 100).toFixed(1)}%</b><small>{formato(d.valor)}</small></li>
-        ))}
+        {dados.map((d, i) => {
+          const dim = selecionado !== null && selecionado !== d.label;
+          const clicavel = onSelecionar && !d.outros;
+          return (
+            <li key={i} className={`${clicavel ? "clicavel" : ""}${dim ? " esmaecida" : ""}${selecionado === d.label ? " sel" : ""}`} onClick={() => clicar(d)}>
+              <span className="tdg-donut-cor" style={{ background: VIZ[i % VIZ.length] }} />{d.label}<b>{((Number(d.valor) || 0) / total * 100).toFixed(1)}%</b><small>{formato(d.valor)}</small>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -106,26 +141,23 @@ const Donut = ({ segmentos, formato = brl }) => {
 function AbaReceita({ receita }) {
   const { porPeriodo, previsao, concentracao, resumoMensal, ticketMedio } = receita;
   const vazio = "Sem faturamento ainda. Preenche quando o Track3R enviar (artefato, importação ou webhook).";
-  const [mesSel, setMesSel] = useState(null);
   const mesesDisp = porPeriodo?.meses?.map((m) => m.mes) || [];
+  const [mesSel, setMesSel] = useState(null);
+  const [tomadorSel, setTomadorSel] = useState(null);
   const mesAtivo = mesSel || mesesDisp[mesesDisp.length - 1];
   const serieDiaria = (porPeriodo?.porDia?.[mesAtivo] || []).map((d) => ({ label: d.dia.slice(8), y: d.receita }));
+  const clienteSel = tomadorSel ? concentracao?.clientes?.find((c) => c.tomador === tomadorSel) : null;
 
   return (
     <>
-      <Secao titulo="Receita por período" kicker="FATURAMENTO">
+      <Secao titulo="Receita por período" kicker="FATURAMENTO" nota="Clique num mês para ver o dia a dia dele.">
         {porPeriodo.disponivel ? (
           <>
-            <Barras itens={porPeriodo.meses} valor={(i) => i.receita} rotulo={(i) => mesLabel(i.mes)} formato={brl} />
+            <Barras itens={porPeriodo.meses} valor={(i) => i.receita} rotulo={(i) => mesLabel(i.mes)} formato={brl}
+              comPct onClick={(i) => setMesSel(i.mes)} selKey={mesAtivo} keyOf={(i) => i.mes} />
             {serieDiaria.length > 1 && (
               <>
-                <div className="tdg-chart-controls">
-                  <label>Dia a dia:&nbsp;
-                    <select value={mesAtivo} onChange={(e) => setMesSel(e.target.value)}>
-                      {mesesDisp.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
-                    </select>
-                  </label>
-                </div>
+                <div className="tdg-chart-controls"><span className="tdg-nota">Dia a dia · <strong>{mesLabel(mesAtivo)}</strong></span></div>
                 <LinhaSVG serie={serieDiaria} formatoY={brl} />
               </>
             )}
@@ -143,14 +175,29 @@ function AbaReceita({ receita }) {
         ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo="Concentração por cliente (tomador)" kicker="CARTEIRA">
+      <Secao titulo="Concentração por cliente (tomador)" kicker="CARTEIRA" nota="Clique numa fatia (ou na legenda) para isolar o cliente e ver o mês a mês dele.">
         {concentracao.disponivel ? (
           <div className="tdg-split">
-            <Donut segmentos={concentracao.clientes.map((c) => ({ label: c.tomador, valor: c.total }))} />
-            <table className="tdg-tabela">
-              <thead><tr><th>Tomador</th><th>Total</th><th>%</th></tr></thead>
-              <tbody>{concentracao.clientes.slice(0, 12).map((c) => <tr key={c.tomador}><td>{c.tomador}</td><td>{brl(c.total)}</td><td>{pctFrac(c.participacao)}</td></tr>)}</tbody>
-            </table>
+            <Donut segmentos={concentracao.clientes.map((c) => ({ label: c.tomador, valor: c.total }))} selecionado={tomadorSel} onSelecionar={setTomadorSel} />
+            {clienteSel ? (
+              <div className="tdg-filtro-detalhe">
+                <div className="tdg-chart-controls">
+                  <span><strong>{clienteSel.tomador}</strong> · {brl(clienteSel.total)} · {pctFrac(clienteSel.participacao)} da receita</span>
+                  <button type="button" className="tdg-mini" onClick={() => setTomadorSel(null)}>× limpar filtro</button>
+                </div>
+                <table className="tdg-tabela">
+                  <thead><tr><th>Mês</th><th>Receita</th></tr></thead>
+                  <tbody>{(concentracao.meses || []).map((m) => <tr key={m}><td>{mesLabel(m)}</td><td>{brl(clienteSel.porMes?.[m] || 0)}</td></tr>)}</tbody>
+                </table>
+              </div>
+            ) : (
+              <table className="tdg-tabela">
+                <thead><tr><th>Tomador</th><th>Total</th><th>%</th></tr></thead>
+                <tbody>{concentracao.clientes.slice(0, 12).map((c) => (
+                  <tr key={c.tomador} className="clicavel" onClick={() => setTomadorSel(c.tomador)}><td>{c.tomador}</td><td>{brl(c.total)}</td><td>{pctFrac(c.participacao)}</td></tr>
+                ))}</tbody>
+              </table>
+            )}
           </div>
         ) : <Vazio>{vazio}</Vazio>}
       </Secao>
@@ -291,6 +338,7 @@ function AbaOperacional({ operacional }) {
   const { volume, otd, efetividade, ocorrencias, leadtime, slaRota, reentrega, atualizado, periodo, servicoNota } = operacional;
   const vazio = "Sem dados operacionais ainda. Preenche quando o Track3R enviar ocorrências/encomendas.";
   const [ocKey, setOcKey] = useState(null);
+  const [motivoSel, setMotivoSel] = useState(null);
   const ocMes = ocorrencias.meses.find((m) => m.key === (ocKey || ocorrencias.defaultKey)) || ocorrencias.meses[ocorrencias.meses.length - 1] || null;
   const serieOtd = (otd.daily || []).map((d) => ({ label: d.data?.slice(5), y: d.pct }));
 
@@ -301,7 +349,7 @@ function AbaOperacional({ operacional }) {
       )}
 
       <Secao titulo="Volume de pedidos" kicker="POR MÊS">
-        {volume.disponivel ? <Barras itens={volume.meses} valor={(i) => i.pedidos} rotulo={(i) => mesLabel(i.mes)} /> : <Vazio>{vazio}</Vazio>}
+        {volume.disponivel ? <Barras itens={volume.meses} valor={(i) => i.pedidos} rotulo={(i) => mesLabel(i.mes)} comPct /> : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo={`OTD — On Time Delivery (meta ${otd.meta}%)`} kicker="PONTUALIDADE">
@@ -337,8 +385,10 @@ function AbaOperacional({ operacional }) {
                 </select>
               </label>
               <span className="tdg-nota">{num(ocMes.totalInsucessos)} insucessos de {num(ocMes.totalProcessadas)} ({pctN(ocMes.pctInsucesso)})</span>
+              {motivoSel && <button type="button" className="tdg-mini" onClick={() => setMotivoSel(null)}>× limpar</button>}
             </div>
-            <Barras itens={ocMes.motivos} valor={(i) => i.count} rotulo={(i) => i.motivo} formato={(v) => num(v)} />
+            <Barras itens={ocMes.motivos} valor={(i) => i.count} rotulo={(i) => i.motivo} formato={(v) => num(v)}
+              comPct onClick={(i) => setMotivoSel(motivoSel === i.motivo ? null : i.motivo)} selKey={motivoSel} keyOf={(i) => i.motivo} />
           </>
         ) : <Vazio>{vazio}</Vazio>}
       </Secao>

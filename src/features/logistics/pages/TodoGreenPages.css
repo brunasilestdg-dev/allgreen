@@ -5492,3 +5492,19 @@
 .tdg-mini { padding: 3px 8px; border: 1px solid var(--tdg-green); border-radius: 6px; background: transparent; color: var(--tdg-green); cursor: pointer; font-size: 0.75rem; white-space: nowrap; }
 .tdg-mini:hover { background: var(--tdg-green); color: #fff; }
 .tdg-nota-input { width: 100%; min-width: 220px; padding: 5px 8px; border: 1px solid var(--tdg-line); border-radius: 8px; background: var(--tdg-bg); color: var(--tdg-text); font: inherit; font-size: 0.8rem; resize: vertical; }
+
+/* ===== Painel comercial · paleta de dados (validada, dataviz) e interações ===== */
+.tdg { --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4; --viz-outros:#9aa0a6; }
+:root[data-theme="dark"] .tdg { --viz-1:#3987e5; --viz-2:#d95926; --viz-3:#199e70; --viz-4:#c98500; --viz-5:#d55181; --viz-outros:#6b6f76; }
+.tdg-barra-linha.clicavel { cursor: pointer; border-radius: 8px; }
+.tdg-barra-linha.clicavel:hover { background: var(--tdg-soft); }
+.tdg-barra-linha.esmaecida { opacity: 0.38; }
+.tdg-barra-linha.sel .tdg-barra-preenchida { box-shadow: 0 0 0 2px var(--tdg-card), 0 0 0 3px var(--tdg-green); }
+.tdg-barra-pct { font-style: normal; color: var(--tdg-muted); margin-left: 8px; font-size: 0.75rem; }
+.tdg-chart-hit { cursor: crosshair; }
+.tdg-donut-legenda li.clicavel { cursor: pointer; }
+.tdg-donut-legenda li.esmaecida { opacity: 0.4; }
+.tdg-donut-legenda li.sel { font-weight: 700; }
+.tdg-tabela tr.clicavel { cursor: pointer; }
+.tdg-tabela tr.clicavel:hover { background: var(--tdg-soft); }
+.tdg-filtro-detalhe { flex: 1 1 320px; }
