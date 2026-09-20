@@ -355,58 +355,42 @@ exige credencial, não exige contrato novo e não tem custo. Reimportar o arquiv
 do dia seguinte não duplica nada — o sistema reconhece o que já entrou e só
 atualiza o status.
 
-### O webhook de ocorrências já tem receptor (31/08)
+### TRACK3R: endpoints e tokens individuais (atualizado em 19/09)
 
-Você entregou a especificação do fornecedor ("WebHook Envio de
-Ocorrências/Tracking"). Ela pede que NÓS exponhamos a API e informemos a URL ao
-TRACK3R; ele chama com o cabeçalho `Token`. O receptor está construído e
-testado, e **fica desligado até o segredo existir** — sem ele, responde 503 de
-propósito, porque aceitar ocorrência sem conferir token é deixar qualquer um
-escrever na sua operação.
+O fornecedor confirmou que a configuração fica com a TRACK3R e exige
+**uma URL e um token exclusivo por evento**. Temos os 13 endpoints
+documentados, todos com `POST`, JSON e cabeçalho `Token`.
+O receptor de ocorrências continua aceitando a rota legada sem tipo, mas
+recomendamos enviar a URL explícita `/ocorrencias`.
 
-**Três passos, só você pode dar:**
+**Etapas necessárias da titular:**
 
-1. Escolher o token e cadastrar no cofre (o valor nunca entra em código,
-   commit, log ou conversa):
+1. Cadastrar a TRACK3R no TMS em modo **Arquivo** para gerar o ID da integração
+   e obter as 13 URLs completas no kit. Não enviar o placeholder `<id>`.
+2. Gerar valores aleatórios e **distintos** para cada endpoint a ativar e
+   cadastrar no cofre do Cloudflare Worker os segredos indicados em
+   `docs/TRACK3R_TOKENS_INDIVIDUAIS.md`. Não salvar os valores no repositório.
+3. Passar a integração para modo Webhook e entregar ao Lucas os pares
+   **URL + token** pelo canal seguro combinado com a TRACK3R.
+4. Homologar com dados reais e pedir a **tabela oficial de códigos de
+   ocorrência** para mapear o status no ERP.
 
-   ```
-   openssl rand -hex 32                                   # gera um valor forte
-   npx wrangler secret put TODOGREEN_TRACK3R_WEBHOOK_SECRET
-   ```
+**Compatibilidade:** `TODOGREEN_TRACK3R_WEBHOOK_SECRET` é usado somente
+enquanto nenhum segredo individual tiver sido configurado. A partir do primeiro,
+todos os eventos exigem o respectivo segredo; os não configurados retornam 503.
+Não reusar o token de uma URL em outra. O token de API
+`TODOGREEN_TRACK3R_API_TOKEN` é separado e não autentica os webhooks.
 
-2. Pegar o id da sua integração TRACK3R (aparece na tela do TMS, em
-   Configuração) e informar ao suporte do TRACK3R a URL e o token:
+**Confirmações adicionais a solicitar ao fornecedor:**
 
-   `https://seufuncionario-expo.brunapsiles.workers.dev/api/todogreen/tms/webhook/<id-da-integração>`
-
-3. Pedir a eles a **tabela oficial de códigos de ocorrência**. O documento só
-   revela `"03" = Entregue`. Sem a lista, quem decide o tipo do evento é a
-   descrição em texto, e o código fica guardado cru. Quando a tabela chegar, ela
-   entra na configuração da integração (campo `ocorrenciaPorCodigo`) e passa a
-   mandar — sem precisar de publicação nova.
-
-**O que perguntar junto**, porque muda o comportamento do receptor:
-
-- o cabeçalho é exatamente `Token` e o valor é fixo por cliente, ou expira?
-- um POST traz UMA ocorrência ou uma lista? (hoje o receptor aceita uma)
-- o TRACK3R reenvia quando não recebe resposta? Quantas vezes, com que
-  intervalo, e qual código ele entende como "recebido"? (respondemos 200 com
-  `{"status": true, "descricao": "Recebido com sucesso!"}`, como a
-  especificação pede)
-- a `encomenda` é estável entre as ocorrências da mesma entrega e é o mesmo
-  número do relatório de coletas? (é ela que amarra a ocorrência à operação)
-- `ocorrencia.data` vem sempre em dd/mm/aaaa hh:mm:ss no fuso de Brasília?
-- o `cnpj_embarcador` vem sempre preenchido? (é o ÚNICO critério de casamento
-  com a conta — sem ele o registro entra na fila do que falta casar)
-- por quanto tempo os links de comprovante e assinatura ficam disponíveis? (o
-  portal do cliente aponta para eles)
-
-Os modos **API** e **webhook** estão prontos; o webhook espera só o segredo e a
-URL informada. Enquanto isso, o modo arquivo cobre a operação inteira.
-
-**Segredos a cadastrar no cofre do Worker**:
-`TODOGREEN_TRACK3R_API_TOKEN` (quando a API existir) e
-`TODOGREEN_TRACK3R_WEBHOOK_SECRET` (o webhook, acima).
+- intervalo e quantidade de novas tentativas após falha;
+- padrão de horário e fuso dos eventos;
+- estabilidade do código da encomenda e sua correspondência com coletas;
+- garantia do CNPJ do embarcador no payload;
+- duração e renovação dos links de comprovantes, assinaturas e XML/DACTE;
+- APIs de consulta, exportação de históricos e tabela de códigos;
+- se os eventos de motorista, cotações e rede terceira estarão habilitados
+  para a conta da To Do Green.
 
 **Perguntas ao suporte do TRACK3R** (as mesmas estão na tela, em
 `PERGUNTAS_AO_TRACK3R`):
