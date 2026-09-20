@@ -2,40 +2,40 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, TrendingUp, KanbanSquare, Truck, CircleDashed } from "lucide-react";
 import "./TodoGreenPages.css";
 
-const brl = (v) =>
-  (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-const pct = (v, casas = 1) => (v === null || v === undefined ? "—" : `${(Number(v) * 100).toFixed(casas)}%`);
+const brl = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const brlFull = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const num = (v) => (Number(v) || 0).toLocaleString("pt-BR");
-const mesLabel = (mes) => {
-  const [ano, m] = String(mes || "").split("-");
-  const nomes = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-  return m ? `${nomes[Number(m)] || m}/${String(ano).slice(2)}` : mes;
-};
+const pctN = (v, casas = 1) => (v === null || v === undefined ? "—" : `${Number(v).toFixed(casas)}%`);
+const pctFrac = (v, casas = 1) => (v === null || v === undefined ? "—" : `${(Number(v) * 100).toFixed(casas)}%`);
 const varLabel = (v) => (v === null || v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
+const mesLabel = (mes) => {
+  const s = String(mes || "");
+  const m = s.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return s; // já vem "Fev/26" do artefato
+  const nomes = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  return `${nomes[Number(m[2])] || m[2]}/${m[1].slice(2)}`;
+};
 
-// Estado vazio honesto: diz POR QUE está vazio, sem fingir número.
+const DONUT_CORES = ["#1f7a4d", "#37a06a", "#6cc191", "#2f6f8f", "#c9a227", "#b0b7bd"];
+
 const Vazio = ({ children }) => <p className="tdg-panel-vazio">{children}</p>;
 
-const Secao = ({ titulo, kicker, children }) => (
+const Secao = ({ titulo, kicker, nota, children }) => (
   <section className="tdg-panel">
-    <div className="tdg-section-head">
-      <div>{kicker && <span className="tdg-kicker">{kicker}</span>}<h3>{titulo}</h3></div>
-    </div>
+    <div className="tdg-section-head"><div>{kicker && <span className="tdg-kicker">{kicker}</span>}<h3>{titulo}</h3></div></div>
     {children}
+    {nota && <p className="tdg-nota">{nota}</p>}
   </section>
 );
 
-// Barras horizontais simples, sem dependência de lib de gráfico.
 const Barras = ({ itens, valor, rotulo, formato = num }) => {
   const max = Math.max(1, ...itens.map((i) => Number(valor(i)) || 0));
   return (
     <div className="tdg-barras">
       {itens.map((i, idx) => (
         <div className="tdg-barra-linha" key={idx}>
-          <span className="tdg-barra-rotulo">{rotulo(i)}</span>
-          <span className="tdg-barra-trilho">
-            <span className="tdg-barra-preenchida" style={{ width: `${((Number(valor(i)) || 0) / max) * 100}%` }} />
-          </span>
+          <span className="tdg-barra-rotulo" title={rotulo(i)}>{rotulo(i)}</span>
+          <span className="tdg-barra-trilho"><span className="tdg-barra-preenchida" style={{ width: `${((Number(valor(i)) || 0) / max) * 100}%` }} /></span>
           <span className="tdg-barra-valor">{formato(valor(i))}</span>
         </div>
       ))}
@@ -43,15 +43,94 @@ const Barras = ({ itens, valor, rotulo, formato = num }) => {
   );
 };
 
+// Gráfico de linha/área (inline SVG). série: [{label, y}]. meta opcional (linha).
+const LinhaSVG = ({ serie, meta = null, formatoY = num, altura = 120 }) => {
+  const largura = 720;
+  const pad = { t: 8, r: 8, b: 8, l: 8 };
+  const ys = serie.map((p) => Number(p.y) || 0);
+  const yMax = Math.max(...ys, meta ?? 0) * 1.05 || 1;
+  const yMin = Math.min(...ys, meta ?? Infinity, 0);
+  const base = meta !== null ? Math.min(...ys, meta) * 0.98 : 0;
+  const lo = meta !== null ? base : 0;
+  const span = yMax - lo || 1;
+  const x = (i) => pad.l + (i / Math.max(1, serie.length - 1)) * (largura - pad.l - pad.r);
+  const y = (v) => pad.t + (1 - (v - lo) / span) * (altura - pad.t - pad.b);
+  const linha = serie.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(Number(p.y) || 0).toFixed(1)}`).join(" ");
+  const area = `${linha} L${x(serie.length - 1).toFixed(1)},${(altura - pad.b).toFixed(1)} L${x(0).toFixed(1)},${(altura - pad.b).toFixed(1)} Z`;
+  const metaY = meta !== null ? y(meta) : null;
+  return (
+    <div className="tdg-chart">
+      <svg viewBox={`0 0 ${largura} ${altura}`} preserveAspectRatio="none" role="img" aria-label="gráfico de linha">
+        <path d={area} className="tdg-chart-area" />
+        <path d={linha} className="tdg-chart-linha" />
+        {metaY !== null && <line x1={pad.l} x2={largura - pad.r} y1={metaY} y2={metaY} className="tdg-chart-meta" />}
+      </svg>
+      <div className="tdg-chart-eixo"><span>{serie[0]?.label}</span>{meta !== null && <span className="tdg-chart-meta-rot">meta {formatoY(meta)}</span>}<span>{serie[serie.length - 1]?.label}</span></div>
+    </div>
+  );
+};
+
+// Donut (inline SVG). segmentos: [{label, valor}]. Agrupa cauda em "Outros".
+const Donut = ({ segmentos, formato = brl }) => {
+  const total = segmentos.reduce((s, x) => s + (Number(x.valor) || 0), 0) || 1;
+  const top = segmentos.slice(0, 5);
+  const resto = segmentos.slice(5).reduce((s, x) => s + (Number(x.valor) || 0), 0);
+  const dados = resto > 0 ? [...top, { label: "Outros", valor: resto }] : top;
+  const R = 60;
+  const C = 2 * Math.PI * R;
+  let offset = 0;
+  return (
+    <div className="tdg-donut-wrap">
+      <svg viewBox="0 0 160 160" className="tdg-donut" role="img" aria-label="gráfico de rosca">
+        <g transform="translate(80,80) rotate(-90)">
+          <circle r={R} className="tdg-donut-trilho" fill="none" strokeWidth="26" />
+          {dados.map((d, i) => {
+            const frac = (Number(d.valor) || 0) / total;
+            const dash = `${(frac * C).toFixed(2)} ${(C - frac * C).toFixed(2)}`;
+            const el = <circle key={i} r={R} fill="none" strokeWidth="26" stroke={DONUT_CORES[i % DONUT_CORES.length]} strokeDasharray={dash} strokeDashoffset={(-offset * C).toFixed(2)} />;
+            offset += frac;
+            return el;
+          })}
+        </g>
+      </svg>
+      <ul className="tdg-donut-legenda">
+        {dados.map((d, i) => (
+          <li key={i}><span className="tdg-donut-cor" style={{ background: DONUT_CORES[i % DONUT_CORES.length] }} />{d.label}<b>{((Number(d.valor) || 0) / total * 100).toFixed(1)}%</b><small>{formato(d.valor)}</small></li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+// ===== Aba Receita =====
 function AbaReceita({ receita }) {
   const { porPeriodo, previsao, concentracao, resumoMensal, ticketMedio } = receita;
-  const semTrack3r = "Sem faturamento ainda. Assim que o Track3R enviar (webhook ou importação), preenche automaticamente.";
+  const vazio = "Sem faturamento ainda. Preenche quando o Track3R enviar (artefato, importação ou webhook).";
+  const [mesSel, setMesSel] = useState(null);
+  const mesesDisp = porPeriodo?.meses?.map((m) => m.mes) || [];
+  const mesAtivo = mesSel || mesesDisp[mesesDisp.length - 1];
+  const serieDiaria = (porPeriodo?.porDia?.[mesAtivo] || []).map((d) => ({ label: d.dia.slice(8), y: d.receita }));
+
   return (
     <>
       <Secao titulo="Receita por período" kicker="FATURAMENTO">
-        {porPeriodo.disponivel
-          ? <Barras itens={porPeriodo.meses} valor={(i) => i.receita} rotulo={(i) => mesLabel(i.mes)} formato={brl} />
-          : <Vazio>{semTrack3r}</Vazio>}
+        {porPeriodo.disponivel ? (
+          <>
+            <Barras itens={porPeriodo.meses} valor={(i) => i.receita} rotulo={(i) => mesLabel(i.mes)} formato={brl} />
+            {serieDiaria.length > 1 && (
+              <>
+                <div className="tdg-chart-controls">
+                  <label>Dia a dia:&nbsp;
+                    <select value={mesAtivo} onChange={(e) => setMesSel(e.target.value)}>
+                      {mesesDisp.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <LinhaSVG serie={serieDiaria} formatoY={brl} />
+              </>
+            )}
+          </>
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo="Previsão de fechamento do mês" kicker="RITMO">
@@ -61,164 +140,182 @@ function AbaReceita({ receita }) {
             <div className="tdg-kpi"><span>Projeção do mês</span><strong>{brl(previsao.projecao)}</strong></div>
             <div className="tdg-kpi"><span>Base</span><strong>{previsao.base === "comparado" ? "ritmo vs. mês anterior" : "ritmo linear"}</strong></div>
           </div>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo="Concentração por cliente (tomador)" kicker="CARTEIRA">
         {concentracao.disponivel ? (
-          <table className="tdg-tabela">
-            <thead><tr><th>Tomador</th><th>Total</th><th>% da receita</th></tr></thead>
-            <tbody>
-              {concentracao.clientes.slice(0, 15).map((c) => (
-                <tr key={c.tomador}><td>{c.tomador}</td><td>{brl(c.total)}</td><td>{pct(c.participacao)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+          <div className="tdg-split">
+            <Donut segmentos={concentracao.clientes.map((c) => ({ label: c.tomador, valor: c.total }))} />
+            <table className="tdg-tabela">
+              <thead><tr><th>Tomador</th><th>Total</th><th>%</th></tr></thead>
+              <tbody>{concentracao.clientes.slice(0, 12).map((c) => <tr key={c.tomador}><td>{c.tomador}</td><td>{brl(c.total)}</td><td>{pctFrac(c.participacao)}</td></tr>)}</tbody>
+            </table>
+          </div>
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo="Resumo mensal" kicker="MÊS A MÊS">
         {resumoMensal.disponivel ? (
           <table className="tdg-tabela">
             <thead><tr><th>Mês</th><th>Receita</th><th>Var. MoM</th><th>{resumoMensal.clientePrincipal || "Principal"}</th><th>Outros</th></tr></thead>
-            <tbody>
-              {resumoMensal.meses.map((m) => (
-                <tr key={m.mes}>
-                  <td>{mesLabel(m.mes)}</td><td>{brl(m.receita)}</td><td>{varLabel(m.varMoM)}</td>
-                  <td>{brl(m.principal)}</td><td>{brl(m.outros)}</td>
-                </tr>
-              ))}
-            </tbody>
+            <tbody>{resumoMensal.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{brl(m.receita)}</td><td>{varLabel(m.varMoM)}</td><td>{brl(m.principal)}</td><td>{brl(m.outros)}</td></tr>)}</tbody>
           </table>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo="Ticket médio por cliente" kicker="RECEITA ÷ PEDIDOS">
         {ticketMedio.disponivel ? (
-          <>
-            {!ticketMedio.temVolume && <Vazio>Receita presente, mas ainda sem volume de pedidos para calcular o ticket. Falta a base de encomendas do Track3R.</Vazio>}
-            <table className="tdg-tabela">
-              <thead><tr><th>Cliente</th><th>Receita</th><th>Pedidos</th><th>Ticket médio</th></tr></thead>
-              <tbody>
-                {ticketMedio.clientes.slice(0, 15).map((c) => (
-                  <tr key={c.cliente}><td>{c.cliente}</td><td>{brl(c.receita)}</td><td>{c.pedidos ? num(c.pedidos) : "—"}</td><td>{c.ticketMedio === null ? "—" : brl(c.ticketMedio)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+          <table className="tdg-tabela">
+            <thead><tr><th>Cliente</th><th>Receita</th><th>Pedidos</th><th>Ticket médio</th></tr></thead>
+            <tbody>{ticketMedio.clientes.slice(0, 12).map((c) => <tr key={c.cliente}><td>{c.cliente}</td><td>{brl(c.receita)}</td><td>{c.pedidos ? num(c.pedidos) : "—"}</td><td>{c.ticketMedio === null ? "—" : brlFull(c.ticketMedio)}</td></tr>)}</tbody>
+          </table>
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
     </>
   );
 }
 
+// ===== Aba Kanban =====
 function AbaKanban({ kanban }) {
-  const { pipeline, fup } = kanban;
+  const { pipeline, fup, updatesSemana, atualizado } = kanban;
   return (
     <>
-      <Secao titulo="Pipeline comercial" kicker="OPORTUNIDADES POR ETAPA">
+      <Secao titulo="Kanban — todos os clientes por etapa" kicker="PIPELINE" nota={atualizado ? `Atualizado em ${atualizado}.` : ""}>
         {pipeline.disponivel ? (
-          <div className="tdg-kanban">
-            {pipeline.etapas.map((e) => (
-              <div className="tdg-kanban-coluna" key={e.etapa}>
-                <div className="tdg-kanban-cabeca"><strong>{e.etapa}</strong><small>{e.quantidade} · {brl(e.valorMensal)}/mês</small></div>
-                {e.itens.slice(0, 8).map((i, idx) => (
-                  <div className="tdg-kanban-cartao" key={idx}><strong>{i.cliente}</strong><small>{brl(i.valorMensal)}/mês</small></div>
-                ))}
+          <>
+            <div className="tdg-kpi-row">
+              <div className="tdg-kpi"><span>Oportunidades</span><strong>{num(pipeline.total)}</strong></div>
+              <div className="tdg-kpi"><span>Valor no pipeline</span><strong>{brl(pipeline.valorTotal)}</strong></div>
+            </div>
+            <div className="tdg-kanban">
+              {pipeline.etapas.map((e) => (
+                <div className="tdg-kanban-coluna" key={e.etapa}>
+                  <div className="tdg-kanban-cabeca"><strong>{e.etapa}</strong><small>{e.quantidade} · {brl(e.valor)}</small></div>
+                  {e.itens.slice(0, 12).map((i, idx) => <div className="tdg-kanban-cartao" key={idx}><strong>{i.cliente}</strong><small>{brl(i.valor)}</small></div>)}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : <Vazio>Sem oportunidades. Importe seu pipeline ou conecte os boards do monday.com.</Vazio>}
+      </Secao>
+
+      <Secao titulo="Atualização semanal" kicker="MOVIMENTAÇÕES">
+        {updatesSemana.disponivel ? (
+          <div className="tdg-updates">
+            {updatesSemana.itens.map((u, idx) => (
+              <div className="tdg-update" key={idx}>
+                <div className="tdg-update-topo"><strong>{u.cliente}</strong><span className="tdg-tag">{u.etapa}</span>{u.valor > 0 && <span className="tdg-update-valor">{brl(u.valor)}</span>}{u.data && <small>{u.data}</small>}</div>
+                {u.texto && <p>{u.texto}</p>}
               </div>
             ))}
           </div>
-        ) : <Vazio>Sem oportunidades cadastradas. Importe seu pipeline ou conecte os boards do monday.com.</Vazio>}
+        ) : <Vazio>Sem atualizações semanais registradas.</Vazio>}
       </Secao>
 
       <Secao titulo="Clientes para FUP" kicker="SEM ACOMPANHAMENTO">
         {fup.disponivel ? (
           <table className="tdg-tabela">
-            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor mensal</th><th>Última atualização</th><th>Sem FUP há</th></tr></thead>
-            <tbody>
-              {fup.clientes.slice(0, 20).map((c, idx) => (
-                <tr key={idx}>
-                  <td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valorMensal)}</td>
-                  <td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
-                  <td>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
-                </tr>
-              ))}
-            </tbody>
+            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th></tr></thead>
+            <tbody>{fup.clientes.map((c, idx) => (
+              <tr key={idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm || "—"}</td>
+                <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
+                <td className="tdg-td-texto">{c.texto || "—"}</td></tr>
+            ))}</tbody>
           </table>
-        ) : <Vazio>Sem oportunidades para acompanhar ainda.</Vazio>}
+        ) : <Vazio>Sem oportunidades para acompanhar.</Vazio>}
       </Secao>
-      <p className="tdg-nota">Atualização do pipeline: semanal. Ao mapear os boards do monday.com, esta aba passa a refletir o CRM em tempo real.</p>
     </>
   );
 }
 
+// ===== Aba Operacional =====
 function AbaOperacional({ operacional }) {
-  const { volume, otd, efetividade, ocorrencias, resumoMensal, ranking, leadTime, slaPorRota, reentrega } = operacional;
-  const semTrack3r = "Sem encomendas ainda. Assim que o Track3R enviar ocorrências/encomendas, preenche automaticamente.";
+  const { volume, otd, efetividade, ocorrencias, leadtime, slaRota, reentrega, atualizado, periodo, servicoNota } = operacional;
+  const vazio = "Sem dados operacionais ainda. Preenche quando o Track3R enviar ocorrências/encomendas.";
+  const [ocKey, setOcKey] = useState(null);
+  const ocMes = ocorrencias.meses.find((m) => m.key === (ocKey || ocorrencias.defaultKey)) || ocorrencias.meses[ocorrencias.meses.length - 1] || null;
+  const serieOtd = (otd.daily || []).map((d) => ({ label: d.data?.slice(5), y: d.pct }));
+
   return (
     <>
+      {(periodo || servicoNota || atualizado) && (
+        <div className="tdg-aviso"><CircleDashed size={16} /><span>{[periodo && `Período: ${periodo}`, atualizado && `atualizado ${atualizado}`].filter(Boolean).join(" · ")}{servicoNota ? ` — ${servicoNota}` : ""}</span></div>
+      )}
+
       <Secao titulo="Volume de pedidos" kicker="POR MÊS">
-        {volume.disponivel ? <Barras itens={volume.meses} valor={(i) => i.pedidos} rotulo={(i) => mesLabel(i.mes)} /> : <Vazio>{semTrack3r}</Vazio>}
+        {volume.disponivel ? <Barras itens={volume.meses} valor={(i) => i.pedidos} rotulo={(i) => mesLabel(i.mes)} /> : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo={`OTD — On Time Delivery (meta ${pct(otd.meta, 0)})`} kicker="PONTUALIDADE">
+      <Secao titulo={`OTD — On Time Delivery (meta ${otd.meta}%)`} kicker="PONTUALIDADE">
         {otd.disponivel ? (
           <>
-            <div className="tdg-kpi-row"><div className="tdg-kpi"><span>OTD geral</span><strong>{pct(otd.otdGeral)}</strong></div><div className="tdg-kpi"><span>Entregas medidas</span><strong>{num(otd.entreguesTotal)}</strong></div></div>
-            <table className="tdg-tabela"><thead><tr><th>Mês</th><th>Entregues</th><th>No prazo</th><th>OTD</th></tr></thead>
-              <tbody>{otd.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{num(m.entregues)}</td><td>{num(m.noPrazo)}</td><td>{pct(m.otd)}</td></tr>)}</tbody>
+            <div className="tdg-kpi-row"><div className="tdg-kpi"><span>OTD acumulado</span><strong className={otd.acumuladoPct >= otd.meta ? "tdg-ok" : "tdg-alerta"}>{pctN(otd.acumuladoPct)}</strong></div></div>
+            {serieOtd.length > 1 && <LinhaSVG serie={serieOtd} meta={otd.meta} formatoY={(v) => `${v}%`} />}
+            <table className="tdg-tabela"><thead><tr><th>Mês</th><th>Total</th><th>No prazo</th><th>Fora</th><th>OTD</th></tr></thead>
+              <tbody>{otd.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{num(m.total)}</td><td>{num(m.noPrazo)}</td><td>{num(m.foraPrazo)}</td><td className={m.pct >= otd.meta ? "tdg-ok" : "tdg-alerta"}>{pctN(m.pct)}</td></tr>)}</tbody>
             </table>
           </>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo="Efetividade de entregas" kicker="ENTREGUES ÷ TOTAL">
+      <Secao titulo="Efetividade de entregas" kicker="FINALIZADAS ÷ TOTAL">
         {efetividade.disponivel ? (
-          <div className="tdg-kpi-row"><div className="tdg-kpi"><span>Efetividade geral</span><strong>{pct(efetividade.efetividadeGeral)}</strong></div><div className="tdg-kpi"><span>Entregues</span><strong>{num(efetividade.entregues)}/{num(efetividade.total)}</strong></div></div>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+          <>
+            <div className="tdg-kpi-row"><div className="tdg-kpi"><span>Efetividade acumulada</span><strong>{pctN(efetividade.acumuladoPct)}</strong></div></div>
+            <table className="tdg-tabela"><thead><tr><th>Mês</th><th>Total</th><th>Finalizadas</th><th>Insucessos</th><th>Efetividade</th></tr></thead>
+              <tbody>{efetividade.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{num(m.total)}</td><td>{num(m.finalizadas)}</td><td>{num(m.insucessos)}</td><td>{pctN(m.pctEfetividade)}</td></tr>)}</tbody>
+            </table>
+          </>
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo="Decomposição das ocorrências" kicker="INSUCESSOS">
-        {ocorrencias.disponivel
-          ? <Barras itens={ocorrencias.tipos} valor={(i) => i.quantidade} rotulo={(i) => i.tipo} formato={(v) => num(v)} />
-          : <Vazio>Sem ocorrências de insucesso registradas.</Vazio>}
+      <Secao titulo="Decomposição das ocorrências" kicker="INSUCESSOS POR MOTIVO">
+        {ocorrencias.disponivel && ocMes ? (
+          <>
+            <div className="tdg-chart-controls">
+              <label>Mês:&nbsp;
+                <select value={ocMes.key} onChange={(e) => setOcKey(e.target.value)}>
+                  {ocorrencias.meses.map((m) => <option key={m.key} value={m.key}>{m.mes}</option>)}
+                </select>
+              </label>
+              <span className="tdg-nota">{num(ocMes.totalInsucessos)} insucessos de {num(ocMes.totalProcessadas)} ({pctN(ocMes.pctInsucesso)})</span>
+            </div>
+            <Barras itens={ocMes.motivos} valor={(i) => i.count} rotulo={(i) => i.motivo} formato={(v) => num(v)} />
+          </>
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo="Resumo mensal operacional" kicker="MÊS A MÊS">
-        {resumoMensal.disponivel ? (
-          <table className="tdg-tabela">
-            <thead><tr><th>Mês</th><th>Volume</th><th>Var. MoM</th><th>OTD</th><th>Efetividade</th><th>Insucessos</th></tr></thead>
-            <tbody>{resumoMensal.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{num(m.volume)}</td><td>{varLabel(m.varMoM)}</td><td>{pct(m.otd)}</td><td>{pct(m.efetividade)}</td><td>{m.insucessos === null ? "—" : num(m.insucessos)}</td></tr>)}</tbody>
+      <Secao titulo="Lead time — do pedido à entrega" kicker="PRAZO" nota={leadtime.nota}>
+        {leadtime.disponivel ? (
+          <table className="tdg-tabela"><thead><tr><th>Mês</th><th>Mediana</th><th>Média</th><th>Entregas</th></tr></thead>
+            <tbody>{leadtime.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{m.medianaH === null ? "—" : `${m.medianaH.toFixed(1)} h`}</td><td>{`${(Number(m.mediaH) || 0).toFixed(1)} h`}</td><td>{num(m.count)}</td></tr>)}</tbody>
           </table>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo="Ranking de clientes por volume" kicker="PEDIDOS">
-        {ranking.disponivel
-          ? <Barras itens={ranking.clientes.slice(0, 15)} valor={(i) => i.total} rotulo={(i) => i.cliente} />
-          : <Vazio>{semTrack3r}</Vazio>}
-      </Secao>
-
-      <Secao titulo="Lead time (registro → entrega)" kicker="PRAZO">
-        {leadTime.disponivel ? (
-          <div className="tdg-kpi-row"><div className="tdg-kpi"><span>Médio</span><strong>{leadTime.diasMediosGeral?.toFixed(1)} dia(s)</strong></div><div className="tdg-kpi"><span>Pedidos medidos</span><strong>{num(leadTime.pedidos)}</strong></div></div>
-        ) : <Vazio>{semTrack3r}</Vazio>}
-      </Secao>
-
-      <Secao titulo="SLA por rota" kicker="FORA DO PRAZO">
-        {slaPorRota.disponivel ? (
+      <Secao titulo="SLA por rota" kicker={slaRota.topN ? `TOP ${slaRota.topN} ROTAS` : "FORA DO PRAZO"} nota={slaRota.nota}>
+        {slaRota.disponivel ? (
           <table className="tdg-tabela"><thead><tr><th>Rota</th><th>Pedidos</th><th>Fora do prazo</th><th>% fora</th></tr></thead>
-            <tbody>{slaPorRota.rotas.slice(0, 20).map((r) => <tr key={r.rota}><td>{r.rota}</td><td>{num(r.pedidos)}</td><td>{num(r.foraDoPrazo)}</td><td>{pct(r.percentualForaDoPrazo)}</td></tr>)}</tbody>
+            <tbody>{slaRota.rows.map((r) => <tr key={r.rota}><td>{r.rota}</td><td>{num(r.total)}</td><td>{num(r.foraPrazo)}</td><td className={r.pctForaPrazo > 5 ? "tdg-alerta" : ""}>{pctN(r.pctForaPrazo)}</td></tr>)}</tbody>
           </table>
-        ) : <Vazio>{semTrack3r}</Vazio>}
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo="Reentrega" kicker="MAIS DE UMA TENTATIVA">
+      <Secao titulo="Reentrega — pedidos com mais de uma tentativa" kicker="REENTREGA" nota={reentrega.nota}>
         {reentrega.disponivel ? (
-          <table className="tdg-tabela"><thead><tr><th>Rota</th><th>Pedidos</th><th>Com +1 tentativa</th><th>% reentrega</th></tr></thead>
-            <tbody>{reentrega.rotas.slice(0, 20).map((r) => <tr key={r.rota}><td>{r.rota}</td><td>{num(r.pedidos)}</td><td>{num(r.comReentrega)}</td><td>{pct(r.percentualReentrega)}</td></tr>)}</tbody>
-          </table>
-        ) : <Vazio>Sem reentregas registradas.</Vazio>}
+          <>
+            <div className="tdg-kpi-row"><div className="tdg-kpi"><span>Reentrega geral</span><strong>{pctN(reentrega.pctGeral)}</strong></div></div>
+            {reentrega.distribuicao.length > 0 && (
+              <table className="tdg-tabela"><thead><tr><th>Tentativas</th><th>Pedidos</th></tr></thead>
+                <tbody>{reentrega.distribuicao.map((d) => <tr key={d.tentativas}><td>{d.tentativas}</td><td>{num(d.count)}</td></tr>)}</tbody>
+              </table>
+            )}
+            <table className="tdg-tabela"><thead><tr><th>Rota</th><th>Pedidos</th><th>Com +1 tentativa</th><th>% reentrega</th></tr></thead>
+              <tbody>{reentrega.rows.map((r) => <tr key={r.rota}><td>{r.rota}</td><td>{num(r.total)}</td><td>{num(r.multiTentativa)}</td><td>{pctN(r.pctMultiTentativa)}</td></tr>)}</tbody>
+            </table>
+          </>
+        ) : <Vazio>{vazio}</Vazio>}
       </Secao>
     </>
   );
@@ -253,42 +350,29 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
 
   const avisoFonte = useMemo(() => {
     if (!dados?.fontes) return "";
-    const { receita, operacional } = dados.fontes;
-    if (!receita?.visivel) return "Você vê o pipeline da sua carteira. Receita e operacional consolidados exigem visão de carteira.";
-    if (receita?.fonte === "artefato_temporario" && receita?.retrato) {
-      const r = receita.retrato;
+    if (!dados.fontes.receita?.visivel) return "Você vê o pipeline da sua carteira. Receita e operacional consolidados exigem visão de carteira.";
+    if (dados.modo === "artefato_temporario" && dados.fontes.receita?.retrato) {
+      const r = dados.fontes.receita.retrato;
       const quando = r.importadoEm ? new Date(r.importadoEm).toLocaleString("pt-BR") : "";
-      return `Receita por fonte TEMPORÁRIA (importação do Track3R${r.de ? `, período ${r.de} a ${r.ate}` : ""}${quando ? ` · atualizado ${quando}` : ""}). Migra para os webhooks oficiais automaticamente quando entrarem.`;
+      return `Fonte TEMPORÁRIA: espelho do artefato do Track3R${r.de ? ` (${r.de} a ${r.ate})` : ""}${quando ? ` · atualizado ${quando}` : ""}. Migra para os webhooks oficiais automaticamente quando entrarem.`;
     }
-    if (receita?.registros === 0 && operacional?.registros === 0)
-      return "Track3R ainda não enviou dados. A tela está pronta e preenche sozinha quando o faturamento/encomendas chegarem (webhook ou importação).";
     return "";
   }, [dados]);
 
-  if (loading && !dados)
-    return <section className="tdg-panel" aria-busy="true">Carregando painel comercial...</section>;
+  if (loading && !dados) return <section className="tdg-panel" aria-busy="true">Carregando painel comercial...</section>;
 
   return (
     <div className="tdg-page">
       <header className="tdg-page-title">
-        <div>
-          <span>COMERCIAL</span>
-          <h2>Painel comercial</h2>
-          <p>Receita, pipeline e operação em uma tela. Números reais das fontes conectadas — sem dado fictício.</p>
-        </div>
+        <div><span>COMERCIAL</span><h2>Painel comercial</h2><p>Receita, pipeline e operação em uma tela. Números reais das fontes conectadas — sem dado fictício.</p></div>
         <button className="tdg-action" type="button" onClick={carregar}><RefreshCw size={16} />Atualizar</button>
       </header>
 
-      {avisoFonte && (
-        <div className="tdg-aviso"><CircleDashed size={16} /><span>{avisoFonte}</span></div>
-      )}
+      {avisoFonte && <div className="tdg-aviso"><CircleDashed size={16} /><span>{avisoFonte}</span></div>}
 
       <div className="tdg-abas" role="tablist">
         {ABAS.map(({ id, label, Icon }) => (
-          <button key={id} type="button" role="tab" aria-selected={aba === id}
-            className={`tdg-aba${aba === id ? " ativa" : ""}`} onClick={() => setAba(id)}>
-            <Icon size={16} />{label}
-          </button>
+          <button key={id} type="button" role="tab" aria-selected={aba === id} className={`tdg-aba${aba === id ? " ativa" : ""}`} onClick={() => setAba(id)}><Icon size={16} />{label}</button>
         ))}
       </div>
 

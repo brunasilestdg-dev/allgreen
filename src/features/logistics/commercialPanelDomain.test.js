@@ -18,6 +18,8 @@ import {
   slaPorRota,
   reentregaPorRota,
   receitaDeSnapshot,
+  montarPainelDoArtefato,
+  montarPainelCanonicoMirror,
   montarPainelComercial,
 } from "./commercialPanelDomain.js";
 
@@ -155,6 +157,53 @@ describe("receitaDeSnapshot (ponte temporária do artefato)", () => {
     const maersk = r.ticketMedio.clientes.find((c) => c.cliente === "MAERSK");
     expect(maersk.pedidos).toBe(100);
     expect(maersk.ticketMedio).toBe(30); // 3000 / 100
+  });
+});
+
+describe("montarPainelDoArtefato (espelho do artefato)", () => {
+  const artefato = {
+    DATA: {
+      daily: [{ data: "2026-08-01", mes_num: 8, receita: 2000 }],
+      monthly: [{ mes_num: 8, mes: "Ago/26", receita: 2000, clientes: [{ nome: "MAERSK", valor: 2000, pedidos: 60 }] }],
+    },
+    KANBAN: { atualizado: "17/09/2026", stages: [{ label: "Prospecção", items: [{ nome: "Boticario", valor: 200000 }, { nome: "WE PINK", valor: 500000 }] }] },
+    UPDATES: {
+      weekly_updates: [{ nome: "CH Robinson", etapa: "Homologação", valor: 250000, data_ultima_atualizacao: "14/09/2026", texto: "avançou" }],
+      fup_list: [{ nome: "Petz", etapa: "Prospecção", valor: 100000, data_ultima_atualizacao: "15/08/2026", texto: "agendar", dias_sem_atualizacao: 33 }],
+    },
+    OPS: {
+      atualizado: "18/09/2026", periodo: "19/02 a 16/09", meta_otd: 98,
+      otd: { monthly: [{ mes: "Ago/26", total: 100, noPrazo: 96, foraPrazo: 4, pct: 96 }], daily: [{ data: "2026-08-01", pct: 95 }], acumulado_pct: 95.83 },
+      efetividade: { monthly: [{ mes: "Ago/26", total: 100, finalizadas: 93, insucessos: 7, pctEfetividade: 93, pctInsucesso: 7 }], acumulado_pct: 93.46 },
+      waterfall: { defaultKey: "2026-08", monthly: [{ key: "2026-08", label: "Ago", mes: "Ago/26", totalProcessadas: 100, totalInsucessos: 7, pctInsucesso: 7, motivos: [{ motivo: "Destinatario Ausente", count: 5, pct: 71.4, pctOfTotal: 5 }] }] },
+      leadtime: { nota: "n", monthly: [{ mes: "Ago/26", medianaH: 31.1, mediaH: 45.2, count: 60 }] },
+      slaRota: { top_n: 20, rotas_totais: 49, pct_volume_coberto: 84.3, nota: "s", rows: [{ rota: "ZS-BRK", total: 6271, foraPrazo: 47, pctForaPrazo: 0.7 }] },
+      reentrega: { pct_geral: 5.48, nota: "r", distribuicao_tentativas: [{ tentativas: 1, count: 40917 }], rows_por_rota: [{ rota: "ZS-BRK", total: 6271, multiTentativa: 142, pctMultiTentativa: 2.3 }] },
+    },
+  };
+
+  it("espelha receita, kanban e operacional na forma da tela", () => {
+    const p = montarPainelDoArtefato(artefato, new Date(Date.UTC(2026, 7, 2)));
+    expect(p.receita.concentracao.clientes[0].tomador).toBe("MAERSK");
+    expect(p.kanban.pipeline.etapas[0].etapa).toBe("Prospecção");
+    expect(p.kanban.pipeline.etapas[0].valor).toBe(700000);
+    expect(p.kanban.fup.clientes[0].semFupDias).toBe(33);
+    expect(p.kanban.updatesSemana.itens[0].cliente).toBe("CH Robinson");
+    expect(p.operacional.otd.acumuladoPct).toBe(95.83);
+    expect(p.operacional.otd.meta).toBe(98);
+    expect(p.operacional.efetividade.acumuladoPct).toBe(93.46);
+    expect(p.operacional.ocorrencias.meses[0].motivos[0].motivo).toBe("Destinatario Ausente");
+    expect(p.operacional.leadtime.meses[0].medianaH).toBe(31.1);
+    expect(p.operacional.slaRota.rows[0].rota).toBe("ZS-BRK");
+    expect(p.operacional.reentrega.pctGeral).toBe(5.48);
+  });
+
+  it("canônico devolve a MESMA forma mirror (vazio honesto quando sem fatos)", () => {
+    const p = montarPainelCanonicoMirror({ faturas: [], encomendas: [], oportunidades: [] });
+    expect(p.operacional.otd.disponivel).toBe(false);
+    expect(p.kanban.pipeline.disponivel).toBe(false);
+    expect(p.operacional.otd).toHaveProperty("acumuladoPct");
+    expect(p.operacional.slaRota).toHaveProperty("rows");
   });
 });
 

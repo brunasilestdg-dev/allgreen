@@ -609,7 +609,182 @@ export function receitaDeSnapshot({ daily = [], monthly = [] } = {}, hoje = new 
   return { porPeriodo, previsao, concentracao, resumoMensal, ticketMedio };
 }
 
-// ===== Montagem das três abas =====
+// ===== Espelho do artefato (mirror): mesma forma para as 3 abas =====
+// A tela consome UMA forma só (a "mirror"). O artefato já traz tudo
+// pré-calculado, então aqui é quase pass-through normalizado.
+
+function normalizarKanbanArtefato(KANBAN = {}, UPDATES = {}) {
+  const etapas = (KANBAN.stages || []).map((st) => ({
+    etapa: textoLimpo(st?.label) || "Sem etapa",
+    quantidade: (st?.items || []).length,
+    valor: (st?.items || []).reduce((s, i) => s + soNumero(i?.valor), 0),
+    itens: (st?.items || []).map((i) => ({ cliente: textoLimpo(i?.nome), valor: soNumero(i?.valor) })),
+  }));
+  const pipeline = {
+    disponivel: etapas.length > 0,
+    etapas,
+    total: etapas.reduce((s, e) => s + e.quantidade, 0),
+    valorTotal: etapas.reduce((s, e) => s + e.valor, 0),
+  };
+  const fupClientes = (UPDATES.fup_list || [])
+    .map((f) => ({
+      cliente: textoLimpo(f?.nome),
+      etapa: textoLimpo(f?.etapa),
+      valor: soNumero(f?.valor),
+      atualizadoEm: textoLimpo(f?.data_ultima_atualizacao),
+      semFupDias: soNumero(f?.dias_sem_atualizacao),
+      texto: textoLimpo(f?.texto),
+    }))
+    .sort((a, b) => b.semFupDias - a.semFupDias);
+  const semana = (UPDATES.weekly_updates || []).map((w) => ({
+    cliente: textoLimpo(w?.nome),
+    etapa: textoLimpo(w?.etapa),
+    valor: soNumero(w?.valor),
+    data: textoLimpo(w?.data_ultima_atualizacao),
+    texto: textoLimpo(w?.texto),
+  }));
+  return {
+    atualizado: textoLimpo(KANBAN.atualizado) || textoLimpo(UPDATES.atualizado),
+    pipeline,
+    fup: { disponivel: fupClientes.length > 0, clientes: fupClientes },
+    updatesSemana: { disponivel: semana.length > 0, itens: semana },
+  };
+}
+
+function normalizarOpsArtefato(OPS = {}) {
+  const otd = OPS.otd || {};
+  const efet = OPS.efetividade || {};
+  const wf = OPS.waterfall || {};
+  const lt = OPS.leadtime || {};
+  const sla = OPS.slaRota || {};
+  const re = OPS.reentrega || {};
+  const volumeMeses = (otd.monthly || []).map((m) => ({ mes: textoLimpo(m?.mes), pedidos: soNumero(m?.total) }));
+  return {
+    atualizado: textoLimpo(OPS.atualizado),
+    periodo: textoLimpo(OPS.periodo),
+    servicoNota: textoLimpo(OPS.servicoNota),
+    volume: { disponivel: volumeMeses.length > 0, meses: volumeMeses },
+    otd: {
+      disponivel: (otd.monthly || []).length > 0,
+      meta: soNumero(OPS.meta_otd) || 98,
+      acumuladoPct: soNumero(otd.acumulado_pct),
+      meses: (otd.monthly || []).map((m) => ({ mes: textoLimpo(m?.mes), total: soNumero(m?.total), noPrazo: soNumero(m?.noPrazo), foraPrazo: soNumero(m?.foraPrazo), pct: soNumero(m?.pct) })),
+      daily: (otd.daily || []).map((d) => ({ data: textoLimpo(d?.data), pct: soNumero(d?.pct) })),
+    },
+    efetividade: {
+      disponivel: (efet.monthly || []).length > 0,
+      acumuladoPct: soNumero(efet.acumulado_pct),
+      meses: (efet.monthly || []).map((m) => ({ mes: textoLimpo(m?.mes), total: soNumero(m?.total), finalizadas: soNumero(m?.finalizadas), insucessos: soNumero(m?.insucessos), pctEfetividade: soNumero(m?.pctEfetividade), pctInsucesso: soNumero(m?.pctInsucesso) })),
+    },
+    ocorrencias: {
+      disponivel: (wf.monthly || []).length > 0,
+      defaultKey: textoLimpo(wf.defaultKey),
+      meses: (wf.monthly || []).map((m) => ({
+        key: textoLimpo(m?.key),
+        label: textoLimpo(m?.label),
+        mes: textoLimpo(m?.mes),
+        totalProcessadas: soNumero(m?.totalProcessadas),
+        totalInsucessos: soNumero(m?.totalInsucessos),
+        pctInsucesso: soNumero(m?.pctInsucesso),
+        motivos: (m?.motivos || []).map((x) => ({ motivo: textoLimpo(x?.motivo), count: soNumero(x?.count), pct: soNumero(x?.pct), pctOfTotal: soNumero(x?.pctOfTotal) })),
+      })),
+    },
+    leadtime: {
+      disponivel: (lt.monthly || []).length > 0,
+      nota: textoLimpo(lt.nota),
+      meses: (lt.monthly || []).map((m) => ({ mes: textoLimpo(m?.mes), medianaH: soNumero(m?.medianaH), mediaH: soNumero(m?.mediaH), count: soNumero(m?.count) })),
+    },
+    slaRota: {
+      disponivel: (sla.rows || []).length > 0,
+      topN: soNumero(sla.top_n),
+      pctVolumeCoberto: soNumero(sla.pct_volume_coberto),
+      rotasTotais: soNumero(sla.rotas_totais),
+      nota: textoLimpo(sla.nota),
+      rows: (sla.rows || []).map((r) => ({ rota: textoLimpo(r?.rota), total: soNumero(r?.total), foraPrazo: soNumero(r?.foraPrazo), pctForaPrazo: soNumero(r?.pctForaPrazo) })),
+    },
+    reentrega: {
+      disponivel: (re.rows_por_rota || []).length > 0 || soNumero(re.pct_geral) > 0,
+      pctGeral: soNumero(re.pct_geral),
+      nota: textoLimpo(re.nota),
+      distribuicao: (re.distribuicao_tentativas || []).map((d) => ({ tentativas: soNumero(d?.tentativas), count: soNumero(d?.count) })),
+      rows: (re.rows_por_rota || []).map((r) => ({ rota: textoLimpo(r?.rota), total: soNumero(r?.total), multiTentativa: soNumero(r?.multiTentativa), pctMultiTentativa: soNumero(r?.pctMultiTentativa) })),
+    },
+  };
+}
+
+// Espelho completo do artefato -> forma "mirror" das 3 abas.
+export function montarPainelDoArtefato(artefato = {}, hoje = new Date()) {
+  const { DATA = {}, KANBAN = {}, UPDATES = {}, OPS = {} } = artefato || {};
+  return {
+    receita: receitaDeSnapshot(DATA, hoje),
+    kanban: normalizarKanbanArtefato(KANBAN, UPDATES),
+    operacional: normalizarOpsArtefato(OPS),
+  };
+}
+
+// Canônico (fatos crus do Track3R via webhook) -> MESMA forma "mirror" que o
+// artefato, para a tela ter um caminho só. Preenche o que os fatos permitem;
+// o resto fica disponivel:false até haver base.
+export function montarPainelCanonicoMirror({ faturas = [], encomendas = [], oportunidades = [] } = {}, hoje = new Date()) {
+  const receita = {
+    porPeriodo: receitaPorPeriodo(faturas),
+    previsao: previsaoDeFechamento(faturas, hoje),
+    concentracao: concentracaoPorTomador(faturas),
+    resumoMensal: resumoMensalReceita(faturas),
+    ticketMedio: ticketMedioPorCliente(faturas, encomendas),
+  };
+  const pipe = pipelinePorEtapa(oportunidades);
+  const fup = clientesParaFup(oportunidades, hoje);
+  const kanban = {
+    atualizado: "",
+    pipeline: {
+      disponivel: pipe.disponivel,
+      etapas: pipe.etapas.map((e) => ({ etapa: e.etapa, quantidade: e.quantidade, valor: e.valorMensal, itens: e.itens.map((i) => ({ cliente: i.cliente, valor: i.valorMensal })) })),
+      total: pipe.totalOportunidades,
+      valorTotal: pipe.valorMensalTotal,
+    },
+    fup: { disponivel: fup.disponivel, clientes: fup.clientes.map((c) => ({ ...c, texto: "" })) },
+    updatesSemana: { disponivel: false, itens: [] },
+  };
+  const otd = otdPorMes(encomendas);
+  const efet = efetividadeDeEntregas(encomendas);
+  const ocorr = decomposicaoDeOcorrencias(encomendas);
+  const lt = leadTimeDeEntrega(encomendas);
+  const sla = slaPorRota(encomendas);
+  const re = reentregaPorRota(encomendas);
+  const vol = volumeDiarioDePedidos(encomendas);
+  const operacional = {
+    atualizado: "",
+    periodo: "",
+    servicoNota: "",
+    volume: { disponivel: vol.disponivel, meses: vol.meses.map((m) => ({ mes: m.mes, pedidos: m.pedidos })) },
+    otd: {
+      disponivel: otd.disponivel,
+      meta: Math.round((otd.meta || 0.98) * 100),
+      acumuladoPct: otd.otdGeral === null ? 0 : otd.otdGeral * 100,
+      meses: otd.meses.map((m) => ({ mes: m.mes, total: m.entregues, noPrazo: m.noPrazo, foraPrazo: m.entregues - m.noPrazo, pct: m.otd === null ? 0 : m.otd * 100 })),
+      daily: [],
+    },
+    efetividade: {
+      disponivel: efet.disponivel,
+      acumuladoPct: efet.efetividadeGeral === null ? 0 : efet.efetividadeGeral * 100,
+      meses: efet.meses.map((m) => ({ mes: m.mes, total: m.total, finalizadas: m.entregues, insucessos: m.total - m.entregues, pctEfetividade: m.efetividade === null ? 0 : m.efetividade * 100, pctInsucesso: m.efetividade === null ? 0 : (1 - m.efetividade) * 100 })),
+    },
+    ocorrencias: {
+      disponivel: ocorr.disponivel,
+      defaultKey: "",
+      meses: ocorr.disponivel
+        ? [{ key: "geral", label: "Todos os insucessos", mes: "Geral", totalProcessadas: 0, totalInsucessos: ocorr.total, pctInsucesso: 0, motivos: ocorr.tipos.map((t) => ({ motivo: t.tipo, count: t.quantidade, pct: t.percentual * 100, pctOfTotal: 0 })) }]
+        : [],
+    },
+    leadtime: { disponivel: lt.disponivel, nota: "", meses: lt.meses.map((m) => ({ mes: m.mes, medianaH: null, mediaH: m.horasMedias, count: m.pedidos })) },
+    slaRota: { disponivel: sla.disponivel, topN: 20, pctVolumeCoberto: 0, rotasTotais: sla.rotas.length, nota: "", rows: sla.rotas.map((r) => ({ rota: r.rota, total: r.pedidos, foraPrazo: r.foraDoPrazo, pctForaPrazo: r.percentualForaDoPrazo * 100 })) },
+    reentrega: { disponivel: re.disponivel, pctGeral: 0, nota: "", distribuicao: [], rows: re.rotas.map((r) => ({ rota: r.rota, total: r.pedidos, multiTentativa: r.comReentrega, pctMultiTentativa: r.percentualReentrega * 100 })) },
+  };
+  return { receita, kanban, operacional };
+}
+
+// ===== Montagem das três abas (canônico, a partir dos fatos crus) =====
 
 export function montarPainelComercial({ faturas = [], encomendas = [], oportunidades = [] } = {}, hoje = new Date()) {
   return {
