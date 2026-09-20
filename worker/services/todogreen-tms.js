@@ -133,8 +133,8 @@ const documentoDaLinha = (row) => ({
 const modoDisponivel = (integracao, env) => ({
   arquivo: true,
   api: Boolean(integracao?.baseUrl && env?.[integracao?.tokenEnvKey]),
-  webhook: estadoTokensWebhookTrack3r(env, {
-    webhook_secret_env_key: integracao?.webhookSecretEnvKey,
+  webhook: Boolean(integracao) && estadoTokensWebhookTrack3r(env, {
+    webhook_secret_env_key: integracao.webhookSecretEnvKey,
   }).disponivel,
 });
 
