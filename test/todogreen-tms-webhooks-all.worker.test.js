@@ -41,7 +41,7 @@ async function criarIntegracao(usuario) {
   ).bind(usuario.id, usuario.id, usuario.id, agora, agora).run();
 }
 
-const chamar = (tipo, corpo, token = SEGREDO) => worker.fetch(
+const chamar = (tipo, corpo, token = SEGREDO, ambienteExecucao = ambiente()) => worker.fetch(
   new Request(`https://app.test/api/todogreen/tms/webhook/tmw-all-int/${tipo}`, {
     method: "POST",
     headers: {
@@ -51,7 +51,7 @@ const chamar = (tipo, corpo, token = SEGREDO) => worker.fetch(
     },
     body: JSON.stringify(corpo),
   }),
-  ambiente(),
+  ambienteExecucao,
   { waitUntil() {}, passThroughOnException() {} },
 );
 
@@ -72,6 +72,32 @@ beforeAll(async () => {
 });
 
 describe("TRACK3R — webhooks documentados", () => {
+  it("exige Token exclusivo por endpoint quando o modo individual começa", async () => {
+    const ambienteIndividual = {
+      ...ambiente(),
+      TODOGREEN_TRACK3R_TOKEN_OCORRENCIAS: "token-ocorrencias-exclusivo",
+      TODOGREEN_TRACK3R_TOKEN_ENCOMENDAS: "token-encomendas-exclusivo",
+    };
+    const ocorrencia = { encomenda: "", ocorrencia: { descricao: "" } };
+    const encomenda = { codigo_encomenda: "TOKEN-INDIVIDUAL-TESTE" };
+
+    expect((await chamar("encomendas", encomenda,
+      "token-encomendas-exclusivo", ambienteIndividual)).status).toBe(200);
+    expect((await chamar("ocorrencias", ocorrencia,
+      "token-ocorrencias-exclusivo", ambienteIndividual)).status).toBe(200);
+
+    // Nem o token de outro evento nem o compartilhado anterior abrem esta URL.
+    expect((await chamar("encomendas", encomenda,
+      "token-ocorrencias-exclusivo", ambienteIndividual)).status).toBe(401);
+    expect((await chamar("ocorrencias", ocorrencia,
+      "token-encomendas-exclusivo", ambienteIndividual)).status).toBe(401);
+    expect((await chamar("encomendas", encomenda, SEGREDO, ambienteIndividual)).status).toBe(401);
+
+    // Um dos 13 eventos sem token próprio nunca usa o segredo antigo como fallback.
+    expect((await chamar("faturas", { codigo_fatura: 77 }, SEGREDO,
+      ambienteIndividual)).status).toBe(503);
+  });
+
   it("recebe encomenda e preserva o payload bruto na inbox", async () => {
     const payload = {
       data_hora_envio: "01/03/2024 15:21:19",
