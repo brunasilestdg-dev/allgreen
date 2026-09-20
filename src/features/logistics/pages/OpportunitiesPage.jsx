@@ -102,6 +102,10 @@ const CAMPOS_ESTUDO = [
   // oportunidade JÁ criada pode ser editada — sem ele, os 67 projetos que
   // vieram do quadro ficariam presos ao nome que a importação deu.
   "titulo",
+  // Vínculo com a conta (cliente). Sem isto, as oportunidades importadas ficam
+  // sem cliente e não dá para atrelá-las depois.
+  "clientId",
+  "cliente",
   "origin",
   "destination",
   "distanciaKm",
@@ -159,7 +163,7 @@ function CampoEstudo({ form, campo, rotulo, tipo = "text", onChange, opcoes }) {
   );
 }
 
-function EstudoEletrificacaoModal({ registro, conta, onClose, onSave, onDelete, setToast, comments = [], onComment, interactions = [], onInteraction, pessoas = [], onCreateTask, currentUserId }) {
+function EstudoEletrificacaoModal({ registro, conta, clients = [], onClose, onSave, onDelete, setToast, comments = [], onComment, interactions = [], onInteraction, pessoas = [], onCreateTask, currentUserId }) {
   const [enviarApresentacao, setEnviarApresentacao] = useState(false);
   // Regra da titular (30/08): comentário feito AQUI fica só nesta
   // oportunidade; comentário feito na conta aparece em todas as
@@ -221,6 +225,20 @@ function EstudoEletrificacaoModal({ registro, conta, onClose, onSave, onDelete, 
           <legend>1. Rota e demanda</legend>
           <div className="tdg-estudo-grid">
             <CampoEstudo form={form} campo="titulo" rotulo="Nome do negócio" onChange={mudar} />
+            <label>
+              <span>Cliente (conta){form.clientId ? "" : " — não vinculado"}</span>
+              {clients.length ? (
+                <select value={form.clientId || ""} onChange={(event) => {
+                  const c = clients.find((item) => item.id === event.target.value);
+                  setForm((atual) => ({ ...atual, clientId: event.target.value, cliente: c?.name || atual.cliente }));
+                }}>
+                  <option value="">Sem conta vinculada</option>
+                  {[...clients].sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR")).map((c) => (
+                    <option value={c.id} key={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              ) : <input value={form.cliente || ""} onChange={mudar("cliente")} />}
+            </label>
             <CampoEstudo form={form} campo="origin" rotulo="Origem" onChange={mudar} />
             <CampoEstudo form={form} campo="destination" rotulo="Destino" onChange={mudar} />
             <CampoEstudo form={form} campo="distanciaKm" rotulo="Distância por viagem (km)" tipo="number" onChange={mudar} />
@@ -1191,6 +1209,7 @@ export default function OpportunitiesPage({
         <EstudoEletrificacaoModal
           registro={editando}
           conta={clients.find((c) => c.id === editando.clientId) || null}
+          clients={clients}
           onClose={() => setEditandoId(null)}
           onSave={(alteracoes) => onUpdate?.(editando.id, alteracoes)}
           onDelete={onDelete}
