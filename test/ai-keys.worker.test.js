@@ -150,6 +150,15 @@ describe("a chave do espaço vem na frente da chave da plataforma", () => {
     expect(soDoCofre[0][0]).not.toBe("claude");
     expect(soDoCofre.map(([nome]) => nome)).toContain("claude");
   });
+
+  it("fluxo padrão lidera com o Gemini Flash completo, com o flash-lite logo atrás", async () => {
+    const { providerChain } = await import("../worker/services/ai.js");
+    const ordem = providerChain({ GEMINI_API_KEY: "chave-da-plataforma" }, {}).map(([nome]) => nome);
+    expect(ordem[0]).toBe("gemini-flash");
+    expect(ordem).toContain("gemini-lite");
+    // O lite continua na cascata, como queda imediata — só deixou de liderar.
+    expect(ordem.indexOf("gemini-flash")).toBeLessThan(ordem.indexOf("gemini-lite"));
+  });
 });
 
 describe("isolamento entre espaços", () => {

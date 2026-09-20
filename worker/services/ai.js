@@ -781,6 +781,12 @@ export function providerChain(
         "openai",
       ]
     : [
+        // Fluxo padrão: lidera com o Flash COMPLETO (mais inteligente que o
+        // flash-lite, mesma faixa gratuita) e mantém o lite logo atrás como
+        // queda imediata se o Flash limitar/falhar — sem perder velocidade de
+        // contingência. Antes o padrão só usava o lite; o Flash completo ficava
+        // restrito ao fluxo profundo.
+        "gemini-flash",
         "gemini-lite",
         "groq",
         "sambanova",
