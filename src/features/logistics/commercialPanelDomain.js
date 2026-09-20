@@ -540,6 +540,75 @@ export function reentregaPorRota(encomendas = []) {
   return { disponivel: rotas.some((r) => r.comReentrega > 0), rotas };
 }
 
+// ===== Ponte temporária: receita a partir do retrato (artefato/importação) =====
+//
+// O retrato traz `daily` [{data, receita}] e `monthly` [{mes_num, receita,
+// clientes:[{nome, valor, pedidos}]}] JÁ pré-agregados pela extração externa.
+// Devolve EXATAMENTE a mesma forma que a aba Receita monta a partir do ledger
+// canônico — a tela não sabe nem se importa de qual fonte veio.
+export function receitaDeSnapshot({ daily = [], monthly = [] } = {}, hoje = new Date()) {
+  const ano = textoLimpo(daily[0]?.data).slice(0, 4) || String((hoje instanceof Date ? hoje : new Date(hoje)).getUTCFullYear());
+  const mesKey = (mesNum) => `${ano}-${String(mesNum).padStart(2, "0")}`;
+
+  const meses = monthly
+    .map((m) => ({ mes: mesKey(m?.mes_num), receita: soNumero(m?.receita) }))
+    .sort((a, b) => ordenarMeses(a.mes, b.mes));
+  const porDiaMap = new Map();
+  for (const dd of daily) {
+    const mes = mesDe(dd?.data);
+    const dia = diaDe(dd?.data);
+    if (!mes || !dia) continue;
+    if (!porDiaMap.has(mes)) porDiaMap.set(mes, []);
+    porDiaMap.get(mes).push({ dia, receita: soNumero(dd?.receita) });
+  }
+  const porDia = {};
+  for (const [mes, arr] of porDiaMap.entries()) porDia[mes] = arr.sort((a, b) => ordenarMeses(a.dia, b.dia));
+  const porPeriodo = { disponivel: meses.length > 0, meses, porDia };
+
+  const previsao = previsaoDeFechamento(
+    daily.map((dd) => ({ data: dd?.data, valor: soNumero(dd?.receita), mes: mesDe(dd?.data), tomador: "" })),
+    hoje,
+  );
+
+  const porTomador = new Map();
+  for (const m of monthly) {
+    const mes = mesKey(m?.mes_num);
+    for (const c of m?.clientes || []) {
+      const nome = textoLimpo(c?.nome) || "Sem tomador identificado";
+      const chave = normalizarNome(nome);
+      if (!porTomador.has(chave)) porTomador.set(chave, { tomador: nome, total: 0, pedidos: 0, porMes: new Map() });
+      const r = porTomador.get(chave);
+      r.total += soNumero(c?.valor);
+      r.pedidos += soNumero(c?.pedidos);
+      r.porMes.set(mes, soNumero(r.porMes.get(mes)) + soNumero(c?.valor));
+    }
+  }
+  const totalGeral = [...porTomador.values()].reduce((s, r) => s + r.total, 0);
+  const clientesConc = [...porTomador.values()]
+    .map((r) => ({ tomador: r.tomador, total: r.total, participacao: totalGeral > 0 ? r.total / totalGeral : 0, porMes: Object.fromEntries(r.porMes) }))
+    .sort((a, b) => b.total - a.total);
+  const concentracao = { disponivel: clientesConc.length > 0, meses: meses.map((m) => m.mes), clientes: clientesConc, totalGeral };
+
+  const clientePrincipal = clientesConc[0]?.tomador || "";
+  const chavePrincipal = normalizarNome(clientePrincipal);
+  const resumoMeses = meses.map((mm, idx) => {
+    const m = monthly.find((x) => mesKey(x?.mes_num) === mm.mes);
+    const principal = (m?.clientes || [])
+      .filter((c) => normalizarNome(c?.nome) === chavePrincipal)
+      .reduce((s, c) => s + soNumero(c?.valor), 0);
+    const anterior = idx > 0 ? meses[idx - 1].receita : 0;
+    return { mes: mm.mes, receita: mm.receita, varMoM: varMoM(mm.receita, anterior), principal, outros: mm.receita - principal };
+  });
+  const resumoMensal = { disponivel: resumoMeses.length > 0, clientePrincipal, meses: resumoMeses };
+
+  const clientesTicket = [...porTomador.values()]
+    .map((r) => ({ cliente: r.tomador, receita: r.total, pedidos: r.pedidos, ticketMedio: r.pedidos > 0 ? r.total / r.pedidos : null }))
+    .sort((a, b) => b.receita - a.receita);
+  const ticketMedio = { disponivel: clientesTicket.length > 0, temVolume: clientesTicket.some((c) => c.pedidos > 0), clientes: clientesTicket };
+
+  return { porPeriodo, previsao, concentracao, resumoMensal, ticketMedio };
+}
+
 // ===== Montagem das três abas =====
 
 export function montarPainelComercial({ faturas = [], encomendas = [], oportunidades = [] } = {}, hoje = new Date()) {

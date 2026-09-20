@@ -255,6 +255,11 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
     if (!dados?.fontes) return "";
     const { receita, operacional } = dados.fontes;
     if (!receita?.visivel) return "Você vê o pipeline da sua carteira. Receita e operacional consolidados exigem visão de carteira.";
+    if (receita?.fonte === "artefato_temporario" && receita?.retrato) {
+      const r = receita.retrato;
+      const quando = r.importadoEm ? new Date(r.importadoEm).toLocaleString("pt-BR") : "";
+      return `Receita por fonte TEMPORÁRIA (importação do Track3R${r.de ? `, período ${r.de} a ${r.ate}` : ""}${quando ? ` · atualizado ${quando}` : ""}). Migra para os webhooks oficiais automaticamente quando entrarem.`;
+    }
     if (receita?.registros === 0 && operacional?.registros === 0)
       return "Track3R ainda não enviou dados. A tela está pronta e preenche sozinha quando o faturamento/encomendas chegarem (webhook ou importação).";
     return "";

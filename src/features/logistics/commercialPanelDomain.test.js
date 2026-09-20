@@ -17,6 +17,7 @@ import {
   leadTimeDeEntrega,
   slaPorRota,
   reentregaPorRota,
+  receitaDeSnapshot,
   montarPainelComercial,
 } from "./commercialPanelDomain.js";
 
@@ -123,6 +124,37 @@ describe("Aba Receita", () => {
     expect(t.temVolume).toBe(true);
     expect(t.clientes[0].pedidos).toBe(2);
     expect(t.clientes[0].ticketMedio).toBe(500);
+  });
+});
+
+describe("receitaDeSnapshot (ponte temporária do artefato)", () => {
+  const snapshot = {
+    daily: [
+      { data: "2026-07-05", mes_num: 7, receita: 1000 },
+      { data: "2026-08-01", mes_num: 8, receita: 2000 },
+    ],
+    monthly: [
+      { mes_num: 7, mes: "Julho", receita: 1000, clientes: [{ nome: "MAERSK", valor: 1000, pedidos: 40 }] },
+      { mes_num: 8, mes: "Agosto", receita: 3000, clientes: [{ nome: "MAERSK", valor: 2000, pedidos: 60 }, { nome: "Flowserve", valor: 1000, pedidos: 5 }] },
+    ],
+  };
+
+  it("devolve a mesma forma da aba Receita, com número real do retrato", () => {
+    const r = receitaDeSnapshot(snapshot, new Date(Date.UTC(2026, 7, 2)));
+    expect(r.porPeriodo.disponivel).toBe(true);
+    expect(r.porPeriodo.meses).toEqual([
+      { mes: "2026-07", receita: 1000 },
+      { mes: "2026-08", receita: 3000 },
+    ]);
+    expect(r.concentracao.clientes[0].tomador).toBe("MAERSK");
+    expect(r.concentracao.clientes[0].total).toBe(3000);
+    const ago = r.resumoMensal.meses.find((m) => m.mes === "2026-08");
+    expect(ago.principal).toBe(2000); // MAERSK
+    expect(ago.outros).toBe(1000); // Flowserve
+    expect(ago.varMoM).toBeCloseTo(2, 5); // 1000 -> 3000 = +200%
+    const maersk = r.ticketMedio.clientes.find((c) => c.cliente === "MAERSK");
+    expect(maersk.pedidos).toBe(100);
+    expect(maersk.ticketMedio).toBe(30); // 3000 / 100
   });
 });
 

@@ -8,7 +8,7 @@
 //   Operacional -> todogreen_tms_documents      (encomendas/ocorrências)
 //   Kanban      -> todogreen_opportunities       (pipeline nativo; Monday depois)
 import { TENANT_ID, podeNaVertical, podeVerTodaCarteira, recorteDeCarteira } from "./todogreen-access.js";
-import { montarPainelComercial } from "../../src/features/logistics/commercialPanelDomain.js";
+import { montarPainelComercial, receitaDeSnapshot } from "../../src/features/logistics/commercialPanelDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -100,35 +100,76 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
     }));
   };
 
+  // Retrato temporário (artefato/importação): usado como fonte de receita
+  // ENQUANTO o ledger canônico estiver vazio. Some sozinho quando os webhooks
+  // do Track3R começarem a alimentar todogreen_financial_entries.
+  const lerSnapshot = async () => {
+    if (!verTudo) return null;
+    const row = await env.DB.prepare(
+      `SELECT daily_json, monthly_json, captured_from, captured_to, total_receita, imported_at, source
+         FROM todogreen_commercial_snapshots
+        WHERE tenant_id = ? AND workspace_owner_id = ?
+        ORDER BY imported_at DESC LIMIT 1`,
+    ).bind(TENANT_ID, ownerId).first();
+    if (!row) return null;
+    const parse = (v, fb) => { try { return JSON.parse(v || ""); } catch { return fb; } };
+    return {
+      daily: parse(row.daily_json, []),
+      monthly: parse(row.monthly_json, []),
+      capturedFrom: texto(row.captured_from),
+      capturedTo: texto(row.captured_to),
+      totalReceita: Number(row.total_receita) || 0,
+      importedAt: texto(row.imported_at),
+      source: texto(row.source) || "artefato",
+    };
+  };
+
   // Cada fonte falha isolada: uma tabela indisponível vira aviso, não zera o
   // painel inteiro nem finge dado.
-  const [faturas, encomendas, oportunidades] = await Promise.allSettled([
+  const [faturas, encomendas, oportunidades, snapshot] = await Promise.allSettled([
     lerFaturas(),
     lerEncomendas(),
     lerOportunidades(),
+    lerSnapshot(),
   ]);
 
   const erros = {};
-  const valor = (resultado, chave) => {
+  const valor = (resultado, chave, fallback) => {
     if (resultado.status === "fulfilled") return resultado.value;
     console.error(`Painel comercial · falha ao ler ${chave}`, resultado.reason);
     erros[chave] = "indisponivel";
-    return [];
+    return fallback;
   };
 
   const dados = {
-    faturas: valor(faturas, "receita"),
-    encomendas: valor(encomendas, "operacional"),
-    oportunidades: valor(oportunidades, "kanban"),
+    faturas: valor(faturas, "receita", []),
+    encomendas: valor(encomendas, "operacional", []),
+    oportunidades: valor(oportunidades, "kanban", []),
   };
+  const retrato = valor(snapshot, "retrato", null);
 
-  const painel = montarPainelComercial(dados, new Date());
+  const hoje = new Date();
+  const painel = montarPainelComercial(dados, hoje);
+
+  // Fonte de receita: ledger canônico quando houver; senão o retrato temporário.
+  let fonteReceita = "track3r_faturamento";
+  if (dados.faturas.length === 0 && retrato && (retrato.monthly.length > 0 || retrato.daily.length > 0)) {
+    painel.receita = receitaDeSnapshot(retrato, hoje);
+    fonteReceita = retrato.source === "artefato" ? "artefato_temporario" : retrato.source;
+  }
 
   return json({
     ...painel,
     fontes: {
       // Sinaliza de onde cada aba se alimenta e por que pode estar vazia.
-      receita: { fonte: "track3r_faturamento", visivel: verTudo, registros: dados.faturas.length },
+      receita: {
+        fonte: fonteReceita,
+        visivel: verTudo,
+        registros: dados.faturas.length,
+        retrato: retrato
+          ? { de: retrato.capturedFrom, ate: retrato.capturedTo, total: retrato.totalReceita, importadoEm: retrato.importedAt }
+          : null,
+      },
       operacional: { fonte: "track3r_tms", visivel: verTudo, registros: dados.encomendas.length },
       kanban: { fonte: "oportunidades", visivel: true, registros: dados.oportunidades.length },
     },
