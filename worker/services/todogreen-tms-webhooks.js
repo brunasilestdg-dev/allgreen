@@ -7,7 +7,7 @@
 // de domínio é ligado com segurança.
 
 import { TENANT_ID } from "./todogreen-access.js";
-import { sameHash } from "../auth/credenciais.js";
+import { autenticarTokenWebhookTrack3r } from "./todogreen-track3r-webhook-auth.js";
 import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
 import { receberOcorrenciaTrack3r } from "./todogreen-tms.js";
 import { projetarWebhookTrack3r } from "./todogreen-track3r-projectors.js";
@@ -124,7 +124,7 @@ async function integracaoDoWebhook(env, integracaoId) {
   ).bind(integracaoId, TENANT_ID).first();
 }
 
-async function validarAcesso(request, env, integracaoId) {
+async function validarAcesso(request, env, integracaoId, tipo) {
   if (!limitarTaxa(`tms-webhook:${integracaoId}`, 600))
     return { response: jsonFornecedor(false, "Muitas chamadas em sequência. Tente novamente em instantes.", 429) };
 
@@ -135,13 +135,11 @@ async function validarAcesso(request, env, integracaoId) {
   const integracao = await integracaoDoWebhook(env, integracaoId);
   if (!integracao) return { response: TOKEN_INVALIDO() };
 
-  const envKey = texto(integracao.webhook_secret_env_key, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET";
-  const esperado = String(env?.[envKey] || "");
-  if (!esperado)
-    return { response: jsonFornecedor(false, `Integração sem segredo configurado (${envKey}).`, 503) };
-
   const recebido = String(request.headers.get("Token") || "").trim().slice(0, 500);
-  if (!recebido || !sameHash(recebido, esperado)) return { response: TOKEN_INVALIDO() };
+  const token = autenticarTokenWebhookTrack3r(env, integracao, tipo, recebido);
+  if (!token.configurado)
+    return { response: jsonFornecedor(false, `Integração sem token configurado para ${tipo} (${token.nome}).`, 503) };
+  if (!token.autorizado) return { response: TOKEN_INVALIDO() };
 
   return { integracao };
 }
@@ -252,7 +250,7 @@ export async function receberWebhookTrack3r(request, env) {
   // normalização, casamento por CNPJ, idempotência e projeção em operação/POD.
   if (tipo === "ocorrencias") return receberOcorrenciaTrack3r(request, env);
 
-  const acesso = await validarAcesso(request, env, integracaoId);
+  const acesso = await validarAcesso(request, env, integracaoId, tipo);
   if (acesso.response) return acesso.response;
 
   const declarado = Number(request.headers.get("content-length") || 0);
