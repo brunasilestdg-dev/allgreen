@@ -5516,3 +5516,13 @@
 .tdg-fup-acoes { display: flex; gap: 6px; white-space: nowrap; }
 .tdg-mini-danger { border-color: var(--tdg-danger); color: var(--tdg-danger); }
 .tdg-mini-danger:hover { background: var(--tdg-danger); color: #fff; }
+
+/* ===== Painel comercial · gráfico de linha enriquecido ===== */
+.tdg-chart-rico { position: relative; }
+.tdg-chart-grade { stroke: var(--tdg-line); stroke-width: 1; opacity: 0.5; vector-effect: non-scaling-stroke; }
+.tdg-chart-overlay { position: absolute; inset: 0; pointer-events: none; }
+.tdg-chart-ytick { position: absolute; left: 2px; transform: translateY(-50%); font-size: 0.68rem; color: var(--tdg-muted); background: color-mix(in srgb, var(--tdg-card) 78%, transparent); padding: 0 3px; border-radius: 3px; font-variant-numeric: tabular-nums; }
+.tdg-chart-dot { position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: var(--tdg-green); opacity: 0.55; }
+.tdg-chart-dot.pico { width: 8px; height: 8px; margin: -4px 0 0 -4px; opacity: 1; box-shadow: 0 0 0 2px var(--tdg-card); }
+.tdg-chart-rotulo { position: absolute; transform: translate(-50%, -140%); white-space: nowrap; font-size: 0.7rem; font-weight: 600; color: var(--tdg-text); background: color-mix(in srgb, var(--tdg-card) 88%, transparent); padding: 1px 5px; border-radius: 5px; border: 1px solid var(--tdg-line); font-variant-numeric: tabular-nums; }
+.tdg-chart-rotulo.pico { color: var(--tdg-green); border-color: var(--tdg-green); }

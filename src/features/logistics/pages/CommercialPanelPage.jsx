@@ -59,32 +59,53 @@ const Barras = ({ itens, valor, rotulo, formato = num, onClick, selKey, keyOf, c
   );
 };
 
-// Gráfico de linha/área (inline SVG) com faixas de hover (tooltip nativo por ponto).
-const LinhaSVG = ({ serie, meta = null, formatoY = num, altura = 130 }) => {
+// Gráfico de linha/área (inline SVG) com eixo de valores, grade, rótulos diretos
+// no pico e no último ponto, % do dia (comPct) e tooltip nativo por ponto.
+const LinhaSVG = ({ serie, meta = null, formatoY = num, comPct = false, altura = 150 }) => {
   const largura = 720;
-  const pad = { t: 8, r: 8, b: 8, l: 8 };
+  const pad = { t: 12, r: 12, b: 12, l: 12 };
   const ys = serie.map((p) => Number(p.y) || 0);
-  const yMax = Math.max(...ys, meta ?? 0) * 1.05 || 1;
+  const maxV = Math.max(...ys, meta ?? 0);
+  const yMax = maxV * 1.08 || 1;
   const lo = meta !== null ? Math.min(...ys, meta) * 0.98 : 0;
   const span = yMax - lo || 1;
+  const soma = ys.reduce((s, v) => s + v, 0) || 1;
   const x = (i) => pad.l + (i / Math.max(1, serie.length - 1)) * (largura - pad.l - pad.r);
   const y = (v) => pad.t + (1 - (v - lo) / span) * (altura - pad.t - pad.b);
   const linha = serie.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(Number(p.y) || 0).toFixed(1)}`).join(" ");
   const area = `${linha} L${x(serie.length - 1).toFixed(1)},${(altura - pad.b).toFixed(1)} L${x(0).toFixed(1)},${(altura - pad.b).toFixed(1)} Z`;
   const metaY = meta !== null ? y(meta) : null;
   const seg = serie.length > 1 ? (largura - pad.l - pad.r) / (serie.length - 1) : largura;
+  const maxIdx = ys.indexOf(Math.max(...ys));
+  const rotulados = [...new Set([maxIdx, serie.length - 1].filter((i) => i >= 0))];
+  const ticksFrac = [1, 0.5, 0];
+  const pos = (i, v) => ({ left: `${(x(i) / largura) * 100}%`, top: `${(y(v) / altura) * 100}%` });
+  const rotuloPonto = (i) => {
+    const v = ys[i];
+    return `${formatoY(v)}${comPct ? ` · ${((v / soma) * 100).toFixed(1)}%` : ""}`;
+  };
   return (
-    <div className="tdg-chart">
+    <div className="tdg-chart tdg-chart-rico" style={{ height: altura }}>
       <svg viewBox={`0 0 ${largura} ${altura}`} preserveAspectRatio="none" role="img" aria-label="gráfico de linha">
+        {ticksFrac.map((f, k) => <line key={k} className="tdg-chart-grade" x1={pad.l} x2={largura - pad.r} y1={pad.t + (1 - f) * (altura - pad.t - pad.b)} y2={pad.t + (1 - f) * (altura - pad.t - pad.b)} />)}
         <path d={area} className="tdg-chart-area" />
         <path d={linha} className="tdg-chart-linha" />
         {metaY !== null && <line x1={pad.l} x2={largura - pad.r} y1={metaY} y2={metaY} className="tdg-chart-meta" />}
         {serie.map((p, i) => (
           <rect key={i} className="tdg-chart-hit" x={x(i) - seg / 2} y={0} width={seg} height={altura} fill="transparent">
-            <title>{`${p.label}: ${formatoY(Number(p.y) || 0)}`}</title>
+            <title>{`${p.label}: ${rotuloPonto(i)}`}</title>
           </rect>
         ))}
       </svg>
+      <div className="tdg-chart-overlay">
+        {ticksFrac.map((f, k) => (
+          <span key={k} className="tdg-chart-ytick" style={{ top: `${((pad.t + (1 - f) * (altura - pad.t - pad.b)) / altura) * 100}%` }}>{formatoY(lo + f * span)}</span>
+        ))}
+        {serie.map((p, i) => <span key={i} className={`tdg-chart-dot${i === maxIdx ? " pico" : ""}`} style={pos(i, ys[i])} />)}
+        {rotulados.map((i) => (
+          <span key={i} className={`tdg-chart-rotulo${i === maxIdx ? " pico" : ""}`} style={pos(i, ys[i])}>{rotuloPonto(i)}</span>
+        ))}
+      </div>
       <div className="tdg-chart-eixo"><span>{serie[0]?.label}</span>{meta !== null && <span className="tdg-chart-meta-rot">meta {formatoY(meta)}</span>}<span>{serie[serie.length - 1]?.label}</span></div>
     </div>
   );
@@ -157,8 +178,8 @@ function AbaReceita({ receita }) {
               comPct onClick={(i) => setMesSel(i.mes)} selKey={mesAtivo} keyOf={(i) => i.mes} />
             {serieDiaria.length > 1 && (
               <>
-                <div className="tdg-chart-controls"><span className="tdg-nota">Dia a dia · <strong>{mesLabel(mesAtivo)}</strong></span></div>
-                <LinhaSVG serie={serieDiaria} formatoY={brl} />
+                <div className="tdg-chart-controls"><span className="tdg-nota">Dia a dia · <strong>{mesLabel(mesAtivo)}</strong> · total {brl(serieDiaria.reduce((s, d) => s + (Number(d.y) || 0), 0))}</span></div>
+                <LinhaSVG serie={serieDiaria} formatoY={brl} comPct />
               </>
             )}
           </>
