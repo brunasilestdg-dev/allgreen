@@ -280,6 +280,8 @@ const friendlyCommercialText = (value) =>
 
 const IMPLEMENTED_MODULE_IDS = new Set([
   "dashboard",
+  "painel-comercial",
+  "conectores",
   "dashboard-esg",
   "central-esg",
   "relatorios-esg",
