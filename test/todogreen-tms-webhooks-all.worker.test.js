@@ -92,7 +92,7 @@ describe("TRACK3R — webhooks documentados", () => {
     expect(row.external_ref).toBe("123");
     expect(row.source_sent_at).toBe("01/03/2024 15:21:19");
     expect(row.status).toBe("processed");
-    expect(JSON.parse(row.payload_json).document.numero).toBe("12345678");
+    expect(JSON.parse(row.payload_json).documento.numero).toBe("12345678");
   });
 
   it("projeta lista e encomenda no TMS independentemente da ordem de chegada", async () => {
