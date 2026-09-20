@@ -1,6 +1,21 @@
 # AG-SEP-04 — Plano e matriz de migração de dados (D1)
 
-Status: `AG-SEP-04 PLANO — aguarda decisão da titular e leitura de produção`
+Status: `AG-SEP-04 PLANO — decisão: Estratégia B (coexistência); aguarda leitura de produção`
+
+## 0. Decisão da titular (confirmada)
+
+Os dois produtos **coexistem**:
+
+| Produto | Papel | Worker | D1 | Domínio | `TDG_ENVIRONMENT` |
+|---|---|---|---|---|---|
+| **All Green** | **Produção** | `allgreen` | `allgreen-db` | `orianone.app` / `www.orianone.app` (via OrianBridge) | `production` |
+| **Seu Funcionário** | **Teste / staging** | `seufuncionario-expo` | `seu-funcionario-db` (permanece) | apenas `*.workers.dev` (sai do `orianone.app`) | ajustar para não-produção (`preview`/`test`) |
+
+Consequências travadas:
+- Estratégia de dados = **B (cópia filtrada por conta)** — §4.
+- Os dados de produção do All Green (grafo de tenant + `todogreen_*`) são **copiados** para `allgreen-db`; a origem permanece intacta e passa a ser o ambiente de teste do Seu Funcionário.
+- Domínio (`orianone.app`, OrianBridge) é **configuração de infraestrutura** (rotas `wrangler.jsonc` + env), nunca literal em regra de negócio (§9 de `ALLGREEN_REPOSITORY_SEPARATION.md`).
+- Após o corte, o worker antigo perde o custom domain `orianone.app` e deve ter `TDG_ENVIRONMENT` reclassificado para não rotular teste como produção na tela "Saúde do sistema".
 
 Base: `main` no commit da separação standalone (rebrand All Green + `allgreen-db` criado).
 
@@ -111,7 +126,18 @@ Colunas exigidas pelo §5: `objeto | tabela(s) | dono | leitores | escritores | 
 | **B** | **Cópia filtrada por conta** | Copiar só contas ligadas a tenant (§1.1) + todo `todogreen_*` + tenant graph; Seu Funcionário puro fica no D1 antigo | Bancos realmente independentes; cada produto segue | Complexo; risco de conta usada nos dois lados; delta duplo | Os dois produtos seguem vivos e separados |
 | **C** | **DB compartilhado interino** | Worker novo aponta o binding `DB` para o **`seu-funcionario-db` existente**; cutover de `orianone.app`; split real do D1 depois | Zero cópia; zero fork; dados intactos; reversível | Não entrega D1 independente ainda; reutiliza infra de produção (explícito, não implícito) | Cutover urgente com integridade máxima; separar o D1 depois com calma |
 
-**Recomendação:** dado que o trabalho é "All Green **standalone** (migração do To Do Green)", o fim natural é **A** (All Green passa a ser o produto). Se houver dúvida sobre continuar o Seu Funcionário, faça **C** agora (seguro e reversível) e decida A×B depois. **B** só se os dois produtos realmente coexistirem.
+**Decisão travada: Estratégia B.** Os dois produtos coexistem (§0): All Green
+em produção no `orianone.app` com `allgreen-db`; Seu Funcionário como ambiente
+de teste no worker/DB antigos. Copiar para `allgreen-db` apenas o conjunto All
+Green (contas ligadas a tenant pela §1.1 + `tenants`/`tenant_users` + todo
+`todogreen_*` + os `workspaces`/`contacts`/`interactions`/`public_*` dessas
+contas). O que não é All Green permanece só na origem (teste).
+
+**Risco a tratar na execução (contas que usam os dois lados):** uma conta All
+Green que também tenha dados no workspace genérico terá seu blob copiado junto
+(vai com o `user`); após o corte, edições no ambiente de teste divergem do de
+produção — aceitável porque teste não é fonte canônica. A consulta da §7
+mede quantas contas estão nessa situação antes de executar.
 
 ## 5. Runbook de execução (após decisão + homologação)
 
