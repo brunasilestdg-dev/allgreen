@@ -1,9 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "seufuncionario-expo",
+  "name": "allgreen",
   "main": "worker-entry.js",
   "compatibility_date": "2026-07-14",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    { "pattern": "orianone.app", "custom_domain": true },
+    { "pattern": "www.orianone.app", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -27,8 +31,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "seu-funcionario-db",
-      "database_id": "dfa94699-fc55-4129-bca1-ec718f5fc048"
+      "database_name": "allgreen-db",
+      "database_id": "00000000-0000-0000-0000-000000000000"
     }
   ],
   "vars": {

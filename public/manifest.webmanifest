@@ -1,7 +1,7 @@
 {
-  "name": "Seu Funcionário",
-  "short_name": "Seu Funcionário",
-  "description": "Estratégia, marketing, vendas, organização e execução em um só lugar.",
+  "name": "All Green",
+  "short_name": "All Green",
+  "description": "Comercial, operação, financeiro, gestão e ESG no mesmo fluxo.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

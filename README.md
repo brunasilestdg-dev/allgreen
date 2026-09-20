@@ -1,21 +1,21 @@
-# Seu Funcionário
+# All Green
 
-**Tenha o funcionário que sua empresa precisa, quando precisar.**
+**Comercial, operação, financeiro, gestão e ESG no mesmo fluxo.**
 
-Plataforma de inteligência empresarial em português do Brasil, publicada em https://seufuncionario-expo.brunapsiles.workers.dev — uma equipe digital para quem está começando sozinho até empresas em expansão:
+All Green é uma plataforma de gestão empresarial em português do Brasil, publicada em https://orianone.app — uma equipe digital que acompanha o negócio do primeiro cliente até a expansão:
 
-- **Mais de 40 funcionários especialistas** com instruções próprias: Estratégia, Jurídico, Marketing, TI, Vendas, Financeiro, RH, Operações, Produto, Projetos, Customer Success, Dados, Logística, Compras, Compliance, Segurança da Informação, Growth, E-commerce, Captação e muitos outros
-- **Diretor de Inteligência**: o funcionário principal que entende o pedido, envolve as áreas certas, divide demandas complexas em etapas e consolida um plano único — o usuário não precisa saber qual departamento chamar
-- **Contratação dinâmica**: crie novos funcionários sob medida (por setor, profissão, projeto ou problema) direto no chat, sem reconstruir a aplicação
-- **Adaptação por segmento**: as respostas se ajustam a setor, porte, estágio e objetivo do negócio cadastrado
-- Painel de tarefas, CRM de leads, controle financeiro, documentos versionados, criador de sites com publicação e captação de contatos, estúdio de logos/imagens com IA, vídeo opcional e trilhas de certificação
-- **Aplicativo instalável (PWA)**: funciona como site e como app no celular e no computador
-- **Sincronização multi-dispositivo**: os projetos acompanham a conta — entre de qualquer aparelho e continue de onde parou
-- **Central Hoje**: prioriza tarefas, clientes, agenda e meta semanal em uma única próxima ação
-- **Importação aberta**: contatos por CSV, financeiro por CSV/OFX e documentos em formatos comuns
-- **Ações confirmáveis da IA**: respostas podem virar tarefa, documento ou projeto sem executar alterações silenciosas
+- **Time de especialistas com IA**: Estratégia, Comercial, Operações, Financeiro, Jurídico, Marketing, RH, Projetos, Dados, Logística, Compras, Compliance, Segurança da Informação e ESG, cada um com instruções próprias.
+- **Direção de Inteligência**: entende o pedido, aciona as áreas certas, quebra demandas complexas em etapas e consolida um plano único — sem exigir que o usuário saiba qual área chamar.
+- **Módulos sob medida**: crie novos especialistas por setor, profissão, projeto ou problema direto no fluxo, sem reconstruir a aplicação.
+- **Adaptação por segmento**: as respostas se ajustam a setor, porte, estágio e objetivo do negócio cadastrado.
+- **Operação completa**: painel de tarefas, CRM de leads, controle financeiro, documentos versionados, criador de sites com captação de contatos, estúdio de imagens com IA e trilhas de certificação.
+- **Aplicativo instalável (PWA)**: funciona como site e como app no celular e no computador.
+- **Sincronização multi-dispositivo**: os projetos acompanham a conta — entre de qualquer aparelho e continue de onde parou.
+- **Central Hoje**: prioriza tarefas, clientes, agenda e meta da semana em uma única próxima ação.
+- **Importação aberta**: contatos por CSV, financeiro por CSV/OFX e documentos em formatos comuns.
+- **Ações confirmáveis da IA**: respostas viram tarefa, documento ou projeto sem executar alterações silenciosas.
 
-O núcleo foi desenhado para combinar as cotas gratuitas de Google, Cloudflare, Groq, Cerebras, Mistral, OpenRouter, GitHub Models e Hugging Face. Cotas e filas dos provedores ainda podem existir. O xAI não participa da cascata automática: só é acionado após confirmação explícita de uso pago. Se todas as rotas gratuitas falharem, o app entrega um plano de contingência local sem inventar informações.
+O núcleo combina as cotas gratuitas de Google, Cloudflare, Groq, Cerebras, Mistral, OpenRouter, GitHub Models e Hugging Face. O provedor pago (xAI) fica fora da cascata automática e só é acionado após confirmação explícita. Se todas as rotas gratuitas falharem, o app entrega um plano de contingência local sem inventar informações.
 
 ## Estrutura
 
@@ -24,25 +24,25 @@ O núcleo foi desenhado para combinar as cotas gratuitas de Google, Cloudflare, 
 | `src/`        | Interface do aplicativo (React + Vite)                                        |
 | `worker.js`   | Backend (Cloudflare Worker): login, chat de IA, mídia, sites públicos e leads |
 | `migrations/` | Banco de dados de contas (Cloudflare D1)                                      |
-| `public/`     | Arquivos estáticos (favicon)                                                  |
+| `public/`     | Arquivos estáticos (ícones, manifest, service worker)                         |
 | `video-ai/`   | Servidor próprio e opcional de geração de vídeo (GPU, Docker)                 |
 
 ## Rodar no seu computador
 
 ```bash
-npm install
+npm ci         # instala as dependências travadas no lockfile
 npm run dev    # abre a interface em modo desenvolvimento
 npm test       # roda os testes
 npm run verify # roda lint e todos os testes
 ```
 
-## Lançar na internet (gratuito, via Cloudflare)
+## Publicar na Cloudflare
 
-1. Crie uma conta gratuita em [dash.cloudflare.com](https://dash.cloudflare.com)
+1. Crie uma conta em [dash.cloudflare.com](https://dash.cloudflare.com).
 2. No terminal, dentro da pasta do projeto:
    ```bash
-   npx wrangler login                                   # conecta sua conta
-   npx wrangler d1 create seu-funcionario-db            # cria o banco de contas
+   npx wrangler login                        # conecta sua conta
+   npx wrangler d1 create allgreen-db        # cria o banco de contas
    ```
    Copie o `database_id` que aparecer e cole no campo `database_id` do arquivo `wrangler.jsonc`.
 3. Crie as tabelas e cadastre a chave de IA (gratuita em [aistudio.google.com/apikey](https://aistudio.google.com/apikey)):
@@ -54,7 +54,7 @@ npm run verify # roda lint e todos os testes
    ```bash
    npm run deploy
    ```
-   Ao final o terminal mostra o endereço público do seu app (`https://seufuncionario-expo.<sua-conta>.workers.dev`).
+   O Worker `allgreen` responde nos domínios `orianone.app` e `www.orianone.app` configurados em `wrangler.jsonc`.
 
 ### Chaves opcionais
 
@@ -70,17 +70,17 @@ npm run verify # roda lint e todos os testes
 | `HF_TOKEN`                        | Hugging Face, crédito gratuito muito limitado      |
 | `XAI_API_KEY`                     | Uso pago opcional e sempre confirmado pelo usuário |
 | `VIDEO_AI_URL` + `VIDEO_AI_TOKEN` | Servidor próprio de vídeo (`video-ai/`)            |
-| `SUPPORT_EMAIL`                    | Canal de suporte mostrado no aplicativo              |
+| `SUPPORT_EMAIL`                   | Canal de suporte mostrado no aplicativo            |
 
 Cadastre cada segredo com `npx wrangler secret put NOME_DO_SEGREDO`. A rede de provedores é uma decisão interna do backend: nomes, chaves, custos e estado da infraestrutura não são exibidos ao usuário final.
 
-Sem as opcionais o app continua funcionando: o chat usa a cascata disponível, imagens e logos usam o FLUX na cota gratuita do Cloudflare, e o gerador de vídeo indica a alternativa gratuita no Hugging Face. O estúdio não afirma que o vídeo próprio está disponível sem `VIDEO_AI_URL` e `VIDEO_AI_TOKEN`.
+Sem as opcionais o app continua funcionando: o chat usa a cascata disponível, imagens e logos usam o FLUX na cota gratuita do Cloudflare, e o gerador de vídeo indica a alternativa gratuita no Hugging Face.
 
 ## Segurança
 
 - Senhas protegidas com PBKDF2 (100.000 iterações) e sal individual; sessões expiram em 30 dias.
-- As rotas de IA exigem login, evitando que estranhos consumam sua cota gratuita.
-- Limite de 8 requisições por minuto por IP contra abuso.
+- As rotas de IA exigem login, evitando que estranhos consumam a cota gratuita.
+- Limite de requisições por IP contra abuso.
 - Sites públicos recebem HTML higienizado e uma política CSP; os leads ficam vinculados ao dono do site.
 
 ## Operação e piloto

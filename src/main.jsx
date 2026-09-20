@@ -100,7 +100,7 @@ class ErrorBoundary extends React.Component {
     return (
       <div className="crash-screen">
         <div className="crash-card">
-          <strong>{/^\/todogreen(?:\/|$)/.test(location.pathname) ? "To Do Green" : "Seu Funcionário"}</strong>
+          <strong>All Green</strong>
           <h1>Algo deu errado</h1>
           <p>
             Encontramos um problema inesperado. Seus dados estão salvos; tente

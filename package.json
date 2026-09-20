@@ -1,5 +1,5 @@
 {
-  "name": "seu-funcionario",
+  "name": "allgreen",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -13,9 +13,9 @@
     "test:unit": "vitest run --config vite.config.js",
     "test:worker": "vitest run --config vitest.worker.config.js",
     "deploy": "npm run verify && npm run build && npm run deploy:cloudflare",
-    "deploy:cloudflare": "npx wrangler d1 migrations apply seu-funcionario-db --remote && npx wrangler deploy",
+    "deploy:cloudflare": "npx wrangler d1 migrations apply allgreen-db --remote && npx wrangler deploy",
     "deploy:cloudflare:gated": "npm run test:e2e:critical:ci && npm run deploy:cloudflare",
-    "db:migrate": "npx wrangler d1 migrations apply seu-funcionario-db --remote",
+    "db:migrate": "npx wrangler d1 migrations apply allgreen-db --remote",
     "test:e2e": "playwright test",
     "test:e2e:acesso": "playwright test e2e/vertical-acesso.spec.js",
     "test:e2e:todogreen": "playwright test e2e/todogreen-smoke.spec.js e2e/todogreen-navegacao.spec.js e2e/todogreen-visual.spec.js e2e/todogreen-roteirizacao.spec.js e2e/todogreen-portais-auth.spec.js",
