@@ -263,7 +263,41 @@ function NotaFup({ item, onNota }) {
   );
 }
 
-function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova }) {
+function FupRow({ c, etapas, onRenomear, onValor, onMover, onFup, onNota, onExcluir }) {
+  const [nome, setNome] = useState(c.cliente);
+  const [valor, setValor] = useState(c.valor);
+  useEffect(() => { setNome(c.cliente); }, [c.cliente]);
+  useEffect(() => { setValor(c.valor); }, [c.valor]);
+  return (
+    <tr>
+      <td>
+        <input className="tdg-inline-cell" value={nome} onChange={(e) => setNome(e.target.value)}
+          onBlur={() => { const v = nome.trim(); if (v && v !== c.cliente) onRenomear(c.id, v); else if (!v) setNome(c.cliente); }}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+      </td>
+      <td>
+        <select className="tdg-inline-select" value={c.etapa} onChange={(e) => onMover(c.id, e.target.value)}>
+          {etapas.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </td>
+      <td>
+        <input className="tdg-inline-cell tdg-num" type="number" value={valor} onChange={(e) => setValor(e.target.value)}
+          onBlur={() => { const nv = Number(valor) || 0; if (nv !== c.valor) onValor(c.id, nv); }}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+      </td>
+      <td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
+      <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
+      <td className="tdg-td-texto"><NotaFup item={c} onNota={onNota} /></td>
+      <td className="tdg-fup-acoes">
+        <button type="button" className="tdg-mini" onClick={() => onFup(c.id)} title="Registrar follow-up hoje (zera o contador)">✓ FUP</button>
+        <button type="button" className="tdg-mini tdg-mini-danger" title="Excluir (vai para arquivados)"
+          onClick={() => { if (window.confirm(`Excluir "${c.cliente}"? A oportunidade vai para arquivados.`)) onExcluir(c.id); }}>🗑</button>
+      </td>
+    </tr>
+  );
+}
+
+function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear, onExcluir }) {
   const { pipeline, fup, updatesSemana, atualizado, editavel } = kanban;
   const etapas = useMemo(() => {
     const doPipe = pipeline.etapas.map((e) => e.etapa);
@@ -316,15 +350,18 @@ function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova }) {
         </Secao>
       )}
 
-      <Secao titulo="Clientes para FUP" kicker="SEM ACOMPANHAMENTO">
+      <Secao titulo="Clientes para FUP" kicker="SEM ACOMPANHAMENTO" nota={editavel ? "Edite o nome, a etapa, o valor e o contexto direto na linha. Use 🗑 para excluir o que não for oportunidade (ex.: “Implementação do TMS”)." : ""}>
         {fup.disponivel ? (
           <table className="tdg-tabela">
-            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th>{editavel && <th></th>}</tr></thead>
+            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th>{editavel && <th>Ações</th>}</tr></thead>
             <tbody>{fup.clientes.map((c, idx) => (
-              <tr key={c.id || idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
-                <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
-                <td className="tdg-td-texto">{editavel && c.id ? <NotaFup item={c} onNota={onNota} /> : (c.texto || "—")}</td>
-                {editavel && <td>{c.id && <button type="button" className="tdg-mini" onClick={() => onFup(c.id)} title="Registrar follow-up hoje (zera o contador)">✓ FUP hoje</button>}</td>}</tr>
+              editavel && c.id
+                ? <FupRow key={c.id} c={c} etapas={etapas} onRenomear={onRenomear} onValor={onValor} onMover={onMover} onFup={onFup} onNota={onNota} onExcluir={onExcluir} />
+                : (
+                  <tr key={c.id || idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
+                    <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
+                    <td className="tdg-td-texto">{c.texto || "—"}</td></tr>
+                )
             ))}</tbody>
           </table>
         ) : <Vazio>Sem oportunidades para acompanhar.</Vazio>}
@@ -470,6 +507,14 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
   const valorOportunidade = (id, valor) => patchOportunidade(id, { valorMensal: valor });
   const registrarFup = (id) => patchOportunidade(id, { ultimaInteracaoEm: new Date().toISOString() });
   const salvarNotaFup = (id, texto) => patchOportunidade(id, { fupTexto: String(texto || "").slice(0, 2000) });
+  const renomearOportunidade = (id, nome) => patchOportunidade(id, { cliente: nome, titulo: nome });
+  const excluirOportunidade = async (id) => {
+    try {
+      const resp = await fetch(`/api/todogreen/records/opportunities/${id}`, { method: "DELETE", headers: authHeaders?.() || {} });
+      if (!resp.ok) { const d = await resp.json().catch(() => ({})); throw new Error(d.error || "Não foi possível excluir."); }
+      await carregar();
+    } catch (e) { setToast?.(e.message); }
+  };
   const novaOportunidade = async ({ cliente, valor, etapa }) => {
     try {
       const resp = await fetch(`/api/todogreen/records/opportunities`, {
@@ -511,7 +556,7 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
       </div>
 
       {dados && aba === "receita" && <AbaReceita receita={dados.receita} />}
-      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNota={salvarNotaFup} onNova={novaOportunidade} />}
+      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNota={salvarNotaFup} onNova={novaOportunidade} onRenomear={renomearOportunidade} onExcluir={excluirOportunidade} />}
       {dados && aba === "operacional" && <AbaOperacional operacional={dados.operacional} />}
     </div>
   );
