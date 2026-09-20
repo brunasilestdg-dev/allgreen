@@ -289,6 +289,11 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
     return handleTransactionsWithControls(request, env, access, user);
 
   if (path.startsWith("/api/todogreen/master-data")) {
+    // Defesa em profundidade: os cadastros mestres guardam PII (motoristas, CNH,
+    // chave PIX). Além da permissão por recurso, o motorista é barrado por PAPEL
+    // aqui, como nas demais rotas internas — ele usa o portal do motorista.
+    if (access.role === "motorista")
+      return response({ error: "Motoristas usam o portal do motorista (/portal-motorista)." }, 403);
     const masterResource = path.replace(/^\/api\/todogreen\/master-data\/?/, "").split("/").filter(Boolean)[0] || "";
     const required = MASTER_PERMISSIONS[masterResource] || [];
     if (required.length && !canAny(access, required))

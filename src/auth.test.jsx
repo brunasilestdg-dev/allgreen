@@ -43,12 +43,7 @@ describe("acesso à conta", () => {
     fireEvent.change(screen.getByLabelText("Senha"), {
       target: { value: "senha-segura" },
     });
-    fireEvent.submit(
-      screen
-        .getByRole("heading", { name: "Entre no ambiente To Do Green" })
-        .closest(".auth-card")
-        .querySelector("form"),
-    );
+    fireEvent.submit(screen.getByLabelText("E-mail").closest("form"));
 
     await waitFor(() =>
       expect(window.location.pathname).toBe("/todogreen"),

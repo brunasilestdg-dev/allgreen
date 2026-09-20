@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ErpRegistriesPage from "./ErpRegistriesPage.jsx";
 
@@ -64,5 +64,138 @@ describe("cadastros agrupados por correlação", () => {
     rerender(<ErpRegistriesPage registros={{ costCenters: [], accounts: [], bankAccounts: [] }} criar={vi.fn()} setToast={vi.fn()} secao="accounts" areaLabel="Financeiro" />);
     expect(await screen.findByRole("heading", { name: /Plano de contas/ })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /^Veículos/ })).not.toBeInTheDocument();
+  });
+});
+
+// Editar e arquivar por linha: a tela deixou de ser só-criar. Cada fonte tem seu
+// caminho — records vai pelos ganchos (atualizar/arquivar), fleet/master pela API
+// — e o UPDATE sempre carrega a revision lida (controle otimista).
+describe("editar e arquivar por linha", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  const stubEmpty = () =>
+    vi.stubGlobal("fetch", vi.fn((url) => Promise.resolve(new Response(JSON.stringify(
+      String(url).includes("/fleet") ? { vehicles: [] } : { records: [] },
+    ), { status: 200 }))));
+
+  const abrirForm = () => document.querySelector("form.tdg-registry-form");
+
+  it("records (Plano de contas): Editar chama atualizar com payload + revision", async () => {
+    stubEmpty();
+    const atualizar = vi.fn(() => Promise.resolve({ id: "acc1", codigo: "1.1", nome: "Caixa Geral", natureza: "ativo", revision: 3 }));
+    render(<ErpRegistriesPage
+      registros={{ costCenters: [], bankAccounts: [], accounts: [{ id: "acc1", codigo: "1.1", nome: "Caixa", natureza: "ativo", revision: 2 }] }}
+      criar={vi.fn()} atualizar={atualizar} arquivar={vi.fn()} setToast={vi.fn()} secao="accounts" areaLabel="Financeiro"
+    />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Editar" }));
+    // Modal em modo edição, pré-preenchido (a natureza vira o campo `tipo`).
+    expect(screen.getByRole("dialog", { name: /Editar conta/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Caixa Geral" } });
+    fireEvent.submit(abrirForm());
+
+    await waitFor(() => expect(atualizar).toHaveBeenCalledWith(
+      "accounts", "acc1", { codigo: "1.1", nome: "Caixa Geral", tipo: "ativo", revision: 2 },
+    ));
+  });
+
+  it("records (Plano de contas): Arquivar confirma e chama arquivar(colecao, id)", async () => {
+    stubEmpty();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const arquivar = vi.fn(() => Promise.resolve());
+    render(<ErpRegistriesPage
+      registros={{ costCenters: [], bankAccounts: [], accounts: [{ id: "acc1", codigo: "1.1", nome: "Caixa", natureza: "ativo", revision: 2 }] }}
+      criar={vi.fn()} atualizar={vi.fn()} arquivar={arquivar} setToast={vi.fn()} secao="accounts" areaLabel="Financeiro"
+    />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Arquivar" }));
+    expect(window.confirm).toHaveBeenCalled();
+    await waitFor(() => expect(arquivar).toHaveBeenCalledWith("accounts", "acc1"));
+  });
+
+  it("records: Arquivar cancelado (confirm=false) não chama arquivar", async () => {
+    stubEmpty();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const arquivar = vi.fn();
+    render(<ErpRegistriesPage
+      registros={{ costCenters: [], bankAccounts: [], accounts: [{ id: "acc1", codigo: "1.1", nome: "Caixa", natureza: "ativo", revision: 2 }] }}
+      criar={vi.fn()} atualizar={vi.fn()} arquivar={arquivar} setToast={vi.fn()} secao="accounts" areaLabel="Financeiro"
+    />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Arquivar" }));
+    expect(arquivar).not.toHaveBeenCalled();
+  });
+
+  const employee = { id: "e1", employeeCode: "E1", fullName: "Maria", jobTitle: "Analista", department: "Ops", employmentType: "employee", status: "active", revision: 4 };
+  const stubEmployees = () => {
+    const fn = vi.fn((url, options = {}) => {
+      const u = String(url);
+      const method = options.method || "GET";
+      if (u.includes("/master-data/employees/e1") && method === "PATCH")
+        return Promise.resolve(new Response(JSON.stringify({ record: { ...employee, fullName: "Maria Silva", revision: 5 } }), { status: 200 }));
+      if (u.includes("/master-data/employees/e1") && method === "DELETE")
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      if (u.includes("/master-data/employees") && method === "GET")
+        return Promise.resolve(new Response(JSON.stringify({ records: [employee] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ records: [] }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fn);
+    return fn;
+  };
+
+  it("master (Colaboradores): Editar faz PATCH na API com revision", async () => {
+    const fetchMock = stubEmployees();
+    render(<ErpRegistriesPage registros={{}} criar={vi.fn()} atualizar={vi.fn()} arquivar={vi.fn()} setToast={vi.fn()} secao="employees" areaLabel="Colaboradores" />);
+
+    await screen.findByText("Maria");
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    fireEvent.change(screen.getByLabelText("Nome completo"), { target: { value: "Maria Silva" } });
+    fireEvent.submit(abrirForm());
+
+    await waitFor(() => {
+      const patch = fetchMock.mock.calls.find(([u, o]) => String(u).includes("/master-data/employees/e1") && o?.method === "PATCH");
+      expect(patch).toBeTruthy();
+      const body = JSON.parse(patch[1].body);
+      expect(body.revision).toBe(4);
+      expect(body.fullName).toBe("Maria Silva");
+    });
+    // A linha é trocada pelo registro devolvido pela API.
+    expect(await screen.findByText("Maria Silva")).toBeInTheDocument();
+  });
+
+  it("master (Colaboradores): Arquivar faz DELETE e remove a linha", async () => {
+    const fetchMock = stubEmployees();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<ErpRegistriesPage registros={{}} criar={vi.fn()} atualizar={vi.fn()} arquivar={vi.fn()} setToast={vi.fn()} secao="employees" areaLabel="Colaboradores" />);
+
+    await screen.findByText("Maria");
+    fireEvent.click(screen.getByRole("button", { name: "Arquivar" }));
+
+    await waitFor(() => {
+      const del = fetchMock.mock.calls.find(([u, o]) => String(u).includes("/master-data/employees/e1") && o?.method === "DELETE");
+      expect(del).toBeTruthy();
+    });
+    await waitFor(() => expect(screen.queryByText("Maria")).not.toBeInTheDocument());
+  });
+
+  it("master: 409 na edição mostra toast pedindo para recarregar", async () => {
+    const fn = vi.fn((url, options = {}) => {
+      const u = String(url);
+      const method = options.method || "GET";
+      if (u.includes("/master-data/employees/e1") && method === "PATCH")
+        return Promise.resolve(new Response(JSON.stringify({ error: "Este cadastro mudou. Recarregue antes de salvar." }), { status: 409 }));
+      if (u.includes("/master-data/employees") && method === "GET")
+        return Promise.resolve(new Response(JSON.stringify({ records: [employee] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ records: [] }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fn);
+    const setToast = vi.fn();
+    render(<ErpRegistriesPage registros={{}} criar={vi.fn()} atualizar={vi.fn()} arquivar={vi.fn()} setToast={setToast} secao="employees" areaLabel="Colaboradores" />);
+
+    await screen.findByText("Maria");
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    fireEvent.submit(abrirForm());
+
+    await waitFor(() => expect(setToast).toHaveBeenCalledWith(expect.stringMatching(/Recarregue/)));
   });
 });

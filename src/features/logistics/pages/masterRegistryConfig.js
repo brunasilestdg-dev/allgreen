@@ -112,4 +112,44 @@ export const payloadFor = (tab,form) => {
   return body;
 };
 
+// Campos numéricos que payloadFor coage para Number — aqui voltam a string para
+// o input controlado do form (que trabalha com texto).
+const NUMERIC_FORM_FIELDS = {
+  items: ["estoqueMinimo", "custoReferencia"],
+  vehicles: ["modelYear", "payloadKg", "batteryCapacityKwh", "realRangeKm"],
+  routes: ["distanceKm", "estimatedDurationMin", "tollAmount"],
+};
+const paraTexto = (v) => (v === undefined || v === null || v === "" ? "" : String(v));
+
+// INVERSO de payloadFor: recebe um registro salvo (records, fleet ou master) e
+// devolve o objeto de `form` com as MESMAS chaves de FORMS[tab].fields, para
+// pré-preencher o modal em modo edição. Desfaz as transformações não triviais
+// de payloadFor: papeis (array → primeiro elemento), razaoSocial → nome,
+// address {full,cep} → addressText + cep, numéricos → string e isDefault
+// (boolean → "true"/"false"). Cobre todas as abas das três fontes.
+export const initialFromRecord = (tab, record = {}) => {
+  const inicial = FORMS[tab]?.initial || {};
+  const numericos = new Set(NUMERIC_FORM_FIELDS[tab] || []);
+  const form = {};
+  for (const [field] of FORMS[tab]?.fields || []) {
+    form[field] = numericos.has(field) ? paraTexto(record[field]) : record[field] ?? inicial[field] ?? "";
+  }
+  if (tab === "parties") {
+    form.nome = record.razaoSocial ?? record.nome ?? "";
+    form.papeis = (Array.isArray(record.papeis) ? record.papeis[0] : record.papeis) ?? inicial.papeis ?? "";
+  }
+  if (tab === "accounts") {
+    // O serviço de records devolve a natureza da conta em `natureza`; o form usa `tipo`.
+    form.tipo = record.tipo ?? record.natureza ?? inicial.tipo ?? "";
+  }
+  if (tab === "operationalUnits" || tab === "companyProfiles") {
+    form.addressText = record.address?.full ?? record.address?.address ?? "";
+    form.cep = record.address?.cep ?? "";
+  }
+  if (tab === "bankAccounts") {
+    form.isDefault = record.isDefault === true || record.isDefault === "true" ? "true" : "false";
+  }
+  return form;
+};
+
 export { UNITS };

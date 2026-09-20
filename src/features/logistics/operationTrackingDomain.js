@@ -221,23 +221,37 @@ export const normalizarQualidade = (origem, padrao = "estimado") => {
   return QUALIDADE_MEDICAO.includes(q) ? q : padrao;
 };
 
+// Teto de sanidade por evento. Não é regra de negócio fina: é a barreira contra
+// um valor absurdo (km/kWh inflado) distorcer o ganho por km e o ESG. Uma perna
+// real fica MUITO abaixo disto; o teto só corta o que não é fato.
+export const LIMITE_DISTANCIA_KM_EVENTO = 20000;
+export const LIMITE_ENERGIA_KWH_EVENTO = 50000;
+
 // Lê a medição do corpo do evento. Distância e energia são INDEPENDENTES: um
 // evento pode trazer só km, só kWh, os dois, ou nenhum. Devolve null quando nada
 // foi informado — e o caminho de escrita então grava NULL nas colunas (o evento
 // não mede nada). Medida informada nasce "medido"; sem energia informada, o ESG
 // segue derivando com "estimado" (a origem não some, muda de dono). Valores
-// negativos são zerados (não existe distância/energia negativa num fato).
-export const medicaoDoEvento = (corpo = {}) => {
+// negativos são zerados e valores acima do teto são limitados (não existe
+// distância/energia negativa nem absurda num fato).
+//
+// `forcarOrigem` cravamos a qualidade da medida, ignorando o que o corpo pediu:
+// é o que o portal do motorista usa ("presumido"), porque o aparelho do
+// motorista não é um medidor confiável — deixá-lo carimbar "medido" mentiria a
+// proveniência do ESG e inflaria o ganho por km com dado do próprio interessado.
+export const medicaoDoEvento = (corpo = {}, { forcarOrigem = null } = {}) => {
   const nKm = Number(corpo.distanciaKm);
   const nKwh = Number(corpo.energiaKwh);
   const temKm = corpo.distanciaKm != null && corpo.distanciaKm !== "" && Number.isFinite(nKm);
   const temKwh = corpo.energiaKwh != null && corpo.energiaKwh !== "" && Number.isFinite(nKwh);
   if (!temKm && !temKwh) return null;
+  const limitar = (n, teto) => Math.min(teto, Math.max(0, n));
+  const origem = forcarOrigem ? normalizarQualidade(forcarOrigem, "presumido") : null;
   return {
-    distanciaKm: temKm ? Math.max(0, nKm) : null,
-    distanciaOrigem: temKm ? normalizarQualidade(corpo.distanciaOrigem, "medido") : null,
-    energiaKwh: temKwh ? Math.max(0, nKwh) : null,
-    energiaOrigem: temKwh ? normalizarQualidade(corpo.energiaOrigem, "medido") : null,
+    distanciaKm: temKm ? limitar(nKm, LIMITE_DISTANCIA_KM_EVENTO) : null,
+    distanciaOrigem: temKm ? (origem || normalizarQualidade(corpo.distanciaOrigem, "medido")) : null,
+    energiaKwh: temKwh ? limitar(nKwh, LIMITE_ENERGIA_KWH_EVENTO) : null,
+    energiaOrigem: temKwh ? (origem || normalizarQualidade(corpo.energiaOrigem, "medido")) : null,
   };
 };
 

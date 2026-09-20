@@ -9,6 +9,7 @@ import {
   TABS,
   UNITS,
   groupOfTab,
+  initialFromRecord,
   payloadFor,
   rowFor,
 } from "./masterRegistryConfig.js";
@@ -26,13 +27,20 @@ async function api(path, options = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(payload.error || "Não foi possível concluir o cadastro.");
+  if (!res.ok) {
+    // Preserva status/código para a tela distinguir 409 (conflito de revisão)
+    // de erro genérico — o texto do toast muda conforme o caso.
+    const erro = new Error(payload.error || "Não foi possível concluir o cadastro.");
+    erro.status = res.status;
+    erro.code = payload.code;
+    throw erro;
+  }
   return payload;
 }
 
 const secaoConhecida = (secao) => TABS.some((item) => item.id === secao);
 
-export default function ErpRegistriesPage({ registros, criar, setToast, secao = "", areaLabel = "" }) {
+export default function ErpRegistriesPage({ registros, criar, atualizar, arquivar, setToast, secao = "", areaLabel = "" }) {
   // Regra da titular (30/08): cadastro correlato mora na MESMA tela (veículo
   // com motorista); sem correlação, fica sozinho (tabela de preço). E cada
   // cadastro no galho da sua área: quando o menu manda uma seção, esta tela
@@ -50,6 +58,8 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
   const [carregando, setCarregando] = useState({});
   const [formTab, setFormTab] = useState("");
   const [form, setForm] = useState({});
+  // { id, revision } quando o modal está em modo edição; null ao criar.
+  const [editando, setEditando] = useState(null);
   const [saving, setSaving] = useState(false);
   // Uma seção externa é pedida uma vez por sessão da tela; sem este registro,
   // o efeito re-pediria a lista a cada resposta que chega.
@@ -91,8 +101,17 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
 
   const abrirFormulario = (tabId) => {
     setForm(FORMS[tabId]?.initial || {});
+    setEditando(null);
     setFormTab(tabId);
   };
+  // Editar reaproveita o MESMO modal, pré-preenchido pelo inverso de payloadFor,
+  // e guarda id + revision para o UPDATE com controle de concorrência.
+  const abrirEdicao = (cfg, record) => {
+    setForm(initialFromRecord(cfg.id, record));
+    setEditando({ id: record.id, revision: record.revision });
+    setFormTab(cfg.id);
+  };
+  const fecharFormulario = () => { setFormTab(""); setEditando(null); };
   const change = (field, value) => setForm((now) => ({ ...now, [field]: value }));
   const [enviandoArquivo, setEnviandoArquivo] = useState("");
   const [cepStatus, setCepStatus] = useState({});
@@ -144,6 +163,8 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
     }
   };
 
+  const rotuloSingular = (cfg) => `${cfg.singular[0].toUpperCase()}${cfg.singular.slice(1)}`;
+
   const submit = async (event) => {
     event.preventDefault();
     const cfg = TABS.find((item) => item.id === formTab);
@@ -151,26 +172,75 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
     setSaving(true);
     try {
       const body = payloadFor(formTab, form);
-      let created;
-      if (cfg.source === "records") {
-        created = await criar(formTab, body);
-      } else if (cfg.source === "fleet") {
-        const payload = await api("/api/todogreen/fleet", { method: "POST", body });
-        created = payload.vehicle;
+      if (editando) {
+        // UPDATE por fonte, sempre com a revision lida (controle otimista).
+        const corpo = { ...body, revision: editando.revision };
+        let atualizado;
+        if (cfg.source === "records") {
+          atualizado = await atualizar?.(formTab, editando.id, corpo);
+        } else if (cfg.source === "fleet") {
+          const payload = await api(`/api/todogreen/fleet/${encodeURIComponent(editando.id)}`, { method: "PATCH", body: corpo });
+          atualizado = payload.vehicle;
+        } else {
+          const payload = await api(`${MASTER_API}/${cfg.resource}/${encodeURIComponent(editando.id)}`, { method: "PATCH", body: corpo });
+          atualizado = payload.record;
+        }
+        // records já atualiza o estado no gancho; fleet/master trocam a linha aqui.
+        if (cfg.source !== "records" && atualizado) {
+          setExternal((now) => ({
+            ...now,
+            [formTab]: (now[formTab] || []).map((item) => (item.id === editando.id ? atualizado : item)),
+          }));
+        }
+        setToast?.(`${rotuloSingular(cfg)} atualizado.`);
       } else {
-        const payload = await api(`${MASTER_API}/${cfg.resource}`, { method: "POST", body });
-        created = payload.record;
+        let created;
+        if (cfg.source === "records") {
+          created = await criar(formTab, body);
+        } else if (cfg.source === "fleet") {
+          const payload = await api("/api/todogreen/fleet", { method: "POST", body });
+          created = payload.vehicle;
+        } else {
+          const payload = await api(`${MASTER_API}/${cfg.resource}`, { method: "POST", body });
+          created = payload.record;
+        }
+        if (cfg.source !== "records" && created) {
+          setExternal((now) => ({ ...now, [formTab]: [created, ...(now[formTab] || [])] }));
+        }
+        setToast?.(`${rotuloSingular(cfg)} cadastrado.`);
       }
-      if (cfg.source !== "records" && created) {
-        setExternal((now) => ({ ...now, [formTab]: [created, ...(now[formTab] || [])] }));
-      }
-      setToast?.(`${cfg.singular[0].toUpperCase()}${cfg.singular.slice(1)} cadastrado.`);
       setForm(FORMS[formTab]?.initial || {});
+      setEditando(null);
       setFormTab("");
     } catch (error) {
-      setToast?.(error.message || "Não foi possível cadastrar.");
+      if (error?.status === 409) {
+        setToast?.("Este cadastro foi alterado por outra pessoa. Recarregue a página antes de salvar.");
+      } else {
+        setToast?.(error.message || (editando ? "Não foi possível atualizar." : "Não foi possível cadastrar."));
+      }
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Arquivar por linha: confirma, apaga logicamente na fonte certa e some da tela.
+  const arquivarRegistro = async (cfg, record) => {
+    if (typeof window !== "undefined" && !window.confirm(
+      `Arquivar este cadastro de ${cfg.singular}? Ele deixa de aparecer na lista, mas o histórico é preservado.`,
+    )) return;
+    try {
+      if (cfg.source === "records") {
+        await arquivar?.(cfg.id, record.id);
+      } else if (cfg.source === "fleet") {
+        await api(`/api/todogreen/fleet/${encodeURIComponent(record.id)}`, { method: "DELETE" });
+        setExternal((now) => ({ ...now, [cfg.id]: (now[cfg.id] || []).filter((item) => item.id !== record.id) }));
+      } else {
+        await api(`${MASTER_API}/${cfg.resource}/${encodeURIComponent(record.id)}`, { method: "DELETE" });
+        setExternal((now) => ({ ...now, [cfg.id]: (now[cfg.id] || []).filter((item) => item.id !== record.id) }));
+      }
+      setToast?.(`${rotuloSingular(cfg)} arquivado.`);
+    } catch (error) {
+      setToast?.(error.message || "Não foi possível arquivar.");
     }
   };
 
@@ -235,7 +305,7 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
             {/* Cadastro em janela própria: abrir um formulário não empurra
                 mais a tabela desta seção nem as seções irmãs do grupo. */}
             {formTab === tabId && (
-              <Modal title={`Novo ${cfg.singular}`} onClose={() => setFormTab("")} wide>
+              <Modal title={`${editando ? "Editar" : "Novo"} ${cfg.singular}`} onClose={fecharFormulario} wide>
               <form className="tdg-form tdg-registry-form tdg-form-em-modal" onSubmit={submit}>
                 {(formConfig.fields || []).map(([field, label, type = "text", required = false, selectKey]) => (
                   <label key={field}>
@@ -305,8 +375,10 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
                   </label>
                 ))}
                 <div className="tdg-form-actions full">
-                  <button type="button" onClick={() => setFormTab("")}>Cancelar</button>
-                  <button className="tdg-action" type="submit" disabled={saving}>{saving ? "Cadastrando..." : "Cadastrar"}</button>
+                  <button type="button" onClick={fecharFormulario}>Cancelar</button>
+                  <button className="tdg-action" type="submit" disabled={saving}>
+                    {saving ? (editando ? "Salvando..." : "Cadastrando...") : (editando ? "Salvar" : "Cadastrar")}
+                  </button>
                 </div>
               </form>
               </Modal>
@@ -321,11 +393,15 @@ export default function ErpRegistriesPage({ registros, criar, setToast, secao = 
             ) : (
               <div className="tdg-table-wrap">
                 <table className="tdg-table">
-                  <thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
+                  <thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}<th className="tdg-row-actions-head">Ações</th></tr></thead>
                   <tbody>
                     {lista.map((record) => (
                       <tr key={record.id}>
                         {rowFor(tabId, record).map((cell, index) => <td key={`${record.id}-${index}`}>{cell}</td>)}
+                        <td className="tdg-row-actions">
+                          <button type="button" className="tdg-row-action" onClick={() => abrirEdicao(cfg, record)}>Editar</button>
+                          <button type="button" className="tdg-row-action tdg-row-action-danger" onClick={() => arquivarRegistro(cfg, record)}>Arquivar</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

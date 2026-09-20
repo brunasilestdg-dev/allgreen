@@ -241,17 +241,26 @@ export async function routeTodoGreenApi(request, env, ctx) {
       return handleTodoGreenEsg(request, env);
     });
   }
-  if (path.startsWith("/api/todogreen/tracker/")) {
-    const readiness = await guarded(
-      "To Do Green Tracker readiness error",
-      "Não foi possível carregar o diagnóstico do rastreamento.",
-      () => handleTodoGreenTrackerReadiness(request, env),
-    );
-    if (readiness) return readiness;
-  }
-  if (path.startsWith("/api/todogreen/tracker"))
+  if (path.startsWith("/api/todogreen/tracker")) {
+    // Rotas internas do rastreador atrás do choke point: um motorista NÃO lê a
+    // telemetria (GPS/IMEI/placa) da frota inteira. Só o receptor de webhook
+    // (autenticado por HMAC, sem sessão) fica público, como o /tms/webhook.
+    const ehWebhookTracker = /^\/api\/todogreen\/tracker\/webhook(\/|$)/.test(path);
+    if (!ehWebhookTracker) {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+    }
+    if (path.startsWith("/api/todogreen/tracker/")) {
+      const readiness = await guarded(
+        "To Do Green Tracker readiness error",
+        "Não foi possível carregar o diagnóstico do rastreamento.",
+        () => handleTodoGreenTrackerReadiness(request, env),
+      );
+      if (readiness) return readiness;
+    }
     return guarded("To Do Green Tracker error", "Não foi possível processar o rastreamento veicular.",
       () => handleTodoGreenTracker(request, env));
+  }
   // Radar por busca web (a tela "RFQs / RFIs" chama este endpoint; estava sem
   // rota no roteador) e sinais estruturados (PNCP · Compras.gov · GDELT).
   if (path === "/api/todogreen/market-radar") {

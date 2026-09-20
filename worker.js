@@ -4868,6 +4868,23 @@ export default {
         ? handleAi(request, env, user)
         : handleMedia(request, env, url);
     }
-    return env.ASSETS.fetch(request);
+    // Fallback: serve o SPA. Envelopa o HTML com cabeçalhos de segurança —
+    // os portais externos (cliente/motorista/colaborador) e a entrada da
+    // vertical são rotas React DENTRO deste shell, então precisam de
+    // anti-clickjacking (sempre) e noindex nas superfícies privadas. Sites e
+    // formulários públicos têm handlers próprios e não passam por aqui.
+    const assetResp = await env.ASSETS.fetch(request);
+    const contentType = assetResp.headers.get("content-type") || "";
+    if (!contentType.includes("text/html")) return assetResp;
+    const headers = new Headers(assetResp.headers);
+    headers.set("x-frame-options", "DENY");
+    if (/^\/(portal-cliente|portal-motorista|portal-colaborador|todogreen)(\/|$)/.test(url.pathname)) {
+      headers.set("x-robots-tag", "noindex, nofollow");
+    }
+    return new Response(assetResp.body, {
+      status: assetResp.status,
+      statusText: assetResp.statusText,
+      headers,
+    });
   },
 };

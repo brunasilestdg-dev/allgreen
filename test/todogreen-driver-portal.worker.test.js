@@ -236,6 +236,31 @@ describe("minhas viagens são só as minhas", () => {
     expect((await pedir("/api/todogreen/records/operations", { token: joao.token })).status).toBe(403);
     expect((await pedir("/api/todogreen/payroll/colaboradores", { token: joao.token })).status).toBe(403);
   });
+
+  // Regressão do bypass do rastreador: as rotas /tracker* entregavam a
+  // telemetria (GPS/IMEI/placa) da frota inteira porque escapavam do choke
+  // point. Uma varredura das rotas internas garante que um motorista leve 403
+  // em todas elas — e que a próxima rota nova que esquecer o choke point
+  // apareça aqui como teste vermelho, não como vulnerabilidade silenciosa.
+  it("motorista leva 403 nas rotas internas (inclui /tracker*, o bug corrigido)", async () => {
+    const rotasInternas = [
+      "/api/todogreen/tracker",
+      "/api/todogreen/tracker/vehicles",
+      "/api/todogreen/tracker/events",
+      "/api/todogreen/tracker/health",
+      "/api/todogreen/tms",
+      "/api/todogreen/dashboards",
+      "/api/todogreen/pricing-parameters",
+      "/api/todogreen/work-center",
+      "/api/todogreen/esg",
+      "/api/todogreen/fleet",
+      "/api/todogreen/master-data/drivers",
+    ];
+    for (const rota of rotasInternas) {
+      const r = await pedir(rota, { token: joao.token });
+      expect(r.status, `motorista deveria levar 403 em ${rota}`).toBe(403);
+    }
+  });
 });
 
 describe("a entrega da rua fecha o ciclo", () => {

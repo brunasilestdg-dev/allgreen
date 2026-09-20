@@ -15,6 +15,7 @@ import { handleTodoGreenFileVault } from "./worker/services/todogreen-file-vault
 import { handleTodoGreenTmsLocalBridge } from "./worker/services/todogreen-tms-local-bridge.js";
 import { handleTodoGreenTmsApiKeys } from "./worker/services/todogreen-tms-api-keys.js";
 import { handlePublicTodoGreenTmsApi } from "./worker/services/todogreen-public-tms-api.js";
+import { reprocessarWebhooksTrack3r } from "./worker/services/todogreen-tms-webhooks.js";
 import { handlePublicTodoGreenRoutingApi } from "./worker/services/todogreen-public-routing-api.js";
 import { routeTodoGreenApi } from "./worker/services/todogreen-router.js";
 
@@ -183,6 +184,9 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runTodoGreenTrackerScheduled(env));
     ctx.waitUntil(runTodoGreenEnterpriseWorkflowScheduled(env));
+    // Dreno dos webhooks do TMS cuja projeção falhou/ficou pendente, para o
+    // evento durável na inbox não ficar preso sem retry.
+    ctx.waitUntil(reprocessarWebhooksTrack3r(env).catch(() => {}));
     if (typeof appWorker.scheduled === "function") return appWorker.scheduled(controller, env, ctx);
   },
 };

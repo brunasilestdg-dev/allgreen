@@ -168,7 +168,7 @@ describe("fluxos de trabalho", () => {
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Calcular em dias úteis" }),
     );
-    fireEvent.change(within(dialog).getByLabelText("Data base do prazo"), {
+    fireEvent.change(within(dialog).getByLabelText("Data base"), {
       target: { value: "2024-01-01" },
     });
     fireEvent.change(within(dialog).getByLabelText("Dias úteis"), {
@@ -187,7 +187,7 @@ describe("fluxos de trabalho", () => {
     fireEvent.change(screen.getByLabelText("Título"), {
       target: { value: "Criar campanha de lançamento" },
     });
-    fireEvent.change(screen.getByLabelText("Responsável"), {
+    fireEvent.change(screen.getByLabelText("Tipo de responsável"), {
       target: { value: "digital" },
     });
     fireEvent.change(screen.getByLabelText("Colaborador digital"), {

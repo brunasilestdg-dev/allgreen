@@ -19,8 +19,9 @@
 // diz o que está ligado, e a tela mostra o que falta.
 
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
-import { sameHash } from "../auth/credenciais.js";
+import { autenticarTokenWebhookTrack3r, estadoTokensWebhookTrack3r, TRACK3R_WEBHOOK_TOKEN_KEYS } from "./todogreen-track3r-webhook-auth.js";
 import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
+import { safeExternalUrl, isTrack3rEnvKey, isSafeHeaderName } from "../lib/net.js";
 import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
 import {
   PERGUNTAS_AO_TRACK3R,
@@ -88,7 +89,7 @@ const integracaoDaLinha = (row, env) => ({
   // falta sem expor nada.
   segredos: {
     apiToken: Boolean(env?.[row.token_env_key]),
-    webhookSecret: Boolean(env?.[row.webhook_secret_env_key]),
+    webhookSecret: estadoTokensWebhookTrack3r(env, row).disponivel,
   },
 });
 
@@ -132,7 +133,9 @@ const documentoDaLinha = (row) => ({
 const modoDisponivel = (integracao, env) => ({
   arquivo: true,
   api: Boolean(integracao?.baseUrl && env?.[integracao?.tokenEnvKey]),
-  webhook: Boolean(env?.[integracao?.webhookSecretEnvKey]),
+  webhook: Boolean(integracao) && estadoTokensWebhookTrack3r(env, {
+    webhook_secret_env_key: integracao.webhookSecretEnvKey,
+  }).disponivel,
 });
 
 // Estado honesto do motor de roteirização. O planejador elétrico nativo
@@ -177,7 +180,16 @@ const verConfiguracao = async (env, access, request) => {
   return json({
     integracao,
     modos: modoDisponivel(integracao, env),
-    webhookKit: integracao ? montarKitWebhookTrack3r({ origin, integrationId: integracao.id }) : null,
+    webhookKit: integracao ? {
+      ...montarKitWebhookTrack3r({ origin, integrationId: integracao.id }),
+      tokensIndividuais: estadoTokensWebhookTrack3r(env, row).individual,
+      endpoints: montarKitWebhookTrack3r({ origin, integrationId: integracao.id }).endpoints
+        .map((endpoint) => ({
+          ...endpoint,
+          tokenEnvKey: TRACK3R_WEBHOOK_TOKEN_KEYS[endpoint.type],
+          tokenConfigurado: Boolean(env?.[TRACK3R_WEBHOOK_TOKEN_KEYS[endpoint.type]]),
+        })),
+    } : null,
     // Estado real do otimizador de rotas, para a tela não fingir motor no ar.
     roteirizacao: estadoRoteirizacao(env),
     // Enquanto o fornecedor não responder, é isto que a tela mostra como
@@ -193,27 +205,50 @@ const salvarConfiguracao = async (env, access, user, corpo, request) => {
     ? texto(corpo.syncMode)
     : "arquivo";
 
+  // As chaves de segredo que a config aponta são LIDAS do cofre na
+  // sincronização e enviadas no cabeçalho da chamada externa. Se pudessem ser
+  // qualquer nome, um usuário `tms:manage` apontaria para BREVO/GEMINI/SEFAZ/
+  // SysPag/VAPID e receberia o valor do segredo. Por isso só aceitamos chaves do
+  // próprio conector (prefixo TODOGREEN_TRACK3R_).
+  const tokenEnvKey = texto(corpo.tokenEnvKey, 120) || "TODOGREEN_TRACK3R_API_TOKEN";
+  const webhookSecretEnvKey = texto(corpo.webhookSecretEnvKey, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET";
+  const authHeaderName = texto(corpo.authHeaderName, 60) || "authorization";
+  if (!isTrack3rEnvKey(tokenEnvKey) || !isTrack3rEnvKey(webhookSecretEnvKey))
+    return json({ error: "As chaves de segredo devem começar com TODOGREEN_TRACK3R_." }, 400);
+  if (!isSafeHeaderName(authHeaderName))
+    return json({ error: "Nome de cabeçalho de autenticação inválido." }, 400);
+
   // Não deixa marcar API ou webhook sem o que eles exigem. Salvar um modo que
   // não pode funcionar transformaria a tela num relatório de erro silencioso.
   if (modo === "api" && !texto(corpo.baseUrl))
     return json({ error: "O modo API precisa da URL base do TRACK3R." }, 400);
-  if (modo === "api" && !env[texto(corpo.tokenEnvKey) || "TODOGREEN_TRACK3R_API_TOKEN"])
+  // A URL base precisa ser HTTPS e pública — nada de apontar para a rede interna.
+  if (modo === "api" && texto(corpo.baseUrl)) {
+    try {
+      safeExternalUrl(corpo.baseUrl, texto(corpo.collectionsPath) || "/");
+    } catch (erro) {
+      return json({ error: erro.message }, 400);
+    }
+  }
+  if (modo === "api" && !env[tokenEnvKey])
     return json({
       error: "O modo API precisa do token no cofre do Worker. Cadastre o segredo e tente de novo.",
-      segredoFaltando: texto(corpo.tokenEnvKey) || "TODOGREEN_TRACK3R_API_TOKEN",
+      segredoFaltando: tokenEnvKey,
     }, 409);
-  if (modo === "webhook" && !env[texto(corpo.webhookSecretEnvKey) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET"])
+  if (modo === "webhook" && !estadoTokensWebhookTrack3r(env, {
+    webhook_secret_env_key: webhookSecretEnvKey,
+  }).disponivel)
     return json({
       error: "O modo webhook precisa do segredo no cofre do Worker.",
-      segredoFaltando: texto(corpo.webhookSecretEnvKey) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET",
+      segredoFaltando: webhookSecretEnvKey,
     }, 409);
 
   const campos = [
     texto(corpo.name, 120) || "TRACK3R",
     texto(corpo.baseUrl, 400),
-    texto(corpo.tokenEnvKey, 120) || "TODOGREEN_TRACK3R_API_TOKEN",
-    texto(corpo.webhookSecretEnvKey, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET",
-    texto(corpo.authHeaderName, 60) || "authorization",
+    tokenEnvKey,
+    webhookSecretEnvKey,
+    authHeaderName,
     modo,
     texto(corpo.collectionsPath, 200),
     texto(corpo.invoicesPath, 200),
@@ -412,9 +447,23 @@ const sincronizarApi = async (env, access, user, corpo) => {
   const caminho = texto(corpo.caminho, 200) || integracao.collectionsPath;
   if (!caminho) return json({ error: "Informe o caminho da consulta na API." }, 400);
 
+  // Defesa em profundidade: mesmo que uma config antiga guarde uma chave fora do
+  // padrão, nunca lemos do cofre um segredo que não seja do conector TRACK3R.
+  if (!isTrack3rEnvKey(integracao.tokenEnvKey))
+    return json({ error: "A chave de token da integração é inválida. Reconfigure a integração." }, 400);
+
+  // `safeExternalUrl` exige HTTPS, host público, caminho relativo e MESMA origem
+  // da base — um caminho absoluto não redireciona o fetch para outro host.
+  let alvo;
+  try {
+    alvo = safeExternalUrl(integracao.baseUrl, caminho);
+  } catch (erro) {
+    return json({ error: erro.message }, 400);
+  }
+
   let payload;
   try {
-    const resposta = await fetch(new URL(caminho, integracao.baseUrl).href, {
+    const resposta = await fetch(alvo.href, {
       headers: {
         [integracao.authHeaderName]: String(env[integracao.tokenEnvKey]),
         accept: "application/json",
@@ -851,15 +900,11 @@ export async function receberOcorrenciaTrack3r(request, env) {
   const integracao = await integracaoDoWebhook(env, integracaoId);
   if (!integracao) return TOKEN_INVALIDO();
 
-  const nomeDoSegredo = texto(integracao.webhook_secret_env_key, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET";
-  const esperado = String(env[nomeDoSegredo] || "");
-  // Sem segredo cadastrado o receptor NÃO aceita. Aceitar "enquanto não
-  // configuram" é como deixar a porta encostada e escrever um bilhete.
-  if (!esperado)
-    return respostaDoFornecedor(false, `Integração sem segredo configurado (${nomeDoSegredo}).`, 503);
-
   const enviado = String(request.headers.get("Token") || "").trim().slice(0, 500);
-  if (!enviado || !sameHash(enviado, esperado)) return TOKEN_INVALIDO();
+  const token = autenticarTokenWebhookTrack3r(env, integracao, "ocorrencias", enviado);
+  if (!token.configurado)
+    return respostaDoFornecedor(false, `Integração sem token configurado para ocorrencias (${token.nome}).`, 503);
+  if (!token.autorizado) return TOKEN_INVALIDO();
 
   // O corpo é lido como texto UMA vez, para poder medir antes de interpretar.
   const bruto = await request.text().catch(() => "");

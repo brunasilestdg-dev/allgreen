@@ -10,6 +10,8 @@
 // já pediu antes, nem se a conta existe. Quem decide o que fazer é um humano na
 // fila de aprovação, com o papel escolhido na hora do aceite.
 
+import { allowed, edgeIp } from "../lib/http.js";
+
 const TENANT_ID = "todogreen";
 
 const limpar = (valor, max = 500) => String(valor || "").trim().slice(0, max);
@@ -35,6 +37,11 @@ const recebido = () => json(
 
 export async function receberSolicitacaoDeAcesso(request, env) {
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
+  // Porta pública sem sessão: sem teto por IP dava para inserir linhas sem fim
+  // variando o e-mail (a deduplicação só vale para pendências do MESMO e-mail).
+  const ip = edgeIp(request);
+  if (ip && !allowed(`tdg:solicitar-acesso:${ip}`, 5))
+    return json({ error: "Muitos pedidos em pouco tempo. Tente novamente mais tarde." }, 429);
   const corpo = await request.json().catch(() => ({}));
   const email = limpar(corpo.email, 160).toLowerCase();
   const nome = limpar(corpo.nome || corpo.name, 160);

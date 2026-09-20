@@ -43,6 +43,7 @@ import {
   faixaNPS,
   precisaOcorrencia,
 } from "../../src/features/logistics/npsDomain.js";
+import { allowed as limitarTaxa } from "../lib/http.js";
 import {
   INSTRUCAO_ASSISTENTE,
   RESPOSTA_FORA_DE_ESCOPO,
@@ -818,6 +819,13 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       403,
     );
 
+  // Limite de taxa por cliente/ação: o portal é superfície EXTERNA e o
+  // assistente consome a MESMA cota de IA do espaço da transportadora. Sem teto,
+  // um cliente autenticado queima a cota (e o custo) do dono ou infla a fila de
+  // solicitações/NPS. É defesa contra rajada, por sessão e por ação.
+  const excedeuLimite = (acao, teto) =>
+    !limitarTaxa(`portal:${acao}:${user.id}:${escopo.clientId}`, teto);
+
   // Sessão — quem sou eu, o que posso ver, qual é o meu menu.
   if (request.method === "GET" && (resource === "" || resource === "sessao")) {
     await logPortalEvent(env, escopo, user, "portal_aberto");
@@ -1258,6 +1266,9 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     const pergunta = clean(body.pergunta ?? body.question, 2000);
     if (pergunta.length < 2)
       return response({ error: "Escreva a sua pergunta." }, 400);
+    // Teto por cliente: o assistente gasta a cota de IA do espaço do dono.
+    if (excedeuLimite("assistente", 20))
+      return response({ error: "Muitas perguntas em pouco tempo. Aguarde um instante e tente de novo." }, 429);
 
     // Recusa antes de chamar o modelo: garantia que não depende de o modelo
     // obedecer à instrução.
@@ -1411,6 +1422,8 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     }
 
     if (request.method === "POST") {
+      if (excedeuLimite("solicitacao", 30))
+        return response({ error: "Muitas solicitações em pouco tempo. Aguarde um instante." }, 429);
       let body = {};
       try {
         body = await request.json();
@@ -1558,6 +1571,8 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     }
 
     if (request.method === "POST") {
+      if (excedeuLimite("nps", 10))
+        return response({ error: "Muitas respostas em pouco tempo. Aguarde um instante." }, 429);
       let body = {};
       try {
         body = await request.json();
@@ -1591,8 +1606,12 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       // A ponte que fecha o ciclo: detrator abre ocorrência com responsável e
       // prazo. Mesma tabela, mesmo motor da fila da equipe. Sem isso, uma nota
       // baixa some — e NPS que não trata detrator é enquete, não gestão.
+      // Nota de detrator abre ocorrência — mas isso é criar um chamado, então
+      // exige a permissão de criar solicitação. Um perfil só-leitura registra a
+      // nota (feedback é sempre bem-vindo) sem, por essa via, abrir ocorrência
+      // que ele não poderia abrir direto.
       let incidentId = null;
-      if (precisaOcorrencia(nota)) {
+      if (precisaOcorrencia(nota) && clientCan(escopo, "portal:request:create")) {
         incidentId = crypto.randomUUID();
         const assunto = `Avaliação baixa (nota ${nota})`;
         const descricao = motivo || comentario

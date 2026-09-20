@@ -2194,6 +2194,17 @@ const criar = async (env, colecao, access, user, corpo, email = "") => {
     if (!cliente) return json({ error: "Cliente não encontrado neste espaço." }, 404);
   }
 
+  // Oportunidade pode nascer só com nome (lead ainda sem conta). Mas SE apontar
+  // um cliente, ele tem de existir neste espaço — senão a oportunidade fica órfã
+  // (fora da Conta 360) ou carimba uma conta que não é desta carteira.
+  if (colecao === COLECOES.opportunities && texto(corpo.clientId)) {
+    const cliente = await env.DB.prepare(
+      `SELECT id FROM todogreen_clients
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ? AND archived_at IS NULL`,
+    ).bind(TENANT_ID, access.ownerId, texto(corpo.clientId, 120)).first();
+    if (!cliente) return json({ error: "Cliente não encontrado neste espaço." }, 404);
+  }
+
   // Guarda que precisa do BANCO para decidir (linhagem de pastas, dono de
   // pasta privada). Fica no servidor porque um ciclo travaria a leitura
   // recursiva do próprio servidor, e porque dono é regra de acesso.
@@ -2287,12 +2298,22 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
     }
   }
   if (colecao === COLECOES.proposals) {
-    // Gate de viabilidade só na TRANSIÇÃO para liberada (não a cada PATCH de
-    // uma proposta que já está liberada) — a mesma disciplina do gate jurídico.
+    // Os gates só valem na TRANSIÇÃO para liberada (não a cada PATCH de uma
+    // proposta que já está liberada) — a mesma disciplina do gate jurídico.
     const situacaoNova = texto(proximo.situacao, 40).toLowerCase();
     const situacaoAtual = texto(atual.status, 40).toLowerCase();
+    const entrandoEmLiberacao = STATUS_DE_LIBERACAO.has(situacaoNova) && !STATUS_DE_LIBERACAO.has(situacaoAtual);
+    // Gate do Deal Desk: a proposta de um cenário com pedido de alçada
+    // pendente/recusado não pode SAIR. No criar isto já era conferido; sem esta
+    // checagem, um PATCH rascunho→enviada contornava a alçada no servidor.
+    if (entrandoEmLiberacao) {
+      const liberacao = await proposalLiberada(env, access, texto(proximo.cenarioId, 120));
+      if (!liberacao.liberada) return json({ error: liberacao.motivo }, 409);
+    }
+    // Gate de viabilidade (seções 47–50): exige snapshot sem faltas quando a
+    // proposta está ligada a uma oportunidade.
     const oportunidadeDaProposta = texto(proximo.oportunidadeId, 120);
-    if (STATUS_DE_LIBERACAO.has(situacaoNova) && !STATUS_DE_LIBERACAO.has(situacaoAtual) && oportunidadeDaProposta) {
+    if (entrandoEmLiberacao && oportunidadeDaProposta) {
       const viab = await viabilidadeDaProposta(env, access, { opportunityId: oportunidadeDaProposta, scenarioId: texto(proximo.cenarioId, 120) });
       if (!viab.liberada) return json({ error: viab.motivo, code: "viability_required", blockers: viab.blockers || [] }, 409);
       proximo.campos = { ...objeto(proximo.campos), viabilidade: carimboDeViabilidade(viab.snapshot) };
@@ -2313,6 +2334,16 @@ const atualizar = async (env, colecao, access, user, id, corpo, email = "") => {
       `SELECT id FROM todogreen_clients
         WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ?
           AND archived_at IS NULL AND status = 'ativo'`,
+    ).bind(TENANT_ID, access.ownerId, texto(proximo.clientId, 120)).first();
+    if (!cliente) return json({ error: "Cliente não encontrado neste espaço." }, 404);
+  }
+
+  // Mesma regra do criar: se a oportunidade apontar um cliente, ele tem de
+  // existir neste espaço (não deixa a edição amarrar a conta a um id órfão).
+  if (colecao === COLECOES.opportunities && texto(proximo.clientId)) {
+    const cliente = await env.DB.prepare(
+      `SELECT id FROM todogreen_clients
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND id = ? AND archived_at IS NULL`,
     ).bind(TENANT_ID, access.ownerId, texto(proximo.clientId, 120)).first();
     if (!cliente) return json({ error: "Cliente não encontrado neste espaço." }, 404);
   }
@@ -2561,7 +2592,7 @@ const instrucoesDaProjecaoNaRota = async (env, { ownerId, operacao, tipo, userId
   return instrucoes;
 };
 
-export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId, corpo, origem = "" }) => {
+export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId, corpo, origem = "", medicaoConfiavel = true }) => {
   // Tipo e efeitos vêm do contrato único (operationTrackingDomain), não mais de
   // um Set copiado aqui. É a mesma verdade que a projeção do TMS lê.
   const tipo = normalizarTipoEvento(corpo.tipo);
@@ -2667,7 +2698,9 @@ export const aplicarEventoOperacional = async (env, { ownerId, operacao, userId,
   // do last_position: só preenche quando a operação ainda não tem o dado — a
   // distância (NOT NULL DEFAULT 0) reflete quando é 0; a energia (nullable)
   // quando é NULL. Nunca soma, então o SUM(distance_km) da frota não dobra.
-  const medicao = medicaoDoEvento(corpo);
+  // Medida vinda de porta não confiável (portal do motorista) entra como
+  // "presumido", nunca "medido": o aparelho do motorista não é medidor.
+  const medicao = medicaoDoEvento(corpo, medicaoConfiavel ? {} : { forcarOrigem: "presumido" });
   const refleteDistancia = medicao?.distanciaKm != null;
   const refleteEnergia = medicao?.energiaKwh != null;
   let atualizacaoMedicao = "";

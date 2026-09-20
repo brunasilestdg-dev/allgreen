@@ -258,7 +258,7 @@ async function salvarEncomenda(env, integracao, corpo) {
         vehicle_class,driver_name,packages,weight_kg,distance_km,promised_at,occurred_at,
         payload_json,import_hash,order_ref,occurrence_code,operation_id,projected_at,
         revision,created_by,updated_by,created_at,updated_at,archived_at)
-     VALUES (?,?,?,?,'webhook',?,? ,?,'',?,?,?,?,?,?,?,'',?,?,?,?,?,?,?, ?,0,?,?,?,? ,?,'','',NULL,1,?,?,?,?,NULL)`,
+     VALUES (?,?,?,?,'webhook',?,?,?,'',?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,0,?,?,?,?,?,'','',NULL,1,?,?,?,?,NULL)`,
   ).bind(
     crypto.randomUUID(), TENANT_ID, integracao.workspace_owner_id, integracao.id,
     codigo, kindDaEncomenda(corpo), shipperName, shipperDocument, clientIdEncontrado,
@@ -701,7 +701,7 @@ async function projetarFaturaCliente(env, integracao, corpo) {
        (id,tenant_id,workspace_owner_id,number,kind,client_id,competence_date,
         issue_date,due_date,original_amount,open_amount,status,fields_json,
         revision,created_by,updated_by,created_at,updated_at,archived_at)
-     VALUES (?,?,?,?,'receivable','',?,?,?,?,?,?,?,?,1,?,?,?,?,NULL)`,
+     VALUES (?,?,?,?,'receivable','',?,?,?,?,?,?,?,1,?,?,?,?,NULL)`,
   ).bind(
     titleId, TENANT_ID, integracao.workspace_owner_id, number,
     competencia, emissao, vencimento, valor, aberto, status, fields,

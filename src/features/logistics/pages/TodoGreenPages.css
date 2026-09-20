@@ -1167,6 +1167,23 @@
   background: var(--tdg-bg);
 }
 
+/* Ações por linha nos cadastros mestres: botões-link discretos (Editar/Arquivar). */
+.tdg-table th.tdg-row-actions-head { text-align: right; }
+.tdg-table td.tdg-row-actions { text-align: right; white-space: nowrap; }
+.tdg-row-action {
+  background: none;
+  border: 0;
+  color: var(--tdg-green);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 4px 6px;
+}
+.tdg-row-action:hover,
+.tdg-row-action:focus-visible { text-decoration: underline; }
+.tdg-row-action.tdg-row-action-danger { color: var(--tdg-danger, #b3261e); }
+.tdg-row-action + .tdg-row-action { margin-left: 6px; }
+
 /* Estado vazio: explica o que fazer, não só que não há nada. */
 .tdg-empty {
   border: 1px dashed var(--tdg-line);
