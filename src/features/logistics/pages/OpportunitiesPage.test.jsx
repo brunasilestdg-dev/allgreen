@@ -172,21 +172,19 @@ describe("página de oportunidades", () => {
     render(<OpportunitiesPage opportunities={[]} onCreate={onCreate} />);
     abrirNova();
     fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "Nova Conta" } });
-    fireEvent.change(screen.getByLabelText("Distância por viagem (km)"), {
-      target: { value: "90" },
-    });
-    fireEvent.change(screen.getByLabelText("Viagens por mês"), { target: { value: "40" } });
-    fireEvent.change(screen.getByLabelText("Valor mensal (R$)"), {
+    fireEvent.change(screen.getByLabelText("Receita potencial mensal (R$)"), {
       target: { value: "12000" },
+    });
+    fireEvent.change(screen.getByLabelText("Prazo de pagamento (dias)"), {
+      target: { value: "30" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
 
     const registro = onCreate.mock.calls[0][0];
-    // Guardar "90" como string faria o motor somar texto e produzir um
+    // Guardar "12000" como string faria o motor somar texto e produzir um
     // pipeline errado sem erro nenhum.
-    expect(registro.distanciaKm).toBe(90);
-    expect(registro.viagensMes).toBe(40);
     expect(registro.valorMensal).toBe(12000);
+    expect(registro.prazoPagamento).toBe(30);
     expect(registro.cliente).toBe("Nova Conta");
   });
 
@@ -194,7 +192,7 @@ describe("página de oportunidades", () => {
     const onCreate = vi.fn();
     render(<OpportunitiesPage clients={[{ id: "cli-1", name: "Rede Alfa" }]} opportunities={[completa]} onCreate={onCreate} />);
     abrirNova();
-    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-1" } });
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "Rede Alfa" } });
     fireEvent.click(screen.getByRole("button", { name: /^Apresentação/ }));
     expect(screen.getByRole("button", { name: /Distribuidora Norte/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
@@ -266,7 +264,7 @@ describe("página de oportunidades", () => {
     render(<OpportunitiesPage clients={clients} opportunities={[]} onCreate={vi.fn()} setToast={setToast} />);
 
     abrirNova();
-    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-fria" } });
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "Rede Fria" } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
     await waitFor(() => expect(setToast).toHaveBeenCalled());
     expect(setToast.mock.calls.at(-1)[0]).toMatch(/Rede Fria saiu de Frio para Morno/);
@@ -274,7 +272,7 @@ describe("página de oportunidades", () => {
     // O modal fecha no sucesso; a segunda oportunidade começa como a pessoa
     // começaria — abrindo de novo.
     abrirNova();
-    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "cli-quente" } });
+    fireEvent.change(screen.getByLabelText("Cliente"), { target: { value: "Rede Quente" } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar oportunidade/ }));
     await waitFor(() => expect(setToast).toHaveBeenCalledTimes(2));
     expect(setToast.mock.calls.at(-1)[0]).not.toMatch(/Morno/);
