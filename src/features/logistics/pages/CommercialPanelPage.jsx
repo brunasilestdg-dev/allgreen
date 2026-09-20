@@ -205,7 +205,18 @@ function CartaoKanban({ item, etapas, editavel, onMover, onValor }) {
   );
 }
 
-function AbaKanban({ kanban, onMover, onValor, onFup, onNova }) {
+function NotaFup({ item, onNota }) {
+  const [texto, setTexto] = useState(item.texto || "");
+  useEffect(() => { setTexto(item.texto || ""); }, [item.texto]);
+  const salvar = () => { if ((texto || "") !== (item.texto || "")) onNota(item.id, texto); };
+  return (
+    <textarea className="tdg-nota-input" rows={2} value={texto} placeholder="Observação do follow-up…"
+      onChange={(e) => setTexto(e.target.value)} onBlur={salvar}
+      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.currentTarget.blur(); }} />
+  );
+}
+
+function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova }) {
   const { pipeline, fup, updatesSemana, atualizado, editavel } = kanban;
   const etapas = useMemo(() => {
     const doPipe = pipeline.etapas.map((e) => e.etapa);
@@ -265,8 +276,8 @@ function AbaKanban({ kanban, onMover, onValor, onFup, onNova }) {
             <tbody>{fup.clientes.map((c, idx) => (
               <tr key={c.id || idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
                 <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
-                <td className="tdg-td-texto">{c.texto || "—"}</td>
-                {editavel && <td>{c.id && <button type="button" className="tdg-mini" onClick={() => onFup(c.id)} title="Registrar follow-up hoje">✓ FUP</button>}</td>}</tr>
+                <td className="tdg-td-texto">{editavel && c.id ? <NotaFup item={c} onNota={onNota} /> : (c.texto || "—")}</td>
+                {editavel && <td>{c.id && <button type="button" className="tdg-mini" onClick={() => onFup(c.id)} title="Registrar follow-up hoje (zera o contador)">✓ FUP hoje</button>}</td>}</tr>
             ))}</tbody>
           </table>
         ) : <Vazio>Sem oportunidades para acompanhar.</Vazio>}
@@ -408,6 +419,7 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
   const moverOportunidade = (id, etapa) => patchOportunidade(id, { estagio: etapa });
   const valorOportunidade = (id, valor) => patchOportunidade(id, { valorMensal: valor });
   const registrarFup = (id) => patchOportunidade(id, { ultimaInteracaoEm: new Date().toISOString() });
+  const salvarNotaFup = (id, texto) => patchOportunidade(id, { fupTexto: String(texto || "").slice(0, 2000) });
   const novaOportunidade = async ({ cliente, valor, etapa }) => {
     try {
       const resp = await fetch(`/api/todogreen/records/opportunities`, {
@@ -449,7 +461,7 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
       </div>
 
       {dados && aba === "receita" && <AbaReceita receita={dados.receita} />}
-      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNova={novaOportunidade} />}
+      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNota={salvarNotaFup} onNova={novaOportunidade} />}
       {dados && aba === "operacional" && <AbaOperacional operacional={dados.operacional} />}
     </div>
   );

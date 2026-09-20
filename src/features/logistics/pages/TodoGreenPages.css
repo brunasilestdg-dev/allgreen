@@ -5491,3 +5491,4 @@
 .tdg-nova-form input:first-child { flex: 1 1 200px; }
 .tdg-mini { padding: 3px 8px; border: 1px solid var(--tdg-green); border-radius: 6px; background: transparent; color: var(--tdg-green); cursor: pointer; font-size: 0.75rem; white-space: nowrap; }
 .tdg-mini:hover { background: var(--tdg-green); color: #fff; }
+.tdg-nota-input { width: 100%; min-width: 220px; padding: 5px 8px; border: 1px solid var(--tdg-line); border-radius: 8px; background: var(--tdg-bg); color: var(--tdg-text); font: inherit; font-size: 0.8rem; resize: vertical; }
