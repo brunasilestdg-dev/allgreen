@@ -19,7 +19,7 @@
 // diz o que está ligado, e a tela mostra o que falta.
 
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
-import { sameHash } from "../auth/credenciais.js";
+import { autenticarTokenWebhookTrack3r, estadoTokensWebhookTrack3r, TRACK3R_WEBHOOK_TOKEN_KEYS } from "./todogreen-track3r-webhook-auth.js";
 import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
 import { safeExternalUrl, isTrack3rEnvKey, isSafeHeaderName } from "../lib/net.js";
 import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
@@ -89,7 +89,7 @@ const integracaoDaLinha = (row, env) => ({
   // falta sem expor nada.
   segredos: {
     apiToken: Boolean(env?.[row.token_env_key]),
-    webhookSecret: Boolean(env?.[row.webhook_secret_env_key]),
+    webhookSecret: estadoTokensWebhookTrack3r(env, row).disponivel,
   },
 });
 
@@ -133,7 +133,9 @@ const documentoDaLinha = (row) => ({
 const modoDisponivel = (integracao, env) => ({
   arquivo: true,
   api: Boolean(integracao?.baseUrl && env?.[integracao?.tokenEnvKey]),
-  webhook: Boolean(env?.[integracao?.webhookSecretEnvKey]),
+  webhook: estadoTokensWebhookTrack3r(env, {
+    webhook_secret_env_key: integracao?.webhookSecretEnvKey,
+  }).disponivel,
 });
 
 // Estado honesto do motor de roteirização. O planejador elétrico nativo
@@ -178,7 +180,16 @@ const verConfiguracao = async (env, access, request) => {
   return json({
     integracao,
     modos: modoDisponivel(integracao, env),
-    webhookKit: integracao ? montarKitWebhookTrack3r({ origin, integrationId: integracao.id }) : null,
+    webhookKit: integracao ? {
+      ...montarKitWebhookTrack3r({ origin, integrationId: integracao.id }),
+      tokensIndividuais: estadoTokensWebhookTrack3r(env, row).individual,
+      endpoints: montarKitWebhookTrack3r({ origin, integrationId: integracao.id }).endpoints
+        .map((endpoint) => ({
+          ...endpoint,
+          tokenEnvKey: TRACK3R_WEBHOOK_TOKEN_KEYS[endpoint.type],
+          tokenConfigurado: Boolean(env?.[TRACK3R_WEBHOOK_TOKEN_KEYS[endpoint.type]]),
+        })),
+    } : null,
     // Estado real do otimizador de rotas, para a tela não fingir motor no ar.
     roteirizacao: estadoRoteirizacao(env),
     // Enquanto o fornecedor não responder, é isto que a tela mostra como
@@ -224,7 +235,9 @@ const salvarConfiguracao = async (env, access, user, corpo, request) => {
       error: "O modo API precisa do token no cofre do Worker. Cadastre o segredo e tente de novo.",
       segredoFaltando: tokenEnvKey,
     }, 409);
-  if (modo === "webhook" && !env[webhookSecretEnvKey])
+  if (modo === "webhook" && !estadoTokensWebhookTrack3r(env, {
+    webhook_secret_env_key: webhookSecretEnvKey,
+  }).disponivel)
     return json({
       error: "O modo webhook precisa do segredo no cofre do Worker.",
       segredoFaltando: webhookSecretEnvKey,
@@ -887,15 +900,11 @@ export async function receberOcorrenciaTrack3r(request, env) {
   const integracao = await integracaoDoWebhook(env, integracaoId);
   if (!integracao) return TOKEN_INVALIDO();
 
-  const nomeDoSegredo = texto(integracao.webhook_secret_env_key, 120) || "TODOGREEN_TRACK3R_WEBHOOK_SECRET";
-  const esperado = String(env[nomeDoSegredo] || "");
-  // Sem segredo cadastrado o receptor NÃO aceita. Aceitar "enquanto não
-  // configuram" é como deixar a porta encostada e escrever um bilhete.
-  if (!esperado)
-    return respostaDoFornecedor(false, `Integração sem segredo configurado (${nomeDoSegredo}).`, 503);
-
   const enviado = String(request.headers.get("Token") || "").trim().slice(0, 500);
-  if (!enviado || !sameHash(enviado, esperado)) return TOKEN_INVALIDO();
+  const token = autenticarTokenWebhookTrack3r(env, integracao, "ocorrencias", enviado);
+  if (!token.configurado)
+    return respostaDoFornecedor(false, `Integração sem token configurado para ocorrencias (${token.nome}).`, 503);
+  if (!token.autorizado) return TOKEN_INVALIDO();
 
   // O corpo é lido como texto UMA vez, para poder medir antes de interpretar.
   const bruto = await request.text().catch(() => "");
