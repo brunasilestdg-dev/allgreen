@@ -14,7 +14,7 @@ Builds.
 | **TRACK3R — 13 webhooks** | Todos com projetor idempotente; dreno de reprocessamento no cron; **2 bugs reais corrigidos** (INSERT de encomenda e de fatura); 28/28 testes verdes | Ligar o webhook real: segredo `TODOGREEN_TRACK3R_WEBHOOK_SECRET` + fornecedor disparando |
 | **Segurança da autenticação** | Cabeçalhos anti-clickjacking (`X-Frame-Options: DENY`) + `noindex` nas superfícies privadas do SPA; sessão canônica por cookie já aceita em todas as rotas | **Rotacionar credenciais** (abaixo); migração cookie-only dos portais é faseada (próximo passo) |
 | **Operação logística completa** | Jornada order-to-cash coberta por teste transversal | Homologar com dados/volume reais em produção |
-| **monday.com** | OAuth 2.1 + webhook + persistência já no código (migração 0139) | **Conectar** a conta monday (OAuth) e validar sync real |
+| **monday.com** | OAuth 2.1 + receptor de webhook + inbox + conexões (migração 0139). **Ainda NÃO** projeta os eventos do monday em registros do ERP, e não há testes | **Conectar** a conta (OAuth) e **definir o mapeamento** quadros/colunas → registros do ERP (depende do seu esquema de quadros); com isso eu construo a projeção + testes e valido o sync real |
 | **Interface** | e2e local 10/11 (1 falha pré-existente de copy, não-regressão) | Regressão visual com baseline exige **Docker** (`npm run test:visual:docker`) |
 | **Recuperação/publicação** | Versão em produção conferida por HTTP (`/api/status`, operacional) | **Backup/restore D1/R2** em produção (conta Cloudflare) |
 
@@ -47,3 +47,10 @@ afetada. Segredos são lidos em runtime (não exige redeploy).
 - **Migração cookie-only dos portais externos** (tira o token do `localStorage`, fechando o vetor de XSS): faseada — portais → app → remoção das gravações do token. Só frontend (o servidor já valida pelo cookie).
 - **Allow-list de papéis internos no choke point** (defesa em profundidade) + teste de contrato que garante 403 de papel de permissão mínima em toda rota interna.
 - **Atomicidade por lote** (`env.DB.batch`) nas projeções TRACK3R (hoje idempotentes + reprocessáveis; batch daria all-or-nothing por evento).
+- **monday.com — projeção para o ERP + testes**: depois que você definir o mapeamento (quais quadros/colunas viram quais registros do ERP), construo a projeção dos eventos do inbox para os registros e cubro com testes (hoje só há OAuth + receptor de webhook, sem projeção nem cobertura).
+
+## Estado de validação (nesta sessão, sem GitHub Actions)
+
+- Lint: 0 erros · Build: OK · Testes unitários: 4578/4578 · e2e local: 10/11 (1 falha de copy pré-existente).
+- Testes de worker: as 4 falhas do TRACK3R (webhooks) foram **corrigidas**; restam 2 pré-existentes (`energy`, `geo-fleet`) que dependem de serviços externos (Valhalla/ANEEL/ANP) indisponíveis neste ambiente — passam no build real da Cloudflare.
+- Cloudflare Workers Builds do PR #440: **deploy bem-sucedido** (portão real de deploy).
