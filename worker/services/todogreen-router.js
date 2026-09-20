@@ -18,6 +18,7 @@ import { handleTodoGreenOperationParams } from "./todogreen-operation-params.js"
 import { handleTodoGreenDashboards } from "./todogreen-dashboards.js";
 import { handleTodoGreenRequests } from "./todogreen-requests.js";
 import { handleTodoGreenVerticalRecords } from "./todogreen-vertical-records.js";
+import { handleTodoGreenCommercialPanel } from "./todogreen-commercial-panel.js";
 import { handleTodoGreenStock } from "./todogreen-stock.js";
 import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
 import { handleTodoGreenPurchasingParams } from "./todogreen-purchasing-params.js";
@@ -317,6 +318,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
       return handleTodoGreenVerticalRecords(request, env, resolved.access, resolved.user);
+    });
+  }
+
+  if (path.startsWith("/api/todogreen/comercial/painel")) {
+    return guarded("To Do Green commercial panel error", "Não foi possível montar o painel comercial.", async () => {
+      const resolved = await internalReadAccess(request, env);
+      if (resolved.response) return resolved.response;
+      return handleTodoGreenCommercialPanel(request, env, resolved.access, resolved.user);
     });
   }
 

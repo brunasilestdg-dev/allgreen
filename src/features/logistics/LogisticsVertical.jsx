@@ -156,6 +156,7 @@ const DealDeskPage = lazy(() => import("./pages/DealDeskPage.jsx"));
 const DocumentVaultPage = lazy(() => import("./pages/DocumentVaultPage.jsx"));
 const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
 const BusinessConnectorsPage = lazy(() => import("./pages/BusinessConnectorsPage.jsx"));
+const CommercialPanelPage = lazy(() => import("./pages/CommercialPanelPage.jsx"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage.jsx"));
 const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
 const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
@@ -476,6 +477,15 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     area: "comercial",
     status: "functional",
     description: "Jornada de venda, critérios de avanço e atalhos comerciais.",
+  },
+  "painel-comercial": {
+    title: "Painel comercial",
+    navLabel: "Painel comercial",
+    route: "/todogreen/painel-comercial",
+    area: "comercial",
+    status: "functional",
+    permission: ["crm:manage", "clients:manage", "revenue:manage", "finance:manage", "audit:read"],
+    description: "Receita novos negócios, kanban de clientes e modelo operacional em uma tela, com dados reais das fontes conectadas.",
   },
   clientes: {
     title: "Clientes",
@@ -1170,7 +1180,7 @@ const PRIMARY_NAVIGATION = Object.freeze([
   // Notícias e inteligência (RFQs/RFIs, notícias, LinkedIn e decisores) é
   // inteligência comercial — mora em Comercial (decisão da titular, 05/09),
   // como atalho para a ferramenta do Espaço.
-  { id: "commercial", label: "Comercial", route: "/todogreen/clientes", pages: ["clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "marketing", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
+  { id: "commercial", label: "Comercial", route: "/todogreen/painel-comercial", pages: ["painel-comercial", "clientes", "oportunidades", "funil", "precificacao", "aceite-viagens", "regua", "propostas", "central-rfq", "deal-desk", "marketing", "metas", "performance-comercial", "playbook-comercial"], extras: [["Cadastro · Tabelas de preço", "/todogreen/cadastros?secao=priceTables"]] },
   // Planejamento decide o que entra; Operação executa o que foi aceito. Antes
   // as duas coisas moravam na mesma área e "Planejamento" aparecia dentro de
   // Operação enquanto uma OUTRA aba chamada Planejamento (que era, na verdade,
@@ -3987,6 +3997,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
       {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "conectores" && <Suspense fallback={<section className="tdg-panel">Carregando conectores...</section>}><BusinessConnectorsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "painel-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando painel comercial...</section>}><CommercialPanelPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "saude-sistema" && <Suspense fallback={<section className="tdg-panel">Carregando saúde do sistema...</section>}><SystemHealthPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 
