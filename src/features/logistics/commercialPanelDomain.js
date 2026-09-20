@@ -728,6 +728,7 @@ export function montarKanbanDeOportunidades(oportunidades = [], hoje = new Date(
       id: textoLimpo(o?.id),
       cliente: textoLimpo(o?.cliente) || textoLimpo(o?.titulo) || "Oportunidade",
       valor: soNumero(o?.valorMensal),
+      interacoes: soNumero(o?.interacoes),
     });
   }
   const etapas = [...porEtapa.values()].sort((a, b) => b.valor - a.valor);
@@ -750,6 +751,7 @@ export function montarKanbanDeOportunidades(oportunidades = [], hoje = new Date(
         atualizadoEm: base,
         semFupDias,
         texto: textoLimpo(o?.texto),
+        interacoes: soNumero(o?.interacoes),
       };
     })
     .sort((a, b) => soNumero(b.semFupDias) - soNumero(a.semFupDias));

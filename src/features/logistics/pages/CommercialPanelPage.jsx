@@ -269,6 +269,7 @@ function CartaoKanban({ item, etapas, editavel, onMover, onValor }) {
           </select>
         </>
       ) : <small>{brl(item.valor)}</small>}
+      {item.interacoes > 0 && <small className="tdg-card-interacoes" title="Interações registradas nesta oportunidade">💬 {item.interacoes} interação(ões)</small>}
     </div>
   );
 }
@@ -309,6 +310,7 @@ function FupRow({ c, etapas, onRenomear, onValor, onMover, onFup, onNota, onExcl
       <td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
       <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
       <td className="tdg-td-texto"><NotaFup item={c} onNota={onNota} /></td>
+      <td className="tdg-num">{c.interacoes > 0 ? `💬 ${c.interacoes}` : "—"}</td>
       <td className="tdg-fup-acoes">
         <button type="button" className="tdg-mini" onClick={() => onFup(c.id)} title="Registrar follow-up hoje (zera o contador)">✓ FUP</button>
         <button type="button" className="tdg-mini tdg-mini-danger" title="Excluir (vai para arquivados)"
@@ -371,17 +373,18 @@ function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear
         </Secao>
       )}
 
-      <Secao titulo="Clientes para FUP" kicker="SEM ACOMPANHAMENTO" nota={editavel ? "Edite o nome, a etapa, o valor e o contexto direto na linha. Use 🗑 para excluir o que não for oportunidade (ex.: “Implementação do TMS”)." : ""}>
+      <Secao titulo="Clientes para FUP" kicker="SEM ACOMPANHAMENTO" nota={editavel ? "Edite nome, etapa, valor e contexto na linha. 💬 = interações registradas na oportunidade (o histórico completo abre na tela Oportunidades). Use 🗑 para excluir o que não for cliente (ex.: “Implementação do TMS”)." : ""}>
         {fup.disponivel ? (
           <table className="tdg-tabela">
-            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th>{editavel && <th>Ações</th>}</tr></thead>
+            <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th><th>Interações</th>{editavel && <th>Ações</th>}</tr></thead>
             <tbody>{fup.clientes.map((c, idx) => (
               editavel && c.id
                 ? <FupRow key={c.id} c={c} etapas={etapas} onRenomear={onRenomear} onValor={onValor} onMover={onMover} onFup={onFup} onNota={onNota} onExcluir={onExcluir} />
                 : (
                   <tr key={c.id || idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
                     <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
-                    <td className="tdg-td-texto">{c.texto || "—"}</td></tr>
+                    <td className="tdg-td-texto">{c.texto || "—"}</td>
+                    <td className="tdg-num">{c.interacoes > 0 ? `💬 ${c.interacoes}` : "—"}</td></tr>
                 )
             ))}</tbody>
           </table>

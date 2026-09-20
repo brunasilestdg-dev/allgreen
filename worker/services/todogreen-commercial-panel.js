@@ -84,7 +84,11 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
   const lerOportunidades = async () => {
     const { results } = await env.DB.prepare(
       `SELECT t.id, t.stage, t.monthly_value, t.contract_value, t.client_name, t.title,
-              t.owner_user_id, t.last_interaction_at, t.updated_at, t.fields_json
+              t.owner_user_id, t.last_interaction_at, t.updated_at, t.fields_json,
+              (SELECT COUNT(*) FROM todogreen_crm_interactions i
+                WHERE i.tenant_id = t.tenant_id AND i.opportunity_id = t.id AND i.archived_at IS NULL) AS interacoes,
+              (SELECT MAX(i2.occurred_at) FROM todogreen_crm_interactions i2
+                WHERE i2.tenant_id = t.tenant_id AND i2.opportunity_id = t.id AND i2.archived_at IS NULL) AS ultima_interacao_em
          FROM todogreen_opportunities t
         WHERE t.tenant_id = ? AND t.workspace_owner_id = ? AND t.archived_at IS NULL
           ${recorteOportunidades.sql}`,
@@ -98,8 +102,11 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
       cliente: texto(r.client_name),
       titulo: texto(r.title),
       responsavel: texto(r.owner_user_id),
-      ultimaInteracaoEm: texto(r.last_interaction_at),
+      // A "última interação" real é a ocorrência mais recente registrada; sem
+      // interação, cai no carimbo de last_interaction_at.
+      ultimaInteracaoEm: texto(r.ultima_interacao_em) || texto(r.last_interaction_at),
       atualizadoEm: texto(r.updated_at),
+      interacoes: Number(r.interacoes) || 0,
       texto: texto(parse(r.fields_json, {}).fupTexto),
     }));
   };

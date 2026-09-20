@@ -5526,3 +5526,4 @@
 .tdg-chart-dot.pico { width: 8px; height: 8px; margin: -4px 0 0 -4px; opacity: 1; box-shadow: 0 0 0 2px var(--tdg-card); }
 .tdg-chart-rotulo { position: absolute; transform: translate(-50%, -140%); white-space: nowrap; font-size: 0.7rem; font-weight: 600; color: var(--tdg-text); background: color-mix(in srgb, var(--tdg-card) 88%, transparent); padding: 1px 5px; border-radius: 5px; border: 1px solid var(--tdg-line); font-variant-numeric: tabular-nums; }
 .tdg-chart-rotulo.pico { color: var(--tdg-green); border-color: var(--tdg-green); }
+.tdg-card-interacoes { display: block; margin-top: 3px; color: var(--tdg-muted); font-size: 0.72rem; }
