@@ -11,7 +11,7 @@ Builds.
 | Frente | Código (feito e validado aqui) | Depende da titular |
 | --- | --- | --- |
 | **PR #440** (segurança/integridade/entrega) | Pronto para revisão; CI (Workers Builds + GitGuardian) verde | Aprovar e **mergear** (= deploy em produção) |
-| **TRACK3R — 13 webhooks** | Todos com projetor idempotente; dreno de reprocessamento no cron; **2 bugs reais corrigidos** (INSERT de encomenda e de fatura); 28/28 testes verdes | Ligar o webhook real: segredo `TODOGREEN_TRACK3R_WEBHOOK_SECRET` + fornecedor disparando |
+| **TRACK3R — 13 webhooks** | Todos com projetor idempotente; dreno de reprocessamento no cron; **2 bugs reais corrigidos** (INSERT de encomenda e de fatura); 28/28 testes verdes | Cadastramento de tokens distintos por endpoint (`docs/TRACK3R_TOKENS_INDIVIDUAIS.md`) + fornecedor disparando dados reais |
 | **Segurança da autenticação** | Cabeçalhos anti-clickjacking (`X-Frame-Options: DENY`) + `noindex` nas superfícies privadas do SPA; sessão canônica por cookie já aceita em todas as rotas | **Rotacionar credenciais** (abaixo); migração cookie-only dos portais é faseada (próximo passo) |
 | **Operação logística completa** | Jornada order-to-cash coberta por teste transversal | Homologar com dados/volume reais em produção |
 | **monday.com** | OAuth 2.1 + receptor de webhook + inbox + conexões (migração 0139). **Ainda NÃO** projeta os eventos do monday em registros do ERP, e não há testes | **Conectar** a conta (OAuth) e **definir o mapeamento** quadros/colunas → registros do ERP (depende do seu esquema de quadros); com isso eu construo a projeção + testes e valido o sync real |
@@ -38,7 +38,7 @@ afetada. Segredos são lidos em runtime (não exige redeploy).
 
 - **Mergear o PR #440**: revise e aprove; o merge na `main` publica em produção
   pelo Workers Builds. (Não faço merge/aprovação por política.)
-- **TRACK3R webhook**: `openssl rand -hex 32` → `npx wrangler secret put TODOGREEN_TRACK3R_WEBHOOK_SECRET`; informe ao fornecedor a URL `.../api/todogreen/tms/webhook/<id>` e peça a tabela oficial de códigos de ocorrência (detalhes em `PENDENCIAS_DA_TITULAR.md`). Feito isto, dá para homologar os 13 eventos com dados reais.
+- **TRACK3R webhook**: criar a integração em modo Arquivo para obter o ID real e as 13 URLs, gerar **um token distinto por endpoint** e cadastrar cada segredo no Cloudflare (`docs/TRACK3R_TOKENS_INDIVIDUAIS.md`). Enviar ao fornecedor cada par URL + token por canal seguro. Pedir a tabela oficial de códigos de ocorrência (`PENDENCIAS_DA_TITULAR.md`) e homologar com eventos reais. **Não** enviar o token legado compartilhado.
 - **monday.com**: conectar a conta na Central de Integrações (OAuth) e mapear os quadros/campos aos registros do ERP.
 - **Backup/restore D1/R2**: validar em produção com a conta Cloudflare (runbook em `docs/DEPLOYMENT_RUNBOOK.md`).
 
