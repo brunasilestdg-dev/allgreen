@@ -16,8 +16,21 @@ describe("permissão da tela vem do config, não do menu", () => {
   it("telas restritas declaram a permissão que o menu já usa", () => {
     expect(permissaoDaPagina("acessos")).toBe("access:manage");
     expect(permissaoDaPagina("integracoes")).toBe("integration:manage");
+    expect(permissaoDaPagina("conectores")).toBe("integration:manage");
     expect(permissaoDaPagina("fiscal")).toBe("fiscal:manage");
     expect(permissaoDaPagina("planner")).toBe("planner:manage");
+  });
+
+  it("conectores de negócio é visível para quem administra integrações (não é dev-only)", () => {
+    // A Central de Integrações (dev-only) escondia o \"Conectar monday.com\" do
+    // owner/admin. Conectores de negócio abre a autorização das contas externas
+    // por `integration:manage` — sem exigir o perfil de desenvolvedor.
+    const pagina = todoGreenRouteToPage("/todogreen/conectores");
+    expect(pagina).toBe("conectores");
+    expect(hasTodoGreenPermission("owner", permissaoDaPagina(pagina))).toBe(true);
+    expect(hasTodoGreenPermission("admin", permissaoDaPagina(pagina))).toBe(true);
+    expect(hasTodoGreenPermission("operacoes", permissaoDaPagina(pagina))).toBe(true);
+    expect(hasTodoGreenPermission("motorista", permissaoDaPagina(pagina))).toBe(false);
   });
 
   it("telas abertas continuam livres e clientes aceita permissões comerciais equivalentes", () => {

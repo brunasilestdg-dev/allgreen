@@ -155,6 +155,7 @@ const TripViabilityPage = lazy(() => import("./pages/TripViabilityPage.jsx"));
 const DealDeskPage = lazy(() => import("./pages/DealDeskPage.jsx"));
 const DocumentVaultPage = lazy(() => import("./pages/DocumentVaultPage.jsx"));
 const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
+const BusinessConnectorsPage = lazy(() => import("./pages/BusinessConnectorsPage.jsx"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage.jsx"));
 const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
 const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
@@ -966,6 +967,17 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     permission: "integration:manage",
     description: "Estado da cascata de IA, pesquisa web e automações autohospedadas, sem expor credenciais.",
   },
+  conectores: {
+    title: "Conectores de negócio",
+    navLabel: "Conectores",
+    route: "/todogreen/conectores",
+    area: "administracao",
+    status: "functional",
+    // Conector de negócio (monday.com etc.) é diferente das telas técnicas
+    // dev-only: administrar integrações basta. Owner/admin/operações veem.
+    permission: "integration:manage",
+    description: "Autorização das contas externas de negócio (monday.com e afins), sem expor credenciais.",
+  },
   qualidade: {
     title: "Qualidade",
     navLabel: "Qualidade",
@@ -1260,6 +1272,14 @@ const MANAGEMENT_TOOLS = Object.freeze([
     title: MODULE_IMPLEMENTATION.integracoes.title,
     description: MODULE_IMPLEMENTATION.integracoes.description,
     route: "/todogreen/integracoes",
+    permission: "integration:manage",
+  },
+  {
+    id: "conectores",
+    label: "Conectores",
+    title: MODULE_IMPLEMENTATION.conectores.title,
+    description: MODULE_IMPLEMENTATION.conectores.description,
+    route: "/todogreen/conectores",
     permission: "integration:manage",
   },
   {
@@ -3966,6 +3986,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "auditoria" && <Suspense fallback={<section className="tdg-panel">Carregando auditoria...</section>}><GovernancePage role={role} permissions={remoteAccess.permissions || []} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
       {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "conectores" && <Suspense fallback={<section className="tdg-panel">Carregando conectores...</section>}><BusinessConnectorsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "saude-sistema" && <Suspense fallback={<section className="tdg-panel">Carregando saúde do sistema...</section>}><SystemHealthPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 
