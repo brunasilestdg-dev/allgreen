@@ -21,7 +21,7 @@
 // A regra que orienta o arquivo: **o que a sessão pode fazer sai do banco,
 // nunca da requisição.**
 
-import { verticalPermite } from "../../src/features/logistics/logisticsVerticalDomain.js";
+import { verticalPermite, TODO_GREEN_PERMISSIONS } from "../../src/features/logistics/logisticsVerticalDomain.js";
 import { sessionUser } from "../auth/credenciais.js";
 
 export const TENANT_ID = "todogreen";
@@ -127,10 +127,6 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     .then((resultado) => resultado.results || [])
     .catch(() => []);
 
-  // Sem domínio na conta: entrar exige alguém ter autorizado esta pessoa.
-  if (!ehAdministrador && !autorizacoes.length && !vinculos.length)
-    return { access: null, motivo: NEGADO.semVinculo };
-
   // Os espaços que esta sessão alcança de fato. O administrador da vertical
   // opera qualquer espaço porque é dele que a operação depende; todos os
   // demais ficam presos ao próprio espaço e ao do vínculo.
@@ -163,6 +159,23 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     .all()
     .then((resultado) => (resultado.results || []).map((item) => item.workspace_owner_id).filter(Boolean))
     .catch(() => []);
+
+  // Sem domínio na conta: entrar exige que ALGUÉM tenha autorizado esta pessoa.
+  // A negação só pode acontecer DEPOIS de considerar todos os vínculos válidos
+  // aplicáveis — administrador, liberação por e-mail, associação ao tenant,
+  // carteira (vendedor), cadastro de motorista e cadastro de colaborador. Antes
+  // desta correção a guarda olhava só admin/liberação/tenant e barrava um
+  // motorista, colaborador ou vendedor legítimo antes de checar o vínculo dele.
+  const temVinculoValido =
+    ehAdministrador ||
+    autorizacoes.length > 0 ||
+    vinculos.length > 0 ||
+    donosDaCarteira.length > 0 ||
+    espacosDeMotorista.length > 0 ||
+    espacosDeColaborador.length > 0;
+  if (!temVinculoValido)
+    return { access: null, motivo: NEGADO.semVinculo };
+
   // O espaço gravado na liberação por e-mail (0071). É o que resolve o caso
   // normal de quem foi autorizado ANTES de ter conta: sem ele, a pessoa criava
   // a conta, entrava, e caía no próprio espaço vazio — com todas as permissões
@@ -197,12 +210,33 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
   const vinculo = vinculos.find((item) => clean(item.workspace_owner_id, 100) === espacoPadrao)
     || vinculos.find((item) => !clean(item.workspace_owner_id, 100))
     || null;
+  // Menor privilégio: sem liberação/vínculo explícito de papel, o acesso vem do
+  // TIPO de vínculo — e NUNCA de "auditor" (leitura ampla) por acidente, nem de
+  // "admin". Carteira concede o papel de vendedor; cadastro de motorista concede
+  // "motorista" (driver:self/event, sem leitura da vertical); cadastro de
+  // colaborador concede "colaborador" (só o próprio portal). Um vínculo de
+  // motorista, colaborador ou cliente JAMAIS concede acesso administrativo:
+  // "admin" continua vindo exclusivamente do e-mail listado em
+  // TODOGREEN_ADMIN_EMAILS (ehAdministrador).
+  const papelDoVinculo = donosDaCarteira.length
+    ? "vendedor"
+    : espacosDeMotorista.length
+      ? "motorista"
+      : espacosDeColaborador.length
+        ? "colaborador"
+        : "auditor";
   const role = ehAdministrador
     ? "admin"
-    : autorizado?.role || vinculo?.role || "auditor";
+    : autorizado?.role || vinculo?.role || papelDoVinculo;
+  // Liberação por e-mail e associação ao tenant trazem a lista autoritativa de
+  // permissões (mesmo vazia). Sem elas, as permissões derivam do papel mínimo do
+  // vínculo — não podem ficar vazias, senão o portal do motorista/colaborador não
+  // teria nem a própria permissão (driver:self / colaborador:self).
   const permissions = ehAdministrador
     ? ["*"]
-    : parse(autorizado?.permissions_json || vinculo?.permissions_json, []);
+    : autorizado || vinculo
+      ? parse(autorizado?.permissions_json || vinculo?.permissions_json, [])
+      : TODO_GREEN_PERMISSIONS[role] || [];
 
   if (autorizado?.id) {
     await env.DB.prepare(

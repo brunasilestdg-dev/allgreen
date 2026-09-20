@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import worker from "../worker-entry.js";
+import { NEGADO, resolveTodoGreenAccess } from "../worker/services/todogreen-access.js";
 
 // O painel Acessos administra DUAS fontes de vínculo, não uma.
 //
@@ -174,5 +175,95 @@ describe("revogar acesso revoga de verdade", () => {
     // O que a titular espera de "remover acesso": a porta fecha.
     const depois = await pedir("/api/todogreen/treasury/saldos", { token: tokenDesligado });
     expect(depois.status).toBe(403);
+  });
+});
+
+// AG-SEP-04 (Bloco 3): a negação de acesso não pode ocorrer ANTES de considerar
+// todos os vínculos válidos aplicáveis, e cada vínculo por e-mail (motorista,
+// colaborador, vendedor) concede o seu papel MÍNIMO — nunca "auditor" (leitura
+// ampla) por acidente e JAMAIS "admin". "admin" continua vindo só do e-mail
+// listado em TODOGREEN_ADMIN_EMAILS.
+describe("AG-SEP-04: ordem da negação e menor privilégio por tipo de vínculo", () => {
+  beforeAll(async () => {
+    const agora = new Date().toISOString();
+    // Motorista puro: só o cadastro de motorista, sem access_emails/tenant_users.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_drivers
+         (id,tenant_id,workspace_owner_id,full_name,user_email,status,created_by,updated_by,created_at,updated_at)
+       VALUES ('sep4-drv','todogreen','vin-dona','Motorista Puro','motorista.puro@todogreen.test','active','vin-dona','vin-dona',?,?)`,
+    ).bind(agora, agora).run();
+    // Colaborador puro: só o cadastro de pessoal (work_email).
+    await env.DB.prepare(
+      `INSERT INTO todogreen_employees
+         (id,tenant_id,workspace_owner_id,full_name,work_email,status,created_by,updated_by,created_at,updated_at)
+       VALUES ('sep4-emp','todogreen','vin-dona','Colaborador Puro','colab.puro@todogreen.test','active','vin-dona','vin-dona',?,?)`,
+    ).bind(agora, agora).run();
+    // Vendedor puro: só a carteira atribuída (cliente + assignment ativo).
+    await env.DB.prepare(
+      `INSERT INTO todogreen_clients
+         (id,tenant_id,workspace_owner_id,name,created_by,updated_by,created_at,updated_at)
+       VALUES ('sep4-cli','todogreen','vin-dona','Cliente Carteira','vin-dona','vin-dona',?,?)`,
+    ).bind(agora, agora).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_assignments
+         (id,tenant_id,client_id,seller_email,status,assigned_by,created_at,updated_at)
+       VALUES ('sep4-asg','todogreen','sep4-cli','vendedor.puro@todogreen.test','active','vin-dona',?,?)`,
+    ).bind(agora, agora).run();
+  });
+
+  it("motorista puro é ADMITIDO (não negado) e resolve como 'motorista' — sem read, sem admin", async () => {
+    const { access, motivo } = await resolveTodoGreenAccess(
+      env, { id: "sep4-u-drv", email: "motorista.puro@todogreen.test" }, null,
+    );
+    expect(motivo).toBeNull();
+    expect(access?.role).toBe("motorista");
+    expect(access?.ownerId).toBe("vin-dona");
+    expect(access?.viaAdministradorGlobal).toBe(false);
+    expect(access?.permissions).not.toContain("*");
+    expect(access?.permissions).not.toContain("read");
+    expect(access?.permissions).toEqual(["driver:self", "driver:event"]);
+  });
+
+  it("colaborador puro resolve como 'colaborador' (só o portal, sem read)", async () => {
+    const { access, motivo } = await resolveTodoGreenAccess(
+      env, { id: "sep4-u-emp", email: "colab.puro@todogreen.test" }, null,
+    );
+    expect(motivo).toBeNull();
+    expect(access?.role).toBe("colaborador");
+    expect(access?.ownerId).toBe("vin-dona");
+    expect(access?.permissions).toEqual(["colaborador:self"]);
+  });
+
+  it("vendedor puro (carteira) resolve como 'vendedor' no espaço do cliente", async () => {
+    const { access, motivo } = await resolveTodoGreenAccess(
+      env, { id: "sep4-u-vend", email: "vendedor.puro@todogreen.test" }, null,
+    );
+    expect(motivo).toBeNull();
+    expect(access?.role).toBe("vendedor");
+    expect(access?.ownerId).toBe("vin-dona");
+  });
+
+  it("conta sem NENHUM vínculo continua negada (sem-vinculo)", async () => {
+    const { access, motivo } = await resolveTodoGreenAccess(
+      env, { id: "sep4-u-nada", email: "sem.vinculo.sep4@todogreen.test" }, null,
+    );
+    expect(access).toBeNull();
+    expect(motivo).toBe(NEGADO.semVinculo);
+  });
+
+  it("liberação/tenant explícitos vencem o vínculo por e-mail (um motorista com papel concedido NÃO é rebaixado, mas também não vira admin sozinho)", async () => {
+    const agora = new Date().toISOString();
+    // Mesmo e-mail do motorista, agora com liberação explícita de 'operacoes'.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_access_emails
+         (id,tenant_id,email,role,status,permissions_json,note,created_by,workspace_owner_id,created_at,updated_at)
+       VALUES ('sep4-ae','todogreen','motorista.puro@todogreen.test','operacoes','active',
+         '["read","operations:manage"]','','vin-dona','vin-dona',?,?)`,
+    ).bind(agora, agora).run();
+    const { access } = await resolveTodoGreenAccess(
+      env, { id: "sep4-u-drv", email: "motorista.puro@todogreen.test" }, null,
+    );
+    expect(access?.role).toBe("operacoes");
+    expect(access?.role).not.toBe("admin");
   });
 });

@@ -42,23 +42,31 @@ Total de tabelas no schema: **235**. Duas famílias:
 - **~55 de núcleo/compartilhadas** — `users`, `sessions`, `workspaces`,
   `memberships`, `contacts`, `interactions`, `tenants`, `public_*`, etc.
 
-### 1.1 O discriminador (achado central)
+### 1.1 O discriminador (achado central — CORRIGIDO no bloco de acesso)
 
 `users` **não tem coluna de produto**. O mesmo login pode usar o workspace
-genérico (Seu Funcionário) e a vertical (`/todogreen`). A fronteira real é o
-grafo de tenant:
+genérico (Seu Funcionário) e a vertical (`/todogreen`).
 
-```
-tenants (id, slug, name, segment)
-   └── tenant_users (tenant_id, workspace_owner_id → users.id, user_id → users.id, role)
-          └── todogreen_* (escopadas por tenant_id / operation_id / client_id)
-```
+**Correção importante:** o vínculo All Green **NÃO** é só `tenant_users`. A
+função autoritativa `worker/services/todogreen-access.js::resolveTodoGreenAccess`
+reconhece **seis** fontes de acesso. Uma conta é All Green se satisfizer
+qualquer uma:
 
-Logo:
-- **Conta All Green** = `users.id` que aparece como `workspace_owner_id` (ou `user_id`) em `tenant_users`, mais o `tenants`/`todogreen_*` correspondente.
-- **Conta Seu Funcionário puro** = `users` sem vínculo em `tenant_users`, com dados só no blob `workspaces`.
+| Fonte | Tabela / origem | Papel resultante |
+|---|---|---|
+| Administrador global | e-mail em `TODOGREEN_ADMIN_EMAILS` (env) | `admin` |
+| Liberação por e-mail | `todogreen_access_emails` (active) | o papel gravado |
+| Associação ao tenant | `tenant_users` (active) | o papel gravado |
+| Carteira comercial | `todogreen_client_assignments` (seller_email) → `todogreen_clients` | `vendedor` |
+| Cadastro de motorista | `todogreen_drivers` (user_email) | `motorista` |
+| Cadastro de colaborador | `todogreen_employees` (work/personal email) | `colaborador` |
 
-Isso torna possível uma cópia **filtrada por conta**, e não só a cópia total.
+- **Conta All Green** = satisfaz ≥1 fonte acima → copiar para `allgreen-db` (usuário + workspace + todos os vínculos + `todogreen_*` do espaço).
+- **Conta Seu Funcionário puro** = nenhuma fonte acima; dados só no blob `workspaces` → **NÃO** copiar o workspace para produção.
+
+Selecionar só `tenant_users` (versão anterior deste plano) **excluiria**
+vendedores, motoristas, colaboradores e liberados por e-mail — todos usuários
+legítimos do ERP/TMS/Portais. A cópia filtrada usa as seis fontes.
 
 ## 2. Regras de segurança do corte (§5)
 
@@ -129,9 +137,12 @@ Colunas exigidas pelo §5: `objeto | tabela(s) | dono | leitores | escritores | 
 **Decisão travada: Estratégia B.** Os dois produtos coexistem (§0): All Green
 em produção no `orianone.app` com `allgreen-db`; Seu Funcionário como ambiente
 de teste no worker/DB antigos. Copiar para `allgreen-db` apenas o conjunto All
-Green (contas ligadas a tenant pela §1.1 + `tenants`/`tenant_users` + todo
-`todogreen_*` + os `workspaces`/`contacts`/`interactions`/`public_*` dessas
-contas). O que não é All Green permanece só na origem (teste).
+Green — contas com **qualquer uma das seis fontes de vínculo** da §1.1
+(admin, `access_emails`, `tenant_users`, carteira/`client_assignments`,
+`drivers`, `employees`) + `tenants`/`tenant_users`/`todogreen_access_emails`
++ todo `todogreen_*` do espaço + os `workspaces`/`contacts`/`interactions`/
+`public_*` **apenas dessas** contas. Workspaces de contas Seu Funcionário puro
+**não** são importados. Preservar `id`, timestamps e permissões.
 
 **Risco a tratar na execução (contas que usam os dois lados):** uma conta All
 Green que também tenha dados no workspace genérico terá seu blob copiado junto
