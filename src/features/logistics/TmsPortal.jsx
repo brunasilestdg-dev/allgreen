@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Coins,
   Contact,
   Copy,
   Download,
@@ -96,6 +97,7 @@ const SECTIONS = [
   { id: "fiscal", label: "CT-e, MDF-e e CIOT", icon: FileCheck2 },
   { id: "faturamento", label: "Faturamento", icon: CircleDollarSign },
   { id: "cadastros", label: "Cadastros Track3r", icon: Contact },
+  { id: "valores", label: "Valores das encomendas", icon: Coins },
   { id: "integracoes", label: "Integrações e API", icon: Cable },
 ];
 
@@ -1607,6 +1609,68 @@ function CadastrosSection({ data }) {
   );
 }
 
+// Valores por encomenda recebidos por webhook (valores-encomendas): frete
+// cobrado, valor da mercadoria e impostos. Somente leitura. As colunas de
+// mercadoria (valor da carga) e frete (o que a To Do Green cobra) ficam
+// separadas de propósito — não são a mesma coisa.
+function ValoresSection({ data }) {
+  const valores = data?.valores || { resumo: {}, registros: [] };
+  const resumo = valores.resumo || {};
+  const [busca, setBusca] = useState("");
+  const rows = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    const lista = valores.registros || [];
+    if (!q) return lista;
+    return lista.filter((r) => `${r.codigo} ${r.produto}`.toLowerCase().includes(q));
+  }, [valores.registros, busca]);
+  return (
+    <div className="tms-stack">
+      <section className="tms-panel">
+        <div className="tms-panel-head"><div><span>Valores recebidos da Track3R</span><h2>Frete, mercadoria e impostos por encomenda</h2></div><strong className="tms-queue-count">{resumo.total || 0}</strong></div>
+        <div className="tms-metrics">
+          <Metric label="Encomendas com valor" value={resumo.total || 0} />
+          <Metric label="Frete total (cobrado)" value={money.format(resumo.freteTotal || 0)} />
+          <Metric label="Valor da mercadoria (carga)" value={money.format(resumo.valorMercadoria || 0)} />
+          <Metric label="ICMS" value={money.format(resumo.icms || 0)} />
+        </div>
+        <p className="tms-note">Fonte: webhook <strong>valores-encomendas</strong>. O <strong>frete</strong> é o que a To Do Green cobra pelo transporte; a <strong>mercadoria</strong> é o valor da carga. Não são reconhecidos como receita no painel comercial — a receita vem das faturas.</p>
+      </section>
+      <section className="tms-panel">
+        <div className="tms-panel-head">
+          <div><span>Lista</span><h2>Valores por encomenda</h2></div>
+          <div className="tms-workbench-toolbar">
+            <label className="tms-search-field">
+              <Search size={16} />
+              <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por encomenda ou produto" aria-label="Buscar valores" />
+            </label>
+          </div>
+        </div>
+        {rows.length ? (
+          <div className="tms-table-wrap">
+            <table className="tms-table">
+              <thead><tr><th>Encomenda</th><th>Produto</th><th>Mercadoria</th><th>Peso (kg)</th><th>Frete</th><th>Frete total</th><th>ICMS</th><th>Último envio</th></tr></thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.codigo}>
+                    <td><strong>{r.codigo}</strong>{r.cfop ? <small>CFOP {r.cfop}</small> : null}</td>
+                    <td>{r.produto || "—"}</td>
+                    <td>{money.format(r.valorMercadoria || 0)}</td>
+                    <td>{number.format(r.pesoKg || 0)}</td>
+                    <td>{money.format(r.frete || 0)}</td>
+                    <td><strong>{money.format(r.freteTotal || 0)}</strong></td>
+                    <td>{money.format(r.icms || 0)}</td>
+                    <td>{r.ultimoEnvio ? dateTime(r.ultimoEnvio) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <Empty>Nenhum valor por encomenda recebido ainda. Quando o webhook de valores-encomendas chegar, aparece aqui.</Empty>}
+      </section>
+    </div>
+  );
+}
+
 export default function TmsPortal() {
   const [section, setSection] = useState(pathSection);
   const [data, setData] = useState(null);
@@ -1675,6 +1739,7 @@ export default function TmsPortal() {
   if (section === "fiscal") content = <div className="tms-stack"><section className="tms-panel"><div className="tms-panel-head"><div><span>Documentos fiscais</span><h2>CT-e e MDF-e</h2></div></div><FiscalTable rows={data?.recent?.fiscal} /></section><section className="tms-panel"><div className="tms-panel-head"><div><span>ANTT</span><h2>CIOT</h2></div></div><CiotTable rows={data?.recent?.ciots} /></section></div>;
   if (section === "faturamento") content = <BillingSection data={data} onReload={load} />;
   if (section === "cadastros") content = <CadastrosSection data={data} />;
+  if (section === "valores") content = <ValoresSection data={data} />;
   if (section === "integracoes") content = <Integrations data={data} onReload={load} setToast={mostrarToast} />;
 
   return (

@@ -640,6 +640,77 @@ const listarCadastros = async (env, access, url) => {
   });
 };
 
+// Valores por encomenda que a TRACK3R envia (webhook valores-encomendas):
+// valor da mercadoria, frete, taxas e impostos por encomenda. Antes entravam
+// no banco (todogreen_track3r_order_values) sem tela; esta leitura os expõe no
+// Portal TMS. Somente leitura, escopada por espaço.
+const listarValores = async (env, access, url) => {
+  const { limit, offset } = paginacao(url);
+  const base = `FROM todogreen_track3r_order_values
+      WHERE tenant_id = ? AND workspace_owner_id = ?`;
+  const params = [TENANT_ID, access.ownerId];
+
+  const [{ results }, resumoRow] = await Promise.all([
+    env.DB.prepare(
+      `SELECT external_order_code, product_code, product_description, merchandise_value,
+              weight_kg, freight, total_freight, icms, iss, tax_rate, cfop,
+              ad_valorem, gris, dispatch_fee, toll_fee, river_fee, difficult_access_fee,
+              unloading_fee, ctrc_fee, extra_pickup_fee, extra_delivery_fee, trt_fee,
+              emex_fee, tde_fee, last_seen_at
+         ${base} ORDER BY last_seen_at DESC, external_order_code ASC LIMIT ? OFFSET ?`,
+    ).bind(...params, limit, offset).all(),
+    // Totais globais (não da página): o topo da tela soma tudo que entrou.
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(total_freight), 0) AS frete_total,
+              COALESCE(SUM(merchandise_value), 0) AS mercadoria,
+              COALESCE(SUM(icms), 0) AS icms
+         ${base}`,
+    ).bind(...params).first(),
+  ]);
+
+  return json({
+    registros: (results || []).map((row) => ({
+      codigo: row.external_order_code,
+      produtoCodigo: row.product_code || "",
+      produto: row.product_description || "",
+      valorMercadoria: Number(row.merchandise_value || 0),
+      pesoKg: Number(row.weight_kg || 0),
+      frete: Number(row.freight || 0),
+      freteTotal: Number(row.total_freight || 0),
+      icms: Number(row.icms || 0),
+      iss: Number(row.iss || 0),
+      aliquota: Number(row.tax_rate || 0),
+      cfop: row.cfop || "",
+      ultimoEnvio: row.last_seen_at || "",
+      taxas: {
+        adValorem: Number(row.ad_valorem || 0),
+        gris: Number(row.gris || 0),
+        despacho: Number(row.dispatch_fee || 0),
+        pedagio: Number(row.toll_fee || 0),
+        fluvial: Number(row.river_fee || 0),
+        dificuldadeAcesso: Number(row.difficult_access_fee || 0),
+        descarga: Number(row.unloading_fee || 0),
+        ctrc: Number(row.ctrc_fee || 0),
+        extraColeta: Number(row.extra_pickup_fee || 0),
+        extraEntrega: Number(row.extra_delivery_fee || 0),
+        trt: Number(row.trt_fee || 0),
+        emex: Number(row.emex_fee || 0),
+        tde: Number(row.tde_fee || 0),
+      },
+    })),
+    resumo: {
+      total: Number(resumoRow?.total || 0),
+      freteTotal: Number(resumoRow?.frete_total || 0),
+      valorMercadoria: Number(resumoRow?.mercadoria || 0),
+      icms: Number(resumoRow?.icms || 0),
+    },
+    total: Number(resumoRow?.total || 0),
+    limit,
+    offset,
+  });
+};
+
 const verSugestoes = async (env, access, url) => {
   const id = texto(url.searchParams.get("documento"), 120);
   if (!id) return json({ error: "Informe o documento." }, 400);
@@ -1027,6 +1098,7 @@ export async function handleTodoGreenTms(request, env, access, user) {
     if (recurso === "configuracao" || !recurso) return verConfiguracao(env, access, request);
     if (recurso === "documentos") return listarDocumentos(env, access, url);
     if (recurso === "cadastros") return listarCadastros(env, access, url);
+    if (recurso === "valores") return listarValores(env, access, url);
     if (recurso === "classes") return listarPorClasse(env, access, url);
     if (recurso === "sugestoes") return verSugestoes(env, access, url);
     if (recurso === "execucoes") return listarExecucoes(env, access, url);

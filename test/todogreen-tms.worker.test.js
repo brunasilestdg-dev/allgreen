@@ -76,6 +76,29 @@ async function criarEntidadeTrack3r(usuario, tipo, codigo, nome, extra = {}) {
   ).run();
 }
 
+async function criarValorEncomenda(usuario, codigo, extra = {}) {
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO todogreen_track3r_order_values
+       (id, tenant_id, workspace_owner_id, integration_id, external_order_code,
+        product_code, product_description, merchandise_value, weight_kg, freight,
+        ad_valorem, gris, dispatch_fee, toll_fee, river_fee, difficult_access_fee,
+        unloading_fee, ctrc_fee, extra_pickup_fee, extra_delivery_fee, trt_fee,
+        emex_fee, tde_fee, cfop, tax_rate, icms, iss, total_freight, payload_json,
+        first_seen_at, last_seen_at)
+     VALUES (?, 'todogreen', ?, 'int-track3r', ?, '', ?, ?, ?, ?, 0,0,0,0,0,0,0,0,0,0,0,0,0, ?, 0, ?, 0, ?, '{}', ?, ?)
+     ON CONFLICT(workspace_owner_id, integration_id, external_order_code) DO UPDATE SET
+       total_freight = excluded.total_freight, merchandise_value = excluded.merchandise_value,
+       last_seen_at = excluded.last_seen_at`,
+  ).bind(
+    crypto.randomUUID(), usuario.id, codigo,
+    extra.produto || "Encomenda",
+    extra.mercadoria ?? 0, extra.peso ?? 0, extra.frete ?? 0,
+    extra.cfop || "", extra.icms ?? 0, extra.freteTotal ?? 0,
+    agora, agora,
+  ).run();
+}
+
 const pedir = (caminho, { metodo = "GET", token, corpo } = {}) => {
   const headers = { "cf-connecting-ip": nextIp() };
   if (token) headers.authorization = `Bearer ${token}`;
@@ -552,6 +575,37 @@ describe("cadastros recebidos da Track3r aparecem no portal", () => {
   it("quem só consulta também lê; sem sessão, 401", async () => {
     expect((await pedir("/api/todogreen/tms/cadastros", { token: auditor.token })).status).toBe(200);
     expect((await pedir("/api/todogreen/tms/cadastros")).status).toBe(401);
+  });
+});
+
+describe("valores por encomenda (valores-encomendas) aparecem no portal", () => {
+  // Antes, valores-encomendas entravam no banco mas não tinham tela. Esta rota
+  // os expõe, com frete e mercadoria SEPARADOS (não são a mesma coisa).
+  it("lista com frete e mercadoria distintos e soma o frete total", async () => {
+    await criarValorEncomenda(gestora, "ENC-1", { produto: "Peças", mercadoria: 1000, peso: 5, frete: 20, freteTotal: 23.4, icms: 2, cfop: "5360" });
+    await criarValorEncomenda(gestora, "ENC-2", { produto: "Roupas", mercadoria: 500, freteTotal: 10 });
+
+    const r = await pedir("/api/todogreen/tms/valores", { token: gestora.token });
+    expect(r.status).toBe(200);
+    const corpo = await r.json();
+    expect(corpo.resumo.total).toBeGreaterThanOrEqual(2);
+    // O resumo soma o FRETE (frete_total), não o valor da mercadoria.
+    expect(corpo.resumo.freteTotal).toBeGreaterThan(33);
+    const enc = corpo.registros.find((x) => x.codigo === "ENC-1");
+    expect(enc).toMatchObject({ produto: "Peças", valorMercadoria: 1000, frete: 20, freteTotal: 23.4, cfop: "5360" });
+    // mercadoria (carga) e frete (cobrado) são campos distintos
+    expect(enc.valorMercadoria).not.toBe(enc.freteTotal);
+  });
+
+  it("um espaço não vê os valores do outro", async () => {
+    await criarValorEncomenda(colega, "ENC-COLEGA", { freteTotal: 99 });
+    const corpo = await (await pedir("/api/todogreen/tms/valores", { token: gestora.token })).json();
+    expect(corpo.registros.map((x) => x.codigo)).not.toContain("ENC-COLEGA");
+  });
+
+  it("quem só consulta também lê; sem sessão, 401", async () => {
+    expect((await pedir("/api/todogreen/tms/valores", { token: auditor.token })).status).toBe(200);
+    expect((await pedir("/api/todogreen/tms/valores")).status).toBe(401);
   });
 });
 
