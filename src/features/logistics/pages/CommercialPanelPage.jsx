@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, TrendingUp, KanbanSquare, Truck, CircleDashed } from "lucide-react";
+import { comparativosDeSerie } from "../commercialPanelDomain.js";
 import "./TodoGreenPages.css";
 
 const brl = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -19,6 +20,34 @@ const mesLabel = (mes) => {
 // Paleta categórica validada (dataviz): distinta e CVD-safe em claro/escuro.
 // Cores por CSS var → o modo escuro troca sozinho. "Outros" fica neutro.
 const VIZ = ["var(--viz-1)", "var(--viz-2)", "var(--viz-3)", "var(--viz-4)", "var(--viz-5)", "var(--viz-outros)"];
+
+const deltaClass = (d) => (d === null || d === undefined ? "" : d >= 0 ? "tdg-ok" : "tdg-alerta");
+const deltaTxt = (d) => (d === null || d === undefined ? "—" : `${d >= 0 ? "▲ +" : "▼ "}${(d * 100).toFixed(1)}%`);
+
+// Faixa de comparativos MoM / MTD / DoD / YoY para uma métrica aditiva.
+function Comparativos({ dados, formato = num }) {
+  const tiles = [
+    ["MoM", dados.mom, "mês vs. mês anterior"],
+    ["MTD", dados.mtd, "mês até o dia X vs. mesmo período do mês anterior"],
+    ["DoD", dados.dod, "dia vs. dia anterior"],
+    ["YoY", dados.yoy, "vs. mesmo mês do ano anterior"],
+  ];
+  return (
+    <div className="tdg-kpi-row tdg-comparativos">
+      {tiles.map(([label, c, hint]) => (
+        <div className="tdg-kpi tdg-kpi-comp" key={label} title={hint}>
+          <span>{label}{label === "MTD" && c?.disponivel ? ` · até dia ${c.corteDia}` : ""}</span>
+          {c && c.disponivel ? (
+            <>
+              <strong>{formato(c.atual)} <em className={deltaClass(c.delta)}>{deltaTxt(c.delta)}</em></strong>
+              <small>anterior: {formato(c.anterior)}</small>
+            </>
+          ) : <strong className="tdg-sem-base">sem base ainda</strong>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const Vazio = ({ children }) => <p className="tdg-panel-vazio">{children}</p>;
 
@@ -168,9 +197,18 @@ function AbaReceita({ receita }) {
   const mesAtivo = mesSel || mesesDisp[mesesDisp.length - 1];
   const serieDiaria = (porPeriodo?.porDia?.[mesAtivo] || []).map((d) => ({ label: d.dia.slice(8), y: d.receita }));
   const clienteSel = tomadorSel ? concentracao?.clientes?.find((c) => c.tomador === tomadorSel) : null;
+  const compReceita = useMemo(() => comparativosDeSerie({
+    mensal: (porPeriodo?.meses || []).map((m) => ({ mes: m.mes, valor: m.receita })),
+    diaria: Object.values(porPeriodo?.porDia || {}).flat().map((d) => ({ dia: d.dia, valor: d.receita })),
+  }), [porPeriodo]);
 
   return (
     <>
+      {porPeriodo.disponivel && (
+        <Secao titulo="Comparativos de receita" kicker="MoM · MTD · DoD · YoY">
+          <Comparativos dados={compReceita} formato={brl} />
+        </Secao>
+      )}
       <Secao titulo="Receita por período" kicker="FATURAMENTO" nota="Clique num mês para ver o dia a dia dele.">
         {porPeriodo.disponivel ? (
           <>
@@ -411,6 +449,12 @@ function AbaOperacional({ operacional }) {
     <>
       {(periodo || servicoNota || atualizado) && (
         <div className="tdg-aviso"><CircleDashed size={16} /><span>{[periodo && `Período: ${periodo}`, atualizado && `atualizado ${atualizado}`].filter(Boolean).join(" · ")}{servicoNota ? ` — ${servicoNota}` : ""}</span></div>
+      )}
+
+      {volume.disponivel && (
+        <Secao titulo="Comparativos de volume" kicker="MoM · YoY">
+          <Comparativos dados={comparativosDeSerie({ mensal: (volume.meses || []).map((m) => ({ mes: m.mes, valor: m.pedidos })), diaria: [] })} formato={num} />
+        </Secao>
       )}
 
       <Secao titulo="Volume de pedidos" kicker="POR MÊS">

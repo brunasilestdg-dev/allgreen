@@ -18,6 +18,7 @@ import {
   slaPorRota,
   reentregaPorRota,
   operacionalPorPraca,
+  comparativosDeSerie,
   receitaDeSnapshot,
   montarPainelDoArtefato,
   montarPainelCanonicoMirror,
@@ -128,6 +129,42 @@ describe("Aba Receita", () => {
     expect(t.temVolume).toBe(true);
     expect(t.clientes[0].pedidos).toBe(2);
     expect(t.clientes[0].ticketMedio).toBe(500);
+  });
+});
+
+describe("comparativosDeSerie (MoM / MTD / DoD / YoY)", () => {
+  const mensal = [
+    { mes: "2026-07", valor: 100 },
+    { mes: "2026-08", valor: 200 },
+  ];
+  const diaria = [
+    { dia: "2026-07-01", valor: 40 }, { dia: "2026-07-02", valor: 60 },
+    { dia: "2026-08-01", valor: 30 }, { dia: "2026-08-02", valor: 90 },
+  ];
+  it("MoM compara mês atual x anterior", () => {
+    const c = comparativosDeSerie({ mensal, diaria });
+    expect(c.mom.disponivel).toBe(true);
+    expect(c.mom.atual).toBe(200);
+    expect(c.mom.delta).toBeCloseTo(1, 5); // +100%
+  });
+  it("DoD compara último dia x penúltimo", () => {
+    const c = comparativosDeSerie({ mensal, diaria });
+    expect(c.dod.atual).toBe(90);
+    expect(c.dod.anterior).toBe(30);
+    expect(c.dod.delta).toBeCloseTo(2, 5); // +200%
+  });
+  it("MTD compara acumulado até o mesmo dia do mês anterior", () => {
+    const c = comparativosDeSerie({ mensal, diaria });
+    // corte = dia 02; ago até dia 2 = 120; jul até dia 2 = 100
+    expect(c.mtd.atual).toBe(120);
+    expect(c.mtd.anterior).toBe(100);
+    expect(c.mtd.corteDia).toBe(2);
+  });
+  it("YoY fica indisponível sem o ano anterior", () => {
+    expect(comparativosDeSerie({ mensal, diaria }).yoy.disponivel).toBe(false);
+    const comAnoAnterior = comparativosDeSerie({ mensal: [{ mes: "2025-08", valor: 50 }, ...mensal], diaria });
+    expect(comAnoAnterior.yoy.disponivel).toBe(true);
+    expect(comAnoAnterior.yoy.delta).toBeCloseTo(3, 5); // 50 -> 200 = +300%
   });
 });
 

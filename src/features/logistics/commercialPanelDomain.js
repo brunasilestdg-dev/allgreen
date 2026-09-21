@@ -577,6 +577,55 @@ export function reentregaPorRota(encomendas = []) {
   return { disponivel: rotas.some((r) => r.comReentrega > 0), rotas };
 }
 
+// ===== Comparativos (MoM / MTD / DoD / YoY) para métricas aditivas =====
+// Recebe séries {mensal:[{mes,valor}], diaria:[{dia,valor}]} e devolve os quatro
+// comparativos, cada um com atual, anterior e delta (fração). `disponivel:false`
+// quando não há base (ex.: YoY sem o ano anterior) — nunca inventa comparação.
+export function comparativosDeSerie({ mensal = [], diaria = [] } = {}) {
+  const meses = [...mensal].filter((m) => m && m.mes).sort((a, b) => ordenarMeses(a.mes, b.mes));
+  const dias = [...diaria].filter((d) => d && d.dia).sort((a, b) => ordenarMeses(a.dia, b.dia));
+  const ultimo = meses[meses.length - 1];
+  const penultimo = meses[meses.length - 2];
+
+  const par = (atual, anterior, extra = {}) => ({
+    disponivel: true, atual: soNumero(atual), anterior: soNumero(anterior),
+    delta: varMoM(atual, anterior), ...extra,
+  });
+
+  const mom = ultimo && penultimo
+    ? par(ultimo.valor, penultimo.valor, { rotuloAtual: ultimo.mes, rotuloAnterior: penultimo.mes })
+    : { disponivel: false };
+
+  let yoy = { disponivel: false };
+  if (ultimo) {
+    const [ano, mm] = String(ultimo.mes).split("-");
+    const alvo = `${Number(ano) - 1}-${mm}`;
+    const anoAnterior = meses.find((m) => m.mes === alvo);
+    if (anoAnterior) yoy = par(ultimo.valor, anoAnterior.valor, { rotuloAtual: ultimo.mes, rotuloAnterior: alvo });
+  }
+
+  const dod = dias.length >= 2
+    ? par(dias[dias.length - 1].valor, dias[dias.length - 2].valor, { rotuloAtual: dias[dias.length - 1].dia, rotuloAnterior: dias[dias.length - 2].dia })
+    : { disponivel: false };
+
+  let mtd = { disponivel: false };
+  if (ultimo && dias.length) {
+    const mesAtual = ultimo.mes;
+    const diasAtual = dias.filter((d) => d.dia.slice(0, 7) === mesAtual);
+    if (diasAtual.length && penultimo) {
+      const corte = Number(diasAtual[diasAtual.length - 1].dia.slice(8, 10));
+      const somaAte = (mes) => dias
+        .filter((d) => d.dia.slice(0, 7) === mes && Number(d.dia.slice(8, 10)) <= corte)
+        .reduce((s, d) => s + soNumero(d.valor), 0);
+      const accAtual = somaAte(mesAtual);
+      const accAnterior = somaAte(penultimo.mes);
+      mtd = par(accAtual, accAnterior, { corteDia: corte, rotuloAtual: mesAtual, rotuloAnterior: penultimo.mes });
+    }
+  }
+
+  return { mom, mtd, dod, yoy };
+}
+
 // ===== Ponte temporária: receita a partir do retrato (artefato/importação) =====
 //
 // O retrato traz `daily` [{data, receita}] e `monthly` [{mes_num, receita,
@@ -695,7 +744,13 @@ function normalizarOpsArtefato(OPS = {}) {
   const lt = OPS.leadtime || {};
   const sla = OPS.slaRota || {};
   const re = OPS.reentrega || {};
-  const volumeMeses = (otd.monthly || []).map((m) => ({ mes: textoLimpo(m?.mes), pedidos: soNumero(m?.total) }));
+  // Chave YYYY-MM (a partir do mes_num) para os comparativos ordenarem/casarem
+  // corretamente; o rótulo na tela continua vindo do mesLabel.
+  const anoOps = (textoLimpo(OPS.otd?.daily?.[0]?.data) || textoLimpo(OPS.periodo).match(/\d{4}/)?.[0] || "2026").slice(0, 4);
+  const volumeMeses = (otd.monthly || []).map((m) => ({
+    mes: m?.mes_num ? `${anoOps}-${String(m.mes_num).padStart(2, "0")}` : textoLimpo(m?.mes),
+    pedidos: soNumero(m?.total),
+  }));
   return {
     atualizado: textoLimpo(OPS.atualizado),
     periodo: textoLimpo(OPS.periodo),

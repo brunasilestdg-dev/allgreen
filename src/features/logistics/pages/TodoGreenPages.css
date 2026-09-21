@@ -5527,3 +5527,8 @@
 .tdg-chart-rotulo { position: absolute; transform: translate(-50%, -140%); white-space: nowrap; font-size: 0.7rem; font-weight: 600; color: var(--tdg-text); background: color-mix(in srgb, var(--tdg-card) 88%, transparent); padding: 1px 5px; border-radius: 5px; border: 1px solid var(--tdg-line); font-variant-numeric: tabular-nums; }
 .tdg-chart-rotulo.pico { color: var(--tdg-green); border-color: var(--tdg-green); }
 .tdg-card-interacoes { display: block; margin-top: 3px; color: var(--tdg-muted); font-size: 0.72rem; }
+
+/* ===== Painel comercial · comparativos ===== */
+.tdg-comparativos .tdg-kpi-comp em { font-style: normal; font-size: 0.8rem; margin-left: 4px; }
+.tdg-kpi-comp strong { font-size: 1rem; }
+.tdg-sem-base { color: var(--tdg-muted); font-weight: 500; font-size: 0.9rem; }
