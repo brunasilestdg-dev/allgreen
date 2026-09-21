@@ -96,6 +96,8 @@ import {
 } from "./components/leituraDeArquivo.js";
 import Markdown from "./components/Markdown.jsx";
 import SharingFields from "./components/SharingFields.jsx";
+import Toast from "./components/Toast.jsx";
+import AppUpdate from "./components/AppUpdate.jsx";
 import Tasks from "./features/tasks/TasksScreen.jsx";
 import Documents from "./features/documents/DocumentsScreen.jsx";
 import Catalog from "./features/catalog/CatalogScreen.jsx";
@@ -150,7 +152,6 @@ import CRM from "./features/omnichannel/CRM.jsx";
 import Appointments from "./features/omnichannel/Appointments.jsx";
 import Quotes from "./features/omnichannel/Quotes.jsx";
 import TimeTracking from "./features/omnichannel/TimeTracking.jsx";
-import { textoDoToast, tomDoToast } from "./toastTone.js";
 import {
   BUSINESS_INDUSTRY_CATALOG,
   businessPackLabels,
@@ -1556,35 +1557,9 @@ function useWhatsappSender({ db, setToast }) {
 
 // Movido para ./components/SharingFields.jsx.
 
-function Toast({ toast }) {
-  if (!toast) return null;
-  const tom = tomDoToast(toast);
-  const texto = textoDoToast(toast);
-  const Icone = tom === "erro" ? CircleAlert : CheckCircle2;
-  return (
-    <div className={`toast ${tom === "erro" ? "erro" : ""}`} role="status" aria-live="polite">
-      <Icone size={18} />
-      {texto}
-    </div>
-  );
-}
+// Movido para ./components/Toast.jsx.
 
-function AppUpdate({ visible, latestVersion }) {
-  return visible ? (
-    <div className="app-update" role="status" aria-live="polite">
-      <span>
-        <RefreshCw size={18} />
-        <strong>Uma nova versão está pronta.</strong>
-        {latestVersion
-          ? `Versão ${latestVersion} disponível.`
-          : "Atualize para receber as melhorias sem perder seus dados."}
-      </span>
-      <button type="button" onClick={() => location.reload()}>
-        Atualizar agora
-      </button>
-    </div>
-  ) : null;
-}
+// Movido para ./components/AppUpdate.jsx.
 
 // Movido para ./components/Markdown.jsx.
 
