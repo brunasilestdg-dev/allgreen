@@ -7,6 +7,7 @@ import {
   FileText,
   Gauge,
   Home,
+  Inbox,
   Leaf,
   Loader2,
   MessageSquare,
@@ -18,6 +19,7 @@ import {
 import "./CustomerPortal.css";
 import { tamanhoLegivel } from "./documentVaultDomain.js";
 import Operacoes from "./CustomerPortalOperations.jsx";
+import CaixaAtendimento from "./CustomerPortalCaixa.jsx";
 import {
   AssistenteCliente,
   GreenScoreDetalhado,
@@ -29,6 +31,7 @@ import { classificarNPS, precisaOcorrencia } from "./npsDomain.js";
 
 const ICONES = {
   inicio: Home,
+  atendimento: Inbox,
   operacoes: Route,
   "green-score": Gauge,
   esg: Leaf,
@@ -796,6 +799,7 @@ export default function CustomerPortal() {
       {aviso && <div className="cp-alerta cp-alerta-acao" role="alert"><AlertTriangle size={18} /><span>{aviso}</span><button type="button" onClick={() => setAviso("")} aria-label="Fechar aviso">×</button></div>}
       <section className="cp-conteudo">
         {aba === "inicio" && <Inicio resumo={resumo} financeiro={financeiro} onIr={setAba} />}
+        {aba === "atendimento" && <CaixaAtendimento enviar={enviar} setAviso={setAviso} onIr={setAba} />}
         {aba === "operacoes" && <Operacoes pedir={pedir} enviar={enviar} setAviso={setAviso} />}
         {aba === "green-score" && <GreenScoreDetalhado resumo={resumo} />}
         {aba === "esg" && <ImpactoAmbiental resumo={resumo} />}

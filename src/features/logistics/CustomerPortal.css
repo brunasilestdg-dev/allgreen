@@ -712,3 +712,36 @@
 @media (max-width: 700px) {
   .cp-nps-notas { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
+
+/* ---- Central de atendimento automatizada ---- */
+.cp-caixa-vazio { align-items: center; border: 1px dashed var(--cp-borda); border-radius: 14px; color: var(--cp-suave); display: grid; gap: 10px; justify-items: center; padding: 22px 16px; text-align: center; }
+.cp-caixa-vazio svg { color: var(--cp-verde-claro); }
+.cp-caixa-exemplos { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.cp-caixa-exemplos button { background: var(--cp-fundo); border: 1px solid var(--cp-borda); border-radius: 999px; color: var(--cp-verde); cursor: pointer; font: inherit; font-size: 0.9rem; min-height: 40px; padding: 6px 14px; }
+.cp-caixa-exemplos button:hover { border-color: var(--cp-verde-claro); }
+
+.cp-caixa-conversa { display: grid; gap: 12px; list-style: none; margin: 6px 0 0; padding: 0; }
+.cp-caixa-linha { display: flex; }
+.cp-caixa-minha { justify-content: flex-end; }
+.cp-caixa-deles { justify-content: flex-start; }
+.cp-caixa-bolha { border-radius: 14px; max-width: 88%; padding: 12px 14px; }
+.cp-caixa-bolha p { margin: 0; }
+.cp-caixa-bolha p + p { margin-top: 8px; }
+.cp-caixa-cliente { background: var(--cp-verde); color: #fff; }
+.cp-caixa-ia { background: var(--cp-fundo); border: 1px solid var(--cp-borda); color: var(--cp-tinta); }
+.cp-caixa-escalado { background: #fff; border: 1px solid var(--cp-verde-claro); color: var(--cp-tinta); }
+.cp-caixa-aviso { background: #fff8ec; border: 1px solid rgba(180, 130, 20, 0.35); color: var(--cp-tinta); }
+.cp-caixa-motivo { color: var(--cp-suave); font-size: 0.88rem; }
+
+.cp-caixa-selo { align-items: center; border-radius: 999px; display: inline-flex; font-size: 0.78rem; font-weight: 700; gap: 5px; margin-bottom: 6px; padding: 3px 10px; }
+.cp-caixa-selo-ia { background: rgba(52, 183, 143, 0.16); color: var(--cp-verde); }
+.cp-caixa-selo-equipe { background: rgba(23, 98, 79, 0.12); color: var(--cp-verde); }
+
+.cp-caixa-link { align-items: center; background: none; border: none; color: var(--cp-verde); cursor: pointer; display: inline-flex; font: inherit; font-weight: 700; gap: 6px; margin-top: 8px; min-height: 40px; padding: 0; }
+
+.cp-caixa-form { display: grid; gap: 10px; margin-top: 14px; }
+.cp-caixa-form textarea { border: 1px solid var(--cp-borda); border-radius: 12px; color: var(--cp-tinta); font: inherit; font-size: 16px; padding: 12px; resize: vertical; width: 100%; }
+.cp-caixa-form textarea:focus { border-color: var(--cp-verde-claro); outline: none; }
+.cp-caixa-form > .cp-botao { justify-self: start; }
+.cp-caixa-nota { align-items: center; color: var(--cp-suave); display: flex; font-size: 0.86rem; gap: 7px; margin-top: 12px; }
+.cp-caixa-nota svg { color: var(--cp-verde-claro); flex-shrink: 0; }

@@ -51,6 +51,10 @@ import {
   montarContextoDoCliente,
   validarContexto,
 } from "../../src/features/logistics/customerAssistantDomain.js";
+import {
+  LIMITE_MENSAGEM,
+  triagemAtendimento,
+} from "../../src/features/logistics/atendimentoAutomatizadoDomain.js";
 import { runWithFallback } from "./ai.js";
 import { envComChavesDoEspaco } from "./ai-keys.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
@@ -788,6 +792,130 @@ export async function handleTodoGreenClientPortalPreview(request, env, access, u
   });
 }
 
+// Núcleo do assistente: recusa fora de escopo, monta o contexto só do cliente
+// da sessão e roda a MESMA cascata de IA do produto. Devolve um resultado
+// discriminado; quem chama decide o formato da resposta e o que registra na
+// trilha. Reusado pelo endpoint /assistente e pela caixa automatizada — uma só
+// regra de contexto e de recusa, nunca duas versões que divergem.
+async function gerarRespostaDoAssistente(env, escopo, pergunta) {
+  if (foraDoEscopoDoCliente(pergunta)) return { estado: "fora_escopo" };
+
+  const resumo = await clientOverview(env, escopo);
+  const { sql, params } = scopedWhere(escopo);
+  const recentes = await env.DB.prepare(
+    `SELECT reference, status, service_date, origin, destination, fields_json
+       FROM todogreen_client_operations
+      WHERE ${sql}
+      ORDER BY service_date DESC LIMIT 20`,
+  )
+    .bind(...params)
+    .all()
+    .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
+
+  let contexto;
+  try {
+    contexto = montarContextoDoCliente({
+      cliente: { id: escopo.clientId, nome: escopo.clientName },
+      resumo,
+      greenScore: resumo.greenScore,
+      operacoes: (recentes.results || []).map((linha) => ({
+        referencia: linha.reference,
+        data: linha.service_date,
+        origem: linha.origin,
+        destino: linha.destination,
+        status: linha.status,
+        campos: camposParaCliente(parse(linha.fields_json, {})),
+      })),
+    });
+    // Se algum campo interno escapou para o contexto, a chamada cai aqui em vez
+    // de sair pela rede.
+    validarContexto(contexto);
+  } catch (erro) {
+    console.error("contexto do assistente", erro);
+    return { estado: "erro_contexto" };
+  }
+
+  try {
+    const envIa = await envComChavesDoEspaco(env, escopo.workspaceOwnerId);
+    // Entra só o que está marcado como PÚBLICO no dossiê da transportadora — o
+    // conteúdo que a empresa já publica em apresentação comercial. Interno e
+    // restrito não chegam ao modelo, então não há o que a resposta possa vazar.
+    const perfilPublico = blocoDeContextoDoNegocio(
+      await dossiePublicoDoEspaco(env, escopo.workspaceOwnerId),
+      { incluirRestrito: false },
+    );
+    const { ok, result, errors } = await runWithFallback(envIa, {
+      prompt: [
+        perfilPublico,
+        `Dados do cliente (únicos disponíveis):\n${JSON.stringify(contexto, null, 2)}`,
+        `Pergunta: ${pergunta}`,
+      ].filter(Boolean).join("\n\n"),
+      system: INSTRUCAO_ASSISTENTE,
+    });
+    if (!ok) {
+      console.error("assistente do portal: todos os provedores falharam", errors);
+      return { estado: "indisponivel" };
+    }
+    const texto = String(result?.content || "").trim();
+    if (!texto) return { estado: "vazio" };
+    return { estado: "ok", resposta: texto };
+  } catch (erro) {
+    console.error("assistente do portal", erro);
+    return { estado: "indisponivel" };
+  }
+}
+
+// Escalonamento da caixa: a mensagem vira o MESMO chamado que a equipe já trata
+// (todogreen_client_requests), já classificado pela triagem e com prazo. A
+// validação de campos obrigatórios do formulário NÃO se aplica aqui de
+// propósito: a caixa é a porta em que uma pessoa completa o que faltar — o que
+// não pode é a mensagem se perder. O cliente do chamado vem do escopo da
+// sessão, nunca do corpo.
+async function abrirChamadoAutomatico(env, escopo, user, { triagem, mensagem }) {
+  const agora = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const tipo = triagem.tipo;
+  const urgencia = triagem.urgencia;
+  const assunto = String(triagem.assunto || "").slice(0, 160) || "Atendimento";
+  const campos = {
+    // Marca a origem para a fila da equipe saber que veio da caixa automática,
+    // e guarda o porquê da triagem para a pessoa não recomeçar do zero.
+    origem: "caixa-automatizada",
+    triagemMotivo: String(triagem.motivo || "").slice(0, 300),
+  };
+  await env.DB.prepare(
+    `INSERT INTO todogreen_client_requests
+       (id, tenant_id, client_id, workspace_owner_id, type, subject, description,
+        urgency, status, fields_json, due_at, opened_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      escopo.tenantId,
+      escopo.clientId,
+      escopo.workspaceOwnerId || "",
+      tipo,
+      assunto,
+      mensagem,
+      urgencia,
+      JSON.stringify(campos),
+      prazoDaSolicitacao(tipo, urgencia, agora),
+      escopo.email,
+      agora,
+      agora,
+    )
+    .run();
+  // A mensagem vira a primeira linha da conversa — a thread não começa no meio.
+  await inserirMensagem(env, escopo, id, {
+    lado: "cliente",
+    email: escopo.email,
+    nome: user?.name || escopo.email,
+    texto: mensagem,
+  });
+  await logPortalEvent(env, escopo, user, "caixa_escalada", id, assunto);
+  return id;
+}
+
 export async function handleTodoGreenCustomerPortal(request, env) {
   if (!env.DB) return response({ error: "Banco indisponível." }, 503);
 
@@ -1270,94 +1398,92 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     if (excedeuLimite("assistente", 20))
       return response({ error: "Muitas perguntas em pouco tempo. Aguarde um instante e tente de novo." }, 429);
 
-    // Recusa antes de chamar o modelo: garantia que não depende de o modelo
-    // obedecer à instrução.
-    if (foraDoEscopoDoCliente(pergunta)) {
+    // O núcleo (recusa fora de escopo + contexto isolado + cascata de IA) está
+    // em `gerarRespostaDoAssistente`, compartilhado com a caixa automatizada.
+    // Aqui fica só o formato da resposta e o registro na trilha.
+    const r = await gerarRespostaDoAssistente(env, escopo, pergunta);
+    if (r.estado === "fora_escopo") {
       await logPortalEvent(env, escopo, user, "assistente_fora_escopo", "", pergunta.slice(0, 120));
       return response({ resposta: RESPOSTA_FORA_DE_ESCOPO, foraDeEscopo: true });
     }
-
-    const resumo = await clientOverview(env, escopo);
-    const { sql, params } = scopedWhere(escopo);
-    const recentes = await env.DB.prepare(
-      `SELECT reference, status, service_date, origin, destination, fields_json
-         FROM todogreen_client_operations
-        WHERE ${sql}
-        ORDER BY service_date DESC LIMIT 20`,
-    )
-      .bind(...params)
-      .all()
-      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
-
-    let contexto;
-    try {
-      contexto = montarContextoDoCliente({
-        cliente: { id: escopo.clientId, nome: escopo.clientName },
-        resumo,
-        greenScore: resumo.greenScore,
-        operacoes: (recentes.results || []).map((linha) => ({
-          referencia: linha.reference,
-          data: linha.service_date,
-          origem: linha.origin,
-          destino: linha.destination,
-          status: linha.status,
-          campos: camposParaCliente(parse(linha.fields_json, {})),
-        })),
-      });
-      // Se algum campo interno escapou para o contexto, a chamada cai aqui em
-      // vez de sair pela rede.
-      validarContexto(contexto);
-    } catch (erro) {
-      console.error("contexto do assistente", erro);
+    if (r.estado === "erro_contexto")
       return response({ error: "Não foi possível preparar o assistente." }, 500);
+    if (r.estado === "vazio")
+      return response({ error: "O assistente não respondeu. Tente de novo." }, 502);
+    if (r.estado !== "ok")
+      return response({ error: "O assistente está indisponível agora." }, 502);
+    await logPortalEvent(env, escopo, user, "assistente_pergunta", "", pergunta.slice(0, 120));
+    return response({ resposta: r.resposta, foraDeEscopo: false });
+  }
+
+  // ----- Central de atendimento automatizada -----
+  //
+  // Uma porta só. O cliente escreve em linguagem livre; a triagem (pura) decide
+  // o caminho e a caixa OU responde na hora com a IA (mesma cadeia e mesmo
+  // isolamento do Assistente) OU abre o chamado já classificado, com prazo,
+  // para a equipe. Nada some: quando a IA não dá conta, cai para o chamado;
+  // quando falta permissão de abrir chamado, a caixa diz o que fazer em vez de
+  // engolir a mensagem. O cliente vem do escopo da sessão, nunca do corpo.
+  if (request.method === "POST" && resource === "caixa") {
+    if (excedeuLimite("caixa", 15))
+      return response({ error: "Muitas mensagens em pouco tempo. Aguarde um instante e tente de novo." }, 429);
+    let body = {};
+    try {
+      body = await request.json();
+    } catch {
+      return response({ error: "Corpo JSON inválido." }, 400);
+    }
+    const mensagem = clean(body.mensagem ?? body.pergunta ?? body.texto, LIMITE_MENSAGEM);
+    if (mensagem.length < 2) return response({ error: "Escreva a sua mensagem." }, 400);
+
+    // Fora de escopo (outro cliente, concorrente): mesma recusa do Assistente,
+    // antes de qualquer roteamento.
+    if (foraDoEscopoDoCliente(mensagem)) {
+      await logPortalEvent(env, escopo, user, "caixa_fora_escopo", "", mensagem.slice(0, 120));
+      return response({ tratamento: "fora_escopo", resposta: RESPOSTA_FORA_DE_ESCOPO, foraDeEscopo: true });
     }
 
-    // O assistente usa a MESMA cadeia de provedores do resto do produto
-    // (worker/services/ai.js). Antes chamava `env.AI.run()` num modelo só:
-    // se aquele provedor caísse, o assistente do cliente caía junto, sem
-    // tentar nenhum outro — enquanto o app interno seguia funcionando porque
-    // tinha catorze alternativas. O cliente ficava com a pior resiliência do
-    // produto justamente na parte que ele vê.
-    //
-    // O que NÃO muda: a recusa antes do modelo, o contexto restrito ao
-    // próprio cliente e a validação que barra campo interno. A troca é só de
-    // motor.
-    try {
-      const envIa = await envComChavesDoEspaco(env, escopo.workspaceOwnerId);
-      // O portal sabia tudo do CLIENTE e nada da To Do Green: perguntado
-      // "vocês atendem Curitiba?" ou "qual é o OTD de vocês?", o assistente
-      // não tinha o que responder sobre a própria transportadora.
-      //
-      // Entra só o que está marcado como PÚBLICO no dossiê — é o conteúdo que
-      // a empresa já publica em apresentação comercial. Interno e restrito não
-      // chegam ao modelo, então não há o que a resposta possa vazar: a regra de
-      // confidencialidade do portal continua sendo cumprida pelo que NÃO é
-      // enviado, não pela obediência do modelo.
-      const perfilPublico = blocoDeContextoDoNegocio(
-        await dossiePublicoDoEspaco(env, escopo.workspaceOwnerId),
-        { incluirRestrito: false },
-      );
-      const { ok, result, errors } = await runWithFallback(envIa, {
-        prompt: [
-          perfilPublico,
-          `Dados do cliente (únicos disponíveis):\n${JSON.stringify(contexto, null, 2)}`,
-          `Pergunta: ${pergunta}`,
-        ].filter(Boolean).join("\n\n"),
-        system: INSTRUCAO_ASSISTENTE,
-      });
-      if (!ok) {
-        console.error("assistente do portal: todos os provedores falharam", errors);
-        return response({ error: "O assistente está indisponível agora." }, 502);
+    const triagem = triagemAtendimento(mensagem);
+    const podeAbrir = clientCan(escopo, "portal:request:create");
+
+    // Caminho 1: dá para responder na hora, com os dados do próprio cliente.
+    if (triagem.autoRespondivel) {
+      const r = await gerarRespostaDoAssistente(env, escopo, mensagem);
+      if (r.estado === "ok") {
+        await logPortalEvent(env, escopo, user, "caixa_resposta_ia", "", mensagem.slice(0, 120));
+        return response({ tratamento: "respondido_ia", resposta: r.resposta, triagem });
       }
-      const texto = String(result?.content || "").trim();
-      if (!texto)
-        return response({ error: "O assistente não respondeu. Tente de novo." }, 502);
-      await logPortalEvent(env, escopo, user, "assistente_pergunta", "", pergunta.slice(0, 120));
-      return response({ resposta: texto, foraDeEscopo: false });
-    } catch (erro) {
-      console.error("assistente do portal", erro);
-      return response({ error: "O assistente está indisponível agora." }, 502);
+      // A IA não respondeu: em vez de deixar a mensagem no vácuo, escala — se a
+      // pessoa puder abrir chamado. Nada é engolido.
+      if (podeAbrir) {
+        const id = await abrirChamadoAutomatico(env, escopo, user, { triagem, mensagem });
+        return response(
+          {
+            tratamento: "escalado",
+            protocolo: id,
+            triagem,
+            motivo: "O assistente não conseguiu responder agora; uma pessoa vai assumir.",
+          },
+          201,
+        );
+      }
+      return response({
+        tratamento: "sem_resposta",
+        triagem,
+        resposta: "Não consegui responder agora. Peça a um gestor da sua conta para abrir uma solicitação.",
+      });
     }
+
+    // Caminho 2: escala para uma pessoa (ação da equipe ou assunto sensível).
+    if (!podeAbrir)
+      return response({
+        tratamento: "sem_permissao",
+        triagem,
+        resposta: "Isso precisa virar uma solicitação para a equipe. Peça a um gestor da sua conta, que tem permissão para abrir.",
+      });
+
+    const id = await abrirChamadoAutomatico(env, escopo, user, { triagem, mensagem });
+    return response({ tratamento: "escalado", protocolo: id, triagem }, 201);
   }
 
   // ----- Solicitações -----
