@@ -634,7 +634,13 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
     if (dados.modo === "artefato_temporario" && dados.fontes.receita?.retrato) {
       const r = dados.fontes.receita.retrato;
       const quando = r.importadoEm ? new Date(r.importadoEm).toLocaleString("pt-BR") : "";
-      return `Fonte TEMPORÁRIA: espelho do artefato do Track3R${r.de ? ` (${r.de} a ${r.ate})` : ""}${quando ? ` · atualizado ${quando}` : ""}. Migra para os webhooks oficiais automaticamente quando entrarem.`;
+      const periodo = `${r.de ? ` (${r.de} a ${r.ate})` : ""}${quando ? ` · atualizado ${quando}` : ""}`;
+      // Os webhooks oficiais já podem estar configurados no cofre, mesmo sem
+      // nenhum evento recebido ainda: nesse caso o aviso deixa claro que a
+      // migração está armada e é automática — não que a integração falta fazer.
+      return dados.webhooksProntos
+        ? `Fonte TEMPORÁRIA: espelho do artefato do Track3R${periodo}. Os webhooks oficiais já estão configurados e homologados — a migração é automática assim que o Track3R começar a enviar os eventos.`
+        : `Fonte TEMPORÁRIA: espelho do artefato do Track3R${periodo}. Migra para os webhooks oficiais automaticamente quando entrarem.`;
     }
     return "";
   }, [dados]);

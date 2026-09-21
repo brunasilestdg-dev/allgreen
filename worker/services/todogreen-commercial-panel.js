@@ -8,6 +8,7 @@
 //   Operacional -> todogreen_tms_documents      (encomendas/ocorrências)
 //   Kanban      -> todogreen_opportunities       (pipeline nativo; Monday depois)
 import { TENANT_ID, podeNaVertical, podeVerTodaCarteira, recorteDeCarteira } from "./todogreen-access.js";
+import { estadoTokensWebhookTrack3r } from "./todogreen-track3r-webhook-auth.js";
 import { montarPainelDoArtefato, montarPainelCanonicoMirror, montarKanbanDeOportunidades } from "../../src/features/logistics/commercialPanelDomain.js";
 
 const json = (data, status = 200) =>
@@ -140,13 +141,25 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
     };
   };
 
+  // Os webhooks oficiais do Track3R já estão configurados no cofre? Serve só
+  // para o aviso de fonte deixar claro que a migração está armada (não que o
+  // canal ainda precisa ser criado) enquanto os primeiros eventos não chegam.
+  const lerWebhooksProntos = async () => {
+    const row = await env.DB.prepare(
+      `SELECT webhook_secret_env_key FROM todogreen_tms_integrations
+        WHERE tenant_id = ? AND workspace_owner_id = ? AND provider = 'track3r' AND archived_at IS NULL`,
+    ).bind(TENANT_ID, ownerId).first();
+    return estadoTokensWebhookTrack3r(env, row || {}).individual;
+  };
+
   // Cada fonte falha isolada: uma tabela indisponível vira aviso, não zera o
   // painel inteiro nem finge dado.
-  const [faturas, encomendas, oportunidades, snapshot] = await Promise.allSettled([
+  const [faturas, encomendas, oportunidades, snapshot, webhooks] = await Promise.allSettled([
     lerFaturas(),
     lerEncomendas(),
     lerOportunidades(),
     lerSnapshot(),
+    lerWebhooksProntos(),
   ]);
 
   const erros = {};
@@ -163,6 +176,7 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
     oportunidades: valor(oportunidades, "kanban", []),
   };
   const retrato = valor(snapshot, "retrato", null);
+  const webhooksProntos = valor(webhooks, "webhooks", false);
   const hoje = new Date();
 
   // Cada aba escolhe a MELHOR fonte, de forma independente:
@@ -186,6 +200,10 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
 
   return json({
     modo: !receitaCanonica && art ? "artefato_temporario" : "canonico",
+    // Webhooks oficiais já configurados no cofre (mesmo sem evento recebido
+    // ainda). O aviso de fonte usa isto para não dar a entender que a
+    // integração ainda precisa ser feita.
+    webhooksProntos,
     receita,
     kanban,
     operacional,
