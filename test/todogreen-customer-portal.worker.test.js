@@ -639,6 +639,107 @@ describe("relatório e cofre de evidências", () => {
     expect(d.evidencias[0].impressaoDigital).toBe("abc123");
   });
 
+  it("o cofre informa o tamanho do arquivo anexado", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_evidences
+         (id, tenant_id, client_id, workspace_owner_id, tipo, titulo, emitido_em,
+          arquivo_url, arquivo_nome, arquivo_bytes, hash_conteudo, created_by, created_at, updated_at)
+       VALUES ('ev-a-arq', 'todogreen', 'cli-a', 'dono', 'nota_fiscal', 'NF com arquivo', '2026-07-20',
+               'r2://cofre/nf-a.pdf', 'nf-a.pdf', 20480, 'def456', 'seed', ?, ?)`,
+    )
+      .bind(agora, agora)
+      .run();
+
+    const d = await (
+      await pedir("/api/todogreen/portal/evidencias", { token: pessoaA.token })
+    ).json();
+    const anexada = d.evidencias.find((e) => e.titulo === "NF com arquivo");
+    expect(anexada).toBeTruthy();
+    expect(anexada.arquivoBytes).toBe(20480);
+  });
+
+  it("emite link temporário de download da própria evidência e registra na trilha", async () => {
+    const r = await pedir("/api/todogreen/portal/evidencias/ev-a-arq/link", {
+      method: "POST",
+      token: pessoaA.token,
+      body: {},
+    });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    // O endereço de origem do arquivo nunca aparece: só um link temporário.
+    expect(d.url).toMatch(/^\/api\/todogreen\/arquivo\?t=/);
+    expect(d.url).not.toContain("r2://");
+    expect(d.expiraEm).toBeTruthy();
+
+    const concessao = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_document_grants WHERE evidence_id = 'ev-a-arq'",
+    ).first();
+    expect(concessao.n).toBeGreaterThan(0);
+
+    const evento = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_client_portal_events WHERE client_id = 'cli-a' AND action = 'documento_link_emitido'",
+    ).first();
+    expect(evento.n).toBeGreaterThan(0);
+  });
+
+  it("não emite link para evidência de outro cliente", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_evidences
+         (id, tenant_id, client_id, workspace_owner_id, tipo, titulo, emitido_em,
+          arquivo_url, arquivo_nome, arquivo_bytes, hash_conteudo, created_by, created_at, updated_at)
+       VALUES ('ev-b-arq', 'todogreen', 'cli-b', 'dono', 'nota_fiscal', 'NF do B', '2026-07-20',
+               'r2://cofre/nf-b.pdf', 'nf-b.pdf', 1024, 'zzz', 'seed', ?, ?)`,
+    )
+      .bind(agora, agora)
+      .run();
+
+    // 404 e não 403: o escopo do cliente A nem enxerga o documento do B.
+    const r = await pedir("/api/todogreen/portal/evidencias/ev-b-arq/link", {
+      method: "POST",
+      token: pessoaA.token,
+      body: {},
+    });
+    expect(r.status).toBe(404);
+  });
+
+  it("não emite link quando o arquivo ainda não foi anexado", async () => {
+    // As evidências semeadas antes (ex.: "Nota fiscal A") não têm arquivo_url.
+    const semArquivo = await env.DB.prepare(
+      "SELECT id FROM todogreen_evidences WHERE client_id = 'cli-a' AND arquivo_url = '' LIMIT 1",
+    ).first();
+    expect(semArquivo).toBeTruthy();
+    const r = await pedir(`/api/todogreen/portal/evidencias/${semArquivo.id}/link`, {
+      method: "POST",
+      token: pessoaA.token,
+      body: {},
+    });
+    expect(r.status).toBe(409);
+  });
+
+  it("leitor não gera link de download", async () => {
+    await criarCliente("cli-e", "Cliente E");
+    const leitor = await criarUsuario("u-e", "leitor@clientee.com.br");
+    await vincular("cli-e", leitor.email, "cliente_leitor");
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_evidences
+         (id, tenant_id, client_id, workspace_owner_id, tipo, titulo, emitido_em,
+          arquivo_url, arquivo_nome, arquivo_bytes, hash_conteudo, created_by, created_at, updated_at)
+       VALUES ('ev-e-arq', 'todogreen', 'cli-e', 'dono', 'nota_fiscal', 'NF do E', '2026-07-20',
+               'r2://cofre/nf-e.pdf', 'nf-e.pdf', 512, 'eee', 'seed', ?, ?)`,
+    )
+      .bind(agora, agora)
+      .run();
+    const r = await pedir("/api/todogreen/portal/evidencias/ev-e-arq/link", {
+      method: "POST",
+      token: leitor.token,
+      body: {},
+    });
+    expect(r.status).toBe(403);
+  });
+
   it("a geração de relatório fica na trilha", async () => {
     await pedir("/api/todogreen/portal/relatorio?inicio=2026-07-01&fim=2026-07-31", {
       token: pessoaA.token,

@@ -1,5 +1,5 @@
 import { AlertTriangle, ChevronLeft, ChevronRight, Download, Loader2, MapPin, Search } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ROTULO_SLA,
   SITUACOES_SLA,
@@ -328,8 +328,8 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
               {operacoes.map((operacao) => {
                 const sla = operacao.sla || {};
                 return (
-                  <>
-                    <tr key={operacao.id}>
+                  <Fragment key={operacao.id}>
+                    <tr>
                       <td>{operacao.referencia || "—"}</td>
                       <td>{soData(operacao.dataServico)}</td>
                       <td>{operacao.origem || "—"}</td>
@@ -347,7 +347,7 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
                       </td>
                     </tr>
                     {abertaId === operacao.id && (
-                      <tr key={`${operacao.id}-detalhe`} className="cp-op-linha-detalhe">
+                      <tr className="cp-op-linha-detalhe">
                         <td colSpan={7}>
                           {detalhe ? (
                             <Detalhe
@@ -361,7 +361,7 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

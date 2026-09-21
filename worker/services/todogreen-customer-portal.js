@@ -1159,7 +1159,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       return response({ error: "Seu acesso não permite ver documentos." }, 403);
     const { sql, params } = scopedWhere(escopo);
     const linhas = await env.DB.prepare(
-      `SELECT id, titulo, tipo, referencia, emitido_em, hash_conteudo, created_at
+      `SELECT id, titulo, tipo, referencia, emitido_em, arquivo_nome, arquivo_bytes, hash_conteudo, created_at
          FROM todogreen_evidences
         WHERE ${sql}
         ORDER BY emitido_em DESC, created_at DESC

@@ -4,7 +4,7 @@ const SERVICE_VERSION =
 // cache e baixar a nova: mudar o nome do cache faz o `activate` apagar tudo o
 // que não é este cache — cura o caso de telas que "não fazem nada" porque o JS
 // em cache aponta para pedaços que já não existem.
-const CACHE = `allgreen-v268-${SERVICE_VERSION}`;
+const CACHE = `allgreen-v269-${SERVICE_VERSION}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 

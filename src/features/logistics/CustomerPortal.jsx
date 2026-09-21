@@ -43,6 +43,7 @@ const ICONES = {
 
 const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+const BRL_PORTAL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 const authHeaders = () => {
   try {
@@ -285,18 +286,20 @@ function Relatorios({ setAviso }) {
   );
 }
 
-const BRL_PORTAL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-
 // Faturas do próprio cliente: vencimento, saldo e 2ª via do documento fiscal.
-function Faturas({ setAviso }) {
-  const [dados, setDados] = useState(null);
+function Faturas({ setAviso, dadosIniciais }) {
+  // A home já busca "financeiro" para o resumo. Se veio de lá, reaproveita e
+  // evita uma 2ª requisição ao mesmo endpoint ao abrir a aba; só busca sozinha
+  // quando a home não tinha o dado (ex.: a carga silenciosa da home falhou).
+  const [dados, setDados] = useState(dadosIniciais || null);
   useEffect(() => {
+    if (dadosIniciais) return;
     // `pedir` já prefixa /api/todogreen/portal/ — passar o caminho absoluto
     // duplicava o prefixo e o endpoint respondia 404 (a aba nunca carregava).
     pedir("financeiro")
       .then(setDados)
       .catch((motivo) => setAviso?.(motivo.message));
-  }, [setAviso]);
+  }, [dadosIniciais, setAviso]);
   const baixarXml = async (titulo) => {
     try {
       const resposta = await fetch(comEmpresa(`financeiro/${titulo.id}/xml`), { headers: authHeaders() });
@@ -798,7 +801,7 @@ export default function CustomerPortal() {
         {aba === "esg" && <ImpactoAmbiental resumo={resumo} />}
         {aba === "planejar" && <PlanejarEletrificacao />}
         {aba === "relatorios" && <Relatorios setAviso={setAviso} />}
-        {aba === "financeiro" && <Faturas setAviso={setAviso} />}
+        {aba === "financeiro" && <Faturas setAviso={setAviso} dadosIniciais={financeiro} />}
         {aba === "documentos" && <Evidencias evidencias={evidencias} carregando={carregandoEvidencias} aoAvisar={setAviso} />}
         {aba === "solicitacoes" && <Solicitacoes podeAbrir={(sessao?.permissoes || []).includes("portal:request:create")} setAviso={setAviso} />}
         {aba === "nps" && <Avaliacao setAviso={setAviso} />}
