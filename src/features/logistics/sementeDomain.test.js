@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TODO_GREEN_MODULE_CATALOG } from "./logisticsVerticalDomain.js";
 import { NOMES_DOS_ESPECIALISTAS, especialistaDaVertical } from "./todoGreenAiSpecialists.js";
@@ -18,7 +19,7 @@ import {
 // implementação dentro do componente. O componente é lido como texto pelo
 // mesmo motivo do teste de rótulos: importá-lo arrasta a árvore inteira.
 const fonte = fs.readFileSync(
-  path.join(path.dirname(new URL(import.meta.url).pathname), "LogisticsVertical.jsx"),
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "LogisticsVertical.jsx"),
   "utf8",
 );
 const blocoDosModulos = fonte.slice(

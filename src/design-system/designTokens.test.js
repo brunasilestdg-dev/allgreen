@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // ===== Guarda dos tokens de design (item 14: "token de design duplicado") =====
@@ -16,7 +17,7 @@ import { describe, expect, it } from "vitest";
 //   3. Todo `var(--tdg-…)`/`var(--ds-…)` usado no código tem definição em algum
 //      lugar: sem isso a tela vale só pelo fallback, e no escuro fica presa ao claro.
 
-const RAIZ = new URL("../", import.meta.url).pathname;
+const RAIZ = fileURLToPath(new URL("../", import.meta.url));
 const arquivos = [];
 const varrer = (dir) => {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -27,7 +28,10 @@ const varrer = (dir) => {
 };
 varrer(RAIZ);
 const css = arquivos.filter((p) => p.endsWith(".css"));
-const relativo = (p) => p.slice(RAIZ.length);
+// Caminho relativo sempre com barra "/", inclusive no Windows (onde `join`
+// devolve "\"): as asserções abaixo comparam com literais como
+// "design-system/tokens.css".
+const relativo = (p) => p.slice(RAIZ.length).replace(/\\/g, "/");
 
 // Declarações com o seletor que as envolve. O parser é propositalmente
 // simples (pilha de chaves): serve para CSS escrito à mão, não para minificado.

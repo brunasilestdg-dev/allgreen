@@ -1,0 +1,16 @@
+# Terminação de linha normalizada. O código é servido por Cloudflare Workers e
+# desenvolvido em Windows/macOS/Linux; sem isto o git no Windows (core.autocrlf)
+# entrega os fontes com CRLF e testes que varrem código-fonte por padrões com
+# `\n` quebram só nessa máquina. Força LF no working tree em qualquer plataforma.
+* text=auto eol=lf
+
+# Binários: nunca normalizar.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf binary

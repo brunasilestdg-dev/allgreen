@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolvePrimaryRoute } from "./PrimaryAppRouter.jsx";
 
@@ -100,7 +101,7 @@ describe("SSO interno e isolamento dos portais externos", () => {
     // Guarda estática (mesma técnica de moduleNavLabels.test.js): um import de
     // LogisticsVertical/TmsPortal/useVerticalRecords num portal externo seria
     // custo interno, margem e dados de outro cliente a um passo da tela.
-    const raiz = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const portais = [
       "features/logistics/CustomerPortal.jsx",
       "features/logistics/CustomerPortalOperations.jsx",

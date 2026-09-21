@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const ler = (caminho) => readFileSync(new URL(caminho, import.meta.url), "utf8");
+// Normaliza CRLF→LF: as asserções abaixo casam blocos com `\n` e o git pode
+// entregar o fonte com CRLF no Windows (core.autocrlf). Um teste que varre
+// código-fonte não pode depender do estilo de quebra de linha do checkout.
+const ler = (caminho) =>
+  readFileSync(new URL(caminho, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 const credentials = () => ler("./features/logistics/LogisticsVerticalCredentials.js");
 const invite = () => ler("./features/logistics/TodoGreenAccessInvite.jsx");

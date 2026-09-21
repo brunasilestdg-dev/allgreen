@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { BLOCKED_PATTERNS, polirTexto } from "./rotulosBanidos.js";
 
@@ -17,7 +18,7 @@ import { BLOCKED_PATTERNS, polirTexto } from "./rotulosBanidos.js";
 // LogisticsVertical.jsx arrastaria a árvore inteira para dentro do teste.
 
 const fonte = fs.readFileSync(
-  path.join(path.dirname(new URL(import.meta.url).pathname), "LogisticsVertical.jsx"),
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "LogisticsVertical.jsx"),
   "utf8",
 );
 

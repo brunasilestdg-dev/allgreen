@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // A barra de navegação da vertical derivava o rótulo de cada aba com
@@ -12,7 +13,7 @@ import { describe, expect, it } from "vitest";
 // inteira de dependências para dentro do teste.
 
 const arquivo = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   "LogisticsVertical.jsx",
 );
 const fonte = fs.readFileSync(arquivo, "utf8");
