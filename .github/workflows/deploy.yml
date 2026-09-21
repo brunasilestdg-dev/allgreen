@@ -88,7 +88,7 @@ jobs:
       - name: Atualizar o banco
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: npx wrangler d1 migrations apply seu-funcionario-db --remote
+        run: npx wrangler d1 migrations apply allgreen-db --remote
 
       - name: Publicar
         env:
@@ -98,7 +98,7 @@ jobs:
       - name: Conferir a versão que ficou no ar
         run: |
           sleep 15
-          NO_AR=$(curl -s https://seufuncionario-expo.brunapsiles.workers.dev/api/status | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
+          NO_AR=$(curl -s https://orianone.app/api/status | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
           ESPERADA=$(node -e "console.log(JSON.parse(require('fs').readFileSync('dist/version.json', 'utf8')).version)")
           echo "No ar: $NO_AR | Esperada: $ESPERADA"
           if [ "$NO_AR" != "$ESPERADA" ]; then

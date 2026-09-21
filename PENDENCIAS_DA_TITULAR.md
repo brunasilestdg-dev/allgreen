@@ -1,6 +1,6 @@
 # Pendências da Titular
 
-Ações que somente você pode realizar. **Nenhuma delas impede o uso do app**, que está no ar em https://seufuncionario-expo.brunapsiles.workers.dev
+Ações que somente você pode realizar. **Nenhuma delas impede o uso do app**, que está no ar em https://orianone.app
 
 ## 🔴 Recomendadas agora
 
@@ -23,7 +23,7 @@ cada foto vira ~40 linhas de base64 no D1 — o R2 tira esse peso. Passos, uma v
 
 ```bash
 # 1. Criar o bucket (nome livre; use este para casar com o exemplo):
-npx wrangler r2 bucket create seu-funcionario-midia
+npx wrangler r2 bucket create allgreen-midia
 ```
 
 2. Adicionar o binding no `wrangler.jsonc` (o **binding TEM que se chamar
@@ -31,7 +31,7 @@ npx wrangler r2 bucket create seu-funcionario-midia
 
 ```jsonc
 "r2_buckets": [
-  { "binding": "MEDIA_BUCKET", "bucket_name": "seu-funcionario-midia" }
+  { "binding": "MEDIA_BUCKET", "bucket_name": "allgreen-midia" }
 ]
 ```
 
@@ -68,7 +68,7 @@ integração. Ele publica sozinho a cada alteração. Falta só você dar a chav
 
 **Passo 2 — guardar a chave no GitHub (2 min)**
 
-1. Abra https://github.com/brunapsiles/Seufuncionario/settings/secrets/actions
+1. Abra https://github.com/brunasilestdg-dev/allgreen/settings/secrets/actions
 2. Clique em **New repository secret**
 3. Em *Name*, escreva exatamente: `CLOUDFLARE_API_TOKEN`
 4. Em *Secret*, cole o token que você copiou
@@ -76,12 +76,12 @@ integração. Ele publica sozinho a cada alteração. Falta só você dar a chav
 
 **Passo 3 — mandar publicar (1 min)**
 
-1. Abra https://github.com/brunapsiles/Seufuncionario/actions/workflows/deploy.yml
+1. Abra https://github.com/brunasilestdg-dev/allgreen/actions/workflows/deploy.yml
 2. Clique em **Run workflow** > **Run workflow**
 3. Espere terminar (uns 3 minutos). O último passo mostra a versão que ficou no ar.
 
 **Como saber que deu certo:** abra
-https://seufuncionario-expo.brunapsiles.workers.dev/api/status — o campo
+https://orianone.app/api/status — o campo
 `version` tem que mostrar `v145`.
 
 Depois disso, toda alteração publica sozinha. Você não precisa repetir nada.
@@ -115,7 +115,7 @@ Depois de cadastrar, teste: Configurações → "Notificações do navegador" �
 - Chaves que passaram por chats (Codex/Claude): token Cloudflare, Gemini, xAI, Google API key, Brevo. O app guarda todas em cofre seguro; regenerar é só uma camada extra de proteção contra terceiros.
 - Google API key: em console.cloud.google.com → Credenciais, dá para **restringir** quais APIs ela pode usar.
 
-### 2. Domínio próprio (ex.: seufuncionario.com.br)
+### 2. Domínio próprio (ex.: orianone.com.br)
 
 - Pago (~R$ 40/ano em registro.br). Deixa o endereço com a sua marca e habilita e-mails do seu domínio. O endereço gratuito atual continua funcionando para sempre.
 
@@ -147,7 +147,7 @@ fluxo de autorização com um segredo que só você pode cadastrar:
 1. No **Google Cloud Console → APIs e serviços → Tela de consentimento**:
    adicionar o escopo `https://www.googleapis.com/auth/gmail.readonly`.
 2. Em **Credenciais**, no OAuth Client já existente: adicionar como *Authorized
-   redirect URI* `https://seufuncionario-expo.brunapsiles.workers.dev/api/auth/google/callback`
+   redirect URI* `https://orianone.app/api/auth/google/callback`
    e copiar o **Client secret**.
 3. Cadastrar o segredo no cofre: `npx wrangler secret put GOOGLE_CLIENT_SECRET`.
 

@@ -60,7 +60,7 @@ export default defineConfig({
       : {},
   },
   webServer: {
-    command: `npx wrangler d1 migrations apply seu-funcionario-db --local && npx wrangler dev --local --port ${PORTA}`,
+    command: `npx wrangler d1 migrations apply allgreen-db --local && npx wrangler dev --local --port ${PORTA}`,
     url: `http://localhost:${PORTA}/api/status`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

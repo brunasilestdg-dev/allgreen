@@ -4,13 +4,13 @@ Este arquivo orienta qualquer assistente de IA que trabalhe neste projeto. A tit
 
 ## O que é o projeto
 
-**Seu Funcionário** — plataforma de equipe digital para empreendedores brasileiros, em produção:
-**https://seufuncionario-expo.brunapsiles.workers.dev**
+**All Green** — plataforma de equipe digital para empreendedores brasileiros, em produção:
+**https://orianone.app**
 
 - Frontend: React 19 + Vite (`src/App.jsx` concentra o app; `src/styles.css` os estilos)
 - Backend: Cloudflare Worker (`worker.js`) — login, chat de IA multi-provedor, mídia, sincronização, colaboração
-- Banco: Cloudflare D1 (`seu-funcionario-db`), migrações em `migrations/`
-- PWA instalável; código no GitHub `brunapsiles/Seufuncionario` (branch `main`)
+- Banco: Cloudflare D1 (`allgreen-db`), migrações em `migrations/`
+- PWA instalável; código no GitHub `brunasilestdg-dev/allgreen` (branch `main`)
 
 ## Comandos
 
@@ -22,14 +22,14 @@ npm run build     # gera dist/ (não commitado)
 npm test          # executa a suíte Vitest isoladamente
 npm run deploy    # valida, compila, aplica migrações e publica
 npm run deploy:cloudflare                             # aplica migrações e publica (Workers Builds); deploy:cloudflare:gated = E2E crítico antes, onde há Chromium
-npx wrangler d1 migrations apply seu-funcionario-db --remote   # aplica migrações novas
+npx wrangler d1 migrations apply allgreen-db --remote   # aplica migrações novas
 ```
 
 **Lint** (`eslint.config.js`, flat config): roda no `verify`, no deploy local completo e no CI. O Cloudflare Workers Builds também deve executar o gate mínimo (`npm ci`, `npm run verify`, `npm run build`) antes de publicar; GitHub Actions vermelho por falta de minutos/runner não bloqueia, mas `verify`, `build`, `test:e2e:critical`, Cloudflare Builds ou deploy manual vermelho bloqueia. O lint trava só em ERROS; hoje o único rule como erro é `react-hooks/rules-of-hooks` (0 violações — de guarda contra a classe de bug de "hooks depois de return condicional" que já mordeu aqui). O resto é AVISO (backlog para reduzir aos poucos, ~80): `no-unused-vars`, `react-hooks/exhaustive-deps`, regras novas do React Compiler (`set-state-in-effect` etc.) e `jsx-a11y` (acessibilidade). Ao mexer no código, não precisa zerar os avisos, mas **não introduza erros** (o CI barra).
 
 ## Deploy automático
 
-O Cloudflare Workers Builds está conectado ao repositório `brunapsiles/Seufuncionario`.
+O Cloudflare Workers Builds está conectado ao repositório `brunasilestdg-dev/allgreen`.
 Todo push na branch `main` deve executar `npm ci`, `npm run verify`,
 `npm run build` e, em seguida, `npm run deploy:cloudflare` (migrations + publicação). O gate de navegador (`test:e2e:critical`) roda **antes do merge** (local/sessão remota) e no fallback manual `deploy.yml`, que instala Chromium; dentro do build do Cloudflare não há como instalar o navegador — a tentativa de 13/09 (`cd8f90b`) travou a publicação da `main`. O diretório raiz configurado é `/`; builds de branches que
 não sejam a `main` também estão habilitados como versões de prévia. A validação completa não pode depender dos minutos do GitHub Actions. Se o Actions estiver vermelho por falta de runner/minutos, isso não bloqueia; se `verify`, `build`, Cloudflare Builds ou deploy manual falharem, bloqueia. O workflow `Publicar` do GitHub é apenas uma contingência manual e também precisa rodar o mesmo gate mínimo antes de publicar.
@@ -80,7 +80,7 @@ quantos resultados vieram.
 5. Não recriar funções que já existem — corrigir/estender as atuais (ver mapa abaixo).
 6. Alterou schema? Criar NOVA migração numerada em `migrations/` (nunca editar as antigas) e aplicar com wrangler.
 7. Dados de usuários são isolados por conta; qualquer rota nova de dados exige sessão (ver `sessionUser`).
-8. Ao subir mudança visual, incrementar a versão do cache em `public/sw.js` (`seu-funcionario-vN`).
+8. Ao subir mudança visual, incrementar a versão do cache em `public/sw.js` (`allgreen-vN`).
 9. Mudanças concluídas e validadas devem ser publicadas automaticamente, sem pedir
    uma autorização adicional à titular. Só interromper quando houver bloqueio externo
    inevitável de credencial, permissão ou serviço, informando exatamente o acesso faltante.
