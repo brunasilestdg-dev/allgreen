@@ -400,6 +400,10 @@ function AbaOperacional({ operacional }) {
   const vazio = "Sem dados operacionais ainda. Preenche quando o Track3R enviar ocorrências/encomendas.";
   const [ocKey, setOcKey] = useState(null);
   const [motivoSel, setMotivoSel] = useState(null);
+  const [pracaClienteSel, setPracaClienteSel] = useState(null);
+  const praca = operacional.praca || { disponivel: false, pracas: [], matriz: [] };
+  const clientesDaMatriz = [...new Set((praca.matriz || []).map((m) => m.cliente))];
+  const matrizFiltrada = pracaClienteSel ? (praca.matriz || []).filter((m) => m.cliente === pracaClienteSel) : (praca.matriz || []);
   const ocMes = ocorrencias.meses.find((m) => m.key === (ocKey || ocorrencias.defaultKey)) || ocorrencias.meses[ocorrencias.meses.length - 1] || null;
   const serieOtd = (otd.daily || []).map((d) => ({ label: d.data?.slice(5), y: d.pct }));
 
@@ -411,6 +415,35 @@ function AbaOperacional({ operacional }) {
 
       <Secao titulo="Volume de pedidos" kicker="POR MÊS">
         {volume.disponivel ? <Barras itens={volume.meses} valor={(i) => i.pedidos} rotulo={(i) => mesLabel(i.mes)} comPct /> : <Vazio>{vazio}</Vazio>}
+      </Secao>
+
+      <Secao titulo="Por praça de embarque (cliente × origem)" kicker="PRAÇA DE EMBARQUE"
+        nota="Praça = unidade de origem por encomenda (Track3R). Preenche quando as encomendas do Track3R entrarem.">
+        {praca.disponivel ? (
+          <div className="tdg-split">
+            <div className="tdg-filtro-detalhe">
+              <Barras itens={praca.pracas} valor={(i) => i.pedidos} rotulo={(i) => i.praca} comPct />
+              <table className="tdg-tabela">
+                <thead><tr><th>Praça</th><th>Pedidos</th><th>OTD</th><th>Efetividade</th></tr></thead>
+                <tbody>{praca.pracas.map((p) => <tr key={p.praca}><td>{p.praca}</td><td>{num(p.pedidos)}</td><td>{pctFrac(p.otd)}</td><td>{pctFrac(p.efetividade)}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <div className="tdg-filtro-detalhe">
+              <div className="tdg-chart-controls">
+                <label>Cliente:&nbsp;
+                  <select value={pracaClienteSel || ""} onChange={(e) => setPracaClienteSel(e.target.value || null)}>
+                    <option value="">Todos os clientes</option>
+                    {clientesDaMatriz.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              </div>
+              <table className="tdg-tabela">
+                <thead><tr><th>Cliente</th><th>Praça de embarque</th><th>Pedidos</th></tr></thead>
+                <tbody>{matrizFiltrada.slice(0, 40).map((m, idx) => <tr key={idx}><td>{m.cliente}</td><td>{m.praca}</td><td>{num(m.pedidos)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+        ) : <Vazio>Sem origem por encomenda ainda. Esta visão (cliente × praça de embarque) preenche automaticamente quando os webhooks do Track3R entrarem.</Vazio>}
       </Secao>
 
       <Secao titulo={`OTD — On Time Delivery (meta ${otd.meta}%)`} kicker="PONTUALIDADE">

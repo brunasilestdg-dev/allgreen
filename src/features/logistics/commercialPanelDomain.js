@@ -306,6 +306,7 @@ const consolidarPorEncomenda = (encomendas = []) => {
         orderRef: ref,
         cliente: "",
         rota: "—",
+        praca: "",
         registroEm: "",
         prometidoEm: "",
         entregueEm: "",
@@ -317,6 +318,9 @@ const consolidarPorEncomenda = (encomendas = []) => {
     const reg = mapa.get(ref);
     const cliente = textoLimpo(e?.cliente);
     if (cliente && !reg.cliente) reg.cliente = cliente;
+    // Praça de embarque = unidade de ORIGEM da encomenda (Track3R origin_unit).
+    const origem = textoLimpo(e?.originUnit);
+    if (origem && !reg.praca) reg.praca = origem;
     const rota = rotaDe(e);
     if (rota !== "— → —" && reg.rota === "—") reg.rota = rota;
     else if (reg.rota === "—") reg.rota = rota;
@@ -524,6 +528,39 @@ export function slaPorRota(encomendas = []) {
   return { disponivel: rotas.length > 0, rotas };
 }
 
+// Operacional por PRAÇA DE EMBARQUE (unidade de origem, Track3R) e a matriz
+// cliente × praça. Preenche quando as encomendas do Track3R chegarem.
+export function operacionalPorPraca(encomendas = []) {
+  const consolidadas = consolidarPorEncomenda(encomendas);
+  const porPraca = new Map();
+  const matriz = new Map();
+  for (const p of consolidadas) {
+    const praca = textoLimpo(p.praca) || "Sem praça";
+    if (!porPraca.has(praca)) porPraca.set(praca, { praca, pedidos: 0, entregues: 0, noPrazo: 0 });
+    const reg = porPraca.get(praca);
+    reg.pedidos += 1;
+    if (p.entregue) {
+      reg.entregues += 1;
+      if (p.prometidoEm && p.entregueEm && diaDe(p.entregueEm) <= diaDe(p.prometidoEm)) reg.noPrazo += 1;
+    }
+    const cliente = textoLimpo(p.cliente) || "Sem cliente";
+    const chave = `${normalizarNome(cliente)}|${normalizarNome(praca)}`;
+    if (!matriz.has(chave)) matriz.set(chave, { cliente, praca, pedidos: 0 });
+    matriz.get(chave).pedidos += 1;
+  }
+  const pracas = [...porPraca.values()]
+    .map((r) => ({
+      praca: r.praca,
+      pedidos: r.pedidos,
+      entregues: r.entregues,
+      otd: r.entregues > 0 ? r.noPrazo / r.entregues : null,
+      efetividade: r.pedidos > 0 ? r.entregues / r.pedidos : null,
+    }))
+    .sort((a, b) => b.pedidos - a.pedidos);
+  const cruzamento = [...matriz.values()].sort((a, b) => b.pedidos - a.pedidos);
+  return { disponivel: pracas.length > 0, pracas, matriz: cruzamento };
+}
+
 export function reentregaPorRota(encomendas = []) {
   const consolidadas = consolidarPorEncomenda(encomendas);
   const porRota = new Map();
@@ -709,6 +746,9 @@ function normalizarOpsArtefato(OPS = {}) {
       distribuicao: (re.distribuicao_tentativas || []).map((d) => ({ tentativas: soNumero(d?.tentativas), count: soNumero(d?.count) })),
       rows: (re.rows_por_rota || []).map((r) => ({ rota: textoLimpo(r?.rota), total: soNumero(r?.total), multiTentativa: soNumero(r?.multiTentativa), pctMultiTentativa: soNumero(r?.pctMultiTentativa) })),
     },
+    // O artefato não traz a quebra cliente × praça de embarque; ela vem dos
+    // fatos do Track3R (origem por encomenda). Fica pronta e vazia até lá.
+    praca: { disponivel: false, pracas: [], matriz: [] },
   };
 }
 
@@ -832,6 +872,7 @@ export function montarPainelCanonicoMirror({ faturas = [], encomendas = [], opor
     leadtime: { disponivel: lt.disponivel, nota: "", meses: lt.meses.map((m) => ({ mes: m.mes, medianaH: null, mediaH: m.horasMedias, count: m.pedidos })) },
     slaRota: { disponivel: sla.disponivel, topN: 20, pctVolumeCoberto: 0, rotasTotais: sla.rotas.length, nota: "", rows: sla.rotas.map((r) => ({ rota: r.rota, total: r.pedidos, foraPrazo: r.foraDoPrazo, pctForaPrazo: r.percentualForaDoPrazo * 100 })) },
     reentrega: { disponivel: re.disponivel, pctGeral: 0, nota: "", distribuicao: [], rows: re.rotas.map((r) => ({ rota: r.rota, total: r.pedidos, multiTentativa: r.comReentrega, pctMultiTentativa: r.percentualReentrega * 100 })) },
+    praca: operacionalPorPraca(encomendas),
   };
   return { receita, kanban, operacional };
 }

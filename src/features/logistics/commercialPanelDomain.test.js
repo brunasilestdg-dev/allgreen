@@ -17,6 +17,7 @@ import {
   leadTimeDeEntrega,
   slaPorRota,
   reentregaPorRota,
+  operacionalPorPraca,
   receitaDeSnapshot,
   montarPainelDoArtefato,
   montarPainelCanonicoMirror,
@@ -313,6 +314,16 @@ describe("Aba Operacional", () => {
     expect(mg.pedidos).toBe(1);
     expect(mg.foraDoPrazo).toBe(1);
     expect(mg.percentualForaDoPrazo).toBe(1);
+  });
+
+  it("por praça de embarque agrupa por origem e cruza cliente × praça", () => {
+    const p = operacionalPorPraca(encomendas);
+    expect(p.disponivel).toBe(true);
+    // E1 origem SP (Alfa), E2 origem SP (Beta) -> praça "SP" com 2 pedidos
+    const sp = p.pracas.find((x) => x.praca === "SP");
+    expect(sp.pedidos).toBe(2);
+    expect(p.matriz.some((m) => m.cliente === "Alfa" && m.praca === "SP" && m.pedidos === 1)).toBe(true);
+    expect(p.matriz.some((m) => m.cliente === "Beta" && m.praca === "SP" && m.pedidos === 1)).toBe(true);
   });
 
   it("reentrega detecta pedido com mais de uma tentativa", () => {
