@@ -581,6 +581,65 @@ const listarPorClasse = async (env, access, url) => {
   return json({ mes, linhas: results || [] });
 };
 
+// Cadastros de referência que a TRACK3R envia por webhook (embarcador, tomador,
+// unidade). Antes esses dados entravam no banco (todogreen_track3r_entities) mas
+// nenhuma tela os lia — ficavam só para enriquecer o nome nas outras projeções.
+// Esta leitura os expõe no Portal TMS. Somente leitura, escopada por espaço.
+const TIPOS_CADASTRO = { embarcador: "embarcador", tomador: "tomador", unidade: "unidade" };
+const listarCadastros = async (env, access, url) => {
+  const { limit, offset } = paginacao(url);
+  // Aceita singular e plural (o menu usa "embarcadores"; o webhook, "embarcador").
+  const pedido = texto(url.searchParams.get("tipo"), 20).toLowerCase().replace(/(es|s)$/, "");
+  const tipo = TIPOS_CADASTRO[pedido] || "";
+  const filtro = tipo ? "AND entity_type = ?" : "";
+  const params = [TENANT_ID, access.ownerId, ...(tipo ? [tipo] : [])];
+  const base = `FROM todogreen_track3r_entities
+      WHERE tenant_id = ? AND workspace_owner_id = ? ${filtro}`;
+
+  const [{ results }, totalRow, resumoRows] = await Promise.all([
+    env.DB.prepare(
+      `SELECT entity_type, external_code, name, trade_name, document, first_seen_at, last_seen_at
+         ${base} ORDER BY last_seen_at DESC, name ASC LIMIT ? OFFSET ?`,
+    ).bind(...params, limit, offset).all(),
+    env.DB.prepare(`SELECT COUNT(*) AS total ${base}`).bind(...params).first(),
+    // Contadores por tipo são globais (não da página atual), para os cartões do
+    // topo refletirem tudo que já entrou, não só os 100 mais recentes.
+    env.DB.prepare(
+      `SELECT entity_type, COUNT(*) AS total
+         FROM todogreen_track3r_entities
+        WHERE tenant_id = ? AND workspace_owner_id = ?
+        GROUP BY entity_type`,
+    ).bind(TENANT_ID, access.ownerId).all(),
+  ]);
+
+  const porTipo = { embarcador: 0, tomador: 0, unidade: 0 };
+  for (const row of resumoRows?.results || []) {
+    const t = row?.entity_type;
+    if (t && Object.prototype.hasOwnProperty.call(porTipo, t)) porTipo[t] = Number(row.total || 0);
+  }
+
+  return json({
+    registros: (results || []).map((row) => ({
+      tipo: row.entity_type,
+      codigo: row.external_code,
+      nome: row.name || "",
+      nomeFantasia: row.trade_name || "",
+      documento: row.document || "",
+      primeiroEnvio: row.first_seen_at || "",
+      ultimoEnvio: row.last_seen_at || "",
+    })),
+    resumo: {
+      embarcadores: porTipo.embarcador,
+      tomadores: porTipo.tomador,
+      unidades: porTipo.unidade,
+      total: porTipo.embarcador + porTipo.tomador + porTipo.unidade,
+    },
+    total: Number(totalRow?.total || 0),
+    limit,
+    offset,
+  });
+};
+
 const verSugestoes = async (env, access, url) => {
   const id = texto(url.searchParams.get("documento"), 120);
   if (!id) return json({ error: "Informe o documento." }, 400);
@@ -967,6 +1026,7 @@ export async function handleTodoGreenTms(request, env, access, user) {
   if (request.method === "GET") {
     if (recurso === "configuracao" || !recurso) return verConfiguracao(env, access, request);
     if (recurso === "documentos") return listarDocumentos(env, access, url);
+    if (recurso === "cadastros") return listarCadastros(env, access, url);
     if (recurso === "classes") return listarPorClasse(env, access, url);
     if (recurso === "sugestoes") return verSugestoes(env, access, url);
     if (recurso === "execucoes") return listarExecucoes(env, access, url);

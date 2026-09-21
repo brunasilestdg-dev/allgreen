@@ -168,9 +168,10 @@ export async function loadTmsPortalData() {
     throw error;
   }
 
-  const [ordersData, tmsData, fiscalData, ciotData, billingData, tmsConfig, ciotConfig, fiscalProfile, apiKeysData] = await Promise.all([
+  const [ordersData, tmsData, cadastrosData, fiscalData, ciotData, billingData, tmsConfig, ciotConfig, fiscalProfile, apiKeysData] = await Promise.all([
     fetchJson("/api/todogreen/transactions/service-orders?limit=100"),
     fetchJson("/api/todogreen/tms/documentos?limit=100"),
+    fetchJson("/api/todogreen/tms/cadastros?limit=200", { optional: true }),
     fetchJson("/api/todogreen/fiscal/documentos?limit=100", { optional: true }),
     fetchJson("/api/todogreen/transactions/ciot", { optional: true }),
     fetchJson("/api/todogreen/transactions/billing-items?status=eligible", { optional: true }),
@@ -181,6 +182,10 @@ export async function loadTmsPortalData() {
   ]);
 
   const orders = (ordersData?.records || []).map(order);
+  const cadastros = {
+    resumo: cadastrosData?.resumo || { embarcadores: 0, tomadores: 0, unidades: 0, total: 0 },
+    registros: cadastrosData?.registros || [],
+  };
   const externalDocuments = tmsData?.registros || [];
   const operations = externalDocuments.map(operationFromTmsDocument);
   const fiscalDocuments = (fiscalData?.registros || []).map(fiscal);
@@ -266,7 +271,9 @@ export async function loadTmsPortalData() {
     totals: {
       orders: Number(ordersData?.total ?? orders.length),
       operations: Number(tmsData?.total ?? operations.length),
+      cadastros: Number(cadastros.resumo.total || 0),
     },
+    cadastros,
     all: { orders, operations, fiscal: fiscalDocuments, ciots, billing: billingRecords },
   };
 }

@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Contact,
   Copy,
   Download,
   Eye,
@@ -94,6 +95,7 @@ const SECTIONS = [
   { id: "viagens", label: "Viagens", icon: Truck },
   { id: "fiscal", label: "CT-e, MDF-e e CIOT", icon: FileCheck2 },
   { id: "faturamento", label: "Faturamento", icon: CircleDollarSign },
+  { id: "cadastros", label: "Cadastros Track3r", icon: Contact },
   { id: "integracoes", label: "Integrações e API", icon: Cable },
 ];
 
@@ -1545,6 +1547,66 @@ function Integrations({ data, onReload, setToast }) {
   );
 }
 
+const CADASTRO_LABEL = { embarcador: "Embarcador", tomador: "Tomador", unidade: "Unidade" };
+
+// Cadastros de referência recebidos por webhook da Track3r (embarcadores,
+// tomadores e unidades). Somente leitura — o dono do dado é a Track3r; aqui a
+// operação enxerga o que chegou.
+function CadastrosSection({ data }) {
+  const cadastros = data?.cadastros || { resumo: {}, registros: [] };
+  const resumo = cadastros.resumo || {};
+  const [tipo, setTipo] = useState("");
+  const rows = useMemo(
+    () => (cadastros.registros || []).filter((row) => !tipo || row.tipo === tipo),
+    [cadastros.registros, tipo],
+  );
+  return (
+    <div className="tms-stack">
+      <section className="tms-panel">
+        <div className="tms-panel-head"><div><span>Cadastros recebidos da Track3r</span><h2>Embarcadores, tomadores e unidades</h2></div><strong className="tms-queue-count">{resumo.total || 0}</strong></div>
+        <div className="tms-metrics">
+          <Metric label="Embarcadores" value={resumo.embarcadores || 0} onClick={() => setTipo("embarcador")} />
+          <Metric label="Tomadores" value={resumo.tomadores || 0} onClick={() => setTipo("tomador")} />
+          <Metric label="Unidades" value={resumo.unidades || 0} onClick={() => setTipo("unidade")} />
+        </div>
+      </section>
+      <section className="tms-panel">
+        <div className="tms-panel-head">
+          <div><span>Lista</span><h2>{tipo ? `${CADASTRO_LABEL[tipo]}s` : "Todos os cadastros"}</h2></div>
+          <div className="tms-workbench-toolbar">
+            <label>
+              <span>Tipo</span>
+              <select value={tipo} onChange={(event) => setTipo(event.target.value)}>
+                <option value="">Todos</option>
+                {Object.entries(CADASTRO_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+        {rows.length ? (
+          <div className="tms-table-wrap">
+            <table className="tms-table">
+              <thead><tr><th>Tipo</th><th>Código</th><th>Nome</th><th>Nome fantasia</th><th>Documento</th><th>Último envio</th></tr></thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={`${row.tipo}:${row.codigo}`}>
+                    <td>{CADASTRO_LABEL[row.tipo] || row.tipo}</td>
+                    <td>{row.codigo}</td>
+                    <td>{row.nome || "—"}</td>
+                    <td>{row.nomeFantasia || "—"}</td>
+                    <td>{row.documento || "—"}</td>
+                    <td>{row.ultimoEnvio ? dateTime(row.ultimoEnvio) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <Empty>Nenhum cadastro recebido da Track3r ainda. Quando os webhooks de embarcadores, tomadores e unidades chegarem, eles aparecem aqui.</Empty>}
+      </section>
+    </div>
+  );
+}
+
 export default function TmsPortal() {
   const [section, setSection] = useState(pathSection);
   const [data, setData] = useState(null);
@@ -1612,6 +1674,7 @@ export default function TmsPortal() {
   if (section === "viagens") content = <section className="tms-panel"><div className="tms-panel-head"><div><span>Execução</span><h2>Viagens e movimentações</h2></div><strong className="tms-queue-count">{data?.totals?.operations || 0}</strong></div><OperationsWorkbench rows={data?.all?.operations || []} /></section>;
   if (section === "fiscal") content = <div className="tms-stack"><section className="tms-panel"><div className="tms-panel-head"><div><span>Documentos fiscais</span><h2>CT-e e MDF-e</h2></div></div><FiscalTable rows={data?.recent?.fiscal} /></section><section className="tms-panel"><div className="tms-panel-head"><div><span>ANTT</span><h2>CIOT</h2></div></div><CiotTable rows={data?.recent?.ciots} /></section></div>;
   if (section === "faturamento") content = <BillingSection data={data} onReload={load} />;
+  if (section === "cadastros") content = <CadastrosSection data={data} />;
   if (section === "integracoes") content = <Integrations data={data} onReload={load} setToast={mostrarToast} />;
 
   return (

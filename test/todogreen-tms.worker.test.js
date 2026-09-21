@@ -60,6 +60,22 @@ async function criarCliente(usuario, id, nome, documento = "") {
   ).bind(id, usuario.id, nome, nome, documento, usuario.id, usuario.id, agora, agora).run();
 }
 
+async function criarEntidadeTrack3r(usuario, tipo, codigo, nome, extra = {}) {
+  const agora = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO todogreen_track3r_entities
+       (id, tenant_id, workspace_owner_id, integration_id, entity_type, external_code,
+        name, trade_name, document, payload_json, first_seen_at, last_seen_at)
+     VALUES (?, 'todogreen', ?, 'int-track3r', ?, ?, ?, ?, ?, '{}', ?, ?)
+     ON CONFLICT(workspace_owner_id, integration_id, entity_type, external_code) DO UPDATE SET
+       name = excluded.name, trade_name = excluded.trade_name,
+       document = excluded.document, last_seen_at = excluded.last_seen_at`,
+  ).bind(
+    crypto.randomUUID(), usuario.id, tipo, codigo,
+    nome, extra.trade_name || "", extra.document || "", agora, agora,
+  ).run();
+}
+
 const pedir = (caminho, { metodo = "GET", token, corpo } = {}) => {
   const headers = { "cf-connecting-ip": nextIp() };
   if (token) headers.authorization = `Bearer ${token}`;
@@ -499,6 +515,43 @@ describe("projeção na operação", () => {
       metodo: "POST", token: gestora.token,
       corpo: { documentoIds: Array.from({ length: 101 }, (_, i) => `x${i}`) },
     })).status).toBe(400);
+  });
+});
+
+describe("cadastros recebidos da Track3r aparecem no portal", () => {
+  // Antes, embarcadores/tomadores/unidades entravam no banco pelo webhook mas
+  // nenhuma tela os lia. Esta rota os expõe, escopada por espaço e só leitura.
+  it("lista os três tipos com contadores por tipo", async () => {
+    await criarEntidadeTrack3r(gestora, "embarcador", "EMB-1", "Amazon", { trade_name: "Amazon BR", document: "11222333000181" });
+    await criarEntidadeTrack3r(gestora, "tomador", "TOM-1", "Shopee");
+    await criarEntidadeTrack3r(gestora, "unidade", "UN-1", "Cajamar", { trade_name: "CD Cajamar" });
+
+    const r = await pedir("/api/todogreen/tms/cadastros", { token: gestora.token });
+    expect(r.status).toBe(200);
+    const corpo = await r.json();
+    expect(corpo.resumo).toMatchObject({ embarcadores: 1, tomadores: 1, unidades: 1, total: 3 });
+    expect(corpo.registros.map((x) => x.codigo)).toEqual(expect.arrayContaining(["EMB-1", "TOM-1", "UN-1"]));
+    const emb = corpo.registros.find((x) => x.codigo === "EMB-1");
+    expect(emb).toMatchObject({ tipo: "embarcador", nome: "Amazon", nomeFantasia: "Amazon BR", documento: "11222333000181" });
+  });
+
+  it("filtra por tipo aceitando singular e plural, mantendo o resumo global", async () => {
+    const r = await pedir("/api/todogreen/tms/cadastros?tipo=embarcadores", { token: gestora.token });
+    const corpo = await r.json();
+    expect(corpo.registros.length).toBeGreaterThan(0);
+    expect(corpo.registros.every((x) => x.tipo === "embarcador")).toBe(true);
+    expect(corpo.resumo.total).toBeGreaterThanOrEqual(3);
+  });
+
+  it("um espaço não vê o cadastro do outro", async () => {
+    await criarEntidadeTrack3r(colega, "embarcador", "EMB-COLEGA", "Só do colega");
+    const corpo = await (await pedir("/api/todogreen/tms/cadastros", { token: gestora.token })).json();
+    expect(corpo.registros.map((x) => x.codigo)).not.toContain("EMB-COLEGA");
+  });
+
+  it("quem só consulta também lê; sem sessão, 401", async () => {
+    expect((await pedir("/api/todogreen/tms/cadastros", { token: auditor.token })).status).toBe(200);
+    expect((await pedir("/api/todogreen/tms/cadastros")).status).toBe(401);
   });
 });
 
