@@ -78,7 +78,7 @@ quantos resultados vieram.
 3. Produto 100% em **português do Brasil**; tom profissional e acolhedor.
 4. Antes de commitar: `npm run verify` e `npm run build` verdes. Testar o fluxo real em produção quando possível.
 5. Não recriar funções que já existem — corrigir/estender as atuais (ver mapa abaixo).
-6. Alterou schema? Criar NOVA migração numerada em `migrations/` (nunca editar as antigas) e aplicar com wrangler.
+6. Alterou schema? Criar NOVA migração numerada em `migrations/` (nunca editar nem RENOMEAR as antigas — o D1 registra cada migração pelo nome do arquivo em `d1_migrations`; renomear faz o wrangler reaplicá-la contra produção) e aplicar com wrangler. Use sempre o **próximo número livre** (`NNNN_nome.sql`): rode `ls migrations/ | tail` antes. Números repetidos são armadilha — a trava `src/migracoes-numeracao.test.js` falha o CI em qualquer colisão nova (as 13 colisões históricas ficam anistiadas lá porque já foram aplicadas em produção).
 7. Dados de usuários são isolados por conta; qualquer rota nova de dados exige sessão (ver `sessionUser`).
 8. Ao subir mudança visual, incrementar a versão do cache em `public/sw.js` (`allgreen-vN`).
 9. Mudanças concluídas e validadas devem ser publicadas automaticamente, sem pedir
