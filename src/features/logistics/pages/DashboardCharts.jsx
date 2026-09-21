@@ -11,9 +11,9 @@ import "./DashboardCharts.css";
 // tocado — a pessoa clica a fatia e a tela decide para onde levar. A entrada é
 // animada por CSS (barra cresce, linha se desenha, rosca aparece).
 
-// Paleta categórica da rosca: verde da marca primeiro, depois tons que se
-// distinguem em claro e escuro. Índices além do tamanho dão a volta.
-const CORES = ["var(--tdg-green)", "#c4700b", "#2f8f83", "#5b6b78", "#8a5cb4", "#b8483a"];
+// Paleta categórica validada (dataviz) — distinta e CVD-safe em claro/escuro,
+// via CSS vars (o modo escuro troca sozinho). Índices além do tamanho dão a volta.
+const CORES = ["var(--viz-1)", "var(--viz-2)", "var(--viz-3)", "var(--viz-4)", "var(--viz-5)", "var(--viz-outros)"];
 
 const formatarValor = (valor, unidade) => {
   const num = Number(valor) || 0;

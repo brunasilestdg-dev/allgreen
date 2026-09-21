@@ -1,4 +1,8 @@
 /* Desenhos dos indicadores do painel — SVG/CSS, sem biblioteca. */
+/* Paleta categórica validada (mesma do painel comercial) — definida aqui também
+   para a rosca da home usar as cores mesmo sem o CSS do painel carregado. */
+.tdg { --viz-1:#2a78d6; --viz-2:#eb6834; --viz-3:#1baf7a; --viz-4:#eda100; --viz-5:#e87ba4; --viz-outros:#9aa0a6; }
+:root[data-theme="dark"] .tdg { --viz-1:#3987e5; --viz-2:#d95926; --viz-3:#199e70; --viz-4:#c98500; --viz-5:#d55181; --viz-outros:#6b6f76; }
 .tdgc-empty { color: var(--tdg-muted); font-size: 12px; margin: 0; padding: 18px 6px; text-align: center; }
 
 .tdgc-metric { align-items: center; display: flex; height: 100%; justify-content: center; min-height: 72px; }
@@ -25,8 +29,9 @@
 .tdgc-line-labels strong { color: var(--tdg-green); font-family: "IBM Plex Mono", monospace; font-size: 13px; }
 
 /* Distribuição (rosca) — anel em SVG, segmentado, com total no centro. */
-.tdgc-donut-wrap { align-items: center; display: flex; gap: 18px; min-height: 108px; }
+.tdgc-donut-wrap { align-items: center; display: flex; flex-wrap: wrap; gap: 14px 18px; min-height: 108px; }
 .tdgc-donut2 { flex: none; height: 112px; position: relative; width: 112px; }
+.tdgc-legend { flex: 1 1 160px; }
 /* Começa no topo (12h) e vai no sentido horário. */
 .tdgc-donut2-svg { height: 100%; transform: rotate(-90deg); width: 100%; }
 .tdgc-donut2-trilho { fill: none; stroke: var(--tdg-line, #e3ede7); stroke-width: 4; }
