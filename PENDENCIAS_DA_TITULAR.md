@@ -355,7 +355,7 @@ exige credencial, não exige contrato novo e não tem custo. Reimportar o arquiv
 do dia seguinte não duplica nada — o sistema reconhece o que já entrou e só
 atualiza o status.
 
-### TRACK3R: endpoints e tokens individuais (atualizado em 19/09)
+### TRACK3R: endpoints e tokens individuais (atualizado em 21/09)
 
 O fornecedor confirmou que a configuração fica com a TRACK3R e exige
 **uma URL e um token exclusivo por evento**. Temos os 13 endpoints
@@ -363,15 +363,26 @@ documentados, todos com `POST`, JSON e cabeçalho `Token`.
 O receptor de ocorrências continua aceitando a rota legada sem tipo, mas
 recomendamos enviar a URL explícita `/ocorrencias`.
 
-**Etapas necessárias da titular:**
+**Situação em 21/09/2026:** integração `b9757495-…` criada, e os **11
+segredos individuais ativados** já cadastrados no cofre do Worker `allgreen`
+(ocorrências, encomendas, valores-encomendas, embarcadores, tomadores, ctes,
+unidades, averbações, faturas, faturas-motorista e listas). Homologação HTTP no
+ar confirmada: token correto → **200**, token errado/ausente → **401**, e os
+dois endpoints ainda sem segredo (**cotações** e **faturas-rede-terceira**) →
+**503** (comportamento fail-closed esperado). Como já existe segredo individual,
+o fallback compartilhado legado está **desligado** para todos os endpoints.
 
-1. Cadastrar a TRACK3R no TMS em modo **Arquivo** para gerar o ID da integração
-   e obter as 13 URLs completas no kit. Não enviar o placeholder `<id>`.
-2. Gerar valores aleatórios e **distintos** para cada endpoint a ativar e
-   cadastrar no cofre do Cloudflare Worker os segredos indicados em
-   `docs/TRACK3R_TOKENS_INDIVIDUAIS.md`. Não salvar os valores no repositório.
-3. Passar a integração para modo Webhook e entregar ao Lucas os pares
-   **URL + token** pelo canal seguro combinado com a TRACK3R.
+**Etapas restantes da titular / fornecedor:**
+
+1. ~~Cadastrar a TRACK3R no TMS em modo **Arquivo** para gerar o ID da
+   integração e obter as URLs completas no kit.~~ **Feito** (id `b9757495-…`).
+2. ~~Gerar valores **distintos** por endpoint e cadastrar os segredos no cofre
+   do Cloudflare Worker.~~ **Feito** — 11 segredos individuais registrados e
+   homologados em 21/09. (Cotações e faturas-rede-terceira ficam em 503 até
+   receberem seus próprios segredos, se um dia forem ativadas.)
+3. Passar a integração para modo Webhook na TRACK3R e entregar ao Lucas os pares
+   **URL + token** pelo canal seguro combinado. **Recomendado trocar os 11
+   tokens** antes de liberar, pois foram compartilhados por chat nesta sessão.
 4. Homologar com dados reais e pedir a **tabela oficial de códigos de
    ocorrência** para mapear o status no ERP.
 
