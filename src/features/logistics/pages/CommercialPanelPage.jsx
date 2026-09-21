@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { RefreshCw, TrendingUp, KanbanSquare, Truck, CircleDashed, X, ExternalLink } from "lucide-react";
 import { comparativosDeSerie, agruparSlaPorBase } from "../commercialPanelDomain.js";
-import { interacoesVisiveis, rotuloDoTipo, RESULTADOS_DA_INTERACAO } from "../interacoesDomain.js";
+import { rotuloDoTipo, RESULTADOS_DA_INTERACAO } from "../interacoesDomain.js";
 import "./TodoGreenPages.css";
 
 const brl = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -32,28 +32,45 @@ const dataHora = (iso) => {
 };
 
 // Painel lateral que abre as interações reais de UMA oportunidade — o que o
-// contador "💬 N" no Kanban/FUP prometia e não abria. Só leitura: o histórico
-// completo (com edição) continua na tela Oportunidades, para onde o rodapé leva.
-function InteracoesDrawer({ oportunidade, interacoes, onFechar, onAbrirOportunidades }) {
-  const lista = useMemo(
-    () => interacoesVisiveis({ interacoes, opportunityId: oportunidade?.id || "" }),
-    [interacoes, oportunidade],
-  );
+// contador "💬 N" no Kanban/FUP prometia e não abria. Busca do servidor com o
+// MESMO escopo do contador (tenant + opportunity_id), por isso bate com o "💬 N"
+// mesmo para interações importadas sem client_id (a lista geral do front, por
+// ser recortada por carteira, as escondia). Só leitura: registrar/editar segue
+// na tela Oportunidades, para onde o rodapé leva.
+function InteracoesDrawer({ oportunidade, authHeaders, onFechar, onAbrirOportunidades }) {
+  const [lista, setLista] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
   useEffect(() => {
     const esc = (e) => { if (e.key === "Escape") onFechar(); };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [onFechar]);
+  useEffect(() => {
+    if (!oportunidade?.id) return;
+    let vivo = true;
+    setCarregando(true); setErro("");
+    fetch(`/api/todogreen/comercial/painel?opportunityId=${encodeURIComponent(oportunidade.id)}`, { headers: authHeaders?.() || {} })
+      .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || "Não foi possível carregar as interações."); return d; })
+      .then((d) => { if (vivo) setLista(Array.isArray(d.interacoes) ? d.interacoes : []); })
+      .catch((e) => { if (vivo) setErro(e.message); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, [oportunidade, authHeaders]);
   if (!oportunidade) return null;
   return (
     <div className="tdg-drawer-overlay" onClick={onFechar}>
       <aside className="tdg-drawer" role="dialog" aria-label={`Interações de ${oportunidade.cliente}`} onClick={(e) => e.stopPropagation()}>
         <header className="tdg-drawer-head">
-          <div><span className="tdg-kicker">INTERAÇÕES</span><h3>{oportunidade.cliente}</h3><small>{lista.length} registro(s)</small></div>
+          <div><span className="tdg-kicker">INTERAÇÕES</span><h3>{oportunidade.cliente}</h3><small>{carregando ? "carregando…" : `${lista.length} registro(s)`}</small></div>
           <button type="button" className="tdg-mini" onClick={onFechar} aria-label="Fechar"><X size={16} /></button>
         </header>
         <div className="tdg-drawer-corpo">
-          {lista.length === 0 ? (
+          {carregando ? (
+            <p className="tdg-panel-vazio">Carregando interações…</p>
+          ) : erro ? (
+            <p className="tdg-panel-vazio">{erro}</p>
+          ) : lista.length === 0 ? (
             <p className="tdg-panel-vazio">Nenhuma interação registrada nesta oportunidade ainda.</p>
           ) : lista.map((it) => (
             <article className="tdg-interacao" key={it.id}>
@@ -375,13 +392,20 @@ function AbaReceita({ receita, mesFoco = null, setMesFoco }) {
 // ===== Aba Kanban (editável quando vem das oportunidades do ERP) =====
 const ETAPAS_PADRAO = ["Prospecção", "Apresentação", "Negociação", "Proposta / BID", "Homologação", "Fechamento"];
 
-function CartaoKanban({ item, etapas, editavel, onMover, onValor, onVerInteracoes }) {
+function CartaoKanban({ item, etapas, editavel, onMover, onValor, onVerInteracoes, onRenomear, onAbrir }) {
   const [editandoValor, setEditandoValor] = useState(false);
   const [valor, setValor] = useState(item.valor);
+  const [nome, setNome] = useState(item.cliente);
   useEffect(() => { setValor(item.valor); }, [item.valor]);
+  useEffect(() => { setNome(item.cliente); }, [item.cliente]);
   return (
     <div className="tdg-kanban-cartao">
-      <strong>{item.cliente}</strong>
+      {editavel && item.id ? (
+        <input className="tdg-inline-cell tdg-kanban-nome" value={nome} title="Editar o nome da oportunidade"
+          onChange={(e) => setNome(e.target.value)}
+          onBlur={() => { const v = nome.trim(); if (v && v !== item.cliente) onRenomear?.(item.id, v); else if (!v) setNome(item.cliente); }}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+      ) : <strong>{item.cliente}</strong>}
       {editavel && item.id ? (
         <>
           {editandoValor ? (
@@ -400,6 +424,9 @@ function CartaoKanban({ item, etapas, editavel, onMover, onValor, onVerInteracoe
       {item.interacoes > 0 && (item.id && onVerInteracoes
         ? <button type="button" className="tdg-card-interacoes tdg-card-interacoes-btn" title="Ver as interações desta oportunidade" onClick={() => onVerInteracoes(item)}>💬 {item.interacoes} interação(ões)</button>
         : <small className="tdg-card-interacoes">💬 {item.interacoes} interação(ões)</small>)}
+      {editavel && item.id && onAbrir && (
+        <button type="button" className="tdg-card-abrir" onClick={() => onAbrir(item)} title="Abrir na tela Oportunidades para preencher todas as informações">↗ abrir / editar tudo</button>
+      )}
     </div>
   );
 }
@@ -452,7 +479,7 @@ function FupRow({ c, etapas, onRenomear, onValor, onMover, onFup, onNota, onExcl
   );
 }
 
-function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear, onExcluir, onVerInteracoes }) {
+function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear, onExcluir, onVerInteracoes, onAbrir }) {
   const { pipeline, fup, updatesSemana, atualizado, editavel } = kanban;
   const etapas = useMemo(() => {
     const doPipe = pipeline.etapas.map((e) => e.etapa);
@@ -484,7 +511,7 @@ function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear
               {etapasComEtapa.map((e) => (
                 <div className="tdg-kanban-coluna" key={e.etapa}>
                   <div className="tdg-kanban-cabeca"><strong>{e.etapa}</strong><small>{e.quantidade} · {brl(e.valor)}</small></div>
-                  {e.itens.map((i, idx) => <CartaoKanban key={i.id || idx} item={i} etapas={etapas} editavel={editavel} onMover={onMover} onValor={onValor} onVerInteracoes={onVerInteracoes} />)}
+                  {e.itens.map((i, idx) => <CartaoKanban key={i.id || idx} item={i} etapas={etapas} editavel={editavel} onMover={onMover} onValor={onValor} onVerInteracoes={onVerInteracoes} onRenomear={onRenomear} onAbrir={onAbrir} />)}
                 </div>
               ))}
             </div>
@@ -723,7 +750,7 @@ const ABAS = [
   { id: "operacional", label: "Modelo Operacional", Icon: Truck },
 ];
 
-export default function CommercialPanelPage({ authHeaders, setToast, interactions = [], onNavigate }) {
+export default function CommercialPanelPage({ authHeaders, setToast, onNavigate }) {
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [aba, setAba] = useState("receita");
@@ -829,13 +856,13 @@ export default function CommercialPanelPage({ authHeaders, setToast, interaction
       )}
 
       {dados && aba === "receita" && <AbaReceita receita={dados.receita} mesFoco={mesFoco} setMesFoco={setMesFoco} />}
-      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNota={salvarNotaFup} onNova={novaOportunidade} onRenomear={renomearOportunidade} onExcluir={excluirOportunidade} onVerInteracoes={setOpInteracoes} />}
+      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNota={salvarNotaFup} onNova={novaOportunidade} onRenomear={renomearOportunidade} onExcluir={excluirOportunidade} onVerInteracoes={setOpInteracoes} onAbrir={onNavigate ? (op) => onNavigate(`/todogreen/oportunidades?opportunity=${encodeURIComponent(op.id)}`) : undefined} />}
       {dados && aba === "operacional" && <AbaOperacional operacional={dados.operacional} mesFoco={mesFoco} setMesFoco={setMesFoco} />}
 
       {opInteracoes && (
         <InteracoesDrawer
           oportunidade={opInteracoes}
-          interacoes={interactions}
+          authHeaders={authHeaders}
           onFechar={() => setOpInteracoes(null)}
           onAbrirOportunidades={onNavigate ? (op) => { onNavigate(`/todogreen/oportunidades?opportunity=${encodeURIComponent(op.id)}`); setOpInteracoes(null); } : null}
         />

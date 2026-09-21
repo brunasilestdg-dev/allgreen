@@ -43,6 +43,42 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
   // para esse papel ficam de fora (em vez de vazar a carteira inteira).
   const recorteOportunidades = verTudo ? { sql: "", params: [] } : recorteDeCarteira(access, email, "t", "client_id");
 
+  // Drawer de interações do painel: ?opportunityId=X devolve SÓ as interações
+  // daquela oportunidade, com o MESMO escopo do contador do card (tenant +
+  // opportunity_id) — por isso bate com o "💬 N", ao contrário da lista geral
+  // do front, que é recortada por carteira e deixava de fora as importadas sem
+  // client_id. Confirma antes que a oportunidade é visível para quem pede.
+  const opParaInteracoes = texto(new URL(request.url).searchParams.get("opportunityId"));
+  if (opParaInteracoes) {
+    const dona = await env.DB.prepare(
+      `SELECT t.id FROM todogreen_opportunities t
+        WHERE t.tenant_id = ? AND t.workspace_owner_id = ? AND t.id = ? AND t.archived_at IS NULL
+          ${recorteOportunidades.sql}`,
+    ).bind(TENANT_ID, ownerId, opParaInteracoes, ...recorteOportunidades.params).first();
+    if (!dona) return json({ error: "Oportunidade não encontrada." }, 404);
+    const { results } = await env.DB.prepare(
+      `SELECT id, kind, subject, notes, participants, outcome, next_step,
+              occurred_at, next_step_at, author_email
+         FROM todogreen_crm_interactions
+        WHERE tenant_id = ? AND opportunity_id = ? AND archived_at IS NULL
+        ORDER BY occurred_at DESC, created_at DESC`,
+    ).bind(TENANT_ID, opParaInteracoes).all();
+    return json({
+      interacoes: (results || []).map((r) => ({
+        id: texto(r.id),
+        tipo: texto(r.kind) || "reuniao",
+        assunto: texto(r.subject),
+        ata: texto(r.notes),
+        participantes: texto(r.participants),
+        resultado: texto(r.outcome),
+        proximoPasso: texto(r.next_step),
+        ocorridaEm: texto(r.occurred_at),
+        proximoPassoEm: texto(r.next_step_at),
+        autorEmail: texto(r.author_email),
+      })),
+    });
+  }
+
   const lerFaturas = async () => {
     if (!verTudo) return [];
     const { results } = await env.DB.prepare(

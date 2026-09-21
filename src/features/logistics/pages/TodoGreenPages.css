@@ -4506,14 +4506,28 @@
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 14px;
 }
-.tdg-funil-etapas { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.tdg-funil-etapas li {
+.tdg-funil-etapas { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tdg-funil-etapas li { display: block; }
+.tdg-funil-linha {
   display: grid;
-  grid-template-columns: 130px minmax(0, 1fr) auto;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
+.tdg-funil-linha:hover:not(:disabled) { background: var(--tdg-soft, #f2f7f4); }
+.tdg-funil-linha:disabled { cursor: default; opacity: .65; }
+.tdg-funil-seta { display: inline-block; width: 1em; color: var(--tdg-muted); }
 .tdg-funil-etapa-nome { color: var(--tdg-ink, var(--tdg-ink)); font-size: 13px; font-weight: 650; }
+.tdg-funil-etapa-nome em { color: var(--tdg-muted); font-style: normal; font-weight: 500; font-size: 11px; }
 .tdg-funil-barra {
   height: 12px;
   border-radius: 999px;
@@ -4528,6 +4542,11 @@
   min-width: 2px;
 }
 .tdg-funil-etapa-valor { color: var(--tdg-muted, var(--tdg-muted)); font-size: 12.5px; white-space: nowrap; }
+.tdg-funil-pct { font-style: normal; color: var(--tdg-green); font-weight: 700; margin-left: 4px; }
+.tdg-funil-oportunidades { list-style: none; margin: 6px 0 2px 20px; padding: 0; display: grid; gap: 4px; }
+.tdg-funil-op { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; background: var(--tdg-soft, #f2f7f4); border: 1px solid var(--tdg-line); border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--tdg-text); text-align: left; }
+.tdg-funil-op:hover { border-color: var(--tdg-green); }
+.tdg-funil-op b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tdg-funil-tabela th { text-align: right; }
 .tdg-funil-tabela th:first-child, .tdg-funil-tabela td:first-child { text-align: left; }
 .tdg-funil-tabela td { text-align: right; }
@@ -4548,7 +4567,7 @@
 @media (max-width: 900px) {
   .tdg-funil-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tdg-funil-grid { grid-template-columns: minmax(0, 1fr); }
-  .tdg-funil-etapas li { grid-template-columns: 100px minmax(0, 1fr) auto; }
+  .tdg-funil-linha { grid-template-columns: 110px minmax(0, 1fr) auto; }
 }
 
 /* ===== Estúdio: ferramentas do app geral montadas na vertical ===== */
@@ -5535,6 +5554,11 @@
 .tdg-card-interacoes-btn:hover { text-decoration: underline; }
 .tdg-link-interacoes { background: none; border: 0; padding: 0; cursor: pointer; color: var(--tdg-green); font: inherit; font-variant-numeric: tabular-nums; }
 .tdg-link-interacoes:hover { text-decoration: underline; }
+.tdg-kanban-nome { font-weight: 700; color: var(--tdg-ink, var(--tdg-text)); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; margin: -2px -4px 2px; width: calc(100% + 8px); }
+.tdg-kanban-nome:hover { border-color: var(--tdg-line); }
+.tdg-kanban-nome:focus { border-color: var(--tdg-green); background: var(--tdg-bg); outline: none; }
+.tdg-card-abrir { align-self: flex-start; margin-top: 4px; background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--tdg-green); font: inherit; font-size: 0.72rem; font-weight: 600; }
+.tdg-card-abrir:hover { text-decoration: underline; }
 
 /* ===== Painel comercial · drawer de interações ===== */
 .tdg-drawer-overlay { position: fixed; inset: 0; background: rgba(6, 24, 22, 0.42); display: flex; justify-content: flex-end; z-index: 60; animation: tdg-drawer-fade .18s ease-out; }

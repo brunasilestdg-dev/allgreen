@@ -61,6 +61,12 @@ button.tdgc-bar-col:focus-visible { outline: 2px solid var(--tdg-green); outline
 .tdgc-legend-btn { align-items: center; background: none; border: 0; cursor: pointer; display: grid; font: inherit; gap: 8px; grid-template-columns: 10px 1fr auto; padding: 2px 4px; margin: -2px -4px; border-radius: 6px; text-align: left; width: 100%; color: inherit; }
 .tdgc-legend-btn:hover { background: var(--tdg-soft, #f2f7f4); }
 .tdgc-legend-btn:focus-visible { outline: 2px solid var(--tdg-green); outline-offset: 1px; }
+/* Legenda clicável: o <li> embrulha um <button> que JÁ é a grade (10px 1fr auto).
+   Sem isto o <li> impõe a própria grade e prende o botão na 1ª coluna (10px),
+   colapsando o rótulo do estágio para largura 0 — sobravam só a bolinha e o
+   número/percentual. Com o <li> em bloco, o botão ocupa a largura toda e o nome
+   volta a aparecer. */
+.tdgc-legend li:has(> .tdgc-legend-btn) { display: block; }
 .tdgc-point.tdgc-clic { cursor: pointer; }
 .tdgc-point.tdgc-clic:hover { r: 5; }
 .tdgc-table tr.tdgc-clic:hover td { background: var(--tdg-soft, #f2f7f4); }
