@@ -26,7 +26,7 @@ const STATUS = {
   error: { label: "Erro na integração", Icon: AlertTriangle },
 };
 
-const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, onConnect, healthById = new Map() }) => (
+const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, onConnect, onSync, syncing, healthById = new Map() }) => (
   <section className="tdg-panel">
     <div className="tdg-section-head">
       <div><span className="tdg-kicker">INTEGRAÇÕES</span><h2>{title}</h2></div>
@@ -69,6 +69,16 @@ const ProviderList = ({ title, icon: Icon, items = [], testing, onTest, onConnec
                 {item.status === "connected" ? "Reconectar" : "Conectar"}
               </button>
             )}
+            {onSync && item.canSync && (
+              <button
+                type="button"
+                className="tdg-action"
+                disabled={syncing === item.id}
+                onClick={() => onSync(item)}
+              >
+                {syncing === item.id ? "Sincronizando..." : "Sincronizar agora"}
+              </button>
+            )}
             {onTest && item.canTest && (
               <button
                 type="button"
@@ -89,6 +99,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState("");
+  const [syncing, setSyncing] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -134,6 +145,24 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       window.location.href = data.authorizeUrl;
     } catch (error) {
       setToast?.(error.message);
+    }
+  };
+
+  // Sincroniza sob demanda (ex.: monday.com → Kanban) pelo endpoint autenticado,
+  // sem esperar o cron. Recarrega o status ao final.
+  const sync = async (item) => {
+    const path = item?.syncPath || "/api/todogreen/integrations/monday/sync";
+    setSyncing(item.id);
+    try {
+      const response = await fetch(path, { method: "POST", headers: authHeaders?.() || {} });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || data.motivo || "Não foi possível sincronizar.");
+      setToast?.(`monday.com sincronizado: ${data.sincronizados ?? 0} oportunidade(s) no Kanban.`);
+      load();
+    } catch (error) {
+      setToast?.(error.message);
+    } finally {
+      setSyncing("");
     }
   };
 
@@ -264,7 +293,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       <ProviderList title="Mensageria" icon={MessageCircle} items={status?.messaging} healthById={healthById} />
       <ProviderList title="Comunicação e produtividade" icon={Mail} items={status?.communication} healthById={healthById} />
       <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} healthById={healthById} />
-      <ProviderList title="Dados e gestão" icon={Database} items={status?.management} testing={testing} onTest={test} onConnect={connect} healthById={healthById} />
+      <ProviderList title="Dados e gestão" icon={Database} items={status?.management} testing={testing} onTest={test} onConnect={connect} onSync={sync} syncing={syncing} healthById={healthById} />
       <ProviderList title="API e troca de dados" icon={Cable} items={status?.dataExchange} healthById={healthById} />
       <ProviderList title="Automação ativa na Cloudflare" icon={Workflow} items={status?.automation} healthById={healthById} />
 
