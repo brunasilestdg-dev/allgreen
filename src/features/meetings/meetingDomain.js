@@ -14,8 +14,8 @@ export const formatTimestamp = (seconds) => {
 };
 
 // Estrutura a transcrição em falas. Aceita dois formatos:
-//   "Bruna: falou algo"        -> participante identificado
-//   "[01:20] Bruna: falou"     -> com marcação de tempo
+//   "Renata: falou algo"        -> participante identificado
+//   "[01:20] Renata: falou"     -> com marcação de tempo
 // Linhas sem participante entram como continuação da fala anterior.
 export const parseTranscript = (raw) => {
   const linhas = String(raw || "")
@@ -28,7 +28,7 @@ export const parseTranscript = (raw) => {
     const tempo = comTempo ? comTempo[1] : "";
     const resto = comTempo ? comTempo[2] : linha;
     // Participante: nome curto (até 3 palavras), sem pontuação de fim de frase.
-    // Rótulo de fala em transcrição é um nome ("Bruna", "Cliente da padaria");
+    // Rótulo de fala em transcrição é um nome ("Renata", "Cliente da padaria");
     // um trecho mais longo antes dos dois-pontos é frase, não participante —
     // "Ficou decidido o seguinte: ..." precisa continuar sendo frase.
     const comFalante = /^([^:]{1,40}):\s+(.+)$/.exec(resto);
@@ -149,7 +149,7 @@ export const parseMinutes = (raw) => {
 };
 
 // Extrai responsável e prazo de uma linha de tarefa da ata.
-// Formatos aceitos: "Enviar proposta — Bruna — 05/08" ou "Enviar (Bruna, 05/08)".
+// Formatos aceitos: "Enviar proposta — Renata — 05/08" ou "Enviar (Renata, 05/08)".
 export const parseActionItem = (linha) => {
   const texto = String(linha || "").trim();
   const entreParenteses = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(texto);

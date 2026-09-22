@@ -6,8 +6,8 @@ import App from "./App";
 
 const user = {
   id: "user-review",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 const business = {
   id: "business-review-1",
@@ -109,7 +109,7 @@ describe("revisão de entrega em tarefas comuns (não missão)", () => {
             area: "Operação",
             businessId: business.id,
             assigneeType: "real",
-            assignee: "Bruna Silva",
+            assignee: "Renata Silva",
             assigneeId: user.id,
             project: "",
             isMission: false,
@@ -171,7 +171,7 @@ describe("revisão de entrega em tarefas comuns (não missão)", () => {
             area: "Operação",
             businessId: business.id,
             assigneeType: "real",
-            assignee: "Bruna Silva",
+            assignee: "Renata Silva",
             assigneeId: user.id,
             project: "",
             isMission: false,

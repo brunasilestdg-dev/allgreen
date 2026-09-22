@@ -15,7 +15,7 @@ describe("ponte interna da sessão HttpOnly", () => {
   });
 
   it("preserva o corpo original de POST ao criar a Request interna", async () => {
-    const payload = { email: "brunapsiles@gmail.com", password: "SenhaForte2026!" };
+    const payload = { email: "usuaria@example.com", password: "SenhaForte2026!" };
     const original = new Request("https://app.test/api/auth/login", {
       method: "POST",
       headers: {

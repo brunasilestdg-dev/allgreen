@@ -17,7 +17,7 @@ import {
 
 const now = "2026-07-29T18:00:00.000Z";
 const members = [
-  { id: "u1", name: "Bruna Psiles" },
+  { id: "u1", name: "Renata Silva" },
   { id: "u2", name: "João Silva" },
   { id: "u3", name: "Ana Souza" },
 ];
@@ -92,7 +92,7 @@ describe("domínio do chat corporativo", () => {
         channel: group,
         body: "@joao.silva confira o arquivo",
         authorId: "u1",
-        authorName: "Bruna",
+        authorName: "Renata",
         members,
         attachments: [{ id: "a1", name: "brief.pdf" }],
       },
@@ -150,7 +150,7 @@ describe("domínio do chat corporativo", () => {
         id: "root",
         channelId: "c1",
         body: "início",
-        authorName: "Bruna",
+        authorName: "Renata",
         createdAt: "2026-07-29T18:01:00.000Z",
       },
       {
@@ -228,7 +228,7 @@ describe("domínio do chat corporativo", () => {
   it("produz resumo local e prompt sem inventar dados", () => {
     const messages = [
       {
-        authorName: "Bruna",
+        authorName: "Renata",
         body: "Decidimos aprovar a proposta.",
         createdAt: now,
       },

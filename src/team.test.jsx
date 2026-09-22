@@ -6,8 +6,8 @@ import App from "./App";
 
 const user = {
   id: "user-team",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 
 const businessDb = (overrides = {}) => ({
@@ -133,7 +133,7 @@ describe("convites de equipe", () => {
           name: "Convidado Teste",
           email: "convidado@empresa.com",
           role: "colaborador",
-          ownerName: "Bruna Silva",
+          ownerName: "Renata Silva",
           hasAccount: false,
         });
       return response({});
@@ -159,14 +159,14 @@ describe("convites de equipe", () => {
           name: "Convidado Teste",
           email: "convidado@empresa.com",
           role: "colaborador",
-          ownerName: "Espaço da Bruna",
+          ownerName: "Espaço da Renata",
           hasAccount: false,
         });
       if (url === "/api/collab/invite/accept" && options.method === "POST")
         return response({
           ok: true,
           ownerId: "owner-1",
-          ownerName: "Espaço da Bruna",
+          ownerName: "Espaço da Renata",
           user: { id: "new-user", name: "Convidado Teste", email: "convidado@empresa.com" },
           token: "session-token-new",
         });
@@ -185,7 +185,7 @@ describe("convites de equipe", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Bem-vindo(a) ao espaço de Espaço da Bruna",
+        name: "Bem-vindo(a) ao espaço de Espaço da Renata",
       }),
     ).toBeInTheDocument();
     expect(localStorage.getItem("seu-funcionario-auth-token")).toBe(
@@ -208,7 +208,7 @@ describe("convites de equipe", () => {
           logs: [
             {
               id: "log-1",
-              actorName: "Bruna Silva",
+              actorName: "Renata Silva",
               action: "papel_alterado",
               target: "member-1",
               details: "novo papel: gestor",

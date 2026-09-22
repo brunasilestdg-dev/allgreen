@@ -19,7 +19,7 @@ const board = {
 
 const item = {
   id: "item-1", boardId: board.id, type: "rfq", title: "RFQ Mercado Livre", description: "Precificar operação",
-  status: "novo", priority: "alta", responsible: "Bruna", client: "Mercado Livre", dueDate: "2026-08-30",
+  status: "novo", priority: "alta", responsible: "Renata", client: "Mercado Livre", dueDate: "2026-08-30",
   fields: { groupId: "rfqs", startDate: "2026-08-24", estimatedHours: 8, location: "Cajamar, SP", custom: { margem: 18 } },
   dependencies: [], relations: [], revision: 1,
 };
@@ -52,7 +52,7 @@ describe("Central de Implantação To Do Green", () => {
     expect(document.querySelector(".tdg-work-dashboard")?.textContent).toContain("BI multi-board");
 
     fireEvent.click([...document.querySelectorAll("[data-work-view]")].find((button) => button.textContent === "Pivô"));
-    expect(document.querySelector(".tdg-work-pivot")?.textContent).toContain("Bruna");
+    expect(document.querySelector(".tdg-work-pivot")?.textContent).toContain("Renata");
 
     fireEvent.click([...document.querySelectorAll("[data-work-view]")].find((button) => button.textContent === "Tabela"));
     fireEvent.click(document.querySelector("[data-work-open]"));

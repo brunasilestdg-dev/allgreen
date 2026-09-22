@@ -40,8 +40,8 @@ Espere resolver antes de seguir — o Caddy só emite o certificado depois.
 ### 3. Suba
 
 ```bash
-git clone https://github.com/brunapsiles/Seufuncionario.git
-cd Seufuncionario/connectors/searxng
+git clone https://github.com/brunasilestdg-dev/allgreen.git
+cd allgreen/connectors/searxng
 
 cp .env.example .env
 openssl rand -hex 32          # → cole em SEARXNG_SECRET

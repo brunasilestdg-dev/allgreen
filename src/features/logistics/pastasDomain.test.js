@@ -13,29 +13,29 @@ import {
   visibilidadeValida,
 } from "./pastasDomain.js";
 
-const BRUNA = { email: "bruna@todogreen.com.br", papel: "vendedor", permissoes: ["crm:manage"] };
+const RENATA = { email: "renata@todogreen.com.br", papel: "vendedor", permissoes: ["crm:manage"] };
 const JOAO = { email: "joao@todogreen.com.br", papel: "vendedor", permissoes: ["crm:manage"] };
 const FINANCEIRO = { email: "fin@todogreen.com.br", papel: "financeiro", permissoes: ["read", "finance:manage"] };
 const DONA = { email: "dona@todogreen.com.br", papel: "owner", permissoes: ["*"] };
 
 const pastas = [
-  { id: "p1", nome: "Privada da Bruna", visibilidade: "private", donoEmail: BRUNA.email },
+  { id: "p1", nome: "Privada da Renata", visibilidade: "private", donoEmail: RENATA.email },
   { id: "p2", paiId: "p1", nome: "Dentro da privada", visibilidade: "shared" },
   { id: "p3", nome: "Financeiro", visibilidade: "area", permissaoDaArea: "finance:manage" },
   { id: "p4", nome: "Do espaço", visibilidade: "shared" },
-  { id: "p5", nome: "Privada compartilhada", visibilidade: "private", donoEmail: BRUNA.email, membros: [JOAO.email] },
+  { id: "p5", nome: "Privada compartilhada", visibilidade: "private", donoEmail: RENATA.email, membros: [JOAO.email] },
 ];
 
 describe("quem vê cada pasta", () => {
   it("privada é da dona dela e de quem ela listar", () => {
-    expect(podeVerPasta(pastas, "p1", BRUNA)).toBe(true);
+    expect(podeVerPasta(pastas, "p1", RENATA)).toBe(true);
     expect(podeVerPasta(pastas, "p1", JOAO)).toBe(false);
     expect(podeVerPasta(pastas, "p5", JOAO)).toBe(true);
   });
 
   it("pasta da área é de quem tem a permissão, e só", () => {
     expect(podeVerPasta(pastas, "p3", FINANCEIRO)).toBe(true);
-    expect(podeVerPasta(pastas, "p3", BRUNA)).toBe(false);
+    expect(podeVerPasta(pastas, "p3", RENATA)).toBe(false);
   });
 
   it("pasta do espaço é de todos", () => {
@@ -48,7 +48,7 @@ describe("quem vê cada pasta", () => {
     // protege — e ninguém que arrasta um documento pensa nisso.
     expect(podeVerPasta(pastas, "p2", JOAO)).toBe(false);
     expect(podeVerPasta(pastas, "p2", FINANCEIRO)).toBe(false);
-    expect(podeVerPasta(pastas, "p2", BRUNA)).toBe(true);
+    expect(podeVerPasta(pastas, "p2", RENATA)).toBe(true);
   });
 
   it("pasta órfã (pai arquivado) não é promovida a pública", () => {
@@ -58,9 +58,9 @@ describe("quem vê cada pasta", () => {
 
   it("pasta de área SEM permissão escolhida é fechada, não aberta", () => {
     // Abrir por engano é o erro caro.
-    const semArea = [{ id: "y", nome: "Área nenhuma", visibilidade: "area", donoEmail: BRUNA.email }];
+    const semArea = [{ id: "y", nome: "Área nenhuma", visibilidade: "area", donoEmail: RENATA.email }];
     expect(podeVerPasta(semArea, "y", JOAO)).toBe(false);
-    expect(podeVerPasta(semArea, "y", BRUNA)).toBe(true);
+    expect(podeVerPasta(semArea, "y", RENATA)).toBe(true);
   });
 
   it("dona e administração veem tudo, inclusive privada de terceiro", () => {
@@ -77,7 +77,7 @@ describe("quem vê cada pasta", () => {
 
   it("pastasVisiveis devolve só a fatia de cada pessoa", () => {
     expect(pastasVisiveis(pastas, JOAO).map((p) => p.id).sort()).toEqual(["p4", "p5"]);
-    expect(pastasVisiveis(pastas, BRUNA).map((p) => p.id).sort()).toEqual(["p1", "p2", "p4", "p5"]);
+    expect(pastasVisiveis(pastas, RENATA).map((p) => p.id).sort()).toEqual(["p1", "p2", "p4", "p5"]);
     expect(pastasVisiveis(pastas, FINANCEIRO).map((p) => p.id).sort()).toEqual(["p3", "p4"]);
   });
 });
@@ -94,7 +94,7 @@ describe("os arquivos seguem a pasta", () => {
     // O acervo que já existia não pode sumir numa migração — esconder tudo
     // seria o mesmo que apagar.
     expect(arquivosVisiveis(arquivos, pastas, JOAO).map((a) => a.id)).toEqual(["a1", "a4"]);
-    expect(arquivosVisiveis(arquivos, pastas, BRUNA).map((a) => a.id)).toEqual(["a1", "a2", "a3", "a4"]);
+    expect(arquivosVisiveis(arquivos, pastas, RENATA).map((a) => a.id)).toEqual(["a1", "a2", "a3", "a4"]);
   });
 
   it("conta por pasta para a tela mostrar quanto tem em cada uma", () => {
@@ -122,7 +122,7 @@ describe("árvore e caminho", () => {
   });
 
   it("caminho devolve a trilha de cima para baixo, sem laço", () => {
-    expect(caminhoDaPasta(pastas, "p2").map((p) => p.nome)).toEqual(["Privada da Bruna", "Dentro da privada"]);
+    expect(caminhoDaPasta(pastas, "p2").map((p) => p.nome)).toEqual(["Privada da Renata", "Dentro da privada"]);
     const anel = [
       { id: "a", paiId: "b", nome: "A", visibilidade: "shared" },
       { id: "b", paiId: "a", nome: "B", visibilidade: "shared" },

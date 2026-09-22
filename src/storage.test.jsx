@@ -24,12 +24,12 @@ describe("isolamento local por conta", () => {
   });
 
   it("persiste o usuário antes do reload para restaurar a sessão", () => {
-    startUserSession({ id: "bruna", name: "Bruna", email: "bruna@example.com" });
+    startUserSession({ id: "renata", name: "Renata", email: "renata@example.com" });
 
-    expect(localStorage.getItem("seu-funcionario-active-user")).toBe("bruna");
-    const saved = JSON.parse(localStorage.getItem("seu-funcionario-v2:bruna"));
-    expect(saved.user).toMatchObject({ id: "bruna", email: "bruna@example.com" });
-    expect(loadInitialDb().user).toMatchObject({ id: "bruna", email: "bruna@example.com" });
+    expect(localStorage.getItem("seu-funcionario-active-user")).toBe("renata");
+    const saved = JSON.parse(localStorage.getItem("seu-funcionario-v2:renata"));
+    expect(saved.user).toMatchObject({ id: "renata", email: "renata@example.com" });
+    expect(loadInitialDb().user).toMatchObject({ id: "renata", email: "renata@example.com" });
   });
 
   it("ignora cache corrompido sem misturar dados", () => {

@@ -110,7 +110,7 @@ describe("domínio relacional das bases", () => {
       id: "cm1",
       text: "Aprovado",
       authorId: "u1",
-      authorName: "Bruna",
+      authorName: "Renata",
       createdAt: "2026-07-29T11:00:00.000Z",
     });
     expect(row).toMatchObject({ content: "", attachments: [], comments: [] });

@@ -53,14 +53,14 @@ describe("motor de processos", () => {
     const result = createProcessCase(
       process,
       { request: "Comprar notebooks", value: 5000 },
-      { sequence: 7, requesterId: "u1", requesterName: "Bruna" },
+      { sequence: 7, requesterId: "u1", requesterName: "Renata" },
       "2026-07-29T11:00:00.000Z",
     );
     expect(result.errors).toEqual({});
     expect(result.caseRecord).toMatchObject({
       protocol: "CMP-20260729-0007",
       stageId: "new",
-      requesterName: "Bruna",
+      requesterName: "Renata",
     });
     expect(result.caseRecord.history[0].type).toBe("created");
   });

@@ -145,8 +145,8 @@ describe("saudação", () => {
   });
 
   it("usa só o primeiro nome", () => {
-    expect(greeting("Bruna Paula Silva", new Date("2026-08-05T09:00:00"))).toBe(
-      "Bom dia, Bruna",
+    expect(greeting("Renata Paula Silva", new Date("2026-08-05T09:00:00"))).toBe(
+      "Bom dia, Renata",
     );
   });
 

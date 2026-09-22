@@ -357,7 +357,7 @@ describe("validateDiagram", () => {
 
 describe("orgChartFromRows", () => {
   const linhas = [
-    { id: "1", nome: "Bruna", "responde a": "" },
+    { id: "1", nome: "Renata", "responde a": "" },
     { id: "2", nome: "Ana", "responde a": "1" },
     { id: "3", nome: "Carlos", "responde a": "1" },
     { id: "4", nome: "Duda", "responde a": "2" },
@@ -367,27 +367,27 @@ describe("orgChartFromRows", () => {
     const { nodes, edges } = orgChartFromRows(linhas);
     expect(nodes).toHaveLength(4);
     expect(edges).toHaveLength(3);
-    expect(nodes.map((n) => n.text)).toContain("Bruna");
+    expect(nodes.map((n) => n.text)).toContain("Renata");
   });
 
   it("posiciona por nível de hierarquia", () => {
     const { nodes } = orgChartFromRows(linhas);
     const y = (nome) => nodes.find((n) => n.text === nome).y;
-    expect(y("Bruna")).toBeLessThan(y("Ana"));
+    expect(y("Renata")).toBeLessThan(y("Ana"));
     expect(y("Ana")).toBeLessThan(y("Duda"));
     expect(y("Ana")).toBe(y("Carlos"));
   });
 
   it("ignora vínculo com chefe inexistente", () => {
     const { edges } = orgChartFromRows([
-      { id: "1", nome: "Bruna", "responde a": "999" },
+      { id: "1", nome: "Renata", "responde a": "999" },
     ]);
     expect(edges).toEqual([]);
   });
 
   it("não entra em laço quando alguém responde a si mesmo", () => {
     const { nodes, edges } = orgChartFromRows([
-      { id: "1", nome: "Bruna", "responde a": "1" },
+      { id: "1", nome: "Renata", "responde a": "1" },
     ]);
     expect(nodes).toHaveLength(1);
     expect(edges).toEqual([]);
