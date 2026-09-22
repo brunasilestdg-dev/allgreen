@@ -585,7 +585,8 @@ export async function routeTodoGreenApi(request, env, ctx) {
     return guarded("To Do Green integrations error", "Não foi possível carregar as integrações.", async () => {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
-      if (path === "/api/todogreen/integrations/monday/oauth/start") {
+      if (path === "/api/todogreen/integrations/monday/oauth/start"
+        || path === "/api/todogreen/integrations/monday/sync") {
         return handleTodoGreenMondayManage(request, env, resolved.access, resolved.user);
       }
       return handleTodoGreenIntegrations(request, env, resolved.access);

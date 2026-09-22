@@ -142,27 +142,35 @@ const marketIntegrations = (search) => [
 ];
 
 const managementIntegrations = (env = {}) => {
-  const mondayConfigured = Boolean(
+  const mondayOauth = Boolean(
     env.MONDAY_CLIENT_ID
     && env.MONDAY_CLIENT_SECRET
     && env.MONDAY_SIGNING_SECRET
   );
+  // Caminho simples: token de API no cofre espelha o board Novos Negócios no
+  // Kanban do painel (cron horário + botão). Não exige OAuth/webhooks.
+  const mondayToken = Boolean(String(env.MONDAY_API_TOKEN || "").trim());
+  const mondayConfigured = mondayOauth || mondayToken;
   return [
   withReadiness({
     id: "monday",
     name: "monday.com",
     configured: mondayConfigured,
-    detail: mondayConfigured
-      ? "Backend OAuth 2.1/PKCE e receptor de webhooks disponíveis. Falta autorizar a conta e mapear boards/campos para concluir a conexão."
-      : "Conector backend implementado. Cadastre as credenciais no cofre do Worker para habilitar OAuth e webhooks autenticados.",
+    detail: mondayToken
+      ? "Sincronização por token de API ativa: o board de Novos Negócios espelha no Kanban do painel comercial (a cada hora e sob demanda)."
+      : mondayOauth
+        ? "Backend OAuth 2.1/PKCE e receptor de webhooks disponíveis. Falta autorizar a conta e mapear boards/campos para concluir a conexão."
+        : "Conector backend implementado. Cadastre um token de API (MONDAY_API_TOKEN) para espelhar o board, ou as credenciais OAuth para conexão por usuário.",
     requirement: mondayConfigured
-      ? "Autorizar a conta monday.com + mapear boards e eventos"
-      : "MONDAY_CLIENT_ID + MONDAY_CLIENT_SECRET + MONDAY_SIGNING_SECRET",
+      ? "Board Novos Negócios → Kanban do painel (token de API) ou OAuth por usuário"
+      : "MONDAY_API_TOKEN (simples) ou MONDAY_CLIENT_ID + MONDAY_CLIENT_SECRET + MONDAY_SIGNING_SECRET",
     canConfigure: true,
-    // Só oferece "Conectar" quando as três credenciais estão no cofre; sem elas
-    // o início do OAuth responde 503 e o botão só frustraria a titular.
-    canConnect: mondayConfigured,
+    // "Conectar" (OAuth) só quando as credenciais OAuth existem; a sincronização
+    // por token roda sozinha e pelo botão "Sincronizar".
+    canConnect: mondayOauth,
     connectPath: "/api/todogreen/integrations/monday/oauth/start",
+    canSync: mondayToken,
+    syncPath: "/api/todogreen/integrations/monday/sync",
   }, { external: !mondayConfigured }),
   withReadiness({
     id: "power-bi",

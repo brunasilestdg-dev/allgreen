@@ -88,6 +88,7 @@ import { runTodoGreenEnergyReferenceScheduled } from "./worker/services/todogree
 import { runTodoGreenMarketSignalsScheduled } from "./worker/services/todogreen-market-signals.js";
 import { runTodoGreenRoadRiskScheduled } from "./worker/services/todogreen-road-risk.js";
 import { runTodoGreenTrackerScheduled, expurgarPosicoesAntigasDoTracker } from "./worker/services/todogreen-tracker.js";
+import { runTodoGreenMondaySyncScheduled } from "./worker/services/todogreen-monday-sync.js";
 import { runTodoGreenPendenciaAvisos } from "./worker/services/todogreen-semente.js";
 import { lerManifestoDeVersao, systemVersionPayload } from "./worker/services/todogreen-system-health.js";
 
@@ -4297,6 +4298,14 @@ export default {
     ctx.waitUntil(
       runTodoGreenPendenciaAvisos(env).catch((error) =>
         console.error("scheduled To Do Green pendências", error),
+      ),
+    );
+    // Espelha o board "Novos Negócios" do monday.com no Kanban do painel
+    // comercial (oportunidades). Auto-limitado: só roda com MONDAY_API_TOKEN no
+    // cofre; erro não derruba os outros jobs.
+    ctx.waitUntil(
+      runTodoGreenMondaySyncScheduled(env).catch((error) =>
+        console.error("scheduled To Do Green monday sync", error),
       ),
     );
   },

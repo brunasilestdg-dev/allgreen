@@ -1,4 +1,5 @@
 import { podeNaVertical } from "./todogreen-access.js";
+import { sincronizarMondayOportunidades } from "./todogreen-monday-sync.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -358,10 +359,32 @@ export async function handleTodoGreenMondayPublic(request, env) {
   return null;
 }
 
+async function syncNow(request, env, access) {
+  if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
+  if (!env?.DB) return json({ error: "Banco indisponível." }, 503);
+  if (!podeNaVertical(access, "integration:manage")) {
+    return json({ error: "Seu papel não pode gerenciar integrações." }, 403);
+  }
+  if (!String(env?.MONDAY_API_TOKEN || "").trim()) {
+    return json({ error: "MONDAY_API_TOKEN não configurado no Worker.", missing: ["MONDAY_API_TOKEN"] }, 503);
+  }
+  try {
+    const resultado = await sincronizarMondayOportunidades(env, { ownerId: String(access?.ownerId || "") });
+    if (!resultado.ok) return json({ error: "Não foi possível sincronizar o monday.com.", motivo: resultado.erro }, 502);
+    return json(resultado);
+  } catch (error) {
+    console.error("Monday sync failed", error);
+    return json({ error: "Falha ao sincronizar o board do monday.com." }, 502);
+  }
+}
+
 export async function handleTodoGreenMondayManage(request, env, access, user) {
   const path = new URL(request.url).pathname;
   if (path === "/api/todogreen/integrations/monday/oauth/start") {
     return startOauth(request, env, access, user);
+  }
+  if (path === "/api/todogreen/integrations/monday/sync") {
+    return syncNow(request, env, access);
   }
   return null;
 }
