@@ -4,13 +4,13 @@ Este arquivo orienta qualquer assistente de IA que trabalhe neste projeto. A tit
 
 ## O que é o projeto
 
-**Seu Funcionário** — plataforma de equipe digital para empreendedores brasileiros, em produção:
-**https://seufuncionario-expo.brunapsiles.workers.dev**
+**All Green** — plataforma de equipe digital para empreendedores brasileiros, em produção:
+**https://orianone.app**
 
 - Frontend: React 19 + Vite (`src/App.jsx` concentra o app; `src/styles.css` os estilos)
 - Backend: Cloudflare Worker (`worker.js`) — login, chat de IA multi-provedor, mídia, sincronização, colaboração
 - Banco: Cloudflare D1 (`allgreen-db`), migrações em `migrations/`
-- PWA instalável; código no GitHub `brunapsiles/Seufuncionario` (branch `main`)
+- PWA instalável; código no GitHub `brunasilestdg-dev/allgreen` (branch `main`)
 
 ## Comandos
 
