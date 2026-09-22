@@ -711,6 +711,33 @@ const listarValores = async (env, access, url) => {
   });
 };
 
+// Tentativas de webhook RECUSADas (401/503), para diagnosticar se um evento
+// "não chega" porque não é enviado ou porque é enviado e recusado. Somente
+// leitura. Nunca expõe token (a tabela não guarda o valor).
+const listarRecusas = async (env, access, url) => {
+  const { limit, offset } = paginacao(url);
+  const { results } = await env.DB.prepare(
+    `SELECT integration_id, event_type, http_status, reason, token_present, ip,
+            attempt_count, first_seen_at, last_seen_at
+       FROM todogreen_tms_webhook_rejections
+      WHERE tenant_id = ?
+      ORDER BY last_seen_at DESC LIMIT ? OFFSET ?`,
+  ).bind(TENANT_ID, limit, offset).all();
+  return json({
+    registros: (results || []).map((row) => ({
+      integracaoId: row.integration_id,
+      tipo: row.event_type,
+      status: Number(row.http_status || 0),
+      motivo: row.reason,
+      tokenEnviado: Boolean(row.token_present),
+      ip: row.ip,
+      tentativas: Number(row.attempt_count || 0),
+      primeiraEm: row.first_seen_at,
+      ultimaEm: row.last_seen_at,
+    })),
+  });
+};
+
 const verSugestoes = async (env, access, url) => {
   const id = texto(url.searchParams.get("documento"), 120);
   if (!id) return json({ error: "Informe o documento." }, 400);
@@ -1099,6 +1126,7 @@ export async function handleTodoGreenTms(request, env, access, user) {
     if (recurso === "documentos") return listarDocumentos(env, access, url);
     if (recurso === "cadastros") return listarCadastros(env, access, url);
     if (recurso === "valores") return listarValores(env, access, url);
+    if (recurso === "recusas") return listarRecusas(env, access, url);
     if (recurso === "classes") return listarPorClasse(env, access, url);
     if (recurso === "sugestoes") return verSugestoes(env, access, url);
     if (recurso === "execucoes") return listarExecucoes(env, access, url);

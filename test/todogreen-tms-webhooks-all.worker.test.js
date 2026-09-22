@@ -540,6 +540,22 @@ describe("TRACK3R — webhooks documentados", () => {
     expect(Number(depois.total)).toBe(Number(antes.total));
   });
 
+  it("registra a tentativa RECUSADA para diagnóstico, sem guardar o token", async () => {
+    // Sem esse log não dá para saber se um evento "não chega" porque não é
+    // enviado ou porque é enviado e recusado.
+    await chamar("faturas", { codigo_fatura: 123 }, "token-bem-errado");
+    const rej = await env.DB.prepare(
+      `SELECT * FROM todogreen_tms_webhook_rejections
+        WHERE integration_id='tmw-all-int' AND event_type='faturas' AND http_status=401`,
+    ).first();
+    expect(rej).toBeTruthy();
+    expect(rej.reason).toBe("token_incorreto");
+    expect(Number(rej.token_present)).toBe(1);
+    expect(Number(rej.attempt_count)).toBeGreaterThanOrEqual(1);
+    // O valor do token NUNCA é gravado.
+    expect(JSON.stringify(rej)).not.toContain("token-bem-errado");
+  });
+
   it("recusa tipo inexistente em vez de aceitar payload ambíguo", async () => {
     const r = await chamar("qualquer-coisa", { id: 1 });
     expect(r.status).toBe(400);

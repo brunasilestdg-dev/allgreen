@@ -609,6 +609,29 @@ describe("valores por encomenda (valores-encomendas) aparecem no portal", () => 
   });
 });
 
+describe("log de recusas de webhook (diagnóstico)", () => {
+  it("lista as tentativas recusadas sem expor token; exige sessão", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tms_webhook_rejections
+         (id, tenant_id, integration_id, event_type, http_status, reason, token_present, ip,
+          attempt_count, first_seen_at, last_seen_at)
+       VALUES (?, 'todogreen', 'int-diag', 'faturas', 401, 'token_incorreto', 1, '203.0.113.9', 3, ?, ?)
+       ON CONFLICT(tenant_id, integration_id, event_type, http_status, reason, token_present)
+       DO UPDATE SET attempt_count = 3, last_seen_at = excluded.last_seen_at`,
+    ).bind(crypto.randomUUID(), agora, agora).run();
+
+    const r = await pedir("/api/todogreen/tms/recusas", { token: gestora.token });
+    expect(r.status).toBe(200);
+    const corpo = await r.json();
+    const rej = corpo.registros.find((x) => x.tipo === "faturas" && x.integracaoId === "int-diag");
+    expect(rej).toMatchObject({ status: 401, motivo: "token_incorreto", tokenEnviado: true, tentativas: 3 });
+
+    // sem sessão, 401
+    expect((await pedir("/api/todogreen/tms/recusas")).status).toBe(401);
+  });
+});
+
 describe("o documento do TMS não é editado", () => {
   it("PATCH e DELETE respondem 405 apontando o vínculo", async () => {
     const doc = (await documentos(gestora.token)).registros[0];
