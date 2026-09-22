@@ -124,6 +124,33 @@ async function integracaoDoWebhook(env, integracaoId) {
   ).bind(integracaoId, TENANT_ID).first();
 }
 
+// Registra uma tentativa RECUSADA (401/503) para diagnóstico. Responde a
+// "o evento não chega porque não é enviado, ou porque é enviado e recusado?".
+// NUNCA grava o valor do token — só se um cabeçalho Token veio (booleano),
+// o endpoint, o status, o motivo, o IP e a contagem. Falha do log nunca derruba
+// o webhook.
+async function registrarRecusaWebhook(env, { integracaoId, tipo, status, reason, ip, tokenPresent }) {
+  const agora = new Date().toISOString();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO todogreen_tms_webhook_rejections
+         (id, tenant_id, integration_id, event_type, http_status, reason, token_present, ip,
+          attempt_count, first_seen_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+       ON CONFLICT(tenant_id, integration_id, event_type, http_status, reason, token_present)
+       DO UPDATE SET
+         attempt_count = todogreen_tms_webhook_rejections.attempt_count + 1,
+         ip = excluded.ip,
+         last_seen_at = excluded.last_seen_at`,
+    ).bind(
+      crypto.randomUUID(), TENANT_ID, texto(integracaoId, 120), texto(tipo, 40),
+      status, texto(reason, 200), tokenPresent ? 1 : 0, texto(ip, 60), agora, agora,
+    ).run();
+  } catch {
+    // Log de diagnóstico é best-effort: nunca pode falhar o recebimento.
+  }
+}
+
 async function validarAcesso(request, env, integracaoId, tipo) {
   if (!limitarTaxa(`tms-webhook:${integracaoId}`, 600))
     return { response: jsonFornecedor(false, "Muitas chamadas em sequência. Tente novamente em instantes.", 429) };
@@ -132,14 +159,24 @@ async function validarAcesso(request, env, integracaoId, tipo) {
   if (ip && !limitarTaxa(`tms-webhook-ip:${ip}`, 600))
     return { response: jsonFornecedor(false, "Muitas chamadas em sequência. Tente novamente em instantes.", 429) };
 
-  const integracao = await integracaoDoWebhook(env, integracaoId);
-  if (!integracao) return { response: TOKEN_INVALIDO() };
-
   const recebido = String(request.headers.get("Token") || "").trim().slice(0, 500);
+  const tokenPresent = recebido.length > 0;
+
+  const integracao = await integracaoDoWebhook(env, integracaoId);
+  if (!integracao) {
+    await registrarRecusaWebhook(env, { integracaoId, tipo, status: 401, reason: "integracao_nao_encontrada", ip, tokenPresent });
+    return { response: TOKEN_INVALIDO() };
+  }
+
   const token = autenticarTokenWebhookTrack3r(env, integracao, tipo, recebido);
-  if (!token.configurado)
+  if (!token.configurado) {
+    await registrarRecusaWebhook(env, { integracaoId, tipo, status: 503, reason: "sem_token_configurado", ip, tokenPresent });
     return { response: jsonFornecedor(false, `Integração sem token configurado para ${tipo} (${token.nome}).`, 503) };
-  if (!token.autorizado) return { response: TOKEN_INVALIDO() };
+  }
+  if (!token.autorizado) {
+    await registrarRecusaWebhook(env, { integracaoId, tipo, status: 401, reason: "token_incorreto", ip, tokenPresent });
+    return { response: TOKEN_INVALIDO() };
+  }
 
   return { integracao };
 }

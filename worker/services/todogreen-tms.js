@@ -581,6 +581,163 @@ const listarPorClasse = async (env, access, url) => {
   return json({ mes, linhas: results || [] });
 };
 
+// Cadastros de referência que a TRACK3R envia por webhook (embarcador, tomador,
+// unidade). Antes esses dados entravam no banco (todogreen_track3r_entities) mas
+// nenhuma tela os lia — ficavam só para enriquecer o nome nas outras projeções.
+// Esta leitura os expõe no Portal TMS. Somente leitura, escopada por espaço.
+const TIPOS_CADASTRO = { embarcador: "embarcador", tomador: "tomador", unidade: "unidade" };
+const listarCadastros = async (env, access, url) => {
+  const { limit, offset } = paginacao(url);
+  // Aceita singular e plural (o menu usa "embarcadores"; o webhook, "embarcador").
+  const pedido = texto(url.searchParams.get("tipo"), 20).toLowerCase().replace(/(es|s)$/, "");
+  const tipo = TIPOS_CADASTRO[pedido] || "";
+  const filtro = tipo ? "AND entity_type = ?" : "";
+  const params = [TENANT_ID, access.ownerId, ...(tipo ? [tipo] : [])];
+  const base = `FROM todogreen_track3r_entities
+      WHERE tenant_id = ? AND workspace_owner_id = ? ${filtro}`;
+
+  const [{ results }, totalRow, resumoRows] = await Promise.all([
+    env.DB.prepare(
+      `SELECT entity_type, external_code, name, trade_name, document, first_seen_at, last_seen_at
+         ${base} ORDER BY last_seen_at DESC, name ASC LIMIT ? OFFSET ?`,
+    ).bind(...params, limit, offset).all(),
+    env.DB.prepare(`SELECT COUNT(*) AS total ${base}`).bind(...params).first(),
+    // Contadores por tipo são globais (não da página atual), para os cartões do
+    // topo refletirem tudo que já entrou, não só os 100 mais recentes.
+    env.DB.prepare(
+      `SELECT entity_type, COUNT(*) AS total
+         FROM todogreen_track3r_entities
+        WHERE tenant_id = ? AND workspace_owner_id = ?
+        GROUP BY entity_type`,
+    ).bind(TENANT_ID, access.ownerId).all(),
+  ]);
+
+  const porTipo = { embarcador: 0, tomador: 0, unidade: 0 };
+  for (const row of resumoRows?.results || []) {
+    const t = row?.entity_type;
+    if (t && Object.prototype.hasOwnProperty.call(porTipo, t)) porTipo[t] = Number(row.total || 0);
+  }
+
+  return json({
+    registros: (results || []).map((row) => ({
+      tipo: row.entity_type,
+      codigo: row.external_code,
+      nome: row.name || "",
+      nomeFantasia: row.trade_name || "",
+      documento: row.document || "",
+      primeiroEnvio: row.first_seen_at || "",
+      ultimoEnvio: row.last_seen_at || "",
+    })),
+    resumo: {
+      embarcadores: porTipo.embarcador,
+      tomadores: porTipo.tomador,
+      unidades: porTipo.unidade,
+      total: porTipo.embarcador + porTipo.tomador + porTipo.unidade,
+    },
+    total: Number(totalRow?.total || 0),
+    limit,
+    offset,
+  });
+};
+
+// Valores por encomenda que a TRACK3R envia (webhook valores-encomendas):
+// valor da mercadoria, frete, taxas e impostos por encomenda. Antes entravam
+// no banco (todogreen_track3r_order_values) sem tela; esta leitura os expõe no
+// Portal TMS. Somente leitura, escopada por espaço.
+const listarValores = async (env, access, url) => {
+  const { limit, offset } = paginacao(url);
+  const base = `FROM todogreen_track3r_order_values
+      WHERE tenant_id = ? AND workspace_owner_id = ?`;
+  const params = [TENANT_ID, access.ownerId];
+
+  const [{ results }, resumoRow] = await Promise.all([
+    env.DB.prepare(
+      `SELECT external_order_code, product_code, product_description, merchandise_value,
+              weight_kg, freight, total_freight, icms, iss, tax_rate, cfop,
+              ad_valorem, gris, dispatch_fee, toll_fee, river_fee, difficult_access_fee,
+              unloading_fee, ctrc_fee, extra_pickup_fee, extra_delivery_fee, trt_fee,
+              emex_fee, tde_fee, last_seen_at
+         ${base} ORDER BY last_seen_at DESC, external_order_code ASC LIMIT ? OFFSET ?`,
+    ).bind(...params, limit, offset).all(),
+    // Totais globais (não da página): o topo da tela soma tudo que entrou.
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(total_freight), 0) AS frete_total,
+              COALESCE(SUM(merchandise_value), 0) AS mercadoria,
+              COALESCE(SUM(icms), 0) AS icms
+         ${base}`,
+    ).bind(...params).first(),
+  ]);
+
+  return json({
+    registros: (results || []).map((row) => ({
+      codigo: row.external_order_code,
+      produtoCodigo: row.product_code || "",
+      produto: row.product_description || "",
+      valorMercadoria: Number(row.merchandise_value || 0),
+      pesoKg: Number(row.weight_kg || 0),
+      frete: Number(row.freight || 0),
+      freteTotal: Number(row.total_freight || 0),
+      icms: Number(row.icms || 0),
+      iss: Number(row.iss || 0),
+      aliquota: Number(row.tax_rate || 0),
+      cfop: row.cfop || "",
+      ultimoEnvio: row.last_seen_at || "",
+      taxas: {
+        adValorem: Number(row.ad_valorem || 0),
+        gris: Number(row.gris || 0),
+        despacho: Number(row.dispatch_fee || 0),
+        pedagio: Number(row.toll_fee || 0),
+        fluvial: Number(row.river_fee || 0),
+        dificuldadeAcesso: Number(row.difficult_access_fee || 0),
+        descarga: Number(row.unloading_fee || 0),
+        ctrc: Number(row.ctrc_fee || 0),
+        extraColeta: Number(row.extra_pickup_fee || 0),
+        extraEntrega: Number(row.extra_delivery_fee || 0),
+        trt: Number(row.trt_fee || 0),
+        emex: Number(row.emex_fee || 0),
+        tde: Number(row.tde_fee || 0),
+      },
+    })),
+    resumo: {
+      total: Number(resumoRow?.total || 0),
+      freteTotal: Number(resumoRow?.frete_total || 0),
+      valorMercadoria: Number(resumoRow?.mercadoria || 0),
+      icms: Number(resumoRow?.icms || 0),
+    },
+    total: Number(resumoRow?.total || 0),
+    limit,
+    offset,
+  });
+};
+
+// Tentativas de webhook RECUSADas (401/503), para diagnosticar se um evento
+// "não chega" porque não é enviado ou porque é enviado e recusado. Somente
+// leitura. Nunca expõe token (a tabela não guarda o valor).
+const listarRecusas = async (env, access, url) => {
+  const { limit, offset } = paginacao(url);
+  const { results } = await env.DB.prepare(
+    `SELECT integration_id, event_type, http_status, reason, token_present, ip,
+            attempt_count, first_seen_at, last_seen_at
+       FROM todogreen_tms_webhook_rejections
+      WHERE tenant_id = ?
+      ORDER BY last_seen_at DESC LIMIT ? OFFSET ?`,
+  ).bind(TENANT_ID, limit, offset).all();
+  return json({
+    registros: (results || []).map((row) => ({
+      integracaoId: row.integration_id,
+      tipo: row.event_type,
+      status: Number(row.http_status || 0),
+      motivo: row.reason,
+      tokenEnviado: Boolean(row.token_present),
+      ip: row.ip,
+      tentativas: Number(row.attempt_count || 0),
+      primeiraEm: row.first_seen_at,
+      ultimaEm: row.last_seen_at,
+    })),
+  });
+};
+
 const verSugestoes = async (env, access, url) => {
   const id = texto(url.searchParams.get("documento"), 120);
   if (!id) return json({ error: "Informe o documento." }, 400);
@@ -967,6 +1124,9 @@ export async function handleTodoGreenTms(request, env, access, user) {
   if (request.method === "GET") {
     if (recurso === "configuracao" || !recurso) return verConfiguracao(env, access, request);
     if (recurso === "documentos") return listarDocumentos(env, access, url);
+    if (recurso === "cadastros") return listarCadastros(env, access, url);
+    if (recurso === "valores") return listarValores(env, access, url);
+    if (recurso === "recusas") return listarRecusas(env, access, url);
     if (recurso === "classes") return listarPorClasse(env, access, url);
     if (recurso === "sugestoes") return verSugestoes(env, access, url);
     if (recurso === "execucoes") return listarExecucoes(env, access, url);
