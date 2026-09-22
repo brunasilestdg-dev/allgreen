@@ -24,7 +24,7 @@ código. Complementa o `AGENTS.md` (comandos do dia a dia) e o
 
 ```bash
 git clone <URL_DO_REPOSITORIO>
-cd Seufuncionario
+cd allgreen
 npm ci
 ```
 
@@ -60,7 +60,7 @@ usar domínio próprio, *Zone:DNS:Edit* + *Workers Routes:Edit*.
 ## 4. Criar o banco D1 e apontar o `wrangler.jsonc`
 
 ```bash
-wrangler d1 create seu-funcionario-db
+wrangler d1 create allgreen-db
 ```
 
 O comando devolve um `database_id`. **Troque o `database_id`** em
@@ -80,10 +80,10 @@ schema num D1 novo, em ordem.
 
 ```bash
 # ambiente novo (remoto):
-npx wrangler d1 migrations apply seu-funcionario-db --remote
+npx wrangler d1 migrations apply allgreen-db --remote
 
 # desenvolvimento local:
-npx wrangler d1 migrations apply seu-funcionario-db --local
+npx wrangler d1 migrations apply allgreen-db --local
 ```
 
 Nunca edite uma migration já aplicada — crie uma nova numerada (regra do
@@ -110,7 +110,7 @@ De `wrangler.jsonc`:
 | --- | --- | --- |
 | `ASSETS` | Assets estáticos (`./dist`) | SPA + `run_worker_first` para rotas de API/portais |
 | `AI` | Workers AI | contingência local de IA |
-| `DB` | D1 (`seu-funcionario-db`) | banco operacional |
+| `DB` | D1 (`allgreen-db`) | banco operacional |
 
 `vars` públicas (não são segredo): `GEMINI_MODEL`, `XAI_MODEL`,
 `TODOGREEN_ADMIN_EMAILS`, `TDG_ENVIRONMENT`.
@@ -217,7 +217,7 @@ npm run lint && npm run test:unit && npm run test:worker && npm run build
 
 export CLOUDFLARE_API_TOKEN=***         # token da titular; NUNCA em arquivo versionado
 npx wrangler whoami                     # confirma a conta
-npx wrangler d1 migrations list seu-funcionario-db --remote   # compara com migrations/
+npx wrangler d1 migrations list allgreen-db --remote   # compara com migrations/
 npm run deploy:cloudflare               # aplica pendentes + publica (idempotente)
 ```
 

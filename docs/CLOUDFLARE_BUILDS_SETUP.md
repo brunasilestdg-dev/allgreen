@@ -17,16 +17,17 @@
 | GitHub Actions "Qualidade" (`.github/workflows/ci.yml`) | Testes no CI do GitHub. Hoje falha por falta de minutos; volta a servir quando a franquia renovar ou com runner self-hosted (ver `GITHUB_SELF_HOSTED_RUNNER.md`). |
 | GitHub Actions "Publicar" (`.github/workflows/deploy.yml`) | **Fallback manual** (workflow_dispatch). Não publica mais sozinho. |
 
-O Worker se chama **`seufuncionario-expo`** (`wrangler.jsonc` → `name`). O nome no
-painel Cloudflare tem que ser exatamente esse. Banco D1: `seu-funcionario-db`.
+O Worker se chama **`allgreen`** (`wrangler.jsonc` → `name`). O nome no
+painel Cloudflare tem que ser exatamente esse. Banco D1: `allgreen-db`. Domínio de
+produção: `orianone.app`.
 
 ## Passo a passo no painel (uma vez)
 
 1. Acesse o painel: **https://dash.cloudflare.com** → **Workers & Pages**.
-2. Abra o Worker **`seufuncionario-expo`**.
+2. Abra o Worker **`allgreen`**.
 3. **Settings** → aba **Builds**.
 4. **Connect** / **Connect Git Repository** → **GitHub** → autorize se pedir →
-   escolha **`brunapsiles/Seufuncionario`**.
+   escolha **`brunasilestdg-dev/allgreen`**.
 5. **Production branch** = **`main`**.
 6. Preencha os campos de build (próxima seção) e **Save**.
 
@@ -92,10 +93,10 @@ o log distinguir "falhou na validação" de "falhou ao publicar".
 ## Como confirmar o primeiro deploy
 
 1. Faça um push (ou merge) na `main`.
-2. No painel: **Workers & Pages → seufuncionario-expo → Builds** — acompanhe o log
+2. No painel: **Workers & Pages → allgreen → Builds** — acompanhe o log
    (deve rodar npm ci → verify → build → migrations → deploy).
 3. Confirme a versão no ar:
-   `https://seufuncionario-expo.brunapsiles.workers.dev/api/system/version`
+   `https://orianone.app/api/system/version`
    → `sha` deve ser o **SHA curto** do commit da `main` que você acabou de
    publicar (é como se rastreia "produção == main"); `branch` = `main`;
    `publishedBy` = `cloudflare-workers-builds` (o build lê `WORKERS_CI_COMMIT_SHA`

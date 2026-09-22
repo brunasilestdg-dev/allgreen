@@ -29,7 +29,7 @@ npx wrangler d1 migrations apply allgreen-db --remote   # aplica migrações nov
 
 ## Deploy automático
 
-O Cloudflare Workers Builds está conectado ao repositório `brunapsiles/Seufuncionario`.
+O Cloudflare Workers Builds deve estar conectado ao repositório `brunasilestdg-dev/allgreen` (se ainda apontar para um repositório antigo, religar a conexão no painel — ver `docs/CLOUDFLARE_BUILDS_SETUP.md`).
 Todo push na branch `main` deve executar `npm ci`, `npm run verify`,
 `npm run build` e, em seguida, `npm run deploy:cloudflare` (migrations + publicação). O gate de navegador (`test:e2e:critical`) roda **antes do merge** (local/sessão remota) e no fallback manual `deploy.yml`, que instala Chromium; dentro do build do Cloudflare não há como instalar o navegador — a tentativa de 13/09 (`cd8f90b`) travou a publicação da `main`. O diretório raiz configurado é `/`; builds de branches que
 não sejam a `main` também estão habilitados como versões de prévia. A validação completa não pode depender dos minutos do GitHub Actions. Se o Actions estiver vermelho por falta de runner/minutos, isso não bloqueia; se `verify`, `build`, Cloudflare Builds ou deploy manual falharem, bloqueia. O workflow `Publicar` do GitHub é apenas uma contingência manual e também precisa rodar o mesmo gate mínimo antes de publicar.
@@ -80,7 +80,7 @@ quantos resultados vieram.
 5. Não recriar funções que já existem — corrigir/estender as atuais (ver mapa abaixo).
 6. Alterou schema? Criar NOVA migração numerada em `migrations/` (nunca editar as antigas) e aplicar com wrangler.
 7. Dados de usuários são isolados por conta; qualquer rota nova de dados exige sessão (ver `sessionUser`).
-8. Ao subir mudança visual, incrementar a versão do cache em `public/sw.js` (`seu-funcionario-vN`).
+8. Ao subir mudança visual, incrementar a versão do cache em `public/sw.js` (`allgreen-vN`).
 9. Mudanças concluídas e validadas devem ser publicadas automaticamente, sem pedir
    uma autorização adicional à titular. Só interromper quando houver bloqueio externo
    inevitável de credencial, permissão ou serviço, informando exatamente o acesso faltante.
