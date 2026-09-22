@@ -20,7 +20,7 @@ const response = (data, ok = true) =>
   });
 
 const business = { id: "b1", name: "Empresa Teste" };
-const user = { id: "u1", name: "Bruna" };
+const user = { id: "u1", name: "Renata" };
 
 function Harness({ initial, onChange = () => {}, toast = vi.fn() }) {
   const [db, setDb] = useState(initial);

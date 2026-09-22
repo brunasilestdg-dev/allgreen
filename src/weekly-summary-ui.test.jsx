@@ -4,7 +4,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const user = { id: "user-ws", name: "Bruna Silva", email: "bruna@example.com" };
+const user = { id: "user-ws", name: "Renata Silva", email: "renata@example.com" };
 const business = {
   id: "business-ws-1",
   name: "Ateliê",

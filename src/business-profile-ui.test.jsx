@@ -10,7 +10,7 @@ describe("central do negócio", () => {
   it("seleciona atividade, recomenda pacotes e salva o perfil", () => {
     const business = {
       id: "b1",
-      name: "Canal da Bruna",
+      name: "Canal da Renata",
       segment: "Conteúdo",
       menuMode: "all",
     };

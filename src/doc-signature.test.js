@@ -59,13 +59,13 @@ describe("makeSignature e verifySignature", () => {
 
   it("registra quem assinou, quando e a impressão digital do conteúdo", () => {
     const sig = makeSignature({
-      signerName: "  Bruna  ",
-      signerEmail: "bruna@exemplo.com",
+      signerName: "  Renata  ",
+      signerEmail: "renata@exemplo.com",
       signerRole: "Contratada",
       content: conteudo,
       signedAt: "2026-07-29T12:00:00.000Z",
     });
-    expect(sig.signerName).toBe("Bruna");
+    expect(sig.signerName).toBe("Renata");
     expect(sig.signerRole).toBe("Contratada");
     expect(sig.fingerprint).toBe(documentFingerprint(conteudo));
     expect(sig.code).toBe(signatureCode(sig.fingerprint, sig.signedAt));
@@ -73,14 +73,14 @@ describe("makeSignature e verifySignature", () => {
   });
 
   it("confirma integridade quando o documento não mudou", () => {
-    const sig = makeSignature({ signerName: "Bruna", content: conteudo });
+    const sig = makeSignature({ signerName: "Renata", content: conteudo });
     const check = verifySignature(sig, conteudo);
     expect(check.valid).toBe(true);
     expect(check.reason).toBe("ok");
   });
 
   it("acusa alteração quando o documento muda depois de assinado", () => {
-    const sig = makeSignature({ signerName: "Bruna", content: conteudo });
+    const sig = makeSignature({ signerName: "Renata", content: conteudo });
     const check = verifySignature(sig, `${conteudo}\nCláusula nova.`);
     expect(check.valid).toBe(false);
     expect(check.reason).toBe("alterado");
@@ -103,7 +103,7 @@ describe("signatureStatus", () => {
 
   it("fica assinado quando todas as assinaturas conferem", () => {
     const sigs = [
-      makeSignature({ signerName: "Bruna", content: conteudo }),
+      makeSignature({ signerName: "Renata", content: conteudo }),
       makeSignature({ signerName: "Cliente", content: conteudo }),
     ];
     expect(signatureStatus(sigs, conteudo)).toEqual({
@@ -114,7 +114,7 @@ describe("signatureStatus", () => {
   });
 
   it("fica alterado quando o texto muda depois", () => {
-    const sigs = [makeSignature({ signerName: "Bruna", content: conteudo })];
+    const sigs = [makeSignature({ signerName: "Renata", content: conteudo })];
     const status = signatureStatus(sigs, "Proposta comercial revisada");
     expect(status.state).toBe("alterado");
     expect(status.valid).toBe(0);
@@ -130,16 +130,16 @@ describe("signatureBlockText", () => {
 
   it("lista assinante, código, impressão digital e o aviso legal", () => {
     const sig = makeSignature({
-      signerName: "Bruna",
-      signerEmail: "bruna@exemplo.com",
+      signerName: "Renata",
+      signerEmail: "renata@exemplo.com",
       signerRole: "Prestadora",
       content: conteudo,
       signedAt: "2026-07-29T12:00:00.000Z",
     });
     const bloco = signatureBlockText([sig], conteudo);
     expect(bloco).toContain("ASSINATURAS ELETRÔNICAS");
-    expect(bloco).toContain("Assinado por: Bruna — Prestadora");
-    expect(bloco).toContain("bruna@exemplo.com");
+    expect(bloco).toContain("Assinado por: Renata — Prestadora");
+    expect(bloco).toContain("renata@exemplo.com");
     expect(bloco).toContain(sig.code);
     expect(bloco).toContain(sig.fingerprint);
     expect(bloco).toContain("Lei 14.063/2020");
@@ -147,7 +147,7 @@ describe("signatureBlockText", () => {
   });
 
   it("avisa dentro do bloco quando o documento foi alterado", () => {
-    const sig = makeSignature({ signerName: "Bruna", content: conteudo });
+    const sig = makeSignature({ signerName: "Renata", content: conteudo });
     const bloco = signatureBlockText([sig], "Recibo alterado");
     expect(bloco).toContain("ATENÇÃO");
   });

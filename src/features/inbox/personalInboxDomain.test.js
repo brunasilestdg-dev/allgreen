@@ -9,8 +9,8 @@ import {
 
 const viewer = {
   id: "user-1",
-  name: "Bruna Psiles",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
   isWorkspaceOwner: true,
 };
 
@@ -124,15 +124,15 @@ describe("caixa de entrada pessoal", () => {
 
   it("detecta menção por nome, e-mail ou lista explícita", () => {
     expect(
-      commentMentionsViewer({ text: "Pode olhar, @Bruna Psiles?" }, viewer),
+      commentMentionsViewer({ text: "Pode olhar, @Renata Silva?" }, viewer),
     ).toBe(true);
     expect(
-      commentMentionsViewer({ text: "Veja com @bruna@example.com" }, viewer),
+      commentMentionsViewer({ text: "Veja com @renata@example.com" }, viewer),
     ).toBe(true);
     expect(
       commentMentionsViewer({ text: "Sem arroba", mentions: [viewer.id] }, viewer),
     ).toBe(true);
-    expect(commentMentionsViewer({ text: "Olá, Bruna" }, viewer)).toBe(false);
+    expect(commentMentionsViewer({ text: "Olá, Renata" }, viewer)).toBe(false);
   });
 
   it("persiste leitura e adiamento por item e resume apenas o que está ativo", () => {

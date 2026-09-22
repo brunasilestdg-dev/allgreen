@@ -562,7 +562,7 @@ A vertical só deve ser considerada profissional quando:
 
 Atue como arquiteto de produto SaaS, arquiteto fullstack sênior, especialista em logística sustentável, precificação comercial, ESG, controladoria, permissões B2B e UX enterprise.
 
-Você trabalhará diretamente no repositório existente `brunapsiles/Seufuncionario`.
+Você trabalhará diretamente no repositório existente `brunasilestdg-dev/allgreen`.
 
 Sua missão é transformar a vertical To Do Green em uma vertical enterprise real, profunda e vendável, sem remover funcionalidades existentes e sem criar um sistema paralelo.
 

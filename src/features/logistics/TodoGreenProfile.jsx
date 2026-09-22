@@ -178,7 +178,7 @@ export default function TodoGreenProfile({ db, update, authHeaders, setToast }) 
                 onChange={(e) => setAssinatura(e.target.value)}
                 rows={4}
                 maxLength={600}
-                placeholder={"Ex.:\nBruna Paula · Comercial · To Do Green\n(11) 90000-0000 · bruna@todogreen.com.br"}
+                placeholder={"Ex.:\nRenata Paula · Comercial · To Do Green\n(11) 90000-0000 · renata@todogreen.com.br"}
               />
               <small className="tdg-esg-nota">Usada no fecho do e-mail de apresentação. Em branco, assina com seu primeiro nome.</small>
               <button type="button" className="tdg-btn-ghost" disabled={!assinaturaMudou} onClick={salvarAssinatura}>

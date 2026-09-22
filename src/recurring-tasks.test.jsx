@@ -28,8 +28,8 @@ describe("nextRecurrenceDue (função pura)", () => {
 
 const user = {
   id: "user-recurring",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 const business = {
   id: "business-recurring-1",

@@ -1204,7 +1204,7 @@ describe("interações do comercial: ata, tentativa de contato e carimbo da data
         tipo: "reuniao",
         assunto: "Agenda com o time de logística",
         ata: "Cliente pediu piloto em SP com 4 veículos. Jurídico deles revisa a minuta.",
-        participantes: "Bruna, Diretor de logística",
+        participantes: "Renata, Diretor de logística",
         resultado: "avancou",
         proximoPasso: "Enviar minuta revisada",
         proximoPassoEm: "2026-09-05",

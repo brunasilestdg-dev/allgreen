@@ -10,7 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const user = { id: "user-plan", name: "Bruna Silva", email: "bruna@example.com" };
+const user = { id: "user-plan", name: "Renata Silva", email: "renata@example.com" };
 const business = {
   id: "business-plan-1",
   name: "Doces da Ana",

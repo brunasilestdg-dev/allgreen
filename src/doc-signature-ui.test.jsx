@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App, { documentFingerprint, makeSignature } from "./App";
 
-const user = { id: "user-sig", name: "Bruna Silva", email: "bruna@example.com" };
+const user = { id: "user-sig", name: "Renata Silva", email: "renata@example.com" };
 const business = {
   id: "business-sig-1",
   name: "Doces da Ana",
@@ -120,7 +120,7 @@ describe("Assinatura eletrônica de documentos", () => {
     expect(
       within(dialog).getByText(/assinatura eletrônica simples/i),
     ).toBeInTheDocument();
-    expect(within(dialog).getByDisplayValue("Bruna Silva")).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue("Renata Silva")).toBeInTheDocument();
 
     // Sem o aceite, o botão de assinar fica bloqueado.
     const confirmar = within(dialog).getByRole("button", {
@@ -137,7 +137,7 @@ describe("Assinatura eletrônica de documentos", () => {
   it("avisa no cartão quando o documento foi alterado depois de assinado", async () => {
     const assinatura = makeSignature({
       id: "sig-antiga",
-      signerName: "Bruna Silva",
+      signerName: "Renata Silva",
       content: "Texto original que já não está mais aqui",
       signedAt: "2026-07-21T10:00:00.000Z",
     });
@@ -153,8 +153,8 @@ describe("Assinatura eletrônica de documentos", () => {
   it("mostra código, data e integridade das assinaturas ao editar o documento", async () => {
     const assinatura = makeSignature({
       id: "sig-valida",
-      signerName: "Bruna Silva",
-      signerEmail: "bruna@example.com",
+      signerName: "Renata Silva",
+      signerEmail: "renata@example.com",
       signerRole: "Contratada",
       content: CONTEUDO,
       signedAt: "2026-07-21T10:00:00.000Z",
@@ -166,7 +166,7 @@ describe("Assinatura eletrônica de documentos", () => {
     fireEvent.click(screen.getByRole("button", { name: /Editar/ }));
     const dialog = await screen.findByRole("dialog");
     expect(
-      within(dialog).getByText("Bruna Silva — Contratada"),
+      within(dialog).getByText("Renata Silva — Contratada"),
     ).toBeInTheDocument();
     expect(
       within(dialog).getByText(`Código: ${assinatura.code}`),

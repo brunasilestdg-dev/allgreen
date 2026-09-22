@@ -10,7 +10,7 @@ const authHeaders = () => ({ authorization: "Bearer token" });
 const response = (data, ok = true) =>
   Promise.resolve({ ok, json: () => Promise.resolve(data) });
 
-const user = { id: "u1", name: "Bruna" };
+const user = { id: "u1", name: "Renata" };
 const member = { id: "u2", name: "João Silva", role: "colaborador" };
 
 const blankDb = {

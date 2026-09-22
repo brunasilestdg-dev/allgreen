@@ -8,7 +8,7 @@ import worker from "../worker-entry.js";
 // (tabela/coluna ausente, SQL incompatível com o schema remoto) derrubar o
 // agregado inteiro — o que fazia a tela mostrar TUDO zerado, como se não
 // houvesse dado. Agora: o que lê aparece; o que falha entra em `errors`; e zero
-// de verdade continua zero. Ver AUDITORIA_CONSOLIDACAO_TDG.md §4.
+// de verdade continua zero.
 //
 // Este arquivo é dedicado porque um dos testes DROPA uma tabela para simular a
 // falha em produção — o pool de workers isola o storage por arquivo de teste, e
