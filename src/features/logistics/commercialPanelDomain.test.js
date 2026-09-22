@@ -20,6 +20,7 @@ import {
   operacionalPorPraca,
   comparativosDeSerie,
   receitaDeSnapshot,
+  mesclarReceitaComFaturas,
   montarPainelDoArtefato,
   montarPainelCanonicoMirror,
   montarKanbanDeOportunidades,
@@ -196,6 +197,35 @@ describe("receitaDeSnapshot (ponte temporária do artefato)", () => {
     const maersk = r.ticketMedio.clientes.find((c) => c.cliente === "MAERSK");
     expect(maersk.pedidos).toBe(100);
     expect(maersk.ticketMedio).toBe(30); // 3000 / 100
+  });
+});
+
+describe("mesclarReceitaComFaturas (artefato congelado + faturas novas)", () => {
+  const snapshot = {
+    daily: [{ data: "2026-09-10", mes_num: 9, receita: 1000 }],
+    monthly: [{ mes_num: 9, mes: "Setembro", receita: 1000, clientes: [{ nome: "MAERSK", valor: 1000, pedidos: 40 }] }],
+  };
+  const base = receitaDeSnapshot(snapshot, new Date(Date.UTC(2026, 8, 20)));
+
+  it("sem faturas novas, devolve o artefato inalterado (mesma referência)", () => {
+    expect(mesclarReceitaComFaturas(base, [], new Date())).toBe(base);
+  });
+
+  it("soma faturas lançadas depois do corte por cima da base, preservando o histórico", () => {
+    const faturasApos = [
+      { data: "2026-09-25", valor: 500, mes: "2026-09", tomador: "Flowserve" },
+      { data: "2026-10-02", valor: 800, mes: "2026-10", tomador: "MAERSK" },
+    ];
+    const r = mesclarReceitaComFaturas(base, faturasApos, new Date(Date.UTC(2026, 9, 3)));
+    const set = r.porPeriodo.meses.find((m) => m.mes === "2026-09");
+    const out = r.porPeriodo.meses.find((m) => m.mes === "2026-10");
+    expect(set.receita).toBe(1500); // 1000 do artefato + 500 da fatura nova
+    expect(out.receita).toBe(800); // mês novo, só das faturas
+    const maersk = r.concentracao.clientes.find((c) => c.tomador === "MAERSK");
+    const flow = r.concentracao.clientes.find((c) => c.tomador === "Flowserve");
+    expect(maersk.total).toBe(1800); // 1000 artefato + 800 fatura
+    expect(flow.total).toBe(500);
+    expect(r.concentracao.totalGeral).toBe(2300);
   });
 });
 

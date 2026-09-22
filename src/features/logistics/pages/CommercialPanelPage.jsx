@@ -631,15 +631,18 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
   const avisoFonte = useMemo(() => {
     if (!dados?.fontes) return "";
     if (!dados.fontes.receita?.visivel) return "Você vê o pipeline da sua carteira. Receita e operacional consolidados exigem visão de carteira.";
-    if (dados.modo === "artefato_temporario" && dados.fontes.receita?.retrato) {
-      const r = dados.fontes.receita.retrato;
+    const r = dados.fontes.receita?.retrato;
+    if ((dados.modo === "artefato_temporario" || dados.modo === "hibrido") && r) {
       const quando = r.importadoEm ? new Date(r.importadoEm).toLocaleString("pt-BR") : "";
       const periodo = `${r.de ? ` (${r.de} a ${r.ate})` : ""}${quando ? ` · atualizado ${quando}` : ""}`;
-      // Os webhooks oficiais já podem estar configurados no cofre, mesmo sem
-      // nenhum evento recebido ainda: nesse caso o aviso deixa claro que a
-      // migração está armada e é automática — não que a integração falta fazer.
+      if (dados.modo === "hibrido") {
+        // Base congelada do artefato + faturas do webhook lançadas depois do corte.
+        return `Base: artefato do Track3R${periodo}, congelado no último dia. As faturas recebidas por webhook depois do corte já entram somando por cima — automaticamente.`;
+      }
+      // Só o artefato ainda (nenhuma fatura nova recebida). Os webhooks podem já
+      // estar configurados no cofre: nesse caso a migração está armada.
       return dados.webhooksProntos
-        ? `Fonte TEMPORÁRIA: espelho do artefato do Track3R${periodo}. Os webhooks oficiais já estão configurados e homologados — a migração é automática assim que o Track3R começar a enviar os eventos.`
+        ? `Base: artefato do Track3R${periodo}, congelado. Os webhooks oficiais já estão configurados e homologados — assim que chegarem faturas novas, elas somam automaticamente por cima desta base.`
         : `Fonte TEMPORÁRIA: espelho do artefato do Track3R${periodo}. Migra para os webhooks oficiais automaticamente quando entrarem.`;
     }
     return "";

@@ -859,6 +859,66 @@ export function montarKanbanDeOportunidades(oportunidades = [], hoje = new Date(
   };
 }
 
+// Merge da RECEITA: artefato (base congelada até o corte) + faturas do webhook
+// (lançadas DEPOIS do corte). O histórico do artefato é preservado e as faturas
+// novas somam por cima — sem gatilho manual e sem dupla contagem (o worker filtra
+// as faturas por data > corte antes de chamar). `resumoMensal`/`ticketMedio`
+// seguem do artefato (base histórica); `porPeriodo`, `concentracao` e `previsao`
+// passam a refletir a soma.
+export function mesclarReceitaComFaturas(receitaArtefato, faturasApos = [], hoje = new Date()) {
+  if (!receitaArtefato) return receitaArtefato;
+  if (!Array.isArray(faturasApos) || faturasApos.length === 0) return receitaArtefato;
+
+  const incPeriodo = receitaPorPeriodo(faturasApos);
+  const incConc = concentracaoPorTomador(faturasApos);
+
+  const mesMap = new Map();
+  for (const m of receitaArtefato.porPeriodo?.meses || []) mesMap.set(m.mes, soNumero(m.receita));
+  for (const m of incPeriodo.meses) mesMap.set(m.mes, soNumero(mesMap.get(m.mes)) + soNumero(m.receita));
+  const meses = [...mesMap.entries()].map(([mes, receita]) => ({ mes, receita })).sort((a, b) => ordenarMeses(a.mes, b.mes));
+
+  const diaMap = {};
+  const somarDias = (src) => {
+    for (const [mes, arr] of Object.entries(src || {})) {
+      if (!diaMap[mes]) diaMap[mes] = new Map();
+      for (const d of arr) diaMap[mes].set(d.dia, soNumero(diaMap[mes].get(d.dia)) + soNumero(d.receita));
+    }
+  };
+  somarDias(receitaArtefato.porPeriodo?.porDia);
+  somarDias(incPeriodo.porDia);
+  const porDia = {};
+  for (const [mes, mp] of Object.entries(diaMap)) {
+    porDia[mes] = [...mp.entries()].map(([dia, receita]) => ({ dia, receita })).sort((a, b) => ordenarMeses(a.dia, b.dia));
+  }
+  const porPeriodo = { disponivel: meses.length > 0, meses, porDia };
+
+  const cMap = new Map();
+  const somarClientes = (conc) => {
+    for (const c of conc?.clientes || []) {
+      const chave = normalizarNome(c.tomador);
+      if (!cMap.has(chave)) cMap.set(chave, { tomador: c.tomador, total: 0, porMes: new Map() });
+      const r = cMap.get(chave);
+      r.total += soNumero(c.total);
+      for (const [mes, v] of Object.entries(c.porMes || {})) r.porMes.set(mes, soNumero(r.porMes.get(mes)) + soNumero(v));
+    }
+  };
+  somarClientes(receitaArtefato.concentracao);
+  somarClientes(incConc);
+  const totalGeral = [...cMap.values()].reduce((s, r) => s + r.total, 0);
+  const clientes = [...cMap.values()]
+    .map((r) => ({ tomador: r.tomador, total: r.total, participacao: totalGeral > 0 ? r.total / totalGeral : 0, porMes: Object.fromEntries(r.porMes) }))
+    .sort((a, b) => b.total - a.total);
+  const concentracao = { disponivel: clientes.length > 0, meses: meses.map((m) => m.mes), clientes, totalGeral };
+
+  const diarioMesclado = [];
+  for (const [mes, arr] of Object.entries(porDia)) {
+    for (const d of arr) diarioMesclado.push({ data: d.dia, valor: d.receita, mes, tomador: "" });
+  }
+  const previsao = previsaoDeFechamento(diarioMesclado, hoje);
+
+  return { ...receitaArtefato, porPeriodo, concentracao, previsao };
+}
+
 // Espelho completo do artefato -> forma "mirror" das 3 abas.
 export function montarPainelDoArtefato(artefato = {}, hoje = new Date()) {
   const { DATA = {}, KANBAN = {}, UPDATES = {}, OPS = {} } = artefato || {};

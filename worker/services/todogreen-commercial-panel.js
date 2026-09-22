@@ -9,7 +9,7 @@
 //   Kanban      -> todogreen_opportunities       (pipeline nativo; Monday depois)
 import { TENANT_ID, podeNaVertical, podeVerTodaCarteira, recorteDeCarteira } from "./todogreen-access.js";
 import { estadoTokensWebhookTrack3r } from "./todogreen-track3r-webhook-auth.js";
-import { montarPainelDoArtefato, montarPainelCanonicoMirror, montarKanbanDeOportunidades } from "../../src/features/logistics/commercialPanelDomain.js";
+import { montarPainelDoArtefato, montarPainelCanonicoMirror, montarKanbanDeOportunidades, mesclarReceitaComFaturas } from "../../src/features/logistics/commercialPanelDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -190,16 +190,34 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
   const receitaCanonica = dados.faturas.length > 0;
   const operacionalCanonico = dados.encomendas.length > 0;
 
-  const receita = receitaCanonica ? canon.receita : (art ? art.receita : canon.receita);
+  // Congela o artefato no seu último dia (captured_to) e soma por cima as
+  // faturas do webhook lançadas DEPOIS desse corte — automático, sem gatilho e
+  // sem dupla contagem (faturas até o corte já estão no artefato). Sem artefato,
+  // mantém o caminho canônico puro.
+  const corte = String(retrato?.capturedTo || "").slice(0, 10);
+  const faturasApos = corte
+    ? dados.faturas.filter((f) => {
+        const dia = String(f?.data || "").slice(0, 10);
+        if (dia) return dia > corte;
+        const mes = String(f?.mes || "").slice(0, 7);
+        return mes ? mes > corte.slice(0, 7) : true;
+      })
+    : dados.faturas;
+
+  const receita = art ? mesclarReceitaComFaturas(art.receita, faturasApos, hoje) : canon.receita;
   const operacional = operacionalCanonico ? canon.operacional : (art ? art.operacional : canon.operacional);
 
   const kanbanEditavel = montarKanbanDeOportunidades(dados.oportunidades, hoje);
   const kanban = kanbanEditavel.pipeline.disponivel ? kanbanEditavel : (art ? { ...art.kanban, editavel: false } : kanbanEditavel);
 
   const fonte = (canonico, temArt) => (canonico ? "track3r" : temArt ? "artefato_temporario" : "vazio");
+  // Base do artefato + faturas novas por cima = "híbrido". Sem faturas novas,
+  // é o artefato congelado; sem artefato, é canônico puro.
+  const receitaHibrida = Boolean(art) && faturasApos.length > 0;
+  const fonteReceita = receitaHibrida ? "hibrido" : art ? "artefato_temporario" : fonte(receitaCanonica, false);
 
   return json({
-    modo: !receitaCanonica && art ? "artefato_temporario" : "canonico",
+    modo: art ? (receitaHibrida ? "hibrido" : "artefato_temporario") : (receitaCanonica ? "canonico" : "vazio"),
     // Webhooks oficiais já configurados no cofre (mesmo sem evento recebido
     // ainda). O aviso de fonte usa isto para não dar a entender que a
     // integração ainda precisa ser feita.
@@ -209,9 +227,11 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
     operacional,
     fontes: {
       receita: {
-        fonte: fonte(receitaCanonica, Boolean(art)),
+        fonte: fonteReceita,
         visivel: verTudo,
         registros: dados.faturas.length,
+        faturasAposCorte: faturasApos.length,
+        corte,
         retrato: retrato
           ? { de: retrato.capturedFrom, ate: retrato.capturedTo, total: retrato.totalReceita, importadoEm: retrato.importedAt, source: retrato.source }
           : null,
