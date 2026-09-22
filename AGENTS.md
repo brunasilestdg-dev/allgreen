@@ -4,13 +4,13 @@ Este arquivo orienta qualquer assistente de IA que trabalhe neste projeto. A tit
 
 ## O que é o projeto
 
-**Seu Funcionário** — plataforma de equipe digital para empreendedores brasileiros, em produção:
-**https://seufuncionario-expo.brunapsiles.workers.dev**
+**All Green** — plataforma de equipe digital para empreendedores brasileiros, em produção:
+**https://orianone.app**
 
 - Frontend: React 19 + Vite (`src/App.jsx` concentra o app; `src/styles.css` os estilos)
 - Backend: Cloudflare Worker (`worker.js`) — login, chat de IA multi-provedor, mídia, sincronização, colaboração
-- Banco: Cloudflare D1 (`seu-funcionario-db`), migrações em `migrations/`
-- PWA instalável; código no GitHub `brunapsiles/Seufuncionario` (branch `main`)
+- Banco: Cloudflare D1 (`allgreen-db`), migrações em `migrations/`
+- PWA instalável; código no GitHub `brunasilestdg-dev/allgreen` (branch `main`)
 
 ## Comandos
 
@@ -22,7 +22,7 @@ npm run build     # gera dist/ (não commitado)
 npm test          # executa a suíte Vitest isoladamente
 npm run deploy    # valida, compila, aplica migrações e publica
 npm run deploy:cloudflare                             # aplica migrações e publica (Workers Builds); deploy:cloudflare:gated = E2E crítico antes, onde há Chromium
-npx wrangler d1 migrations apply seu-funcionario-db --remote   # aplica migrações novas
+npx wrangler d1 migrations apply allgreen-db --remote   # aplica migrações novas
 ```
 
 **Lint** (`eslint.config.js`, flat config): roda no `verify`, no deploy local completo e no CI. O Cloudflare Workers Builds também deve executar o gate mínimo (`npm ci`, `npm run verify`, `npm run build`) antes de publicar; GitHub Actions vermelho por falta de minutos/runner não bloqueia, mas `verify`, `build`, `test:e2e:critical`, Cloudflare Builds ou deploy manual vermelho bloqueia. O lint trava só em ERROS; hoje o único rule como erro é `react-hooks/rules-of-hooks` (0 violações — de guarda contra a classe de bug de "hooks depois de return condicional" que já mordeu aqui). O resto é AVISO (backlog para reduzir aos poucos, ~80): `no-unused-vars`, `react-hooks/exhaustive-deps`, regras novas do React Compiler (`set-state-in-effect` etc.) e `jsx-a11y` (acessibilidade). Ao mexer no código, não precisa zerar os avisos, mas **não introduza erros** (o CI barra).

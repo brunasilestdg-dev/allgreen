@@ -129,7 +129,7 @@ describe("o que a pessoa pode fazer", () => {
 describe("menu", () => {
   it("mostra só o que o papel alcança", () => {
     const leitor = menuForAccess(resolveClientScope(vinculo({ role: "cliente_leitor" })));
-    expect(leitor.map((i) => i.id)).toEqual(["inicio", "operacoes", "green-score", "esg", "planejar", "nps", "assistente"]);
+    expect(leitor.map((i) => i.id)).toEqual(["inicio", "atendimento", "operacoes", "green-score", "esg", "planejar", "nps", "assistente"]);
   });
 
   it("gestor ganha relatórios, documentos e solicitações", () => {

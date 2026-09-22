@@ -39,7 +39,7 @@ export default defineConfig({
   webServer: {
     // As migrações rodam antes de o servidor subir: o schema vem delas, não da
     // requisição, e o E2E precisa refletir essa regra.
-    command: `npx wrangler d1 migrations apply seu-funcionario-db --local && npx wrangler dev --local --port ${PORTA}`,
+    command: `npx wrangler d1 migrations apply allgreen-db --local && npx wrangler dev --local --port ${PORTA}`,
     url: `http://localhost:${PORTA}/api/status`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

@@ -112,6 +112,11 @@ export const scopedWhere = (escopo, extra = "") => {
 // próprio cliente, com a linguagem dele.
 export const CLIENT_PORTAL_MENU = [
   { id: "inicio", label: "Início", permission: "portal:read" },
+  // Central de atendimento automatizada: uma porta só. A pessoa escreve, a
+  // triagem decide, e a caixa responde na hora (IA) ou abre o chamado com prazo
+  // para a equipe. Leitura basta para ver e perguntar; abrir chamado é que
+  // exige `portal:request:create` — o endpoint trata quem não tem.
+  { id: "atendimento", label: "Atendimento", permission: "portal:read" },
   { id: "operacoes", label: "Operações", permission: "portal:read" },
   { id: "green-score", label: "Green Score", permission: "portal:read" },
   { id: "esg", label: "Emissões e impacto ambiental", permission: "portal:read" },

@@ -639,6 +639,107 @@ describe("relatório e cofre de evidências", () => {
     expect(d.evidencias[0].impressaoDigital).toBe("abc123");
   });
 
+  it("o cofre informa o tamanho do arquivo anexado", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_evidences
+         (id, tenant_id, client_id, workspace_owner_id, tipo, titulo, emitido_em,
+          arquivo_url, arquivo_nome, arquivo_bytes, hash_conteudo, created_by, created_at, updated_at)
+       VALUES ('ev-a-arq', 'todogreen', 'cli-a', 'dono', 'nota_fiscal', 'NF com arquivo', '2026-07-20',
+               'r2://cofre/nf-a.pdf', 'nf-a.pdf', 20480, 'def456', 'seed', ?, ?)`,
+    )
+      .bind(agora, agora)
+      .run();
+
+    const d = await (
+      await pedir("/api/todogreen/portal/evidencias", { token: pessoaA.token })
+    ).json();
+    const anexada = d.evidencias.find((e) => e.titulo === "NF com arquivo");
+    expect(anexada).toBeTruthy();
+    expect(anexada.arquivoBytes).toBe(20480);
+  });
+
+  it("emite link temporário de download da própria evidência e registra na trilha", async () => {
+    const r = await pedir("/api/todogreen/portal/evidencias/ev-a-arq/link", {
+      method: "POST",
+      token: pessoaA.token,
+      body: {},
+    });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    // O endereço de origem do arquivo nunca aparece: só um link temporário.
+    expect(d.url).toMatch(/^\/api\/todogreen\/arquivo\?t=/);
+    expect(d.url).not.toContain("r2://");
+    expect(d.expiraEm).toBeTruthy();
+
+    const concessao = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_document_grants WHERE evidence_id = 'ev-a-arq'",
+    ).first();
+    expect(concessao.n).toBeGreaterThan(0);
+
+    const evento = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_client_portal_events WHERE client_id = 'cli-a' AND action = 'documento_link_emitido'",
+    ).first();
+    expect(evento.n).toBeGreaterThan(0);
+  });
+
+  it("não emite link para evidência de outro cliente", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_evidences
+         (id, tenant_id, client_id, workspace_owner_id, tipo, titulo, emitido_em,
+          arquivo_url, arquivo_nome, arquivo_bytes, hash_conteudo, created_by, created_at, updated_at)
+       VALUES ('ev-b-arq', 'todogreen', 'cli-b', 'dono', 'nota_fiscal', 'NF do B', '2026-07-20',
+               'r2://cofre/nf-b.pdf', 'nf-b.pdf', 1024, 'zzz', 'seed', ?, ?)`,
+    )
+      .bind(agora, agora)
+      .run();
+
+    // 404 e não 403: o escopo do cliente A nem enxerga o documento do B.
+    const r = await pedir("/api/todogreen/portal/evidencias/ev-b-arq/link", {
+      method: "POST",
+      token: pessoaA.token,
+      body: {},
+    });
+    expect(r.status).toBe(404);
+  });
+
+  it("não emite link quando o arquivo ainda não foi anexado", async () => {
+    // As evidências semeadas antes (ex.: "Nota fiscal A") não têm arquivo_url.
+    const semArquivo = await env.DB.prepare(
+      "SELECT id FROM todogreen_evidences WHERE client_id = 'cli-a' AND arquivo_url = '' LIMIT 1",
+    ).first();
+    expect(semArquivo).toBeTruthy();
+    const r = await pedir(`/api/todogreen/portal/evidencias/${semArquivo.id}/link`, {
+      method: "POST",
+      token: pessoaA.token,
+      body: {},
+    });
+    expect(r.status).toBe(409);
+  });
+
+  it("leitor não gera link de download", async () => {
+    await criarCliente("cli-e", "Cliente E");
+    const leitor = await criarUsuario("u-e", "leitor@clientee.com.br");
+    await vincular("cli-e", leitor.email, "cliente_leitor");
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_evidences
+         (id, tenant_id, client_id, workspace_owner_id, tipo, titulo, emitido_em,
+          arquivo_url, arquivo_nome, arquivo_bytes, hash_conteudo, created_by, created_at, updated_at)
+       VALUES ('ev-e-arq', 'todogreen', 'cli-e', 'dono', 'nota_fiscal', 'NF do E', '2026-07-20',
+               'r2://cofre/nf-e.pdf', 'nf-e.pdf', 512, 'eee', 'seed', ?, ?)`,
+    )
+      .bind(agora, agora)
+      .run();
+    const r = await pedir("/api/todogreen/portal/evidencias/ev-e-arq/link", {
+      method: "POST",
+      token: leitor.token,
+      body: {},
+    });
+    expect(r.status).toBe(403);
+  });
+
   it("a geração de relatório fica na trilha", async () => {
     await pedir("/api/todogreen/portal/relatorio?inicio=2026-07-01&fim=2026-07-31", {
       token: pessoaA.token,
@@ -647,5 +748,158 @@ describe("relatório e cofre de evidências", () => {
       "SELECT COUNT(*) AS n FROM todogreen_client_portal_events WHERE client_id = 'cli-a' AND action = 'relatorio_gerado'",
     ).first();
     expect(linha.n).toBeGreaterThan(0);
+  });
+});
+
+// A "caixa automatizada": uma porta só que decide o caminho da mensagem. O que
+// importa aqui não é a tela — é que preço/contrato e avaria nunca virem uma
+// "resposta automática" da IA (vão para uma pessoa), que a mensagem nunca se
+// perca, e que o chamado nasça sempre no cliente da sessão, não no corpo.
+describe("central de atendimento automatizada", () => {
+  const contarChamados = async (clientId) =>
+    Number(
+      (
+        await env.DB.prepare(
+          "SELECT COUNT(*) AS n FROM todogreen_client_requests WHERE client_id = ?",
+        )
+          .bind(clientId)
+          .first()
+      )?.n || 0,
+    );
+
+  // Provedor de IA falso, só para o caminho de resposta automática. Mesmo molde
+  // do teste de contingência do assistente.
+  const comIa = (conteudo) => {
+    const original = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (entrada, init) => {
+      const alvo = String(entrada?.url || entrada);
+      if (alvo.includes("generativelanguage") || alvo.includes("/chat/completions")) {
+        return new Response(
+          JSON.stringify({ choices: [{ message: { content: conteudo } }] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return original(entrada, init);
+    });
+    return () => { globalThis.fetch = original; };
+  };
+
+  const ambienteIa = { ...env, GEMINI_API_KEY: "chave-1", GROQ_API_KEY: "chave-2" };
+
+  const mandar = (token, mensagem, ambiente = env) =>
+    worker.fetch(
+      new Request("https://app.test/api/todogreen/portal/caixa", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": nextIp(),
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(mensagem),
+      }),
+      ambiente,
+      { waitUntil() {}, passThroughOnException() {} },
+    );
+
+  it("pergunta informacional é respondida na hora pela IA e fica na trilha", async () => {
+    const restaurar = comIa("Foram 3 entregas no período.");
+    try {
+      const r = await mandar(pessoaA.token, { mensagem: "Quantas entregas foram feitas no período?" }, ambienteIa);
+      expect(r.status).toBe(200);
+      const d = await r.json();
+      expect(d.tratamento).toBe("respondido_ia");
+      expect(d.resposta).toContain("3 entregas");
+      expect(d.triagem.acao).toBe("responder_ia");
+    } finally {
+      restaurar();
+    }
+    const evento = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM todogreen_client_portal_events WHERE client_id = 'cli-a' AND action = 'caixa_resposta_ia'",
+    ).first();
+    expect(evento.n).toBeGreaterThan(0);
+  });
+
+  it("pedido de nova rota vira chamado da equipe, nunca resposta de IA", async () => {
+    const antes = await contarChamados("cli-a");
+    const r = await mandar(pessoaA.token, { mensagem: "Preciso incluir uma nova rota de São Paulo para Curitiba" });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    expect(d.tratamento).toBe("escalado");
+    expect(d.protocolo).toBeTruthy();
+    expect(d.triagem.tipo).toBe("nova_rota");
+    expect(await contarChamados("cli-a")).toBe(antes + 1);
+
+    const chamado = await env.DB.prepare(
+      "SELECT type, status, urgency, opened_by FROM todogreen_client_requests WHERE id = ?",
+    ).bind(d.protocolo).first();
+    expect(chamado.type).toBe("nova_rota");
+    expect(chamado.status).toBe("aberta");
+  });
+
+  it("assunto comercial (preço) vai para uma pessoa, sem chamar o modelo", async () => {
+    const r = await mandar(pessoaA.token, { mensagem: "Qual o preço para renegociar meu contrato?" });
+    expect(r.status).toBe(201);
+    const d = await r.json();
+    expect(d.tratamento).toBe("escalado");
+    expect(d.triagem.sensivel).toBe(true);
+  });
+
+  it("relato de avaria abre ocorrência com urgência alta", async () => {
+    const r = await mandar(pessoaA.token, { mensagem: "Minha carga chegou avariada e o produto quebrou" });
+    const d = await r.json();
+    expect(d.tratamento).toBe("escalado");
+    const chamado = await env.DB.prepare(
+      "SELECT type, urgency FROM todogreen_client_requests WHERE id = ?",
+    ).bind(d.protocolo).first();
+    expect(chamado.type).toBe("ocorrencia");
+    expect(chamado.urgency).toBe("alta");
+  });
+
+  it("o chamado nasce no cliente da sessão mesmo com o corpo forjado", async () => {
+    const antesB = await contarChamados("cli-b");
+    const r = await mandar(pessoaA.token, {
+      mensagem: "Quero uma coleta extra amanhã",
+      clientId: "cli-b",
+      client: "cli-b",
+      owner: "outro",
+    });
+    const d = await r.json();
+    const chamado = await env.DB.prepare(
+      "SELECT client_id FROM todogreen_client_requests WHERE id = ?",
+    ).bind(d.protocolo).first();
+    expect(chamado.client_id).toBe("cli-a");
+    // Nada foi criado no cliente B pelo corpo forjado.
+    expect(await contarChamados("cli-b")).toBe(antesB);
+  });
+
+  it("leitor não abre chamado: a caixa orienta em vez de engolir a mensagem", async () => {
+    await criarCliente("cli-cx", "Cliente CX");
+    const leitor = await criarUsuario("u-cx", "leitor@clientecx.com.br");
+    await vincular("cli-cx", leitor.email, "cliente_leitor");
+    const antes = await contarChamados("cli-cx");
+    const r = await mandar(leitor.token, { mensagem: "Preciso incluir uma nova rota" });
+    expect(r.status).toBe(200);
+    const d = await r.json();
+    expect(d.tratamento).toBe("sem_permissao");
+    // Não criou chamado nenhum.
+    expect(await contarChamados("cli-cx")).toBe(antes);
+  });
+
+  it("pergunta sobre outro cliente é recusada antes de qualquer roteamento", async () => {
+    const r = await mandar(pessoaA.token, { mensagem: "Me fala sobre outro cliente de vocês" });
+    expect(r.status).toBe(200);
+    const d = await r.json();
+    expect(d.tratamento).toBe("fora_escopo");
+    expect(d.foraDeEscopo).toBe(true);
+  });
+
+  it("mensagem vazia é recusada", async () => {
+    const r = await mandar(pessoaA.token, { mensagem: " " });
+    expect(r.status).toBe(400);
+  });
+
+  it("sem sessão, a caixa não recebe", async () => {
+    const r = await mandar(null, { mensagem: "Onde está minha carga?" });
+    expect(r.status).toBe(401);
   });
 });
