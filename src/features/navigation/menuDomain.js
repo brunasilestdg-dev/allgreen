@@ -18,7 +18,7 @@ export const DEFAULT_MENU = [
   "contas",
   "agendamentos",
   "contatos",
-  "tarefas-inteligentes",
+  "operacao",
   "documentos",
   "resultados",
 ];

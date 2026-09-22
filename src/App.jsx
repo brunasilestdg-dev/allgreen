@@ -565,7 +565,7 @@ const navSecondary = [
 const navGroups = [
   {
     label: null,
-    items: ["inicio", "conversar", "meu-trabalho", "comecar"],
+    items: ["inicio", "conversar", "meu-trabalho", "perfil-negocio", "comecar"],
   },
   {
     label: "VENDAS E CLIENTES",
