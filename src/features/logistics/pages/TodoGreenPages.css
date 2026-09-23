@@ -5532,3 +5532,4 @@
 .tdg-comparativos .tdg-kpi-comp em { font-style: normal; font-size: 0.8rem; margin-left: 4px; }
 .tdg-kpi-comp strong { font-size: 1rem; }
 .tdg-sem-base { color: var(--tdg-muted); font-weight: 500; font-size: 0.9rem; }
+.tdg-mercadolivre-result { background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 10px; font-size: 12px; max-height: 420px; overflow: auto; padding: 12px; white-space: pre-wrap; word-break: break-word; }

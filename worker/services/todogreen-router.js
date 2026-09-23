@@ -41,6 +41,11 @@ import { handleTodoGreenSemente } from "./todogreen-semente.js";
 import { handleTodoGreenTimeline } from "./todogreen-timeline.js";
 import { handleTodoGreenIntegrations } from "./todogreen-integrations.js";
 import { handleTodoGreenMondayManage, handleTodoGreenMondayPublic } from "./todogreen-monday.js";
+import {
+  MERCADOLIVRE_CALLBACK_PATH,
+  handleTodoGreenMercadoLivreManage,
+  handleTodoGreenMercadoLivrePublic,
+} from "./todogreen-mercadolivre.js";
 import { handleTodoGreenSystemHealth } from "./todogreen-system-health.js";
 import { handleTodoGreenEnergy } from "./todogreen-energy-reference.js";
 import { handleTodoGreenMarketRadar } from "./todogreen-market-radar.js";
@@ -121,6 +126,16 @@ export async function routeTodoGreenApi(request, env, ctx) {
       "To Do Green monday public integration error",
       "Não foi possível concluir a integração com o monday.com.",
       () => handleTodoGreenMondayPublic(request, env),
+    );
+  }
+
+  // O Mercado Livre devolve a pessoa ao callback sem sessão do ERP; o state de
+  // uso único + PKCE amarram a volta ao espaço que iniciou.
+  if (path === MERCADOLIVRE_CALLBACK_PATH) {
+    return guarded(
+      "To Do Green Mercado Livre public integration error",
+      "Não foi possível concluir a integração com o Mercado Livre.",
+      () => handleTodoGreenMercadoLivrePublic(request, env),
     );
   }
 
@@ -587,6 +602,10 @@ export async function routeTodoGreenApi(request, env, ctx) {
       if (resolved.response) return resolved.response;
       if (path === "/api/todogreen/integrations/monday/oauth/start") {
         return handleTodoGreenMondayManage(request, env, resolved.access, resolved.user);
+      }
+      if (path.startsWith("/api/todogreen/integrations/mercadolivre/")) {
+        const handled = await handleTodoGreenMercadoLivreManage(request, env, resolved.access, resolved.user);
+        if (handled) return handled;
       }
       return handleTodoGreenIntegrations(request, env, resolved.access);
     });
