@@ -78,7 +78,16 @@ export async function elevacaoDaRota(env, geometry, { fetcher = fetch } = {}) {
   if (amostra.length < 2)
     return { ok: false, reason: GEO_ERRORS.ELEVATION_NOT_AVAILABLE, source: "none", detail: "Geometria insuficiente para o perfil." };
 
-  const key = chaveGeo("elevation", { shape: amostra });
+  // A chave do cache inclui a fonte pretendida: a mesma rota calculada pelo
+  // Geoapify e pelo Valhalla são entradas distintas. Sem isso, trocar de
+  // provedor (ou ligar o Valhalla depois) continuaria servindo o valor do
+  // provedor anterior por 30 dias.
+  const fonte = String(env?.GEOAPIFY_API_KEY || "").trim()
+    ? "geoapify"
+    : motores.valhalla.configured
+      ? "valhalla"
+      : "none";
+  const key = chaveGeo("elevation", { shape: amostra, fonte });
   const cached = await lerCache(env, key);
   if (cached) return { ...cached.payload, cached: true, ingestedAt: cached.ingestedAt, sourceUpdatedAt: cached.sourceUpdatedAt };
 

@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import worker from "../worker-entry.js";
 import {
   handleTodoGreenEnergy,
+  montarPlanoDeEnergia,
   runTodoGreenEnergyReferenceScheduled,
   sincronizarCurvaDeCargaOns,
   sincronizarPrecosAnp,
@@ -209,7 +210,10 @@ describe("plano com as referências ingeridas", () => {
   });
 
   it("tarifa ANEEL vigente com curva por posto, janela energética do ONS, diesel municipal da ANP e plano por veículo dentro de 20h→6h", async () => {
-    const plano = await (await call("/api/todogreen/energy/plan?horaInicio=20", { token: op.token })).json();
+    // Plano calculado com relógio fixo (NOW) para o frescor das referências ser
+    // determinístico: por HTTP o `now` cai no relógio real e a janela do ONS (3
+    // dias) venceria com o tempo. A rota HTTP do /plan é coberta nos outros testes.
+    const plano = await montarPlanoDeEnergia(env, op.id, { now: NOW, horaInicio: 20 });
     expect(plano.tarifa).toMatchObject({ tier: "aneel", aneelDisponivel: true, aneelVigente: true, stale: false });
     expect(plano.tarifa.tarifaKwhBase).toBeCloseTo(0.43698, 5);
     expect(plano.tarifa.curva[19].tarifa).toBeCloseTo(1.62439, 5);
