@@ -3,7 +3,7 @@ import { sanitizeSiteHtml, siteSlug } from "../worker.js";
 
 describe("publicação segura de sites", () => {
   it("normaliza o endereço público", () => {
-    expect(siteSlug("  Ateliê da Brúna!  ")).toBe("atelie-da-bruna");
+    expect(siteSlug("  Ateliê da Lúna!  ")).toBe("atelie-da-luna");
   });
 
   it("remove scripts e manipuladores perigosos do HTML publicado", () => {

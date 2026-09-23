@@ -1,6 +1,6 @@
 import { buildExtensionPrompt } from "./prompt.js";
 
-const DEFAULT_BASE = "https://seufuncionario-expo.brunapsiles.workers.dev";
+const DEFAULT_BASE = "https://orianone.app";
 const $ = (id) => document.getElementById(id);
 let lastProposal = null;
 

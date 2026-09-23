@@ -28,7 +28,7 @@ const PROJETOS = [
   [],
   ["Projetos em Andamento - Novos Clientes"],
   ["Nome", "Subelementos", "Responsável", "Funil", "Prioridade", "Status", "Faturamento Anual Esperado", "Faturamento Mensal Esperado", "Data Inicio", "Data Proposta", "Data Finalização", "Update Summary"],
-  ["Projeto Maersk - On Running", "Projeto Crocs", "JEBERSON DE ARAUJO PIRES, Bruna de Paula Siles", "Fechamento", "Alta", "Feito", 1800000, 150000, "2025-07-08 00:00:00", "", "2026-02-20 00:00:00", "Resumo do acompanhamento"],
+  ["Projeto Maersk - On Running", "Projeto Crocs", "JEBERSON DE ARAUJO PIRES, Renata de Paula Siles", "Fechamento", "Alta", "Feito", 1800000, 150000, "2025-07-08 00:00:00", "", "2026-02-20 00:00:00", "Resumo do acompanhamento"],
   ["Subitems", "Name", "Responsável", "Status", "Data Finalização", "Descrição", "Números", "Item ID (auto generated)"],
   ["", "Projeto Crocs", "Claudio Jannini Mano", "A começar", "", "", "", "12467246255"],
   ["Projeto DHL", "Bid Rede", "Valentin Manfrin", "Homologação", "Alta", "Em andamento", 3600000, 300000, "2026-04-07 00:00:00", "", "2026-09-30 00:00:00", ""],
@@ -136,7 +136,7 @@ describe("projetos viram oportunidades", () => {
   it("guarda datas, prioridade, responsáveis e resumo sem inventar nada", () => {
     expect(oportunidades[2]).toMatchObject({
       prioridade: "Alta",
-      responsaveis: ["JEBERSON DE ARAUJO PIRES", "Bruna de Paula Siles"],
+      responsaveis: ["JEBERSON DE ARAUJO PIRES", "Renata de Paula Siles"],
       inicioEm: "2025-07-08",
       fimEm: "2026-02-20",
       propostaEm: "",

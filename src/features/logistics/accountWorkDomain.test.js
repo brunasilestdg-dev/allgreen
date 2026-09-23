@@ -3,7 +3,7 @@ import { accountWorkTasks, estruturarNotasDaConta, suggestionContext, taskWorkRo
 
 describe("estruturarNotasDaConta — fim da parede de texto", () => {
   it("quebra o bloco do pipeline importado em campos e updates", () => {
-    const notes = "[Pipeline Novos Negócios — Em andamento] Funil: Prospecção | Prioridade: Média | Status: Não iniciado Faturamento anual esperado: R$ 3.600.000 Responsável: JEBERSON, Bruna Últimos updates: - 2026-08-26 (JEBERSON): irá fazer FUP com o Ricardo. - 2026-08-20 (Bruna): primeiro contato.";
+    const notes = "[Pipeline Novos Negócios — Em andamento] Funil: Prospecção | Prioridade: Média | Status: Não iniciado Faturamento anual esperado: R$ 3.600.000 Responsável: JEBERSON, Renata Últimos updates: - 2026-08-26 (JEBERSON): irá fazer FUP com o Ricardo. - 2026-08-20 (Renata): primeiro contato.";
     const { linhas, updates } = estruturarNotasDaConta(notes);
     expect(linhas.some((l) => /^Funil: Prospecção$/.test(l))).toBe(true);
     expect(linhas.some((l) => /^Prioridade: Média$/.test(l))).toBe(true);

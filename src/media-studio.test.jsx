@@ -14,7 +14,7 @@ import MediaStudio from "./features/media/MediaStudio.jsx";
 const business = { id: "b1", name: "Doces da Ana" };
 
 const baseDb = (media = []) => ({
-  user: { id: "u1", name: "Bruna" },
+  user: { id: "u1", name: "Renata" },
   media,
   preferences: {},
 });

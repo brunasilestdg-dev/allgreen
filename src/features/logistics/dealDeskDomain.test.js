@@ -153,9 +153,9 @@ describe("a proposta sai ou não sai", () => {
   });
 
   it("aprovado, sai apontando a versão aprovada", () => {
-    const r = liberacaoDaProposta("c1", [{ ...base, situacao: SITUACOES.aprovado, versao: 2, decisorNome: "Bruna" }], AGORA);
+    const r = liberacaoDaProposta("c1", [{ ...base, situacao: SITUACOES.aprovado, versao: 2, decisorNome: "Renata" }], AGORA);
     expect(r.liberada).toBe(true);
-    expect(r.motivo).toMatch(/Bruna/);
+    expect(r.motivo).toMatch(/Renata/);
     expect(r.motivo).toMatch(/versão 2/);
   });
 

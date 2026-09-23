@@ -11,7 +11,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const user = { id: "user-dgm", name: "Bruna Silva", email: "bruna@example.com" };
+const user = { id: "user-dgm", name: "Renata Silva", email: "renata@example.com" };
 const business = {
   id: "business-dgm-1",
   name: "Doces da Ana",
@@ -287,8 +287,8 @@ describe("Diagramas técnicos", () => {
         { id: "f2", name: "Responde a", type: "text" },
       ],
       rows: [
-        { id: "r1", cells: { f1: "Bruna", f2: "" } },
-        { id: "r2", cells: { f1: "Ana", f2: "Bruna" } },
+        { id: "r1", cells: { f1: "Renata", f2: "" } },
+        { id: "r2", cells: { f1: "Ana", f2: "Renata" } },
       ],
     };
     seedLoggedIn(businessDb([diagrama()], [base]));
@@ -300,7 +300,7 @@ describe("Diagramas técnicos", () => {
     );
 
     expect(await screen.findByText(/2 formas/)).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Bruna")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Renata")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Ana")).toBeInTheDocument();
   });
 

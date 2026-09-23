@@ -20,7 +20,7 @@ const response = (data, ok = true) =>
   });
 
 const business = { id: "business-portal", name: "Empresa Teste" };
-const user = { id: "user-portal", name: "Bruna" };
+const user = { id: "user-portal", name: "Renata" };
 
 const baseDb = {
   user,

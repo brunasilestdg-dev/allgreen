@@ -28,7 +28,7 @@ describe("acesso à conta", () => {
     const fetchMock = vi.fn(() =>
       response({
         token: "session-token",
-        user: { id: "user-1", name: "Bruna", email: "bruna@example.com" },
+        user: { id: "user-1", name: "Renata", email: "renata@example.com" },
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -38,7 +38,7 @@ describe("acesso à conta", () => {
       screen.getByRole("heading", { name: "Entrar" }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("E-mail"), {
-      target: { value: "BRUNA@example.com" },
+      target: { value: "RENATA@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Senha"), {
       target: { value: "senha-segura" },

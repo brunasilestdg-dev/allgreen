@@ -209,12 +209,12 @@ describe("espaço de trabalho To Do Green", () => {
   });
 
   it("marca 'minha' pelo responsável — o criador (ownerId) não conta quando existe assigneeId", () => {
-    // Cenário do CRM: Bruna registra a interação e escolhe João como responsável
-    // pelo follow-up. Antes do ajuste, o Meu Dia da Bruna contava a tarefa como
+    // Cenário do CRM: Renata registra a interação e escolhe João como responsável
+    // pelo follow-up. Antes do ajuste, o Meu Dia da Renata contava a tarefa como
     // dela porque o ownerId (criador) coincidia com o usuário logado.
     const board = buildTodoGreenTaskBoard({
       today: "2026-09-14",
-      currentUserId: "bruna",
+      currentUserId: "renata",
       db: {
         tasks: [
           {
@@ -225,7 +225,7 @@ describe("espaço de trabalho To Do Green", () => {
             status: "A fazer",
             due: "2026-09-18",
             assigneeId: "joao",
-            ownerId: "bruna",
+            ownerId: "renata",
           },
         ],
       },
@@ -245,7 +245,7 @@ describe("espaço de trabalho To Do Green", () => {
           status: "A fazer",
           due: "2026-09-18",
           assigneeId: "joao",
-          ownerId: "bruna",
+          ownerId: "renata",
         }],
       },
     });
@@ -255,7 +255,7 @@ describe("espaço de trabalho To Do Green", () => {
   it("cai no ownerId como fallback só quando não existe responsável", () => {
     const board = buildTodoGreenTaskBoard({
       today: "2026-09-14",
-      currentUserId: "bruna",
+      currentUserId: "renata",
       db: {
         tasks: [
           {
@@ -265,7 +265,7 @@ describe("espaço de trabalho To Do Green", () => {
             title: "Definir escopo",
             status: "A fazer",
             due: "2026-09-15",
-            ownerId: "bruna",
+            ownerId: "renata",
           },
         ],
       },
@@ -276,7 +276,7 @@ describe("espaço de trabalho To Do Green", () => {
   it("respeita assignees[] quando a tarefa lista vários responsáveis, mesmo com ownerId diferente", () => {
     const board = buildTodoGreenTaskBoard({
       today: "2026-09-14",
-      currentUserId: "bruna",
+      currentUserId: "renata",
       db: {
         tasks: [
           {
@@ -287,7 +287,7 @@ describe("espaço de trabalho To Do Green", () => {
             status: "A fazer",
             due: "2026-09-16",
             ownerId: "outro",
-            assignees: [{ id: "bruna", name: "Bruna" }, { id: "joao", name: "João" }],
+            assignees: [{ id: "renata", name: "Renata" }, { id: "joao", name: "João" }],
           },
         ],
       },

@@ -3063,7 +3063,7 @@ export async function handleTodoGreenVerticalRecords(request, env, access, user)
     // (coluna/tabela ausente, SQL incompatível com o schema remoto) rejeitava o
     // agregado inteiro → a tela caía no catch e mostrava TUDO zerado. Agora é
     // allSettled: o que leu aparece; o que falhou entra em `errors` para a tela
-    // mostrar "indisponível" (não zero). Ver AUDITORIA_CONSOLIDACAO_TDG.md §4.
+    // mostrar "indisponível" (não zero).
     const [resultados, cenariosRes] = await Promise.all([
       Promise.allSettled(permitidas.map((n) => listar(env, COLECOES[n], access, user.email))),
       podeLerCenarios(access)

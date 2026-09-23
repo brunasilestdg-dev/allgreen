@@ -34,8 +34,8 @@ describe("buildTaskCalendar / shiftYearMonth (funções puras)", () => {
 
 const user = {
   id: "user-cal",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 const business = {
   id: "business-cal-1",

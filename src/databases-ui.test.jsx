@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const user = { id: "user-db", name: "Bruna Silva", email: "bruna@example.com" };
+const user = { id: "user-db", name: "Renata Silva", email: "renata@example.com" };
 const business = {
   id: "business-db-1",
   name: "Negócio Teste",

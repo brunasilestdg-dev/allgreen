@@ -62,7 +62,7 @@ describe("rótulos sobrevivem ao polimento", () => {
     // ...mas a troca de verdade continua valendo onde ela nasceu.
     expect(polirTexto("40 funcionais · 13 backlog")).toBe("40 ativas · 13 planejado");
     // E domínio/e-mail não é lugar de renomear empresa.
-    expect(polirTexto("bruna.paula@todogreen.com.br")).toBe("bruna.paula@todogreen.com.br");
+    expect(polirTexto("renata.paula@todogreen.com.br")).toBe("renata.paula@todogreen.com.br");
     expect(polirTexto("seufuncionario-expo com tenant todogreen")).toContain("To Do Green");
   });
 

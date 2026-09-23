@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const user = { id: "u1", name: "Bruna", email: "bruna@example.com" };
+const user = { id: "u1", name: "Renata", email: "renata@example.com" };
 const business = { id: "b1", name: "Empresa Central", segment: "Serviços" };
 const database = () => ({
   user,

@@ -67,13 +67,13 @@ describe("domínio de formulários públicos", () => {
       false,
     );
     const ok = validatePublicFormSubmission(form, {
-      contact: { name: "Bruna", email: "bruna@example.com" },
+      contact: { name: "Renata", email: "renata@example.com" },
       values: { kind: "Financeiro" },
       privacyConsent: true,
     });
     expect(ok.valid).toBe(true);
     const invalid = validatePublicFormSubmission(form, {
-      contact: { name: "Bruna", email: "invalido" },
+      contact: { name: "Renata", email: "invalido" },
       values: { kind: "Outro" },
       privacyConsent: false,
     });
@@ -107,7 +107,7 @@ describe("domínio de formulários públicos", () => {
     const valid = validatePublicFormSubmission(form, {
       values: {},
       attachments: [{ fieldId: "proof", name: "comprovante.pdf" }],
-      signature: { name: "Bruna", consent: true },
+      signature: { name: "Renata", consent: true },
       payment: { acknowledged: true },
     });
     expect(valid.valid).toBe(true);

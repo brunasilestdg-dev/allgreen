@@ -31,7 +31,7 @@ describe("LegalHub — abertura da página (regressão de TDZ)", () => {
     render(
       <Suspense fallback={<span>carregando</span>}>
         <LegalHub
-          db={{ user: { id: "u1", name: "Bruna" } }}
+          db={{ user: { id: "u1", name: "Renata" } }}
           update={() => {}}
           setToast={() => {}}
           authHeaders={() => ({})}
@@ -55,7 +55,7 @@ describe("LegalHub — abertura da página (regressão de TDZ)", () => {
     render(
       <Suspense fallback={<span>carregando</span>}>
         <LegalHub
-          db={{ user: { id: "u1", name: "Bruna" } }}
+          db={{ user: { id: "u1", name: "Renata" } }}
           update={() => {}}
           setToast={() => {}}
           authHeaders={() => ({})}

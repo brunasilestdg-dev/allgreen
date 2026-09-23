@@ -34,24 +34,24 @@ describe("formatTimestamp", () => {
 
 describe("parseTranscript", () => {
   it("separa participante e fala", () => {
-    const falas = parseTranscript("Bruna: bom dia a todos\nCliente: bom dia");
+    const falas = parseTranscript("Renata: bom dia a todos\nCliente: bom dia");
     expect(falas).toEqual([
-      { speaker: "Bruna", text: "bom dia a todos", at: "" },
+      { speaker: "Renata", text: "bom dia a todos", at: "" },
       { speaker: "Cliente", text: "bom dia", at: "" },
     ]);
   });
 
   it("lê a marcação de tempo", () => {
-    const falas = parseTranscript("[01:20] Bruna: vamos ao orçamento");
+    const falas = parseTranscript("[01:20] Renata: vamos ao orçamento");
     expect(falas[0]).toEqual({
-      speaker: "Bruna",
+      speaker: "Renata",
       text: "vamos ao orçamento",
       at: "01:20",
     });
   });
 
   it("junta linha sem participante à fala anterior", () => {
-    const falas = parseTranscript("Bruna: primeira parte\ne a continuação aqui");
+    const falas = parseTranscript("Renata: primeira parte\ne a continuação aqui");
     expect(falas).toHaveLength(1);
     expect(falas[0].text).toBe("primeira parte e a continuação aqui");
   });
@@ -71,10 +71,10 @@ describe("parseTranscript", () => {
 describe("speakerStats", () => {
   it("mede turnos, palavras e a fatia de cada um", () => {
     const falas = parseTranscript(
-      "Bruna: uma duas três quatro\nCliente: cinco seis\nBruna: sete oito",
+      "Renata: uma duas três quatro\nCliente: cinco seis\nRenata: sete oito",
     );
     const stats = speakerStats(falas);
-    expect(stats[0]).toMatchObject({ speaker: "Bruna", turns: 2, words: 6 });
+    expect(stats[0]).toMatchObject({ speaker: "Renata", turns: 2, words: 6 });
     expect(stats[0].share).toBeCloseTo(75, 0);
     expect(stats[1]).toMatchObject({ speaker: "Cliente", words: 2 });
   });
@@ -87,27 +87,27 @@ describe("speakerStats", () => {
 
 describe("renameSpeaker", () => {
   it("corrige o nome em todas as falas daquele participante", () => {
-    const falas = parseTranscript("Bruna: oi\nBrunna: tudo bem\nBruna: sim");
-    const corrigido = renameSpeaker(falas, "Brunna", "Bruna");
-    expect(corrigido.every((f) => f.speaker === "Bruna")).toBe(true);
+    const falas = parseTranscript("Renata: oi\nBrunna: tudo bem\nRenata: sim");
+    const corrigido = renameSpeaker(falas, "Brunna", "Renata");
+    expect(corrigido.every((f) => f.speaker === "Renata")).toBe(true);
   });
 });
 
 describe("searchTranscript", () => {
   it("acha as falas que contêm o termo, com a posição", () => {
-    const falas = parseTranscript("Bruna: o prazo é agosto\nCliente: e o preço?");
+    const falas = parseTranscript("Renata: o prazo é agosto\nCliente: e o preço?");
     const achados = searchTranscript(falas, "preço");
     expect(achados).toHaveLength(1);
     expect(achados[0].index).toBe(1);
   });
 
   it("busca também pelo nome do participante e ignora maiúsculas", () => {
-    const falas = parseTranscript("Bruna: teste");
-    expect(searchTranscript(falas, "BRUNA")).toHaveLength(1);
+    const falas = parseTranscript("Renata: teste");
+    expect(searchTranscript(falas, "RENATA")).toHaveLength(1);
   });
 
   it("termo vazio não devolve nada", () => {
-    expect(searchTranscript(parseTranscript("Bruna: x"), "  ")).toEqual([]);
+    expect(searchTranscript(parseTranscript("Renata: x"), "  ")).toEqual([]);
   });
 });
 
@@ -120,7 +120,7 @@ Decisões
 - Fechar o contrato nesta semana
 
 Tarefas
-- Enviar contrato assinado — Bruna — 05/08
+- Enviar contrato assinado — Renata — 05/08
 - Confirmar sabor do bolo — Cliente — 10/08
 
 Riscos
@@ -169,17 +169,17 @@ Temas
 
 describe("parseActionItem", () => {
   it("lê tarefa, responsável e prazo separados por travessão", () => {
-    expect(parseActionItem("Enviar contrato — Bruna — 05/08")).toEqual({
+    expect(parseActionItem("Enviar contrato — Renata — 05/08")).toEqual({
       title: "Enviar contrato",
-      owner: "Bruna",
+      owner: "Renata",
       due: "05/08",
     });
   });
 
   it("lê o formato entre parênteses", () => {
-    expect(parseActionItem("Enviar contrato (Bruna, 05/08)")).toEqual({
+    expect(parseActionItem("Enviar contrato (Renata, 05/08)")).toEqual({
       title: "Enviar contrato",
-      owner: "Bruna",
+      owner: "Renata",
       due: "05/08",
     });
   });
@@ -226,13 +226,13 @@ describe("actionDueDate", () => {
 describe("minutesToTasks", () => {
   it("transforma as tarefas da ata em tarefas com prazo resolvido", () => {
     const minutes = parseMinutes(
-      "Tarefas\n- Enviar contrato — Bruna — 05/08\n- Revisar proposta",
+      "Tarefas\n- Enviar contrato — Renata — 05/08\n- Revisar proposta",
     );
     const tarefas = minutesToTasks(minutes, { referencia: "2026-07-29" });
     expect(tarefas).toHaveLength(2);
     expect(tarefas[0]).toMatchObject({
       title: "Enviar contrato",
-      owner: "Bruna",
+      owner: "Renata",
       dueDate: "2026-08-05",
     });
     expect(tarefas[1]).toMatchObject({ title: "Revisar proposta", dueDate: "" });
@@ -249,14 +249,14 @@ describe("minutesToTasks", () => {
 
 describe("buildMinutesPrompt", () => {
   it("inclui a transcrição, os dados da reunião e a proibição de inventar", () => {
-    const falas = parseTranscript("[00:10] Bruna: vamos fechar");
+    const falas = parseTranscript("[00:10] Renata: vamos fechar");
     const prompt = buildMinutesPrompt(
-      { title: "Alinhamento", date: "2026-07-29", participants: ["Bruna", "Ana"] },
+      { title: "Alinhamento", date: "2026-07-29", participants: ["Renata", "Ana"] },
       falas,
     );
     expect(prompt).toContain("Alinhamento");
-    expect(prompt).toContain("Bruna, Ana");
-    expect(prompt).toContain("[00:10] Bruna: vamos fechar");
+    expect(prompt).toContain("Renata, Ana");
+    expect(prompt).toContain("[00:10] Renata: vamos fechar");
     expect(prompt).toContain("Não invente decisões");
     expect(prompt).toContain("Perguntas pendentes");
   });
@@ -269,7 +269,7 @@ describe("filterMeetings e allTags", () => {
       title: "Alinhamento com o cliente",
       client: "Padaria X",
       tags: ["vendas"],
-      participants: ["Bruna"],
+      participants: ["Renata"],
       transcript: "falamos de preço",
       minutes: { resumo: "" },
     },

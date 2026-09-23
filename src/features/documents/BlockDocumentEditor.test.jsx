@@ -17,7 +17,7 @@ import {
 
 const business = { id: "business-doc", name: "Empresa" };
 const baseDb = {
-  user: { id: "user-doc", name: "Bruna" },
+  user: { id: "user-doc", name: "Renata" },
   documents: [{ id: "document-1", title: "Contrato", type: "Documento" }],
   databases: [
     {

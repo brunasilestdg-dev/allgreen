@@ -231,11 +231,11 @@ describe("automações configuráveis da Central de Trabalho", () => {
     expect(subitemResponse.status).toBe(201);
     const commentResponse = await pedir(`/api/todogreen/work-center/${parent.id}/comments`, {
       method: "POST",
-      body: { body: "@Bruna validar SLA antes da ativação" },
+      body: { body: "@Renata validar SLA antes da ativação" },
     });
     expect(commentResponse.status).toBe(201);
     const comment = (await commentResponse.json()).comment;
-    expect(comment.mentions).toContain("Bruna");
+    expect(comment.mentions).toContain("Renata");
 
     const detailResponse = await pedir(`/api/todogreen/work-center/${parent.id}/detail`);
     expect(detailResponse.status).toBe(200);
