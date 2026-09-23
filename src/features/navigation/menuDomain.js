@@ -14,13 +14,20 @@ export const DEFAULT_MENU = [
   "conversar",
   "meu-trabalho",
   "vendas",
+  // Orçamentos, Precificação, Reuniões e Notebook entram na curadoria inicial:
+  // são fluxos de alto valor que ficavam escondidos em "Todas as ferramentas".
+  // Continuam removíveis em dois cliques por Personalizar menu.
+  "orcamentos",
+  "precificacao",
   "financeiro",
   "contas",
   "agendamentos",
+  "reunioes",
   "contatos",
   "operacao",
   "documentos",
   "resultados",
+  "notebook",
 ];
 
 // Itens que não podem sair do menu: sem eles a pessoa perde o caminho de volta.

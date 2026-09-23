@@ -40,13 +40,14 @@ export const BUSINESS_PACKS = [
   {
     id: "operacao",
     label: "Operação e projetos",
-    description: "Tarefas, processos, projetos, capacidade, quadros e planejamento diário.",
+    description: "Tarefas, processos, projetos, jurídico, capacidade, quadros e planejamento diário.",
     pages: [
       "operacao",
       "estrutura",
       "planejar",
       "portfolio",
       "processos",
+      "juridico",
       "capacidade",
       "quadro",
       "diagramas",
@@ -56,19 +57,27 @@ export const BUSINESS_PACKS = [
   {
     id: "equipe",
     label: "Equipe e colaboração",
-    description: "Trabalho pessoal, chat, desenvolvimento, certificados e gestão da equipe.",
-    pages: ["meu-trabalho", "chat-corporativo", "desenvolvimento", "certificacoes"],
+    description: "Trabalho pessoal, chat, desenvolvimento, certificados, histórico e gestão da equipe.",
+    pages: [
+      "meu-trabalho",
+      "chat-corporativo",
+      "desenvolvimento",
+      "certificacoes",
+      "historico",
+    ],
   },
   {
     id: "conteudo",
     label: "Conteúdo, marca e criatividade",
-    description: "Marketing, calendário editorial, imagens, vídeos e apresentações.",
+    description: "Marketing, calendário editorial, imagens, vídeos, apresentações e criação.",
     pages: [
       "marketing",
       "conteudo",
       "criacao-local",
       "laboratorio-gratuito",
       "estudio",
+      "midia",
+      "editor-codigo",
       "apresentacoes",
       "assinatura",
     ],
@@ -82,13 +91,14 @@ export const BUSINESS_PACKS = [
   {
     id: "conhecimento",
     label: "Documentos, dados e conhecimento",
-    description: "Documentos, wiki, bases, planilhas, notas, análises e memória.",
+    description: "Documentos, wiki, bases, planilhas, notebook, notas, análises e memória.",
     pages: [
       "documentos",
       "wiki",
       "analise",
       "bases",
       "planilhas",
+      "notebook",
       "notas-conectadas",
       "memoria-busca",
       "ideias",
@@ -97,8 +107,14 @@ export const BUSINESS_PACKS = [
   {
     id: "automacao",
     label: "IA, agentes e automações",
-    description: "Agentes, regras automáticas, ferramentas inteligentes e contingências.",
-    pages: ["automacoes", "agentes", "ferramentas", "central-crescimento"],
+    description: "Agentes, regras automáticas, integrações, ferramentas inteligentes e contingências.",
+    pages: [
+      "automacoes",
+      "agentes",
+      "integracoes",
+      "ferramentas",
+      "central-crescimento",
+    ],
   },
   {
     id: "logistica",
@@ -750,7 +766,11 @@ export function businessEnabledPackIds(business) {
 }
 
 export function businessVisiblePageIds(business) {
-  const always = ["inicio", "comecar", "perfil-negocio"];
+  // "conversar" é a porta de entrada fixada (PINNED) do app: precisa continuar
+  // visível mesmo em modo "custom" com poucos packs, senão a pessoa perde o
+  // caminho mais curto para quase tudo. "inicio"/"comecar"/"perfil-negocio"
+  // seguem a mesma regra de sempre-visíveis.
+  const always = ["inicio", "conversar", "comecar", "perfil-negocio"];
   if (!business || business.menuMode !== "custom") return null;
   const selected = new Set(businessEnabledPackIds(business));
   for (const pack of BUSINESS_PACKS) {
