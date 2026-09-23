@@ -556,6 +556,40 @@ describe("TRACK3R — webhooks documentados", () => {
     expect(JSON.stringify(rej)).not.toContain("token-bem-errado");
   });
 
+  it("plano B: embarcador cria cliente novo (nome+CNPJ) quando não existe", async () => {
+    await chamar("embarcadores", {
+      data_hora_envio: "01/09/2026 10:00:00",
+      codigo_embarcador: 5001,
+      nome: "Cliente Novo Plano B",
+      fantasia: "Novo Plano B",
+      cpf_cnpj: "99.888.777/0001-66",
+    });
+    const c = await env.DB.prepare(
+      `SELECT * FROM todogreen_clients WHERE workspace_owner_id='tmw-all-user'
+        AND REPLACE(REPLACE(REPLACE(REPLACE(document,'.',''),'/',''),'-',''),' ','')='99888777000166'`,
+    ).first();
+    expect(c).toBeTruthy();
+    expect(c.name).toBe("Novo Plano B");
+    expect(JSON.parse(c.fields_json).source).toBe("track3r_embarcador");
+  });
+
+  it("plano B: embarcador enriquece cliente existente sem CNPJ, casando por nome", async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_clients (id,tenant_id,workspace_owner_id,name,legal_name,document,status,portal_enabled,fields_json,revision,created_by,updated_by,created_at,updated_at)
+       VALUES ('cli-enriquecer','todogreen','tmw-all-user','Enriquecer SA','Enriquecer SA','','ativo',0,'{}',1,'tmw-all-user','tmw-all-user',?,?)`,
+    ).bind(agora, agora).run().catch(() => {});
+    await chamar("embarcadores", {
+      data_hora_envio: "01/09/2026 11:00:00",
+      codigo_embarcador: 5002,
+      nome: "Enriquecer SA",
+      fantasia: "Enriquecer SA",
+      cpf_cnpj: "11122233000199",
+    });
+    const c = await env.DB.prepare("SELECT document FROM todogreen_clients WHERE id='cli-enriquecer'").first();
+    expect(String(c.document).replace(/\D/g, "")).toBe("11122233000199");
+  });
+
   it("recusa tipo inexistente em vez de aceitar payload ambíguo", async () => {
     const r = await chamar("qualquer-coisa", { id: 1 });
     expect(r.status).toBe(400);

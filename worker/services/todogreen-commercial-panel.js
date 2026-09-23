@@ -61,11 +61,20 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
 
   const lerEncomendas = async () => {
     if (!verTudo) return [];
+    // Plano B: quando o nome do embarcador não veio (só o código chegou), resolve
+    // o cliente pelo CNPJ da encomenda (shipper_document) cruzando com o cadastro
+    // do ERP. Subconsulta correlacionada com LIMIT 1 — não duplica linha.
     const { results } = await env.DB.prepare(
-      `SELECT order_ref, external_id, kind, status, occurrence, occurrence_code,
-              promised_at, occurred_at, origin_unit, current_unit, shipper_name, shipper_group
-         FROM todogreen_tms_documents
-        WHERE tenant_id = ? AND workspace_owner_id = ? AND archived_at IS NULL`,
+      `SELECT d.order_ref, d.external_id, d.kind, d.status, d.occurrence, d.occurrence_code,
+              d.promised_at, d.occurred_at, d.origin_unit, d.current_unit, d.shipper_name, d.shipper_group,
+              (SELECT c.name FROM todogreen_clients c
+                WHERE c.tenant_id = d.tenant_id AND c.workspace_owner_id = d.workspace_owner_id
+                  AND c.archived_at IS NULL AND COALESCE(d.shipper_document,'') <> ''
+                  AND REPLACE(REPLACE(REPLACE(REPLACE(c.document,'.',''),'/',''),'-',''),' ','')
+                    = REPLACE(REPLACE(REPLACE(REPLACE(d.shipper_document,'.',''),'/',''),'-',''),' ','')
+                LIMIT 1) AS cliente_por_cnpj
+         FROM todogreen_tms_documents d
+        WHERE d.tenant_id = ? AND d.workspace_owner_id = ? AND d.archived_at IS NULL`,
     ).bind(TENANT_ID, ownerId).all();
     return (results || []).map((r) => ({
       orderRef: texto(r.order_ref) || texto(r.external_id),
@@ -78,7 +87,7 @@ export async function handleTodoGreenCommercialPanel(request, env, access, user)
       occurredAt: texto(r.occurred_at),
       originUnit: texto(r.origin_unit),
       currentUnit: texto(r.current_unit),
-      cliente: texto(r.shipper_name) || texto(r.shipper_group),
+      cliente: texto(r.shipper_name) || texto(r.cliente_por_cnpj) || texto(r.shipper_group),
     }));
   };
 

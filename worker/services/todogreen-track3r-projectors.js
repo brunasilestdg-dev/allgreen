@@ -98,7 +98,7 @@ async function salvarEntidade(env, integracao, tipo, corpo) {
   ).run();
 
   if (entityType === "embarcador") {
-    const clientId = await clientePorDocumento(env, integracao, document);
+    const clientId = await garantirClienteEmbarcador(env, integracao, tradeName || name, document);
     if (clientId) {
       await env.DB.prepare(
         `UPDATE todogreen_tms_documents
@@ -138,6 +138,49 @@ async function clientePorDocumento(env, integracao, documento) {
       LIMIT 1`,
   ).bind(TENANT_ID, integracao.workspace_owner_id, doc).first();
   return texto(row?.id, 120);
+}
+
+// Plano B da atribuição por cliente: garante um cliente no ERP a partir do
+// embarcador. Casa por CNPJ; senão por nome (enriquecendo o CNPJ que faltava);
+// senão cria. Assim "por cliente" no painel funciona sem cadastro manual e o
+// CNPJ dos clientes passa a existir para o casamento por documento.
+async function garantirClienteEmbarcador(env, integracao, nome, documento) {
+  const doc = soDigitos(documento);
+  const nomeLimpo = texto(nome, 240);
+  if (doc) {
+    const porDoc = await clientePorDocumento(env, integracao, documento);
+    if (porDoc) return porDoc;
+  }
+  if (!nomeLimpo) return "";
+  const agora = new Date().toISOString();
+  const atorId = ator(integracao) || texto(integracao.workspace_owner_id, 120);
+  const porNome = await env.DB.prepare(
+    `SELECT id, document FROM todogreen_clients
+      WHERE tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL
+        AND lower(trim(name)) = lower(trim(?)) LIMIT 1`,
+  ).bind(TENANT_ID, integracao.workspace_owner_id, nomeLimpo).first().catch(() => null);
+  if (porNome?.id) {
+    if (doc && !soDigitos(porNome.document)) {
+      await env.DB.prepare(
+        `UPDATE todogreen_clients SET document=?, updated_by=?, updated_at=?, revision=revision+1 WHERE id=?`,
+      ).bind(texto(documento, 40), atorId, agora, porNome.id).run().catch(() => {});
+    }
+    return texto(porNome.id, 120);
+  }
+  const id = idSeguro("track3r-client", integracao.workspace_owner_id, doc || nomeLimpo);
+  await env.DB.prepare(
+    `INSERT INTO todogreen_clients
+       (id,tenant_id,workspace_owner_id,name,legal_name,document,status,portal_enabled,
+        fields_json,revision,created_by,updated_by,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,'ativo',0,?,1,?,?,?,?)
+     ON CONFLICT(id) DO UPDATE SET
+       document=CASE WHEN COALESCE(todogreen_clients.document,'')='' THEN excluded.document ELSE todogreen_clients.document END,
+       updated_by=excluded.updated_by, updated_at=excluded.updated_at`,
+  ).bind(
+    id, TENANT_ID, integracao.workspace_owner_id, nomeLimpo, nomeLimpo, texto(documento, 40),
+    JSON.stringify({ source: "track3r_embarcador" }), atorId, atorId, agora, agora,
+  ).run().catch(() => {});
+  return id;
 }
 
 async function entidadeTrack3r(env, integracao, tipo, codigo) {
