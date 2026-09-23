@@ -400,3 +400,33 @@ describe("Aba Operacional", () => {
     expect(mg.comReentrega).toBe(1); // E2 teve 2 tentativas
   });
 });
+
+describe("Aba Operacional com de-para oficial (dados crus do webhook)", () => {
+  // No webhook a encomenda grava a DESCRIÇÃO do status na coluna `status`
+  // (descricao_status); `occurrence`/`occurrenceCode` ficam vazios. O de-para
+  // oficial é o que classifica entrega x insucesso nesse cenário.
+  const encomendas = [
+    // Entregue pelo TEXTO do status (sem código 03).
+    enc({ orderRef: "W1", occurredAt: "2026-09-01T08:00:00Z", promisedAt: "2026-09-03T00:00:00Z", originUnit: "SP", currentUnit: "RJ", cliente: "Alfa", status: "Entregue" }),
+    // Em trânsito NÃO é entrega nem insucesso.
+    enc({ orderRef: "W2", occurredAt: "2026-09-02T08:00:00Z", originUnit: "SP", currentUnit: "MG", cliente: "Beta", status: "Em Rota" }),
+    // Insucesso pelo de-para (categoria "insucesso").
+    enc({ orderRef: "W3", occurredAt: "2026-09-03T08:00:00Z", originUnit: "SP", currentUnit: "PR", cliente: "Gama", status: "Cliente ausente" }),
+    // Extravio conta como insucesso (CATEGORIAS_INSUCESSO).
+    enc({ orderRef: "W4", occurredAt: "2026-09-04T08:00:00Z", originUnit: "SP", currentUnit: "BA", cliente: "Delta", status: "Extravio Total - Armazém" }),
+    // Devolução NÃO conta como insucesso de entrega.
+    enc({ orderRef: "W5", occurredAt: "2026-09-05T08:00:00Z", originUnit: "SP", currentUnit: "CE", cliente: "Eps", status: "Devolvido" }),
+  ];
+
+  it("efetividade usa o de-para: só W1 (Entregue) conta como entregue", () => {
+    const e = efetividadeDeEntregas(encomendas);
+    expect(e.total).toBe(5);
+    expect(e.entregues).toBe(1); // apenas W1
+  });
+
+  it("decomposição conta só insucesso/avaria/extravio via de-para", () => {
+    const d = decomposicaoDeOcorrencias(encomendas);
+    expect(d.total).toBe(2); // W3 (Cliente ausente) + W4 (Extravio)
+    expect(d.tipos.map((t) => t.tipo).sort()).toEqual(["Cliente ausente", "Extravio Total - Armazém"]);
+  });
+});

@@ -9,6 +9,11 @@
 // Regra de ouro: sem dado -> `disponivel:false` e listas vazias. NUNCA número
 // inventado. Cada seção diz honestamente se tem base para o que mostra.
 
+import {
+  categoriaStatusTrack3r,
+  CATEGORIAS_INSUCESSO,
+} from "./track3rStatusDomain.js";
+
 const soNumero = (valor) => {
   const n = Number(valor);
   return Number.isFinite(n) ? n : 0;
@@ -56,11 +61,19 @@ const varMoM = (atual, anterior) => {
   return (soNumero(atual) - base) / base;
 };
 
-// Uma encomenda foi entregue? O Track3R marca "03" como Entregue; o texto de
-// status/ocorrência confirma. Guarda contra "não entregue" para não contar
-// insucesso como sucesso.
+// Uma encomenda foi entregue? Ordem de confiança:
+//   1. Track3R marca a ocorrência "03" como Entregue (código operacional).
+//   2. De-para OFICIAL: a encomenda grava a descrição do status (descricao_status)
+//      na coluna `status`; a tabela do Lucas diz a categoria canônica. Categoria
+//      "entregue" -> sim; qualquer outra categoria CONHECIDA -> não (não confunde
+//      em trânsito/insucesso com entrega).
+//   3. Sem de-para (status fora da tabela oficial): cai no texto, com guarda
+//      contra "não entregue" para não contar insucesso como sucesso.
 const foiEntregue = (enc) => {
   if (textoLimpo(enc?.occurrenceCode) === "03") return true;
+  const cat = categoriaStatusTrack3r(textoLimpo(enc?.status) || textoLimpo(enc?.occurrence));
+  if (cat === "entregue") return true;
+  if (cat) return false; // categoria oficial conhecida e não-entregue
   const alvo = `${textoLimpo(enc?.status)} ${textoLimpo(enc?.occurrence)}`.toLowerCase();
   if (/n[ãa]o\s*entreg/.test(alvo)) return false;
   return /entreg/.test(alvo);
@@ -422,9 +435,16 @@ export function decomposicaoDeOcorrencias(encomendas = []) {
   const porTipo = new Map();
   let total = 0;
   for (const e of encomendas) {
-    const tipo = textoLimpo(e?.occurrence);
+    // A encomenda do webhook grava a descrição do status em `status`; o campo
+    // `occurrence` só vem do artefato/importação. Considera os dois.
+    const tipo = textoLimpo(e?.occurrence) || textoLimpo(e?.status);
     if (!tipo) continue;
     if (foiEntregue(e)) continue; // ocorrência de sucesso não é "insucesso"
+    // De-para oficial: só insucesso/avaria/extravio contam como falha de entrega.
+    // Status fora da tabela (categoria "") mantém o comportamento antigo, para
+    // não perder ocorrência legada que ainda não esteja mapeada.
+    const cat = categoriaStatusTrack3r(tipo);
+    if (cat && !CATEGORIAS_INSUCESSO.includes(cat)) continue;
     porTipo.set(tipo, soNumero(porTipo.get(tipo)) + 1);
     total += 1;
   }
