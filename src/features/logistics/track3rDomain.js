@@ -363,6 +363,30 @@ export const normalizarOcorrenciaDoWebhook = (payload = {}, fieldMap = {}) => {
   };
 };
 
+// Do payload cru do webhook, os dados de PROVA DE ENTREGA e de quem recebeu —
+// já sanitizados (URL só http(s), texto aparado e limitado). Documento de
+// arquivo/API não tem esses objetos aninhados e recebe tudo vazio. É o elo que
+// faltava: `projetarOperacao` lê as colunas PLANAS do documento, mas comprovante,
+// assinatura e recebedor só existem ANINHADOS no payload — por isso nunca
+// chegavam à operação do cliente. Aqui eles voltam, sem inventar nada.
+export const dadosDeEntregaDoPayload = (payload = {}) => {
+  const corpo = payload && typeof payload === "object" ? payload : {};
+  const ocorrencia = ocorrenciaDoPayload(corpo);
+  const recebedor =
+    (corpo.recebedor && typeof corpo.recebedor === "object" ? corpo.recebedor : {}) || {};
+  return {
+    proofUrl: urlSegura(ocorrencia?.comprovante?.caminho),
+    signatureUrl: urlSegura(ocorrencia?.assinatura?.caminho),
+    // Quem recebeu e em que condição ("Próprio", "Vizinho", "Portaria") é o que
+    // o embarcador legitimamente quer na prova de entrega. O DOCUMENTO do
+    // recebedor (RG/CPF) fica de fora de propósito: é dado pessoal de terceiro e
+    // não tem por que aparecer no portal.
+    receiverName: texto(recebedor.nome).slice(0, 200),
+    receiverKind: texto(recebedor.tipo).slice(0, 60),
+    occurrenceDescription: texto(ocorrencia.descricao).slice(0, 200),
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Deduplicação
 // ---------------------------------------------------------------------------
@@ -475,6 +499,11 @@ export const projetarOperacao = (doc = {}, opcoes = {}) => {
 
   const evento = mapearStatusParaEvento(doc.status);
   const entregue = evento === "entrega";
+  // Comprovante, assinatura e recebedor moram aninhados no payload do webhook —
+  // vazios para documento de arquivo/API. Sem isto, `proof_url`/`signature_url`
+  // ficavam eternamente em branco e a aba "Comprovante de entrega" do portal
+  // nunca acendia, mesmo com o dado tendo chegado pelo webhook.
+  const entrega = dadosDeEntregaDoPayload(doc.payload);
 
   // Os nomes aqui espelham as COLUNAS REAIS de `todogreen_client_operations`
   // (migrações 0033 e 0045): `reference`, `service_date`, `origin`,
@@ -493,7 +522,14 @@ export const projetarOperacao = (doc = {}, opcoes = {}) => {
     destino: texto(doc.currentUnit),
     distanceKm: Math.max(0, numero(doc.distanceKm)),
     vehiclePlate: texto(doc.vehiclePlate),
+    // O nome do motorista continua no registro canônico porque a operação
+    // interna usa; quem decide se ele SAI para o cliente é o serializador do
+    // portal (hoje ele não sai — dado pessoal do motorista não vai ao embarcador).
     driverName: texto(doc.driverName),
+    // Colunas dedicadas de `todogreen_client_operations` (0053/0061): a prova de
+    // entrega e a assinatura digital que o webhook do TRACK3R traz.
+    proofUrl: entrega.proofUrl,
+    signatureUrl: entrega.signatureUrl,
     promisedAt: texto(doc.promisedAt) || null,
     // Só marca entrega quando o status DIZ entrega. Preencher com a data do
     // evento em qualquer status faria toda ocorrência contar como entregue.
@@ -516,6 +552,11 @@ export const projetarOperacao = (doc = {}, opcoes = {}) => {
       weightKg: Math.max(0, numero(doc.weightKg)),
       lastStatus: texto(doc.status),
       lastOccurrence: texto(doc.occurrence),
+      // Quem recebeu a entrega, para a prova ficar completa no portal. São
+      // strings (o allowlist do portal só deixa sair chave conhecida e valor
+      // não-objeto), e o documento pessoal do recebedor NÃO entra aqui.
+      receiverName: entrega.receiverName,
+      receiverKind: entrega.receiverKind,
     },
   };
 };
@@ -527,7 +568,10 @@ export const projetarEvento = (doc = {}) => {
   return {
     kind,
     titulo: texto(doc.status),
-    descricao: texto(doc.occurrence),
+    // A coluna plana `occurrence` costuma vir vazia no webhook (a descrição da
+    // ocorrência mora aninhada em `ocorrencia.descricao`); nesse caso, usa a
+    // descrição do payload em vez de deixar a linha do tempo muda.
+    descricao: texto(doc.occurrence) || dadosDeEntregaDoPayload(doc.payload).occurrenceDescription,
     local: texto(doc.currentUnit) || texto(doc.originUnit),
     ocorridoEm: texto(doc.occurredAt),
   };

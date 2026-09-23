@@ -726,15 +726,18 @@ const projetar = async (env, access, user, corpo) => {
            (id, tenant_id, workspace_owner_id, client_id, product_id, contract_id,
             reference, status, service_date, origin, destination, fields_json,
             sla_status, incident_count, promised_at, delivered_at, eta_at,
-            vehicle_plate, driver_name, distance_km,
+            vehicle_plate, driver_name, distance_km, proof_url, signature_url,
             revision, created_by, updated_by, created_at, updated_at, archived_at)
-         VALUES (?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, '', ?, ?, ?, NULL, ?, ?, ?, 1, ?, ?, ?, ?, NULL)`,
+         VALUES (?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, '', ?, ?, ?, NULL, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)`,
       ).bind(
         operacaoId, TENANT_ID, access.ownerId, operacao.clientId,
         operacao.referencia, operacao.status, operacao.serviceDate,
         operacao.origem, operacao.destino, JSON.stringify(operacao.campos),
         operacao.incidentes, operacao.promisedAt, operacao.deliveredAt,
         operacao.vehiclePlate, operacao.driverName, operacao.distanceKm,
+        // Comprovante e assinatura que a projeção agora extrai do payload do
+        // webhook — antes essas colunas ficavam vazias e o POD nunca acendia.
+        operacao.proofUrl || "", operacao.signatureUrl || "",
         user.id, user.id, agora, agora,
       ),
     );

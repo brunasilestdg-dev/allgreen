@@ -47,8 +47,10 @@ const FILTROS = [
   ["com_ocorrencia", "Com ocorrência"],
 ];
 
-function Detalhe({ detalhe, aoBaixarComprovante, baixando }) {
-  const { operacao, sla, previsao, linhaDoTempo, ocorrencias, comprovante } = detalhe;
+function Detalhe({ detalhe, aoBaixarComprovante, aoBaixarAssinatura, baixando }) {
+  const { operacao, sla, previsao, linhaDoTempo, ocorrencias, comprovante, assinatura } = detalhe;
+  const recebedor = operacao.campos?.receiverName || "";
+  const tipoRecebedor = operacao.campos?.receiverKind || "";
   return (
     <div className="cp-op-detalhe">
       <div className="cp-op-blocos">
@@ -85,7 +87,6 @@ function Detalhe({ detalhe, aoBaixarComprovante, baixando }) {
         <article>
           <h4>Veículo e rota</h4>
           <p><span>Placa</span><strong>{operacao.placa || "—"}</strong></p>
-          <p><span>Motorista</span><strong>{operacao.motorista || "—"}</strong></p>
           <p><span>Distância</span><strong>{operacao.distanciaKm ? `${operacao.distanciaKm} km` : "—"}</strong></p>
           {operacao.ultimaPosicao ? (
             <p className="cp-op-posicao">
@@ -106,6 +107,12 @@ function Detalhe({ detalhe, aoBaixarComprovante, baixando }) {
 
         <article>
           <h4>Comprovante de entrega</h4>
+          {recebedor && (
+            <p>
+              <span>Recebido por</span>
+              <strong>{recebedor}{tipoRecebedor ? ` (${tipoRecebedor})` : ""}</strong>
+            </p>
+          )}
           {comprovante.disponivel ? (
             <>
               <p className="cp-op-hash">
@@ -119,6 +126,12 @@ function Detalhe({ detalhe, aoBaixarComprovante, baixando }) {
             </>
           ) : (
             <p className="cp-op-vazio">{comprovante.motivo}</p>
+          )}
+          {assinatura?.disponivel && (
+            <button type="button" className="cp-baixar" disabled={baixando} onClick={aoBaixarAssinatura}>
+              <Download size={16} />
+              {baixando ? "Gerando link..." : "Baixar assinatura"}
+            </button>
           )}
         </article>
       </div>
@@ -238,6 +251,18 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
     }
   };
 
+  const baixarAssinatura = async () => {
+    setBaixando(true);
+    try {
+      const { url } = await enviar(`operacoes/${encodeURIComponent(abertaId)}/assinatura`, {});
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (erro) {
+      setAviso(erro.message);
+    } finally {
+      setBaixando(false);
+    }
+  };
+
   const operacoes = dados?.operacoes || [];
   const paginacao = dados?.paginacao || { pagina: 1, paginas: 1, total: 0, primeiro: 0, ultimo: 0 };
   const resumo = dados?.resumo;
@@ -258,7 +283,7 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
             <input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Referência, origem, destino, placa ou motorista"
+              placeholder="Referência, origem, destino ou placa"
             />
           </div>
         </label>
@@ -354,6 +379,7 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
                               detalhe={detalhe}
                               baixando={baixando}
                               aoBaixarComprovante={baixarComprovante}
+                              aoBaixarAssinatura={baixarAssinatura}
                             />
                           ) : (
                             <div className="cp-carregando"><Loader2 className="girando" size={18} /> Abrindo o detalhe...</div>
