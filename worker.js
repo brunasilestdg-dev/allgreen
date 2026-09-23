@@ -81,6 +81,7 @@ import {
 } from "./worker/services/omnichannel.js";
 import { createQuoteHandlers } from "./worker/services/quotes.js";
 import { createWebhookHandlers } from "./worker/services/webhooks.js";
+import { normalizeInboundEmails } from "./worker/mensageria/inbound-email.js";
 import { runTodoGreenScheduledWorkAutomations } from "./worker/services/todogreen-work-center.js";
 import { runTodoGreenIntelligenceWatches } from "./worker/services/todogreen-client-intelligence.js";
 import { runTodoGreenMarketIntelligenceScheduled } from "./worker/services/todogreen-market-intelligence.js";
@@ -1168,9 +1169,15 @@ async function handleInboundEmail(request, env) {
   if (!env.DB) return json({ error: "Banco de dados indisponível." }, 503);
   if (request.method !== "POST")
     return json({ error: "Método não permitido." }, 405);
+  // O segredo pode vir por header (provedores que permitem) OU pela URL
+  // (?key=/?secret=) — o Brevo Inbound Parsing não deixa configurar header
+  // customizado, então o segredo viaja na própria URL do webhook.
+  const url = new URL(request.url);
   const secret =
     request.headers.get("x-sf-inbound-secret") ||
     request.headers.get("x-inbound-secret") ||
+    url.searchParams.get("key") ||
+    url.searchParams.get("secret") ||
     "";
   if (!env.INBOUND_EMAIL_SECRET || !sameHash(secret, env.INBOUND_EMAIL_SECRET))
     return json({ error: "Webhook não autorizado." }, 403);
@@ -1183,43 +1190,33 @@ async function handleInboundEmail(request, env) {
   } catch {
     return json({ error: "Webhook inválido." }, 400);
   }
-  const to = String(
-    body.to ||
-      body.recipient ||
-      body.envelope?.to?.[0] ||
-      body.headers?.to ||
-      "",
-  )
-    .split(",")[0]
-    .trim()
-    .toLowerCase();
-  const ownerId = await resolveInboundOwner(env, "email", to);
-  if (!ownerId)
+  // Entende o formato genérico (um e-mail no topo) e o do Brevo (array items[]).
+  const messages = normalizeInboundEmails(body);
+  if (!messages.length) return json({ error: "Webhook sem mensagens." }, 400);
+  let inserted = 0;
+  let anyOwner = false;
+  for (const msg of messages) {
+    const ownerId = await resolveInboundOwner(env, "email", msg.to);
+    if (!ownerId) continue;
+    anyOwner = true;
+    await insertInteraction(env, ownerId, ownerId, {
+      channel: "email",
+      direction: "in",
+      contactName: msg.fromName || msg.fromAddress,
+      contactHandle: msg.fromAddress,
+      subject: msg.subject || "(sem assunto)",
+      body: (msg.text || stripHtml(msg.html) || "(e-mail sem texto)").slice(0, 4000),
+      meta: {
+        provider: "inbound_email_webhook",
+        providerAccountId: msg.to,
+        messageId: msg.messageId,
+      },
+    });
+    inserted += 1;
+  }
+  if (!anyOwner)
     return json({ error: "Nenhum workspace configurado para este e-mail." }, 404);
-  const from = String(body.from || body.sender || body.headers?.from || "").trim();
-  const subject = String(body.subject || "(sem assunto)").slice(0, 200);
-  const text = String(
-    body.text ||
-      body["body-plain"] ||
-      body["stripped-text"] ||
-      body.plain ||
-      "",
-  ).trim();
-  const htmlText = stripHtml(body.html || body["body-html"] || "");
-  await insertInteraction(env, ownerId, ownerId, {
-    channel: "email",
-    direction: "in",
-    contactName: from,
-    contactHandle: from,
-    subject,
-    body: (text || htmlText || "(e-mail sem texto)").slice(0, 4000),
-    meta: {
-      provider: "inbound_email_webhook",
-      providerAccountId: to,
-      messageId: body["message-id"] || body.messageId || "",
-    },
-  });
-  return json({ ok: true, inserted: 1 });
+  return json({ ok: true, inserted });
 }
 
 async function handlePersonalInbox(request, env, user, url) {

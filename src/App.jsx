@@ -267,6 +267,7 @@ import {
   Trash2,
   Edit3,
   Copy,
+  Fingerprint,
   Download,
   Upload,
   ExternalLink,
@@ -565,7 +566,7 @@ const navSecondary = [
 const navGroups = [
   {
     label: null,
-    items: ["inicio", "conversar", "meu-trabalho", "comecar"],
+    items: ["inicio", "conversar", "meu-trabalho", "perfil-negocio", "comecar"],
   },
   {
     label: "VENDAS E CLIENTES",
@@ -13660,6 +13661,16 @@ function AccountSettings({ db, update, setToast, go }) {
     URL.revokeObjectURL(link.href);
     setToast("Diagnóstico preparado para o suporte");
   };
+  // ID da conta (workspace): usado ao configurar integrações que roteiam para o
+  // seu espaço — ex.: o segredo EMAIL_INBOUND_OWNER_ID da caixa de entrada.
+  const copyAccountId = async () => {
+    try {
+      await navigator.clipboard.writeText(db.user.id);
+      setToast("ID da conta copiado");
+    } catch {
+      setToast(`Seu ID: ${db.user.id}`);
+    }
+  };
   const enablePush = async () => {
     if (!vapidPublicKey) {
       setToast("Notificações do navegador não estão configuradas.");
@@ -14275,7 +14286,21 @@ function AccountSettings({ db, update, setToast, go }) {
               {serviceStatus?.version ? ` · ${serviceStatus.version}` : ""}
             </span>
           </div>
+          <div className="settings-stat">
+            <Fingerprint />
+            <span>
+              ID da conta: <strong>{db.user.id}</strong>
+              <br />
+              <small>
+                Usado ao configurar integrações que entregam no seu espaço (ex.:
+                caixa de entrada por e-mail).
+              </small>
+            </span>
+          </div>
           <div className="settings-actions">
+            <Button variant="secondary" onClick={copyAccountId}>
+              <Copy size={16} /> Copiar meu ID
+            </Button>
             <Button variant="secondary" onClick={downloadDiagnostics}>
               Baixar diagnóstico
             </Button>
