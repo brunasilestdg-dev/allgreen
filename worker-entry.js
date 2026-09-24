@@ -1,8 +1,6 @@
 import appWorker from "./worker.js";
 import { withInternalSessionAuthorization } from "./worker/auth/internal-session-request.js";
-import {
-  runTodoGreenTrackerScheduled,
-} from "./worker/services/todogreen-tracker.js";
+import { ehDisparoSemanal } from "./worker/lib/cron.js";
 import { exigirAcessoTodoGreen } from "./worker/services/todogreen-access.js";
 import { handleTodoGreenMarketRadar } from "./worker/services/todogreen-market-radar.js";
 import {
@@ -182,11 +180,15 @@ export default {
     return appWorker.fetch(request, env, ctx);
   },
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(runTodoGreenTrackerScheduled(env));
-    ctx.waitUntil(runTodoGreenEnterpriseWorkflowScheduled(env));
-    // Dreno dos webhooks do TMS cuja projeção falhou/ficou pendente, para o
-    // evento durável na inbox não ficar preso sem retry.
-    ctx.waitUntil(reprocessarWebhooksTrack3r(env).catch(() => {}));
+    // Jobs horários da vertical: ficam fora do disparo semanal, como os do
+    // worker.js (worker/lib/cron.js). O rastreador não é chamado aqui — roda
+    // uma vez por disparo horário, no scheduled do worker.js.
+    if (!ehDisparoSemanal(controller)) {
+      ctx.waitUntil(runTodoGreenEnterpriseWorkflowScheduled(env));
+      // Dreno dos webhooks do TMS cuja projeção falhou/ficou pendente, para o
+      // evento durável na inbox não ficar preso sem retry.
+      ctx.waitUntil(reprocessarWebhooksTrack3r(env).catch(() => {}));
+    }
     if (typeof appWorker.scheduled === "function") return appWorker.scheduled(controller, env, ctx);
   },
 };
