@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const user = { id: "user-mtg", name: "Bruna Silva", email: "bruna@example.com" };
+const user = { id: "user-mtg", name: "Renata Silva", email: "renata@example.com" };
 const business = {
   id: "business-mtg-1",
   name: "Doces da Ana",
@@ -13,13 +13,13 @@ const business = {
 };
 
 const TRANSCRICAO =
-  "Bruna: bom dia, vamos falar do orçamento\nCliente: quero saber o preço do bolo\nBruna: fecho em quatro mil";
+  "Renata: bom dia, vamos falar do orçamento\nCliente: quero saber o preço do bolo\nRenata: fecho em quatro mil";
 
 const reuniao = (extra = {}) => ({
   id: "mt-1",
   title: "Alinhamento com a cliente",
   date: "2026-07-29",
-  participants: ["Bruna", "Cliente"],
+  participants: ["Renata", "Cliente"],
   client: "Padaria X",
   project: "",
   tags: ["vendas"],
@@ -87,7 +87,7 @@ Decisões
 - Fechar em quatro mil reais
 
 Tarefas
-- Enviar contrato — Bruna — 05/08
+- Enviar contrato — Renata — 05/08
 - Confirmar sabor — Cliente
 
 Riscos
@@ -131,7 +131,7 @@ describe("Reuniões", () => {
         if (url === "/api/config") return response({ videoEnabled: false });
         if (url === "/api/ai") return response({ text: aiRespondeu });
         if (url === "/api/transcribe")
-          return response({ text: "Bruna: transcrito pelo Whisper" });
+          return response({ text: "Renata: transcrito pelo Whisper" });
         return response({});
       }),
     );
@@ -157,7 +157,7 @@ describe("Reuniões", () => {
     fireEvent.click(screen.getByRole("button", { name: /Alinhamento com a cliente/ }));
 
     const speakers = document.querySelector(".mtg-speakers");
-    await waitFor(() => expect(speakers.textContent).toContain("Bruna"));
+    await waitFor(() => expect(speakers.textContent).toContain("Renata"));
     expect(speakers.textContent).toContain("2 falas");
     expect(speakers.textContent).toContain("Cliente");
   });
@@ -224,7 +224,7 @@ describe("Reuniões", () => {
     expect(criadas).toHaveLength(2);
     const contrato = criadas.find((t) => t.title === "Enviar contrato");
     expect(contrato.due).toBe("2026-08-05");
-    expect(contrato.notes).toContain("Bruna");
+    expect(contrato.notes).toContain("Renata");
   });
 
   it("avisa quando a IA não devolve ata", async () => {
@@ -247,7 +247,7 @@ describe("Reuniões", () => {
         reuniao({
           id: "mt-2",
           title: "Retrospectiva interna",
-          transcript: "Bruna: vamos melhorar o processo",
+          transcript: "Renata: vamos melhorar o processo",
           tags: ["interno"],
         }),
       ]),

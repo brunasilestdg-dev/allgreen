@@ -6,8 +6,8 @@ import App, { CHANGELOG_ENTRIES } from "./App";
 
 const user = {
   id: "user-changelog",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 
 const businessDb = (overrides = {}) => ({

@@ -6,8 +6,8 @@ import App from "./App";
 
 const user = {
   id: "user-size",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 
 const businessDb = (overrides = {}) => ({

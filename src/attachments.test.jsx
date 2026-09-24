@@ -124,8 +124,8 @@ describe("buildAttachment / addAttachmentsFromFiles (funções puras)", () => {
 
 const user = {
   id: "user-attach",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 const business = {
   id: "business-attach-1",

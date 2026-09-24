@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LogisticsVertical from "./LogisticsVertical.jsx";
 
 const baseDb = {
-  user: { id: "u1", name: "Bruna", email: "bruna@example.com" },
+  user: { id: "u1", name: "Renata", email: "renata@example.com" },
   businesses: [],
   tasks: [],
   notifications: [],
@@ -179,7 +179,7 @@ describe("LogisticsVertical", () => {
     // Sem "Sair" a sessão fica eterna no navegador: quem pega o mesmo
     // aparelho entra direto na conta de quem esqueceu de sair.
     expect(screen.getByRole("button", { name: "Sair" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Olá, Bruna" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Olá, Renata" })).toBeTruthy();
     expect(screen.getByText("Novos Negócios e Comercial. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Minha fila" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Configurar meu início/ })).toBeTruthy();
@@ -721,7 +721,7 @@ describe("LogisticsVertical", () => {
               alcadaId: "gestao_comercial",
               situacao: "aprovado",
               versao: 2,
-              decisorNome: "Bruna",
+              decisorNome: "Renata",
               gatilhos: [],
               prazoEm: new Date(Date.now() + 86400000).toISOString(),
               criadoEm: new Date().toISOString(),
@@ -742,7 +742,7 @@ describe("LogisticsVertical", () => {
         }),
     });
     await renderarAutorizada();
-    expect(await screen.findByText(/Aprovado por Bruna na versão 2/)).toBeTruthy();
+    expect(await screen.findByText(/Aprovado por Renata na versão 2/)).toBeTruthy();
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Salvar proposta/ }).disabled).toBe(false),
     );

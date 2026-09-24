@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-brunapsiles/Seufuncionario}"
+REPO="${REPO:-brunasilestdg-dev/allgreen}"
 BRANCH="${BRANCH:-main}"
 
 if ! command -v gh >/dev/null 2>&1; then

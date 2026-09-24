@@ -89,9 +89,9 @@ describe("endereço do webhook: barreira contra SSRF", () => {
   it("recusa apontar para o próprio aplicativo", () => {
     // Senão o nosso servidor viraria uma ponte para a nossa própria API, com
     // a identidade dele.
-    const opts = { selfHost: "seufuncionario-expo.brunapsiles.workers.dev" };
+    const opts = { selfHost: "orianone.app" };
     expect(
-      validateWebhookUrl("https://seufuncionario-expo.brunapsiles.workers.dev/api/ai", opts).ok,
+      validateWebhookUrl("https://orianone.app/api/ai", opts).ok,
     ).toBe(false);
     expect(validateWebhookUrl("https://exemplo.com/x", opts).ok).toBe(true);
   });

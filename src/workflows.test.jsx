@@ -30,8 +30,8 @@ import {
 
 const user = {
   id: "user-flow",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 const business = {
   id: "business-1",
@@ -123,7 +123,7 @@ describe("fluxos de trabalho", () => {
       target: { value: "Preparar lançamento" },
     });
     fireEvent.change(screen.getByLabelText("Nome do responsável"), {
-      target: { value: "Bruna" },
+      target: { value: "Renata" },
     });
     fireEvent.change(screen.getByLabelText("Projeto"), {
       target: { value: "Campanha de julho" },
@@ -1002,7 +1002,7 @@ describe("integrações reais com ferramentas externas", () => {
       title: "Enviar proposta",
       due: "2026-03-10",
       project: "Campanha de março",
-      assignee: "Bruna",
+      assignee: "Renata",
     });
     expect(url).toContain("calendar.google.com/calendar/render?action=TEMPLATE");
     expect(url).toContain("text=Enviar%20proposta");

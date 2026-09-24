@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const user = { id: "user-sg", name: "Bruna Silva", email: "bruna@example.com" };
+const user = { id: "user-sg", name: "Renata Silva", email: "renata@example.com" };
 const business = {
   id: "business-sg-1",
   name: "Doces da Ana",
@@ -93,7 +93,7 @@ describe("Assinatura de e-mail", () => {
     await screen.findByRole("heading", { name: "Assinatura de e-mail" });
 
     // Nome e negócio vêm pré-preenchidos do perfil/negócio.
-    expect(screen.getByDisplayValue("Bruna Silva")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Renata Silva")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Doces da Ana")).toBeInTheDocument();
 
     // Ao digitar o cargo, a prévia reflete a linha "cargo — negócio".
@@ -108,6 +108,6 @@ describe("Assinatura de e-mail", () => {
     const savedSection = screen
       .getByRole("heading", { name: "Assinaturas salvas" })
       .parentElement;
-    expect(within(savedSection).getByRole("heading", { name: "Bruna Silva" })).toBeInTheDocument();
+    expect(within(savedSection).getByRole("heading", { name: "Renata Silva" })).toBeInTheDocument();
   });
 });

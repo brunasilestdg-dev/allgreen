@@ -71,4 +71,33 @@ describe("perfil universal de negócios", () => {
     ).toEqual(["inicio", "perfil-negocio", "marketing"]);
     expect(filterNavigationForBusiness(nav, { menuMode: "all" })).toBe(nav);
   });
+
+  it("nenhum módulo valioso fica fora de todo pack e a porta de entrada é sempre visível", () => {
+    // Com TODOS os packs ligados, um espaço em modo custom precisa conseguir
+    // exibir estes módulos — antes ficavam fora de qualquer pack e eram
+    // inalcançáveis (nem na busca) para quem estava em modo custom.
+    const todosOsPacks = BUSINESS_PACKS.map((pack) => pack.id);
+    const visiveis = new Set(
+      businessVisiblePageIds({ menuMode: "custom", enabledPacks: todosOsPacks }),
+    );
+    for (const page of [
+      "juridico",
+      "notebook",
+      "integracoes",
+      "midia",
+      "editor-codigo",
+      "historico",
+    ]) {
+      expect(visiveis.has(page)).toBe(true);
+    }
+
+    // "conversar" é PINNED (porta de entrada) e não pode sumir nem no modo
+    // custom mais restrito possível (um único pack).
+    const minimo = businessVisiblePageIds({
+      menuMode: "custom",
+      enabledPacks: ["direcao"],
+    });
+    expect(minimo).toContain("conversar");
+    expect(minimo).toContain("inicio");
+  });
 });

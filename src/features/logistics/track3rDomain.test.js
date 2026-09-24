@@ -3,6 +3,7 @@ import {
   PERGUNTAS_AO_TRACK3R,
   achatarOcorrenciaDoWebhook,
   casarEmbarcador,
+  dadosDeEntregaDoPayload,
   eventoDoCodigoDeOcorrencia,
   hashDoDocumento,
   mapearStatusParaEvento,
@@ -337,6 +338,66 @@ describe("projeção na operação", () => {
     expect(projetarEvento(doc)).toMatchObject({
       kind: "ocorrencia", descricao: "Endereço não localizado",
     });
+  });
+
+  it("leva comprovante, assinatura e recebedor do payload do webhook até a operação", () => {
+    const doc = { ...normalizarOcorrenciaDoWebhook(WEBHOOK), clientId: "c-mrk" };
+    const operacao = projetarOperacao(doc);
+    expect(operacao.proofUrl).toContain("comprovante/1.jpg");
+    expect(operacao.signatureUrl).toContain("assinatura/1.jpg");
+    // Recebedor entra em `fields_json` (sai ao cliente pelo allowlist); o
+    // documento pessoal do recebedor NÃO viaja.
+    expect(operacao.campos).toMatchObject({ receiverName: "JOÃO DA SILVA", receiverKind: "PORTEIRO" });
+    expect(operacao.campos.receiverDocument).toBeUndefined();
+  });
+
+  it("documento de arquivo/API (sem payload aninhado) não inventa prova de entrega", () => {
+    const doc = { ...normalizarDocumento(linhaDoRelatorio()), clientId: "c-amz" };
+    const operacao = projetarOperacao(doc);
+    expect(operacao.proofUrl).toBe("");
+    expect(operacao.signatureUrl).toBe("");
+    expect(operacao.campos.receiverName).toBe("");
+  });
+
+  it("caminho hostil no payload não vira prova de entrega", () => {
+    const hostil = {
+      ...normalizarOcorrenciaDoWebhook({
+        ...WEBHOOK,
+        ocorrencia: { ...WEBHOOK.ocorrencia, comprovante: { caminho: "javascript:alert(1)" } },
+      }),
+      clientId: "c-mrk",
+    };
+    expect(projetarOperacao(hostil).proofUrl).toBe("");
+  });
+
+  it("a descrição da ocorrência do webhook preenche a linha do tempo quando a coluna plana vem vazia", () => {
+    // Como nos payloads reais da Maersk: `observacao` nulo (a coluna plana
+    // `occurrence` fica vazia) e a descrição só existe aninhada em
+    // `ocorrencia.descricao`.
+    const doc = normalizarOcorrenciaDoWebhook({
+      ...WEBHOOK,
+      ocorrencia: { ...WEBHOOK.ocorrencia, observacao: null, descricao: "Em rota de entrega" },
+    });
+    expect(doc.occurrence).toBe("");
+    expect(projetarEvento(doc).descricao).toBe("Em rota de entrega");
+  });
+});
+
+describe("dados de entrega do payload cru", () => {
+  it("extrai prova, assinatura e recebedor já sanitizados", () => {
+    expect(dadosDeEntregaDoPayload(WEBHOOK)).toMatchObject({
+      proofUrl: "https://tmstransportador.blob.core.windows.net/comprovante/1.jpg",
+      signatureUrl: "https://tmstransportador.blob.core.windows.net/assinatura/1.jpg",
+      receiverName: "JOÃO DA SILVA",
+      receiverKind: "PORTEIRO",
+      occurrenceDescription: "Entregue",
+    });
+  });
+
+  it("payload ausente ou não-objeto devolve tudo vazio, sem quebrar", () => {
+    expect(dadosDeEntregaDoPayload()).toMatchObject({ proofUrl: "", signatureUrl: "", receiverName: "" });
+    expect(dadosDeEntregaDoPayload(null).proofUrl).toBe("");
+    expect(dadosDeEntregaDoPayload("x").receiverName).toBe("");
   });
 });
 

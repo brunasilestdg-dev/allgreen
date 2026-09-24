@@ -205,7 +205,7 @@ describe("página de oportunidades", () => {
     // e o que se escreve aqui sai carimbado com o id desta oportunidade.
     const onComment = vi.fn().mockResolvedValue({});
     const comments = [
-      { id: "c1", clientId: "cli-1", opportunityId: "", comentario: "Nota da conta: piloto aprovado.", autorEmail: "bruna@todogreen.com", criadoEm: "2026-08-29T10:00:00Z" },
+      { id: "c1", clientId: "cli-1", opportunityId: "", comentario: "Nota da conta: piloto aprovado.", autorEmail: "renata@todogreen.com", criadoEm: "2026-08-29T10:00:00Z" },
       { id: "c2", clientId: "cli-1", opportunityId: "outra-opp", comentario: "Segredo de outra oportunidade", autorEmail: "x@todogreen.com", criadoEm: "2026-08-29T11:00:00Z" },
     ];
     localStorage.setItem("todogreen-opp-view", "kanban");

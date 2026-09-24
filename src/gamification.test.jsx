@@ -79,8 +79,8 @@ describe("cálculo puro de pontos, níveis e conquistas", () => {
 
 const user = {
   id: "user-gami",
-  name: "Bruna Silva",
-  email: "bruna@example.com",
+  name: "Renata Silva",
+  email: "renata@example.com",
 };
 const business = {
   id: "business-gami-1",

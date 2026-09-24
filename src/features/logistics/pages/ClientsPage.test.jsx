@@ -164,7 +164,7 @@ describe("página de clientes", () => {
       authHeaders={() => ({})}
       setToast={vi.fn()}
       onComment={onComment}
-      comments={[{ id: "c1", clientId: "client-1", opportunityId: "", comentario: "Conta estratégica para o Q4.", autorEmail: "bruna@todogreen.com", criadoEm: "2026-08-29T09:00:00Z" }]}
+      comments={[{ id: "c1", clientId: "client-1", opportunityId: "", comentario: "Conta estratégica para o Q4.", autorEmail: "renata@todogreen.com", criadoEm: "2026-08-29T09:00:00Z" }]}
     />);
     fireEvent.click(await screen.findByRole("button", { name: /Rede Alfa/ }));
     fireEvent.click(screen.getByRole("tab", { name: "Conversas realizadas" }));
