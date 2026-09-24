@@ -570,6 +570,10 @@ const CAMPOS_LIBERADOS_AO_CLIENTE = new Set([
   "deliveries", "entregas", "packages", "pacotes", "trips", "viagens",
   "distanceKm", "occupancyPercent", "dataQuality", "energyKwh",
   "weightKg", "tons", "pallets", "successRate",
+  // Prova de entrega: quem recebeu e em que condição. Nome e tipo do recebedor
+  // são o que o embarcador legitimamente acompanha; o documento pessoal do
+  // recebedor nunca entra em `fields_json`, então não há o que vazar aqui.
+  "receiverName", "receiverKind",
 ]);
 const camposParaCliente = (bruto) =>
   Object.fromEntries(
@@ -591,8 +595,15 @@ const operacaoDoBanco = (linha) => ({
   entregueEm: linha.delivered_at || "",
   previsaoEm: linha.eta_at || "",
   placa: linha.vehicle_plate || "",
-  motorista: linha.driver_name || "",
+  // O NOME DO MOTORISTA não sai para o embarcador: é dado pessoal de quem
+  // dirige, sem interesse legítimo do cliente na prova de entrega. Fica gravado
+  // na operação (uso interno) e é omitido aqui, na fronteira com o portal.
   distanciaKm: linha.distance_km || 0,
+  // A prova de entrega e a assinatura saem por link temporário (endpoints
+  // dedicados); aqui vai só o SINAL de que existem, para a lista/tela decidir o
+  // que oferecer sem expor a URL de origem.
+  temComprovante: Boolean(linha.proof_url),
+  temAssinatura: Boolean(linha.signature_url),
   ocorrencias: Number(linha.ocorrencias || linha.incident_count || 0),
   ultimaPosicao:
     linha.last_position_at && linha.last_position_lat !== null
@@ -985,7 +996,8 @@ export async function handleTodoGreenCustomerPortal(request, env) {
     const linhas = await env.DB.prepare(
       `SELECT o.id, o.reference, o.status, o.service_date, o.origin, o.destination,
               o.fields_json, o.created_at, o.promised_at, o.delivered_at, o.eta_at,
-              o.vehicle_plate, o.driver_name, o.distance_km, o.proof_url, o.proof_hash,
+              o.vehicle_plate, o.distance_km, o.proof_url, o.proof_hash,
+              o.signature_url,
               o.last_position_at, o.last_position_lat, o.last_position_lng,
               (SELECT COUNT(*) FROM todogreen_client_operation_events e
                 WHERE e.operation_id = o.id AND e.kind = 'ocorrencia') AS ocorrencias
@@ -1192,6 +1204,10 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       comprovante: linha.proof_url
         ? { disponivel: true, impressaoDigital: linha.proof_hash }
         : { disponivel: false, motivo: "O comprovante ainda não foi anexado a esta entrega." },
+      // A assinatura digital sai pelo mesmo link temporário do comprovante.
+      assinatura: linha.signature_url
+        ? { disponivel: true, impressaoDigital: linha.signature_hash || "" }
+        : { disponivel: false, motivo: "A assinatura ainda não foi anexada a esta entrega." },
     });
   }
 
@@ -1336,6 +1352,36 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       nome: `comprovante-${linha.id}`,
     });
     await logPortalEvent(env, escopo, user, "comprovante_link_emitido", linha.id, "");
+    return response(
+      { url: `/api/todogreen/arquivo?t=${concessao.token}`, expiraEm: concessao.expiraEm },
+      201,
+    );
+  }
+
+  // A assinatura digital da entrega — mesmo mecanismo do comprovante: link
+  // temporário, origem escondida, cada abertura registrada.
+  if (request.method === "POST" && resource === "operacoes" && subresource === "assinatura") {
+    const { sql, params } = scopedWhere(escopo);
+    const linha = await env.DB.prepare(
+      `SELECT id, client_id, signature_url FROM todogreen_client_operations
+        WHERE ${sql} AND id = ? LIMIT 1`,
+    )
+      .bind(...params, documentoPedido)
+      .first()
+      .catch(() => null);
+    if (!linha) return response({ error: "Operação não encontrada." }, 404);
+    if (!linha.signature_url)
+      return response({ error: "A assinatura ainda não foi anexada a esta entrega." }, 409);
+
+    const { emitirConcessaoDeArquivo } = await import("./todogreen-evidences.js");
+    const concessao = await emitirConcessaoDeArquivo(env, {
+      url: linha.signature_url,
+      clientId: linha.client_id,
+      ownerId: escopo.workspaceOwnerId,
+      para: user?.id || "",
+      nome: `assinatura-${linha.id}`,
+    });
+    await logPortalEvent(env, escopo, user, "assinatura_link_emitido", linha.id, "");
     return response(
       { url: `/api/todogreen/arquivo?t=${concessao.token}`, expiraEm: concessao.expiraEm },
       201,

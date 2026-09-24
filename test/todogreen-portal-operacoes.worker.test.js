@@ -161,11 +161,16 @@ describe("a lista deixou de ser cinco colunas", () => {
     expect(corpo.operacoes.map((o) => o.referencia)).toEqual(["OP-NOPRAZO"]);
   });
 
-  it("busca por placa e por motorista", async () => {
+  it("busca por placa; o nome do motorista não é pesquisável (dado pessoal fora do portal)", async () => {
     const porPlaca = await (await pedir("/api/todogreen/portal/operacoes?busca=ABC1D23", cliente.token)).json();
     expect(porPlaca.operacoes).toHaveLength(1);
+    // O nome do motorista não sai para o embarcador nem alimenta a busca —
+    // procurar por ele não pode revelar (ou confirmar) qual operação ele dirigiu.
     const porMotorista = await (await pedir("/api/todogreen/portal/operacoes?busca=joana", cliente.token)).json();
-    expect(porMotorista.operacoes).toHaveLength(1);
+    expect(porMotorista.operacoes).toHaveLength(0);
+    // E o campo `motorista` não viaja em nenhuma operação da lista.
+    const todas = await (await pedir("/api/todogreen/portal/operacoes", cliente.token)).json();
+    expect(todas.operacoes.every((o) => !("motorista" in o))).toBe(true);
   });
 
   it("filtra atrasadas e com ocorrência", async () => {

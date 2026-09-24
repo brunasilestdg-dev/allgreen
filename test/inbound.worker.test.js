@@ -212,4 +212,72 @@ describe("recepção omnichannel por webhook", () => {
       last_message_preview: "Pode me mandar uma proposta?",
     });
   });
+
+  it("recebe e-mail no formato Brevo (items[]) com segredo pela URL", async () => {
+    const owner = await createUser("inbound-brevo-owner");
+    await mapInbound(owner.id, "email", "atendimento@seudominio.com");
+
+    const received = await readJson(
+      await worker.fetch(
+        new Request(
+          "https://app.test/api/inbound/email?key=email-inbound-secret",
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "cf-connecting-ip": nextIp(),
+            },
+            body: JSON.stringify({
+              items: [
+                {
+                  From: { Name: "Maria Cliente", Address: "maria@example.com" },
+                  To: [{ Name: "Atendimento", Address: "atendimento@seudominio.com" }],
+                  Subject: "Dúvida sobre o frete",
+                  RawTextBody: "Qual o prazo de entrega?",
+                  RawHtmlBody: "<p>Qual o prazo de entrega?</p>",
+                  MessageId: "brevo-msg-1",
+                },
+              ],
+            }),
+          },
+        ),
+        env,
+      ),
+    );
+    expect(received.status).toBe(200);
+    expect(received.body.inserted).toBe(1);
+
+    const inbox = await readJson(await inboxRequest(owner));
+    expect(inbox.body.items[0]).toMatchObject({
+      channel: "email",
+      direction: "in",
+      contactName: "Maria Cliente",
+      contactHandle: "maria@example.com",
+      subject: "Dúvida sobre o frete",
+      body: "Qual o prazo de entrega?",
+      readAt: null,
+    });
+    expect(inbox.body.items[0].meta).toMatchObject({
+      provider: "inbound_email_webhook",
+      providerAccountId: "atendimento@seudominio.com",
+      messageId: "brevo-msg-1",
+    });
+  });
+
+  it("recusa o webhook de e-mail quando o segredo está errado", async () => {
+    const recusado = await readJson(
+      await worker.fetch(
+        new Request("https://app.test/api/inbound/email?key=errado", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "cf-connecting-ip": nextIp(),
+          },
+          body: JSON.stringify({ items: [] }),
+        }),
+        env,
+      ),
+    );
+    expect(recusado.status).toBe(403);
+  });
 });

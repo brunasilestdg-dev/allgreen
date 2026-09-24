@@ -68,6 +68,69 @@ describe("convites de equipe", () => {
     vi.restoreAllMocks();
   });
 
+  it("cria acesso com senha provisória e mostra os dados para repassar", async () => {
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (url === "/api/auth/session") return response({ user });
+      if (String(url).startsWith("/api/workspace"))
+        return options.method === "PUT" ? response({ ok: true }) : response({});
+      if (url === "/api/config") return response({ videoEnabled: false });
+      if (url === "/api/collab")
+        return response({ members: [], invites: [], spaces: [] });
+      if (url === "/api/collab/create-access")
+        return response({
+          ok: true,
+          memberId: "m1",
+          email: "novo@empresa.com",
+          tempPassword: "Abcd-Efgh-Jkmn",
+          loginUrl: "https://orianone.app",
+        });
+      return response({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedLoggedIn(businessDb());
+    render(<App />);
+    await screen.findByRole("heading", { name: /Vamos fazer acontecer/ });
+    fireEvent.click(screen.getByRole("button", { name: "Meu Time" }));
+    await screen.findByText("Convidar colaborador");
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Novo Colaborador" } });
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "novo@empresa.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /Criar acesso com senha provisória/ }));
+    expect(await screen.findByTestId("temp-password")).toHaveTextContent("Abcd-Efgh-Jkmn");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/collab/create-access",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("obriga a trocar a senha provisória antes de abrir o app", async () => {
+    const flagged = { ...user, mustChangePassword: true };
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (url === "/api/auth/session") return response({ user: flagged });
+      if (url === "/api/auth/password") return response({ ok: true, user });
+      if (String(url).startsWith("/api/workspace"))
+        return options.method === "PUT" ? response({ ok: true }) : response({});
+      if (url === "/api/config") return response({ videoEnabled: false });
+      return response({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedLoggedIn(businessDb({ user: flagged }));
+    render(<App />);
+    await screen.findByRole("heading", { name: "Crie sua senha" });
+    expect(screen.queryByRole("heading", { name: /Vamos fazer acontecer/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Senha provisória"), { target: { value: "Abcd-Efgh-Jkmn" } });
+    fireEvent.change(screen.getByLabelText(/Nova senha/), { target: { value: "MinhaSenha#1" } });
+    fireEvent.change(screen.getByLabelText("Confirme a nova senha"), { target: { value: "MinhaSenha#1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar senha e entrar" }));
+    await screen.findByRole("heading", { name: /Vamos fazer acontecer/ });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/password",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ currentPassword: "Abcd-Efgh-Jkmn", newPassword: "MinhaSenha#1" }),
+      }),
+    );
+  });
+
   it("envia um convite com nome, e-mail, função, vínculo e papel", async () => {
     const fetchMock = vi.fn((url, options = {}) => {
       if (url === "/api/auth/session") return response({ user });

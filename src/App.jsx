@@ -267,6 +267,7 @@ import {
   Trash2,
   Edit3,
   Copy,
+  Fingerprint,
   Download,
   Upload,
   ExternalLink,
@@ -565,7 +566,7 @@ const navSecondary = [
 const navGroups = [
   {
     label: null,
-    items: ["inicio", "conversar", "meu-trabalho", "comecar"],
+    items: ["inicio", "conversar", "meu-trabalho", "perfil-negocio", "comecar"],
   },
   {
     label: "VENDAS E CLIENTES",
@@ -1648,6 +1649,108 @@ function ModeOnboarding({ update }) {
           </button>
         </div>
       </div>
+    </main>
+  );
+}
+
+// Primeiro acesso com senha provisória (criada pelo admin na tela de Equipe,
+// contingência ao convite por e-mail): nada do app abre antes de a pessoa
+// definir a própria senha. O servidor desliga a marca em /api/auth/password.
+function FirstAccessPassword({ db, update }) {
+  const [form, setForm] = useState({ current: "", next: "", confirm: "" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (form.next.length < 8)
+      return setError("A nova senha precisa ter pelo menos 8 caracteres.");
+    if (form.next !== form.confirm)
+      return setError("A confirmação não confere com a nova senha.");
+    if (form.next === form.current)
+      return setError("Escolha uma senha diferente da provisória.");
+    setBusy(true);
+    try {
+      const r = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ currentPassword: form.current, newPassword: form.next }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Não foi possível trocar a senha.");
+      update((current) => {
+        const { mustChangePassword: _flag, ...user } = current.user || {};
+        return { ...current, user };
+      });
+    } catch (reason) {
+      setError(
+        reason.message === "Failed to fetch"
+          ? "Não foi possível conectar ao servidor. Tente novamente."
+          : reason.message,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <main className="auth-shell verify-shell">
+      <form className="auth-card verify-card" onSubmit={submit}>
+        <span className="eyebrow">PRIMEIRO ACESSO</span>
+        <h2>Crie sua senha</h2>
+        <p>
+          Olá{db.user?.name ? `, ${db.user.name}` : ""}. Você entrou com uma senha provisória.
+          Defina agora uma senha só sua para continuar.
+        </p>
+        <Field label="Senha provisória">
+          <input
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            required
+            value={form.current}
+            onChange={(e) => setForm({ ...form, current: e.target.value })}
+          />
+        </Field>
+        <Field label="Nova senha (mínimo 8 caracteres)">
+          <input
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={form.next}
+            onChange={(e) => setForm({ ...form, next: e.target.value })}
+          />
+        </Field>
+        <Field label="Confirme a nova senha">
+          <input
+            type="password"
+            autoComplete="new-password"
+            required
+            value={form.confirm}
+            onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+          />
+        </Field>
+        {error && (
+          <div className="auth-error" role="alert">
+            <CircleAlert />
+            {error}
+          </div>
+        )}
+        <Button type="submit" className="full" icon={busy ? RefreshCw : CheckCircle2} disabled={busy}>
+          {busy ? "Salvando..." : "Salvar senha e entrar"}
+        </Button>
+        <Button
+          className="full"
+          variant="ghost"
+          icon={LogOut}
+          onClick={() => {
+            endSession();
+            update(() => cleanDb(null));
+          }}
+        >
+          Sair
+        </Button>
+      </form>
     </main>
   );
 }
@@ -12659,6 +12762,8 @@ function Collaborators({ db, update, setToast }) {
   // Link do último convite criado/reenviado, para o admin copiar e enviar por
   // onde quiser — o acesso não depende do e-mail chegar.
   const [inviteLink, setInviteLink] = useState(null);
+  // Contingência ao e-mail: acesso criado com senha provisória, mostrada uma vez.
+  const [tempAccess, setTempAccess] = useState(null);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -12745,12 +12850,12 @@ function Collaborators({ db, update, setToast }) {
       if (!r.ok) throw new Error(d.error || "Não foi possível enviar o convite.");
       const alvo = form.email;
       setForm(blankInviteForm);
-      if (d.link) setInviteLink({ url: d.link, email: alvo, emailSent: d.emailSent });
+      if (d.link) setInviteLink({ url: d.link, email: alvo, emailSent: d.emailSent, emailError: d.emailError || "" });
       load();
       setToast(
         d.emailSent
           ? `Convite enviado para ${alvo}. O link também está aqui para copiar.`
-          : `Convite criado. Copie o link e envie para ${alvo}.`,
+          : `Convite criado, mas o e-mail não foi enviado${d.emailError ? `: ${d.emailError}` : "."} Copie o link e envie para ${alvo}.`,
       );
     } catch (e) {
       setToast(e.message);
@@ -12767,11 +12872,71 @@ function Collaborators({ db, update, setToast }) {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Não foi possível reenviar.");
-      if (d.link) setInviteLink({ url: d.link, email: "", emailSent: d.emailSent });
+      if (d.link) setInviteLink({ url: d.link, email: "", emailSent: d.emailSent, emailError: d.emailError || "" });
       load();
-      setToast(d.emailSent ? "Convite reenviado. Link novo pronto para copiar." : "Link novo gerado — copie e envie.");
+      setToast(d.emailSent ? "Convite reenviado. Link novo pronto para copiar." : `Link novo gerado, mas o e-mail não foi enviado${d.emailError ? `: ${d.emailError}` : "."} Copie e envie.`);
     } catch (e) {
       setToast(e.message);
+    }
+  };
+  const showTempAccess = (d, name) => {
+    setTempAccess({
+      name: name || "",
+      email: d.email,
+      password: d.tempPassword,
+      loginUrl: d.loginUrl || window.location.origin,
+    });
+  };
+  const createAccessWithPassword = async () => {
+    if (!form.name.trim() || !form.email.trim()) {
+      setToast("Preencha nome e e-mail para criar o acesso.");
+      return;
+    }
+    setSending(true);
+    try {
+      const r = await fetch(`/api/collab/create-access${collabQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify(form),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar o acesso.");
+      const nome = form.name.trim();
+      setForm(blankInviteForm);
+      setInviteLink(null);
+      showTempAccess(d, nome);
+      load();
+      setToast("Acesso criado. Copie a senha provisória e envie para a pessoa.");
+    } catch (e) {
+      setToast(e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+  const resetTempPassword = async (member) => {
+    if (!confirm(`Gerar uma nova senha provisória para ${member.name}? A anterior deixa de valer.`)) return;
+    try {
+      const r = await fetch(`/api/collab/reset-access${collabQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ memberId: member.id }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível gerar a senha.");
+      showTempAccess(d, member.name);
+      setToast("Nova senha provisória gerada.");
+    } catch (e) {
+      setToast(e.message);
+    }
+  };
+  const copiarAcessoProvisorio = async () => {
+    if (!tempAccess) return;
+    const texto = `Seu acesso ao ${tempAccess.loginUrl}\nE-mail: ${tempAccess.email}\nSenha provisória: ${tempAccess.password}\nNo primeiro acesso você vai criar sua própria senha.`;
+    try {
+      await navigator.clipboard.writeText(texto);
+      setToast("Dados de acesso copiados.");
+    } catch {
+      setToast("Não consegui copiar automaticamente — selecione e copie.");
     }
   };
   const copiarLinkConvite = async () => {
@@ -13005,17 +13170,53 @@ function Collaborators({ db, update, setToast }) {
               </Field>
             )}
             </div>
-            <Button type="submit" icon={Send} disabled={sending || !data.canManage}>
-              {sending ? "Enviando..." : "Enviar convite"}
-            </Button>
+            <div className="invite-actions">
+              <Button type="submit" icon={Send} disabled={sending || !data.canManage}>
+                {sending ? "Enviando..." : "Enviar convite"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                icon={KeyRound}
+                disabled={sending || !data.canManage}
+                onClick={createAccessWithPassword}
+                title="Contingência: cria a conta com senha provisória para você repassar, sem depender do e-mail"
+              >
+                Criar acesso com senha provisória
+              </Button>
+            </div>
           </form>
+          {tempAccess && (
+            <div className="invite-link-box temp-access-box" role="status">
+              <small>
+                Acesso {tempAccess.name ? `de ${tempAccess.name} ` : ""}pronto. Envie estes dados por WhatsApp ou pessoalmente — a senha aparece só agora. No primeiro acesso a pessoa cria a própria senha.
+              </small>
+              <dl className="temp-access-data">
+                <dt>Endereço</dt>
+                <dd>{tempAccess.loginUrl}</dd>
+                <dt>E-mail</dt>
+                <dd>{tempAccess.email}</dd>
+                <dt>Senha provisória</dt>
+                <dd><code data-testid="temp-password">{tempAccess.password}</code></dd>
+              </dl>
+              <div className="invite-link-row">
+                <Button type="button" icon={Copy} onClick={copiarAcessoProvisorio}>Copiar dados de acesso</Button>
+              </div>
+              <button type="button" className="invite-link-dismiss" onClick={() => setTempAccess(null)}>Fechar</button>
+            </div>
+          )}
           {inviteLink && (
             <div className="invite-link-box">
               <small>
                 {inviteLink.emailSent
-                  ? `Convite enviado por e-mail${inviteLink.email ? ` para ${inviteLink.email}` : ""}. Este link também vale — copie e mande direto se preferir:`
+                  ? `Convite enviado por e-mail${inviteLink.email ? ` para ${inviteLink.email}` : ""} (se não chegar, peça para conferir o spam). Este link também vale — copie e mande direto se preferir:`
                   : `Copie este link e envie para a pessoa${inviteLink.email ? ` (${inviteLink.email})` : ""}. Ela abre e define a senha:`}
               </small>
+              {!inviteLink.emailSent && inviteLink.emailError && (
+                <small className="invite-email-error" role="alert">
+                  O e-mail não foi enviado: {inviteLink.emailError}
+                </small>
+              )}
               <div className="invite-link-row">
                 <input readOnly value={inviteLink.url} onFocus={(e) => e.target.select()} aria-label="Link do convite" />
                 <Button type="button" icon={Copy} onClick={copiarLinkConvite}>Copiar</Button>
@@ -13073,6 +13274,7 @@ function Collaborators({ db, update, setToast }) {
                     <strong>{m.name}</strong>
                     <small>
                       {m.email} · {m.status === "suspenso" ? "Suspenso" : "Ativo"}
+                      {m.mustChangePassword ? " · Aguardando primeiro acesso" : ""}
                     </small>
                   </span>
                   <select
@@ -13086,6 +13288,17 @@ function Collaborators({ db, update, setToast }) {
                     <option value="admin">Administrador</option>
                   </select>
                   <span className="task-actions">
+                    {m.mustChangePassword ? (
+                      <button
+                        className="icon-button"
+                        title="Gerar nova senha provisória"
+                        aria-label={`Gerar nova senha provisória para ${m.name}`}
+                        disabled={!data.canManage}
+                        onClick={() => resetTempPassword(m)}
+                      >
+                        <KeyRound />
+                      </button>
+                    ) : null}
                     <button
                       className="icon-button"
                       title={m.status === "suspenso" ? "Reativar acesso" : "Suspender acesso"}
@@ -13659,6 +13872,16 @@ function AccountSettings({ db, update, setToast, go }) {
     link.click();
     URL.revokeObjectURL(link.href);
     setToast("Diagnóstico preparado para o suporte");
+  };
+  // ID da conta (workspace): usado ao configurar integrações que roteiam para o
+  // seu espaço — ex.: o segredo EMAIL_INBOUND_OWNER_ID da caixa de entrada.
+  const copyAccountId = async () => {
+    try {
+      await navigator.clipboard.writeText(db.user.id);
+      setToast("ID da conta copiado");
+    } catch {
+      setToast(`Seu ID: ${db.user.id}`);
+    }
   };
   const enablePush = async () => {
     if (!vapidPublicKey) {
@@ -14275,7 +14498,21 @@ function AccountSettings({ db, update, setToast, go }) {
               {serviceStatus?.version ? ` · ${serviceStatus.version}` : ""}
             </span>
           </div>
+          <div className="settings-stat">
+            <Fingerprint />
+            <span>
+              ID da conta: <strong>{db.user.id}</strong>
+              <br />
+              <small>
+                Usado ao configurar integrações que entregam no seu espaço (ex.:
+                caixa de entrada por e-mail).
+              </small>
+            </span>
+          </div>
           <div className="settings-actions">
+            <Button variant="secondary" onClick={copyAccountId}>
+              <Copy size={16} /> Copiar meu ID
+            </Button>
             <Button variant="secondary" onClick={downloadDiagnostics}>
               Baixar diagnóstico
             </Button>
@@ -14845,6 +15082,12 @@ export default function App() {
     routePath,
     sessionStatus === "authenticated" || (!isTodoGreenRoute && Boolean(db.user)),
   );
+  if (
+    db.user?.mustChangePassword &&
+    sessionStatus === "authenticated" &&
+    !["public-site", "invite", "todogreen-access-invite"].includes(primaryRoute.kind)
+  )
+    return <FirstAccessPassword db={db} update={update} />;
   if (primaryRoute.kind !== "workspace")
     return (
       <PrimaryAppRouter

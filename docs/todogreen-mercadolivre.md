@@ -7,7 +7,7 @@ dados fiscais de cada rota/envio. O acesso é liberado pelo Mercado Livre para u
 mesmo com o OAuth funcionando.
 
 Código: `worker/services/todogreen-mercadolivre.js` (rotas),
-`migrations/0143_todogreen_mercadolivre_integration.sql` (tabelas),
+`migrations/0144_todogreen_mercadolivre_integration.sql` (tabelas),
 `src/features/logistics/pages/MercadoLivrePanel.jsx` (tela), testes em
 `test/todogreen-mercadolivre.worker.test.js`.
 
