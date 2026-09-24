@@ -66,7 +66,7 @@ import {
   scheduleRiskSummary,
 } from "./features/projects/scheduleDomain.js";
 import {
-  buildNavigation,
+  buildNavigationForBusiness,
   writeVisit,
 } from "./features/navigation/menuDomain.js";
 import Modal from "./components/Modal.jsx";
@@ -158,6 +158,7 @@ import Quotes from "./features/omnichannel/Quotes.jsx";
 import TimeTracking from "./features/omnichannel/TimeTracking.jsx";
 import ExtensionCard from "./features/extension/ExtensionCard.jsx";
 import VerticalShortcuts from "./features/verticals/VerticalShortcuts.jsx";
+import { destinoDoConviteLegado } from "./routing/conviteLegado.js";
 import { textoDoToast, tomDoToast } from "./toastTone.js";
 import {
   BUSINESS_INDUSTRY_CATALOG,
@@ -15050,20 +15051,10 @@ export default function App() {
       mode: db.preferences.mode || "business",
     });
   }, [db.user?.id, db.spaceKey, db.preferences.mode]);
-  // Link antigo no formato `?convite=CÓDIGO`. Ele chamava /api/collab/join,
-  // rota que não existe mais (o Worker respondia 404 "Ação não encontrada").
-  // O convite hoje vive em /convite/:token (AcceptInvite), que valida o token
-  // e serve quem tem ou não tem conta — então o link antigo só é redirecionado.
+  // Link antigo `?convite=CÓDIGO` → /convite/:token (ver conviteLegado.js).
   useEffect(() => {
-    const m = location.search.match(/[?&]convite=([^&]+)/);
-    if (!m) return;
-    let code = "";
-    try {
-      code = decodeURIComponent(m[1]).trim();
-    } catch {
-      return;
-    }
-    if (code) location.replace(`/convite/${encodeURIComponent(code)}`);
+    const destino = destinoDoConviteLegado(location.search);
+    if (destino) location.replace(destino);
   }, []);
   useEffect(() => {
     if (toast) {
@@ -15141,7 +15132,9 @@ export default function App() {
       .normalize("NFD")
       .replace(/[̀-ͯ]/g, "")
       .toLowerCase();
-  const searchableNav = [...visibleNav, ...navSecondary];
+  // A busca enxerga todas as telas: os pacotes do negócio organizam o menu,
+  // nunca tiram uma ferramenta do alcance.
+  const searchableNav = [...navForMode(mode), ...navSecondary];
   const searchResults = searchQuery.trim()
     ? searchableNav.filter(([, label]) =>
         normalizeSearch(label).includes(normalizeSearch(searchQuery)),
@@ -16096,7 +16089,8 @@ export default function App() {
             // O menu principal é escolhido por quem usa. O que fica de fora NÃO
             // perde acesso: cai em "Todas as ferramentas", logo abaixo, e
             // continua achável pela busca. Escolher menu é organizar atalho.
-            const { main, rest } = buildNavigation(
+            const { main, rest } = buildNavigationForBusiness(
+              navForMode(mode),
               visibleNav,
               db.preferences?.mainMenu,
               navGroups,
