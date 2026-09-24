@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { TODO_GREEN_MODULE_CATALOG } from "./logisticsVerticalDomain.js";
+import { MODULE_IMPLEMENTATION } from "./shell/catalogoDeModulos.js";
 import { NOMES_DOS_ESPECIALISTAS, especialistaDaVertical } from "./todoGreenAiSpecialists.js";
 import {
   ESPECIALISTA_POR_TELA,
@@ -15,19 +14,10 @@ import {
 
 // O universo real de telas da vertical vem de duas fontes que já existem: o
 // catálogo de módulos (que declara para onde cada item leva) e o mapa de
-// implementação dentro do componente. O componente é lido como texto pelo
-// mesmo motivo do teste de rótulos: importá-lo arrasta a árvore inteira.
-const fonte = fs.readFileSync(
-  path.join(path.dirname(new URL(import.meta.url).pathname), "LogisticsVertical.jsx"),
-  "utf8",
-);
-const blocoDosModulos = fonte.slice(
-  fonte.indexOf("const MODULE_IMPLEMENTATION"),
-  fonte.indexOf("const fieldLabels"),
-);
-const telasDoComponente = [...blocoDosModulos.matchAll(/^ {2}"?([a-z0-9-]+)"?: \{/gm)].map(
-  (achado) => achado[1],
-);
+// implementação das telas (./shell/catalogoDeModulos.js). O mapa é dado puro,
+// então entra por import — antes era lido como texto de dentro do componente,
+// que arrastaria a árvore inteira para o teste.
+const telasDoComponente = Object.keys(MODULE_IMPLEMENTATION);
 const telasDoCatalogo = TODO_GREEN_MODULE_CATALOG.map((modulo) =>
   String(modulo.workspaceRoute || modulo.route).replace("/todogreen/", ""),
 );
