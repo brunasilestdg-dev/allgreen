@@ -9,6 +9,9 @@ import {
   prazoDaSolicitacao,
   resumoParaCliente,
   situacaoDoPrazo,
+  tipoDaEncomendaPermitido,
+  tiposDaEncomenda,
+  tiposGerais,
   transicaoPermitida,
   validarSolicitacao,
 } from "./clientRequestDomain.js";
@@ -23,6 +26,53 @@ const pedido = (extra = {}) => ({
   urgencia: "normal",
   prazoEm: new Date(AGORA + 24 * HORA).toISOString(),
   ...extra,
+});
+
+describe("solicitações amarradas à encomenda", () => {
+  it("antes da entrega: oferece devolução e alteração de endereço, não acareação", () => {
+    const ids = tiposDaEncomenda(false).map((t) => t.id);
+    expect(ids).toEqual(["devolucao", "alteracao_endereco"]);
+    expect(ids).not.toContain("acareacao");
+  });
+
+  it("depois da entrega: oferece só acareação", () => {
+    const ids = tiposDaEncomenda(true).map((t) => t.id);
+    expect(ids).toEqual(["acareacao"]);
+  });
+
+  it("a fase da encomenda decide o que é permitido — não confia no corpo enviado", () => {
+    expect(tipoDaEncomendaPermitido("devolucao", false)).toBe(true);
+    expect(tipoDaEncomendaPermitido("acareacao", false)).toBe(false); // entregue? não
+    expect(tipoDaEncomendaPermitido("acareacao", true)).toBe(true);
+    expect(tipoDaEncomendaPermitido("devolucao", true)).toBe(false); // já entregue
+    // Tipo geral nunca é um pedido de encomenda.
+    expect(tipoDaEncomendaPermitido("nova_rota", false)).toBe(false);
+  });
+
+  it("a caixa geral não oferece os tipos de encomenda", () => {
+    const ids = tiposGerais().map((t) => t.id);
+    expect(ids).not.toContain("devolucao");
+    expect(ids).not.toContain("acareacao");
+    expect(ids).toContain("nova_rota");
+  });
+
+  it("cada tipo de encomenda exige o campo que o torna respondível", () => {
+    const devSemMotivo = validarSolicitacao({
+      tipo: "devolucao", assunto: "Solicitação de devolução",
+      descricao: "Quero devolver esta encomenda.", campos: {},
+    });
+    expect(devSemMotivo.valido).toBe(false);
+    const devComMotivo = validarSolicitacao({
+      tipo: "devolucao", assunto: "Solicitação de devolução",
+      descricao: "Produto veio errado.", campos: { motivo: "Produto errado" },
+    });
+    expect(devComMotivo.valido).toBe(true);
+    const endSemEndereco = validarSolicitacao({
+      tipo: "alteracao_endereco", assunto: "Alteração de endereço",
+      descricao: "Preciso mudar o endereço.", campos: {},
+    });
+    expect(endSemEndereco.valido).toBe(false);
+  });
 });
 
 describe("catálogo de tipos", () => {

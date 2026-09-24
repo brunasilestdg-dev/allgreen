@@ -47,10 +47,123 @@ const FILTROS = [
   ["com_ocorrencia", "Com ocorrência"],
 ];
 
-function Detalhe({ detalhe, aoBaixarComprovante, aoBaixarAssinatura, baixando }) {
+const ROTULO_STATUS_SOL = {
+  aberta: "Aberta",
+  em_analise: "Em análise",
+  aguardando_cliente: "Aguardando você",
+  respondida: "Respondida",
+  concluida: "Concluída",
+  recusada: "Não atendida",
+  cancelada: "Cancelada",
+};
+
+// As solicitações amarradas a UMA encomenda: devolução, alteração de endereço
+// (antes da entrega) ou acareação (depois). Os tipos oferecidos vêm do servidor
+// já filtrados pela fase da encomenda — a tela não decide sozinha o que cabe.
+function SolicitacoesDaEncomenda({ solicitacoes, tipos, podeAbrir, aoAbrir, enviando }) {
+  const [tipoId, setTipoId] = useState("");
+  const [campos, setCampos] = useState({});
+  const [detalhes, setDetalhes] = useState("");
+  const tipo = tipos.find((t) => t.id === tipoId) || null;
+
+  const submeter = (evento) => {
+    evento.preventDefault();
+    if (!tipo) return;
+    // A descrição da thread nasce dos campos do pedido + o texto livre — assim a
+    // equipe abre a solicitação já com o essencial, sem ida e volta.
+    const partes = tipo.obrigatorios
+      .map((chave) => `${tipo.camposRotulo[chave] || chave}: ${(campos[chave] || "").trim()}`)
+      .filter((linha) => !linha.endsWith(": "));
+    if (detalhes.trim()) partes.push(detalhes.trim());
+    aoAbrir({ tipo: tipo.id, assunto: tipo.rotulo, descricao: partes.join("\n"), campos });
+    setTipoId("");
+    setCampos({});
+    setDetalhes("");
+  };
+
+  return (
+    <div className="cp-op-solic">
+      <h4 className="cp-op-titulo-linha">Solicitações desta encomenda</h4>
+      {solicitacoes.length > 0 ? (
+        <ul className="cp-op-solic-lista">
+          {solicitacoes.map((s) => (
+            <li key={s.id}>
+              <div>
+                <strong>{s.tipoRotulo || s.tipo}</strong>
+                <small>{dataHora(s.criadaEm)}</small>
+              </div>
+              <span className={`cp-op-solic-status cp-op-solic-${s.status}`}>
+                {ROTULO_STATUS_SOL[s.status] || s.status}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="cp-op-vazio">Nenhuma solicitação aberta para esta encomenda.</p>
+      )}
+
+      {podeAbrir && tipos.length > 0 && (
+        <form className="cp-op-solic-form" onSubmit={submeter}>
+          <label>
+            <span>Abrir solicitação</span>
+            <select
+              value={tipoId}
+              onChange={(e) => {
+                setTipoId(e.target.value);
+                setCampos({});
+              }}
+            >
+              <option value="">Selecione o tipo…</option>
+              {tipos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.rotulo}
+                </option>
+              ))}
+            </select>
+          </label>
+          {tipo && (
+            <>
+              {tipo.descricao && <p className="cp-op-solic-desc">{tipo.descricao}</p>}
+              {tipo.obrigatorios.map((chave) => (
+                <label key={chave}>
+                  <span>{tipo.camposRotulo[chave] || chave}</span>
+                  <input
+                    value={campos[chave] || ""}
+                    onChange={(e) => setCampos((a) => ({ ...a, [chave]: e.target.value }))}
+                  />
+                </label>
+              ))}
+              <label>
+                <span>Detalhes (opcional)</span>
+                <textarea
+                  rows={3}
+                  value={detalhes}
+                  onChange={(e) => setDetalhes(e.target.value)}
+                  placeholder="Explique o pedido para a equipe."
+                />
+              </label>
+              <button
+                type="submit"
+                className="cp-baixar"
+                disabled={enviando || tipo.obrigatorios.some((c) => !(campos[c] || "").trim())}
+              >
+                {enviando ? "Enviando..." : "Enviar solicitação"}
+              </button>
+            </>
+          )}
+        </form>
+      )}
+    </div>
+  );
+}
+
+function Detalhe({ detalhe, aoBaixarComprovante, aoBaixarAssinatura, aoAbrirSolicitacao, enviandoSolic, baixando }) {
   const { operacao, sla, previsao, linhaDoTempo, ocorrencias, comprovante, assinatura } = detalhe;
   const recebedor = operacao.campos?.receiverName || "";
   const tipoRecebedor = operacao.campos?.receiverKind || "";
+  const solicitacoes = detalhe.solicitacoes || [];
+  const tiposSolicitacao = detalhe.tiposSolicitacao || [];
+  const podeAbrirSolicitacao = Boolean(detalhe.podeAbrirSolicitacao);
   return (
     <div className="cp-op-detalhe">
       <div className="cp-op-blocos">
@@ -176,6 +289,14 @@ function Detalhe({ detalhe, aoBaixarComprovante, aoBaixarAssinatura, baixando })
           ))}
         </ol>
       )}
+
+      <SolicitacoesDaEncomenda
+        solicitacoes={solicitacoes}
+        tipos={tiposSolicitacao}
+        podeAbrir={podeAbrirSolicitacao}
+        aoAbrir={aoAbrirSolicitacao}
+        enviando={enviandoSolic}
+      />
     </div>
   );
 }
@@ -191,6 +312,7 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
   const [abertaId, setAbertaId] = useState("");
   const [detalhe, setDetalhe] = useState(null);
   const [baixando, setBaixando] = useState(false);
+  const [enviandoSolic, setEnviandoSolic] = useState(false);
 
   const consulta = useMemo(() => {
     const p = new URLSearchParams();
@@ -260,6 +382,20 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
       setAviso(erro.message);
     } finally {
       setBaixando(false);
+    }
+  };
+
+  const abrirSolicitacao = async (pedido) => {
+    setEnviandoSolic(true);
+    try {
+      await enviar("solicitacoes", { operacaoId: abertaId, ...pedido });
+      // Recarrega o detalhe para a nova solicitação já aparecer na lista da
+      // encomenda, com o status inicial.
+      setDetalhe(await pedir(`operacoes/${encodeURIComponent(abertaId)}`));
+    } catch (erro) {
+      setAviso(erro.message);
+    } finally {
+      setEnviandoSolic(false);
     }
   };
 
@@ -380,6 +516,8 @@ export default function Operacoes({ pedir, enviar, setAviso }) {
                               baixando={baixando}
                               aoBaixarComprovante={baixarComprovante}
                               aoBaixarAssinatura={baixarAssinatura}
+                              aoAbrirSolicitacao={abrirSolicitacao}
+                              enviandoSolic={enviandoSolic}
                             />
                           ) : (
                             <div className="cp-carregando"><Loader2 className="girando" size={18} /> Abrindo o detalhe...</div>
