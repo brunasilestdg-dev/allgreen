@@ -53,7 +53,8 @@ describe("entrada da To Do Green", () => {
     fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: " Ana@Empresa.com " } });
     fireEvent.click(screen.getByRole("button", { name: "Alterar senha inicial" }));
     await screen.findByRole("heading", { name: "Redefinir senha" });
-    expect(corpoDa(fetchMock, "/api/auth/forgot")).toEqual({ email: "ana@empresa.com" });
+    // Sem Turnstile no servidor o token vai vazio — o Worker não o exige.
+    expect(corpoDa(fetchMock, "/api/auth/forgot")).toEqual({ email: "ana@empresa.com", turnstileToken: "" });
 
     const codigo = screen.getByLabelText("Código de 6 dígitos");
     fireEvent.change(codigo, { target: { value: "12a3-4567" } });
@@ -108,6 +109,7 @@ describe("entrada da To Do Green", () => {
       empresa: "",
       telefone: "",
       mensagem: "Sou do financeiro.",
+      turnstileToken: "",
     });
   });
 
@@ -128,15 +130,17 @@ describe("entrada da To Do Green", () => {
     expect(screen.getByRole("button", { name: "Enviar pedido" })).toBeEnabled();
   });
 
-  it("portal externo não oferece pedido de acesso nem consulta o Google", async () => {
-    const fetchMock = rotas({});
+  it("portal externo não oferece pedido de acesso nem carrega o Google", async () => {
+    const fetchMock = rotas({ "/api/config": { googleClientId: "cliente-google" } });
     vi.stubGlobal("fetch", fetchMock);
-    render(<Login update={vi.fn()} entryPortal="cliente" />);
+    const { container } = render(<Login update={vi.fn()} entryPortal="cliente" />);
     expect(screen.getByText("PORTAL DO CLIENTE")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Solicitar acesso/ })).toBeNull();
-    // A entrada da To Do Green não desenha o botão do Google: não há por que
-    // buscar o client id nem carregar o script de terceiros ali.
-    expect(fetchMock).not.toHaveBeenCalledWith("/api/config");
+    // A entrada lê o /api/config por causa da chave do anti-robô, mas não
+    // desenha o botão do Google nem carrega o script de terceiros ali, mesmo
+    // com o client id publicado.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/config"));
+    expect(container.querySelector(".google-btn")).toBeNull();
     expect(document.querySelector('script[src*="accounts.google.com"]')).toBeNull();
     expect(document.title).toBe("To Do Green | Portal do Cliente");
   });
@@ -169,7 +173,7 @@ describe("acesso geral", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reenviar código" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Novo código enviado. Confira seu e-mail.");
-    expect(corpoDa(fetchMock, "/api/auth/resend")).toEqual({ email: "maria@example.com" });
+    expect(corpoDa(fetchMock, "/api/auth/resend")).toEqual({ email: "maria@example.com", turnstileToken: "" });
 
     fireEvent.change(screen.getByLabelText("Código de 6 dígitos"), { target: { value: "654321" } });
     fireEvent.click(confirmar);

@@ -94,6 +94,52 @@ ligue o *Zero Data Retention* em Data Controls no console.
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude. Pensado para **chave trazida pelo espaço** (tela de chaves de IA, cifrada com `WORKSPACE_AI_VAULT_KEY`), que o espaço paga. ⚠️ Se for cadastrado no cofre **da plataforma**, entra no fim da cascata automática **sem** confirmação paga — contraria a regra de gratuidade do `AGENTS.md`; não cadastrar no Worker |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | ChatGPT; mesma regra e mesmo aviso do Claude |
 
+### AI Gateway da Cloudflare (opcional, grátis)
+
+Painel com pedidos, tokens, erros e latência de cada provedor; cache e limite de
+taxa configurados no próprio gateway (`worker/services/ai-gateway.js`).
+
+| Variável | Uso | Sem ela |
+| --- | --- | --- |
+| `AI_GATEWAY_ID` (var) | nome do gateway. `default` é criado sozinho no primeiro pedido do Workers AI; outro nome precisa ser criado antes em AI → AI Gateway | nada passa pelo gateway |
+| `AI_GATEWAY_TOKEN` (segredo) | token com a permissão **AI Gateway Run**. Liga também Gemini, Groq, Cerebras, Mistral, OpenAI e Claude pelo gateway (o gateway autenticado recusa chamada por URL sem ele) | só o Workers AI passa pelo gateway |
+| `CLOUDFLARE_ACCOUNT_ID` (var) | reserva para montar o endereço do gateway se o binding `AI` não souber | usa o binding |
+
+- **Conteúdo nunca fica guardado:** Workers AI vai com `collectLog: false`, e
+  as chamadas por URL levam `cf-aig-collect-log-payload: false`, que guarda só
+  modelo, tokens, tempo e status. Pedido da rota sensível não gera log nem usa
+  cache.
+- **Nada é cobrado sem chave:** a chave do provedor segue em cada pedido e
+  `cf-aig-no-wholesale: true` faz o gateway devolver 400 em vez de cobrar pelo
+  Unified Billing. No painel, ligue também **Require provider credentials**
+  (`byok_only`) e não compre créditos.
+- **Cache e limite de taxa:** ficam desligados por padrão e se configuram no
+  painel do gateway (Settings). Com cache ligado, pedir de novo a mesma pergunta
+  devolve a mesma resposta.
+- **Se o gateway falhar** (token errado, gateway inexistente), o provedor é
+  chamado direto e o gateway fica de lado por 10 minutos.
+- **Logs no plano grátis:** a conta que criar o primeiro gateway a partir de
+  24/09/2026 segue as regras do Workers Logs: 200 mil eventos por dia, guardados
+  por 3 dias. Contas que já tinham gateway antes dessa data têm 100 mil logs no
+  total.
+- O streaming do chat (`/api/ai/stream`) continua indo direto ao Gemini.
+
+### Prompt Guard (opcional; usa a `GROQ_API_KEY`)
+
+Conteúdo externo passa por duas camadas antes de a IA ler: resultado de busca
+na web, pesquisa de empresa, pergunta no portal do cliente e dado de
+ferramenta da Semente. As camadas estão em `worker/services/prompt-guard.js`:
+
+1. **Heurística local:** sempre ligada, sem custo.
+2. **Llama Prompt Guard 2 86M na Groq:** avaliado em português. Está em
+   "Preview" na Groq e pode sair do ar sem aviso; se falhar, a heurística
+   continua valendo. O plano grátis dá 30 pedidos/min e 14,4 mil/dia.
+
+| Variável | Uso |
+| --- | --- |
+| `PROMPT_GUARD_MODEL` | troca o modelo (padrão `meta-llama/llama-prompt-guard-2-86m`) |
+| `PROMPT_GUARD_LIMIAR` | nota a partir da qual o texto é barrado, entre 0 e 1 (padrão 0,8) |
+
 ### IA auto-hospedada (opcional)
 
 | Variável | Uso |
@@ -110,6 +156,40 @@ ou URL do operador; padrão: URL de produção). Sem o par, `pushEnabled(env)` �
 `/api/config` de produção ainda devolvia `vapidPublicKey: null`). Para gerar um
 par no formato certo: `node scripts/gerar-chaves-vapid.mjs` e depois
 `npx wrangler secret put` de cada um.
+
+## Anti-robô: Cloudflare Turnstile (opcional, grátis)
+
+Protege cadastro, login, "esqueci a senha", reenvio do código, pedido de acesso
+à To Do Green e os formulários públicos: formulário `/f/`, contato do site,
+checkout da loja, agenda e central de atendimento. O código está em
+`worker/lib/turnstile.js`. Só liga com **as duas** chaves; com uma só, nada
+muda.
+
+| Variável | Uso |
+| --- | --- |
+| `TURNSTILE_SITE_KEY` (var, pública) | chave do widget, entregue à tela pelo `/api/config` |
+| `TURNSTILE_SECRET_KEY` (segredo) | confere o token no siteverify |
+
+Para criar: Cloudflare → Turnstile → Add widget, em modo **Managed**, com os
+domínios `orianone.app` e `www.orianone.app`. O plano grátis não tem limite de
+desafios e permite 20 widgets com 10 domínios cada. Para testar em
+localhost/E2E, use as chaves de teste da Cloudflare: site
+`1x00000000000000000000AA` e secret `1x0000000000000000000000000000000AA`, que
+sempre passam. Se o siteverify ficar fora do ar, o pedido segue e o limite de
+tentativas continua valendo. Token recusado sempre barra.
+
+## Busca por significado (sem variável nova)
+
+A Memória e busca soma a busca por significado à busca por palavra. O código
+está em `worker/services/busca-semantica.js` e na migração `0145`.
+
+- **Como funciona:** o `bge-m3` do Workers AI (binding `AI`) gera os vetores, e
+  o D1 guarda um vetor int8 por texto e por pessoa, sem guardar o texto. A
+  comparação roda no aparelho.
+- **Por que não o Vectorize:** não roda localmente, o deploy falha sem o índice
+  e o plano Free cabe uns 4.900 textos na conta inteira.
+- **Teto:** 2.000 textos novos por pessoa por dia, para poupar os 10 mil
+  neurons diários que a cascata de IA também usa.
 
 ## Busca web (cota gratuita; cascata, nunca paralelo)
 

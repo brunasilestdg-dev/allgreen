@@ -10,21 +10,37 @@
 import { randomHex, sha256 } from "../auth/credenciais.js";
 import { moneyBRL } from "../lib/format.js";
 import { allowed, json } from "../lib/http.js";
+import {
+  caixaDoTurnstile,
+  cspComTurnstile,
+  exigirTurnstile,
+  scriptDoTurnstile,
+} from "../lib/turnstile.js";
 import { escMail } from "../mensageria/envio.js";
 import { insertInteraction } from "./omnichannel.js";
 
-function publicSiteResponse(site) {
+function publicSiteResponse(site, env = {}) {
   const nonce = randomHex(16);
   const endpoint = `/api/public-sites/${encodeURIComponent(site.slug)}/leads`;
-  const script = `<script nonce="${nonce}">(()=>{const f=document.querySelector('[data-sf-lead-form]');if(!f)return;const s=f.querySelector('[data-sf-lead-status]');f.addEventListener('submit',async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(f).entries());if(s)s.textContent='Enviando...';try{const r=await fetch(${JSON.stringify(endpoint)},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Não foi possível enviar.');f.reset();if(s)s.textContent='Mensagem enviada. Em breve entraremos em contato.'}catch(x){if(s)s.textContent=x.message||'Não foi possível enviar agora.'}})})()</script>`;
+  // O HTML do site é da dona; a caixa do anti-robô entra pelo script, antes do
+  // botão de envio do formulário de contato. O widget cria dentro do form o
+  // campo `cf-turnstile-response`, que segue no FormData.
+  const caixa = caixaDoTurnstile(env, "site");
+  const script = `<script nonce="${nonce}">(()=>{const f=document.querySelector('[data-sf-lead-form]');if(!f)return;const s=f.querySelector('[data-sf-lead-status]');const caixa=${JSON.stringify(caixa).replace(/</g, "\\u003c")};if(caixa){const alvo=f.querySelector('[type=submit],button:not([type])');alvo?alvo.insertAdjacentHTML('beforebegin',caixa):f.insertAdjacentHTML('beforeend',caixa)}f.addEventListener('submit',async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(f).entries());if(s)s.textContent='Enviando...';try{const r=await fetch(${JSON.stringify(endpoint)},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Não foi possível enviar.');f.reset();window.turnstile?.reset();if(s)s.textContent='Mensagem enviada. Em breve entraremos em contato.'}catch(x){window.turnstile?.reset();if(s)s.textContent=x.message||'Não foi possível enviar agora.'}})})()</script>`;
+  // O script do widget vem DEPOIS do nosso: quando ele carrega, a caixa já
+  // está no formulário.
+  const scripts = `${script}${scriptDoTurnstile(env, nonce)}`;
   const html = site.html.match(/<\/body\s*>/i)
-    ? site.html.replace(/<\/body\s*>/i, `${script}</body>`)
-    : `${site.html}${script}`;
+    ? site.html.replace(/<\/body\s*>/i, `${scripts}</body>`)
+    : `${site.html}${scripts}`;
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "public, max-age=0, must-revalidate",
-      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src https: data:; connect-src 'self'; script-src 'nonce-${nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors *`,
+      "content-security-policy": cspComTurnstile(
+        `default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src https: data:; connect-src 'self'; script-src 'nonce-${nonce}'; form-action 'self'; base-uri 'none'; frame-ancestors *`,
+        env,
+      ),
       "permissions-policy": "camera=(), microphone=(), geolocation=()",
       "referrer-policy": "strict-origin-when-cross-origin",
       "x-content-type-options": "nosniff",
@@ -71,7 +87,7 @@ function storefrontProduct(p) {
   };
 }
 
-function storefrontResponse(site, products) {
+function storefrontResponse(site, products, env = {}) {
   const nonce = randomHex(16);
   const endpoint = `/api/public-sites/${encodeURIComponent(site.slug)}/checkout`;
   const productsJson = JSON.stringify(products).replace(/</g, "\\u003c");
@@ -145,6 +161,9 @@ form.addEventListener('submit',async e=>{
   const items=Object.values(cart).map(l=>({productId:l.productId,variantId:l.variantId,quantity:l.qty}));
   if(!items.length)return;
   const b=Object.fromEntries(new FormData(form).entries());
+  // A caixa do anti-robô fica fora do formulário (que nasce oculto); o token
+  // vem do campo que o widget cria nela.
+  b.turnstileToken=(document.querySelector('#sf-turnstile [name="cf-turnstile-response"]')||{}).value||'';
   status.textContent='Enviando pedido...';
   try{
     const r=await fetch(${JSON.stringify(endpoint)},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...b,items})});
@@ -153,8 +172,9 @@ form.addEventListener('submit',async e=>{
     form.reset();
     Object.keys(cart).forEach(k=>delete cart[k]);
     renderCart();
+    window.turnstile?.reset();
     status.textContent='Pedido enviado! Em breve entraremos em contato para confirmar.';
-  }catch(x){status.textContent=x.message||'Não foi possível enviar agora.'}
+  }catch(x){window.turnstile?.reset();status.textContent=x.message||'Não foi possível enviar agora.'}
 });
 })()</script>`;
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>
@@ -176,6 +196,7 @@ h1{font-size:22px}
 <h2>Seu carrinho</h2>
 <div id="sf-cart"></div>
 <p id="sf-total"></p>
+<div id="sf-turnstile">${caixaDoTurnstile(env, "loja")}</div>
 <form id="sf-checkout" hidden>
 <input name="name" placeholder="Seu nome" required maxlength="100">
 <input name="phone" placeholder="WhatsApp">
@@ -186,12 +207,16 @@ h1{font-size:22px}
 </form>
 </div>
 ${script}
+${scriptDoTurnstile(env, nonce)}
 </body></html>`;
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
-      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src https: data:; connect-src 'self'; script-src 'nonce-${nonce}'; form-action 'none'; base-uri 'none'; frame-ancestors *`,
+      "content-security-policy": cspComTurnstile(
+        `default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src https: data:; connect-src 'self'; script-src 'nonce-${nonce}'; form-action 'none'; base-uri 'none'; frame-ancestors *`,
+        env,
+      ),
       "permissions-policy": "camera=(), microphone=(), geolocation=()",
       "referrer-policy": "strict-origin-when-cross-origin",
       "x-content-type-options": "nosniff",
@@ -225,7 +250,7 @@ export async function handlePublicSite(request, env, url) {
     const products = rawProducts
       .map(storefrontProduct)
       .filter((p) => p !== null);
-    return storefrontResponse(site, products);
+    return storefrontResponse(site, products, env);
   }
 
   const checkoutMatch = url.pathname.match(
@@ -246,6 +271,11 @@ export async function handlePublicSite(request, env, url) {
     } catch {
       return json({ error: "Dados inválidos." }, 400);
     }
+    const barradoNaLoja = await exigirTurnstile(request, env, body, {
+      acao: "loja",
+      responder: json,
+    });
+    if (barradoNaLoja) return barradoNaLoja;
     const name =
       typeof body.name === "string" ? body.name.trim().slice(0, 100) : "";
     const email =
@@ -362,7 +392,7 @@ export async function handlePublicSite(request, env, url) {
         });
       html = selected.html;
     }
-    return publicSiteResponse({ ...site, html });
+    return publicSiteResponse({ ...site, html }, env);
   }
 
   const leadMatch = url.pathname.match(
@@ -383,6 +413,11 @@ export async function handlePublicSite(request, env, url) {
   } catch {
     return json({ error: "Dados inválidos." }, 400);
   }
+  const barradoNoSite = await exigirTurnstile(request, env, body, {
+    acao: "site",
+    responder: json,
+  });
+  if (barradoNoSite) return barradoNoSite;
   const name =
     typeof body.name === "string" ? body.name.trim().slice(0, 100) : "";
   const email =

@@ -42,6 +42,7 @@ import {
   handleSystemVersion,
 } from "../services/app-info.js";
 import { handleAuth } from "../services/auth.js";
+import { handleBuscaVetores } from "../services/busca-semantica.js";
 import {
   handleClientPortals,
   handlePublicClientPortal,
@@ -373,6 +374,20 @@ export const ROTAS_AUTENTICADAS = Object.freeze([
       if (!allowed(`rota-estimativa:${user.id}`, 10))
         return json({ error: "Muitas consultas em pouco tempo. Aguarde um minuto." }, 429);
       return handleRouteEstimate(request, env);
+    },
+  },
+  {
+    // Busca por significado (bge-m3): indexar um espaço grande pede vários
+    // lotes seguidos; 30 por minuto por pessoa cobre ~1.900 textos e ainda
+    // barra laço descontrolado.
+    caminhos: ["/api/busca/vetores"],
+    rotulo: "Semantic search error",
+    falha: () =>
+      json({ error: "A busca por significado não respondeu agora.", indisponivel: true }, 500),
+    executar: ({ request, env, user }) => {
+      if (!allowed(`busca-vetores:${user.id}`, 30))
+        return json({ error: "Muitas consultas em pouco tempo. Aguarde um minuto." }, 429);
+      return handleBuscaVetores(request, env, user);
     },
   },
   {

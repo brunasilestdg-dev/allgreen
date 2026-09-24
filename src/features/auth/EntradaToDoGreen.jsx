@@ -18,6 +18,7 @@ export default function EntradaToDoGreen({
   onSubmit,
   onForgot,
   pedido,
+  antiRobo = null,
 }) {
   const termos = useTermosDeUso();
   return (
@@ -54,6 +55,8 @@ export default function EntradaToDoGreen({
                   placeholder="Digite sua senha"
                 />
               </Field>
+
+              {antiRobo}
 
               <AlertaDeErro error={error} />
 

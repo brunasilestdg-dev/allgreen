@@ -77,6 +77,7 @@ export default function EntradaGeral({
   onGoogleCredential,
   onSubmit,
   onForgot,
+  antiRobo = null,
 }) {
   const termos = useTermosDeUso();
   return (
@@ -196,6 +197,7 @@ export default function EntradaGeral({
                 placeholder="••••••••"
               />
             </Field>
+            {antiRobo}
             <AlertaDeErro error={error} />
             <Button
               className="full"

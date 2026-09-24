@@ -22,20 +22,26 @@ async function postJson(url, body, headers = {}) {
   return lerResposta(response);
 }
 
+// `turnstileToken` é o token do anti-robô da tela ("" com o Turnstile
+// desligado); o Worker só o exige quando as duas chaves existem.
+
 // Login e criação de conta usam o mesmo formulário.
-export const entrarOuCriarConta = (mode, { name, email, password }) =>
+export const entrarOuCriarConta = (mode, { name, email, password, turnstileToken }) =>
   postJson(`/api/auth/${mode === "login" ? "login" : "register"}`, {
     name,
     email,
     password,
+    turnstileToken,
   });
 
 export const confirmarCodigoDeEmail = (email, code) =>
   postJson("/api/auth/verify", { email, code });
 
-export const reenviarCodigoDeEmail = (email) => postJson("/api/auth/resend", { email });
+export const reenviarCodigoDeEmail = (email, turnstileToken) =>
+  postJson("/api/auth/resend", { email, turnstileToken });
 
-export const pedirCodigoDeRecuperacao = (email) => postJson("/api/auth/forgot", { email });
+export const pedirCodigoDeRecuperacao = (email, turnstileToken) =>
+  postJson("/api/auth/forgot", { email, turnstileToken });
 
 export const redefinirSenha = ({ email, code, password }) =>
   postJson("/api/auth/reset", { email, code, password });
@@ -47,8 +53,8 @@ export const trocarSenha = ({ currentPassword, newPassword }) =>
   postJson("/api/auth/password", { currentPassword, newPassword }, authHeaders());
 
 // Pedido de acesso à To Do Green, sem login: um administrador decide no app.
-export const solicitarAcessoToDoGreen = (pedido) =>
-  postJson("/api/todogreen/solicitar-acesso", pedido);
+export const solicitarAcessoToDoGreen = (pedido, turnstileToken) =>
+  postJson("/api/todogreen/solicitar-acesso", { ...pedido, turnstileToken });
 
 // Revalida no servidor o token guardado no navegador.
 export const consultarSessao = async () =>

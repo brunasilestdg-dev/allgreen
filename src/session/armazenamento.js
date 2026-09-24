@@ -144,6 +144,13 @@ export function endSession() {
   localStorage.removeItem(ACTIVE_USER_KEY);
   localStorage.removeItem("sf-space");
   localStorage.removeItem("sf-space-name");
+  // Vetores da busca por significado (features/knowledge/semanticSearch.js)
+  // são derivados do conteúdo do espaço: saem do aparelho junto com a sessão.
+  try {
+    if (typeof indexedDB !== "undefined") indexedDB.deleteDatabase("allgreen-busca");
+  } catch {
+    // Sem IndexedDB, não há o que apagar.
+  }
   // Mesmo sem Bearer no navegador, o fetch same-origin envia o cookie HttpOnly
   // automaticamente. Isso garante que sair realmente revogue a sessão atual.
   fetch("/api/auth/session", {

@@ -1,4 +1,5 @@
 import { startUserSession } from "../../session/armazenamento.js";
+import { carregarTurnstile, lerChaveDoTurnstile, opcoesDoWidget } from "../../components/turnstile.js";
 import "./LogisticsVerticalCredentials.css";
 
 const LEGACY_AUTH_TOKEN_KEY = "seu-funcionario-auth-token";
@@ -23,6 +24,52 @@ const postJson = async (url, payload) => {
   return data;
 };
 
+// ===== Anti-robô (Turnstile) =====
+// O mesmo widget da tela de entrada. Sem chave no servidor, nada é baixado e
+// o formulário segue como sempre. O token vale uma vez: renova a cada envio.
+const montarTurnstile = async (form) => {
+  const caixa = form?.querySelector(".tdg-turnstile");
+  if (!caixa || caixa.dataset.montado) return;
+  caixa.dataset.montado = "1";
+  const siteKey = await lerChaveDoTurnstile();
+  if (!siteKey || !caixa.isConnected) return;
+  try {
+    const api = await carregarTurnstile();
+    if (!caixa.isConnected) return;
+    caixa.dataset.widget = api.render(caixa, {
+      ...opcoesDoWidget(siteKey, "entrada"),
+      callback: (token) => {
+        caixa.dataset.token = token;
+      },
+      "expired-callback": () => {
+        caixa.dataset.token = "";
+      },
+      "error-callback": () => {
+        caixa.dataset.token = "";
+      },
+    });
+  } catch {
+    // Sem o widget, o servidor recusa com a mensagem de verificação; o
+    // formulário continua de pé para a pessoa tentar de novo.
+  }
+};
+
+// Espera até 8 s pelo token (o widget termina logo depois de a tela abrir).
+const tokenDoFormulario = async (form) => {
+  const caixa = form?.querySelector(".tdg-turnstile");
+  if (!caixa || !(await lerChaveDoTurnstile())) return "";
+  for (let tentativa = 0; tentativa < 40 && !caixa.dataset.token; tentativa += 1)
+    await new Promise((resolver) => setTimeout(resolver, 200));
+  return caixa.dataset.token || "";
+};
+
+const renovarTurnstile = (form) => {
+  const caixa = form?.querySelector(".tdg-turnstile");
+  if (!caixa?.dataset.widget) return;
+  caixa.dataset.token = "";
+  window.turnstile?.reset(caixa.dataset.widget);
+};
+
 const saveSession = (payload) => {
   if (!payload?.token || !payload?.user?.id || !payload?.user?.email)
     throw new Error("Login sem sessão válida.");
@@ -43,6 +90,7 @@ const loginHtml = () => `
     <form class="tdg-login-form">
       <label><span>E-mail</span><input name="email" type="email" autocomplete="username" required placeholder="nome@todogreen.com.br" /></label>
       <label><span>Senha</span><input name="password" type="password" autocomplete="current-password" required placeholder="Senha inicial" /></label>
+      <div class="tdg-turnstile"></div>
       <div class="tdg-login-actions">
         <button class="tdg-login-primary" type="submit">Entrar</button>
         <button class="tdg-login-secondary" type="button" data-tdg-reset>Alterar senha inicial</button>
@@ -59,6 +107,7 @@ const resetHtml = () => `
     <p>Informe o e-mail recebido. Enviaremos um código para confirmar a troca da senha inicial.</p>
     <form class="tdg-password-form" data-step="request">
       <label><span>E-mail</span><input name="email" type="email" autocomplete="username" required /></label>
+      <div class="tdg-turnstile"></div>
       <button class="tdg-login-primary" type="submit">Enviar código</button>
       <button class="tdg-login-secondary" type="button" data-tdg-back>Voltar para login</button>
     </form>
@@ -83,15 +132,19 @@ const bindLogin = (card) => {
     const password = String(data.get("password") || "");
     try {
       setStatus(card, "Validando acesso...", "ok");
-      const payload = await postJson("/api/auth/login", { email, password });
+      const turnstileToken = await tokenDoFormulario(form);
+      const payload = await postJson("/api/auth/login", { email, password, turnstileToken });
       saveSession(payload);
       setStatus(card, "Acesso validado. Carregando ambiente...", "ok");
       setTimeout(() => window.location.reload(), 250);
     } catch (error) {
       setStatus(card, error.message || "E-mail ou senha inválidos.", "error");
+    } finally {
+      renovarTurnstile(form);
     }
   });
   card.querySelector("[data-tdg-reset]")?.addEventListener("click", () => renderReset(card));
+  montarTurnstile(form);
 };
 
 const bindReset = (card) => {
@@ -104,14 +157,18 @@ const bindReset = (card) => {
     resetEmail = String(data.get("email") || "").trim().toLowerCase();
     try {
       setStatus(card, "Enviando código...", "ok");
-      await postJson("/api/auth/forgot", { email: resetEmail });
+      const turnstileToken = await tokenDoFormulario(requestForm);
+      await postJson("/api/auth/forgot", { email: resetEmail, turnstileToken });
       requestForm.hidden = true;
       confirmForm.hidden = false;
       setStatus(card, "Código enviado. Informe o código e a nova senha.", "ok");
     } catch (error) {
       setStatus(card, error.message || "Não foi possível enviar o código.", "error");
+    } finally {
+      renovarTurnstile(requestForm);
     }
   });
+  montarTurnstile(requestForm);
   confirmForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(confirmForm);

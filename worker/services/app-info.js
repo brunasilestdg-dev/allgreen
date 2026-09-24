@@ -3,16 +3,20 @@
 // Contrato
 // - Recebe: `env` e `url` (a versão também recebe `request`, para o método).
 // - Devolve: `handleConfig` — a configuração pública do cliente (login
-//   Google, vídeo ligado, chave VAPID pública, e-mail de suporte);
-//   `handleStatus` — a saúde básica (banco, versão publicada, busca web);
+//   Google, vídeo ligado, chave VAPID pública, e-mail de suporte, chave
+//   pública do Turnstile);
+//   `handleStatus` — a saúde básica (banco, versão publicada, busca web,
+//   AI Gateway e anti-robô ligados ou não);
 //   `handleSystemVersion` — o SHA publicado e o ambiente (só GET).
 // - Quem chama: a tabela de rotas públicas (/api/config, /api/status e
 //   /api/system/version).
 // - Autorização: nenhuma, de propósito — são leituras sem dado de pessoa e
-//   sem segredo; só a chave VAPID PÚBLICA sai daqui.
+//   sem segredo; só as chaves PÚBLICAS (VAPID e Turnstile) saem daqui.
 
 import { json } from "../lib/http.js";
+import { turnstileSiteKey } from "../lib/turnstile.js";
 import { pushEnabled } from "../mensageria/envio.js";
+import { statusDoGateway } from "./ai-gateway.js";
 import {
   lerManifestoDeVersao,
   systemVersionPayload,
@@ -56,6 +60,9 @@ export async function handleStatus(env, url) {
         configured: search.configured,
         braveConfigured: search.providers.brave,
       },
+      // Só se está ligado; nunca o token nem o ID da conta.
+      aiGateway: statusDoGateway(env),
+      antiRobo: { configured: Boolean(turnstileSiteKey(env)) },
     },
     checkedAt: new Date().toISOString(),
   });
@@ -67,5 +74,8 @@ export function handleConfig(env) {
     videoEnabled: !!(env.VIDEO_AI_URL && env.VIDEO_AI_TOKEN),
     vapidPublicKey: pushEnabled(env) ? env.VAPID_PUBLIC_KEY : null,
     supportEmail: env.SUPPORT_EMAIL || env.MAIL_SENDER || "",
+    // Chave PÚBLICA do widget anti-robô; vazia quando o Turnstile está
+    // desligado (falta a chave secreta ou a pública).
+    turnstileSiteKey: turnstileSiteKey(env),
   });
 }

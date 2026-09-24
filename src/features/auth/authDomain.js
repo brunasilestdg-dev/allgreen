@@ -117,6 +117,9 @@ export const normalizarCodigo = (valor = "") => String(valor).replace(/\D/g, "")
 
 // O navegador diz "Failed to fetch" quando o servidor não responde; isso não
 // pode aparecer em inglês para quem usa (produto 100% em português).
+// Turnstile ligado, mas o widget não entregou token: a tela avisa e não envia.
+export const SEM_TOKEN_ANTI_ROBO = "Confirme a verificação anti-robô para continuar.";
+
 export const mensagemDeFalha = (reason, padrao = "Não foi possível concluir o acesso.") => {
   const message = reason?.message || "";
   if (message === "Failed to fetch")

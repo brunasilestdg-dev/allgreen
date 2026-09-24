@@ -27,6 +27,12 @@ Legenda de esforço: **P** = horas · **M** = dias · **G** = semanas.
   chaves VAPID do push (script pronto) e a chave gratuita do Geoapify.
 - **Vários "limites pagos" do AGENTS.md caíram** (seção 3): colaboração em tempo
   real, busca semântica e OCR por visão já cabem no plano grátis da Cloudflare.
+- **Segunda leva aplicada no mesmo dia** (seção 6):
+  - Turnstile no cadastro, no login e nos formulários públicos.
+  - AI Gateway na frente da cascata, sem guardar conteúdo.
+  - Prompt Guard no conteúdo externo que os agentes leem.
+  - Busca por significado na Memória e busca, com `bge-m3` e cache no D1.
+  - Os três primeiros ligam quando a titular cadastra as chaves.
 
 ---
 
@@ -66,7 +72,7 @@ O que não dá para ver sem login (chaves de IA extras, Geoapify, cofre
 | Problema encontrado | Correção | Onde |
 | --- | --- | --- |
 | Job do rastreador rodava **2× por disparo** do cron, sem trava | chamado só no `scheduled` do app | `worker-entry.js`, `worker.js` |
-| Às segundas 12h UTC os dois crons disparam e **todos os jobs horários rodavam em dobro** (PNCP, ANEEL, automações…) | o cron semanal só envia o resumo | `worker.js` (`WEEKLY_SUMMARY_CRON`) + teste |
+| Às segundas 12h UTC os dois crons disparam e **todos os jobs horários rodavam em dobro** (PNCP, ANEEL, automações…) | o cron semanal só envia o resumo | `worker/lib/cron.js` (`CRON_SEMANAL`) + teste |
 | Link `?convite=` chamava `/api/collab/join`, rota inexistente (404) | redireciona para `/convite/:token` | `src/App.jsx` |
 | Roteirizador fazia **autocompletar no Nominatim público** do navegador — a política diz "you must not implement such a service on the client side" | sugestões pelo **Photon** (feito para busca enquanto se digita) + atribuição OSM | `src/App.jsx`, `photonSuggestionLabels` em `src/domain.js` |
 | "Tempo e distância" usava o **OSRM de demonstração** — "reasonable, non-commercial use-cases" | novo `/api/rotas/estimativa` no Worker, só com **Geoapify** (plano grátis permite uso comercial); sem chave, manda abrir no Maps | `worker/services/route-estimate.js` + teste |
@@ -78,7 +84,7 @@ O que não dá para ver sem login (chaves de IA extras, Geoapify, cofre
 | `tesseract.js` instalado, mas o **leitor comum recusava imagem e PDF escaneado** ("precisam de OCR") | OCR no aparelho para foto e PDF escaneado (até 10 páginas); **XLSX** pelo `read-excel-file` | `components/leituraDeArquivo.js` (chat, Análise, Compras, Documentos, anexos) |
 | `qrcode` instalado, mas a **Cobrança Pix não mostrava QR** | QR do "copia e cola" com download | `components/QrCodeImage.jsx` |
 | DACTE em PDF **sem o código de barras** da chave de acesso | CODE-128C gerado por função pura, validado lendo com o `@zxing` | `logistics/code128Domain.js`, `FiscalPage.jsx` |
-| Transcrição com o `whisper` antigo (sem idioma) e laço byte a byte que pesa nos 10 ms de CPU do plano Free | `whisper-large-v3-turbo` com base64 direto, `language: "pt"`, VAD e nomes da reunião como dica | `worker.js`, `Meetings.jsx` |
+| Transcrição com o `whisper` antigo (sem idioma) e laço byte a byte que pesa nos 10 ms de CPU do plano Free | `whisper-large-v3-turbo` com base64 direto, `language: "pt"`, VAD e nomes da reunião como dica | `worker/services/transcribe.js`, `Meetings.jsx` |
 | Tela do Whiteboard dizia a quem usa que escrita à mão e edição simultânea "exigem serviço pago" | texto honesto: ainda não incluído | `QuickWhiteboard.jsx` |
 | Push sem caminho claro para ligar | `node scripts/gerar-chaves-vapid.mjs` gera o par no formato exato da lib (teste prova) | `scripts/` |
 
@@ -92,6 +98,8 @@ O que não dá para ver sem login (chaves de IA extras, Geoapify, cofre
 | Groq: ligar *Zero Data Retention*; Mistral: desligar "Anonymous improvement data" | privacidade dos provedores que já recebem pedidos | nos consoles de cada provedor |
 | Decidir `AllGreenDesignSystemFinal.css` | nunca foi carregado; ligar muda o visual da vertical inteira | revisão visual antes de importar — ou apagar |
 | Limites de D1 no plano Free (desde 01/09/2026: 5 M linhas lidas e 100 mil escritas por dia) | acima disso as consultas são recusadas | acompanhar em Saúde do sistema |
+| Turnstile: `TURNSTILE_SITE_KEY` (var) + `TURNSTILE_SECRET_KEY` (segredo) | liga o anti-robô no cadastro, no login e nos formulários públicos | Cloudflare → Turnstile → Add widget (Managed) com `orianone.app` e `www.orianone.app`; `wrangler secret put TURNSTILE_SECRET_KEY` |
+| AI Gateway: `AI_GATEWAY_ID` (var) e, para os provedores externos, `AI_GATEWAY_TOKEN` | painel de uso da IA, cache e limite de taxa | `AI_GATEWAY_ID=default` já basta para o Workers AI; token com a permissão "AI Gateway Run" liga o resto. No gateway, ligar **Require provider credentials** e não comprar créditos |
 
 ---
 
@@ -117,10 +125,10 @@ requisição.
 
 | Recurso | O que dá | Limites grátis | Encaixe | Esf. |
 | --- | --- | --- | --- | --- |
-| **Turnstile** | anti-robô sem captcha chato | ilimitado, 20 widgets | formulários públicos (`/api/public-forms`, sites, agendamento, atendimento), cadastro | P |
-| **AI Gateway** | cache, limite de taxa, 5 retentativas, painel por provedor | 100 mil logs no total | frente da cascata; `cf-aig-collect-log-payload: false` para não guardar prompt; `byok_only` evita cobrança | P |
+| **Turnstile** | anti-robô sem captcha chato | ilimitado, 20 widgets | ✅ aplicado: formulários públicos (`/api/public-forms`, sites, loja, agendamento, atendimento), cadastro, login, recuperação de senha e pedido de acesso | P |
+| **AI Gateway** | cache, limite de taxa, 5 retentativas, painel por provedor | 10 gateways; logs: conta que cria o 1º gateway a partir de 24/09/2026 segue o Workers Logs (200 mil eventos/dia, 3 dias); contas antigas, 100 mil no total | ✅ aplicado: frente da cascata; `cf-aig-collect-log-payload: false` (e `collectLog: false` no binding) para não guardar prompt; `cf-aig-no-wholesale` + `byok_only` evitam cobrança — `byok_only` não cobre Workers AI nem Guardrails | P |
 | **Workers AI — embeddings/reranker** | `bge-m3`, `qwen3-embedding-0.6b`, `bge-reranker-base` | 10 mil neurons/dia | busca híbrida com o BM25 existente | M |
-| **Vectorize** | banco vetorial | ver seção 3 | um namespace por espaço | M |
+| **Vectorize** | banco vetorial | ver seção 3 | ❌ descartado na aplicação: sem simulação local (o E2E roda com `wrangler dev --local`), deploy recusa binding para índice inexistente, o token do Workers Builds não cria índice e o Free cabe ~4.900 vetores de 1.024 dim. **na conta inteira**. A busca por significado usa D1 (1 KB por vetor int8) + comparação no aparelho | M |
 | **AI Search** (antigo AutoRAG) | RAG pronto | grátis no beta: 20 mil consultas/mês | base de conhecimento sem montar vetor | M |
 | **Workers AI — visão** | ler foto/manuscrito/comprovante | cota de neurons | OCR manuscrito, comprovante de despesa, CNH (sem sair da Cloudflare, que não treina com o conteúdo) | M |
 | **`env.AI.toMarkdown()`** | PDF/DOCX/XLSX/HTML → Markdown | grátis na maioria dos formatos (imagem gasta neurons) | anexos recebidos por e-mail no servidor | P |
@@ -149,9 +157,17 @@ Matriz do uso **gratuito** (base da rota sensível):
 Outros achados:
 
 - **Proteção contra prompt injection:** `meta-llama/llama-prompt-guard-2-86m`
-  no Groq (avaliado em português; janela de 512 tokens, fatiar e-mail/página) e
-  `openai/gpt-oss-safeguard-20b` (política escrita por você). Encaixe: rodar
-  antes de agente ler e-mail recebido ou página da web. Esf. M.
+  no Groq e `openai/gpt-oss-safeguard-20b` (política escrita por você).
+  - O Prompt Guard 2 foi avaliado em português. A janela é de 512 tokens, então
+    e-mail e página longos precisam ser fatiados.
+  - Encaixe: rodar antes de um agente ler e-mail recebido ou página da web.
+    Esf. M.
+  - ✅ **Aplicado em 24/09/2026** (`worker/services/prompt-guard.js`). A Groq
+    lista o modelo em **Preview**: pode sair do ar sem aviso, não documenta o
+    formato da resposta nem um limiar. O código trata tudo isso e volta para a
+    heurística local.
+  - O Workers AI não oferece o Prompt Guard ao público; ele só roda dentro do
+    Guardrails do AI Gateway, que é cobrado em neurons.
 - **Qualidade em pt-BR:** o Open PT LLM Leaderboard (avaliação mais recente em
   01/09/2025) coloca a família **Qwen3** no topo em cada faixa de tamanho
   (Qwen3-8B 78,4; Qwen3-14B 79,9). Vale testar `qwen3-32b` onde a cascata já
@@ -260,12 +276,17 @@ Não há reconhecimento de **manuscrito em português** maduro rodando no aparel
 
 ## 6. Próximos passos sugeridos (valor ÷ esforço)
 
-1. **Titular:** `MAIL_SENDER`, chaves VAPID e `GEOAPIFY_API_KEY` (seção 2.4).
-2. **P** — Turnstile nos formulários públicos e no cadastro.
+1. **Titular:** `MAIL_SENDER`, chaves VAPID, `GEOAPIFY_API_KEY`, chaves do Turnstile e
+   o AI Gateway (seção 2.4).
+2. ✅ **P** — Turnstile nos formulários públicos e no cadastro (24/09/2026; liga com
+   `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`).
 3. **P** — `write-excel-file` no Gerador de planilhas; gitleaks + osv-scanner + axe no CI.
-4. **P** — AI Gateway na frente da cascata (cache poupa cota; sem guardar prompt).
-5. **M** — Prompt Guard 2 (Groq) antes de agentes lerem conteúdo externo.
-6. **M** — Busca semântica híbrida: `bge-m3` + Vectorize (ou e5-small no aparelho) somada ao BM25.
+4. ✅ **P** — AI Gateway na frente da cascata (24/09/2026; liga com `AI_GATEWAY_ID`,
+   provedores externos com `AI_GATEWAY_TOKEN`; nunca guarda conteúdo).
+5. ✅ **M** — Prompt Guard 2 (Groq) antes de agentes lerem conteúdo externo
+   (24/09/2026; heurística sempre ligada; o modelo está em Preview na Groq).
+6. ✅ **M** — Busca semântica híbrida: `bge-m3` + cache no D1 (no lugar do Vectorize,
+   ver 4.1) + comparação no aparelho, somada ao BM25 por RRF (24/09/2026).
 7. **M** — OpenFreeMap + MapLibre no lugar dos tiles do OSM.
 8. **M** — OCR de manuscrito no Whiteboard via visão do Workers AI (medir qualidade; "preferir null a chutar").
 9. **M** — Passkeys com SimpleWebAuthn (bom para motorista no celular).

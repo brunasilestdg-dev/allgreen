@@ -131,6 +131,8 @@ describe("rotas públicas informativas", () => {
       videoEnabled: false,
       vapidPublicKey: env.VAPID_PUBLIC_KEY,
       supportEmail: "",
+      // Sem as duas chaves do Turnstile, a chave pública do widget sai vazia.
+      turnstileSiteKey: "",
     });
   });
 });

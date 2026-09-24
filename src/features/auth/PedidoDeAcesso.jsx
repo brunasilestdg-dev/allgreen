@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { solicitarAcessoToDoGreen } from "./authApi.js";
-import { mensagemDeFalha } from "./authDomain.js";
+import { SEM_TOKEN_ANTI_ROBO, mensagemDeFalha } from "./authDomain.js";
 
 // Pedido de acesso à To Do Green: quem não tem conta pede aqui e um
 // administrador decide dentro do app. Fica só na entrada do ERP (os portais
 // externos são liberados pela operação, não por pedido).
 //
 // O estado mora no `Login` (via `usePedidoDeAcesso`) para sobreviver a ir e
-// voltar da tela de recuperação de senha, como sempre sobreviveu.
+// voltar da tela de recuperação de senha, como sempre sobreviveu. O pedido
+// gasta o mesmo token anti-robô da tela de entrada (`antiRobo`, do `Login`).
 
 const PEDIDO_VAZIO = { nome: "", email: "", empresa: "", telefone: "", mensagem: "" };
 
@@ -18,7 +19,7 @@ const CAMPOS_DO_PEDIDO = [
   { chave: "telefone", rotulo: "Telefone (opcional)", type: "text", maxLength: 40 },
 ];
 
-export function usePedidoDeAcesso() {
+export function usePedidoDeAcesso({ tokenAntiRobo, renovarAntiRobo }) {
   const [pedindoAcesso, setPedindoAcesso] = useState(false);
   const [pedidoForm, setPedidoForm] = useState(PEDIDO_VAZIO);
   // "" | "enviando" | "enviado" | mensagem de erro.
@@ -27,11 +28,15 @@ export function usePedidoDeAcesso() {
     evento.preventDefault();
     setPedidoStatus("enviando");
     try {
-      const { ok, data } = await solicitarAcessoToDoGreen(pedidoForm);
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN_ANTI_ROBO);
+      const { ok, data } = await solicitarAcessoToDoGreen(pedidoForm, turnstileToken);
       if (!ok) throw new Error(data.error || "Não foi possível registrar o pedido.");
       setPedidoStatus("enviado");
     } catch (razao) {
       setPedidoStatus(mensagemDeFalha(razao, "Não foi possível registrar o pedido."));
+    } finally {
+      renovarAntiRobo();
     }
   };
   return {

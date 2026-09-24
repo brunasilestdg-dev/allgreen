@@ -87,6 +87,7 @@ export function VerificacaoDeEmail({
   onConfirmar,
   onReenviar,
   onVoltar,
+  antiRobo = null,
 }) {
   return (
     <main className="auth-shell verify-shell">
@@ -110,6 +111,7 @@ export function VerificacaoDeEmail({
         >
           {busy ? "Verificando..." : "Confirmar e entrar"}
         </Button>
+        {antiRobo}
         <p className="auth-switch">
           Não recebeu?{" "}
           <button type="button" onClick={onReenviar}>

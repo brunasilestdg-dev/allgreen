@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import TurnstileWidget, { useTurnstile } from "../../components/TurnstileWidget.jsx";
 import { startUserSession } from "../../session/armazenamento.js";
 import { AUTH_TOKEN_KEY } from "../../session/espacoVazio.js";
 import {
@@ -10,6 +11,7 @@ import {
   reenviarCodigoDeEmail,
 } from "./authApi.js";
 import {
+  SEM_TOKEN_ANTI_ROBO,
   destinoAposLogin,
   ehEntradaToDoGreen,
   mensagemDeFalha,
@@ -52,15 +54,30 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const pedido = usePedidoDeAcesso();
-  // O botão do Google só existe no acesso geral; a entrada da To Do Green nem
-  // consulta o client id.
+  // Anti-robô (Turnstile): um widget por tela; login, cadastro, "esqueci a
+  // senha", reenvio do código e pedido de acesso gastam o mesmo token.
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const turnstile = useTurnstile(turnstileSiteKey);
+  const { obterToken, renovar: renovarAntiRobo } = turnstile;
+  // Devolve o token (ou "" com o Turnstile desligado); null quando ele está
+  // ligado mas o widget não entregou token — a tela avisa e não envia.
+  const tokenAntiRobo = async () => {
+    if (!turnstileSiteKey) return "";
+    const token = await obterToken();
+    return token || null;
+  };
+  const pedido = usePedidoDeAcesso({ tokenAntiRobo, renovarAntiRobo });
+  // A chave pública do anti-robô vale para toda porta de entrada. O botão do
+  // Google só existe no acesso geral: a entrada da To Do Green ignora o
+  // client id e nunca carrega o script do Google.
   const [googleId, setGoogleId] = useState("");
   useEffect(() => {
-    if (entradaToDoGreen) return;
     fetch("/api/config")
       .then((r) => r.json())
-      .then((d) => setGoogleId(d.googleClientId || ""))
+      .then((d) => {
+        if (!entradaToDoGreen) setGoogleId(d.googleClientId || "");
+        setTurnstileSiteKey(d.turnstileSiteKey || "");
+      })
       .catch(() => {});
   }, [entradaToDoGreen]);
   const [pending, setPending] = useState(null);
@@ -97,10 +114,13 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
     if (invalido) return setError(invalido);
     setBusy(true);
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN_ANTI_ROBO);
       const { ok, data } = await entrarOuCriarConta(mode, {
         name: form.name.trim(),
         email,
         password: form.password,
+        turnstileToken,
       });
       if (!ok) throw new Error(data.error || "Não foi possível acessar sua conta.");
       if (data.pending) {
@@ -113,6 +133,7 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
       setError(mensagemDeFalha(reason));
     } finally {
       setBusy(false);
+      renovarAntiRobo();
     }
   };
   const onGoogleCredential = async (resp) => {
@@ -141,11 +162,15 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
   const resend = async () => {
     setError("");
     try {
-      const { ok, data } = await reenviarCodigoDeEmail(pending);
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN_ANTI_ROBO);
+      const { ok, data } = await reenviarCodigoDeEmail(pending, turnstileToken);
       if (!ok) throw new Error(data.error || "Não foi possível reenviar.");
       setError("Novo código enviado. Confira seu e-mail.");
     } catch (reason) {
       setError(mensagemDeFalha(reason));
+    } finally {
+      renovarAntiRobo();
     }
   };
   const forgot = async () => {
@@ -155,7 +180,9 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
     setBusy(true);
     setError("");
     try {
-      const { ok, data } = await pedirCodigoDeRecuperacao(email);
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN_ANTI_ROBO);
+      const { ok, data } = await pedirCodigoDeRecuperacao(email, turnstileToken);
       if (!ok) throw new Error(data.error || "Não foi possível enviar o código.");
       setRecover({ email });
       setCode("");
@@ -164,6 +191,7 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
       setError(mensagemDeFalha(reason));
     } finally {
       setBusy(false);
+      renovarAntiRobo();
     }
   };
   const doReset = async () => {
@@ -185,6 +213,20 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
       setBusy(false);
     }
   };
+
+  // Widget anti-robô (só aparece com o Turnstile ligado e, mesmo assim, quase
+  // sempre invisível: pede interação apenas quando desconfia). A redefinição
+  // não o desenha: o código de 6 dígitos já veio do pedido que gastou o token.
+  const antiRobo = (
+    <>
+      <TurnstileWidget turnstile={turnstile} />
+      {turnstile.erro && (
+        <p className="auth-turnstile-erro" role="status">
+          {turnstile.erro}
+        </p>
+      )}
+    </>
+  );
 
   if (recover)
     return (
@@ -216,6 +258,7 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
         busy={busy}
         onConfirmar={verify}
         onReenviar={resend}
+        antiRobo={antiRobo}
         onVoltar={() => {
           setPending(null);
           setCode("");
@@ -237,6 +280,7 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
         onSubmit={submit}
         onForgot={forgot}
         pedido={pedido}
+        antiRobo={antiRobo}
       />
     );
   return (
@@ -254,6 +298,7 @@ export default function Login({ update, onAuthenticated = () => {}, vertical = f
       onGoogleCredential={onGoogleCredential}
       onSubmit={submit}
       onForgot={forgot}
+      antiRobo={antiRobo}
     />
   );
 }
