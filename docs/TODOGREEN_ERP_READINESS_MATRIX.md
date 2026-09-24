@@ -31,8 +31,8 @@ deploy paralelo (H4) e o login Google antes da separação All Green (H5); o
 antigo H6 foi retirado, porque não é registro de validação. Doze controles
 tinham lacuna: três foram corrigidos neste PR (L4, L5, L7) e nove seguem
 abertos, cinco deles achados nesta segunda passada (L8–L12). Há ainda um
-defeito que quebra o faturamento a partir da segunda fatura do mesmo tipo no
-espaço ([D1](#defeitos)). Em 24/09 a produção não rodava a `main` — ver
+defeito, já corrigido, que quebrava o faturamento a partir da segunda fatura do
+mesmo tipo no espaço ([D1](#defeitos)). Em 24/09 a produção não rodava a `main` — ver
 [Estado observado da publicação](#estado-observado-da-publicação-não-é-homologação).
 
 ## Registro de homologação em produção
@@ -105,7 +105,7 @@ ar** — não prova que um processo funciona com dado real.
 | Processo | Implementado | Testado | Homologado | Evidência e fronteira |
 | --- | --- | --- | --- | --- |
 | Fila de faturamento | Sim | Sim | Não registrado | A entrega com POD, pelo ledger, grava o POD, conclui a OS e cria o item elegível no mesmo lote (tabelas da 0056; POD obrigatório pelo gatilho da 0062); conferência e fechamento exigem `finance:manage`. A ponte "Entregas a faturar" gera a OS faturável de entrega já feita, só com contrato ativo, aprovado e assinado e implantação ativa, e é idempotente. Testes: `todogreen-transactions.worker.test.js` ("não pula etapas e a entrega com POD conclui e gera elegibilidade", "confere, fecha, prepara documento e cria contas a receber", "com contrato ativo, marca podeGerar e cria OS concluída + item elegível", "sem contrato ativo, não marca podeGerar e recusa a geração"), `transactional-spine-domain.test.js` ("entrega com POD e sem OS pede a geração da ordem, não fatura sozinha") e o passo 18 da jornada. |
-| Faturamento | Parcial | Parcial | Não registrado | Fechamento, fatura e título (0056); a fatura nasce `issued` e o gatilho da 0062 a rebaixa para `prepared`; o rascunho fiscal sai por `POST /fiscal/documentos/da-fatura`. **Defeito ([D1](#defeitos)):** o segundo fechamento do mesmo tipo de documento no mesmo espaço falha com 500 — a numeração da fatura sempre devolve 1. Os testes fecham um faturamento só por espaço; dois fechamentos, a recusa em competência fechada e a regra de um cliente por fechamento não têm teste. `documentType: "nfe"` é aceito, mas não vira documento fiscal. Testes: `todogreen-transactions.worker.test.js` ("confere, fecha, prepara documento e cria contas a receber", "lista a fatura pendente e prepara o CT-e pré-preenchido, sem duplicar") e os passos 18 e 19 da jornada. |
+| Faturamento | Sim | Parcial | Não registrado | Fechamento, fatura e título (0056); a fatura nasce `issued` e o gatilho da 0062 a rebaixa para `prepared`; o rascunho fiscal sai por `POST /fiscal/documentos/da-fatura`. A fatura interna tem um contador por tipo de documento, que nasce do maior número já gravado; até 24/09 toda fatura saía com 1, e o segundo fechamento do mesmo tipo no espaço falhava com 500 ([D1](#defeitos), corrigido). A recusa em competência fechada e a regra de um cliente por fechamento não têm teste. `documentType: "nfe"` é aceito, mas não vira documento fiscal. Testes: `todogreen-transactions.worker.test.js` ("confere, fecha, prepara documento e cria contas a receber", "lista a fatura pendente e prepara o CT-e pré-preenchido, sem duplicar", "dois fechamentos do mesmo tipo no mesmo espaço recebem números distintos", "o espaço que já faturou continua do maior número gravado, sem repetir", "fechamento recusado não gasta número") e os passos 18 e 19 da jornada. |
 | Motor fiscal | Sim | Sim | Não registrado | Todo o handler exige `fiscal:manage`; os impostos são recalculados no servidor ao validar; XML, número (série atômica, 0069) e chave são gerados na assinatura, só para CT-e/MDF-e (`todogreen-fiscal.js` com `fiscalDomain.js`; 0064); trilha de eventos; o cancelamento estorna o recebível sem baixa. O DACTE é PDF gerado no navegador (`pages/FiscalPage.jsx`, CODE-128C em `code128Domain.js`), sem teste de tela, e recebe a chave sem as letras do CNPJ alfanumérico ([O5](#achados-de-leitura-ainda-não-reproduzidos)). **Fronteira:** o XML da assinatura põe o motorista como remetente e deixa o destinatário vazio, embora o documento guarde tomador, remetente e destinatário. Testes: `todogreen-fiscal.worker.test.js` ("valida um CT-e completo e recusa pulo de estado", "ao assinar, o XML leva o valor real e ganha número sequencial", "dois documentos assinados nunca dividem o mesmo número (reserva atômica)", "CT-e interestadual S→SE devolve ICMS e CFOP corretos", "um espaço não vê o documento do outro", "quem só lê consulta mas não emite", "cancelar a nota cancela o título e o lançamento do razão", "recusa cancelar quando o título já teve baixa (não apaga caixa recebido)"), `fiscalDomain.test.js` ("lucro presumido: ICMS + PIS/COFINS, sem Simples", "o XML guarda o CNPJ com as letras, sem virar outro número"), `code128Domain.test.js` ("gera um código que o leitor decodifica de volta na mesma chave"). |
 | CT-e / MDF-e autorizado | Preparado | Parcial | Não registrado | Só transmite com certificado, senha, URL do conector e host em `SEFAZ_CONNECTOR_ALLOWED_HOSTS`; `interpretarRetornoSefaz` exige cStat 100/104 **com protocolo**. O repositório não traz conector SEFAZ, e a chamada ao conector não tem teste de worker. O ERP aceita **registro manual** de documento autorizado com protocolo digitado e chave gerada na assinatura ou de 44 dígitos, sem conferência de dígito verificador nem consulta oficial; CT-e vindo do TRACK3R entra `validado`, com o protocolo do TMS. Emitente com CNPJ alfanumérico não tem chave gerada (a oficial vem do conector). Testes: `fiscalDomain.test.js` ("autorizado só com cStat 100 E protocolo oficial", "cStat de autorização SEM protocolo não é autorizado (não fabrica)", "resposta de ensaio nunca vira autorizado", "certificado sem conector NÃO habilita transmissão automática", "não monta chave de acesso errada para emitente com CNPJ alfanumérico"), `todogreen-fiscal.worker.test.js` ("sem certificado, 'transmitido' é recusado; documento emitido fora entra com protocolo e chave"). A ponta real com a SEFAZ é o único `it.todo` do repositório: `todogreen-erp-journey.worker.test.js` ("CT-e só pode aparecer como autorizado depois do retorno oficial da SEFAZ"). |
 | NFS-e autorizada | Não | n/a | Não registrado | Só cálculo e validação (no Motor fiscal: ISS e tomador); não há XML, número nem conector de NFS-e — a transmissão só conhece os modelos 57/58, e com conector a NFS-e esbarra em "Assine o documento". O único caminho para "autorizado" é o registro manual. O Padrão Nacional aparece só como pendência (`docs/CATALOGO_RECURSOS_GRATUITOS.md`). |
@@ -306,7 +306,7 @@ Comportamento errado que não é contorno de controle, mas quebra um processo.
 
 | Código | Defeito | Onde | Situação |
 | --- | --- | --- | --- |
-| **D1** | O número da fatura se repete, e o segundo fechamento falha. `closeBilling` reserva o número com o tipo do documento (`cte`, `nfse` ou `nfe`), que o CHECK de `todogreen_document_series` (0053) não aceita — a própria 0069 registra isso; o `INSERT OR IGNORE` descarta a linha em silêncio e a reserva cai em 1. Toda fatura sai `CTE-000001`, e o segundo fechamento do mesmo tipo no mesmo espaço viola o índice único de `todogreen_invoices` (0056). | `todogreen-transactions.js` | **Aberto.** Reproduzido: o primeiro fechamento devolveu 201 com `CTE-000001`; o segundo, no mesmo espaço, 500 (`UNIQUE constraint failed: todogreen_invoices…`), e a série do CT-e nunca foi criada. Os testes fecham um faturamento só por espaço, por isso não pegam. A correção pede migração nova ou outro tipo de série, e teste com dois fechamentos. |
+| **D1** | O número da fatura se repetia, e o segundo fechamento falhava. `closeBilling` reservava o número com o tipo do documento (`cte`, `nfse` ou `nfe`), que o CHECK de `todogreen_document_series` (0053) não aceita — a própria 0069 registra isso; o `INSERT OR IGNORE` descartava a linha em silêncio e a reserva caía em 1. Toda fatura saía `CTE-000001`, e o segundo fechamento do mesmo tipo no mesmo espaço violava o índice único de `todogreen_invoices` (0056). | `todogreen-transactions.js` | **Corrigido.** Reproduzido antes da correção: o primeiro fechamento devolveu 201 com `CTE-000001`; o segundo, no mesmo espaço, 500 (`UNIQUE constraint failed: todogreen_invoices…`). A fatura agora reserva com o tipo `nota_fiscal`, que o CHECK aceita, e o tipo fiscal no `series` (um contador por tipo); a série nasce do maior número já gravado, para quem faturou antes da correção não receber de novo o `CTE-000001`. Sem migração, e os números só são reservados depois das recusas. Testes: `todogreen-transactions.worker.test.js` ("dois fechamentos do mesmo tipo no mesmo espaço recebem números distintos", "o espaço que já faturou continua do maior número gravado, sem repetir", "fechamento recusado não gasta número"). |
 
 ## Achados de leitura (ainda não reproduzidos)
 
@@ -355,8 +355,9 @@ Jurídico e o da assinatura têm lacuna (L1, L2, O2, O3), e a jornada passa pelo
 ramo **legado** dos dois — o fluxo empresarial e o anexo de contexto
 `workflow` —, não pelo registro canônico `todogreen_legal_records`.
 
-**Um faturamento só:** a jornada fecha uma fatura por espaço, por isso não pega
-o [D1](#defeitos).
+**Um faturamento só:** a jornada fecha uma fatura por espaço, por isso não
+pegava o [D1](#defeitos); o defeito tem teste próprio, com dois fechamentos no
+mesmo espaço.
 
 **Fronteira externa:** CT-e autorizado só depois do retorno oficial da SEFAZ —
 é o único `it.todo` do repositório,
@@ -375,9 +376,10 @@ pendente "homologar com dados/volume reais em produção".
 
 ## Prioridades resultantes
 
-- **P0 — D1 e L8, antes de tudo.** O faturamento quebra na segunda fatura do
-  mesmo tipo no espaço, e qualquer papel da vertical — inclusive o colaborador —
-  lê tesouraria, títulos, compras e estoque. Cada um com teste que reproduza.
+- **P0 — L8, antes de tudo.** Qualquer papel da vertical — inclusive o
+  colaborador — lê tesouraria, títulos, compras e estoque. O D1 (o faturamento
+  quebrava na segunda fatura do mesmo tipo no espaço) já foi corrigido, com
+  teste.
 - **P0 — lacunas de controle abertas (L1, L2, L3, L6, L9, L10, L11, L12):** cada
   uma em PR próprio, com teste que reproduza o contorno. L4, L5 e L7 foram
   corrigidas neste PR.
@@ -449,7 +451,8 @@ por teste:
     conferido (L12).
 23. Portal do cliente como "Sim": a própria linha declarava a lacuna das
     solicitações.
-24. Faturamento como "Sim": o segundo fechamento falha (D1).
+24. Faturamento como "Sim": o segundo fechamento falhava (D1, corrigido em
+    seguida).
 25. NFS-e como "Preparado": não há código dormente de NFS-e.
 26. Pedido de compra "editar derruba a aprovação": só marca um indicador (L9);
     Recebimento "idempotente": é imutável, não idempotente (O8).

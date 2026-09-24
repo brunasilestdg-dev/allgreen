@@ -537,3 +537,106 @@ describe("título manual (criação na tela)", () => {
     expect(row.open_amount).toBe(0);
   });
 });
+
+// D1 da matriz de prontidão: o fechamento reservava o número da fatura com o
+// tipo fiscal (cte/nfse/nfe), que o CHECK da série (0053) recusa. O INSERT OR
+// IGNORE descartava a linha em silêncio, a reserva caía em 1 e o segundo
+// fechamento do mesmo tipo no espaço batia no índice único da fatura (500).
+describe("numeração da fatura: cada fechamento recebe o próximo número", () => {
+  const pedirComo = (token, path, method = "GET", body) => worker.fetch(new Request(`https://app.test${path}`, {
+    method,
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "cf-connecting-ip": "198.51.100.92" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }), env, { waitUntil() {}, passThroughOnException() {} });
+
+  const montarEspaco = async (id) => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO users (id,name,email,password_hash,password_salt,created_at)
+      VALUES (?,?,?,'h','s',?)`).bind(id, `Gestora ${id}`, `${id}@test.local`, now).run();
+    await env.DB.prepare(`INSERT INTO sessions (id,user_id,token_hash,expires_at,created_at)
+      VALUES (?,?,?,'2099-01-01T00:00:00.000Z',?)`).bind(`${id}-session`, id, await sha256(`${id}-token`), now).run();
+    await env.DB.prepare(`INSERT INTO todogreen_access_emails
+      (id,tenant_id,email,role,status,permissions_json,note,created_by,created_at,updated_at)
+      VALUES (?,'todogreen',?,'admin','active','["*"]','',?,?,?)`).bind(`${id}-access`, `${id}@test.local`, id, now, now).run();
+    await env.DB.prepare(`INSERT INTO todogreen_clients
+      (id,tenant_id,workspace_owner_id,name,status,portal_enabled,fields_json,revision,created_by,updated_by,created_at,updated_at)
+      VALUES (?,'todogreen',?,'Cliente D1','ativo',0,'{}',1,?,?,?,?)`).bind(`${id}-client`, id, id, id, now, now).run();
+    await env.DB.prepare(`INSERT INTO todogreen_contracts
+      (id,tenant_id,workspace_owner_id,client_id,client_name,proposal_id,title,status,signature_status,
+       approval_status,service_id,price_table_id,sla_json,commercial_terms_json,taxes_json,billing_rules_json,
+       fields_json,revision,created_by,updated_by,created_at,updated_at)
+      VALUES (?,'todogreen',?,?,'Cliente D1','proposal-d1','Contrato','active','signed',
+       'approved','same-day','table-a','{}','{}','{}','{}','{}',1,?,?,?,?)`).bind(`${id}-contract`, id, `${id}-client`, id, id, now, now).run();
+    await env.DB.prepare(`INSERT INTO todogreen_client_activation_state
+      (client_id,tenant_id,workspace_owner_id,status,integration_status,tracking_required,esg_enabled,
+       activated_at,activated_by,revision,created_by,updated_by,created_at,updated_at)
+      VALUES (?,'todogreen',?,'active','ready',0,0,?,?,1,?,?,?,?)`).bind(`${id}-client`, id, now, id, id, id, now, now).run();
+    return `${id}-token`;
+  };
+
+  // Uma OS entregue com POD vira item elegível; conferido, entra no fechamento.
+  const itemConferido = async (token, id) => {
+    const criada = await pedirComo(token, "/api/todogreen/transactions/service-orders", "POST", {
+      clientId: `${id}-client`, contractId: `${id}-contract`, quantity: 4, unitPrice: 25, chargeUnit: "entrega",
+    });
+    expect(criada.status).toBe(201);
+    let ordem = (await criada.json()).record;
+    for (const status of ["released", "in_progress"]) {
+      const r = await pedirComo(token, `/api/todogreen/transactions/service-orders/${ordem.id}/transition`, "POST", { status, revision: ordem.revision });
+      ordem = (await r.json()).record;
+    }
+    const pod = await pedirComo(token, `/api/todogreen/transactions/service-orders/${ordem.id}/pod`, "POST", {
+      recipientName: "Recebedor", documentUrl: "https://exemplo.test/canhoto.jpg",
+    });
+    expect(pod.status).toBe(201);
+    const fila = await (await pedirComo(token, "/api/todogreen/transactions/billing-items?status=eligible")).json();
+    const item = fila.records.find((registro) => registro.service_order_id === ordem.id);
+    const conferido = await pedirComo(token, `/api/todogreen/transactions/billing-items/${item.id}/check`, "POST", { approved: true, revision: item.revision });
+    expect(conferido.status).toBe(200);
+    return item.id;
+  };
+
+  const fechar = (token, itemId, extra = {}) => pedirComo(token, "/api/todogreen/transactions/billing-runs", "POST", {
+    itemIds: [itemId], competenceDate: "2026-08-20", dueDate: "2026-09-20", ...extra,
+  });
+
+  it("dois fechamentos do mesmo tipo no mesmo espaço recebem números distintos", async () => {
+    const token = await montarEspaco("txn-d1");
+    const primeiro = await fechar(token, await itemConferido(token, "txn-d1"));
+    expect(primeiro.status).toBe(201);
+    expect((await primeiro.json()).invoiceNumber).toBe("CTE-000001");
+    const segundo = await fechar(token, await itemConferido(token, "txn-d1"));
+    expect(segundo.status).toBe(201);
+    expect((await segundo.json()).invoiceNumber).toBe("CTE-000002");
+    // Cada tipo de documento tem o próprio contador.
+    const nfse = await fechar(token, await itemConferido(token, "txn-d1"), { documentType: "nfse" });
+    expect(nfse.status).toBe(201);
+    expect((await nfse.json()).invoiceNumber).toBe("NFSE-000001");
+  });
+
+  it("o espaço que já faturou continua do maior número gravado, sem repetir", async () => {
+    // Antes da correção, quem faturou uma vez ficou com um CTE-000001 gravado
+    // e nenhuma série: o contador tem de nascer do que já existe.
+    const token = await montarEspaco("txn-d1-legado");
+    const now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO todogreen_billing_runs
+      (id,tenant_id,workspace_owner_id,number,client_id,contract_id,status,competence_date,gross_amount,net_amount,closed_by,closed_at)
+      VALUES ('run-legado','todogreen','txn-d1-legado','FAT-LEGADO','txn-d1-legado-client','','closed','2026-08-01',100,100,'txn-d1-legado',?)`).bind(now).run();
+    await env.DB.prepare(`INSERT INTO todogreen_invoices
+      (id,tenant_id,workspace_owner_id,billing_run_id,number,series,document_type,status,issued_at,amount,created_by,created_at)
+      VALUES ('inv-legado','todogreen','txn-d1-legado','run-legado','CTE-000007','1','cte','issued',?,100,'txn-d1-legado',?)`).bind(now, now).run();
+    const fechado = await fechar(token, await itemConferido(token, "txn-d1-legado"));
+    expect(fechado.status).toBe(201);
+    expect((await fechado.json()).invoiceNumber).toBe("CTE-000008");
+  });
+
+  it("fechamento recusado não gasta número", async () => {
+    const token = await montarEspaco("txn-d1-recusa");
+    const item = await itemConferido(token, "txn-d1-recusa");
+    const semVencimento = await fechar(token, item, { dueDate: "" });
+    expect(semVencimento.status).toBe(400);
+    const fechado = await fechar(token, item);
+    expect(fechado.status).toBe(201);
+    expect((await fechado.json()).invoiceNumber).toBe("CTE-000001");
+  });
+});
