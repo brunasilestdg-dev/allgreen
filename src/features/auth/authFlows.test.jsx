@@ -185,7 +185,13 @@ describe("acesso geral", () => {
     const { container } = render(<Login update={vi.fn()} />);
     await waitFor(() => expect(container.querySelector(".google-btn")).not.toBeNull());
     expect(screen.getByText("ou use e-mail")).toBeInTheDocument();
-    expect(document.querySelector('script[src="https://accounts.google.com/gsi/client"]')).not.toBeNull();
+    // O script entra num useEffect, depois do commit que desenhou o botão. O
+    // `waitFor` acima pode devolver o controle antes de o React rodar esse
+    // efeito — sob carga, a checagem síncrona via o DOM sem o script (falhou
+    // assim uma vez na suíte completa). Esperar pelo próprio efeito.
+    await waitFor(() =>
+      expect(document.querySelector('script[src="https://accounts.google.com/gsi/client"]')).not.toBeNull(),
+    );
   });
 });
 
