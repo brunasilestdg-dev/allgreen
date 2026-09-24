@@ -74,7 +74,6 @@
   }
 }
 
-
 /* Planner: o modal é portalado para fora de .tdg.
    Reinjeta apenas nele os tokens da vertical para evitar campos transparentes
    e superfícies claras no tema escuro, sem afetar outros módulos. */
