@@ -106,6 +106,7 @@ describe("convites de equipe com D1 local", () => {
     // para o admin repassar por onde quiser, e emailSent avisa que não foi enviado.
     expect(body.link).toMatch(/\/convite\//);
     expect(body.emailSent).toBe(false);
+    expect(body.emailError).toMatch(/não está configurado/);
     expect(typeof body.id).toBe("string");
   });
 

@@ -9,9 +9,16 @@ import { logAudit } from "../lib/audit.js";
 import { allowed, json } from "../lib/http.js";
 import { membershipRole } from "../lib/membership.js";
 import { randomHex, sha256 } from "../auth/credenciais.js";
-import { emailEnabled, inviteEmailHtml, sendEmail } from "../mensageria/envio.js";
+import {
+  emailEnabled,
+  emailFailureReason,
+  inviteEmailHtml,
+  sendEmail,
+} from "../mensageria/envio.js";
 
 const VALID_ROLES = ["admin", "gestor", "colaborador"];
+const EMAIL_NOT_CONFIGURED =
+  "O envio automático de e-mail não está configurado neste ambiente (faltam BREVO_API_KEY/MAIL_SENDER).";
 
 export async function handleCollab(request, env, user, url) {
   const action = url.pathname.replace("/api/collab", "").replace(/^\//, "");
@@ -214,6 +221,7 @@ export async function handleCollab(request, env, user, url) {
     // se falhar, o convite continua de pé e o link segue na resposta.
     const link = `${url.origin}/convite/${token}`;
     let emailSent = false;
+    let emailError = "";
     if (emailEnabled(env)) {
       try {
         await sendEmail(
@@ -225,10 +233,13 @@ export async function handleCollab(request, env, user, url) {
         emailSent = true;
       } catch (e) {
         console.error("invite mail", e);
+        emailError = emailFailureReason(e);
       }
+    } else {
+      emailError = EMAIL_NOT_CONFIGURED;
     }
     await logAudit(env, scopeOwnerId, user, "convite_criado", email, `papel: ${role}`);
-    return json({ id: code, expiresAt, link, emailSent });
+    return json({ id: code, expiresAt, link, emailSent, emailError });
   }
   if (action === "resend") {
     const id = typeof body.id === "string" ? body.id : "";
@@ -252,6 +263,7 @@ export async function handleCollab(request, env, user, url) {
     // Gera um link novo (o token antigo deixa de valer) e o devolve para copiar.
     const link = `${url.origin}/convite/${token}`;
     let emailSent = false;
+    let emailError = "";
     if (emailEnabled(env)) {
       try {
         await sendEmail(
@@ -263,10 +275,13 @@ export async function handleCollab(request, env, user, url) {
         emailSent = true;
       } catch (e) {
         console.error("resend invite mail", e);
+        emailError = emailFailureReason(e);
       }
+    } else {
+      emailError = EMAIL_NOT_CONFIGURED;
     }
     await logAudit(env, scopeOwnerId, user, "convite_reenviado", invite.email, "");
-    return json({ ok: true, expiresAt, link, emailSent });
+    return json({ ok: true, expiresAt, link, emailSent, emailError });
   }
   if (action === "cancel") {
     const id = typeof body.id === "string" ? body.id : "";

@@ -12746,12 +12746,12 @@ function Collaborators({ db, update, setToast }) {
       if (!r.ok) throw new Error(d.error || "Não foi possível enviar o convite.");
       const alvo = form.email;
       setForm(blankInviteForm);
-      if (d.link) setInviteLink({ url: d.link, email: alvo, emailSent: d.emailSent });
+      if (d.link) setInviteLink({ url: d.link, email: alvo, emailSent: d.emailSent, emailError: d.emailError || "" });
       load();
       setToast(
         d.emailSent
           ? `Convite enviado para ${alvo}. O link também está aqui para copiar.`
-          : `Convite criado. Copie o link e envie para ${alvo}.`,
+          : `Convite criado, mas o e-mail não foi enviado${d.emailError ? `: ${d.emailError}` : "."} Copie o link e envie para ${alvo}.`,
       );
     } catch (e) {
       setToast(e.message);
@@ -12768,9 +12768,9 @@ function Collaborators({ db, update, setToast }) {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Não foi possível reenviar.");
-      if (d.link) setInviteLink({ url: d.link, email: "", emailSent: d.emailSent });
+      if (d.link) setInviteLink({ url: d.link, email: "", emailSent: d.emailSent, emailError: d.emailError || "" });
       load();
-      setToast(d.emailSent ? "Convite reenviado. Link novo pronto para copiar." : "Link novo gerado — copie e envie.");
+      setToast(d.emailSent ? "Convite reenviado. Link novo pronto para copiar." : `Link novo gerado, mas o e-mail não foi enviado${d.emailError ? `: ${d.emailError}` : "."} Copie e envie.`);
     } catch (e) {
       setToast(e.message);
     }
@@ -13014,9 +13014,14 @@ function Collaborators({ db, update, setToast }) {
             <div className="invite-link-box">
               <small>
                 {inviteLink.emailSent
-                  ? `Convite enviado por e-mail${inviteLink.email ? ` para ${inviteLink.email}` : ""}. Este link também vale — copie e mande direto se preferir:`
+                  ? `Convite enviado por e-mail${inviteLink.email ? ` para ${inviteLink.email}` : ""} (se não chegar, peça para conferir o spam). Este link também vale — copie e mande direto se preferir:`
                   : `Copie este link e envie para a pessoa${inviteLink.email ? ` (${inviteLink.email})` : ""}. Ela abre e define a senha:`}
               </small>
+              {!inviteLink.emailSent && inviteLink.emailError && (
+                <small className="invite-email-error" role="alert">
+                  O e-mail não foi enviado: {inviteLink.emailError}
+                </small>
+              )}
               <div className="invite-link-row">
                 <input readOnly value={inviteLink.url} onFocus={(e) => e.target.select()} aria-label="Link do convite" />
                 <Button type="button" icon={Copy} onClick={copiarLinkConvite}>Copiar</Button>
