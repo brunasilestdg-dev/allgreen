@@ -57,11 +57,6 @@ export async function handleStatus(env, url) {
         braveConfigured: search.providers.brave,
       },
     },
-    roadmap: {
-      complete: true,
-      completedThrough: 27,
-      nextItem: null,
-    },
     checkedAt: new Date().toISOString(),
   });
 }

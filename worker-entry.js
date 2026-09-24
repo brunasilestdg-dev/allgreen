@@ -184,7 +184,11 @@ export default {
     // worker.js (worker/lib/cron.js). O rastreador não é chamado aqui — roda
     // uma vez por disparo horário, no scheduled do worker.js.
     if (!ehDisparoSemanal(controller)) {
-      ctx.waitUntil(runTodoGreenEnterpriseWorkflowScheduled(env));
+      ctx.waitUntil(
+        runTodoGreenEnterpriseWorkflowScheduled(env).catch((error) =>
+          console.error("scheduled To Do Green enterprise workflows", error),
+        ),
+      );
       // Dreno dos webhooks do TMS cuja projeção falhou/ficou pendente, para o
       // evento durável na inbox não ficar preso sem retry.
       ctx.waitUntil(reprocessarWebhooksTrack3r(env).catch(() => {}));

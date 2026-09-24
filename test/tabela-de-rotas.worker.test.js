@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import worker from "../worker.js";
 import fonteDoWorker from "../worker.js?raw";
 import fonteDoRoteador from "../worker/http/router.js?raw";
+import wrangler from "../wrangler.jsonc?raw";
 import {
   PREFIXOS_PUBLICOS_DE_PAGINA,
   ROTAS_AUTENTICADAS,
@@ -199,5 +200,19 @@ describe("tabela de rotas", () => {
     for (const prefixo of PREFIXOS_PUBLICOS_DE_PAGINA)
       expect(ROTAS_PUBLICAS.some((rota) => rota.caminhos.includes(`${prefixo}*`))).toBe(true);
     expect(Object.isFrozen(PREFIXOS_PUBLICOS_DE_PAGINA)).toBe(true);
+  });
+
+  // Em produção o Cloudflare serve o index.html do SPA para todo caminho fora
+  // de `assets.run_worker_first` sem chamar o Worker. Até 24/09/2026 o `/f/*`
+  // não estava lá: o formulário público respondia 200 com o SPA e nunca
+  // chegava a `handlePublicForm` — e nenhum teste via, porque aqui o Worker
+  // recebe todo caminho.
+  it("toda página pública chega ao Worker em produção (run_worker_first)", () => {
+    const bloco = wrangler.match(/"run_worker_first"\s*:\s*(\[[^\]]*\])/);
+    expect(bloco).toBeTruthy();
+    const padroes = JSON.parse(bloco[1]);
+    expect(padroes).toContain("/api/*");
+    expect(padroes.filter((padrao) => padrao !== "/api/*").sort())
+      .toEqual(PREFIXOS_PUBLICOS_DE_PAGINA.map((prefixo) => `${prefixo}*`).sort());
   });
 });
