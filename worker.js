@@ -9,12 +9,11 @@ import {
   sha256,
   unhex,
 } from "./worker/auth/credenciais.js";
-import { cleanText, moneyBRL } from "./worker/lib/format.js";
+import { moneyBRL } from "./worker/lib/format.js";
 import { allowed, json } from "./worker/lib/http.js";
 import { logAudit } from "./worker/lib/audit.js";
 import { membershipRole } from "./worker/lib/membership.js";
 import {
-  pushEnabled,
   escMail,
   whatsappEnabled,
 } from "./worker/mensageria/envio.js";
@@ -26,7 +25,6 @@ import {
   handleAiStream,
   publicAiResult,
 } from "./worker/services/ai.js";
-import { webSearchConfiguration } from "./worker/services/web-search.js";
 // Reexportado para quem já importava daqui (src/ai-providers.test.js).
 export { askOpenAICompatible, configuredAiProviders, publicAiResult };
 import { handleAuth } from "./worker/services/auth.js";
@@ -43,6 +41,11 @@ import {
 import { createQuoteHandlers } from "./worker/services/quotes.js";
 import { createWebhookHandlers } from "./worker/services/webhooks.js";
 import {
+  handleConfig,
+  handleStatus,
+  handleSystemVersion,
+} from "./worker/services/app-info.js";
+import {
   handleClientPortals,
   handlePublicClientPortal,
 } from "./worker/services/client-portal.js";
@@ -52,11 +55,14 @@ import {
   handleInboundWhatsApp,
 } from "./worker/services/inbound-webhooks.js";
 import { handleInbox, handleInboxConversations } from "./worker/services/inbox.js";
+import { handleMedia } from "./worker/services/media.js";
 import { handleOutboxSend } from "./worker/services/outbox.js";
 import { handlePersonalInbox } from "./worker/services/personal-inbox.js";
 import { handleProductEvents } from "./worker/services/product-events.js";
+import { handlePublicApi, publicApiJson } from "./worker/services/public-api.js";
 import { handleForms, handlePublicForm } from "./worker/services/public-forms.js";
 import { handlePublicInvite } from "./worker/services/public-invite.js";
+import { handlePush } from "./worker/services/push-subscriptions.js";
 import { runScheduledAutomations } from "./worker/services/scheduled-automations.js";
 import {
   handleSites,
@@ -65,6 +71,7 @@ import {
 } from "./worker/services/sites.js";
 import { handleTaskAction } from "./worker/services/task-action.js";
 import { handleTaskNotify } from "./worker/services/task-notify.js";
+import { handleTranscribe } from "./worker/services/transcribe.js";
 import { sendWeeklySummaries } from "./worker/services/weekly-summary.js";
 import { handleWorkspaceBackups } from "./worker/services/workspace-backups.js";
 import { runTodoGreenScheduledWorkAutomations } from "./worker/services/todogreen-work-center.js";
@@ -75,13 +82,6 @@ import { runTodoGreenMarketSignalsScheduled } from "./worker/services/todogreen-
 import { runTodoGreenRoadRiskScheduled } from "./worker/services/todogreen-road-risk.js";
 import { runTodoGreenTrackerScheduled, expurgarPosicoesAntigasDoTracker } from "./worker/services/todogreen-tracker.js";
 import { runTodoGreenPendenciaAvisos } from "./worker/services/todogreen-semente.js";
-import { lerManifestoDeVersao, systemVersionPayload } from "./worker/services/todogreen-system-health.js";
-
-
-
-// Uma fonte só para "qual SHA está publicado": o manifesto version.json do
-// build. /api/status, /api/system/version e a tela Saúde do sistema leem daqui.
-const publishedVersion = (env, origin) => lerManifestoDeVersao(env, origin);
 
 // Movido para ./worker/auth/credenciais.js; reexportado para os testes.
 export { createSession, hex, passwordHash, randomHex, sameHash, sha256, unhex };
@@ -89,6 +89,10 @@ export { createSession, hex, passwordHash, randomHex, sameHash, sha256, unhex };
 // Movido para ./worker/services/sites.js; reexportado para
 // src/public-sites.test.js.
 export { sanitizeSiteHtml, siteSlug };
+
+// Movido para ./worker/services/transcribe.js; reexportado para
+// test/transcribe.worker.test.js.
+export { handleTranscribe };
 
 // Movido para ./worker/mensageria/envio.js.
 
@@ -105,592 +109,6 @@ const { handleWebhooks, notifyWorkspaceChange } = createWebhookHandlers({
   allowed,
   randomHex,
 });
-
-
-async function handlePush(request, env, user, url) {
-  if (request.method !== "POST")
-    return json({ error: "Método não permitido." }, 405);
-  const action = url.pathname.replace("/api/push/", "");
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "Dados inválidos." }, 400);
-  }
-  if (action === "subscribe") {
-    if (!pushEnabled(env))
-      return json(
-        { error: "Notificações do navegador não estão configuradas." },
-        503,
-      );
-    const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
-    const p256dh = body.keys?.p256dh;
-    const auth = body.keys?.auth;
-    if (
-      !endpoint ||
-      typeof p256dh !== "string" ||
-      !p256dh ||
-      typeof auth !== "string" ||
-      !auth
-    )
-      return json({ error: "Assinatura inválida." }, 400);
-    await env.DB.prepare(
-      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(endpoint) DO UPDATE SET
-        user_id = excluded.user_id, p256dh = excluded.p256dh,
-        auth = excluded.auth, created_at = excluded.created_at`,
-    )
-      .bind(
-        crypto.randomUUID(),
-        user.id,
-        endpoint,
-        p256dh,
-        auth,
-        new Date().toISOString(),
-      )
-      .run();
-    return json({ ok: true });
-  }
-  if (action === "unsubscribe") {
-    const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
-    if (!endpoint) return json({ ok: true });
-    await env.DB.prepare(
-      "DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?",
-    )
-      .bind(endpoint, user.id)
-      .run();
-    return json({ ok: true });
-  }
-  return json({ error: "Ação não encontrada." }, 404);
-}
-
-
-async function handleMedia(request, env, url) {
-  if (request.method === "GET") {
-    const requestId = url.searchParams.get("request_id") || "";
-    if (!/^wan_[a-f0-9]{32}$/.test(requestId))
-      return json({ error: "Identificador de vídeo inválido." }, 400);
-    if (!env.VIDEO_AI_URL || !env.VIDEO_AI_TOKEN)
-      return json(
-        { error: "O servidor próprio de vídeo ainda não está conectado." },
-        503,
-      );
-    const response = await fetch(
-      `${env.VIDEO_AI_URL.replace(/\/$/, "")}/v1/videos/${requestId}`,
-      { headers: { authorization: `Bearer ${env.VIDEO_AI_TOKEN}` } },
-    );
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok)
-      return json(
-        {
-          error:
-            data.detail ||
-            data.error?.message ||
-            "Não foi possível consultar o vídeo.",
-        },
-        response.status,
-      );
-    return json({
-      status: data.status,
-      progress: data.progress || 0,
-      url: data.url || null,
-      duration: data.duration || null,
-      error: data.error || null,
-    });
-  }
-  if (request.method !== "POST")
-    return json({ error: "Método não permitido." }, 405);
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "Solicitação inválida." }, 400);
-  }
-  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
-  if (prompt.length < 5 || prompt.length > 3000)
-    return json({ error: "Descreva o material em 5 a 3.000 caracteres." }, 400);
-  if (body.type === "video") {
-    if (!env.VIDEO_AI_URL || !env.VIDEO_AI_TOKEN)
-      return json(
-        {
-          error:
-            "O servidor próprio de vídeo ainda não está conectado. A aplicação não recorrerá a créditos de terceiros.",
-        },
-        503,
-      );
-    const response = await fetch(
-      `${env.VIDEO_AI_URL.replace(/\/$/, "")}/v1/videos`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${env.VIDEO_AI_TOKEN}`,
-        },
-        body: JSON.stringify({
-          prompt,
-          quality: body.quality === "standard" ? "standard" : "advanced",
-          aspectRatio: "16:9",
-        }),
-      },
-    );
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok)
-      return json(
-        {
-          error:
-            data.detail ||
-            data.error?.message ||
-            `Vídeo indisponível (${response.status}).`,
-        },
-        response.status,
-      );
-    return json({
-      status: data.status || "pending",
-      requestId: data.requestId,
-      freeTier: false,
-    });
-  }
-  const finalPrompt =
-    body.type === "logo"
-      ? `Crie um conceito de logo profissional e memorável para uso comercial. ${prompt}. Símbolo original, composição limpa, fundo simples, sem mockup, sem marca d'água, texto somente se solicitado e com grafia exata.`
-      : prompt;
-  if (env.AI) {
-    try {
-      const freeResult = await env.AI.run(
-        "@cf/black-forest-labs/flux-1-schnell",
-        {
-          prompt: finalPrompt.slice(0, 2048),
-          steps: 4,
-          seed: Math.floor(Math.random() * 1_000_000),
-        },
-      );
-      if (freeResult?.image)
-        return json({
-          status: "done",
-          url: `data:image/jpeg;base64,${freeResult.image}`,
-          mimeType: "image/jpeg",
-          freeTier: true,
-        });
-    } catch {
-      if (body.confirmPaid !== true)
-        return json(
-          {
-            error:
-              "A geração integrada está temporariamente indisponível. Tente novamente em alguns minutos.",
-          },
-          503,
-        );
-    }
-  }
-  if (body.confirmPaid !== true)
-    return json(
-      {
-        error:
-          "A geração integrada não respondeu. Tente novamente em alguns minutos.",
-      },
-      503,
-    );
-  if (!env.XAI_API_KEY)
-    return json({ error: "A opção complementar não está disponível." }, 503);
-  const response = await fetch("https://api.x.ai/v1/images/generations", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${env.XAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "grok-imagine-image",
-      prompt: finalPrompt,
-      response_format: "url",
-      n: 1,
-    }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok)
-    return json(
-      {
-        error:
-          data.error?.message || `Imagem indisponível (${response.status}).`,
-      },
-      response.status,
-    );
-  return json({
-    status: "done",
-    url: data.data?.[0]?.url || null,
-    mimeType: data.data?.[0]?.mime_type || "image/jpeg",
-    revisedPrompt: data.data?.[0]?.revised_prompt || "",
-    freeTier: false,
-  });
-}
-
-// Transcreve áudio com Whisper no Workers AI. O áudio é gravado ou escolhido no
-// navegador e chega aqui em base64; nada é armazenado no servidor.
-export async function handleTranscribe(request, env) {
-  if (request.method !== "POST")
-    return json({ error: "Método não permitido." }, 405);
-  if (!env.AI)
-    return json(
-      { error: "Transcrição indisponível: Workers AI não está configurado." },
-      503,
-    );
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "Envio inválido." }, 400);
-  }
-  const base64 = String(body?.audio || "");
-  if (!base64) return json({ error: "Nenhum áudio recebido." }, 400);
-  // ~8 MB de base64 (aprox. 6 MB de áudio) é o teto por envio.
-  if (base64.length > 8_000_000)
-    return json(
-      { error: "Áudio muito longo. Divida em partes de até 5 minutos." },
-      413,
-    );
-  let bytes;
-  try {
-    const binary = atob(base64);
-    bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  } catch {
-    return json({ error: "Áudio em formato inválido." }, 400);
-  }
-  try {
-    const result = await env.AI.run("@cf/openai/whisper", {
-      audio: [...bytes],
-    });
-    const text = String(result?.text || "").trim();
-    if (!text)
-      return json({ error: "Não foi possível entender o áudio." }, 422);
-    return json({
-      text,
-      words: result?.word_count ?? null,
-    });
-  } catch (error) {
-    console.error("Transcribe error", error);
-    return json({ error: "Não foi possível transcrever este áudio." }, 502);
-  }
-}
-
-const apiCorsHeaders = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers":
-    "authorization, content-type, idempotency-key",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
-  "access-control-max-age": "86400",
-};
-
-function publicApiJson(data, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      ...apiCorsHeaders,
-      ...extraHeaders,
-    },
-  });
-}
-
-const PUBLIC_API_COLLECTIONS = new Set([
-  "tasks",
-  "contacts",
-  "opportunities",
-  "transactions",
-]);
-
-function publicApiOpenApi(origin) {
-  const paths = {
-    "/api/public/v1/me": {
-      get: {
-        summary: "Identifica o espaço da chave",
-        security: [{ bearerAuth: [] }],
-        responses: { 200: { description: "Espaço autenticado" } },
-      },
-    },
-  };
-  for (const collection of PUBLIC_API_COLLECTIONS) {
-    paths[`/api/public/v1/${collection}`] = {
-      get: {
-        summary: `Lista ${collection}`,
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            in: "query",
-            name: "limit",
-            schema: { type: "integer", minimum: 1, maximum: 100 },
-          },
-          { in: "query", name: "businessId", schema: { type: "string" } },
-        ],
-        responses: { 200: { description: "Lista paginada" } },
-      },
-      ...(collection === "tasks" || collection === "contacts"
-        ? {
-            post: {
-              summary: `Cria um item em ${collection}`,
-              security: [{ bearerAuth: [] }],
-              parameters: [
-                {
-                  in: "header",
-                  name: "Idempotency-Key",
-                  required: true,
-                  schema: { type: "string" },
-                },
-              ],
-              responses: {
-                201: { description: "Item criado" },
-                409: { description: "Conflito de atualização" },
-              },
-            },
-          }
-        : {}),
-    };
-  }
-  return {
-    openapi: "3.1.0",
-    info: {
-      title: "Seu Funcionário Public API",
-      version: "1.0.0",
-      description:
-        "API gratuita e versionada para integrar dados do espaço. Chaves são criadas dentro do aplicativo.",
-    },
-    servers: [{ url: origin }],
-    components: {
-      securitySchemes: {
-        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "sf_live" },
-      },
-    },
-    paths,
-  };
-}
-
-async function publicApiCredentials(request, env) {
-  const token =
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
-  if (!token.startsWith("sf_live_")) return null;
-  const row = await env.DB.prepare(
-    `SELECT id, workspace_owner_id, scope FROM public_api_keys
-     WHERE key_hash = ? AND revoked_at IS NULL`,
-  )
-    .bind(await sha256(token))
-    .first();
-  if (!row) return null;
-  if (!allowed(`public-api:${row.id}`, 120)) return { rateLimited: true };
-  await env.DB.prepare(
-    "UPDATE public_api_keys SET last_used_at = ? WHERE id = ?",
-  )
-    .bind(new Date().toISOString(), row.id)
-    .run();
-  return row;
-}
-
-function publicApiRecord(record) {
-  if (!record || typeof record !== "object") return null;
-  const safe = { ...record };
-  for (const field of [
-    "ownerId",
-    "sharedWith",
-    "sharedTeams",
-    "editors",
-    "sharingPermission",
-    "visibility",
-  ])
-    delete safe[field];
-  return safe;
-}
-
-const publicWritableFields = {
-  tasks: [
-    "title",
-    "description",
-    "status",
-    "priority",
-    "dueDate",
-    "businessId",
-    "project",
-    "tags",
-  ],
-  contacts: [
-    "name",
-    "email",
-    "phone",
-    "company",
-    "role",
-    "notes",
-    "businessId",
-    "tags",
-  ],
-};
-
-function buildPublicRecord(collection, body, ownerId) {
-  const record = {
-    id: crypto.randomUUID(),
-    ownerId,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    source: "public-api",
-  };
-  for (const field of publicWritableFields[collection] || []) {
-    if (body[field] === undefined) continue;
-    record[field] = Array.isArray(body[field])
-      ? body[field].slice(0, 20).map((value) => cleanText(value, 80))
-      : cleanText(
-          body[field],
-          field === "description" || field === "notes" ? 2_000 : 200,
-        );
-  }
-  if (!record.name && !record.title) return null;
-  if (collection === "tasks") {
-    record.status = record.status || "pendente";
-    record.priority = record.priority || "media";
-  }
-  return record;
-}
-
-async function handlePublicApi(request, env, url) {
-  if (request.method === "OPTIONS")
-    return new Response(null, { status: 204, headers: apiCorsHeaders });
-  if (url.pathname === "/api/public/v1/openapi.json") {
-    if (request.method !== "GET")
-      return publicApiJson({ error: "Método não permitido." }, 405);
-    return publicApiJson(publicApiOpenApi(url.origin));
-  }
-  const credentials = await publicApiCredentials(request, env);
-  if (credentials?.rateLimited)
-    return publicApiJson(
-      { error: "Limite de 120 chamadas por minuto excedido." },
-      429,
-      { "retry-after": "60" },
-    );
-  if (!credentials)
-    return publicApiJson({ error: "Chave ausente, inválida ou revogada." }, 401);
-  if (url.pathname === "/api/public/v1/me") {
-    if (request.method !== "GET")
-      return publicApiJson({ error: "Método não permitido." }, 405);
-    return publicApiJson({
-      workspaceId: credentials.workspace_owner_id,
-      scope: credentials.scope,
-      version: "v1",
-    });
-  }
-  const collection = url.pathname.split("/").filter(Boolean)[3] || "";
-  if (!PUBLIC_API_COLLECTIONS.has(collection))
-    return publicApiJson({ error: "Recurso não encontrado." }, 404);
-  const workspace = await env.DB.prepare(
-    "SELECT data, revision FROM workspaces WHERE user_id = ?",
-  )
-    .bind(credentials.workspace_owner_id)
-    .first();
-  let data;
-  try {
-    data = workspace ? JSON.parse(workspace.data) : {};
-  } catch {
-    return publicApiJson({ error: "Dados do espaço indisponíveis." }, 503);
-  }
-  if (request.method === "GET") {
-    const limit = Math.min(
-      100,
-      Math.max(
-        1,
-        Number.parseInt(url.searchParams.get("limit") || "50", 10) || 50,
-      ),
-    );
-    const businessId = cleanText(url.searchParams.get("businessId"), 80);
-    const records = (Array.isArray(data[collection]) ? data[collection] : [])
-      .filter((record) => !businessId || record?.businessId === businessId)
-      .slice(0, limit)
-      .map(publicApiRecord)
-      .filter(Boolean);
-    return publicApiJson({ data: records, count: records.length, limit });
-  }
-  if (request.method !== "POST")
-    return publicApiJson({ error: "Método não permitido." }, 405);
-  if (credentials.scope !== "read-write")
-    return publicApiJson({ error: "Esta chave permite somente leitura." }, 403);
-  if (!publicWritableFields[collection])
-    return publicApiJson({ error: "Este recurso não aceita criação." }, 405);
-  const idempotencyKey = cleanText(
-    request.headers.get("idempotency-key"),
-    100,
-  );
-  if (!idempotencyKey)
-    return publicApiJson(
-      { error: "Envie o cabeçalho Idempotency-Key." },
-      400,
-    );
-  const prior = await env.DB.prepare(
-    `SELECT response_json FROM public_api_idempotency
-     WHERE api_key_id = ? AND request_key = ?`,
-  )
-    .bind(credentials.id, idempotencyKey)
-    .first();
-  if (prior) return publicApiJson(JSON.parse(prior.response_json), 200);
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return publicApiJson({ error: "Corpo JSON inválido." }, 400);
-  }
-  const record = buildPublicRecord(
-    collection,
-    body && typeof body === "object" ? body : {},
-    credentials.workspace_owner_id,
-  );
-  if (!record)
-    return publicApiJson(
-      {
-        error:
-          collection === "tasks" ? "Informe o título." : "Informe o nome.",
-      },
-      400,
-    );
-  data[collection] = [
-    ...(Array.isArray(data[collection]) ? data[collection] : []),
-    record,
-  ];
-  const updated = JSON.stringify(data);
-  if (updated.length > 900_000)
-    return publicApiJson({ error: "O espaço de dados está cheio." }, 413);
-  const revision = Number.isInteger(workspace?.revision)
-    ? workspace.revision
-    : 0;
-  const result = await env.DB.prepare(
-    `UPDATE workspaces SET data = ?, updated_at = ?, revision = revision + 1
-     WHERE user_id = ? AND revision = ?`,
-  )
-    .bind(
-      updated,
-      new Date().toISOString(),
-      credentials.workspace_owner_id,
-      revision,
-    )
-    .run();
-  if (!result.meta?.changes)
-    return publicApiJson(
-      {
-        error:
-          "Os dados mudaram durante a operação. Repita com a mesma chave de idempotência.",
-      },
-      409,
-    );
-  const responseBody = { data: publicApiRecord(record) };
-  await env.DB.prepare(
-    `INSERT INTO public_api_idempotency
-      (id, api_key_id, request_key, response_json, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      crypto.randomUUID(),
-      credentials.id,
-      idempotencyKey,
-      JSON.stringify(responseBody),
-      new Date().toISOString(),
-    )
-    .run();
-  return publicApiJson(responseBody, 201);
-}
 
 export default {
   async scheduled(controller, env, ctx) {
@@ -811,47 +229,9 @@ export default {
         );
       }
     }
-    // Público e sem segredo: SHA publicado, hora do build e ambiente. É o que
-    // a auditoria compara com `git rev-parse HEAD` para dizer "produção = main".
-    if (url.pathname === "/api/system/version") {
-      if (request.method !== "GET") return json({ error: "Método não permitido." }, 405);
-      const manifesto = await publishedVersion(env, url.origin);
-      return json(systemVersionPayload(env, manifesto));
-    }
-    if (url.pathname === "/api/status") {
-      let database = "indisponível";
-      try {
-        if (env.DB) {
-          await env.DB.prepare("SELECT 1 AS ok").first();
-          database = "operacional";
-        }
-      } catch {}
-      const appVersion = await publishedVersion(env, url.origin);
-      const clientVersion = url.searchParams.get("client") || "";
-      const search = webSearchConfiguration(env);
-      return json({
-        status: database === "operacional" ? "operacional" : "degradado",
-        database,
-        version: appVersion?.version || "local",
-        buildTime: appVersion?.buildTime || null,
-        clientVersion,
-        current: clientVersion
-          ? clientVersion === (appVersion?.version || "local")
-          : true,
-        capabilities: {
-          webSearch: {
-            configured: search.configured,
-            braveConfigured: search.providers.brave,
-          },
-        },
-        roadmap: {
-          complete: true,
-          completedThrough: 27,
-          nextItem: null,
-        },
-        checkedAt: new Date().toISOString(),
-      });
-    }
+    if (url.pathname === "/api/system/version")
+      return handleSystemVersion(request, env, url);
+    if (url.pathname === "/api/status") return handleStatus(env, url);
     if (url.pathname === "/api/inbound/whatsapp") {
       try {
         return await handleInboundWhatsApp(request, env, url);
@@ -949,13 +329,7 @@ export default {
           : json({ error: "Não foi possível concluir o envio." }, 500);
       }
     }
-    if (url.pathname === "/api/config")
-      return json({
-        googleClientId: env.GOOGLE_CLIENT_ID || "",
-        videoEnabled: !!(env.VIDEO_AI_URL && env.VIDEO_AI_TOKEN),
-        vapidPublicKey: pushEnabled(env) ? env.VAPID_PUBLIC_KEY : null,
-        supportEmail: env.SUPPORT_EMAIL || env.MAIL_SENDER || "",
-      });
+    if (url.pathname === "/api/config") return handleConfig(env);
     if (url.pathname === "/api/errors") {
       try {
         return await handleErrorLog(request, env);
