@@ -508,8 +508,10 @@ export const nomeDaUnidade = (valor, mapa = {}) => {
   if (!bruto) return "";
   const efetivo = { ...NOMES_DE_UNIDADE, ...(mapa || {}) };
   if (efetivo[bruto]) return efetivo[bruto];
-  const digitos = bruto.replace(/\D+/g, "");
-  if (digitos.length === 14 && efetivo[digitos]) return efetivo[digitos];
+  // CNPJ pela regra central, que mantém as letras do CNPJ alfanumérico —
+  // tirar "tudo que não é dígito" faria um CNPJ com letras nunca casar.
+  const documento = normalizeDocument(bruto);
+  if (documento.length === 14 && efetivo[documento]) return efetivo[documento];
   return bruto;
 };
 
