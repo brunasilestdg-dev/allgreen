@@ -2972,8 +2972,8 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível decidir o pedido.");
-      if (decisao === "aprovar" && !payload.invitationSent && payload.inviteLink)
-        setConviteManual({ email: pedido.email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt });
+      if (decisao === "aprovar" && payload.inviteLink)
+        setConviteManual({ email: pedido.email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt, emailSent: payload.invitationSent });
       setToast?.(decisao === "aprovar"
         ? payload.invitationSent
           ? `Acesso aprovado e convite enviado para ${pedido.email}.`
@@ -3018,8 +3018,8 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       const response = await fetch(`/api/todogreen/access-list?owner=${encodeURIComponent(ownerId())}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível salvar o acesso.");
-      if (!payload.invitationSent && payload.inviteLink)
-        setConviteManual({ email: payload.email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt });
+      if (payload.inviteLink)
+        setConviteManual({ email: payload.email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt, emailSent: payload.invitationSent });
       setForm({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
       setToast?.(
         payload.invitationSent
@@ -3071,8 +3071,8 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível reenviar o convite.");
-      if (!payload.invitationSent && payload.inviteLink)
-        setConviteManual({ email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt });
+      if (payload.inviteLink)
+        setConviteManual({ email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt, emailSent: payload.invitationSent });
       setToast?.(
         payload.invitationSent
           ? `Convite reenviado para ${email}.`
@@ -3091,7 +3091,9 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
             <strong>Link de convite para {conviteManual.email}</strong>
             <button type="button" className="tdg-invite-link-fechar" aria-label="Fechar" onClick={() => setConviteManual(null)}>×</button>
           </div>
-          <p>O e-mail automático não está configurado (ou o envio falhou). O acesso já está autorizado — copie o link abaixo e envie para a pessoa (WhatsApp, etc.). Nele ela define a própria senha no primeiro acesso.{conviteManual.expiresAt ? ` O convite expira em ${new Date(conviteManual.expiresAt).toLocaleDateString("pt-BR")}.` : ""}</p>
+          <p>{conviteManual.emailSent
+            ? "Convite enviado por e-mail. Você também pode copiar o link e enviar por outro canal (WhatsApp, etc.) — ambos levam à mesma tela onde a pessoa define a própria senha."
+            : "O e-mail automático não está configurado (ou o envio falhou). O acesso já está autorizado — copie o link abaixo e envie para a pessoa (WhatsApp, etc.). Nele ela define a própria senha no primeiro acesso."}{conviteManual.expiresAt ? ` O convite expira em ${new Date(conviteManual.expiresAt).toLocaleDateString("pt-BR")}.` : ""}</p>
           <div className="tdg-invite-link-campo">
             <input type="text" readOnly value={conviteManual.link} onFocus={(e) => e.target.select()} />
             <button type="button" className="tdg-action" onClick={copiarConvite}>{linkCopiado ? "Copiado!" : "Copiar link"}</button>
