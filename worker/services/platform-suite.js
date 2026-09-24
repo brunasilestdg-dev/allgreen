@@ -1,4 +1,10 @@
 import { bookingWindow } from "../../src/features/platform-suite/platformSuiteDomain.js";
+import {
+  caixaDoTurnstile,
+  cspComTurnstile,
+  exigirTurnstile,
+  scriptDoTurnstile,
+} from "../lib/turnstile.js";
 
 const clean = (value, max = 240) =>
   String(value ?? "")
@@ -36,14 +42,18 @@ const randomToken = (bytes = 18) => {
   return [...values].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
-const html = (content, status = 200) =>
+// Páginas com formulário passam o `env`: com o Turnstile ligado, a CSP libera
+// o script e o iframe do widget. As demais seguem sem script nenhum.
+const html = (content, status = 200, env = null) =>
   new Response(content, {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
-      "content-security-policy":
+      "content-security-policy": cspComTurnstile(
         "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+        env,
+      ),
       "referrer-policy": "no-referrer",
       "x-content-type-options": "nosniff",
     },
@@ -524,9 +534,12 @@ async function publicBooking(request, env, url, dependencies) {
            <label>Telefone<input name="phone" maxlength="40" autocomplete="tel"></label>
            <label>Data e horário<input name="startAt" type="datetime-local" required></label>
            <label>Observações<textarea name="notes" maxlength="1000"></textarea></label>
+           ${caixaDoTurnstile(env, "agenda")}
            <button type="submit">Confirmar agendamento</button>
-         </form>`,
+         </form>${scriptDoTurnstile(env)}`,
       ),
+      200,
+      env,
     );
   }
 
@@ -535,6 +548,14 @@ async function publicBooking(request, env, url, dependencies) {
     if (allowed && !(await allowed(`public-booking:${slug}:${ip}`, 12)))
       return json({ error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
     const body = await requestData(request);
+    const barrado = await exigirTurnstile(request, env, body, {
+      acao: "agenda",
+      responder: (dados, status) =>
+        wantsJson(request)
+          ? json(dados, status)
+          : html(pageShell("Verificação necessária", `<h1>Não foi possível agendar</h1><p>${escapeHtml(dados.error)}</p><p><a href="/agenda/${encodeURIComponent(page.slug)}">Voltar para a agenda</a></p>`), status),
+    });
+    if (barrado) return barrado;
     const name = clean(body.name, 100);
     const email = clean(body.email, 180).toLowerCase();
     if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -671,9 +692,12 @@ async function publicSupport(request, env, url, dependencies) {
            <label>Categoria<select name="category"><option>Geral</option><option>Financeiro</option><option>Entrega</option><option>Produto</option><option>Suporte técnico</option></select></label>
            <label>Prioridade<select name="priority"><option>Normal</option><option>Alta</option><option>Urgente</option></select></label>
            <label>Como podemos ajudar?<textarea name="description" required maxlength="4000"></textarea></label>
+           ${caixaDoTurnstile(env, "atendimento")}
            <button type="submit">Abrir chamado</button>
-         </form>`,
+         </form>${scriptDoTurnstile(env)}`,
       ),
+      200,
+      env,
     );
   }
   if (request.method === "POST" && action === "tickets") {
@@ -681,6 +705,14 @@ async function publicSupport(request, env, url, dependencies) {
     if (allowed && !(await allowed(`public-support:${slug}:${ip}`, 12)))
       return json({ error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
     const body = await requestData(request);
+    const barrado = await exigirTurnstile(request, env, body, {
+      acao: "atendimento",
+      responder: (dados, status) =>
+        wantsJson(request)
+          ? json(dados, status)
+          : html(pageShell("Verificação necessária", `<h1>Não foi possível abrir</h1><p>${escapeHtml(dados.error)}</p><p><a href="/atendimento/${encodeURIComponent(portal.slug)}">Voltar para a central</a></p>`), status),
+    });
+    if (barrado) return barrado;
     const name = clean(body.name, 100);
     const email = clean(body.email, 180).toLowerCase();
     const subject = clean(body.subject, 160);

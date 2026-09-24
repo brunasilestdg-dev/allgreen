@@ -373,8 +373,7 @@
 .tdg-crm-metrics,
 .tdg-opp-resumo,
 .tdg-performance-summary,
-.tdg-funil-metrics,
-.tdg-planner-metrics {
+.tdg-funil-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
   gap: 10px;
@@ -383,8 +382,7 @@
 .tdg-crm-metrics > *,
 .tdg-opp-resumo > *,
 .tdg-performance-summary > *,
-.tdg-funil-metrics > *,
-.tdg-planner-metrics > .tdg-metric {
+.tdg-funil-metrics > * {
   position: relative;
   min-width: 0;
   overflow: hidden;
@@ -449,8 +447,7 @@
 .tdg-crm-metrics > *::after,
 .tdg-opp-resumo > *::after,
 .tdg-performance-summary > *::after,
-.tdg-funil-metrics > *::after,
-.tdg-planner-metrics > .tdg-metric::after {
+.tdg-funil-metrics > *::after {
   content: "";
   position: absolute;
   inset: auto 0 0;
@@ -459,8 +456,7 @@
 }
 
 .tdg-crm-toolbar,
-.tdg-opp-toolbar,
-.tdg-planner-head {
+.tdg-opp-toolbar {
   position: sticky;
   z-index: 8;
   top: 0;
@@ -474,7 +470,6 @@
 
 .tdg-crm-view-switch,
 .tdg-view-switch,
-.tdg-planner-cortes,
 .tdg-workviews-switch {
   display: inline-flex;
   gap: 4px;
@@ -486,7 +481,6 @@
 
 .tdg-crm-view-switch button,
 .tdg-view-switch button,
-.tdg-planner-cortes button,
 .tdg-workviews-switch button {
   min-height: 36px;
   border: 0;
@@ -495,7 +489,6 @@
 
 .tdg-crm-view-switch button[data-active="true"],
 .tdg-view-switch button[data-active="true"],
-.tdg-planner-cortes button[data-ativo="true"],
 .tdg-workviews-switch button[data-active="true"] {
   background: var(--tdg-card);
   color: var(--tdg-x-deep);
@@ -528,23 +521,20 @@
 }
 
 .tdg-crm-kanban,
-.tdg-opp-kanban,
-.tdg-planner-board {
+.tdg-opp-kanban {
   scrollbar-color: #91beb5 transparent;
   scrollbar-width: thin;
 }
 
 .tdg-crm-kanban-column,
-.tdg-opp-kb-col,
-.tdg-planner-col {
+.tdg-opp-kb-col {
   border: 1px solid var(--tdg-x-line);
   border-radius: 15px;
   background: #f3f8f6;
 }
 
 .tdg-crm-kanban-column > header,
-.tdg-opp-kb-col > header,
-.tdg-planner-col > header {
+.tdg-opp-kb-col > header {
   position: sticky;
   z-index: 2;
   top: 0;
@@ -591,45 +581,6 @@
 }
 
 /* Planner: quadro vivo e prioridade visível sem carnaval */
-.tdg-planner-focus {
-  border: 1px solid #b9ded6;
-  border-left: 4px solid var(--tdg-x-brand);
-  border-radius: 14px;
-  background: linear-gradient(110deg, #effaf7, var(--tdg-card));
-}
-
-.tdg-planner-focus-list button {
-  transition: background .15s ease, transform .15s ease;
-}
-
-.tdg-planner-focus-list button:hover {
-  background: #e6f5f1;
-  transform: translateX(2px);
-}
-
-.tdg-planner-card {
-  border: 1px solid #d5e4e0;
-  border-radius: 12px;
-  box-shadow: 0 3px 11px rgba(7, 55, 53, .045);
-  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
-}
-
-.tdg-planner-card:hover {
-  transform: translateY(-2px);
-  border-color: #8fc9bd;
-  box-shadow: 0 9px 22px rgba(7, 55, 53, .1);
-}
-
-.tdg-planner-quick input {
-  border: 1px dashed #a8cec5;
-  background: rgba(255, 255, 255, .72);
-}
-
-.tdg-planner-quick input:focus {
-  border-style: solid;
-  border-color: var(--tdg-x-brand);
-  background: var(--tdg-card);
-}
 
 .tdg-planner-form {
   display: grid;
@@ -736,9 +687,8 @@
 
 /* Feedback visual sem distração */
 @media (prefers-reduced-motion: no-preference) {
-  .tdg-planner-card,
   .tdg-crm-kanban-card,
-  .tdg-opp-kb-card {
+.tdg-opp-kb-card {
     animation: tdg-card-in .24s ease both;
   }
 
@@ -786,14 +736,10 @@
   }
 
   .tdg-crm-toolbar,
-  .tdg-opp-toolbar,
-  .tdg-planner-head {
+.tdg-opp-toolbar {
     position: static;
   }
 
-  .tdg-planner-board {
-    grid-auto-columns: minmax(278px, 86vw);
-  }
 }
 
 @media (max-width: 600px) {
@@ -814,10 +760,9 @@
   }
 
   .tdg-crm-metrics,
-  .tdg-opp-resumo,
-  .tdg-performance-summary,
-  .tdg-funil-metrics,
-  .tdg-planner-metrics {
+.tdg-opp-resumo,
+.tdg-performance-summary,
+.tdg-funil-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -879,7 +824,6 @@
   padding: 5px 11px;
   white-space: nowrap;
 }
-
 
 /* Entrada ERP aprovada: marca limpa à esquerda, autenticação à direita. */
 .auth-shell.tdg-auth-entry {

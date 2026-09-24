@@ -1,45 +1,79 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarClock,
-  Check,
+  BarChart3,
+  CalendarRange,
+  ChevronDown,
+  ChevronRight,
+  Filter,
+  GanttChart,
+  KanbanSquare,
   LayoutGrid,
-  Link2,
   ListChecks,
   Lock,
+  MoreHorizontal,
+  Pencil,
   Plus,
   RefreshCw,
+  Search,
+  Table2,
   Trash2,
   Users,
   X,
-  Zap,
 } from "lucide-react";
 import Modal from "../../../components/Modal.jsx";
 import { RadioCards } from "../../../design-system/index.js";
 import {
+  FILTROS_VAZIOS,
   PLANNER_PRIORITIES,
   PLANNER_PROGRESS,
+  adicionarBalde,
   agruparTarefas,
+  dataCurta,
+  filtrarTarefas,
+  filtrosAtivos,
   minhasTarefas,
+  moverBalde,
   normalizarBaldes,
-  prioridadesDoPlano,
-  progressoNumerico,
+  removerBalde,
+  renomearBalde,
   resumoDoCompartilhamento,
-  resumoInteligente,
-  resumoPlano,
-  sinaisDaTarefa,
-  tarefaAtendeBusca,
+  rotulosDoPlano,
 } from "../plannerDomain.js";
 import {
   tarefaCanonicaPertenceAoPlano,
   tarefaTodoParaPlanner,
 } from "../plannerIntegrationDomain.js";
 import { hasTodoGreenPermission } from "../logisticsVerticalDomain.js";
+import PlannerBoard from "./planner/PlannerBoard.jsx";
+import PlannerCharts from "./planner/PlannerCharts.jsx";
+import PlannerSidebar from "./planner/PlannerSidebar.jsx";
+import PlannerTable from "./planner/PlannerTable.jsx";
+import PlannerTaskModal from "./planner/PlannerTaskModal.jsx";
+import PlannerTimeline from "./planner/PlannerTimeline.jsx";
+import {
+  Avatar,
+  CORES_PLANO,
+  IconePrioridade,
+  LABEL_PROGRESSO,
+  MODOS_DE_PARTILHA,
+  PlanoIcone,
+  Rotulo,
+  gerarIdDeTarefa,
+  hoje,
+  modoDoPlano,
+  partilhaParaEnvio,
+  rotuloPartilha,
+  tarefaVazia,
+} from "./planner/plannerUi.jsx";
 import "./TodoGreenPages.css";
+import "./planner/planner.css";
 
-// Planner estilo Microsoft Planner: planos com baldes e tarefas, privados ou
-// compartilhados com o espaço. O progresso da barra é sempre derivado (status +
-// checklist) — a tela nunca digita um número solto. O servidor é a autoridade
-// da visibilidade; aqui a tela só desenha o que ele entrega.
+// Planner no formato do Microsoft Planner: rail de planos à esquerda, trilha
+// "Meus planos › Plano" no topo, abas Quadro / Tabela / Linha do tempo /
+// Gráficos, barra de filtros e "Agrupar por". O quadro tem baldes editáveis,
+// arrastar-e-soltar, "+ Adicionar tarefa" no topo de cada coluna e as
+// concluídas dobradas. As tarefas continuam sendo a task canônica
+// (`db.tasks`) — o servidor só guarda planos, baldes, membros e visibilidade.
 
 // `espacoId` é o espaço que a casca da vertical confirmou no servidor
 // (`/api/todogreen/access` → ownerId). Mandá-lo de volta em `?owner=` garante
@@ -63,38 +97,43 @@ const request = async (path, authHeaders, options = {}, espacoId = "") => {
   return corpo;
 };
 
+const VISTAS = [
+  { id: "quadro", label: "Quadro", icon: KanbanSquare },
+  { id: "tabela", label: "Tabela", icon: Table2 },
+  { id: "linha", label: "Linha do tempo", icon: GanttChart },
+  { id: "graficos", label: "Gráficos", icon: BarChart3 },
+];
+
 const CORTES = [
-  { id: "balde", label: "Balde", icon: LayoutGrid },
-  { id: "progresso", label: "Progresso", icon: ListChecks },
-  { id: "responsavel", label: "Responsável", icon: Users },
+  { id: "balde", label: "Balde" },
+  { id: "progresso", label: "Progresso" },
+  { id: "responsavel", label: "Responsável" },
 ];
 
-// Os três jeitos de compartilhar, na tela. O banco só conhece private/shared;
-// "Pessoas específicas" é privado + a lista de membros (pedido da titular,
-// 30/08). O mapeamento acontece no envio.
-const MODOS_DE_PARTILHA = [
-  { id: "privado", label: "Privado", ajuda: "Só você vê este plano." },
-  { id: "pessoas", label: "Pessoas específicas", ajuda: "Você escolhe quem vê e trabalha nas tarefas." },
-  { id: "espaco", label: "Todo o espaço", ajuda: "Todo o espaço de trabalho vê." },
-];
+const TODOS_STATUS = PLANNER_PROGRESS.map((p) => p.id);
 
-const modoDoPlano = (plano) => {
-  if (plano?.visibility === "shared") return "espaco";
-  return (plano?.members || []).length > 0 ? "pessoas" : "privado";
+// Preferências por navegador (vista, filtros, rail). Nunca travam a tela: sem
+// storage, vale o padrão.
+const ler = (chave, padrao) => {
+  try {
+    const bruto = window.localStorage.getItem(chave);
+    return bruto == null ? padrao : JSON.parse(bruto);
+  } catch { return padrao; }
+};
+const gravar = (chave, valor) => {
+  try { window.localStorage.setItem(chave, JSON.stringify(valor)); } catch { /* ok */ }
 };
 
-const partilhaParaEnvio = (modo, members) => ({
-  visibility: modo === "espaco" ? "shared" : "private",
-  members: modo === "pessoas" ? members : [],
-});
-
-// Rótulo curto de quem vê o plano, para o botão de compartilhar não ser um
-// ícone mudo (a titular não achava onde escolher com quem compartilhar).
-const rotuloPartilha = (plano) => {
-  const modo = modoDoPlano(plano);
-  if (modo === "espaco") return "Todo o espaço";
-  if (modo === "pessoas") return `${(plano.members || []).length} pessoa${(plano.members || []).length === 1 ? "" : "s"}`;
-  return "Só eu";
+const filtrosIniciais = () => {
+  const salvo = ler("todogreen-planner-filtros", null);
+  if (salvo && typeof salvo === "object") return { ...FILTROS_VAZIOS, ...salvo, busca: "" };
+  // Migração do filtro antigo, que guardava só os status marcados.
+  const antigos = ler("todogreen-planner-status", null);
+  if (Array.isArray(antigos)) {
+    const ids = antigos.filter((id) => TODOS_STATUS.includes(id));
+    return { ...FILTROS_VAZIOS, status: ids.length && ids.length < TODOS_STATUS.length ? ids : [] };
+  }
+  return { ...FILTROS_VAZIOS };
 };
 
 // O servidor devolve quem foi aceito na lista mas ainda não alcança a To Do
@@ -105,38 +144,6 @@ const avisoDePartilha = (base, plano) => {
   if (!n) return base;
   return `${base} ${n} pessoa${n === 1 ? "" : "s"} ainda não ${n === 1 ? "tem" : "têm"} acesso à To Do Green neste espaço e só verá${n === 1 ? "" : "o"} o plano depois de liberada${n === 1 ? "" : "s"} em Acessos.`;
 };
-
-const COR_PRIORIDADE = {
-  urgente: "#b42318",
-  alta: "#c4700b",
-  media: "#2c7a5b",
-  baixa: "#5b6b78",
-};
-const LABEL_PRIORIDADE = Object.fromEntries(PLANNER_PRIORITIES.map((p) => [p.id, p.label]));
-const LABEL_PROGRESSO = Object.fromEntries(PLANNER_PROGRESS.map((p) => [p.id, p.label]));
-
-const hoje = () => new Date().toISOString().slice(0, 10);
-
-const tarefaVazia = (bucketId = "") => ({
-  title: "",
-  notes: "",
-  bucketId,
-  assigneeUserId: "",
-  assigneeLabel: "",
-  priority: "media",
-  progress: "nao_iniciada",
-  startDate: "",
-  dueDate: "",
-  checklist: [],
-  labels: [],
-  campos: { clientId: "", opportunityId: "" },
-});
-
-// Id de tarefa nova: UUID quando disponível; senão carimbo + aleatório. Fica
-// fora do componente porque é efeito de evento, não de render (React Compiler).
-const gerarIdDeTarefa = () => (typeof crypto !== "undefined" && crypto.randomUUID
-  ? crypto.randomUUID()
-  : `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 
 export default function PlannerPage({
   authHeaders,
@@ -161,62 +168,55 @@ export default function PlannerPage({
   const podeGerir = hasTodoGreenPermission(role, "planner:manage", permissions);
   const pedir = (path, options) => request(path, authHeaders, options, espacoId);
   const [planoAtivoId, setPlanoAtivoId] = useState("");
-  // Pessoas da plataforma para sugerir como responsável: o dono do espaço e os
-  // membros ativos, da mesma lista que o /api/collab já serve ao app inteiro.
-  // Se a chamada falhar, o campo continua aceitando texto livre — sugestão é
-  // conveniência, nunca condição.
   const [pessoas, setPessoas] = useState([]);
+  const [vista, setVista] = useState(() => {
+    const v = ler("todogreen-planner-vista", "quadro");
+    return VISTAS.some((x) => x.id === v) ? v : "quadro";
+  });
   const [corte, setCorte] = useState("balde");
-  const [busca, setBusca] = useState("");
-  // Filtro de status por chips (pedido da titular: "só quero ver a fazer e em
-  // andamento"). Multi-seleção — nada de um único status por vez, nada de
-  // combo que não deixa buscar. Começa com todos marcados: plano inteiro à
-  // vista até ela escolher esconder algum. A escolha fica por navegador.
-  const [statusFiltro, setStatusFiltro] = useState(() => {
-    try {
-      const salvo = window.localStorage.getItem("todogreen-planner-status");
-      if (salvo) {
-        const ids = JSON.parse(salvo).filter((id) => PLANNER_PROGRESS.some((p) => p.id === id));
-        if (ids.length) return new Set(ids);
-      }
-    } catch { /* usa o padrão */ }
-    return new Set(PLANNER_PROGRESS.map((p) => p.id));
-  });
-  const alternarStatus = (id) => setStatusFiltro((atual) => {
-    const proximo = new Set(atual);
-    if (proximo.has(id)) proximo.delete(id); else proximo.add(id);
-    // Nunca deixar tudo desmarcado — isso esconderia o plano inteiro e pareceria
-    // um bug. Desmarcar o último volta a marcar todos.
-    const efetivo = proximo.size ? proximo : new Set(PLANNER_PROGRESS.map((p) => p.id));
-    try { window.localStorage.setItem("todogreen-planner-status", JSON.stringify([...efetivo])); } catch { /* ok */ }
-    return efetivo;
-  });
-  // Radar e "Faça agora" ficam recolhidos por padrão (pedido da titular, 03/09:
-  // tela limpa). Um botão traz a análise; a escolha fica gravada por navegador.
-  const [analiseAberta, setAnaliseAberta] = useState(() => {
-    try { return window.localStorage.getItem("todogreen-planner-analise") === "1"; } catch { return false; }
-  });
-  const alternarAnalise = () => setAnaliseAberta((v) => {
-    const proximo = !v;
-    try { window.localStorage.setItem("todogreen-planner-analise", proximo ? "1" : "0"); } catch { /* ok */ }
-    return proximo;
-  });
+  const [filtros, setFiltros] = useState(filtrosIniciais);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [railAberto, setRailAberto] = useState(() => ler("todogreen-planner-rail", true) !== false);
+  const [seletorAberto, setSeletorAberto] = useState(false);
+  const [menuPlano, setMenuPlano] = useState(false);
   const [ocupado, setOcupado] = useState("carregando");
   const [erro, setErro] = useState("");
   const [semAcesso, setSemAcesso] = useState(false);
   const [vendoMinhas, setVendoMinhas] = useState(false);
-  const [modalPlano, setModalPlano] = useState(false);
-  const [formPlano, setFormPlano] = useState({ name: "", modo: "privado", description: "", members: [] });
+  const [modalPlano, setModalPlano] = useState(null);
   const [partilhaEmEdicao, setPartilhaEmEdicao] = useState(null);
   const [tarefaEmEdicao, setTarefaEmEdicao] = useState(null);
-  const [rascunhoRapido, setRascunhoRapido] = useState({});
 
   const avisar = (mensagem, tom = "info") => (setToast ? setToast({ mensagem, tom }) : undefined);
+  const hojeRef = hoje();
+
+  const escolherVista = (v) => { setVista(v); gravar("todogreen-planner-vista", v); };
+  const alternarRail = () => setRailAberto((a) => { gravar("todogreen-planner-rail", !a); return !a; });
+  const atualizarFiltros = (patch) => setFiltros((f) => {
+    const proximo = { ...f, ...patch };
+    const { busca: _busca, ...persistente } = proximo;
+    gravar("todogreen-planner-filtros", persistente);
+    return proximo;
+  });
+  const limparFiltros = () => atualizarFiltros({ ...FILTROS_VAZIOS, busca: filtros.busca });
+
+  // Menus flutuantes fecham ao clicar fora.
+  useEffect(() => {
+    if (!filtrosAbertos && !seletorAberto && !menuPlano) return undefined;
+    const fechar = (e) => {
+      if (!e.target.closest?.(".plr-menu-ancora")) { setFiltrosAbertos(false); setSeletorAberto(false); setMenuPlano(false); }
+    };
+    const esc = (e) => { if (e.key === "Escape") { setFiltrosAbertos(false); setSeletorAberto(false); setMenuPlano(false); } };
+    document.addEventListener("mousedown", fechar);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", fechar); document.removeEventListener("keydown", esc); };
+  }, [filtrosAbertos, seletorAberto, menuPlano]);
 
   const planoAtivo = useMemo(
     () => planos.find((p) => p.id === planoAtivoId) || null,
     [planos, planoAtivoId],
   );
+  const baldes = useMemo(() => normalizarBaldes(planoAtivo?.buckets || []), [planoAtivo]);
   const tarefas = useMemo(
     () => canonicalTasks
       .filter((task) => tarefaCanonicaPertenceAoPlano(task, planoAtivoId))
@@ -255,17 +255,13 @@ export default function PlannerPage({
     }
   };
 
-  const carregarMinhas = () => carregarPlanos(planoAtivoId);
-
   useEffect(() => { carregarPlanos(); }, []);
   useEffect(() => {
     let ativo = true;
     // Duas portas de "gente do espaço", exatamente as que o servidor aceita
     // como responsável/membro: colaboradores do app (memberships, via
     // /api/collab) E vínculos diretos da vertical (tenant_users, via
-    // /planner/pessoas). Antes só a primeira era sugerida — quem entrou pela
-    // vertical existia e era aceito na gravação, mas nunca aparecia ao digitar
-    // o nome. Unimos as duas por id, sem duplicar.
+    // /planner/pessoas). Unimos as duas por id, sem duplicar.
     // `alcancaPlanner` vem do servidor da vertical: quem só está no espaço do
     // app (memberships) não abre a To Do Green e não veria o plano. Só marcamos
     // false quando a lista da vertical carregou — se ela falhou, não sabemos,
@@ -302,23 +298,35 @@ export default function PlannerPage({
     return () => { ativo = false; };
   }, [espacoId, authHeaders]);
 
-  const criarPlano = async (evento) => {
-    evento.preventDefault();
-    if (!formPlano.name.trim()) { avisar("Dê um nome ao plano.", "erro"); return; }
+  // ----- Planos -----
+  const salvarPlano = async (form) => {
+    if (!form.name.trim()) { avisar("Dê um nome ao plano.", "erro"); return; }
     setOcupado("salvando");
     try {
-      const corpo = {
-        name: formPlano.name,
-        description: formPlano.description,
-        ...partilhaParaEnvio(formPlano.modo, formPlano.members),
-      };
-      const novo = await pedir("/planos", { method: "POST", body: JSON.stringify(corpo) });
-      setModalPlano(false);
-      setFormPlano({ name: "", modo: "privado", description: "", members: [] });
-      onSyncPlanSharing?.(novo);
-      await carregarPlanos(novo.id);
-      avisar(avisoDePartilha("Plano criado.", novo), novo.membrosSemAcesso?.length ? "info" : "sucesso");
+      if (modalPlano?.modo === "editar" && modalPlano.plano) {
+        await pedir(`/planos/${modalPlano.plano.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ revision: modalPlano.plano.revision, name: form.name, description: form.description, color: form.color }),
+        });
+        setModalPlano(null);
+        await carregarPlanos(modalPlano.plano.id);
+        avisar("Plano atualizado.", "sucesso");
+      } else {
+        const corpo = {
+          name: form.name,
+          description: form.description,
+          color: form.color,
+          ...partilhaParaEnvio(form.modo, form.members),
+        };
+        const novo = await pedir("/planos", { method: "POST", body: JSON.stringify(corpo) });
+        setModalPlano(null);
+        setVendoMinhas(false);
+        onSyncPlanSharing?.(novo);
+        await carregarPlanos(novo.id);
+        avisar(avisoDePartilha("Plano criado.", novo), novo.membrosSemAcesso?.length ? "info" : "sucesso");
+      }
     } catch (motivo) {
+      if (motivo.status === 409) { avisar("O plano mudou em outra tela. Recarreguei.", "erro"); setModalPlano(null); await carregarPlanos(); return; }
       avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro");
       setOcupado("");
     }
@@ -357,59 +365,130 @@ export default function PlannerPage({
     }
   };
 
-  const adicionarRapida = async (bucketId) => {
-    const titulo = (rascunhoRapido[bucketId] || "").trim();
-    if (!titulo || !planoAtivo) return;
-    const id = gerarIdDeTarefa();
-    onUpsertCanonicalTask?.({ ...tarefaVazia(bucketId), id, rawTaskId: id, canonicalTaskId: id, title: titulo, planId: planoAtivo.id }, planoAtivo);
-    setRascunhoRapido((r) => ({ ...r, [bucketId]: "" }));
+  // ----- Baldes (estrutura do plano, PATCH com revision) -----
+  const salvarBaldes = async (novos) => {
+    if (!planoAtivo || !souDono) return false;
+    try {
+      const atualizado = await pedir(`/planos/${planoAtivo.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ revision: planoAtivo.revision, buckets: novos }),
+      });
+      setPlanos((lista) => lista.map((p) => (p.id === atualizado.id ? atualizado : p)));
+      return true;
+    } catch (motivo) {
+      if (motivo.status === 409) { avisar("O plano mudou em outra tela. Recarreguei.", "erro"); await carregarPlanos(); return false; }
+      avisar(motivo.message, "erro");
+      return false;
+    }
+  };
+  const aoAdicionarBalde = (nome) => salvarBaldes(adicionarBalde(baldes, nome));
+  const aoRenomearBalde = (id, nome) => salvarBaldes(renomearBalde(baldes, id, nome));
+  const aoMoverBalde = (id, direcao) => salvarBaldes(moverBalde(baldes, id, direcao));
+  const aoRemoverBalde = async (coluna) => {
+    const restantes = removerBalde(baldes, coluna.chave);
+    if (restantes.length === baldes.length) return;
+    const orfas = tarefas.filter((t) => t.bucketId === coluna.chave);
+    const destino = restantes[0];
+    const pergunta = orfas.length
+      ? `Excluir o balde "${coluna.titulo}"? As ${orfas.length} tarefa(s) dele passam para "${destino.nome}".`
+      : `Excluir o balde "${coluna.titulo}"?`;
+    if (typeof window !== "undefined" && !window.confirm(pergunta)) return;
+    const ok = await salvarBaldes(restantes);
+    if (!ok) return;
+    for (const t of orfas) gravarTarefa({ ...t, bucketId: destino.id });
+    avisar("Balde excluído.", "sucesso");
   };
 
-  const salvarTarefa = async (tarefa) => {
+  // ----- Tarefas (task canônica) -----
+  const gravarTarefa = (tarefa) => {
     if (!planoAtivo) return;
     const id = tarefa.rawTaskId || tarefa.id || gerarIdDeTarefa();
     onUpsertCanonicalTask?.({ ...tarefa, id, rawTaskId: id, canonicalTaskId: tarefa.canonicalTaskId || id, planId: planoAtivo.id }, planoAtivo);
+  };
+
+  const adicionarRapida = (bucketId, titulo) => {
+    if (!titulo || !planoAtivo) return;
+    const id = gerarIdDeTarefa();
+    onUpsertCanonicalTask?.({ ...tarefaVazia(bucketId), id, rawTaskId: id, canonicalTaskId: id, title: titulo, planId: planoAtivo.id }, planoAtivo);
+  };
+
+  const salvarTarefa = (tarefa) => {
+    gravarTarefa(tarefa);
     setTarefaEmEdicao(null);
     avisar("Tarefa salva.", "sucesso");
   };
 
-  const arquivarTarefa = async (tarefa) => {
+  const arquivarTarefa = (tarefa) => {
     if (!planoAtivo) return;
     onDeleteCanonicalTask?.(tarefa.rawTaskId || tarefa.id);
     setTarefaEmEdicao(null);
     avisar("Tarefa arquivada.", "sucesso");
   };
 
-  // Mudança rápida de status a partir do cartão, sem abrir o modal.
-  const mudarProgresso = async (tarefa, progress) => {
-    await salvarTarefa({ ...tarefa, progress });
+  const mudarProgresso = (tarefa, progress) => gravarTarefa({ ...tarefa, progress });
+  const alternarConcluida = (tarefa) => mudarProgresso(tarefa, tarefa.progress === "concluida" ? "em_andamento" : "concluida");
+
+  // Soltar um cartão em outra coluna: o que muda depende do corte ativo.
+  const moverTarefa = (tarefaId, coluna) => {
+    const tarefa = tarefas.find((t) => t.id === tarefaId);
+    if (!tarefa) return;
+    if (corte === "balde") {
+      if (coluna.chave === "__sem__" || tarefa.bucketId === coluna.chave) return;
+      gravarTarefa({ ...tarefa, bucketId: coluna.chave });
+    } else if (corte === "progresso") {
+      if (tarefa.progress === coluna.chave) return;
+      gravarTarefa({ ...tarefa, progress: coluna.chave });
+    } else if (corte === "responsavel") {
+      if (coluna.chave === "__sem__") {
+        if (!tarefa.assigneeUserId && !tarefa.assigneeLabel) return;
+        gravarTarefa({ ...tarefa, assigneeUserId: "", assigneeLabel: "" });
+      } else {
+        if (tarefa.assigneeUserId === coluna.chave) return;
+        gravarTarefa({ ...tarefa, assigneeUserId: coluna.chave, assigneeLabel: coluna.titulo });
+      }
+    }
   };
 
+  // ----- Derivados da vista -----
   const tarefasFiltradas = useMemo(
-    () => tarefas.filter((t) => tarefaAtendeBusca(t, busca) && statusFiltro.has(t.progress)),
-    [tarefas, busca, statusFiltro],
+    () => filtrarTarefas(tarefas, filtros, { hoje: hojeRef, userId: currentUserId }),
+    [tarefas, filtros, hojeRef, currentUserId],
   );
   const colunas = useMemo(
-    () => agruparTarefas(tarefasFiltradas, corte, { baldes: planoAtivo?.buckets || [] }),
-    [tarefasFiltradas, corte, planoAtivo],
+    () => agruparTarefas(tarefasFiltradas, corte, { baldes }),
+    [tarefasFiltradas, corte, baldes],
   );
-  const resumo = useMemo(() => resumoPlano(tarefas), [tarefas]);
-  // Radar do plano: contagem agregada dos sinais que pedem ação e que a faixa de
-  // métricas não mostra (vence hoje, vence em breve, sem responsável, em risco).
-  // Só aparece o que for maior que zero — plano tranquilo não vira ruído.
-  const radar = useMemo(() => resumoInteligente(tarefas, { hoje: hoje() }), [tarefas]);
-  // A fila do "faça agora" do plano ativo: o que pede ação hoje, ranqueado pela
-  // urgência derivada dos dados (prazo, prioridade, responsável) — não digitada.
-  const prioridades = useMemo(() => prioridadesDoPlano(tarefas, { hoje: hoje() }), [tarefas]);
+  const rotulosSugeridos = useMemo(() => rotulosDoPlano(tarefas), [tarefas]);
+  const nFiltros = filtrosAtivos(filtros);
   const minhasFiltradas = useMemo(
     () => minhasTarefas(minhas, currentUserId, { incluirConcluidas: true }),
     [minhas, currentUserId],
   );
 
+  const alternarStatus = (id) => {
+    const atual = filtros.status.length ? filtros.status : TODOS_STATUS;
+    let proximo = atual.includes(id) ? atual.filter((s) => s !== id) : [...atual, id];
+    // Nunca deixar tudo desmarcado — isso esconderia o plano inteiro e
+    // pareceria um bug. Desmarcar o último volta a marcar todos.
+    if (!proximo.length || proximo.length === TODOS_STATUS.length) proximo = [];
+    atualizarFiltros({ status: proximo });
+  };
+  const alternarLista = (campo, id) => {
+    const atual = filtros[campo] || [];
+    atualizarFiltros({ [campo]: atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id] });
+  };
+
+  const abrirTarefaDeOutroPlano = (t) => {
+    const plano = planos.find((p) => p.id === t.planId);
+    if (!plano) return;
+    setVendoMinhas(false);
+    setPlanoAtivoId(t.planId);
+    setTimeout(() => setTarefaEmEdicao(t), 0);
+  };
+
   if (semAcesso) {
     return (
-      <section className="tdg-page">
-        <div className="tdg-page-title"><div><span>Planner</span><h2>Planner</h2></div></div>
+      <section className="tdg-page tdg-planner">
         <div className="tdg-panel tdg-empty">
           <Lock size={22} />
           <p>Você ainda não tem acesso à To Do Green neste espaço. Peça a quem administra para liberar seu e-mail em Acessos — o plano compartilhado com você aparece assim que o acesso for liberado.</p>
@@ -419,315 +498,321 @@ export default function PlannerPage({
   }
 
   return (
-    <section className="tdg-page tdg-planner">
-      <div className="tdg-page-title">
-        <div>
-          <span>Produtividade</span>
-          <h2>Planner</h2>
-          <p>Planos compartilhados com prazo, prioridade e checklist. As mesmas tarefas aparecem no <strong>quadro To Do</strong> e no Meu Dia de quem é responsável.</p>
-        </div>
-        <div className="tdg-page-actions">
-          {/* #115: ponte para o lugar único de tarefas. Toda tarefa do Planner
-              já aparece lá; o botão torna isso visível em vez de a pessoa
-              sentir que há dois mundos de tarefa. */}
-          <button type="button" className="tdg-planner-toggle" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")} title="Ver todas as tarefas no quadro To Do">
-            <LayoutGrid size={15} /> Quadro To Do
-          </button>
-          <button type="button" className="tdg-planner-toggle" data-ativo={vendoMinhas} onClick={() => setVendoMinhas((v) => !v)}>
-            <ListChecks size={15} /> Minhas tarefas
-          </button>
-          {podeGerir && (
-            <button type="button" className="tdg-action" onClick={() => setModalPlano(true)}>
-              <Plus size={16} /> Novo plano
-            </button>
-          )}
-        </div>
-      </div>
+    <section className={`tdg-page tdg-planner plr${railAberto ? "" : " is-rail-recolhido"}`}>
+      <PlannerSidebar
+        planos={planos}
+        planoAtivoId={planoAtivoId}
+        vendoMinhas={vendoMinhas}
+        aberto={railAberto}
+        carregando={ocupado === "carregando"}
+        onEscolherPlano={(id) => { setVendoMinhas(false); setPlanoAtivoId(id); }}
+        onMinhas={() => setVendoMinhas(true)}
+        onNovoPlano={podeGerir ? () => setModalPlano({ modo: "novo" }) : undefined}
+        onAlternar={alternarRail}
+      />
 
-      {erro && <div className="tdg-page-error">{erro}</div>}
+      <div className="plr-principal">
+        {erro && <div className="tdg-page-error">{erro}</div>}
 
-      {vendoMinhas ? (
-        <div className="tdg-panel">
-          <div className="tdg-section-head">
-            <h3><ListChecks size={16} /> Minhas tarefas</h3>
-            <button type="button" className="tdg-planner-icon" onClick={carregarMinhas} title="Atualizar"><RefreshCw size={15} /></button>
-          </div>
-          {minhasFiltradas.length === 0 ? (
-            <div className="tdg-empty"><p>Nenhuma tarefa atribuída a você nos planos que alcança.</p></div>
-          ) : (
-            <ul className="tdg-planner-mytasks">
-              {minhasFiltradas.map((t) => {
-                const plano = planos.find((p) => p.id === t.planId);
-                return (
-                  <li key={t.id}>
-                    <button type="button" onClick={() => { if (plano) { setVendoMinhas(false); setPlanoAtivoId(t.planId); setTimeout(() => setTarefaEmEdicao(t), 0); } }}>
-                      <span className="tdg-planner-prio" style={{ background: COR_PRIORIDADE[t.priority] }} />
-                      <strong>{t.title}</strong>
-                      <em>{plano?.name || "—"}</em>
-                      {t.dueDate && <span className="tdg-planner-due"><CalendarClock size={13} /> {t.dueDate}</span>}
-                      <span className="tdg-planner-status" data-status={t.progress}>{LABEL_PROGRESSO[t.progress]}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="tdg-planner-bar">
-            <div className="tdg-planner-plans">
-              {ocupado === "carregando" && planos.length === 0 ? (
-                <span className="tdg-planner-loading">Carregando planos…</span>
-              ) : planos.length === 0 ? (
-                <span className="tdg-planner-loading">{podeGerir ? "Nenhum plano ainda. Crie o primeiro." : "Nenhum plano compartilhado com você ainda."}</span>
-              ) : (
-                planos.map((p) => (
+        {vendoMinhas ? (
+          <>
+            <header className="plr-topo">
+              <div className="plr-trilha">
+                <ListChecks size={18} className="plr-trilha-icone" />
+                <h2>Minhas tarefas</h2>
+              </div>
+              <div className="plr-topo-acoes">
+                <button type="button" className="plr-botao-suave" onClick={() => carregarPlanos(planoAtivoId)} title="Atualizar"><RefreshCw size={15} /> Atualizar</button>
+                <button type="button" className="plr-botao-suave" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")} title="Ver todas as tarefas no quadro To Do">
+                  <LayoutGrid size={15} /> Quadro To Do
+                </button>
+              </div>
+            </header>
+            <p className="plr-subtitulo">Tudo o que está atribuído a você nos planos que alcança, do prazo mais próximo ao mais distante.</p>
+            {minhasFiltradas.length === 0 ? (
+              <div className="plr-vazio">
+                <ListChecks size={26} />
+                <p>Nenhuma tarefa atribuída a você nos planos que alcança.</p>
+              </div>
+            ) : (
+              <ul className="plr-minhas">
+                {minhasFiltradas.map((t) => {
+                  const plano = planos.find((p) => p.id === t.planId);
+                  const atrasada = t.dueDate && t.dueDate < hojeRef && t.progress !== "concluida";
+                  return (
+                    <li key={t.id}>
+                      <button type="button" onClick={() => abrirTarefaDeOutroPlano(t)} className={t.progress === "concluida" ? "is-feita" : ""}>
+                        <IconePrioridade prioridade={t.priority} />
+                        <span className="plr-minhas-titulo">{t.title}</span>
+                        {plano && <span className="plr-minhas-plano"><PlanoIcone plano={plano} tamanho={16} /> {plano.name}</span>}
+                        {t.dueDate && <span className={`plr-chip plr-chip--data${atrasada ? " is-atrasada" : ""}`}><CalendarRange size={13} /> {dataCurta(t.dueDate, { hoje: hojeRef })}</span>}
+                        <span className="plr-status" data-status={t.progress}>{LABEL_PROGRESSO[t.progress]}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        ) : planoAtivo ? (
+          <>
+            <header className="plr-topo">
+              <div className="plr-trilha">
+                <button type="button" className="plr-trilha-link" onClick={() => setSeletorAberto(true)}>Meus planos</button>
+                <ChevronRight size={15} className="plr-trilha-sep" aria-hidden="true" />
+                <div className="plr-menu-ancora">
                   <button
-                    key={p.id}
                     type="button"
-                    className="tdg-planner-plan"
-                    data-ativo={p.id === planoAtivoId}
-                    onClick={() => setPlanoAtivoId(p.id)}
-                    title={resumoDoCompartilhamento(p)}
+                    className="plr-seletor-plano"
+                    aria-haspopup="listbox"
+                    aria-expanded={seletorAberto}
+                    onClick={() => setSeletorAberto((a) => !a)}
+                    title={planoAtivo.description || resumoDoCompartilhamento(planoAtivo)}
                   >
-                    <span className="tdg-planner-dot" style={{ background: p.color }} />
-                    {p.name}
-                    {p.visibility === "shared" || (p.members || []).length > 0 ? <Users size={12} /> : <Lock size={12} />}
+                    <PlanoIcone plano={planoAtivo} tamanho={26} />
+                    <h2>{planoAtivo.name}</h2>
+                    <ChevronDown size={16} aria-hidden="true" />
                   </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          {planoAtivo && (
-            <>
-              <div className="tdg-planner-head">
-                <div className="tdg-metrics tdg-planner-metrics">
-                  <div className="tdg-metric"><strong>{resumo.total}</strong><span>Tarefas</span></div>
-                  <div className="tdg-metric"><strong>{resumo.concluidas}</strong><span>Concluídas</span></div>
-                  <div className="tdg-metric"><strong>{resumo.emAndamento}</strong><span>Em andamento</span></div>
-                  <div className="tdg-metric"><strong>{resumo.atrasadas(hoje())}</strong><span>Atrasadas</span></div>
-                  <div className="tdg-metric"><strong>{resumo.progressoMedio}%</strong><span>Progresso</span></div>
+                  {seletorAberto && (
+                    <ul className="plr-menu plr-menu--planos" role="listbox" aria-label="Trocar de plano">
+                      {planos.map((p) => (
+                        <li key={p.id}>
+                          <button type="button" role="option" aria-selected={p.id === planoAtivoId} onClick={() => { setPlanoAtivoId(p.id); setSeletorAberto(false); }}>
+                            <PlanoIcone plano={p} tamanho={20} />
+                            <span>{p.name}</span>
+                            {p.visibility === "shared" || (p.members || []).length > 0 ? <Users size={12} /> : <Lock size={12} />}
+                          </button>
+                        </li>
+                      ))}
+                      {podeGerir && (
+                        <>
+                          <li className="plr-menu-sep" role="presentation" />
+                          <li>
+                            <button type="button" onClick={() => { setSeletorAberto(false); setModalPlano({ modo: "novo" }); }}>
+                              <Plus size={15} /> <span>Novo plano</span>
+                            </button>
+                          </li>
+                        </>
+                      )}
+                    </ul>
+                  )}
                 </div>
-                {analiseAberta && radar.emRisco > 0 && (
-                  <div className="tdg-planner-radar" role="status" aria-label="Sinais que pedem ação no plano">
-                    {radar.venceHoje > 0 && <span className="tdg-planner-radar-sinal urgente">{radar.venceHoje} vence(m) hoje</span>}
-                    {radar.venceEmBreve > 0 && <span className="tdg-planner-radar-sinal">{radar.venceEmBreve} vence(m) em breve</span>}
-                    {radar.semResponsavel > 0 && <span className="tdg-planner-radar-sinal">{radar.semResponsavel} sem responsável</span>}
-                    <span className="tdg-planner-radar-sinal total">{radar.emRisco} em risco no total</span>
+              </div>
+              <div className="plr-topo-acoes">
+                {/* Ponte para o lugar único de tarefas. Toda tarefa do Planner
+                    já aparece lá; o botão torna isso visível em vez de a pessoa
+                    sentir que há dois mundos de tarefa. */}
+                <button type="button" className="plr-botao-suave" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")} title="Ver todas as tarefas no quadro To Do">
+                  <LayoutGrid size={15} /> Quadro To Do
+                </button>
+                {souDono && (
+                  <button type="button" className="plr-botao-suave" onClick={() => setPartilhaEmEdicao(planoAtivo)} title="Escolher com quem compartilhar este plano">
+                    {modoDoPlano(planoAtivo) === "privado" ? <Lock size={14} /> : <Users size={14} />}
+                    Compartilhar · {rotuloPartilha(planoAtivo)}
+                  </button>
+                )}
+                {souDono && (
+                  <div className="plr-menu-ancora">
+                    <button type="button" className="plr-icone" aria-label="Mais opções do plano" aria-haspopup="menu" aria-expanded={menuPlano} onClick={() => setMenuPlano((m) => !m)}>
+                      <MoreHorizontal size={17} />
+                    </button>
+                    {menuPlano && (
+                      <div className="plr-menu plr-menu--direita" role="menu">
+                        <button type="button" role="menuitem" onClick={() => { setMenuPlano(false); setModalPlano({ modo: "editar", plano: planoAtivo }); }}>
+                          <Pencil size={14} /> Editar plano
+                        </button>
+                        <button type="button" role="menuitem" className="is-perigo" onClick={() => { setMenuPlano(false); arquivarPlano(); }}>
+                          <Trash2 size={14} /> Arquivar plano
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-                <div className="tdg-planner-controls">
-                  <input
-                    type="search"
-                    placeholder="Buscar tarefa…"
-                    value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
-                    className="tdg-planner-search"
-                  />
-                  <div className="tdg-planner-cortes">
-                    {CORTES.map((c) => {
-                      const Icone = c.icon;
-                      return (
-                        <button key={c.id} type="button" data-ativo={corte === c.id} onClick={() => setCorte(c.id)} title={`Agrupar por ${c.label.toLowerCase()}`}>
-                          <Icone size={14} /> {c.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="tdg-planner-status-filtro" role="group" aria-label="Filtrar por status">
-                    {PLANNER_PROGRESS.map((p) => {
-                      const marcado = statusFiltro.has(p.id);
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className="tdg-planner-status-chip"
-                          data-status={p.id}
-                          data-ativo={marcado}
-                          aria-pressed={marcado}
-                          onClick={() => alternarStatus(p.id)}
-                          title={marcado ? `Esconder “${p.label}”` : `Mostrar “${p.label}”`}
-                        >
-                          {marcado ? <Check size={13} /> : null} {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button type="button" className="tdg-planner-analise-btn" aria-expanded={analiseAberta} onClick={alternarAnalise} title="Mostrar ou esconder o radar e o 'Faça agora'">
-                    {analiseAberta ? "Ocultar análise" : "Ver análise"}
+              </div>
+            </header>
+
+            <div className="plr-abas" role="tablist" aria-label="Vistas do plano">
+              {VISTAS.map((v) => {
+                const Icone = v.icon;
+                return (
+                  <button key={v.id} type="button" role="tab" aria-selected={vista === v.id} data-ativo={vista === v.id} onClick={() => escolherVista(v.id)}>
+                    <Icone size={16} aria-hidden="true" /> {v.label}
                   </button>
-                  {souDono && (
-                    <button type="button" className="tdg-planner-share-btn" onClick={() => setPartilhaEmEdicao(planoAtivo)} title="Escolher com quem compartilhar este plano">
-                      {modoDoPlano(planoAtivo) === "privado" ? <Lock size={14} /> : <Users size={14} />}
-                      Compartilhar · {rotuloPartilha(planoAtivo)}
-                    </button>
-                  )}
-                  {souDono && (
-                    <button type="button" className="tdg-planner-icon tdg-planner-danger" onClick={arquivarPlano} title="Arquivar plano">
-                      <Trash2 size={15} />
-                    </button>
-                  )}
-                </div>
-              </div>
+                );
+              })}
+            </div>
 
-              {analiseAberta && prioridades.length > 0 && (
-                <div className="tdg-planner-focus">
-                  <div className="tdg-planner-focus-head">
-                    <Zap size={15} />
-                    <strong>Faça agora</strong>
-                    <span>O que este plano precisa que você resolva primeiro</span>
-                  </div>
-                  <ul className="tdg-planner-focus-list">
-                    {prioridades.map(({ tarefa, sinais }) => (
-                      <li key={tarefa.id}>
-                        <button type="button" onClick={() => setTarefaEmEdicao(tarefa)}>
-                          <span className="tdg-planner-focus-prio" style={{ background: COR_PRIORIDADE[tarefa.priority] }} />
-                          <span className="tdg-planner-focus-title">{tarefa.title}</span>
-                          <span className="tdg-planner-focus-sinais">
-                            {sinais.map((s) => (
-                              <em key={s.tipo} className={`tdg-planner-sinal ${s.severidade}`}>{s.rotulo}</em>
-                            ))}
-                          </span>
-                          {tarefa.assigneeLabel
-                            ? <span className="tdg-planner-focus-quem">{tarefa.assigneeLabel}</span>
-                            : <span className="tdg-planner-focus-quem sem">sem responsável</span>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+            <div className="plr-toolbar">
+              <label className="plr-busca">
+                <Search size={15} aria-hidden="true" />
+                <input
+                  type="search"
+                  placeholder="Filtrar por palavra-chave"
+                  aria-label="Buscar tarefa"
+                  value={filtros.busca}
+                  onChange={(e) => setFiltros((f) => ({ ...f, busca: e.target.value }))}
+                />
+              </label>
+              <span className="plr-toolbar-espaco" />
+              {(nFiltros > 0 || filtros.busca) && (
+                <span className="plr-toolbar-resumo">{tarefasFiltradas.length} de {tarefas.length}</span>
               )}
-
-              <div className="tdg-planner-board">
-                {colunas.map((coluna) => (
-                  <div className="tdg-planner-col" key={coluna.chave}>
-                    <header>
-                      <strong>{coluna.titulo}</strong>
-                      <span>{coluna.tarefas.length}</span>
-                    </header>
-                    <div className="tdg-planner-col-body">
-                      {coluna.tarefas.map((t) => (
-                        <article className="tdg-planner-card" key={t.id} onClick={() => setTarefaEmEdicao(t)}>
-                          <span className="tdg-planner-prio-bar" style={{ background: COR_PRIORIDADE[t.priority] }} />
-                          <div className="tdg-planner-card-top">
-                            <button
-                              type="button"
-                              className="tdg-planner-check"
-                              data-feito={t.progress === "concluida"}
-                              title={t.progress === "concluida" ? "Reabrir" : "Concluir"}
-                              onClick={(e) => { e.stopPropagation(); mudarProgresso(t, t.progress === "concluida" ? "em_andamento" : "concluida"); }}
-                            >
-                              <Check size={13} />
-                            </button>
-                            <p>{t.title}</p>
-                          </div>
-                          <div className="tdg-planner-bararea">
-                            <span className="tdg-planner-bar-track"><span style={{ width: `${progressoNumerico(t)}%` }} /></span>
-                          </div>
-                          <div className="tdg-planner-card-meta">
-                            {(() => {
-                              const topo = sinaisDaTarefa(t, { hoje: hoje() })[0];
-                              return topo ? <span className={`tdg-planner-sinal ${topo.severidade}`}>{topo.rotulo}</span> : null;
-                            })()}
-                            <span className="tdg-planner-tag" style={{ color: COR_PRIORIDADE[t.priority] }}>{LABEL_PRIORIDADE[t.priority]}</span>
-                            {t.dueDate && <span className={`tdg-planner-tag${t.dueDate < hoje() && t.progress !== "concluida" ? " atrasada" : ""}`}><CalendarClock size={12} /> {t.dueDate}</span>}
-                            {Array.isArray(t.checklist) && t.checklist.length > 0 && (
-                              <span className="tdg-planner-tag"><ListChecks size={12} /> {t.checklist.filter((i) => i.feito).length}/{t.checklist.length}</span>
-                            )}
-                            {t.assigneeLabel && <span className="tdg-planner-assignee">{t.assigneeLabel}</span>}
-                            {t.campos?.clientId && (
-                              <button
-                                type="button"
-                                className="tdg-planner-context"
-                                onClick={(e) => { e.stopPropagation(); onNavigate?.(`/todogreen/clientes?client=${encodeURIComponent(t.campos.clientId)}`); }}
-                              >
-                                <Link2 size={11} /> {clientes.find((cliente) => cliente.id === t.campos.clientId)?.name || "Cliente"}
-                              </button>
-                            )}
-                            {t.campos?.opportunityId && (
-                              <button
-                                type="button"
-                                className="tdg-planner-context"
-                                onClick={(e) => { e.stopPropagation(); onNavigate?.(`/todogreen/oportunidades?opportunity=${encodeURIComponent(t.campos.opportunityId)}`); }}
-                              >
-                                <Link2 size={11} /> Oportunidade
-                              </button>
-                            )}
-                          </div>
-                        </article>
-                      ))}
-                      {podeGerir && corte === "balde" && coluna.chave !== "__sem__" && (
-                        <div className="tdg-planner-quick">
-                          <input
-                            type="text"
-                            placeholder="+ Adicionar tarefa"
-                            value={rascunhoRapido[coluna.chave] || ""}
-                            onChange={(e) => setRascunhoRapido((r) => ({ ...r, [coluna.chave]: e.target.value }))}
-                            onKeyDown={(e) => { if (e.key === "Enter") adicionarRapida(coluna.chave); }}
-                          />
+              <div className="plr-menu-ancora">
+                <button type="button" className="plr-botao-suave" aria-expanded={filtrosAbertos} aria-haspopup="dialog" onClick={() => setFiltrosAbertos((a) => !a)}>
+                  <Filter size={15} /> Filtros {nFiltros > 0 && <b className="plr-badge">{nFiltros}</b>}
+                </button>
+                {filtrosAbertos && (
+                  <div className="plr-popover" role="dialog" aria-label="Filtros">
+                    <section>
+                      <strong>Progresso</strong>
+                      <div className="plr-chips">
+                        {PLANNER_PROGRESS.map((p) => {
+                          const marcado = !filtros.status.length || filtros.status.includes(p.id);
+                          return (
+                            <button key={p.id} type="button" className="plr-chip-filtro" aria-pressed={marcado} data-ativo={marcado} onClick={() => alternarStatus(p.id)}>{p.label}</button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                    <section>
+                      <strong>Prioridade</strong>
+                      <div className="plr-chips">
+                        {PLANNER_PRIORITIES.map((p) => {
+                          const marcado = filtros.prioridades.includes(p.id);
+                          return (
+                            <button key={p.id} type="button" className="plr-chip-filtro" aria-pressed={marcado} data-ativo={marcado} onClick={() => alternarLista("prioridades", p.id)}><IconePrioridade prioridade={p.id} /> {p.label}</button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                    {rotulosSugeridos.length > 0 && (
+                      <section>
+                        <strong>Rótulos</strong>
+                        <div className="plr-chips">
+                          {rotulosSugeridos.map((r) => {
+                            const marcado = filtros.rotulos.includes(r);
+                            return (
+                              <button key={r} type="button" className="plr-chip-filtro plr-chip-filtro--rotulo" aria-pressed={marcado} data-ativo={marcado} onClick={() => alternarLista("rotulos", r)}><Rotulo texto={r} pequeno /></button>
+                            );
+                          })}
                         </div>
-                      )}
-                      {coluna.tarefas.length === 0 && corte !== "balde" && (
-                        <p className="tdg-planner-col-empty">Sem tarefas.</p>
-                      )}
-                    </div>
+                      </section>
+                    )}
+                    <section>
+                      <strong>Mais</strong>
+                      <div className="plr-chips">
+                        <button type="button" className="plr-chip-filtro" aria-pressed={filtros.minhas} data-ativo={filtros.minhas} onClick={() => atualizarFiltros({ minhas: !filtros.minhas })}>Atribuídas a mim</button>
+                        <button type="button" className="plr-chip-filtro" aria-pressed={filtros.semResponsavel} data-ativo={filtros.semResponsavel} onClick={() => atualizarFiltros({ semResponsavel: !filtros.semResponsavel })}>Sem responsável</button>
+                        <button type="button" className="plr-chip-filtro" aria-pressed={filtros.atrasadas} data-ativo={filtros.atrasadas} onClick={() => atualizarFiltros({ atrasadas: !filtros.atrasadas })}>Atrasadas</button>
+                      </div>
+                    </section>
+                    <footer>
+                      <button type="button" className="plr-botao-suave" onClick={limparFiltros} disabled={nFiltros === 0}><X size={14} /> Limpar</button>
+                      <button type="button" className="tdg-action" onClick={() => setFiltrosAbertos(false)}>Pronto</button>
+                    </footer>
                   </div>
-                ))}
+                )}
               </div>
-            </>
-          )}
-
-          {!planoAtivo && planos.length === 0 && ocupado !== "carregando" && (
-            <div className="tdg-panel tdg-empty">
-              <LayoutGrid size={22} />
-              {podeGerir ? (
-                <>
-                  <p>Crie um plano para começar. Ele pode ser privado (só você) ou compartilhado com o espaço.</p>
-                  <button type="button" className="tdg-action" onClick={() => setModalPlano(true)}><Plus size={16} /> Novo plano</button>
-                </>
-              ) : (
-                <p>Nenhum plano foi compartilhado com você ainda. Quando alguém compartilhar, ele aparece aqui.</p>
+              {vista === "quadro" && (
+                <label className="plr-agrupar">
+                  <span>Agrupar por</span>
+                  <select aria-label="Agrupar por" value={corte} onChange={(e) => setCorte(e.target.value)}>
+                    {CORTES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </label>
               )}
             </div>
-          )}
-        </>
-      )}
+
+            {vista === "quadro" && (
+              <PlannerBoard
+                colunas={colunas}
+                corte={corte}
+                hojeRef={hojeRef}
+                souDono={souDono}
+                onAbrir={setTarefaEmEdicao}
+                onConcluir={alternarConcluida}
+                onMover={moverTarefa}
+                onAdicionarRapida={podeGerir ? adicionarRapida : undefined}
+                onAdicionarBalde={aoAdicionarBalde}
+                onRenomearBalde={aoRenomearBalde}
+                onRemoverBalde={aoRemoverBalde}
+                onMoverBalde={aoMoverBalde}
+              />
+            )}
+            {vista === "tabela" && (
+              <PlannerTable
+                tarefas={tarefasFiltradas}
+                baldes={baldes}
+                hojeRef={hojeRef}
+                onAbrir={setTarefaEmEdicao}
+                onConcluir={alternarConcluida}
+                onMudarProgresso={mudarProgresso}
+              />
+            )}
+            {vista === "linha" && (
+              <PlannerTimeline tarefas={tarefasFiltradas} hojeRef={hojeRef} onAbrir={setTarefaEmEdicao} />
+            )}
+            {vista === "graficos" && (
+              <PlannerCharts tarefas={tarefasFiltradas} baldes={baldes} hojeRef={hojeRef} onAbrir={setTarefaEmEdicao} />
+            )}
+          </>
+        ) : (
+          <>
+            <header className="plr-topo">
+              <div className="plr-trilha">
+                <KanbanSquare size={18} className="plr-trilha-icone" />
+                <h2>Meus planos</h2>
+              </div>
+              <div className="plr-topo-acoes">
+                <button type="button" className="plr-botao-suave" onClick={() => onNavigate?.("/todogreen/espaco?ferramenta=tarefas")} title="Ver todas as tarefas no quadro To Do">
+                  <LayoutGrid size={15} /> Quadro To Do
+                </button>
+              </div>
+            </header>
+            <div className="plr-vazio plr-vazio--hero">
+              {ocupado === "carregando" ? (
+                <p>Carregando planos…</p>
+              ) : (
+                podeGerir ? (
+                  <>
+                    <KanbanSquare size={30} />
+                    <h2>Crie o primeiro plano</h2>
+                    <p>Um plano reúne tarefas em baldes, com prazo, prioridade, rótulos e checklist. Pode ser privado, para pessoas específicas ou para todo o espaço.</p>
+                    <button type="button" className="tdg-action" onClick={() => setModalPlano({ modo: "novo" })}><Plus size={16} /> Novo plano</button>
+                  </>
+                ) : (
+                  <>
+                    <KanbanSquare size={30} />
+                    <h2>Nenhum plano compartilhado com você ainda</h2>
+                    <p>Quando alguém compartilhar um plano com você, ele aparece aqui.</p>
+                  </>
+                )
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {modalPlano && (
-        <Modal title="Novo plano" onClose={() => setModalPlano(false)}>
-          <form className="tdg-planner-form" onSubmit={criarPlano}>
-            <label>
-              Nome do plano
-              <input autoFocus value={formPlano.name} onChange={(e) => setFormPlano((f) => ({ ...f, name: e.target.value }))} maxLength={120} />
-            </label>
-            <label>
-              Descrição
-              <textarea rows={2} value={formPlano.description} onChange={(e) => setFormPlano((f) => ({ ...f, description: e.target.value }))} maxLength={2000} />
-            </label>
-            <PartilhaCampos
-              modo={formPlano.modo}
-              members={formPlano.members}
-              pessoas={pessoas}
-              currentUserId={currentUserId}
-              onChange={(patch) => setFormPlano((f) => ({ ...f, ...patch }))}
-            />
-            <div className="tdg-form-actions">
-              <button type="button" onClick={() => setModalPlano(false)}>Cancelar</button>
-              <button type="submit" className="tdg-action" disabled={ocupado === "salvando"}>Criar plano</button>
-            </div>
-          </form>
-        </Modal>
+        <PlanoModal
+          modo={modalPlano.modo}
+          plano={modalPlano.plano}
+          pessoas={pessoas}
+          currentUserId={currentUserId}
+          ocupado={ocupado === "salvando"}
+          onFechar={() => setModalPlano(null)}
+          onSalvar={salvarPlano}
+        />
       )}
 
       {tarefaEmEdicao && (
-        <TarefaModal
+        <PlannerTaskModal
           tarefa={tarefaEmEdicao}
-          baldes={normalizarBaldes(planoAtivo?.buckets || [])}
+          baldes={baldes}
           pessoas={pessoas}
           clientes={clientes}
           oportunidades={oportunidades}
+          sugestoesRotulos={rotulosSugeridos}
           onFechar={() => setTarefaEmEdicao(null)}
           onSalvar={salvarTarefa}
           onArquivar={arquivarTarefa}
@@ -747,154 +832,60 @@ export default function PlannerPage({
   );
 }
 
-function TarefaModal({ tarefa, baldes, pessoas = [], clientes = [], oportunidades = [], onFechar, onSalvar, onArquivar }) {
-  const [form, setForm] = useState({
-    ...tarefaVazia(baldes[0]?.id),
-    ...tarefa,
-    campos: { ...tarefaVazia().campos, ...(tarefa.campos || {}) },
-  });
-  const oportunidadesDoCliente = oportunidades.filter(
-    (oportunidade) => !form.campos.clientId || oportunidade.clientId === form.campos.clientId,
-  );
-  const set = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
-
-  // Escolher uma pessoa da lista grava o vínculo de verdade (assigneeUserId) —
-  // é ele que faz a tarefa aparecer em "Minhas tarefas" de quem foi atribuído.
-  // Texto que não bate com ninguém vale como rótulo solto (gente de fora).
-  const definirResponsavel = (valor) => {
-    const pessoa = pessoas.find((p) => p.name === valor);
-    setForm((f) => ({ ...f, assigneeLabel: valor, assigneeUserId: pessoa?.id || "" }));
-  };
-
-  const alterarItem = (i, patch) =>
-    setForm((f) => ({ ...f, checklist: f.checklist.map((item, idx) => (idx === i ? { ...item, ...patch } : item)) }));
-  const adicionarItem = () => setForm((f) => ({ ...f, checklist: [...(f.checklist || []), { texto: "", feito: false }] }));
-  const removerItem = (i) => setForm((f) => ({ ...f, checklist: f.checklist.filter((_, idx) => idx !== i) }));
-
-  const submeter = (e) => {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    onSalvar({ ...form, checklist: (form.checklist || []).filter((i) => (i.texto || "").trim()) });
-  };
-
+// Criar ou editar um plano: nome, descrição e cor (o ícone do rail). O
+// compartilhamento entra aqui só na criação — depois muda pelo botão próprio.
+function PlanoModal({ modo, plano, pessoas, currentUserId, ocupado, onFechar, onSalvar }) {
+  const [form, setForm] = useState(() => ({
+    name: plano?.name || "",
+    description: plano?.description || "",
+    color: plano?.color || CORES_PLANO[0],
+    modo: "privado",
+    members: [],
+  }));
+  const editar = modo === "editar";
   return (
-    <Modal title={tarefa.id ? "Tarefa" : "Nova tarefa"} onClose={onFechar} wide>
-      <form className="tdg-planner-form tdg-planner-taskform" onSubmit={submeter}>
-        <label>
-          Título
-          <input autoFocus value={form.title} onChange={set("title")} maxLength={200} />
-        </label>
-        <div className="tdg-planner-grid3">
+    <Modal title={editar ? "Editar plano" : "Novo plano"} onClose={onFechar}>
+      <form className="tdg-planner-form plr-form" onSubmit={(e) => { e.preventDefault(); onSalvar(form); }}>
+        <div className="plr-form-plano-nome">
+          <PlanoIcone plano={{ name: form.name || "Plano", color: form.color }} tamanho={44} />
           <label>
-            Balde
-            <select value={form.bucketId} onChange={set("bucketId")}>
-              {baldes.map((b) => <option key={b.id} value={b.id}>{b.nome}</option>)}
-            </select>
-          </label>
-          <label>
-            Prioridade
-            <select value={form.priority} onChange={set("priority")}>
-              {PLANNER_PRIORITIES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
-          </label>
-          <label>
-            Progresso
-            <select value={form.progress} onChange={set("progress")}>
-              {PLANNER_PROGRESS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
+            Nome do plano
+            <input autoFocus value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} maxLength={120} placeholder="Ex.: Marketing, Implantação DHL" />
           </label>
         </div>
-        <div className="tdg-planner-grid3">
-          <label>
-            Responsável
-            <input
-              list="tdg-planner-pessoas"
-              value={form.assigneeLabel}
-              onChange={(e) => definirResponsavel(e.target.value)}
-              placeholder="Nome de quem executa"
-              maxLength={160}
-            />
-            <datalist id="tdg-planner-pessoas">
-              {pessoas.map((p) => <option value={p.name} key={p.id}>{p.email}</option>)}
-            </datalist>
-            {form.assigneeUserId
-              ? <small className="tdg-planner-vinculo">Pessoa da plataforma — entra em “Minhas tarefas” dela.</small>
-              : null}
-          </label>
-          <label>
-            Início
-            <input type="date" value={form.startDate || ""} onChange={set("startDate")} />
-          </label>
-          <label>
-            Prazo
-            <input type="date" value={form.dueDate || ""} onChange={set("dueDate")} />
-          </label>
-        </div>
-        <fieldset className="tdg-planner-business-context">
-          <legend><Link2 size={14} /> Contexto comercial opcional</legend>
-          <p>Use apenas quando a tarefa estiver ligada ao CRM. Projetos de marketing, operação e outras áreas continuam independentes.</p>
-          <div className="tdg-planner-grid3">
-            <label>
-              Cliente
-              <select
-                value={form.campos.clientId}
-                onChange={(e) => setForm((atual) => ({
-                  ...atual,
-                  campos: { clientId: e.target.value, opportunityId: "" },
-                }))}
-              >
-                <option value="">Sem vínculo com cliente</option>
-                {clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.name}</option>)}
-              </select>
-            </label>
-            <label>
-              Oportunidade
-              <select
-                value={form.campos.opportunityId}
-                disabled={!form.campos.clientId}
-                onChange={(e) => setForm((atual) => ({
-                  ...atual,
-                  campos: { ...atual.campos, opportunityId: e.target.value },
-                }))}
-              >
-                <option value="">Sem vínculo com oportunidade</option>
-                {oportunidadesDoCliente.map((oportunidade) => (
-                  <option key={oportunidade.id} value={oportunidade.id}>
-                    {oportunidade.titulo || oportunidade.title || oportunidade.nome || oportunidade.id}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <fieldset className="plr-form-cores">
+          <legend>Cor</legend>
+          <div role="radiogroup" aria-label="Cor do plano">
+            {CORES_PLANO.map((cor) => (
+              <button
+                key={cor}
+                type="button"
+                role="radio"
+                aria-checked={form.color === cor}
+                aria-label={`Cor ${cor}`}
+                className="plr-form-cor"
+                style={{ background: cor }}
+                onClick={() => setForm((f) => ({ ...f, color: cor }))}
+              />
+            ))}
           </div>
         </fieldset>
         <label>
-          Notas
-          <textarea rows={3} value={form.notes} onChange={set("notes")} maxLength={4000} />
+          Descrição
+          <textarea rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} maxLength={2000} placeholder="Para que serve este plano" />
         </label>
-
-        <div className="tdg-planner-checklist">
-          <div className="tdg-section-head">
-            <h3><ListChecks size={15} /> Checklist</h3>
-            <button type="button" className="tdg-planner-icon" onClick={adicionarItem}><Plus size={14} /></button>
-          </div>
-          {(form.checklist || []).map((item, i) => (
-            <div className="tdg-planner-checkrow" key={i}>
-              <input type="checkbox" checked={Boolean(item.feito)} onChange={(e) => alterarItem(i, { feito: e.target.checked })} />
-              <input type="text" value={item.texto || ""} onChange={(e) => alterarItem(i, { texto: e.target.value })} placeholder="Item do checklist" maxLength={300} />
-              <button type="button" className="tdg-planner-icon" onClick={() => removerItem(i)}><Trash2 size={14} /></button>
-            </div>
-          ))}
-        </div>
-
-        <div className="tdg-form-actions tdg-planner-taskactions">
-          {tarefa.id && (
-            <button type="button" className="tdg-planner-danger" onClick={() => onArquivar(tarefa)}>
-              <Trash2 size={15} /> Arquivar
-            </button>
-          )}
-          <span className="tdg-planner-spacer" />
+        {!editar && (
+          <PartilhaCampos
+            modo={form.modo}
+            members={form.members}
+            pessoas={pessoas}
+            currentUserId={currentUserId}
+            onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+          />
+        )}
+        <div className="tdg-form-actions">
           <button type="button" onClick={onFechar}>Cancelar</button>
-          <button type="submit" className="tdg-action">Salvar</button>
+          <button type="submit" className="tdg-action" disabled={ocupado}>{editar ? "Salvar" : "Criar plano"}</button>
         </div>
       </form>
     </Modal>
@@ -949,12 +940,13 @@ function PartilhaCampos({ modo, members, pessoas, currentUserId, onChange }) {
                 ))}
             </datalist>
           </label>
-          <div className="tdg-planner-chips">
+          <div className="tdg-planner-chips plr-membros">
             {members.map((id) => {
               const pessoa = pessoas.find((p) => p.id === id);
               const semAcesso = pessoa?.alcancaPlanner === false;
               return (
-                <span className={`tdg-planner-chip${semAcesso ? " sem-acesso" : ""}`} key={id} title={semAcesso ? "Ainda não tem acesso à To Do Green neste espaço" : undefined}>
+                <span className={`tdg-planner-chip plr-membro${semAcesso ? " sem-acesso" : ""}`} key={id} title={semAcesso ? "Ainda não tem acesso à To Do Green neste espaço" : undefined}>
+                  <Avatar nome={pessoa?.name || id} tamanho={20} />
                   {pessoa?.name || id}
                   {semAcesso && <em>sem acesso</em>}
                   <button
@@ -992,7 +984,7 @@ function PartilhaModal({ plano, pessoas, currentUserId, onFechar, onSalvar }) {
   return (
     <Modal title={`Compartilhar · ${plano.name}`} onClose={onFechar}>
       <form
-        className="tdg-planner-form"
+        className="tdg-planner-form plr-form"
         onSubmit={(e) => { e.preventDefault(); onSalvar({ modo, members }); }}
       >
         <PartilhaCampos

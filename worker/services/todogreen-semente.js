@@ -22,6 +22,7 @@
 
 import { recorteDeCarteira, podeNaVertical, TENANT_ID } from "./todogreen-access.js";
 import { configuredAiProviders, runWithFallback } from "./ai.js";
+import { sanearDados } from "./prompt-guard.js";
 import { envComChavesDoEspaco } from "./ai-keys.js";
 import { webSearchConfiguration } from "./web-search.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
@@ -1351,7 +1352,9 @@ export async function handleTodoGreenSemente(request, env, access, user) {
       prompt: [
         contextoLeve,
         `\nVocê pediu a ferramenta "${dados.ferramenta}". Resultado real, vindo do banco:`,
-        JSON.stringify(dados, null, 1),
+        // O banco guarda texto de terceiros (pesquisa na web, formulário
+        // público, mensagem de cliente): o que parecer ordem para a IA sai.
+        JSON.stringify(sanearDados(dados), null, 1),
         "\nAgora responda. Não peça outra ferramenta: responda com o que tem e diga o que falta, se faltar.",
       ].join("\n"),
       system: INSTRUCAO,

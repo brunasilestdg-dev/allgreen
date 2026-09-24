@@ -11,6 +11,7 @@
 // fila de aprovação, com o papel escolhido na hora do aceite.
 
 import { allowed, edgeIp } from "../lib/http.js";
+import { exigirTurnstile } from "../lib/turnstile.js";
 
 const TENANT_ID = "todogreen";
 
@@ -43,6 +44,9 @@ export async function receberSolicitacaoDeAcesso(request, env) {
   if (ip && !allowed(`tdg:solicitar-acesso:${ip}`, 5))
     return json({ error: "Muitos pedidos em pouco tempo. Tente novamente mais tarde." }, 429);
   const corpo = await request.json().catch(() => ({}));
+  // Mesmo widget da tela de entrada (ação "entrada"): o pedido nasce ali.
+  const barrado = await exigirTurnstile(request, env, corpo, { acao: "entrada", responder: json });
+  if (barrado) return barrado;
   const email = limpar(corpo.email, 160).toLowerCase();
   const nome = limpar(corpo.nome || corpo.name, 160);
   const empresa = limpar(corpo.empresa || corpo.company, 160);

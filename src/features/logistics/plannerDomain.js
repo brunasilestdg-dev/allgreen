@@ -387,3 +387,298 @@ export const validarTarefa = (tarefa) => {
     erros.push("A data de início não pode ser depois do prazo.");
   return erros;
 };
+
+// ===== Estrutura do quadro: baldes editáveis =====
+//
+// O Planner da Microsoft deixa criar, renomear e apagar baldes direto no quadro.
+// Estas funções fazem essa conta sem tocar em React: recebem a lista atual e
+// devolvem a nova, já normalizada. O id nasce do nome (para ficar legível no
+// JSON) e ganha sufixo quando repete — a tarefa aponta para o id, então ele
+// nunca muda ao renomear.
+const slug = (s) =>
+  semAcento(s).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "balde";
+
+export const adicionarBalde = (baldes, nome) => {
+  const atuais = normalizarBaldes(baldes);
+  const nomeLimpo = texto(nome).slice(0, 80);
+  if (!nomeLimpo) return atuais;
+  const base = slug(nomeLimpo);
+  let id = base;
+  let n = 2;
+  while (atuais.some((b) => b.id === id)) id = `${base}_${n++}`;
+  return [...atuais, { id, nome: nomeLimpo }];
+};
+
+export const renomearBalde = (baldes, id, nome) => {
+  const nomeLimpo = texto(nome).slice(0, 80);
+  if (!nomeLimpo) return normalizarBaldes(baldes);
+  return normalizarBaldes(baldes).map((b) => (b.id === id ? { ...b, nome: nomeLimpo } : b));
+};
+
+// Remover um balde nunca deixa o plano sem nenhum: o último fica. Quem chama
+// decide o que fazer com as tarefas órfãs (a tela move para o primeiro balde).
+export const removerBalde = (baldes, id) => {
+  const atuais = normalizarBaldes(baldes);
+  if (atuais.length <= 1) return atuais;
+  return atuais.filter((b) => b.id !== id);
+};
+
+export const moverBalde = (baldes, id, direcao) => {
+  const atuais = normalizarBaldes(baldes);
+  const i = atuais.findIndex((b) => b.id === id);
+  const j = i + (direcao < 0 ? -1 : 1);
+  if (i < 0 || j < 0 || j >= atuais.length) return atuais;
+  const copia = [...atuais];
+  [copia[i], copia[j]] = [copia[j], copia[i]];
+  return copia;
+};
+
+// ===== Rótulos coloridos =====
+//
+// Rótulo é texto livre por tarefa (`labels`), como as etiquetas do MS Planner.
+// A cor não é gravada: sai de um hash estável do texto sobre uma paleta fixa —
+// o mesmo rótulo tem sempre a mesma cor em qualquer plano, e nada de campo
+// extra no banco. Cada entrada traz fundo e texto já legíveis (AA sobre claro).
+export const PALETA_ROTULOS = [
+  { id: "verde", fundo: "#dcefe0", texto: "#1d5b2f" },
+  { id: "azul", fundo: "#dbe8fb", texto: "#1d4f91" },
+  { id: "roxo", fundo: "#e9dff7", texto: "#5a2e91" },
+  { id: "rosa", fundo: "#f9dde6", texto: "#8f2b4d" },
+  { id: "laranja", fundo: "#fbe5d0", texto: "#8a4a0c" },
+  { id: "amarelo", fundo: "#f7efc6", texto: "#6b5300" },
+  { id: "ciano", fundo: "#d6f0f2", texto: "#0f5f66" },
+  { id: "cinza", fundo: "#e6e9ec", texto: "#3f4c58" },
+  { id: "vinho", fundo: "#f4d9d6", texto: "#8a2418" },
+  { id: "musgo", fundo: "#e3ebd3", texto: "#4a5e14" },
+];
+
+export const corDoRotulo = (rotulo) => {
+  const chave = semAcento(rotulo);
+  let h = 0;
+  for (let i = 0; i < chave.length; i++) h = (h * 31 + chave.charCodeAt(i)) >>> 0;
+  return PALETA_ROTULOS[h % PALETA_ROTULOS.length];
+};
+
+export const normalizarRotulos = (valor) =>
+  [...new Set(lista(valor).map((r) => texto(r).slice(0, 40)).filter(Boolean))].slice(0, 12);
+
+// Todos os rótulos em uso num plano, por frequência — alimenta as sugestões ao
+// editar uma tarefa, para o time reaproveitar o vocabulário em vez de inventar
+// "Blog" e "blog" como duas etiquetas.
+export const rotulosDoPlano = (tarefas) => {
+  const contagem = new Map();
+  for (const t of lista(tarefas)) {
+    for (const r of normalizarRotulos(t?.labels || t?.rotulos)) {
+      const chave = semAcento(r);
+      const atual = contagem.get(chave) || { rotulo: r, usos: 0 };
+      contagem.set(chave, { ...atual, usos: atual.usos + 1 });
+    }
+  }
+  return [...contagem.values()].sort((a, b) => b.usos - a.usos || a.rotulo.localeCompare(b.rotulo, "pt-BR")).map((x) => x.rotulo);
+};
+
+// Iniciais para o avatar do responsável: "Bruna Siles" → "BS"; um nome só →
+// duas primeiras letras; vazio → "?".
+export const iniciais = (nome) => {
+  const partes = texto(nome).split(/\s+/).filter(Boolean);
+  if (!partes.length) return "?";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+};
+
+// ===== Filtros do quadro =====
+//
+// Um único predicado para o quadro, a tabela e a linha do tempo lerem os mesmos
+// filtros: busca livre, status (multi), prioridade (multi), só as minhas, só
+// sem responsável, só atrasadas, rótulos. Lista vazia em um critério = não
+// filtra por ele.
+export const FILTROS_VAZIOS = Object.freeze({
+  busca: "",
+  status: [],
+  prioridades: [],
+  rotulos: [],
+  minhas: false,
+  semResponsavel: false,
+  atrasadas: false,
+});
+
+export const filtrosAtivos = (filtros = {}) => {
+  let n = 0;
+  if (lista(filtros.status).length && lista(filtros.status).length < PROGRESS_IDS.length) n++;
+  if (lista(filtros.prioridades).length) n++;
+  if (lista(filtros.rotulos).length) n++;
+  if (filtros.minhas) n++;
+  if (filtros.semResponsavel) n++;
+  if (filtros.atrasadas) n++;
+  return n;
+};
+
+export const filtrarTarefas = (tarefas, filtros = {}, { hoje, userId = "" } = {}) => {
+  const ref = dataDeHoje(hoje);
+  const status = new Set(lista(filtros.status));
+  const prioridades = new Set(lista(filtros.prioridades));
+  const rotulos = new Set(lista(filtros.rotulos).map(semAcento));
+  return lista(tarefas).filter((t) => {
+    if (!tarefaAtendeBusca(t, filtros.busca)) return false;
+    if (status.size && !status.has(normalizarProgresso(t.progress || t.progresso))) return false;
+    if (prioridades.size && !prioridades.has(normalizarPrioridade(t.priority || t.prioridade))) return false;
+    if (rotulos.size && !normalizarRotulos(t.labels || t.rotulos).some((r) => rotulos.has(semAcento(r)))) return false;
+    if (filtros.minhas && responsavelDe(t) !== texto(userId)) return false;
+    if (filtros.semResponsavel && responsavelDe(t)) return false;
+    if (filtros.atrasadas) {
+      const prazo = dueDe(t);
+      if (!prazo || concluida(t) || prazo >= ref) return false;
+    }
+    return true;
+  });
+};
+
+// Concluídas vão para uma dobra no fim da coluna (como o "Concluída (28)" do
+// MS Planner): a coluna mostra o que está vivo e guarda o histórico a um clique.
+export const separarConcluidas = (tarefas) => {
+  const abertas = [];
+  const concluidas = [];
+  for (const t of lista(tarefas)) (concluida(t) ? concluidas : abertas).push(t);
+  return { abertas, concluidas };
+};
+
+// "1 dia", "11 dias": a duração que o cartão mostra, entre início e prazo
+// (inclusivo). Só prazo, sem início → 1 dia. Sem prazo → null (não mostra).
+export const duracaoDaTarefa = (tarefa) => {
+  const fim = dueDe(tarefa);
+  if (!fim) return null;
+  const inicio = texto(tarefa?.startDate || tarefa?.start_date);
+  const dias = inicio ? Math.max(1, diasEntre(inicio, fim) + 1) : 1;
+  return dias;
+};
+
+export const rotuloDuracao = (dias) => (dias == null ? "" : `${dias} dia${dias === 1 ? "" : "s"}`);
+
+// Data curta para o cartão: "06/06" no mesmo ano, "06/06/25" em outro.
+export const dataCurta = (ymd, { hoje } = {}) => {
+  const d = texto(ymd);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  const [ano, mes, dia] = d.split("-");
+  const anoRef = dataDeHoje(hoje).slice(0, 4);
+  return ano === anoRef ? `${dia}/${mes}` : `${dia}/${mes}/${ano.slice(2)}`;
+};
+
+// ===== Linha do tempo (Gantt simples) =====
+//
+// Cada tarefa com prazo vira uma barra: começa em `startDate` (ou no próprio
+// prazo, quando não há início) e termina no prazo. A janela é `dias` dias a
+// partir de `inicio`; barra fora da janela é cortada nas bordas e marca
+// `cortadaAntes`/`cortadaDepois` para a tela desenhar a seta. Tarefa sem prazo
+// entra em `semData`. Posições em DIAS (a tela multiplica pela largura da
+// coluna) — nada de pixel aqui.
+export const linhaDoTempo = (tarefas, { inicio, dias = 28 } = {}) => {
+  const base = texto(inicio) || dataDeHoje();
+  const janela = Math.max(1, Number(dias) || 28);
+  const barras = [];
+  const semData = [];
+  for (const t of ordenarTarefas(tarefas)) {
+    const fim = dueDe(t);
+    if (!fim) { semData.push(t); continue; }
+    const comeco = texto(t.startDate || t.start_date) || fim;
+    const de = Math.min(diasEntre(base, comeco), diasEntre(base, fim));
+    const ate = Math.max(diasEntre(base, comeco), diasEntre(base, fim));
+    if (ate < 0 || de >= janela) continue;
+    const visivelDe = Math.max(0, de);
+    const visivelAte = Math.min(janela - 1, ate);
+    barras.push({
+      tarefa: t,
+      inicio: visivelDe,
+      largura: visivelAte - visivelDe + 1,
+      cortadaAntes: de < 0,
+      cortadaDepois: ate > janela - 1,
+      atrasada: !concluida(t) && fim < dataDeHoje(),
+    });
+  }
+  barras.sort((a, b) => a.inicio - b.inicio || b.largura - a.largura);
+  return { barras, semData, janela, inicio: base };
+};
+
+// Cabeçalho da linha do tempo: um item por dia com marca de semana (segunda)
+// e de hoje, para a tela desenhar a régua sem calcular data.
+export const diasDaJanela = (inicio, dias = 28, { hoje } = {}) => {
+  const base = texto(inicio) || dataDeHoje(hoje);
+  const ref = dataDeHoje(hoje);
+  const saida = [];
+  for (let i = 0; i < Math.max(1, Number(dias) || 28); i++) {
+    const data = new Date(`${base}T00:00:00Z`);
+    data.setUTCDate(data.getUTCDate() + i);
+    const ymd = data.toISOString().slice(0, 10);
+    saida.push({
+      ymd,
+      dia: data.getUTCDate(),
+      semana: data.getUTCDay(),
+      inicioDeSemana: data.getUTCDay() === 1,
+      fimDeSemana: data.getUTCDay() === 0 || data.getUTCDay() === 6,
+      hoje: ymd === ref,
+      primeiroDoMes: data.getUTCDate() === 1 || i === 0,
+    });
+  }
+  return saida;
+};
+
+export const segundaDaSemana = (ymd) => {
+  const data = new Date(`${dataDeHoje(ymd)}T00:00:00Z`);
+  const desvio = (data.getUTCDay() + 6) % 7;
+  data.setUTCDate(data.getUTCDate() - desvio);
+  return data.toISOString().slice(0, 10);
+};
+
+export const deslocarDias = (ymd, n) => {
+  const data = new Date(`${dataDeHoje(ymd)}T00:00:00Z`);
+  data.setUTCDate(data.getUTCDate() + Number(n || 0));
+  return data.toISOString().slice(0, 10);
+};
+
+// ===== Gráficos =====
+//
+// As contagens que a aba "Gráficos" desenha: por status, por balde (com o
+// recorte de status dentro de cada balde), por prioridade e por responsável.
+// Tudo derivado; a tela só mede barras. Ordem estável: baldes na ordem do
+// plano, responsáveis do mais carregado para o menos.
+export const graficosDoPlano = (tarefas, { baldes = [], hoje } = {}) => {
+  const ts = lista(tarefas);
+  const ref = dataDeHoje(hoje);
+  const porStatus = PLANNER_PROGRESS.map((p) => ({
+    id: p.id,
+    label: p.label,
+    total: ts.filter((t) => normalizarProgresso(t.progress || t.progresso) === p.id).length,
+  }));
+  const atrasadas = ts.filter((t) => {
+    const prazo = dueDe(t);
+    return prazo && !concluida(t) && prazo < ref;
+  }).length;
+  const porBalde = normalizarBaldes(baldes).map((b) => {
+    const doBalde = ts.filter((t) => texto(t.bucketId || t.bucket_id) === b.id);
+    return {
+      id: b.id,
+      label: b.nome,
+      total: doBalde.length,
+      porStatus: PLANNER_PROGRESS.map((p) => ({
+        id: p.id,
+        total: doBalde.filter((t) => normalizarProgresso(t.progress || t.progresso) === p.id).length,
+      })),
+    };
+  });
+  const porPrioridade = PLANNER_PRIORITIES.map((p) => ({
+    id: p.id,
+    label: p.label,
+    total: ts.filter((t) => normalizarPrioridade(t.priority || t.prioridade) === p.id && !concluida(t)).length,
+  }));
+  const pessoas = new Map();
+  for (const t of ts) {
+    const chave = responsavelDe(t) || "__sem__";
+    const label = texto(t.assigneeLabel || t.assignee_label) || "Sem responsável";
+    const atual = pessoas.get(chave) || { id: chave, label, total: 0, concluidas: 0, atrasadas: 0 };
+    atual.total++;
+    if (concluida(t)) atual.concluidas++;
+    else if (dueDe(t) && dueDe(t) < ref) atual.atrasadas++;
+    pessoas.set(chave, atual);
+  }
+  const porResponsavel = [...pessoas.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+  return { total: ts.length, atrasadas, porStatus, porBalde, porPrioridade, porResponsavel };
+};

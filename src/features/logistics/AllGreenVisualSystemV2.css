@@ -252,9 +252,7 @@
 .tdg .card,
 .tdg .panel,
 .tdg .task-focus-card,
-.tdg .tdg-home-section,
-.tdg .tdg-planner-col,
-.tdg .tdg-planner-card {
+.tdg .tdg-home-section {
   border-radius: 6px !important;
   box-shadow: none !important;
 }
@@ -408,45 +406,6 @@
 /* 5. PLANNER: board e formulário passam para a mesma linguagem enterprise    */
 /* -------------------------------------------------------------------------- */
 
-.tdg .tdg-planner-page {
-  gap: 14px !important;
-}
-
-.tdg .tdg-planner-board {
-  gap: 12px !important;
-  align-items: start !important;
-}
-
-.tdg .tdg-planner-col {
-  background: #f3f6f4 !important;
-  border: 1px solid var(--tdg-line, #dce5e1) !important;
-  overflow: hidden;
-}
-
-.tdg .tdg-planner-col > header {
-  background: #edf2ef !important;
-  border-bottom: 1px solid var(--tdg-line, #dce5e1) !important;
-  padding: 11px 12px !important;
-}
-
-.tdg .tdg-planner-col-body {
-  padding: 10px !important;
-}
-
-.tdg .tdg-planner-card {
-  background: #fff !important;
-  border: 1px solid #d9e2de !important;
-  padding: 12px !important;
-}
-
-.tdg .tdg-planner-card:hover {
-  border-color: #9ab9ad !important;
-  box-shadow: 0 4px 14px rgba(16,36,31,.06) !important;
-}
-
-.tdg .tdg-planner-status-chip,
-.tdg .tdg-planner-analise-btn,
-.tdg .tdg-planner-share-btn,
 .tdg .tdg-planner-icon {
   border-radius: 5px !important;
 }
