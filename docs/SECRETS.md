@@ -75,6 +75,18 @@ oficial do órgão. Detalhes: `docs/todogreen-sefaz-connector.md` e
 | `SEFAZ_AMBIENTE` | `homologacao` (padrão) ou `producao` | assume homologação |
 | `TODOGREEN_ANTT_CIOT_*` | Conector/cert do CIOT direto (ver doc CIOT) | CIOT depende do conector Windows/ANTT |
 
+## Mercado Livre / Mercado Envios (dados fiscais e CT-e)
+
+App OAuth do DevCenter do Mercado Livre. Passo a passo e contrato:
+`docs/todogreen-mercadolivre.md`. Sem as duas primeiras, a integração aparece
+como "Depende de serviço externo" e o botão Conectar não é oferecido.
+
+| Variável | Uso | Sem ela |
+| --- | --- | --- |
+| `MERCADOLIVRE_CLIENT_ID` | APP ID do app no DevCenter (vai na URL de autorização) | OAuth desligado |
+| `MERCADOLIVRE_CLIENT_SECRET` | Chave secreta do app (troca e renovação de token) | OAuth desligado |
+| `MERCADOLIVRE_TOKEN_ENCRYPTION_KEY` | Chave AES-GCM dos tokens no D1 (opcional) | deriva do `MERCADOLIVRE_CLIENT_SECRET` — trocar o segredo exige reconectar |
+
 ## Integrações de dados públicos (preparadas, ativam com credencial/infra)
 
 Quando os conectores de ANEEL, ONS, ANP, PNCP, Compras.gov, GDELT, PRF e ANTT

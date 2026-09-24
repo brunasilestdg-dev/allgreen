@@ -9,6 +9,11 @@ import {
   runTodoGreenExternalIntegration,
   todoGreenExternalIntegrationCatalog,
 } from "./todogreen-integration-gateway.js";
+import {
+  mercadoLivreConfig,
+  mercadoLivreConnectionSummary,
+  probeMercadoLivre,
+} from "./todogreen-mercadolivre.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -253,6 +258,37 @@ const sefazStatus = (env = {}) => {
   }, { external: !configured });
 };
 
+// Mercado Envios: a To Do Green consulta dados fiscais de middle-mile/linehaul
+// (venda e MWH), Carrito V3, shipment e CT-e. Só vira "conectada" com vínculo
+// OAuth ativo neste espaço; sem APP ID/segredo no cofre, depende de cadastro.
+export const mercadoLivreStatus = (env = {}, connection = null) => {
+  const { configured } = mercadoLivreConfig(env);
+  const connected = configured && connection?.status === "connected";
+  const reauthorize = configured && connection?.status === "reauthorize";
+  return withReadiness({
+    id: "mercadolivre",
+    name: "Mercado Livre · Mercado Envios (dados fiscais e CT-e)",
+    configured,
+    detail: connected
+      ? `Conta ${connection.nickname || connection.userId} autorizada. Consultas fiscais de linehaul, MWH, Carrito V3, shipment e CT-e usam este vínculo; o token é renovado automaticamente.`
+      : reauthorize
+        ? "A autorização do Mercado Livre expirou ou foi revogada. Conecte a conta novamente."
+        : configured
+          ? "App do Mercado Livre cadastrado no cofre. Falta autorizar a conta da transportadora e o Mercado Livre liberar o APP ID para as consultas fiscais."
+          : "Conector OAuth implementado. Crie o App no DevCenter do Mercado Livre, informe o APP ID ao Mercado Livre e cadastre as credenciais no cofre do Worker.",
+    requirement: connected
+      ? ""
+      : configured
+        ? "Autorizar a conta do Mercado Livre + APP ID liberado pelo Mercado Livre"
+        : "MERCADOLIVRE_CLIENT_ID (APP ID) + MERCADOLIVRE_CLIENT_SECRET",
+    capabilities: ["Rotas linehaul · venda", "Rotas linehaul · MWH", "Carrito V3", "Shipment", "CT-e"],
+    canTest: connected,
+    canConfigure: true,
+    canConnect: configured,
+    connectPath: "/api/todogreen/integrations/mercadolivre/oauth/start",
+  }, { connected, error: reauthorize, external: !configured });
+};
+
 const sistemasTrackerDefaultStatus = () => withReadiness({
   id: "sistemas-tracker",
   name: "Sistemas Tracker · posição e telemetria",
@@ -393,7 +429,7 @@ export function todoGreenIntegrationStatus(env = {}, { activeWebhooks = 0 } = {}
     market: marketIntegrations(search),
     messaging: messagingIntegrations(env),
     communication: communicationIntegrations(env),
-    operational: [track3rDefaultStatus(), sistemasTrackerDefaultStatus(), sefazStatus(env), ciotStatus(env), ocppStatus()],
+    operational: [track3rDefaultStatus(), sistemasTrackerDefaultStatus(), sefazStatus(env), ciotStatus(env), mercadoLivreStatus(env), ocppStatus()],
     management: managementIntegrations(env),
     dataExchange: dataExchangeIntegrations(env, activeWebhooks),
     automation: nativeAutomations(env),
@@ -436,6 +472,7 @@ export async function handleTodoGreenIntegrations(request, env, access) {
       await trackerStatusForOwner(envBusca, access.ownerId),
       sefazStatus(envBusca),
       await ciotStatusForOwner(envBusca, access.ownerId),
+      mercadoLivreStatus(envBusca, await mercadoLivreConnectionSummary(envBusca, access.ownerId)),
       ocppStatus(),
     ];
     return json(status);
@@ -468,6 +505,17 @@ export async function handleTodoGreenIntegrations(request, env, access) {
         latencyMs: integrationTest?.latencyMs,
       });
       return json({ integrationTest, checkedAt: new Date().toISOString() });
+    }
+    if (provider === "mercadolivre") {
+      const mercadoLivreTest = await probeMercadoLivre(envBusca, access.ownerId);
+      await recordTodoGreenIntegrationHealth(envBusca, {
+        ownerId: access.ownerId, integrationId: provider, configured: true,
+        authenticated: mercadoLivreTest.ok, online: mercadoLivreTest.ok,
+        error: mercadoLivreTest.ok ? "" : `O Mercado Livre respondeu HTTP ${mercadoLivreTest.status}.`,
+        nextAction: mercadoLivreTest.ok ? "" : "Reconecte a conta do Mercado Livre e rode o teste novamente.",
+        latencyMs: mercadoLivreTest.latencyMs,
+      });
+      return json({ mercadoLivreTest, checkedAt: new Date().toISOString() });
     }
     if (provider === "web-search") {
       const searchTest = await probeWebSearch(envBusca);

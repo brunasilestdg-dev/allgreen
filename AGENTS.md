@@ -348,6 +348,16 @@ quantos resultados vieram.
     conector: `docs/todogreen-sefaz-connector.md`. Segredos:
     `SEFAZ_CONNECTOR_URL`, `SEFAZ_CONNECTOR_TOKEN`, `SEFAZ_CONNECTOR_ALLOWED_HOSTS`,
     `SEFAZ_AMBIENTE`.
+  - **Mercado Livre / Mercado Envios** — `worker/services/todogreen-mercadolivre.js`
+    + `pages/MercadoLivrePanel.jsx`, migração `0144`: OAuth 2.0 + PKCE (molde do
+    monday.com), um vínculo por espaço em `todogreen_mercadolivre_connections`
+    com tokens AES-GCM. O refresh token do ML é de USO ÚNICO: a renovação grava
+    o par novo condicionada ao antigo (não trocar por UPDATE incondicional).
+    Consulta fiscal (linehaul venda/MWH, Carrito V3, shipment, CT-e) só por GET
+    em `api.mercadolibre.com`, com `integration:manage` ou `fiscal:manage`.
+    Dado do ML não autoriza CT-e — o ciclo fiscal/SEFAZ continua o mesmo.
+    Segredos `MERCADOLIVRE_CLIENT_ID` (APP ID) + `MERCADOLIVRE_CLIENT_SECRET`;
+    passo a passo em `docs/todogreen-mercadolivre.md`.
   - **Folha/DP To Do Green** — `payrollDomain.js` + `pages/PeoplePage.jsx`.
     Dado sensível (CPF, salário): só `rh`/`admin`/`owner`, nunca no portal do
     cliente. Faixas de INSS/IRRF testadas na fronteira. Vocabulário "colaborador".

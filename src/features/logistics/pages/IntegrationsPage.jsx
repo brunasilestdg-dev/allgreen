@@ -16,6 +16,7 @@ import {
 import AiKeysPanel from "../../integrations/AiKeysPanel.jsx";
 import McpConnectionsPanel from "../../integrations/McpConnectionsPanel.jsx";
 import SearchKeysPanel from "../../integrations/SearchKeysPanel.jsx";
+import MercadoLivrePanel from "./MercadoLivrePanel.jsx";
 import "./TodoGreenPages.css";
 
 const STATUS = {
@@ -106,22 +107,37 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
 
   useEffect(() => { load(); }, []);
 
-  // O monday.com devolve o usuário para /todogreen/integracoes?monday=... após a
-  // autorização. Traduz o resultado num aviso e limpa o parâmetro para não repetir.
+  // monday.com e Mercado Livre devolvem o usuário para /todogreen/integracoes?<id>=...
+  // após a autorização. Traduz o resultado num aviso e limpa o parâmetro para não repetir.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const monday = params.get("monday");
-    if (!monday) return;
-    if (monday === "connected") setToast?.("Conta monday.com conectada. Use “Testar” após mapear os boards.");
-    else if (monday === "denied") setToast?.("A autorização com o monday.com foi cancelada.");
-    else setToast?.("Não foi possível concluir a conexão com o monday.com.");
-    params.delete("monday");
+    const avisos = {
+      monday: {
+        connected: "Conta monday.com conectada. Use “Testar” após mapear os boards.",
+        denied: "A autorização com o monday.com foi cancelada.",
+        error: "Não foi possível concluir a conexão com o monday.com.",
+      },
+      mercadolivre: {
+        connected: "Conta do Mercado Livre conectada. Use “Testar” para confirmar o vínculo.",
+        denied: "A autorização com o Mercado Livre foi cancelada.",
+        error: "Não foi possível concluir a conexão com o Mercado Livre.",
+      },
+    };
+    let mudou = false;
+    for (const [id, textos] of Object.entries(avisos)) {
+      const resultado = params.get(id);
+      if (!resultado) continue;
+      setToast?.(textos[resultado] || textos.error);
+      params.delete(id);
+      mudou = true;
+    }
+    if (!mudou) return;
     const qs = params.toString();
     window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
   }, []);
 
   // Inicia o OAuth: pede a URL de autorização (autenticado por Bearer, como o
-  // resto do app) e só então navega o navegador até o monday.com. Assim o botão
+  // resto do app) e só então navega o navegador até o provedor. Assim o botão
   // não depende do cookie de sessão e falhas viram aviso, não tela em branco.
   const connect = async (item) => {
     const path = item?.connectPath || "/api/todogreen/integrations/monday/oauth/start";
@@ -129,7 +145,7 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       const response = await fetch(path, { headers: authHeaders?.() || {} });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.authorizeUrl) {
-        throw new Error(data.error || "Não foi possível iniciar a conexão com o monday.com.");
+        throw new Error(data.error || `Não foi possível iniciar a conexão com ${item?.name || "a integração"}.`);
       }
       window.location.href = data.authorizeUrl;
     } catch (error) {
@@ -158,7 +174,13 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "O provedor não respondeu.");
-      if (data.searchTest) {
+      if (data.mercadoLivreTest) {
+        const t = data.mercadoLivreTest;
+        setToast?.(t.ok
+          ? `Mercado Livre respondeu em ${t.latencyMs} ms · conta ${t.nickname || t.userId}.`
+          : `O Mercado Livre respondeu HTTP ${t.status}. Reconecte a conta.`);
+        load();
+      } else if (data.searchTest) {
         setToast?.(resumoDaBusca(data.searchTest));
       } else if (data.integrationTest?.skipped) {
         setToast?.(data.integrationTest.detail || "A integração ainda depende de configuração.");
@@ -263,7 +285,8 @@ export default function IntegrationsPage({ authHeaders, setToast }) {
 
       <ProviderList title="Mensageria" icon={MessageCircle} items={status?.messaging} healthById={healthById} />
       <ProviderList title="Comunicação e produtividade" icon={Mail} items={status?.communication} healthById={healthById} />
-      <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} healthById={healthById} />
+      <ProviderList title="Operação e fiscal" icon={ServerCog} items={status?.operational} testing={testing} onTest={test} onConnect={connect} healthById={healthById} />
+      <MercadoLivrePanel authHeaders={authHeaders} setToast={setToast} onChange={load} />
       <ProviderList title="Dados e gestão" icon={Database} items={status?.management} testing={testing} onTest={test} onConnect={connect} healthById={healthById} />
       <ProviderList title="API e troca de dados" icon={Cable} items={status?.dataExchange} healthById={healthById} />
       <ProviderList title="Automação ativa na Cloudflare" icon={Workflow} items={status?.automation} healthById={healthById} />

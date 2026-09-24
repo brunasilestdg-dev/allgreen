@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleTodoGreenIntegrations, todoGreenIntegrationStatus } from "../../../worker/services/todogreen-integrations.js";
+import { handleTodoGreenIntegrations, mercadoLivreStatus, todoGreenIntegrationStatus } from "../../../worker/services/todogreen-integrations.js";
+import { parseMercadoLivreQuery } from "./pages/MercadoLivrePanel.jsx";
 
 describe("integrações da vertical", () => {
   it("mostra prontidão por conector sem expor credenciais", () => {
@@ -35,6 +36,7 @@ describe("integrações da vertical", () => {
       expect.objectContaining({ id: "sistemas-tracker", status: "requires_setup" }),
       expect.objectContaining({ id: "sefaz-fiscal", configured: true, status: "configured" }),
       expect.objectContaining({ id: "antt-ciot-direct" }),
+      expect.objectContaining({ id: "mercadolivre", status: "external_dependency", canConnect: false, canTest: false }),
       expect.objectContaining({ id: "ocpp", status: "external_dependency" }),
     ]));
     expect(status.management).toEqual(expect.arrayContaining([
@@ -78,5 +80,22 @@ describe("integrações da vertical", () => {
       { role: "auditor", permissions: ["read"] },
     );
     expect(response.status).toBe(403);
+  });
+});
+
+describe("Mercado Livre na central de integrações", () => {
+  const cofre = { MERCADOLIVRE_CLIENT_ID: "123", MERCADOLIVRE_CLIENT_SECRET: "s" };
+
+  it("só vira conectada com vínculo ativo, e revogado vira erro", () => {
+    expect(mercadoLivreStatus(cofre, null)).toEqual(expect.objectContaining({ status: "configured", canConnect: true, canTest: false }));
+    expect(mercadoLivreStatus(cofre, { status: "connected", nickname: "TDG" }))
+      .toEqual(expect.objectContaining({ status: "connected", canTest: true }));
+    expect(mercadoLivreStatus(cofre, { status: "reauthorize" }).status).toBe("error");
+    expect(JSON.stringify(mercadoLivreStatus(cofre, null))).not.toContain("\"s\"");
+  });
+
+  it("lê parâmetros chave=valor por linha", () => {
+    expect(parseMercadoLivreQuery("site_id=MLB\n  status = ready \n\n&x=1")).toEqual({ site_id: "MLB", status: "ready", x: "1" });
+    expect(parseMercadoLivreQuery("")).toEqual({});
   });
 });
