@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   House,
@@ -19,7 +19,6 @@ import {
   TODO_GREEN_MODULE_AREAS,
   TODO_GREEN_MODULE_CATALOG,
   ehPerfilDesenvolvedor,
-  hasTodoGreenPermission,
   summarizeTodoGreenDashboard,
 } from "./logisticsVerticalDomain.js";
 import { endSession } from "../../session/armazenamento.js";
@@ -34,17 +33,10 @@ import {
 } from "./moduleGroupingDomain.js";
 import Semente from "./Semente.jsx";
 import Modal from "../../components/Modal.jsx";
-import ErpHome from "./ErpHome.jsx";
 import TodoGreenProfile from "./TodoGreenProfile.jsx";
-import {
-  aplicarEdicaoPlannerNaTarefa,
-  contextoComercialDaTarefa,
-  desvincularTarefaDoPlanner,
-} from "./plannerIntegrationDomain.js";
 import { IMPLEMENTED_MODULE_IDS, MODULE_IMPLEMENTATION } from "./shell/catalogoDeModulos.js";
 import {
   PRIMARY_NAVIGATION,
-  AREA_DO_CADASTRO,
   secaoDaRota,
   MANAGEMENT_TOOLS,
   navigationModules,
@@ -54,13 +46,7 @@ import {
   TITULOS_POR_TELA,
   sidebarFunctionLabel,
 } from "./shell/navegacao.js";
-import {
-  todoGreenPath,
-  produtoDaRota,
-  todoGreenRouteToPage,
-  workspaceToolFromPath,
-  navigate,
-} from "./shell/rotas.js";
+import { todoGreenPath, todoGreenRouteToPage, navigate } from "./shell/rotas.js";
 import { ownerId, ACESSO, lerRespostaDeAcesso } from "./shell/acesso.js";
 import { montarDadosDaVertical } from "./shell/dadosDaVertical.js";
 import {
@@ -70,10 +56,17 @@ import {
   ProductCard,
   DashboardPanel,
 } from "./journeys/compartilhados.jsx";
-import PricingPanel from "./journeys/PricingPanel.jsx";
-import ProposalPanel from "./journeys/ProposalPanel.jsx";
-import EsgPanel, { MethodologyPanel } from "./journeys/EsgPanel.jsx";
-import AccessPanel from "./journeys/AccessPanel.jsx";
+import TelasPrincipal from "./areas/TelasPrincipal.jsx";
+import TelasGreenTechCore from "./areas/TelasGreenTechCore.jsx";
+import TelasEspacoDeTrabalho from "./areas/TelasEspacoDeTrabalho.jsx";
+import TelasEstudio from "./areas/TelasEstudio.jsx";
+import TelasComercial from "./areas/TelasComercial.jsx";
+import TelasOperacao from "./areas/TelasOperacao.jsx";
+import TelasRecarga from "./areas/TelasRecarga.jsx";
+import TelasEsg from "./areas/TelasEsg.jsx";
+import TelasFinanceiro from "./areas/TelasFinanceiro.jsx";
+import TelasPessoas from "./areas/TelasPessoas.jsx";
+import TelasAdministracao from "./areas/TelasAdministracao.jsx";
 
 // Estes nomes eram declarados aqui e continuam exportados daqui: testes e
 // quem mais os importava seguem funcionando. A fonte agora é o módulo puro de
@@ -81,96 +74,6 @@ import AccessPanel from "./journeys/AccessPanel.jsx";
 export { secaoDaRota, permissaoDaPagina, trilhaDaPagina } from "./shell/navegacao.js";
 export { produtoDaRota, todoGreenRouteToPage } from "./shell/rotas.js";
 export { ACESSO, lerRespostaDeAcesso } from "./shell/acesso.js";
-
-const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
-const PricingParametersPanel = lazy(() => import("./PricingParametersPanel.jsx"));
-const DashboardBuilderPage = lazy(() => import("./pages/DashboardBuilderPage.jsx"));
-const GoalsPage = lazy(() => import("./pages/GoalsPage.jsx"));
-const SalesPerformancePage = lazy(() => import("./pages/SalesPerformancePage.jsx"));
-const ClientsPage = lazy(() => import("./pages/ClientsPage.jsx"));
-const StockPage = lazy(() => import("./pages/StockPage.jsx"));
-const ErpRegistriesPage = lazy(() => import("./pages/ErpRegistriesPage.jsx"));
-const PurchasingPage = lazy(() => import("./pages/PurchasingPage.jsx"));
-const FiscalPage = lazy(() => import("./pages/FiscalPage.jsx"));
-const TreasuryPage = lazy(() => import("./pages/TreasuryPage.jsx"));
-const PeoplePage = lazy(() => import("./pages/PeoplePage.jsx"));
-const PlannerPage = lazy(() => import("./pages/PlannerPage.jsx"));
-const SobreONegocioPage = lazy(() => import("./pages/SobreONegocioPage.jsx"));
-const CentralRfqPage = lazy(() => import("./pages/CentralRfqPage.jsx"));
-const AvancosDaSemanaPage = lazy(() => import("./pages/AvancosDaSemanaPage.jsx"));
-const OpportunitiesPage = lazy(() => import("./pages/OpportunitiesPage.jsx"));
-const SalesFunnelPage = lazy(() => import("./pages/SalesFunnelPage.jsx"));
-// Ferramentas do app geral trazidas para dentro da vertical (Estúdio). Elas já
-// recebem db/update/setToast; passamos um contexto de negócio To Do Green para
-// os exemplos e prompts saírem no tom da transportadora.
-const CreativeToolkit = lazy(() => import("../creative/CreativeToolkit.jsx"));
-const MediaStudio = lazy(() => import("../media/MediaStudio.jsx"));
-const CodeStudio = lazy(() => import("../code/CodeStudio.jsx"));
-// Análise de textos e Mapa de ideias moram no App.jsx como funções de módulo
-// (usam só props + helpers de módulo). Importamos por named export com lazy — o
-// App.jsx não importa a vertical estaticamente, então não há ciclo.
-const TextAnalyzer = lazy(() => import("../../App.jsx").then((m) => ({ default: m.Analyzer })));
-const MindMapStudio = lazy(() => import("../../App.jsx").then((m) => ({ default: m.MindMap })));
-// Contexto de negócio que o Estúdio usa para os exemplos e prompts saírem no
-// tom da To Do Green (transportadora elétrica), em vez do exemplo genérico.
-const negocioTDG = {
-  id: "todogreen",
-  name: "To Do Green",
-  segment: "Transportadora rodoviária 100% elétrica (B2B)",
-  goal: "Transporte de carga com frota elétrica, foco em ESG e redução de CO2",
-  focusAreas: "logística, frota elétrica, ESG, transporte de cargas",
-};
-const ClientRequestsPage = lazy(() => import("./pages/ClientRequestsPage.jsx"));
-const ReportsPage = lazy(() => import("./pages/ReportsPage.jsx"));
-const TripViabilityPage = lazy(() => import("./pages/TripViabilityPage.jsx"));
-const DealDeskPage = lazy(() => import("./pages/DealDeskPage.jsx"));
-const DocumentVaultPage = lazy(() => import("./pages/DocumentVaultPage.jsx"));
-const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage.jsx"));
-const BusinessConnectorsPage = lazy(() => import("./pages/BusinessConnectorsPage.jsx"));
-const CommercialPanelPage = lazy(() => import("./pages/CommercialPanelPage.jsx"));
-const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage.jsx"));
-const TodoGreenWorkspace = lazy(() => import("./TodoGreenWorkspace.jsx"));
-const TodoGreenIntelligenceHub = lazy(() => import("./TodoGreenIntelligenceHub.jsx"));
-const TodoGreenGuides = lazy(() => import("./TodoGreenGuides.jsx"));
-const FinancePage = lazy(() => import("./pages/FinancePage.jsx"));
-const OperationsPage = lazy(() => import("./pages/OperationsPage.jsx"));
-const RoteirizacaoPage = lazy(() => import("./pages/RoteirizacaoPage.jsx"));
-const ChargingPointsPage = lazy(() => import("./pages/ChargingPointsPage.jsx"));
-const ChargingSessionsPage = lazy(() => import("./pages/ChargingSessionsPage.jsx"));
-const ChargerReservationsPage = lazy(() => import("./pages/ChargerReservationsPage.jsx"));
-const ChargingBillingPage = lazy(() => import("./pages/ChargingBillingPage.jsx"));
-const EnergyPage = lazy(() => import("./pages/EnergyPage.jsx"));
-const OperationEnginePage = lazy(() => import("./pages/OperationEnginePage.jsx"));
-const GreenPayAdminPage = lazy(() => import("./pages/GreenPayAdminPage.jsx"));
-const OccurrencesPage = lazy(() => import("./pages/OccurrencesPage.jsx"));
-const QualityPage = lazy(() => import("./pages/QualityPage.jsx"));
-// TDG LegalPage (antigo) permanece disponível como fallback do fluxo legado
-// (aba "Fluxo antigo" dentro do LegalHub, se voltar). O menu do ERP passou
-// a montar a Central Jurídica nova (`LegalHub`) por cima da mesma tabela
-// canônica `todogreen_legal_records`. UM Jurídico só.
-const LegalPage = lazy(() => import("./pages/LegalPage.jsx")); // eslint-disable-line no-unused-vars
-const LegalHub = lazy(() => import("../legal/LegalHub.jsx"));
-const GovernancePage = lazy(() => import("./pages/GovernancePage.jsx"));
-const TransactionalSpinePage = lazy(() => import("./pages/TransactionalSpinePage.jsx"));
-const EnterpriseAreaPage = lazy(() => import("./pages/EnterpriseAreaPage.jsx"));
-const RasciMatrixPage = lazy(() => import("./pages/RasciMatrixPage.jsx"));
-const FluxosPage = lazy(() => import("./pages/FluxosPage.jsx"));
-const ErpManualPage = lazy(() => import("./pages/ErpManualPage.jsx"));
-const ClientActivationPage = lazy(() => import("./ClientActivationPage.jsx"));
-const DriverFleetCenterPage = lazy(() => import("./pages/DriverFleetCenterPage.jsx"));
-// Páginas das 6 lacunas dos 26 blocos (aprimoramentos aditivos).
-const TenantAccessPage = lazy(() => import("./pages/TenantAccessPage.jsx"));
-const CorporateAccountPage = lazy(() => import("./pages/CorporateAccountPage.jsx"));
-const RoamingPage = lazy(() => import("./pages/RoamingPage.jsx"));
-const EnergyPeakSavingsPage = lazy(() => import("./pages/EnergyPeakSavingsPage.jsx"));
-const AlertQueuePage = lazy(() => import("./pages/AlertQueuePage.jsx"));
-const GreenmobRentalPage = lazy(() => import("./pages/GreenmobRentalPage.jsx"));
-const SaasBillingPage = lazy(() => import("./pages/SaasBillingPage.jsx"));
-// Páginas do roadmap P0/P1/P2 (rodada seguinte, também aditiva).
-const GroupEntitiesPage = lazy(() => import("./pages/GroupEntitiesPage.jsx"));
-const OcppConsolePage = lazy(() => import("./pages/OcppConsolePage.jsx"));
-const GreenOnAppPage = lazy(() => import("./pages/GreenOnAppPage.jsx"));
-const PhysicalSafetyPage = lazy(() => import("./pages/PhysicalSafetyPage.jsx"));
 
 export default function LogisticsVertical({ db, update, setToast, access = {}, authHeaders }) {
   const [path, setPath] = useState(todoGreenPath());
@@ -467,6 +370,14 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     ...current,
     preferences: { ...(current.preferences || {}), todoGreenHome: preferences },
   }));
+  // O que as telas recebem do esqueleto: estado, dados carregados e as ações
+  // sobre os registros. Cada grupo de ./areas/ lê daqui só o que usa.
+  const contexto = {
+    db, update, setToast, authHeaders, path, remoteAccess, role, page, secaoDeCadastro,
+    primaryNavigation, ehDev, registros, criar, atualizar, arquivar, registrarPagamento,
+    estornarPagamento, registrarEventoOperacao, listarSubrecurso, pedidosDeAprovacao,
+    clientes, setClientes, verticalData, dashboard, saveHomePreferences,
+  };
 
   return (
     <main className={`tdg ${isOverview ? "tdg-overview-page" : "tdg-module-page"}`} aria-labelledby="tdg-title">
@@ -853,231 +764,21 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         </section>
       )}
       {podeVerPagina && (<>
-      {page === "dashboard" && <ErpHome role={role} user={db?.user || {}} data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} products={LOGISTICS_PRODUCTS} preferences={db?.preferences?.todoGreenHome} onSave={saveHomePreferences} onNavigate={navigate} />}
-      {/* Espaço de trabalho é a dona única de /espaco e do link legado
-          /central-trabalho. O alias é resolvido antes desta renderização. */}
-      {["espaco", "visualizacoes", "agentes-funcoes"].includes(page) && (
-        <Suspense fallback={<section className="tdg-panel">Abrindo o espaço de trabalho...</section>}>
-          <TodoGreenWorkspace
-            key={`${page}:${workspaceToolFromPath(path)}`}
-            db={db}
-            update={update}
-            verticalData={verticalData}
-            setToast={setToast}
-            onNavigate={navigate}
-            authHeaders={authHeaders}
-            mostrarIntegracoes={ehDev}
-            initialTool={page === "visualizacoes" ? "visoes" : page === "agentes-funcoes" ? "agentes" : workspaceToolFromPath(path)}
-          />
-        </Suspense>
-      )}
-      {page === "dashboards" && <Suspense fallback={<section className="tdg-panel">Carregando seus painéis...</section>}><DashboardBuilderPage authHeaders={authHeaders} summary={dashboard} data={registros} setToast={setToast} /></Suspense>}
-      {page === "metas" && <Suspense fallback={<section className="tdg-panel">Carregando metas...</section>}><GoalsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "performance-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando performance comercial...</section>}><SalesPerformancePage authHeaders={authHeaders} onNavigate={navigate} /></Suspense>}
-      {page === "playbook-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando playbook comercial...</section>}><TodoGreenGuides mode="playbook" onNavigate={navigate} /></Suspense>}
-      {page === "solicitacoes" && <Suspense fallback={<section className="tdg-panel">Carregando solicitações...</section>}><ClientRequestsPage authHeaders={authHeaders} setToast={setToast} currentUserId={db?.user?.id} clientes={clientes} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} /></Suspense>}
-      {page === "cadastros" && <Suspense fallback={<section className="tdg-panel">Carregando cadastros...</section>}><ErpRegistriesPage registros={registros} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} secao={secaoDeCadastro} areaLabel={AREA_DO_CADASTRO[secaoDeCadastro] ? primaryNavigation.label : ""} /></Suspense>}
-      {page === "implantacao" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando implantação...</section>}>
-          <ClientActivationPage db={db} update={update} authHeaders={authHeaders} setToast={setToast} />
-        </Suspense>
-      )}
-      {page === "estoque" && <Suspense fallback={<section className="tdg-panel">Carregando estoque...</section>}><StockPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
-      {page === "compras" && <Suspense fallback={<section className="tdg-panel">Carregando compras...</section>}><PurchasingPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
-      {page === "fiscal" && <Suspense fallback={<section className="tdg-panel">Carregando fiscal...</section>}><FiscalPage authHeaders={authHeaders} setToast={setToast} registros={registros} /></Suspense>}
-      {page === "tesouraria" && <Suspense fallback={<section className="tdg-panel">Carregando a tesouraria...</section>}><TreasuryPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "greenpay" && <Suspense fallback={<section className="tdg-panel">Carregando o GreenPay...</section>}><GreenPayAdminPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "central-rfq" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando a Central de RFQ...</section>}>
-          <CentralRfqPage
-            habilitacao={registros.habilitacao}
-            habilitacaoKits={registros.habilitacaoKits}
-            rfq={registros.rfq}
-            clientes={clientes}
-            onCriarDocumento={(registro) => criar("habilitacao", registro)}
-            onAtualizarDocumento={(id, registro) => atualizar("habilitacao", id, registro)}
-            onArquivarDocumento={(id) => arquivar("habilitacao", id)}
-            onCriarKit={(registro) => criar("habilitacaoKits", registro)}
-            onCriarRfq={(registro) => criar("rfq", registro)}
-            onAtualizarRfq={(id, registro) => atualizar("rfq", id, registro)}
-            podeEditar={podeAcessarFuncionalidade(role, remoteAccess.permissions, "compliance:manage")}
-            authHeaders={authHeaders}
-            setToast={setToast}
-          />
-        </Suspense>
-      )}
-      {page === "sobre-o-negocio" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando o dossiê do negócio...</section>}>
-          <SobreONegocioPage
-            businessContext={registros.businessContext}
-            onCreate={(registro) => criar("businessContext", registro)}
-            onUpdate={(id, registro) => atualizar("businessContext", id, registro)}
-            onArchive={(id) => arquivar("businessContext", id)}
-            podeEditar={podeAcessarFuncionalidade(role, remoteAccess.permissions, "business:teach")}
-            setToast={setToast}
-          />
-        </Suspense>
-      )}
-      {page === "clientes" && <Suspense fallback={<section className="tdg-panel">Carregando clientes...</section>}><ClientsPage authHeaders={authHeaders} opportunities={verticalData.opportunities} contracts={registros.contracts} operations={registros.operations} financial={registros.financial} tasks={db?.tasks || []} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} onNavigate={navigate} setToast={setToast} currentUserId={db?.user?.id} remetenteNome={db?.user?.name || ""} assinaturaEmail={db?.preferences?.assinaturaEmail || ""} espacoId={remoteAccess.ownerId || ""} onClientesChange={setClientes} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} onCompletarTarefa={(taskId) => update?.((current) => ({ ...current, tasks: (current.tasks || []).map((t) => t.id === taskId ? { ...t, status: "Concluído" } : t) }))} /></Suspense>}
-      {page === "oportunidades" && <Suspense fallback={<section className="tdg-panel">Carregando oportunidades...</section>}><OpportunitiesPage currentUserId={db?.user?.id} espacoId={remoteAccess.ownerId || ""} onCreateTask={(task) => update?.((current) => ({ ...current, tasks: [task, ...(current.tasks || [])] }))} clients={clientes} opportunities={verticalData.opportunities} scenarios={verticalData.pricingScenarios} comments={verticalData.comments} onComment={(registro) => criar("comments", registro)} interactions={verticalData.interactions} onInteraction={(registro) => criar("interactions", registro)} authHeaders={authHeaders} onCreate={(registro) => criar("opportunities", registro)} onUpdate={(id, alteracoes) => atualizar("opportunities", id, alteracoes)} onDelete={(id) => arquivar("opportunities", id)} onNavigate={navigate} setToast={setToast} /></Suspense>}
-      {page === "funil" && <Suspense fallback={<section className="tdg-panel">Carregando o funil...</section>}><SalesFunnelPage opportunities={verticalData.opportunities} onNavigate={navigate} setToast={setToast} /></Suspense>}
-      {page === "estudio-criativo" && <Suspense fallback={<section className="tdg-panel">Carregando o estúdio...</section>}><div className="tdg-page tdg-estudio"><CreativeToolkit business={negocioTDG} setToast={setToast} /></div></Suspense>}
-      {page === "midia" && <Suspense fallback={<section className="tdg-panel">Carregando a mídia...</section>}><div className="tdg-page tdg-estudio"><MediaStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
-      {page === "editor-codigo" && <Suspense fallback={<section className="tdg-panel">Carregando o editor...</section>}><div className="tdg-page tdg-estudio"><CodeStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
-      {page === "analise-texto" && <Suspense fallback={<section className="tdg-panel">Carregando a análise...</section>}><div className="tdg-page tdg-estudio"><TextAnalyzer db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
-      {page === "mapa-ideias" && <Suspense fallback={<section className="tdg-panel">Carregando o mapa...</section>}><div className="tdg-page tdg-estudio"><MindMapStudio db={db} update={update} business={negocioTDG} setToast={setToast} /></div></Suspense>}
-      {page === "propostas" && <ProposalPanel data={verticalData} criar={criar} atualizar={atualizar} pedidosDeAprovacao={pedidosDeAprovacao} setToast={setToast} />}
-      {page === "precificacao" && <PricingPanel key={`${produtoDaRota(path) || "nova"}:${new URLSearchParams(path.split("?")[1] || "").get("opportunity") || "nova"}`} role={role} criar={criar} db={db} authHeaders={authHeaders} setToast={setToast} opportunities={verticalData.opportunities} />}
-      {page === "esg" && <EsgPanel dashboard={dashboard} data={verticalData} onNavigate={navigate} />}
-      {page === "regua" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando parâmetros do simulador...</section>}>
-          <PricingParametersPanel authHeaders={authHeaders} setToast={setToast} />
-        </Suspense>
-      )}
-      {page === "energia" && <Suspense fallback={<section className="tdg-panel">Carregando energia...</section>}><EnergyPage authHeaders={authHeaders} /></Suspense>}
-      {page === "tenant-acessos" && <Suspense fallback={<section className="tdg-panel">Carregando perfis...</section>}><TenantAccessPage /></Suspense>}
-      {page === "green-on-empresa" && <Suspense fallback={<section className="tdg-panel">Carregando conta corporativa...</section>}><CorporateAccountPage /></Suspense>}
-      {page === "roaming-ocpi" && <Suspense fallback={<section className="tdg-panel">Carregando roaming...</section>}><RoamingPage /></Suspense>}
-      {page === "energia-peak" && <Suspense fallback={<section className="tdg-panel">Carregando BESS e pico...</section>}><EnergyPeakSavingsPage /></Suspense>}
-      {page === "fila-alertas" && <Suspense fallback={<section className="tdg-panel">Carregando fila de alertas...</section>}><AlertQueuePage /></Suspense>}
-      {page === "greenmob-locacao" && <Suspense fallback={<section className="tdg-panel">Carregando Greenmob...</section>}><GreenmobRentalPage /></Suspense>}
-      {page === "saas-billing" && <Suspense fallback={<section className="tdg-panel">Carregando billing...</section>}><SaasBillingPage /></Suspense>}
-      {page === "core-grupo" && <Suspense fallback={<section className="tdg-panel">Carregando Core All Green...</section>}><GroupEntitiesPage /></Suspense>}
-      {page === "ocpp-console" && <Suspense fallback={<section className="tdg-panel">Carregando OCPP...</section>}><OcppConsolePage /></Suspense>}
-      {page === "green-on-app" && <Suspense fallback={<section className="tdg-panel">Carregando Green On App...</section>}><GreenOnAppPage /></Suspense>}
-      {page === "seguranca-fisica" && <Suspense fallback={<section className="tdg-panel">Carregando segurança...</section>}><PhysicalSafetyPage /></Suspense>}
-      {page === "central-esg" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando Central ESG...</section>}>
-          <EsgCenter authHeaders={authHeaders} setToast={setToast} />
-        </Suspense>
-      )}
-      {page === "produtos" && <Suspense fallback={<section className="tdg-panel">Carregando produtos...</section>}><EnterpriseAreaPage area="products" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
-      {page === "motor-operacao" && <Suspense fallback={<section className="tdg-panel">Carregando o motor de HC e DRE...</section>}><OperationEnginePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "planejamento" && <Suspense fallback={<section className="tdg-panel">Carregando planejamento...</section>}><EnterpriseAreaPage area="planning" products={LOGISTICS_PRODUCTS} onNavigate={navigate} /></Suspense>}
-      {/* O simulador de aceite tem tela própria de novo: ele nasceu em
-          Financeiro → Custos, foi parar no rodapé do Planejamento e o menu
-          "Aceite" apontava para Ordens de Serviço — na prática, sumiu. */}
-      {page === "aceite-viagens" && <Suspense fallback={<section className="tdg-panel">Carregando o simulador de aceite...</section>}><TripViabilityPage authHeaders={authHeaders} /></Suspense>}
-      {page === "operacoes" && <Suspense fallback={<section className="tdg-panel">Carregando operações...</section>}><OperationsPage operations={registros.operations} clients={clientes} contracts={registros.contracts} criar={criar} atualizar={atualizar} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
-      {page === "roteirizacao" && <Suspense fallback={<section className="tdg-panel">Carregando o mapa...</section>}><RoteirizacaoPage setToast={setToast} authHeaders={authHeaders} pontosProprios={registros.pontosRecarga} /></Suspense>}
-      {page === "pontos-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando pontos de recarga...</section>}><ChargingPointsPage registros={registros.pontosRecarga} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} /></Suspense>}
-      {page === "sessoes-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando sessões de recarga...</section>}><ChargingSessionsPage registros={registros.chargingSessions} pontos={registros.pontosRecarga} clientes={clientes} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
-      {page === "reservas-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando reservas...</section>}><ChargerReservationsPage registros={registros.chargerReservations} pontos={registros.pontosRecarga} criar={criar} atualizar={atualizar} arquivar={arquivar} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
-      {page === "cobranca-recarga" && <Suspense fallback={<section className="tdg-panel">Carregando cobrança de recarga...</section>}><ChargingBillingPage regras={registros.chargingPrices} sessoes={registros.chargingSessions} clientes={clientes} criar={criar} arquivar={arquivar} setToast={setToast} /></Suspense>}
-      {page === "motorista-frota" && <Suspense fallback={<section className="tdg-panel">Carregando frota e motoristas...</section>}><DriverFleetCenterPage authHeaders={authHeaders} operations={registros.operations} onNavigate={navigate} setToast={setToast} /></Suspense>}
-      {page === "ocorrencias" && <Suspense fallback={<section className="tdg-panel">Carregando ocorrências...</section>}><OccurrencesPage operations={registros.operations} clients={clientes} registrarEventoOperacao={registrarEventoOperacao} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
-      {page === "ordens-servico" && <Suspense fallback={<section className="tdg-panel">Carregando ordens de serviço...</section>}><TransactionalSpinePage mode="service-orders" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
-      {page === "ciot" && <Suspense fallback={<section className="tdg-panel">Carregando CIOT...</section>}><TransactionalSpinePage mode="ciot" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
-      {page === "receita" && <Suspense fallback={<section className="tdg-panel">Carregando contas a receber...</section>}><FinancePage type="revenue" entries={registros.financial.filter((item) => item.tipo === "revenue")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
-      {page === "faturamento" && <Suspense fallback={<section className="tdg-panel">Carregando faturamento...</section>}><TransactionalSpinePage mode="billing" authHeaders={authHeaders} clients={clientes} setToast={setToast} /></Suspense>}
-      {page === "titulos" && <Suspense fallback={<section className="tdg-panel">Carregando títulos...</section>}><TransactionalSpinePage mode="titles" authHeaders={authHeaders} clients={clientes} setToast={setToast} /></Suspense>}
-      {page === "rateios" && <Suspense fallback={<section className="tdg-panel">Carregando rateios...</section>}><TransactionalSpinePage mode="costs" authHeaders={authHeaders} clients={clientes} contracts={registros.contracts} operations={registros.operations} setToast={setToast} /></Suspense>}
-      {page === "custos" && <Suspense fallback={<section className="tdg-panel">Carregando custos e margem...</section>}><FinancePage type="cost" entries={registros.financial.filter((item) => item.tipo === "cost")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
-      {page === "rasci" && <Suspense fallback={<section className="tdg-panel">Carregando matriz RASCI...</section>}><RasciMatrixPage /></Suspense>}
-      {page === "fluxos" && <Suspense fallback={<section className="tdg-panel">Carregando fluxos...</section>}><FluxosPage onNavigate={navigate} /></Suspense>}
-      {page === "manual" && <Suspense fallback={<section className="tdg-panel">Carregando manual do ERP...</section>}><ErpManualPage onNavigate={navigate} /></Suspense>}
-      {page === "comissoes" && <Suspense fallback={<section className="tdg-panel">Carregando comissões...</section>}><FinancePage type="commission" entries={registros.financial.filter((item) => item.tipo === "commission")} clients={clientes} contracts={registros.contracts} criar={criar} registrarPagamento={registrarPagamento} estornarPagamento={estornarPagamento} listarSubrecurso={listarSubrecurso} setToast={setToast} authHeaders={authHeaders} /></Suspense>}
-      {page === "dp-rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP...</section>}><EnterpriseAreaPage area="dp" onNavigate={navigate} /></Suspense>}
-      {page === "rh" && <Suspense fallback={<section className="tdg-panel">Carregando DP/RH...</section>}><PeoplePage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "planner" && <Suspense fallback={<section className="tdg-panel">Carregando o Planner...</section>}><PlannerPage
-        authHeaders={authHeaders}
-        setToast={setToast}
-        currentUserId={db?.user?.id}
-        role={role}
-        espacoId={remoteAccess.ownerId || ""}
-        clientes={clientes}
-        oportunidades={verticalData.opportunities}
-        onNavigate={navigate}
-        canonicalTasks={db?.tasks || []}
-        onUpsertCanonicalTask={(tarefa, plano) => update?.((current) => {
-          const tarefas = current.tasks || [];
-          const rawId = tarefa.rawTaskId || tarefa.id;
-          const existente = tarefas.find((item) => item.id === rawId)
-            || tarefas.find((item) => item.canonicalTaskId && item.canonicalTaskId === tarefa.canonicalTaskId);
-          const { clientId } = contextoComercialDaTarefa(tarefa);
-          const cliente = clientes.find((item) => item.id === clientId);
-          const canonica = aplicarEdicaoPlannerNaTarefa(tarefa, plano, existente || {}, {
-            clientLabel: cliente?.name || cliente?.nome || existente?.clientLabel || "",
-          });
-          return {
-            ...current,
-            tasks: existente
-              ? tarefas.map((item) => (item.id === existente.id ? canonica : item))
-              : [canonica, ...tarefas],
-          };
-        })}
-        onDeleteCanonicalTask={(taskId) => update?.((current) => ({
-          ...current,
-          tasks: (current.tasks || []).filter((item) => item.id !== taskId),
-        }))}
-        onDetachCanonicalPlanTasks={(planId) => update?.((current) => ({
-          ...current,
-          tasks: (current.tasks || []).map((item) => desvincularTarefaDoPlanner(item, planId)),
-        }))}
-      /></Suspense>}
-      {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} interactions={verticalData.interactions} onComment={(registro) => criar("comments", registro)} onNavigate={navigate} setToast={setToast} /></Suspense>}
-      {page === "qualidade" && <Suspense fallback={<section className="tdg-panel">Carregando qualidade...</section>}><QualityPage registros={registros.quality} clients={clientes} operations={registros.operations} criar={criar} atualizar={atualizar} setToast={setToast} /></Suspense>}
-      {page === "marketing" && <Suspense fallback={<section className="tdg-panel">Carregando inteligência de mercado...</section>}><TodoGreenIntelligenceHub verticalData={verticalData} onNavigate={navigate} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "juridico" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando jurídico...</section>}>
-          <LegalHub
-            db={db}
-            update={update}
-            business={db?.businesses?.find?.((b) => b.id === db?.activeBusiness) || null}
-            setToast={setToast}
-            authHeaders={authHeaders}
-            tdgAvailable
-            // Cada sub-item da sidebar do ERP aponta para /juridico?aba=xxx;
-            // lemos a query aqui para abrir a Central na aba certa. Se não
-            // vier query, o LegalHub cai no default (dashboard/solicitar).
-            initialTab={(() => {
-              if (typeof window === "undefined") return undefined;
-              try {
-                return new URL(window.location.href).searchParams.get("aba") || undefined;
-              } catch {
-                return undefined;
-              }
-            })()}
-            viewer={{
-              userId: db?.user?.id,
-              name: db?.user?.name,
-              // O jurídico canônico do TDG usa `compliance:manage` para saber
-              // quem valida/aprova. Aqui traduzimos para o papel que a nova
-              // UI entende (head_juridico = fila completa + aprovar).
-              role: hasTodoGreenPermission(role, "compliance:manage", remoteAccess.permissions)
-                ? "head_juridico"
-                : hasTodoGreenPermission(role, "compliance:read", remoteAccess.permissions)
-                  ? "juridico"
-                  : "solicitante",
-              isOwner: role === "owner",
-            }}
-          />
-        </Suspense>
-      )}
-      {page === "indicadores" && <Suspense fallback={<section className="tdg-panel">Carregando indicadores...</section>}><EnterpriseAreaPage area="indicators" onNavigate={navigate} /></Suspense>}
-      {page === "administracao" && <Suspense fallback={<section className="tdg-panel">Carregando administração...</section>}><EnterpriseAreaPage area="admin" onNavigate={navigate} /></Suspense>}
-      {page === "relatorios" && <Suspense fallback={<section className="tdg-panel">Carregando relatórios...</section>}><ReportsPage dashboard={dashboard} data={verticalData} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "metodologia" && <MethodologyPanel authHeaders={authHeaders} setToast={setToast} />}
-      {page === "documentos" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando os documentos...</section>}>
-          <DocumentVaultPage authHeaders={authHeaders} clientes={clientes} setToast={setToast} />
-        </Suspense>
-      )}
-      {page === "deal-desk" && (
-        <Suspense fallback={<section className="tdg-panel">Carregando aprovações...</section>}>
-          <DealDeskPage
-            authHeaders={authHeaders}
-            quem={{ userId: db?.user?.id || "", role, permissions: remoteAccess.permissions || [] }}
-            setToast={setToast}
-          />
-        </Suspense>
-      )}
-      {page === "auditoria" && <Suspense fallback={<section className="tdg-panel">Carregando auditoria...</section>}><GovernancePage role={role} permissions={remoteAccess.permissions || []} authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
-      {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "conectores" && <Suspense fallback={<section className="tdg-panel">Carregando conectores...</section>}><BusinessConnectorsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "painel-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando painel comercial...</section>}><CommercialPanelPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "saude-sistema" && <Suspense fallback={<section className="tdg-panel">Carregando saúde do sistema...</section>}><SystemHealthPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {/* Cada grupo de ./areas/ devolve a tela da página atual, ou nada. Dentro
+          do grupo cada página continua com a sua expressão fixa, como no
+          despacho único de antes: trocar de página desmonta a anterior e monta
+          a nova; re-renderizar a mesma página preserva o estado dela. */}
+      <TelasPrincipal contexto={contexto} />
+      <TelasGreenTechCore contexto={contexto} />
+      <TelasEspacoDeTrabalho contexto={contexto} />
+      <TelasEstudio contexto={contexto} />
+      <TelasComercial contexto={contexto} />
+      <TelasOperacao contexto={contexto} />
+      <TelasRecarga contexto={contexto} />
+      <TelasEsg contexto={contexto} />
+      <TelasFinanceiro contexto={contexto} />
+      <TelasPessoas contexto={contexto} />
+      <TelasAdministracao contexto={contexto} />
       {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 
       {isOverview && (
