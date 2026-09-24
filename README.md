@@ -81,6 +81,9 @@ Sem as opcionais o app continua funcionando: o chat usa a cascata disponível, i
 - As rotas de IA exigem login, evitando que estranhos consumam a cota gratuita.
 - Limite de requisições por IP contra abuso.
 - Sites públicos recebem HTML higienizado e uma política CSP; os leads ficam vinculados ao dono do site.
+- Anti-robô opcional (Cloudflare Turnstile, grátis) no cadastro, no login e nos formulários públicos: liga com `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`.
+- Texto de terceiros (busca na web, pesquisa de empresa, pergunta no portal do cliente) passa por uma checagem contra injeção de prompt antes de a IA ler.
+- AI Gateway da Cloudflare opcional na frente da cascata (`AI_GATEWAY_ID`), sem guardar o conteúdo das conversas. Detalhes em `docs/SECRETS.md`.
 
 ## Operação e piloto
 

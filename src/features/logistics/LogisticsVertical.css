@@ -418,6 +418,23 @@
 }
 .tdg-perfil-assinatura textarea:focus { border-color: var(--tdg-green, #107a57); outline: none; }
 .tdg-perfil-assinatura button { align-self: flex-start; }
+.tdg-perfil-extensao { border-top: 1px solid var(--tdg-line); display: flex; flex-direction: column; gap: 8px; padding-top: 14px; }
+.tdg-perfil-extensao h3 { align-items: center; color: var(--tdg-ink); display: flex; font-size: .95rem; gap: 6px; margin: 0; }
+.tdg-perfil-extensao ol { color: var(--tdg-ink); font-size: .82rem; line-height: 1.5; margin: 0; padding-left: 18px; }
+.tdg-perfil-extensao label { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); }
+.tdg-perfil-extensao label > span { color: var(--tdg-ink); font-size: .8rem; font-weight: 700; }
+.tdg-perfil-extensao input {
+  background: var(--tdg-card, #fff);
+  border: 1px solid var(--tdg-line);
+  border-radius: 10px;
+  color: var(--tdg-ink);
+  font: inherit;
+  font-size: 16px;
+  padding: 8px 12px;
+}
+.tdg-perfil-extensao-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.tdg-perfil-extensao-acoes .tdg-btn-ghost { align-items: center; display: inline-flex; gap: 6px; margin-top: 0; text-decoration: none; }
+.tdg-perfil-extensao-acoes .tdg-btn-ghost:disabled { cursor: not-allowed; opacity: .5; }
 
 /* Saída sempre à vista: sem ela a sessão fica eterna no navegador e quem
    pega o mesmo aparelho entra direto na conta de quem esqueceu de sair. */

@@ -98,6 +98,7 @@ import {
 } from "./moduleGroupingDomain.js";
 import Semente from "./Semente.jsx";
 import Modal from "../../components/Modal.jsx";
+import { NUCLEO_ALL_GREEN, todoGreenOwnerId } from "../verticals/verticalAccess.js";
 import ErpHome from "./ErpHome.jsx";
 import TodoGreenProfile from "./TodoGreenProfile.jsx";
 import { comRotulo } from "./rotulosDomain.js";
@@ -1682,13 +1683,9 @@ const openFunctionPage = (route) => {
   window.open(route, "_blank", "noopener,noreferrer");
 };
 
-const ownerId = () => {
-  try {
-    return localStorage.getItem("sf-space") || localStorage.getItem("sf-active-user") || "";
-  } catch {
-    return "";
-  }
-};
+// A regra mora em verticalAccess.js: o app geral pergunta o acesso com o
+// mesmo recorte de espaço para decidir se mostra o atalho da vertical.
+const ownerId = () => todoGreenOwnerId(globalThis.localStorage);
 
 const demoModeEnabled = (db = {}, access = {}) => Boolean(db?.[TODO_GREEN_PRODUCTION_DATA_POLICY.demoModeFlag] || access.demoMode);
 
@@ -3652,6 +3649,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <a href="/greenmob" className="tdg-vertical-link">
               <strong>Greenmob</strong>
               <small>Locação de veículos elétricos — CRM, frota, contratos</small>
+            </a>
+            {/* O núcleo compartilhado: ferramentas gerais que a vertical não
+                embute (agentes, wiki, reuniões, diagramas, metas). Mesma conta
+                e mesma sessão — a raiz, para quem está logado, é o núcleo. */}
+            <a href={NUCLEO_ALL_GREEN.route} className="tdg-vertical-link">
+              <strong>{NUCLEO_ALL_GREEN.name}</strong>
+              <small>{NUCLEO_ALL_GREEN.subtitle}</small>
             </a>
           </div>
           {/* Um menu só, do jeito que a titular pediu: as áreas na frente e,

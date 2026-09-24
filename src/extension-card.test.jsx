@@ -108,4 +108,23 @@ describe("Configurações — Extensão do navegador", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Mostrar" }));
     expect(within(card).getByLabelText("Token de acesso").value).toBe(TOKEN);
   });
+
+  it("entrega o pacote pelo próprio app e avisa quanto tempo o token vale", async () => {
+    seedLoggedIn(businessDb());
+    render(<App />);
+    await screen.findByRole("heading", { name: /Vamos fazer acontecer/ });
+
+    fireEvent.click(screen.getByRole("button", { name: "Configurações" }));
+    const card = (await screen.findByRole("heading", {
+      name: "Extensão do navegador",
+    })).closest(".settings-card");
+
+    // Antes a tela mandava carregar "a pasta extension/ do projeto", que
+    // nenhuma pessoa usuária tem.
+    const baixar = within(card).getByRole("link", { name: /Baixar a extensão/ });
+    expect(baixar).toHaveAttribute("href", "/extensao-todogreen.zip");
+    expect(baixar).toHaveAttribute("download");
+    expect(within(card).queryByText(/do projeto/)).not.toBeInTheDocument();
+    expect(within(card).getByText(/vale por 24 horas/)).toBeInTheDocument();
+  });
 });

@@ -92,13 +92,15 @@ import {
 import { escapeHtml, money, slugify, urlBase64ToUint8Array } from "./components/formato.js";
 import { specialistData } from "./domain/especialistas.js";
 import {
-  DOCUMENT_UPLOAD_LIMIT,
   DOCUMENT_ACCEPT,
+  DOCUMENT_UPLOAD_LIMIT,
+  describeOcrProgress,
   documentFileKind,
   extractDocumentText,
 } from "./components/leituraDeArquivo.js";
 import Markdown from "./components/Markdown.jsx";
 import QrCodeImage from "./components/QrCodeImage.jsx";
+import TurnstileWidget, { useTurnstile } from "./components/TurnstileWidget.jsx";
 import SharingFields from "./components/SharingFields.jsx";
 import Tasks from "./features/tasks/TasksScreen.jsx";
 import Documents from "./features/documents/DocumentsScreen.jsx";
@@ -154,6 +156,8 @@ import CRM from "./features/omnichannel/CRM.jsx";
 import Appointments from "./features/omnichannel/Appointments.jsx";
 import Quotes from "./features/omnichannel/Quotes.jsx";
 import TimeTracking from "./features/omnichannel/TimeTracking.jsx";
+import ExtensionCard from "./features/extension/ExtensionCard.jsx";
+import VerticalShortcuts from "./features/verticals/VerticalShortcuts.jsx";
 import { textoDoToast, tomDoToast } from "./toastTone.js";
 import {
   BUSINESS_INDUSTRY_CATALOG,
@@ -1844,6 +1848,19 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleId, setGoogleId] = useState("");
+  // Anti-robô (Turnstile): um widget por tela; login, cadastro, "esqueci a
+  // senha", reenvio do código e pedido de acesso gastam o mesmo token.
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const turnstile = useTurnstile(turnstileSiteKey);
+  const { obterToken, renovar: renovarTurnstile } = turnstile;
+  // Devolve o token (ou "" com o Turnstile desligado); null quando ele está
+  // ligado mas o widget não entregou token — a tela avisa e não envia.
+  const tokenAntiRobo = async () => {
+    if (!turnstileSiteKey) return "";
+    const token = await obterToken();
+    return token || null;
+  };
+  const SEM_TOKEN = "Confirme a verificação anti-robô para continuar.";
   const [showLegal, setShowLegal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   // Pedido de acesso à To Do Green: quem não tem conta pede aqui e um
@@ -1855,23 +1872,30 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
     evento.preventDefault();
     setPedidoStatus("enviando");
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const resposta = await fetch("/api/todogreen/solicitar-acesso", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(pedidoForm),
+        body: JSON.stringify({ ...pedidoForm, turnstileToken }),
       });
       const corpo = await resposta.json().catch(() => ({}));
       if (!resposta.ok) throw new Error(corpo.error || "Não foi possível registrar o pedido.");
       setPedidoStatus("enviado");
     } catch (razao) {
       setPedidoStatus(razao.message || "Não foi possível registrar o pedido.");
+    } finally {
+      renovarTurnstile();
     }
   };
   const googleRef = useRef(null);
   useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
-      .then((d) => setGoogleId(d.googleClientId || ""))
+      .then((d) => {
+        setGoogleId(d.googleClientId || "");
+        setTurnstileSiteKey(d.turnstileSiteKey || "");
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -1965,6 +1989,8 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       return setError("Informe seu nome.");
     setBusy(true);
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const response = await fetch(
         `/api/auth/${mode === "login" ? "login" : "register"}`,
         {
@@ -1974,6 +2000,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
             name: form.name.trim(),
             email,
             password: form.password,
+            turnstileToken,
           }),
         },
       );
@@ -1994,6 +2021,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       );
     } finally {
       setBusy(false);
+      renovarTurnstile();
     }
   };
   const verify = async () => {
@@ -2019,16 +2047,20 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
   const resend = async () => {
     setError("");
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const r = await fetch("/api/auth/resend", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: pending }),
+        body: JSON.stringify({ email: pending, turnstileToken }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || "Não foi possível reenviar.");
       setError("Novo código enviado. Confira seu e-mail.");
     } catch (reason) {
       setError(reason.message);
+    } finally {
+      renovarTurnstile();
     }
   };
   const [recover, setRecover] = useState(null);
@@ -2039,10 +2071,12 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
     setBusy(true);
     setError("");
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const r = await fetch("/api/auth/forgot", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok)
@@ -2054,6 +2088,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       setError(reason.message);
     } finally {
       setBusy(false);
+      renovarTurnstile();
     }
   };
   const doReset = async () => {
@@ -2082,6 +2117,18 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       setBusy(false);
     }
   };
+  // Widget anti-robô (só aparece com o Turnstile ligado e, mesmo assim, quase
+  // sempre invisível: pede interação apenas quando desconfia).
+  const antiRobo = (
+    <>
+      <TurnstileWidget turnstile={turnstile} />
+      {turnstile.erro && (
+        <p className="auth-turnstile-erro" role="status">
+          {turnstile.erro}
+        </p>
+      )}
+    </>
+  );
   if (recover)
     return (
       <main className="auth-shell verify-shell">
@@ -2187,6 +2234,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
           >
             {busy ? "Verificando..." : "Confirmar e entrar"}
           </Button>
+          {antiRobo}
           <p className="auth-switch">
             Não recebeu?{" "}
             <button type="button" onClick={resend}>
@@ -2252,6 +2300,8 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
                     </button>
                   </span>
                 </Field>
+
+                {antiRobo}
 
                 {error && (
                   <div className="auth-error" role="alert">
@@ -2650,6 +2700,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
                 </button>
               </span>
             </Field>
+            {antiRobo}
             {error && (
               <div className="auth-error" role="alert">
                 <CircleAlert />
@@ -8313,6 +8364,7 @@ export function Analyzer({ db, update, business, setToast }) {
   const [sourceName, setSourceName] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState("");
   const [err, setErr] = useState("");
   const [result, setResult] = useState(null);
   const uploadRef = useRef(null);
@@ -8327,15 +8379,21 @@ export function Analyzer({ db, update, business, setToast }) {
     setUploading(true);
     setErr("");
     try {
-      const extracted = await extractDocumentText(file);
+      const extracted = await extractDocumentText(file, {
+        onProgress: (andamento) =>
+          setOcrStatus(describeOcrProgress(file.name, andamento)),
+      });
       setText(extracted.content || "");
       setSourceName(file.name);
       if (extracted.truncated)
         setToast("Arquivo grande: analisei o começo do conteúdo");
+      else if (extracted.ocr)
+        setToast("Texto lido da imagem por OCR — confira antes de analisar");
     } catch (e) {
       setErr(e.message);
     } finally {
       setUploading(false);
+      setOcrStatus("");
       if (uploadRef.current) uploadRef.current.value = "";
     }
   };
@@ -8490,7 +8548,7 @@ Use português do Brasil. Se algum campo não se aplicar, use lista vazia ou str
             disabled={uploading}
           >
             <FileText size={16} />
-            {uploading ? "Lendo arquivo..." : "Enviar arquivo"}
+            {uploading ? ocrStatus || "Lendo arquivo..." : "Enviar arquivo"}
           </button>
           <button className="btn primary" onClick={analyze} disabled={busy}>
             <Sparkles size={16} />
@@ -11937,7 +11995,9 @@ function HistoryPage({ db, update, business, setToast, go }) {
       ],
     }));
     setOpen(null);
-    go("inicio");
+    // A conversa mora em "Falar com seu Funcionário" desde que o chat saiu do
+    // Início; mandar para "inicio" deixava a pessoa sem a conversa retomada.
+    go("conversar");
   };
   const refineProject = async (item) => {
     if (busy) return;
@@ -12132,7 +12192,8 @@ function HistoryPage({ db, update, business, setToast, go }) {
               ],
             }));
             setOpen(null);
-            setToast("Conversa retomada — abra o Início para continuar de onde parou");
+            setToast("Conversa retomada — continue de onde parou");
+            go("conversar");
           };
           return (
             <Modal wide title={x.title} onClose={() => setOpen(null)}>
@@ -13677,58 +13738,6 @@ function Team({ db, update, setToast }) {
         />
       )}
     </PageTitle>
-  );
-}
-
-function ExtensionCard({ setToast }) {
-  const [shown, setShown] = useState(false);
-  const token =
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem(AUTH_TOKEN_KEY) || ""
-      : "";
-  const masked = token ? `${token.slice(0, 6)}${"•".repeat(12)}` : "";
-  const copy = async () => {
-    if (!token) return;
-    try {
-      await navigator.clipboard.writeText(token);
-      setToast("Token copiado — cole na extensão");
-    } catch {
-      setToast("Não foi possível copiar agora");
-    }
-  };
-  return (
-    <section className="settings-card" id="settings-extension">
-      <div className="settings-card-head">
-        <span className="settings-icon">
-          <Plug />
-        </span>
-        <div>
-          <h2>Extensão do navegador</h2>
-          <p>Use a IA do app em qualquer página da internet.</p>
-        </div>
-      </div>
-      <p className="settings-note">
-        Instale a extensão (pasta <code>extension/</code> do projeto) e conecte
-        com o token abaixo. Ele fica só no seu navegador e serve para a extensão
-        falar com a mesma IA — sem custo extra.
-      </p>
-      <Field label="Seu token de acesso">
-        <input
-          value={shown ? token : masked}
-          readOnly
-          className="readonly"
-          aria-label="Token de acesso"
-        />
-      </Field>
-      <div className="settings-actions">
-        <Button variant="secondary" onClick={() => setShown((s) => !s)}>
-          {shown ? "Ocultar" : "Mostrar"}
-        </Button>
-        <Button icon={Copy} onClick={copy} disabled={!token}>
-          Copiar token
-        </Button>
-      </div>
-    </section>
   );
 }
 
@@ -15281,6 +15290,7 @@ export default function App() {
               db={db}
               update={update}
               business={business}
+              go={go}
               setToast={setToast}
             />
           </Suspense>
@@ -16162,6 +16172,7 @@ export default function App() {
               <span>{label}</span>
             </button>
           ))}
+          <VerticalShortcuts authHeaders={authHeaders} collapsed={collapsed} />
         </nav>
         <div className="side-bottom">
           <button

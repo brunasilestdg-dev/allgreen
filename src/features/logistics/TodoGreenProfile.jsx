@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { UserRound } from "lucide-react";
+import { Download, Plug, UserRound } from "lucide-react";
 import Modal from "../../components/Modal.jsx";
+import { EXTENSION_INSTALL_STEPS, EXTENSION_ZIP_URL } from "../extension/extensionAccess.js";
+import { useExtensionToken } from "../extension/useExtensionToken.js";
 
 // Perfil do usuário DENTRO da vertical To Do Green. A edição de foto e status
 // existia só na tela de Configurações do app genérico (/ → Configurações); quem
@@ -43,6 +45,10 @@ export default function TodoGreenProfile({ db, update, authHeaders, setToast }) 
   const [fotoBusy, setFotoBusy] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [erro, setErro] = useState("");
+  // A extensão do navegador fala com o Plantû da vertical, mas o token e o
+  // pacote só apareciam nas Configurações do app geral. Aqui é o lugar de quem
+  // trabalha em /todogreen — a Central de Integrações é só do perfil técnico.
+  const extensao = useExtensionToken(setToast);
 
   const inicial = String(user.name || user.email || "U").trim().charAt(0).toUpperCase();
 
@@ -185,6 +191,31 @@ export default function TodoGreenProfile({ db, update, authHeaders, setToast }) 
                 Salvar assinatura
               </button>
             </label>
+
+            <section className="tdg-perfil-extensao" aria-labelledby="tdg-perfil-extensao-titulo">
+              <h3 id="tdg-perfil-extensao-titulo"><Plug size={15} aria-hidden="true" /> Extensão do navegador</h3>
+              <p className="tdg-esg-nota">
+                Leve o Plantû para qualquer página: resumir, preparar respostas e sugerir tarefas sem sair do site que você está lendo.
+              </p>
+              <ol>
+                {EXTENSION_INSTALL_STEPS.map((passo) => <li key={passo}>{passo}</li>)}
+              </ol>
+              <label>
+                <span>Seu token de acesso</span>
+                <input value={extensao.value} readOnly aria-label="Token de acesso" />
+              </label>
+              <div className="tdg-perfil-extensao-acoes">
+                <a className="tdg-btn-ghost" href={EXTENSION_ZIP_URL} download>
+                  <Download size={14} aria-hidden="true" /> Baixar a extensão
+                </a>
+                <button type="button" className="tdg-btn-ghost" onClick={extensao.toggle}>
+                  {extensao.shown ? "Ocultar" : "Mostrar"}
+                </button>
+                <button type="button" className="tdg-btn-ghost" onClick={extensao.copy} disabled={!extensao.token}>
+                  Copiar token
+                </button>
+              </div>
+            </section>
 
             {erro ? <p className="tdg-alert" role="alert">{erro}</p> : null}
 

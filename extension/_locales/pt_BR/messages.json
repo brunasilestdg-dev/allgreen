@@ -1,0 +1,18 @@
+{
+  "extName": {
+    "message": "To Do Green ERP",
+    "description": "Nome da extensão em chrome://extensions e na loja."
+  },
+  "extDescription": {
+    "message": "Leve o Plantû e o ERP To Do Green ao navegador: resumir páginas, preparar respostas, sugerir tarefas e registrar próximos passos.",
+    "description": "Descrição curta. A Chrome Web Store aceita no máximo 132 caracteres."
+  },
+  "actionTitle": {
+    "message": "To Do Green ERP",
+    "description": "Dica do botão da extensão na barra do navegador."
+  },
+  "contextMenuTitle": {
+    "message": "Perguntar ao Plantû no ERP",
+    "description": "Item do menu do botão direito."
+  }
+}

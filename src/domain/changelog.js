@@ -6,6 +6,48 @@
 
 export const CHANGELOG_ENTRIES = [
   {
+    id: "2026-09-24-ocr-documentos",
+    date: "2026-09-24",
+    title: "Fotos, PDFs escaneados e planilhas agora viram texto",
+    description:
+      "Documentos, Análise de textos, anexos do chat e propostas de fornecedor em Compras leem imagens (PNG, JPG, WEBP), PDFs digitalizados e planilhas XLSX. A leitura acontece no seu aparelho, sem custo, e o texto chega marcado para você conferir nomes, datas e valores antes de usar.",
+  },
+  {
+    id: "2026-09-24-extensao-navegador",
+    date: "2026-09-24",
+    title: "A extensão do navegador agora se instala pelo próprio app",
+    description:
+      "Baixe o pacote em Configurações — ou em Meu perfil, na To Do Green —, descompacte e carregue no Chrome, Edge ou Brave. O Plantû resume a página aberta, prepara respostas e sugere tarefas sem você sair do site. O token de acesso vale por 24 horas.",
+  },
+  {
+    id: "2026-09-24-atalhos-ambientes",
+    date: "2026-09-24",
+    title: "Atalhos entre o app e a To Do Green",
+    description:
+      "Quem tem acesso à To Do Green encontra no menu lateral o caminho para o ERP, a Green On e a Greenmob; na To Do Green, o mesmo grupo leva de volta às ferramentas gerais. Motoristas e colaboradores veem o atalho do próprio portal.",
+  },
+  {
+    id: "2026-09-24-resumo-desde-agosto",
+    date: "2026-09-24",
+    title: "O que mais chegou desde a última novidade",
+    description:
+      "Mídia, para editar imagem, gravar, ditar e ouvir áudio no aparelho; Editor de código com prévia isolada; Notebook de dados com consultas em português; Integrações com importação e exportação em CSV/JSON, agenda .ics e envio automático para outros sistemas; o menu que você escolhe em Personalizar menu; e o Início que leva o seu pedido direto para a conversa.",
+  },
+  {
+    id: "2026-09-23-convites-senha-provisoria",
+    date: "2026-09-23",
+    title: "Convites que dizem por que o e-mail não saiu",
+    description:
+      "Em Meu Time, o convite agora mostra o motivo quando o e-mail não é enviado. Como alternativa, crie o acesso com uma senha provisória, exibida uma única vez para você repassar; no primeiro login a pessoa troca a senha antes de abrir qualquer tela.",
+  },
+  {
+    id: "2026-09-23-menu-inicial",
+    date: "2026-09-23",
+    title: "Um menu inicial com mais do que o básico",
+    description:
+      "Quem chega agora já encontra Orçamentos, Precificação, Reuniões e Notebook de dados no menu, e a Central do negócio aparece no topo para todos. Tudo continua ajustável em Personalizar menu.",
+  },
+  {
     id: "2026-07-31-tarefas-inteligentes",
     date: "2026-07-31",
     title: "A IA agora transforma pedidos em tarefas executáveis",

@@ -232,3 +232,8 @@ export async function extractDocumentText(file, { onProgress } = {}) {
     ...(ocr ? { ocr } : {}),
   };
 }
+
+// Frase de andamento do OCR, igual em todas as telas que leem arquivo. Recebe
+// o que `extractDocumentText` passa ao `onProgress`.
+export const describeOcrProgress = (fileName, { atual = 1, total = 1 } = {}) =>
+  `Lendo o texto de ${fileName || "arquivo"}${total > 1 ? ` — página ${atual} de ${total}` : ""}…`;

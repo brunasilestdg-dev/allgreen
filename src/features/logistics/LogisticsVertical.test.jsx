@@ -192,6 +192,14 @@ describe("LogisticsVertical", () => {
     expect(screen.getAllByText("ESG").length).toBeGreaterThan(0);
   });
 
+  it("a barra leva às verticais irmãs e de volta ao núcleo All Green", async () => {
+    await renderarAutorizada();
+    const grupo = screen.getByRole("group", { name: "Outras verticais da plataforma" });
+    const destinos = within(grupo).getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(destinos).toEqual(["/greenon", "/greenmob", "/"]);
+    expect(within(grupo).getByRole("link", { name: /All Green — ferramentas gerais/ })).toBeTruthy();
+  });
+
   it("menu em acordeão: área abre o segundo nível com as funcionalidades dela", async () => {
     await renderarAutorizada();
 
