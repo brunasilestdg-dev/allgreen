@@ -511,15 +511,6 @@ export const ROTAS_AUTENTICADAS = Object.freeze([
     ),
     executar: ({ request, env, url }) => handleMedia(request, env, url),
   },
-  // Legado: o needsAuth antigo casava o prefixo /api/inbox inteiro, e o que
-  // não era uma das três rotas da caixa caía no handleMedia.
-  {
-    caminhos: ["/api/inbox*"],
-    exigeBanco: true,
-    rotulo: null,
-    falha: null,
-    executar: ({ request, env, url }) => handleMedia(request, env, url),
-  },
 ]);
 
 // ── O que deriva da tabela ──────────────────────────────────────────────

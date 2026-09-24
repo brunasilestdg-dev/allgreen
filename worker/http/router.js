@@ -3,7 +3,8 @@
 // Contrato
 // - Recebe: o `request`, o `env` e o `ctx` do fetch do Worker.
 // - Devolve: a resposta da primeira rota de worker/http/routes.js que casar
-//   o caminho; se nenhuma responder, o SPA (worker/http/spa.js).
+//   o caminho. Se nenhuma responder: JSON 404 para /api/*, e o SPA
+//   (worker/http/spa.js) para o resto.
 // - Quem chama: o fetch de worker.js — que o worker-entry.js chama depois
 //   das rotas da vertical To Do Green.
 // - Autorização: as rotas públicas são consultadas primeiro, na ordem da
@@ -24,7 +25,6 @@ import { servirSpa } from "./spa.js";
 // O guarda único: handler que lança vira a resposta de falha da rota, com o
 // rótulo dela no console.error, em vez de erro opaco do Cloudflare.
 async function comGuarda(rota, contexto) {
-  if (!rota.falha) return rota.executar(contexto);
   try {
     return await rota.executar(contexto);
   } catch (error) {
@@ -72,6 +72,12 @@ export async function rotear(request, env, ctx) {
     }
     return comGuarda(rota, { request, env, ctx, url, user, pagina: false });
   }
+
+  // Nenhuma rota reconheceu o caminho. Em /api/ isso é erro de quem chama —
+  // devolver o index.html com 200 faria um cliente da API ler HTML como se
+  // fosse resposta. (Nenhum asset do build mora sob /api/.)
+  if (pathname.startsWith("/api/"))
+    return json({ error: "Rota da API não encontrada." }, 404);
 
   return servirSpa(request, env, url);
 }
