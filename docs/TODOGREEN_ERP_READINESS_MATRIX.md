@@ -30,11 +30,6 @@ foram corrigidos neste PR (L4, L5, L7) e quatro seguem abertos — ver
 [Lacunas de controle](#lacunas-de-controle). Em 24/09 a produção não rodava a
 `main` — ver [Estado observado da publicação](#estado-observado-da-publicação-não-é-homologação).
 
-`src/readiness-matrix.test.js` trava o que dá para provar daqui: o vocabulário
-das três colunas, homologação só com código do registro, e que toda linha
-"Testado: Sim/Parcial" cite um teste do gate cujo caso exista, literalmente,
-no arquivo citado.
-
 ## Registro de homologação em produção
 
 Toda validação com dado ou credencial real em produção entra aqui, com data,
