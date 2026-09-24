@@ -83,6 +83,30 @@ export const criarRegistroDaColecao = (env, { nome, access, user, corpo, email =
   return criar(env, colecao, access, user, corpo, email);
 };
 
+// O par proposta + cliente do contrato: a proposta existe no espaço, foi
+// aceita, é do mesmo cliente e não tem outro contrato ativo. Conferido na
+// criação e em todo PATCH que troca um dos dois — sem isso a edição desfazia o
+// gate da criação (um contrato nascido de proposta aceita passava a apontar
+// para um rascunho, ou para outro cliente).
+const conferirParDoContrato = async (env, access, { propostaId, clientId, contratoId = "" }) => {
+  const proposta = await env.DB.prepare(
+    `SELECT id,client_id,client_name,opportunity_id,scenario_id,status
+       FROM todogreen_proposals
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
+  ).bind(propostaId, TENANT_ID, access.ownerId).first();
+  if (!proposta) return { resposta: json({ error: "Proposta não encontrada neste espaço." }, 404) };
+  if (!new Set(["accepted", "approved", "aceita", "aprovada"]).has(texto(proposta.status).toLowerCase()))
+    return { resposta: json({ error: "Aceite a proposta antes de gerar o contrato." }, 409) };
+  if (texto(clientId) !== texto(proposta.client_id))
+    return { resposta: json({ error: "O cliente do contrato não corresponde ao da proposta." }, 409) };
+  const existente = await env.DB.prepare(
+    `SELECT id FROM todogreen_contracts
+      WHERE tenant_id=? AND workspace_owner_id=? AND proposal_id=? AND id<>? AND archived_at IS NULL`,
+  ).bind(TENANT_ID, access.ownerId, propostaId, contratoId).first();
+  if (existente) return { resposta: json({ error: "Esta proposta já possui contrato ativo." }, 409) };
+  return { proposta };
+};
+
 export const criar = async (env, colecao, access, user, corpo, email = "") => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);
@@ -115,21 +139,9 @@ export const criar = async (env, colecao, access, user, corpo, email = "") => {
 
   if (colecao === COLECOES.contracts) {
     const propostaId = texto(corpo.propostaId, 120);
-    const proposta = await env.DB.prepare(
-      `SELECT id,client_id,client_name,opportunity_id,scenario_id,status
-         FROM todogreen_proposals
-        WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
-    ).bind(propostaId, TENANT_ID, access.ownerId).first();
-    if (!proposta) return json({ error: "Proposta não encontrada neste espaço." }, 404);
-    if (!new Set(["accepted", "approved", "aceita", "aprovada"]).has(texto(proposta.status).toLowerCase()))
-      return json({ error: "Aceite a proposta antes de gerar o contrato." }, 409);
-    if (texto(corpo.clientId) !== texto(proposta.client_id))
-      return json({ error: "O cliente do contrato não corresponde ao da proposta." }, 409);
-    const existente = await env.DB.prepare(
-      `SELECT id FROM todogreen_contracts
-        WHERE tenant_id=? AND workspace_owner_id=? AND proposal_id=? AND archived_at IS NULL`,
-    ).bind(TENANT_ID, access.ownerId, propostaId).first();
-    if (existente) return json({ error: "Esta proposta já possui contrato ativo." }, 409);
+    const par = await conferirParDoContrato(env, access, { propostaId, clientId: corpo.clientId });
+    if (par.resposta) return par.resposta;
+    const { proposta } = par;
     // Nasce aprovado/assinado? Só com o Jurídico concluído. Na criação, o
     // contrato ainda não tem id, então amarramos pela proposta.
     if (texto(corpo.aprovacao, 40) === "approved" || texto(corpo.assinatura, 40) === "signed") {
@@ -241,6 +253,17 @@ export const atualizar = async (env, colecao, access, user, id, corpo, email = "
     proximo.aprovadoEm = texto(corpo.aprovacao, 40) === "approved" ? new Date().toISOString() : "";
   }
   if (colecao === COLECOES.contracts) {
+    const propostaNova = texto(proximo.propostaId, 120);
+    const trocaOPar = propostaNova !== texto(atual.proposal_id, 120)
+      || texto(proximo.clientId, 120) !== texto(atual.client_id, 120);
+    if (trocaOPar) {
+      const par = await conferirParDoContrato(env, access, { propostaId: propostaNova, clientId: proximo.clientId, contratoId: id });
+      if (par.resposta) return par.resposta;
+      if (propostaNova !== texto(atual.proposal_id, 120)) {
+        proximo.oportunidadeId = corpo.oportunidadeId || par.proposta.opportunity_id;
+        proximo.cenarioId = corpo.cenarioId || par.proposta.scenario_id;
+      }
+    }
     // Gate do Jurídico só na TRANSIÇÃO para approved/signed (não a cada PATCH
     // posterior de um contrato que já está nesse estado).
     const vaiAprovar = texto(proximo.aprovacao, 40) === "approved" && texto(atual.approval_status, 40) !== "approved";

@@ -118,6 +118,10 @@ export const COLECOES_DA_OPERACAO = {
     tabela: "todogreen_routes",
     permissao: "operations:manage",
     permissoesLeitura: ["operations:manage", "planning:manage", "tms:manage", "fleet:manage", "audit:read"],
+    // A rota é da operação da empresa, não da carteira de ninguém — e a tabela
+    // nem tem `client_id`. Sem isto o recorte de carteira quebrava a leitura
+    // (500) para planejamento e auditor.
+    escopoDeCarteira: false,
     ordem: "updated_at DESC",
     daLinha: (row) => ({
       id: row.id,

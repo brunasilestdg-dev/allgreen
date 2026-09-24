@@ -200,6 +200,10 @@ export const montarDadosDaVertical = (registros = {}, clientes = [], db = {}, ac
     // mesmo com lançamento no razão. Mesma forma que a tela "Meus painéis" já usa.
     financial: registros.financial || [],
     operations: (registros.operations || []).map(operacaoDaApi),
+    // Clientes, Oportunidades e Avanços da semana leem estes dois; sem eles a
+    // lista na tela ficava vazia mesmo com o registro salvo no servidor.
+    comments: registros.comments || [],
+    interactions: registros.interactions || [],
     tasks: db.tasks || [],
     inboxUnread: (db.notifications || []).filter((item) => !item.read).length,
   };

@@ -82,6 +82,12 @@ export const TODO_GREEN_PERMISSION_CATALOG = Object.freeze([
       // abre essa tela. Dá para conceder num perfil sob medida sem trocar o
       // papel da pessoa.
       ["dev:access", "Perfil de desenvolvedor (telas técnicas)"],
+      // As duas abaixo já eram exigidas pelo servidor e dadas pelos perfis
+      // prontos, mas não constavam aqui — e o Worker filtra a permissão
+      // personalizada por este catálogo: quem era salvo com permissões sob
+      // medida nunca as recebia.
+      ["compliance:manage", "Gerenciar jurídico, compliance e acervo de habilitação"],
+      ["business:teach", "Ensinar o negócio ao assistente (dossiê que o Plantû lê)"],
     ],
   },
   {

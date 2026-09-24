@@ -29,18 +29,16 @@ import { TODO_GREEN_PERMISSIONS, TODO_GREEN_PERMISSION_KEYS } from "./logisticsV
 // crescerem. Cada lista precisa bater EXATAMENTE com o que o teste encontra:
 // quem corrigir um defeito tira a entrada daqui, e um defeito novo reprova.
 const DEFEITOS_CONHECIDOS = {
-  // `rotas` não declara `escopoDeCarteira: false`, mas `todogreen_routes` não
-  // tem `client_id`: para quem lê rotas sem ver a carteira inteira
-  // (planejamento, auditor) o recorte referencia `t.client_id` e a leitura
-  // quebra — 500 na coleção e `errors.rotas` no GET agregado.
-  recorteSemClientId: ["rotas"],
-  // `chargingPrices.daLinha` não devolve `campos`: um PATCH que não reenvia
-  // `campos` grava `fields_json` vazio por cima do que havia.
-  semIdaEVolta: { chargingPrices: ["fields_json"] },
-  // O catálogo da tela de acesso não tem estas capacidades, e o servidor
-  // (todogreen-core.js) filtra a permissão personalizada por ele: quem é salvo
-  // com permissões personalizadas nunca as recebe.
-  foraDoCatalogo: ["business:teach", "compliance:manage"],
+  // `rotas` (sem `client_id`) não declarava `escopoDeCarteira: false` e dava
+  // 500 para planejamento e auditor — corrigido em 24/09/2026.
+  recorteSemClientId: [],
+  // `chargingPrices.daLinha` não devolvia `campos`, e um PATCH sem `campos`
+  // apagava `fields_json` — corrigido em 24/09/2026.
+  semIdaEVolta: {},
+  // `business:teach` e `compliance:manage` faltavam no catálogo da tela de
+  // acesso, pelo qual o servidor filtra a permissão personalizada — corrigido
+  // em 24/09/2026.
+  foraDoCatalogo: [],
 };
 
 // A ordem é contrato: o GET agregado devolve as coleções nesta ordem.

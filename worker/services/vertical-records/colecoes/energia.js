@@ -230,6 +230,10 @@ export const COLECOES_DE_ENERGIA = {
       clienteNome: row.client_name || "",
       precoPorKwh: numero(row.price_per_kwh),
       observacao: row.note || "",
+      // Sem `campos` aqui, um PATCH que não os reenviasse gravava
+      // `fields_json` vazio por cima do que havia (o PATCH regrava a partir
+      // do que esta função devolve).
+      campos: parse(row.fields_json, {}),
       revision: row.revision,
       criadoEm: row.created_at,
       atualizadoEm: row.updated_at,

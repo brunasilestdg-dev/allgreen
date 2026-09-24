@@ -110,6 +110,23 @@ describe("conceder acesso liga a pessoa ao espaço da empresa", () => {
       .toEqual(["read", "market:read", "market:research"]);
   });
 
+  // Exigidas pelo servidor e dadas pelos perfis prontos, mas fora do catálogo
+  // até 24/09/2026: o filtro da permissão personalizada as descartava, e o
+  // acesso sob medida nunca editava o acervo de habilitação nem o dossiê.
+  it("jurídico/compliance e o dossiê do assistente podem ser dados sob medida", async () => {
+    const resposta = await pedir("/api/todogreen/access-list", {
+      method: "POST",
+      token: tokenDona,
+      body: {
+        email: "acesso-compliance@todogreen.test",
+        role: "vendedor",
+        permissions: ["read", "compliance:manage", "business:teach"],
+      },
+    });
+    expect(resposta.status).toBe(201);
+    expect((await resposta.json()).permissions).toEqual(["read", "compliance:manage", "business:teach"]);
+  });
+
   it("cria o vínculo e o ERP abre com os dados da empresa, não vazio", async () => {
     const concessao = await pedir("/api/todogreen/access-list", {
       method: "POST",
