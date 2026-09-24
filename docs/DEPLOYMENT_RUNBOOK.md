@@ -164,12 +164,19 @@ Já declarados em `wrangler.jsonc → triggers.crons`:
 > (acidentes por ocorrência) em `POST /api/todogreen/risk/import/prf` (teto 40 MB) → células de ~1,1 km
 > em `todogreen_road_risk_cells`. Sem importação, o risco por rota é `RISK_DATA_NOT_AVAILABLE` — nunca zero.
 
-- `0 * * * *` — de hora em hora.
-- `0 12 * * 1` — segunda‑feira meio‑dia (UTC).
+- `0 * * * *` — de hora em hora: automações do app e da Central To Do Green,
+  vigilâncias e inteligência de mercado, referências de energia, sinais de
+  mercado, Risk Map, rastreador (uma vez por disparo) e retenção das posições,
+  avisos de pendência, processos recorrentes e o dreno dos webhooks do TMS.
+- `0 12 * * 1` — segunda‑feira meio‑dia (UTC): **só** o resumo semanal por push.
+  Às segundas os dois disparam no mesmo minuto, cada um na sua invocação; os
+  jobs horários daquele minuto já rodam na invocação horária.
 
-São aplicados no `wrangler deploy`. Novas ingestões periódicas (ANP, ANEEL, ONS,
-GDELT, PRF/ANTT — seções 6–14) devem reaproveitar esses gatilhos ou adicionar um
-novo cron aqui, com o handler no roteador do Worker.
+Os padrões ficam em `worker/lib/cron.js` e precisam bater com `triggers.crons`
+(`test/cron.worker.test.js` confere). São aplicados no `wrangler deploy`. Novas
+ingestões periódicas (ANP, ANEEL, ONS, GDELT, PRF/ANTT — seções 6–14) entram no
+`scheduled` do `worker.js`, na invocação horária, ou ganham um cron novo aqui e
+em `worker/lib/cron.js`.
 
 ## 10. Domínio
 

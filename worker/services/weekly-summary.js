@@ -12,7 +12,7 @@ import { moneyBRL } from "../lib/format.js";
 import { pushEnabled, sendWebPush } from "../mensageria/envio.js";
 
 // ── Resumo semanal ──────────────────────────────────────────────────────
-// Cópia sincronizada de computeWeeklySummary em src/App.jsx. Aqui roda no
+// Cópia sincronizada de computeWeeklySummary em src/domain/dasEResumoSemanal.js. Aqui roda no
 // handler `scheduled` (Cron) para enviar o resumo por push mesmo com o app
 // fechado — a razão de ser da funcionalidade.
 function weekRangeFrom(date) {
