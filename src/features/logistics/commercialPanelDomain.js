@@ -31,6 +31,40 @@ export const normalizarNome = (valor) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// ===== Trilha canônica do funil comercial =====
+// As etapas vêm do Funil do board no Monday e chegam com grafias/variações
+// diferentes ("Prospeção" vs "Prospecção", "Negociação/BID" vs "Negociação",
+// "Proposta / BID"). Consolidamos por uma chave normalizada para o Kanban não
+// quebrar a MESMA etapa em várias colunas, e ordenamos na sequência do funil.
+const FUNIL_CANONICO = [
+  { canon: "Prospecção", variantes: ["prospecao", "prospeccao", "prospeccao", "prospect", "prospeccao"] },
+  { canon: "Apresentação", variantes: ["apresentacao"] },
+  { canon: "Proposta/BID", variantes: ["proposta", "proposta/bid", "proposta bid"] },
+  { canon: "Negociação", variantes: ["negociacao", "negociacao/bid", "negociacao bid"] },
+  { canon: "Homologação", variantes: ["homologacao"] },
+  { canon: "Fechamento", variantes: ["fechamento", "fechado", "ganho", "cliente fechado", "won"] },
+  { canon: "Sem Classificação", variantes: ["sem classificacao", ""] },
+];
+// Chave de casamento: normaliza (minúsculas/sem acento/espaços) e junta os dois
+// lados da barra ("proposta / bid" -> "proposta/bid").
+const chaveEtapa = (estagio) => normalizarNome(estagio).replace(/\s*\/\s*/g, "/");
+const MAPA_ETAPA = new Map();
+const ORDEM_ETAPA = new Map();
+FUNIL_CANONICO.forEach((e, i) => {
+  ORDEM_ETAPA.set(e.canon, i);
+  for (const v of e.variantes) MAPA_ETAPA.set(v, e.canon);
+});
+// Canoniza uma etapa. Mantém o rótulo original quando não reconhecida, para
+// NUNCA esconder um estágio novo do board dentro de outro — só some quando for
+// realmente variante de um estágio conhecido.
+export function canonizarEtapa(estagio) {
+  const bruto = textoLimpo(estagio);
+  if (!bruto) return "Sem Classificação";
+  return MAPA_ETAPA.get(chaveEtapa(bruto)) || bruto;
+}
+// Índice de ordenação do funil; etapas desconhecidas vão para o fim.
+const ordemEtapa = (canon) => (ORDEM_ETAPA.has(canon) ? ORDEM_ETAPA.get(canon) : 999);
+
 const mesDe = (iso) => textoLimpo(iso).slice(0, 7);
 const diaDe = (iso) => textoLimpo(iso).slice(0, 10);
 const numeroDoDia = (iso) => {
@@ -263,7 +297,7 @@ export function ticketMedioPorCliente(faturas = [], encomendas = []) {
 export function pipelinePorEtapa(oportunidades = []) {
   const porEtapa = new Map();
   for (const o of oportunidades) {
-    const etapa = textoLimpo(o?.estagio) || "Sem etapa";
+    const etapa = canonizarEtapa(o?.estagio);
     if (!porEtapa.has(etapa)) porEtapa.set(etapa, { etapa, quantidade: 0, valorMensal: 0, valorContrato: 0, itens: [] });
     const reg = porEtapa.get(etapa);
     reg.quantidade += 1;
@@ -276,7 +310,8 @@ export function pipelinePorEtapa(oportunidades = []) {
       atualizadoEm: textoLimpo(o?.atualizadoEm),
     });
   }
-  const etapas = [...porEtapa.values()].sort((a, b) => b.valorMensal - a.valorMensal);
+  const etapas = [...porEtapa.values()]
+    .sort((a, b) => ordemEtapa(a.etapa) - ordemEtapa(b.etapa) || b.valorMensal - a.valorMensal);
   return {
     disponivel: etapas.length > 0,
     etapas,
@@ -834,7 +869,7 @@ export function montarKanbanDeOportunidades(oportunidades = [], hoje = new Date(
   const ref = (hoje instanceof Date ? hoje : new Date(hoje)).getTime();
   const porEtapa = new Map();
   for (const o of oportunidades) {
-    const etapa = textoLimpo(o?.estagio) || "Sem etapa";
+    const etapa = canonizarEtapa(o?.estagio);
     if (!porEtapa.has(etapa)) porEtapa.set(etapa, { etapa, quantidade: 0, valor: 0, itens: [] });
     const r = porEtapa.get(etapa);
     r.quantidade += 1;
@@ -846,7 +881,8 @@ export function montarKanbanDeOportunidades(oportunidades = [], hoje = new Date(
       interacoes: soNumero(o?.interacoes),
     });
   }
-  const etapas = [...porEtapa.values()].sort((a, b) => b.valor - a.valor);
+  const etapas = [...porEtapa.values()]
+    .sort((a, b) => ordemEtapa(a.etapa) - ordemEtapa(b.etapa) || b.valor - a.valor);
   const pipeline = {
     disponivel: etapas.length > 0,
     etapas,
@@ -861,7 +897,7 @@ export function montarKanbanDeOportunidades(oportunidades = [], hoje = new Date(
       return {
         id: textoLimpo(o?.id),
         cliente: textoLimpo(o?.cliente) || textoLimpo(o?.titulo) || "Oportunidade",
-        etapa: textoLimpo(o?.estagio) || "Sem etapa",
+        etapa: canonizarEtapa(o?.estagio),
         valor: soNumero(o?.valorMensal),
         atualizadoEm: base,
         semFupDias,

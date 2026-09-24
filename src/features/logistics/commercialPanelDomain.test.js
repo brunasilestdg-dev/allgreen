@@ -283,12 +283,45 @@ describe("montarKanbanDeOportunidades (kanban editável do ERP)", () => {
       { id: "o2", cliente: "Beta", estagio: "Proposta / BID", valorMensal: 3000, ultimaInteracaoEm: "2026-09-18T00:00:00Z" },
     ], new Date(Date.UTC(2026, 8, 20)));
     expect(k.editavel).toBe(true);
-    expect(k.pipeline.etapas[0].etapa).toBe("Proposta / BID");
-    expect(k.pipeline.etapas[0].itens[0].id).toBe("o2");
+    // Etapas na ordem do funil (Prospecção antes de Proposta/BID) e "Proposta / BID"
+    // canonizada para "Proposta/BID".
+    expect(k.pipeline.etapas.map((e) => e.etapa)).toEqual(["Prospecção", "Proposta/BID"]);
+    const proposta = k.pipeline.etapas.find((e) => e.etapa === "Proposta/BID");
+    expect(proposta.itens[0].id).toBe("o2");
     expect(k.pipeline.valorTotal).toBe(4000);
     expect(k.fup.clientes[0].cliente).toBe("Alfa"); // mais parado
+    expect(k.fup.clientes[0].etapa).toBe("Prospecção");
     expect(k.fup.clientes[0].semFupDias).toBe(19);
     expect(k.fup.clientes[0].texto).toBe("ligar");
+  });
+
+  it("padroniza etapas: variantes de grafia/BID caem na mesma coluna canônica", () => {
+    const k = montarKanbanDeOportunidades([
+      { id: "a", cliente: "A", estagio: "Prospeção", valorMensal: 100 },
+      { id: "b", cliente: "B", estagio: "Prospecção", valorMensal: 100 },
+      { id: "c", cliente: "C", estagio: "Negociação/BID", valorMensal: 100 },
+      { id: "d", cliente: "D", estagio: "Negociação", valorMensal: 100 },
+      { id: "e", cliente: "E", estagio: "Proposta / BID", valorMensal: 100 },
+      { id: "f", cliente: "F", estagio: "", valorMensal: 100 },
+    ]);
+    const porEtapa = Object.fromEntries(k.pipeline.etapas.map((s) => [s.etapa, s.quantidade]));
+    expect(porEtapa).toEqual({
+      "Prospecção": 2, // "Prospeção" + "Prospecção"
+      "Proposta/BID": 1,
+      "Negociação": 2, // "Negociação/BID" + "Negociação"
+      "Sem Classificação": 1, // etapa vazia
+    });
+    // Ordem do funil respeitada.
+    expect(k.pipeline.etapas.map((e) => e.etapa)).toEqual([
+      "Prospecção", "Proposta/BID", "Negociação", "Sem Classificação",
+    ]);
+  });
+
+  it("mantém etapa desconhecida como coluna própria (não some dentro de outra)", () => {
+    const k = montarKanbanDeOportunidades([
+      { id: "x", cliente: "X", estagio: "Etapa Nova do Board", valorMensal: 100 },
+    ]);
+    expect(k.pipeline.etapas[0].etapa).toBe("Etapa Nova do Board");
   });
 });
 
@@ -303,7 +336,10 @@ describe("Aba Kanban", () => {
     expect(p.disponivel).toBe(true);
     expect(p.totalOportunidades).toBe(2);
     expect(p.valorMensalTotal).toBe(4000);
-    expect(p.etapas[0].etapa).toBe("Proposta"); // maior valor primeiro
+    // Funil primeiro: "Proposta" canoniza p/ "Proposta/BID" (conhecida) e vem antes
+    // de "Mapeamento" (desconhecida, mantida como coluna própria no fim).
+    expect(p.etapas[0].etapa).toBe("Proposta/BID");
+    expect(p.etapas[1].etapa).toBe("Mapeamento");
   });
 
   it("FUP calcula há quantos dias sem atualização, do mais parado ao menos", () => {
