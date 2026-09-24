@@ -1,3 +1,5 @@
+import { pareceInjecao } from "./prompt-guard.js";
+
 const MAX_QUERY_LENGTH = 500;
 const MAX_RESULTS = 6;
 const MAX_COMBINED_RESULTS = 12;
@@ -580,9 +582,29 @@ export async function searchWeb(env, rawQuery, { fetcher = fetch } = {}) {
   for (const item of configured) {
     try {
       const resultados = deduplicateResults([(await item.run()) || []]);
-      if (resultados.length)
-        return { configured: true, query, results: resultados, providers: [item.name], failures };
-      failures.push({ provider: item.name, error: "Respondeu sem resultado." });
+      // Resultado com cara de ordem para a IA ("ignore as instruções
+      // anteriores") sai aqui, antes de chegar a qualquer agente: chat,
+      // pesquisa de empresa, radar de mercado. É a heurística grátis
+      // (prompt-guard.js); o chat ainda passa o que sobrou pelo Prompt Guard 2.
+      const seguros = resultados.filter(
+        (resultado) => !pareceInjecao(`${resultado?.title || ""}\n${resultado?.snippet || ""}`),
+      );
+      const descartados = resultados.length - seguros.length;
+      if (seguros.length)
+        return {
+          configured: true,
+          query,
+          results: seguros,
+          providers: [item.name],
+          failures,
+          ...(descartados ? { descartadosPorInjecao: descartados } : {}),
+        };
+      failures.push({
+        provider: item.name,
+        error: descartados
+          ? "Resultados descartados: pareciam instruções para a IA."
+          : "Respondeu sem resultado.",
+      });
     } catch (erro) {
       failures.push({
         provider: item.name,

@@ -486,6 +486,21 @@ h3,
   width: 18px;
   min-width: 18px;
 }
+/* Widget anti-robô (Turnstile): some quando não precisa de interação; quando
+   aparece, ocupa a largura do formulário sem empurrar o botão para fora. */
+.turnstile-widget:empty {
+  display: none;
+}
+.turnstile-widget {
+  max-width: 100%;
+  margin: 4px 0;
+}
+.auth-turnstile-erro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .auth-switch {
   align-items: center;
   display: flex;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BrainCog,
@@ -21,11 +21,14 @@ import {
 import {
   SEARCHABLE_SOURCES,
   buildAnswerPrompt,
+  buildIndex,
   findDuplicates,
   makeGlossaryEntry,
   searchWorkspace,
   staleContent,
 } from "./searchDomain.js";
+import { fundirResultados } from "./semanticDomain.js";
+import { buscarPorSignificado } from "./semanticSearch.js";
 
 const newId = () => `k-${Math.random().toString(36).slice(2, 10)}`;
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -76,6 +79,52 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
         : { results: [], tokens: [], total: 0 },
     [db, consulta, business, glossario, fonteFiltro],
   );
+
+  // Busca por significado (bge-m3): roda um instante depois que a pessoa para
+  // de digitar e soma ao resultado por palavra. Sem ela (servidor sem IA,
+  // cota do dia), a tela fica exatamente como era.
+  const [significado, setSignificado] = useState({ estado: "ocioso" });
+  const dbRef = useRef(db);
+  useEffect(() => {
+    dbRef.current = db;
+  }, [db]);
+  const businessId = business?.id || null;
+  useEffect(() => {
+    const pergunta = consulta.trim();
+    if (pergunta.length < 3) return undefined;
+    let ativo = true;
+    const espera = setTimeout(async () => {
+      setSignificado({ estado: "buscando", consulta: pergunta, fonte: fonteFiltro });
+      try {
+        const atual = dbRef.current;
+        let docs = buildIndex(atual, { businessId, userId: atual.user?.id || null });
+        if (fonteFiltro) docs = docs.filter((d) => d.sourceId === fonteFiltro);
+        const achado = await buscarPorSignificado(docs, pergunta, { userId: atual.user?.id || "anonimo" });
+        if (ativo) setSignificado({ estado: "pronto", consulta: pergunta, fonte: fonteFiltro, ...achado });
+      } catch {
+        if (ativo) setSignificado({ estado: "indisponivel", consulta: pergunta, fonte: fonteFiltro });
+      }
+    }, 700);
+    return () => {
+      ativo = false;
+      clearTimeout(espera);
+    };
+  }, [consulta, fonteFiltro, businessId]);
+
+  // Resposta de uma consulta (ou área) que já mudou não vale mais: em vez de
+  // zerar o estado a cada tecla, a tela só usa o que é da busca atual.
+  const significadoAtual =
+    significado.consulta === consulta.trim() && significado.fonte === fonteFiltro
+      ? significado
+      : { estado: "ocioso" };
+  const resultados = useMemo(
+    () =>
+      significadoAtual.estado === "pronto"
+        ? fundirResultados(busca.results, significadoAtual.resultados, { limite: 25 })
+        : busca.results,
+    [busca.results, significadoAtual.estado, significadoAtual.resultados],
+  );
+  const soPorSignificado = resultados.filter((r) => r.origem === "significado").length;
 
   const conflitos = useMemo(() => findConflicts(memorias), [memorias]);
   const vencidas = useMemo(() => staleMemories(memorias, hoje()), [memorias]);
@@ -145,7 +194,7 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
   };
 
   const perguntarComCitacoes = async () => {
-    if (busca.results.length === 0) {
+    if (resultados.length === 0) {
       setToast("Busque algo primeiro — a resposta só usa o que está no seu workspace.");
       return;
     }
@@ -155,16 +204,18 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          prompt: buildAnswerPrompt(consulta, busca.results),
+          prompt: buildAnswerPrompt(consulta, resultados),
         }),
       });
       const dados = await r.json();
-      const texto = dados?.text || dados?.reply || dados?.result || "";
+      // /api/ai responde `content` (publicAiResult). Ler só text/reply/result
+      // fazia o botão dizer sempre que a IA não tinha conseguido responder.
+      const texto = dados?.content || dados?.text || dados?.reply || dados?.result || "";
       if (!r.ok || !texto) {
         setToast(dados?.error || "A IA não conseguiu responder agora.");
         return;
       }
-      setResposta({ texto, fontes: busca.results.slice(0, 6) });
+      setResposta({ texto, fontes: resultados.slice(0, 6) });
     } catch {
       setToast("Não foi possível falar com a IA agora.");
     } finally {
@@ -235,7 +286,7 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
             <button
               className="btn"
               onClick={perguntarComCitacoes}
-              disabled={ocupado || busca.results.length === 0}
+              disabled={ocupado || resultados.length === 0}
             >
               <Sparkles size={15} />
               {ocupado ? "Pensando..." : "Responder com citações"}
@@ -263,18 +314,34 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
 
           {consulta.trim() && (
             <p className="kc-count">
-              {busca.total === 0
-                ? "Nada encontrado no seu workspace."
-                : `${busca.total} ${busca.total === 1 ? "resultado" : "resultados"}`}
+              {busca.total === 0 && soPorSignificado === 0
+                ? significadoAtual.estado === "buscando"
+                  ? "Procurando também pelo significado..."
+                  : "Nada encontrado no seu workspace."
+                : `${busca.total + soPorSignificado} ${busca.total + soPorSignificado === 1 ? "resultado" : "resultados"}`}
+              {soPorSignificado > 0 &&
+                ` · ${soPorSignificado} ${soPorSignificado === 1 ? "achado" : "achados"} pelo significado`}
             </p>
           )}
+          {significadoAtual.estado === "pronto" &&
+            significadoAtual.indexados < significadoAtual.total && (
+              <p className="kc-hint">
+                Preparando a busca por significado: {significadoAtual.indexados} de{" "}
+                {significadoAtual.total} itens prontos. Os demais entram nas próximas buscas.
+              </p>
+            )}
 
           <ul className="kc-results">
-            {busca.results.map((r) => (
+            {resultados.map((r) => (
               <li key={r.id}>
                 <header>
                   <span className="kc-source">{r.sourceLabel}</span>
                   <strong>{r.title}</strong>
+                  {r.origem === "significado" && (
+                    <span className="kc-origem" title="Não tem a palavra buscada, mas fala do mesmo assunto">
+                      pelo significado
+                    </span>
+                  )}
                 </header>
                 <Trecho texto={r.snippet} />
                 <footer>

@@ -100,6 +100,7 @@ import {
 } from "./components/leituraDeArquivo.js";
 import Markdown from "./components/Markdown.jsx";
 import QrCodeImage from "./components/QrCodeImage.jsx";
+import TurnstileWidget, { useTurnstile } from "./components/TurnstileWidget.jsx";
 import SharingFields from "./components/SharingFields.jsx";
 import Tasks from "./features/tasks/TasksScreen.jsx";
 import Documents from "./features/documents/DocumentsScreen.jsx";
@@ -1847,6 +1848,19 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleId, setGoogleId] = useState("");
+  // Anti-robô (Turnstile): um widget por tela; login, cadastro, "esqueci a
+  // senha", reenvio do código e pedido de acesso gastam o mesmo token.
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const turnstile = useTurnstile(turnstileSiteKey);
+  const { obterToken, renovar: renovarTurnstile } = turnstile;
+  // Devolve o token (ou "" com o Turnstile desligado); null quando ele está
+  // ligado mas o widget não entregou token — a tela avisa e não envia.
+  const tokenAntiRobo = async () => {
+    if (!turnstileSiteKey) return "";
+    const token = await obterToken();
+    return token || null;
+  };
+  const SEM_TOKEN = "Confirme a verificação anti-robô para continuar.";
   const [showLegal, setShowLegal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   // Pedido de acesso à To Do Green: quem não tem conta pede aqui e um
@@ -1858,23 +1872,30 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
     evento.preventDefault();
     setPedidoStatus("enviando");
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const resposta = await fetch("/api/todogreen/solicitar-acesso", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(pedidoForm),
+        body: JSON.stringify({ ...pedidoForm, turnstileToken }),
       });
       const corpo = await resposta.json().catch(() => ({}));
       if (!resposta.ok) throw new Error(corpo.error || "Não foi possível registrar o pedido.");
       setPedidoStatus("enviado");
     } catch (razao) {
       setPedidoStatus(razao.message || "Não foi possível registrar o pedido.");
+    } finally {
+      renovarTurnstile();
     }
   };
   const googleRef = useRef(null);
   useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
-      .then((d) => setGoogleId(d.googleClientId || ""))
+      .then((d) => {
+        setGoogleId(d.googleClientId || "");
+        setTurnstileSiteKey(d.turnstileSiteKey || "");
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -1968,6 +1989,8 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       return setError("Informe seu nome.");
     setBusy(true);
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const response = await fetch(
         `/api/auth/${mode === "login" ? "login" : "register"}`,
         {
@@ -1977,6 +2000,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
             name: form.name.trim(),
             email,
             password: form.password,
+            turnstileToken,
           }),
         },
       );
@@ -1997,6 +2021,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       );
     } finally {
       setBusy(false);
+      renovarTurnstile();
     }
   };
   const verify = async () => {
@@ -2022,16 +2047,20 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
   const resend = async () => {
     setError("");
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const r = await fetch("/api/auth/resend", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: pending }),
+        body: JSON.stringify({ email: pending, turnstileToken }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || "Não foi possível reenviar.");
       setError("Novo código enviado. Confira seu e-mail.");
     } catch (reason) {
       setError(reason.message);
+    } finally {
+      renovarTurnstile();
     }
   };
   const [recover, setRecover] = useState(null);
@@ -2042,10 +2071,12 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
     setBusy(true);
     setError("");
     try {
+      const turnstileToken = await tokenAntiRobo();
+      if (turnstileToken === null) throw new Error(SEM_TOKEN);
       const r = await fetch("/api/auth/forgot", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok)
@@ -2057,6 +2088,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       setError(reason.message);
     } finally {
       setBusy(false);
+      renovarTurnstile();
     }
   };
   const doReset = async () => {
@@ -2085,6 +2117,18 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
       setBusy(false);
     }
   };
+  // Widget anti-robô (só aparece com o Turnstile ligado e, mesmo assim, quase
+  // sempre invisível: pede interação apenas quando desconfia).
+  const antiRobo = (
+    <>
+      <TurnstileWidget turnstile={turnstile} />
+      {turnstile.erro && (
+        <p className="auth-turnstile-erro" role="status">
+          {turnstile.erro}
+        </p>
+      )}
+    </>
+  );
   if (recover)
     return (
       <main className="auth-shell verify-shell">
@@ -2190,6 +2234,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
           >
             {busy ? "Verificando..." : "Confirmar e entrar"}
           </Button>
+          {antiRobo}
           <p className="auth-switch">
             Não recebeu?{" "}
             <button type="button" onClick={resend}>
@@ -2255,6 +2300,8 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
                     </button>
                   </span>
                 </Field>
+
+                {antiRobo}
 
                 {error && (
                   <div className="auth-error" role="alert">
@@ -2653,6 +2700,7 @@ function Login({ update, onAuthenticated = () => {}, vertical = false, entryPort
                 </button>
               </span>
             </Field>
+            {antiRobo}
             {error && (
               <div className="auth-error" role="alert">
                 <CircleAlert />

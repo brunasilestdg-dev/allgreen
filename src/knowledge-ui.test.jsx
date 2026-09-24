@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { paraBase64, quantizar } from "./features/knowledge/semanticDomain.js";
 
 const user = { id: "user-kc", name: "Renata Silva", email: "renata@example.com" };
 const business = {
@@ -124,7 +125,8 @@ describe("Memória e busca", () => {
             ? response({ ok: true })
             : response({});
         if (url === "/api/config") return response({ videoEnabled: false });
-        if (url === "/api/ai") return response({ text: respostaIa });
+        // Formato real de /api/ai (publicAiResult): `content`.
+        if (url === "/api/ai") return response({ content: respostaIa, degraded: false });
         return response({});
       }),
     );
@@ -219,6 +221,50 @@ describe("Memória e busca", () => {
     expect(
       await screen.findByText("Nada encontrado no seu workspace."),
     ).toBeInTheDocument();
+  });
+
+  it("acha pelo significado o que não tem a palavra buscada", async () => {
+    // Vetor apontando para um eixo: o contrato e a consulta "falam do mesmo
+    // assunto" (mesmo eixo); o resto aponta para outro lado.
+    const vetor = (eixo) =>
+      paraBase64(quantizar(Array.from({ length: 1024 }, (_, i) => (i === eixo ? 1 : 0.001))));
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (url === "/api/auth/session") return response({ user });
+      if (String(url).startsWith("/api/workspace"))
+        return options.method === "PUT" ? response({ ok: true }) : response({});
+      if (url === "/api/config") return response({ videoEnabled: false });
+      if (url === "/api/busca/vetores") {
+        const corpo = JSON.parse(options.body);
+        const vetores = Object.fromEntries(
+          corpo.itens.map((item) => [item.h, vetor(item.t.includes("pagamento") ? 0 : 1)]),
+        );
+        return response({
+          modelo: "bge-m3",
+          dimensoes: 1024,
+          vetores,
+          ...(corpo.consulta ? { consulta: vetor(0) } : {}),
+        });
+      }
+      return response({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedLoggedIn(businessDb());
+    await abrir();
+    // Nenhum texto tem "prazo" nem "recebimento": a busca por palavra não acha.
+    await buscar("prazo de recebimento");
+
+    const lista = await waitFor(
+      () => {
+        const el = document.querySelector(".kc-results");
+        expect(el.textContent).toContain("Contrato padrão");
+        return el;
+      },
+      { timeout: 4000 },
+    );
+    expect(lista.textContent).toContain("pelo significado");
+    expect(lista.textContent).not.toContain("Comprar embalagens");
+    const pedido = fetchMock.mock.calls.find(([url]) => url === "/api/busca/vetores");
+    expect(JSON.parse(pedido[1].body).consulta).toBe("prazo de recebimento");
   });
 
   it("guarda uma memória e a lista aparece", async () => {
