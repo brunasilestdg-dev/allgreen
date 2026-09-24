@@ -18,7 +18,10 @@ describe("permissão da tela vem do config, não do menu", () => {
     expect(permissaoDaPagina("integracoes")).toBe("integration:manage");
     expect(permissaoDaPagina("conectores")).toBe("integration:manage");
     expect(permissaoDaPagina("fiscal")).toBe("fiscal:manage");
-    expect(permissaoDaPagina("planner")).toBe("planner:manage");
+    // Planner abre para quem LÊ a vertical; gerir segue com planner:manage
+    // (servidor). Lista = alternativas, qualquer uma libera a tela.
+    expect(permissaoDaPagina("planner")).toEqual(["read", "planner:manage"]);
+    expect(hasTodoGreenPermission("auditor", "read")).toBe(true);
   });
 
   it("conectores de negócio é visível para quem administra integrações (não é dev-only)", () => {

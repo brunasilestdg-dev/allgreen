@@ -33,6 +33,7 @@ import {
   tarefaCanonicaPertenceAoPlano,
   tarefaTodoParaPlanner,
 } from "../plannerIntegrationDomain.js";
+import { hasTodoGreenPermission } from "../logisticsVerticalDomain.js";
 import "./TodoGreenPages.css";
 
 // Planner estilo Microsoft Planner: planos com baldes e tarefas, privados ou
@@ -40,8 +41,15 @@ import "./TodoGreenPages.css";
 // checklist) — a tela nunca digita um número solto. O servidor é a autoridade
 // da visibilidade; aqui a tela só desenha o que ele entrega.
 
-const request = async (path, authHeaders, options = {}) => {
-  const resposta = await fetch(`/api/todogreen/planner${path}`, {
+// `espacoId` é o espaço que a casca da vertical confirmou no servidor
+// (`/api/todogreen/access` → ownerId). Mandá-lo de volta em `?owner=` garante
+// que planos e pessoas são lidos e gravados NO MESMO espaço em que a
+// administração libera acessos — sem ele, cada sessão caía no seu espaço
+// padrão, e quem tem mais de um vínculo podia não ver o plano da titular.
+const request = async (path, authHeaders, options = {}, espacoId = "") => {
+  const separador = path.includes("?") ? "&" : "?";
+  const destino = espacoId ? `${path}${separador}owner=${encodeURIComponent(espacoId)}` : path;
+  const resposta = await fetch(`/api/todogreen/planner${destino}`, {
     ...options,
     headers: { "content-type": "application/json", ...(authHeaders?.() || {}), ...(options.headers || {}) },
   });
@@ -89,6 +97,15 @@ const rotuloPartilha = (plano) => {
   return "Só eu";
 };
 
+// O servidor devolve quem foi aceito na lista mas ainda não alcança a To Do
+// Green neste espaço. Sem este aviso a titular via "2 pessoas" e ninguém via
+// o plano — a mensagem diz o que falta em vez de deixar parecer que deu certo.
+const avisoDePartilha = (base, plano) => {
+  const n = (plano?.membrosSemAcesso || []).length;
+  if (!n) return base;
+  return `${base} ${n} pessoa${n === 1 ? "" : "s"} ainda não ${n === 1 ? "tem" : "têm"} acesso à To Do Green neste espaço e só verá${n === 1 ? "" : "o"} o plano depois de liberada${n === 1 ? "" : "s"} em Acessos.`;
+};
+
 const COR_PRIORIDADE = {
   urgente: "#b42318",
   alta: "#c4700b",
@@ -134,8 +151,15 @@ export default function PlannerPage({
   onUpsertCanonicalTask,
   onDeleteCanonicalTask,
   onDetachCanonicalPlanTasks,
+  onSyncPlanSharing,
+  permissions = null,
 }) {
   const [planos, setPlanos] = useState([]);
+  // Ler o Planner exige só `read`; gerir (criar plano, adicionar tarefa,
+  // compartilhar, arquivar) exige `planner:manage` — a mesma régua do servidor.
+  // A tela esconde o que ele recusaria em vez de mostrar botão que dá 403.
+  const podeGerir = hasTodoGreenPermission(role, "planner:manage", permissions);
+  const pedir = (path, options) => request(path, authHeaders, options, espacoId);
   const [planoAtivoId, setPlanoAtivoId] = useState("");
   // Pessoas da plataforma para sugerir como responsável: o dono do espaço e os
   // membros ativos, da mesma lista que o /api/collab já serve ao app inteiro.
@@ -219,7 +243,7 @@ export default function PlannerPage({
     setOcupado("carregando");
     setErro("");
     try {
-      const { registros } = await request("/planos", authHeaders);
+      const { registros } = await pedir("/planos");
       setPlanos(registros || []);
       const proximo = selecionar || planoAtivoId || (registros?.[0]?.id ?? "");
       setPlanoAtivoId(registros?.some((p) => p.id === proximo) ? proximo : registros?.[0]?.id || "");
@@ -242,20 +266,29 @@ export default function PlannerPage({
     // /planner/pessoas). Antes só a primeira era sugerida — quem entrou pela
     // vertical existia e era aceito na gravação, mas nunca aparecia ao digitar
     // o nome. Unimos as duas por id, sem duplicar.
-    const juntar = (listas) => {
+    // `alcancaPlanner` vem do servidor da vertical: quem só está no espaço do
+    // app (memberships) não abre a To Do Green e não veria o plano. Só marcamos
+    // false quando a lista da vertical carregou — se ela falhou, não sabemos,
+    // e não avisamos o que não sabemos.
+    const juntar = (listas, verticalOk) => {
       const unicos = [];
       const vistos = new Set();
       for (const pessoa of listas.flat()) {
         if (pessoa?.id && pessoa?.name && !vistos.has(pessoa.id)) {
           vistos.add(pessoa.id);
-          unicos.push({ id: pessoa.id, name: pessoa.name, email: pessoa.email || "" });
+          unicos.push({
+            id: pessoa.id,
+            name: pessoa.name,
+            email: pessoa.email || "",
+            alcancaPlanner: typeof pessoa.alcancaPlanner === "boolean" ? pessoa.alcancaPlanner : (verticalOk ? false : undefined),
+          });
         }
       }
       return unicos;
     };
-    const daVertical = request("/pessoas", authHeaders)
-      .then((corpo) => corpo?.registros || [])
-      .catch(() => []);
+    const daVertical = pedir("/pessoas")
+      .then((corpo) => ({ ok: true, registros: corpo?.registros || [] }))
+      .catch(() => ({ ok: false, registros: [] }));
     const doCollab = espacoId
       ? fetch(`/api/collab?owner=${encodeURIComponent(espacoId)}`, { headers: authHeaders?.() || {} })
         .then((resposta) => (resposta.ok ? resposta.json() : null))
@@ -264,7 +297,7 @@ export default function PlannerPage({
       : Promise.resolve([]);
     Promise.all([daVertical, doCollab]).then(([vertical, collab]) => {
       if (!ativo) return;
-      setPessoas(juntar([vertical, collab]));
+      setPessoas(juntar([vertical.registros, collab], vertical.ok));
     });
     return () => { ativo = false; };
   }, [espacoId, authHeaders]);
@@ -279,11 +312,12 @@ export default function PlannerPage({
         description: formPlano.description,
         ...partilhaParaEnvio(formPlano.modo, formPlano.members),
       };
-      const novo = await request("/planos", authHeaders, { method: "POST", body: JSON.stringify(corpo) });
+      const novo = await pedir("/planos", { method: "POST", body: JSON.stringify(corpo) });
       setModalPlano(false);
       setFormPlano({ name: "", modo: "privado", description: "", members: [] });
+      onSyncPlanSharing?.(novo);
       await carregarPlanos(novo.id);
-      avisar("Plano criado.", "sucesso");
+      avisar(avisoDePartilha("Plano criado.", novo), novo.membrosSemAcesso?.length ? "info" : "sucesso");
     } catch (motivo) {
       avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro");
       setOcupado("");
@@ -295,13 +329,14 @@ export default function PlannerPage({
   const salvarPartilha = async ({ modo, members }) => {
     if (!partilhaEmEdicao) return;
     try {
-      await request(`/planos/${partilhaEmEdicao.id}`, authHeaders, {
+      const atualizado = await pedir(`/planos/${partilhaEmEdicao.id}`, {
         method: "PATCH",
         body: JSON.stringify({ revision: partilhaEmEdicao.revision, ...partilhaParaEnvio(modo, members) }),
       });
       setPartilhaEmEdicao(null);
+      onSyncPlanSharing?.(atualizado);
       await carregarPlanos(partilhaEmEdicao.id);
-      avisar("Compartilhamento atualizado.", "sucesso");
+      avisar(avisoDePartilha("Compartilhamento atualizado.", atualizado), atualizado.membrosSemAcesso?.length ? "info" : "sucesso");
     } catch (motivo) {
       if (motivo.status === 409) { avisar("O plano mudou em outra tela. Recarreguei.", "erro"); setPartilhaEmEdicao(null); await carregarPlanos(); return; }
       avisar(motivo.message, "erro");
@@ -312,7 +347,7 @@ export default function PlannerPage({
     if (!planoAtivo || !souDono) return;
     if (typeof window !== "undefined" && !window.confirm(`Arquivar o plano "${planoAtivo.name}"? As tarefas continuarão disponíveis no To Do.`)) return;
     try {
-      await request(`/planos/${planoAtivo.id}`, authHeaders, { method: "DELETE" });
+      await pedir(`/planos/${planoAtivo.id}`, { method: "DELETE" });
       onDetachCanonicalPlanTasks?.(planoAtivo.id);
       setPlanoAtivoId("");
       await carregarPlanos();
@@ -377,7 +412,7 @@ export default function PlannerPage({
         <div className="tdg-page-title"><div><span>Planner</span><h2>Planner</h2></div></div>
         <div className="tdg-panel tdg-empty">
           <Lock size={22} />
-          <p>Você não tem permissão para gerir o Planner. Fale com quem administra o espaço.</p>
+          <p>Você ainda não tem acesso à To Do Green neste espaço. Peça a quem administra para liberar seu e-mail em Acessos — o plano compartilhado com você aparece assim que o acesso for liberado.</p>
         </div>
       </section>
     );
@@ -401,9 +436,11 @@ export default function PlannerPage({
           <button type="button" className="tdg-planner-toggle" data-ativo={vendoMinhas} onClick={() => setVendoMinhas((v) => !v)}>
             <ListChecks size={15} /> Minhas tarefas
           </button>
-          <button type="button" className="tdg-action" onClick={() => setModalPlano(true)}>
-            <Plus size={16} /> Novo plano
-          </button>
+          {podeGerir && (
+            <button type="button" className="tdg-action" onClick={() => setModalPlano(true)}>
+              <Plus size={16} /> Novo plano
+            </button>
+          )}
         </div>
       </div>
 
@@ -443,7 +480,7 @@ export default function PlannerPage({
               {ocupado === "carregando" && planos.length === 0 ? (
                 <span className="tdg-planner-loading">Carregando planos…</span>
               ) : planos.length === 0 ? (
-                <span className="tdg-planner-loading">Nenhum plano ainda. Crie o primeiro.</span>
+                <span className="tdg-planner-loading">{podeGerir ? "Nenhum plano ainda. Crie o primeiro." : "Nenhum plano compartilhado com você ainda."}</span>
               ) : (
                 planos.map((p) => (
                   <button
@@ -621,7 +658,7 @@ export default function PlannerPage({
                           </div>
                         </article>
                       ))}
-                      {corte === "balde" && coluna.chave !== "__sem__" && (
+                      {podeGerir && corte === "balde" && coluna.chave !== "__sem__" && (
                         <div className="tdg-planner-quick">
                           <input
                             type="text"
@@ -645,8 +682,14 @@ export default function PlannerPage({
           {!planoAtivo && planos.length === 0 && ocupado !== "carregando" && (
             <div className="tdg-panel tdg-empty">
               <LayoutGrid size={22} />
-              <p>Crie um plano para começar. Ele pode ser privado (só você) ou compartilhado com o espaço.</p>
-              <button type="button" className="tdg-action" onClick={() => setModalPlano(true)}><Plus size={16} /> Novo plano</button>
+              {podeGerir ? (
+                <>
+                  <p>Crie um plano para começar. Ele pode ser privado (só você) ou compartilhado com o espaço.</p>
+                  <button type="button" className="tdg-action" onClick={() => setModalPlano(true)}><Plus size={16} /> Novo plano</button>
+                </>
+              ) : (
+                <p>Nenhum plano foi compartilhado com você ainda. Quando alguém compartilhar, ele aparece aqui.</p>
+              )}
             </div>
           )}
         </>
@@ -899,15 +942,21 @@ function PartilhaCampos({ modo, members, pessoas, currentUserId, onChange }) {
             <datalist id="tdg-planner-pessoas-plano">
               {pessoas
                 .filter((p) => !members.includes(p.id) && p.id !== currentUserId)
-                .map((p) => <option value={p.name} key={p.id}>{p.email}</option>)}
+                .map((p) => (
+                  <option value={p.name} key={p.id}>
+                    {p.email}{p.alcancaPlanner === false ? " · sem acesso à To Do Green" : ""}
+                  </option>
+                ))}
             </datalist>
           </label>
           <div className="tdg-planner-chips">
             {members.map((id) => {
               const pessoa = pessoas.find((p) => p.id === id);
+              const semAcesso = pessoa?.alcancaPlanner === false;
               return (
-                <span className="tdg-planner-chip" key={id}>
+                <span className={`tdg-planner-chip${semAcesso ? " sem-acesso" : ""}`} key={id} title={semAcesso ? "Ainda não tem acesso à To Do Green neste espaço" : undefined}>
                   {pessoa?.name || id}
+                  {semAcesso && <em>sem acesso</em>}
                   <button
                     type="button"
                     aria-label={`Remover ${pessoa?.name || id}`}
@@ -920,6 +969,17 @@ function PartilhaCampos({ modo, members, pessoas, currentUserId, onChange }) {
             })}
             {members.length === 0 && <small>Ninguém escolhido ainda — até adicionar alguém, o plano fica só com você.</small>}
           </div>
+          {(() => {
+            const semAcesso = members
+              .map((id) => pessoas.find((p) => p.id === id))
+              .filter((p) => p?.alcancaPlanner === false);
+            if (!semAcesso.length) return null;
+            return (
+              <p className="tdg-planner-aviso" role="status">
+                {semAcesso.map((p) => p.name).join(", ")} {semAcesso.length === 1 ? "está" : "estão"} no espaço, mas ainda sem acesso à To Do Green — {semAcesso.length === 1 ? "não verá" : "não verão"} o plano até {semAcesso.length === 1 ? "ser liberada" : "serem liberadas"} em Acessos (papel com leitura da vertical).
+              </p>
+            );
+          })()}
         </div>
       )}
     </fieldset>

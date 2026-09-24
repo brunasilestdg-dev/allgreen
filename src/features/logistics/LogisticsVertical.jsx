@@ -106,6 +106,7 @@ import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomai
 import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
 import {
   aplicarEdicaoPlannerNaTarefa,
+  aplicarPartilhaDoPlanoNaTarefa,
   contextoComercialDaTarefa,
   desvincularTarefaDoPlanner,
 } from "./plannerIntegrationDomain.js";
@@ -1062,7 +1063,13 @@ const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/planner",
     area: "produtividade",
     status: "functional",
-    permission: "planner:manage",
+    // Abrir o Planner é LER: o servidor já entrega os planos compartilhados a
+    // quem só tem `read` (auditor, papéis sob medida sem `planner:manage`), e
+    // gerir (criar plano, compartilhar, arquivar) continua exigindo
+    // `planner:manage` — checado no servidor e usado pela tela para esconder o
+    // que ele recusaria. Exigir `planner:manage` para ENTRAR era o motivo de
+    // uma pessoa "com quem compartilhei" nem ver o item no menu.
+    permission: ["read", "planner:manage"],
     description: "Planos com tarefas, prazo, prioridade e checklist.",
   },
   // Blocos das 6 lacunas dos 26 blocos All Green — cada tela abre uma rota
@@ -3981,11 +3988,19 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         setToast={setToast}
         currentUserId={db?.user?.id}
         role={role}
+        permissions={remoteAccess.permissions}
         espacoId={remoteAccess.ownerId || ""}
         clientes={clientes}
         oportunidades={verticalData.opportunities}
         onNavigate={navigate}
         canonicalTasks={db?.tasks || []}
+        // Quem vê o plano precisa ver as tarefas dele — e elas moram em
+        // `db.tasks`, com a visibilidade do app (`canSeeTask`). Ao criar ou
+        // recompartilhar um plano, a mesma partilha desce para as tarefas.
+        onSyncPlanSharing={(plano) => update?.((current) => ({
+          ...current,
+          tasks: (current.tasks || []).map((item) => aplicarPartilhaDoPlanoNaTarefa(item, plano)),
+        }))}
         onUpsertCanonicalTask={(tarefa, plano) => update?.((current) => {
           const tarefas = current.tasks || [];
           const rawId = tarefa.rawTaskId || tarefa.id;
