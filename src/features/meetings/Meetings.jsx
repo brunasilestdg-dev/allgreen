@@ -22,6 +22,7 @@ import {
   renameSpeaker,
   searchTranscript,
   speakerStats,
+  transcriptionHint,
 } from "./meetingDomain.js";
 
 const newId = () => `mt-${Math.random().toString(36).slice(2, 10)}`;
@@ -106,7 +107,10 @@ export default function Meetings({ db, update, business, setToast }) {
       const resposta = await fetch("/api/transcribe", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ audio: btoa(binario) }),
+        body: JSON.stringify({
+          audio: btoa(binario),
+          hint: transcriptionHint(selecionada),
+        }),
       });
       const dados = await resposta.json();
       if (!resposta.ok) {

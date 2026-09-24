@@ -66,10 +66,42 @@ export const normalizeUnit = (valor) => {
 // CNPJ e CPF
 // ---------------------------------------------------------------------------
 
-// Guardamos e comparamos só dígitos. Duas grafias do mesmo CNPJ
+// Dígito verificador por módulo 11, com os pesos de cada documento. Cada
+// posição vale o código ASCII menos 48 — para dígito é o próprio número, e
+// para letra é a regra oficial do CNPJ alfanumérico (A = 17, B = 18, ...).
+const checkDigit = (base, pesos) => {
+  const soma = pesos.reduce((total, peso, indice) => total + peso * (base.charCodeAt(indice) - 48), 0);
+  const resto = soma % 11;
+  return resto < 2 ? 0 : 11 - resto;
+};
+
+// Guardamos e comparamos sem pontuação. Duas grafias do mesmo CNPJ
 // ("12.345.678/0001-95" e "12345678000195") viram dois fornecedores se a
 // pontuação entrar no banco.
-export const normalizeDocument = (valor) => digitos(valor).slice(0, 14);
+//
+// CNPJ alfanumérico (IN RFB nº 2.229/2024, novas inscrições desde julho de
+// 2026): as 12 primeiras posições aceitam letra; os 2 dígitos verificadores
+// continuam numéricos. Tirar "tudo que não é dígito" mutilava esse CNPJ em
+// silêncio ("12.ABC.345/01DE-35" virava "123450135"). A letra só é mantida
+// quando a sequência tem essa forma E fecha nos dois dígitos verificadores —
+// senão "CPF 529.982.247-25" (14 caracteres) passaria por CNPJ. Qualquer outra
+// coisa segue a regra de sempre (só dígitos): CPF e CNPJ numérico não mudam.
+// Por isso campo de digitação não deve normalizar a cada tecla: um CNPJ
+// alfanumérico pela metade ainda não fecha e perderia as letras.
+const CNPJ_FORMATO = /^[0-9A-Z]{12}[0-9]{2}$/;
+const PESOS_DV1_CNPJ = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+const PESOS_DV2_CNPJ = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+const cnpjFecha = (n) =>
+  CNPJ_FORMATO.test(n) &&
+  checkDigit(n, PESOS_DV1_CNPJ) === Number(n[12]) &&
+  checkDigit(n, PESOS_DV2_CNPJ) === Number(n[13]);
+
+export const normalizeDocument = (valor) => {
+  const semPontuacao = String(valor ?? "").toUpperCase().replace(/[\s./-]/g, "");
+  if (/[A-Z]/.test(semPontuacao) && cnpjFecha(semPontuacao)) return semPontuacao;
+  return digitos(valor).slice(0, 14);
+};
 
 export const documentKind = (valor) => {
   const limpo = normalizeDocument(valor);
@@ -78,23 +110,14 @@ export const documentKind = (valor) => {
   return "";
 };
 
-// Dígito verificador por módulo 11, com os pesos de cada documento.
-const checkDigit = (base, pesos) => {
-  const soma = pesos.reduce((total, peso, indice) => total + peso * Number(base[indice]), 0);
-  const resto = soma % 11;
-  return resto < 2 ? 0 : 11 - resto;
-};
-
 const repetido = (valor) => /^(\d)\1+$/.test(valor);
 
 export const isValidCnpj = (valor) => {
   const n = normalizeDocument(valor);
   // Repetido passa na conta do módulo 11 (11111111111111 fecha), então tem de
   // ser recusado antes — é o CNPJ de teste que mais aparece em planilha real.
-  if (n.length !== 14 || repetido(n)) return false;
-  const d1 = checkDigit(n, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-  const d2 = checkDigit(n, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-  return d1 === Number(n[12]) && d2 === Number(n[13]);
+  if (repetido(n)) return false;
+  return cnpjFecha(n);
 };
 
 export const isValidCpf = (valor) => {
@@ -112,10 +135,11 @@ export const isValidDocument = (valor) => {
   return false;
 };
 
-// Só para exibir. O banco continua guardando dígitos.
+// Só para exibir. O banco continua guardando sem pontuação.
 export const formatDocument = (valor) => {
   const n = normalizeDocument(valor);
-  if (n.length === 14) return n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  if (n.length === 14)
+    return n.replace(/^([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})(\d{2})$/, "$1.$2.$3/$4-$5");
   if (n.length === 11) return n.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
   return n;
 };

@@ -122,12 +122,17 @@ describe("a solicitação que sai para o cliente", () => {
       status: "aberta", fields_json: "{}", due_at: "2026-09-22T10:00:00.000Z", opened_by: "cliente@alfa.com.br",
       closed_at: null, created_at: "2026-09-21T10:00:00.000Z", updated_at: "2026-09-21T10:00:00.000Z",
       assigned_to: "INTERNO-responsavel@todogreen.com.br", closed_by: "INTERNO-quem-fechou",
-      workspace_owner_id: "INTERNO-dono",
+      workspace_owner_id: "INTERNO-dono", operation_id: "op-do-cliente",
     });
+    // `tipoRotulo` (o rótulo público do tipo) e `operacaoId` (a encomenda do
+    // próprio cliente, que ele já vê em /operacoes) entraram com a solicitação
+    // por encomenda — os dois foram conferidos como seguros para o cliente.
     expect(Object.keys(vista)).toEqual([
-      "id", "tipo", "assunto", "descricao", "urgencia", "status", "campos",
-      "prazoEm", "abertaPor", "encerradaEm", "criadaEm", "atualizadaEm",
+      "id", "tipo", "tipoRotulo", "assunto", "descricao", "urgencia", "status", "campos",
+      "operacaoId", "prazoEm", "abertaPor", "encerradaEm", "criadaEm", "atualizadaEm",
     ]);
+    expect(vista.tipoRotulo).not.toBe("");
+    expect(vista.operacaoId).toBe("op-do-cliente");
     expect(JSON.stringify(vista)).not.toContain("INTERNO");
   });
 });

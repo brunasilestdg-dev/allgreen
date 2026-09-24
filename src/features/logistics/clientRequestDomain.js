@@ -86,9 +86,68 @@ export const TIPOS_SOLICITACAO = {
     obrigatorios: [],
     camposRotulo: {},
   },
+
+  // ---- Solicitações amarradas a UMA encomenda ----
+  //
+  // `escopo: "encomenda"` marca o pedido que só existe colado a uma operação
+  // (o cliente abre a partir da entrega, não do nada). `quando` diz em que fase
+  // da encomenda o pedido faz sentido: pedir devolução ou trocar o endereço de
+  // algo JÁ entregue não é pedido, é engano; e acareação só cabe depois da
+  // entrega. O portal nem oferece o tipo fora da fase — a regra mora aqui, uma
+  // vez, e a tela e o servidor a consultam.
+  devolucao: {
+    id: "devolucao",
+    rotulo: "Solicitação de devolução",
+    descricao: "Devolver a mercadoria desta encomenda ao remetente.",
+    prazoHoras: 24,
+    obrigatorios: ["motivo"],
+    camposRotulo: { motivo: "Motivo da devolução" },
+    escopo: "encomenda",
+    quando: "em_transito",
+  },
+  alteracao_endereco: {
+    id: "alteracao_endereco",
+    rotulo: "Solicitação de alteração de endereço",
+    descricao: "Corrigir ou trocar o endereço de entrega antes da conclusão.",
+    // Curto de propósito: endereço só muda enquanto a encomenda não saiu para a
+    // última milha — cada hora conta.
+    prazoHoras: 8,
+    obrigatorios: ["novoEndereco"],
+    camposRotulo: { novoEndereco: "Novo endereço de entrega" },
+    escopo: "encomenda",
+    quando: "em_transito",
+  },
+  acareacao: {
+    id: "acareacao",
+    rotulo: "Solicitação de acareação",
+    descricao: "Contestar a entrega registrada e pedir apuração do ocorrido.",
+    prazoHoras: 72,
+    obrigatorios: ["motivo"],
+    camposRotulo: { motivo: "Motivo da acareação" },
+    escopo: "encomenda",
+    quando: "entregue",
+  },
 };
 
 export const TIPOS_LISTA = Object.values(TIPOS_SOLICITACAO);
+
+// Os tipos que só existem colados a uma encomenda, filtrados pela fase dela.
+// `entregue` decide: depois da entrega cabe acareação; antes, devolução e troca
+// de endereço. Uma só fonte para o que a tela oferece e o que o servidor aceita.
+export const tiposDaEncomenda = (entregue) =>
+  TIPOS_LISTA.filter(
+    (t) => t.escopo === "encomenda" && t.quando === (entregue ? "entregue" : "em_transito"),
+  );
+
+// O tipo pedido é válido PARA esta encomenda nesta fase? Recusa cedo o que a
+// tela não deveria nem ter oferecido (cliente que forja o corpo da requisição).
+export const tipoDaEncomendaPermitido = (tipo, entregue) =>
+  tiposDaEncomenda(entregue).some((t) => t.id === tipoValido(tipo));
+
+// Os tipos da caixa GERAL (não colados a uma encomenda). É o que a aba de
+// atendimento oferece: pedir devolução "solta", sem uma entrega, não faz
+// sentido — esse pedido nasce da tela da encomenda.
+export const tiposGerais = () => TIPOS_LISTA.filter((t) => t.escopo !== "encomenda");
 
 export const tipoValido = (valor) =>
   Object.prototype.hasOwnProperty.call(TIPOS_SOLICITACAO, valor) ? valor : "outro";

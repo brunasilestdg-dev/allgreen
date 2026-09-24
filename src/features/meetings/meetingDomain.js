@@ -290,3 +290,16 @@ export const makeMeeting = (id, { businessId = null, ownerId = null } = {}) => (
   ownerId,
   createdAt: new Date().toISOString(),
 });
+
+// Dica de contexto para a transcrição (`initial_prompt` do Whisper): o modelo
+// erra muito nome próprio, e dar a ele os nomes que a pessoa já cadastrou na
+// reunião é o jeito mais barato de acertar. Só entra o que foi informado —
+// sem participante nem cliente, a dica fica vazia e não é enviada.
+export const transcriptionHint = (meeting) => {
+  const nomes = [...new Set((meeting?.participants || []).map((p) => String(p || "").trim()).filter(Boolean))];
+  const partes = [];
+  if (nomes.length) partes.push(`Participantes: ${nomes.join(", ")}.`);
+  const cliente = String(meeting?.client || "").trim();
+  if (cliente) partes.push(`Cliente: ${cliente}.`);
+  return partes.join(" ").slice(0, 300);
+};

@@ -61,12 +61,20 @@ const FORA_DO_REPOSITORIO = new Set([
   ".github/workflows/qualidade-selfhosted.yml", // exemplo de workflow A CRIAR
 ]);
 
+// Bibliotecas instaladas cujo nome termina como arquivo (`tesseract.js`): a
+// citação é da dependência, não de um arquivo do repositório.
+const pacote = JSON.parse(readFileSync(join(raiz, "package.json"), "utf8"));
+const DEPENDENCIAS = new Set([
+  ...Object.keys(pacote.dependencies || {}),
+  ...Object.keys(pacote.devDependencies || {}),
+]);
+
 const existeNoRepositorio = (citacao, documento) => {
   // Placeholders (`<nome>Domain.js`) e caminhos de Windows (`C:\...`) não são
   // do repositório.
   if (/[<>\\]/.test(citacao)) return true;
   const limpo = citacao.replace(/^\.\//, "").split("#")[0].split(":")[0];
-  if (FORA_DO_REPOSITORIO.has(limpo)) return true;
+  if (FORA_DO_REPOSITORIO.has(limpo) || DEPENDENCIAS.has(limpo)) return true;
   if (existsSync(join(raiz, limpo))) return true;
   if (existsSync(join(raiz, dirname(documento), limpo))) return true;
   const candidatos = PELO_NOME.get(limpo.split("/").pop()) || [];

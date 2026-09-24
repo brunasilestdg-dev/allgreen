@@ -41,6 +41,11 @@ no cofre do Worker (`wrangler secret put NOME`); variáveis públicas ficam em
 | `SUPPORT_EMAIL` | canal de suporte mostrado no app | usa `MAIL_SENDER` |
 | `PUBLIC_APP_URL` | URL pública informada ao OpenRouter (`HTTP-Referer`) | `https://orianone.app` |
 
+Em 24/09/2026 o `/api/config` de produção devolvia `supportEmail: ""`, o que só
+acontece com `SUPPORT_EMAIL` e `MAIL_SENDER` vazios — e sem `MAIL_SENDER` o
+`emailEnabled` é falso: "Esqueci minha senha" responde 503, convite sai sem
+e-mail e o cadastro não pede código. Conferir no cofre.
+
 ## Chaves de cifragem (cofres internos)
 
 São **pré-requisito** do recurso: sem elas o recurso recusa gravar em vez de
@@ -69,8 +74,17 @@ configurados, e ao final há contingência local.
 | `CEREBRAS_API_KEY` | Cerebras | `CEREBRAS_MODEL` |
 | `MISTRAL_API_KEY` | Mistral | `MISTRAL_MODEL` |
 | `OPENROUTER_API_KEY` | OpenRouter (rota gratuita) | — |
-| `GITHUB_MODELS_TOKEN` | GitHub Models (token só com escopo de modelos) | `GITHUB_MODELS_MODEL` |
 | `HF_TOKEN` | Hugging Face | `HF_MODEL` |
+
+`GITHUB_MODELS_TOKEN` não é mais lido: o GitHub Models foi aposentado em
+30/07/2026 (docs.github.com/en/github-models) e saiu da cascata.
+
+**Rota sensível (LGPD)**: pedido com CPF, cartão, senha/chave, conta bancária ou
+termo clínico vai só para quem não treina com o conteúdo (IA local, Cerebras,
+Groq, Workers AI, SambaNova e chaves pagas do próprio espaço). A Gemini API
+gratuita usa o conteúdo para melhorar produtos e pode ter revisão humana
+(ai.google.dev/gemini-api/terms), por isso fica fora dessa rota. Para o Groq,
+ligue o *Zero Data Retention* em Data Controls no console.
 
 ### Provedores pagos
 
@@ -80,19 +94,22 @@ configurados, e ao final há contingência local.
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude. Pensado para **chave trazida pelo espaço** (tela de chaves de IA, cifrada com `WORKSPACE_AI_VAULT_KEY`), que o espaço paga. ⚠️ Se for cadastrado no cofre **da plataforma**, entra no fim da cascata automática **sem** confirmação paga — contraria a regra de gratuidade do `AGENTS.md`; não cadastrar no Worker |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | ChatGPT; mesma regra e mesmo aviso do Claude |
 
-### IA auto-hospedada (gateway de integrações)
+### IA auto-hospedada (opcional)
 
 | Variável | Uso |
 | --- | --- |
-| `TODOGREEN_OLLAMA_BASE_URL` | servidor Ollama próprio (sondado pelo gateway) |
-| `TODOGREEN_VLLM_BASE_URL` / `TODOGREEN_VLLM_API_KEY` | servidor vLLM próprio e seu bearer |
+| `TODOGREEN_OLLAMA_BASE_URL` + `TODOGREEN_OLLAMA_MODEL` | servidor Ollama (API compatível com a OpenAI em `/v1`); entra na cascata e lidera a rota sensível |
+| `TODOGREEN_OLLAMA_API_KEY` | só se o Ollama estiver atrás de um proxy com autenticação |
+| `TODOGREEN_VLLM_BASE_URL` + `TODOGREEN_VLLM_MODEL` + `TODOGREEN_VLLM_API_KEY` | servidor vLLM |
 
 ## Notificações push
 
 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e (opcional) `VAPID_SUBJECT` (`mailto:`
 ou URL do operador; padrão: URL de produção). Sem o par, `pushEnabled(env)` é
-`false` e o app funciona sem notificações do navegador. Formato e geração do
-par: seção "Segredos" do `AGENTS.md`.
+`false` e o app funciona sem notificações do navegador (em 24/09/2026 o
+`/api/config` de produção ainda devolvia `vapidPublicKey: null`). Para gerar um
+par no formato certo: `node scripts/gerar-chaves-vapid.mjs` e depois
+`npx wrangler secret put` de cada um.
 
 ## Busca web (cota gratuita; cascata, nunca paralelo)
 
@@ -124,6 +141,12 @@ Wikipédia). Ordem da cascata: `AGENTS.md`.
 | `INBOUND_EMAIL_SECRET` | segredo do webhook de e-mail recebido (`/api/inbound/email`) | o webhook responde 403 |
 | `EMAIL_INBOUND_OWNER_ID` | dono do espaço que recebe o e-mail quando o domínio não está mapeado | usa `INBOUND_WEBHOOK_OWNER_ID` |
 | `INBOUND_WEBHOOK_OWNER_ID` | dono padrão das mensagens recebidas sem mapeamento | a mensagem sem dono é descartada |
+
+Custos e riscos antes de ligar: a partir de 01/10/2026 a Meta cobra mensagens de
+serviço acima de 1.000 por mês por número e para de entregar sem cartão
+cadastrado. A Evolution API usa o protocolo não oficial do WhatsApp Web — os
+Termos do WhatsApp proíbem automação não autorizada (risco de banimento do
+número).
 
 ## monday.com
 
@@ -176,7 +199,7 @@ segredo por espaço, sempre lidos de `env`.
 
 | Variável | Uso | Sem ela |
 | --- | --- | --- |
-| `GEOAPIFY_API_KEY` | geocodificação, roteamento cloud (leves e pesados) e elevação | usa Nominatim/OSRM/Valhalla conforme contingências configuradas |
+| `GEOAPIFY_API_KEY` | geocodificação, roteamento cloud (leves e pesados) e elevação; também calcula o "Tempo e distância" do Roteirizador das Ferramentas (`/api/rotas/estimativa`). Plano grátis: 3.000 créditos/dia, uso comercial permitido com atribuição | a vertical usa Nominatim/OSRM/Valhalla conforme contingências configuradas (as instâncias públicas proíbem uso comercial/de rastreio — ver `docs/CATALOGO_RECURSOS_GRATUITOS.md`); o Roteirizador manda abrir no Maps |
 | `TDG_ROUTING_URL` / `TDG_ROUTING_TOKEN` | otimizador VROOM auto-hospedado (`/routes/optimize`) e seu bearer | otimização responde `routing_not_configured` (503) |
 | `TDG_OSRM_BASE_URL` / `TODOGREEN_OSRM_BASE_URL` | motor OSRM (perfil genérico) | OSRM não é oferecido na seleção de motor |
 | `TDG_VALHALLA_BASE_URL` / `TODOGREEN_VALHALLA_BASE_URL` | motor Valhalla (truck costing, restrições, elevação) | pesado sem motor seguro: `NO_SAFE_ROUTING_ENGINE` (409) |
@@ -184,7 +207,8 @@ segredo por espaço, sempre lidos de `env`.
 | `TODOGREEN_NOMINATIM_BASE_URL` | geocodificação própria | Nominatim público |
 | `TODOGREEN_DISPATCH_DETOUR_FACTOR` | fator de desvio do despacho (1–2) | 1,3 |
 | `OPENCHARGEMAP_API_KEY` | carregadores públicos com potência/soquete detalhados | cai para o OSM |
-| `TDG_WEATHER_DISABLED=1` | desliga o clima (Open-Meteo) no modelo de energia | — |
+| `MET_NORWAY_USER_AGENT` | identificação enviada à MET Norway (clima), que exige contato no User-Agent | `AllGreen/1.0 (+URL do app)` |
+| `TDG_WEATHER_DISABLED=1` | desliga a consulta de clima (MET Norway) do modelo de energia | — |
 
 A seleção de motor (`routingEngineSelectionDomain`) usa a presença dessas URLs
 para saber quais motores estão disponíveis — sem forjar disponibilidade.

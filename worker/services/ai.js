@@ -11,6 +11,7 @@ import { allowed, json } from "../lib/http.js";
 import { membershipRole } from "../lib/membership.js";
 import { chavesDoEspaco } from "./ai-keys.js";
 import { chavesDeBuscaDoEspaco } from "./search-keys.js";
+import { detectSensitive } from "../../src/features/knowledge/memoryDomain.js";
 import {
   especialistaDaVertical,
   instrucaoDaVertical,
@@ -383,17 +384,48 @@ const freeAiCatalog = [
   { id: "cerebras", name: "Cerebras Free", key: "CEREBRAS_API_KEY" },
   { id: "mistral", name: "Mistral Free", key: "MISTRAL_API_KEY" },
   { id: "openrouter", name: "OpenRouter Free", key: "OPENROUTER_API_KEY" },
-  { id: "github", name: "GitHub Models Free", key: "GITHUB_MODELS_TOKEN" },
   { id: "huggingface", name: "Hugging Face", key: "HF_TOKEN", limited: true },
+  // IA auto-hospedada pela empresa: sem cota e sem o dado sair do servidor
+  // dela. Precisa de endereço E modelo — só um dos dois não liga nada.
+  {
+    id: "ollama",
+    name: "IA local (Ollama)",
+    requires: ["TODOGREEN_OLLAMA_BASE_URL", "TODOGREEN_OLLAMA_MODEL"],
+  },
+  {
+    id: "vllm",
+    name: "IA local (vLLM)",
+    requires: ["TODOGREEN_VLLM_BASE_URL", "TODOGREEN_VLLM_MODEL"],
+  },
 ];
 
 export function configuredAiProviders(env) {
   return freeAiCatalog.map((item) => ({
     id: item.id,
     name: item.name,
-    configured: item.binding ? !!env[item.binding] : !!env[item.key],
+    configured: item.requires
+      ? item.requires.every((nome) => !!String(env[nome] || "").trim())
+      : item.binding
+        ? !!env[item.binding]
+        : !!env[item.key],
     limited: !!item.limited,
   }));
+}
+
+// Endereço de um servidor de IA auto-hospedado (Ollama, vLLM). Os dois expõem
+// a API compatível com a OpenAI em /v1/chat/completions. Valor vem do cofre
+// (quem configura é a administração), mas ainda assim só http(s) é aceito.
+function localAiBase(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    return ["http:", "https:"].includes(parsed.protocol)
+      ? parsed.toString().replace(/\/+$/, "")
+      : "";
+  } catch {
+    return "";
+  }
 }
 
 export function publicAiResult(result = {}) {
@@ -597,8 +629,13 @@ function buildAiContext(body, serverContext = {}) {
   const contextualPrompt = previous.length
     ? `Continue a conversa considerando as mensagens anteriores abaixo. Não repita respostas já dadas.\n\n${previous.join("\n\n")}\n\nMensagem atual do usuário: ${prompt}`
     : prompt;
-  return { prompt, specialist, system, contextualPrompt, business };
+  return { prompt, specialist, system, contextualPrompt, business, memoryContext };
 }
+
+// O que decide a rota sensível: a conversa de quem usa e as memórias do espaço
+// que entraram no contexto — não as instruções de sistema do próprio app.
+const textoDeQuemUsa = (context) =>
+  `${context.memoryContext || ""}\n${context.contextualPrompt || context.prompt || ""}`;
 
 async function addCurrentWebContext(env, body, prompt, contextualPrompt) {
   if (!shouldSearchWeb(prompt, body.webSearch))
@@ -623,6 +660,52 @@ async function addCurrentWebContext(env, body, prompt, contextualPrompt) {
   };
 }
 
+// ===== Rota sensível (LGPD) =====
+//
+// Os termos da Gemini API gratuita (ai.google.dev/gemini-api/terms, conferido
+// em 24/09/2026) dizem que o conteúdo é usado para "improve, and develop Google
+// products and services and machine learning technologies", que revisores
+// humanos podem lê-lo, e pedem: "Do not submit sensitive, confidential, or
+// personal information to the Unpaid Services" — a exceção vale só para EEE,
+// Suíça e Reino Unido. O plano gratuito da Mistral também treina por padrão, e
+// os roteadores (OpenRouter free, Hugging Face automático) dependem do
+// provedor final. Pedido com dado pessoal sensível vai só para quem não treina
+// com o conteúdo: IA local da empresa, Cerebras, Groq, Workers AI, SambaNova e
+// as chaves pagas que o próprio espaço trouxe (Claude/OpenAI via API não
+// treinam com o que recebem). Se todos falharem, quem chama cai na
+// contingência local — nunca na rota comum.
+const SENSITIVE_ORDER = [
+  "vllm",
+  "ollama",
+  "cerebras",
+  "groq",
+  "gpt-oss",
+  "llama70",
+  "sambanova",
+  "glm",
+  "llama",
+  "claude",
+  "openai",
+];
+
+// Reaproveita o detector da Memória da IA (CPF, cartão, senha/chave, conta
+// bancária, saúde). Dois ajustes para roteamento: CNPJ fica de fora (é dado de
+// empresa, não de pessoa, e aparece em quase toda conversa da vertical de
+// logística) e "saúde" exige termo clínico — "diagnóstico" sozinho é palavra
+// de negócio aqui ("diagnóstico financeiro", diagnóstico da oportunidade). A
+// memória continua usando a regra mais cautelosa, porque lá o custo do falso
+// positivo é só pedir aprovação.
+// Quem chama passa só o que veio de quem usa (conversa, anexos, memórias),
+// nunca as instruções de sistema do próprio app.
+const SAUDE_CLINICA =
+  /(?<![\p{L}\p{N}])(laudos?|atestados?|prontu[áa]rios?|medicamentos?|doen[çc]as?|CID[\s-]?[A-Z]\d{2}|diagn[óo]sticos?\s+(m[ée]dicos?|cl[íi]nicos?))(?![\p{L}\p{N}])/iu;
+
+export function pedidoSensivel(texto) {
+  const alvo = String(texto || "");
+  if (SAUDE_CLINICA.test(alvo)) return true;
+  return detectSensitive(alvo).some((achado) => !["cnpj", "saude"].includes(achado.id));
+}
+
 // A cadeia de provedores, em ordem de preferência.
 //
 // Estava dentro de handleAi, fechada sobre o prompt daquela requisição. O
@@ -635,7 +718,12 @@ async function addCurrentWebContext(env, body, prompt, contextualPrompt) {
 // regra de "profundo usa os melhores primeiro".
 export function providerChain(
   env,
-  { deep = false, confirmPaid = false, preferredProvider = "" } = {},
+  {
+    deep = false,
+    confirmPaid = false,
+    preferredProvider = "",
+    sensitive = false,
+  } = {},
 ) {
   const compatible =
     (config) =>
@@ -711,19 +799,10 @@ export function providerChain(
         },
       }),
     },
-    github: {
-      enabled: !!env.GITHUB_MODELS_TOKEN,
-      run: compatible({
-        endpoint: "https://models.github.ai/inference/chat/completions",
-        token: env.GITHUB_MODELS_TOKEN,
-        model: env.GITHUB_MODELS_MODEL || "openai/gpt-4.1",
-        provider: "GitHub Models Free",
-        headers: {
-          accept: "application/vnd.github+json",
-          "x-github-api-version": "2026-03-10",
-        },
-      }),
-    },
+    // GitHub Models saiu da cascata: foi aposentado em 30/07/2026 ("the
+    // playground, model catalog, inference API, and BYOK are no longer
+    // available" — docs.github.com/en/github-models). Com o token cadastrado,
+    // cada pedido esperava uma falha certa antes de seguir.
     huggingface: {
       enabled: !!env.HF_TOKEN,
       run: compatible({
@@ -763,6 +842,37 @@ export function providerChain(
           "@cf/meta/llama-3.2-3b-instruct",
         ),
     },
+    // IA local: já constava do catálogo de integrações (teste de conexão),
+    // mas ficava fora desta cascata — configurar o servidor não mudava nada
+    // para os assistentes. Timeout maior: servidor próprio costuma ser mais
+    // lento que as nuvens gratuitas.
+    ollama: {
+      enabled: !!(
+        localAiBase(env.TODOGREEN_OLLAMA_BASE_URL) &&
+        String(env.TODOGREEN_OLLAMA_MODEL || "").trim()
+      ),
+      run: compatible({
+        endpoint: `${localAiBase(env.TODOGREEN_OLLAMA_BASE_URL)}/v1/chat/completions`,
+        // O Ollama não pede chave; o protocolo exige algum valor no cabeçalho.
+        token: env.TODOGREEN_OLLAMA_API_KEY || "ollama",
+        model: String(env.TODOGREEN_OLLAMA_MODEL || "").trim(),
+        provider: "IA local (Ollama)",
+        timeout: 20000,
+      }),
+    },
+    vllm: {
+      enabled: !!(
+        localAiBase(env.TODOGREEN_VLLM_BASE_URL) &&
+        String(env.TODOGREEN_VLLM_MODEL || "").trim()
+      ),
+      run: compatible({
+        endpoint: `${localAiBase(env.TODOGREEN_VLLM_BASE_URL)}/v1/chat/completions`,
+        token: env.TODOGREEN_VLLM_API_KEY || "vllm",
+        model: String(env.TODOGREEN_VLLM_MODEL || "").trim(),
+        provider: "IA local (vLLM)",
+        timeout: 20000,
+      }),
+    },
     xai: {
       enabled: confirmPaid === true && !!env.XAI_API_KEY,
       run: (runPrompt, runSystem) =>
@@ -785,20 +895,23 @@ export function providerChain(
       }),
     },
   };
-  const order = deep
+  const order = sensitive
+    ? SENSITIVE_ORDER
+    : deep
     ? [
         "groq",
         "sambanova",
         "cerebras",
         "gemini-flash",
         "openrouter",
-        "github",
         "gpt-oss",
         "mistral",
         "llama70",
         "gemini-lite",
         "gemma",
         "huggingface",
+        "vllm",
+        "ollama",
         "glm",
         "llama",
         "xai",
@@ -818,11 +931,12 @@ export function providerChain(
         "cerebras",
         "openrouter",
         "mistral",
-        "github",
         "gpt-oss",
         "gemma",
         "llama70",
         "huggingface",
+        "vllm",
+        "ollama",
         "glm",
         "llama",
         "xai",
@@ -861,7 +975,10 @@ export function providerChain(
 // falharem, devolve os erros para quem chamou decidir o que fazer — o núcleo
 // cai na contingência local, o portal responde 502.
 export async function runWithFallback(env, { prompt, system, ...opcoes } = {}) {
-  const providers = providerChain(env, opcoes);
+  // Quem chama pode forçar; senão o próprio texto decide. Vale para todos os
+  // caminhos que passam por aqui (chat, Plantû, portal do cliente).
+  const sensitive = opcoes.sensitive ?? pedidoSensivel(prompt);
+  const providers = providerChain(env, { ...opcoes, sensitive });
   const errors = [];
   for (const [nome, run] of providers) {
     try {
@@ -881,8 +998,9 @@ const providerProbeAlias = {
   cerebras: "cerebras",
   mistral: "mistral",
   openrouter: "openrouter",
-  github: "github",
   huggingface: "huggingface",
+  ollama: "ollama",
+  vllm: "vllm",
 };
 
 /** Testa um único provedor configurado sem deixar a cascata mascarar a falha. */
@@ -919,6 +1037,14 @@ export async function handleAiStream(request, env, user) {
   const { prompt, system } = context;
   if (prompt.length < 3) return json({ error: "Explique um pouco mais sobre o que precisa." }, 400);
   if (prompt.length > 50000) return json({ error: "O texto e os anexos ultrapassam o limite." }, 413);
+  // O streaming só existe pelo Gemini gratuito, que usa o conteúdo para treino.
+  // Pedido com dado sensível devolve `fallback` antes de contar cota: a tela
+  // já refaz o pedido em /api/ai, que segue pela rota sensível.
+  if (pedidoSensivel(textoDeQuemUsa(context)))
+    return json(
+      { error: "Pedido com dado sensível: resposta pela rota protegida.", fallback: true },
+      503,
+    );
   // Sem esta checagem o streaming seria um caminho paralelo que ignora a cota,
   // e o limite do plano não valeria nada.
   const cota = await ensureQuota(env, serverContext.ownerId, "aiPerMonth", 1);
@@ -1142,6 +1268,9 @@ export async function handleAi(request, env, user) {
     deep,
     confirmPaid: body.confirmPaid === true,
     preferredProvider: body.preferredProvider,
+    // Decidido sobre o pedido e o contexto do espaço, não sobre o texto de
+    // sites que a busca trouxe (conteúdo externo não é dado de quem usa).
+    sensitive: pedidoSensivel(textoDeQuemUsa(context)),
   });
   if (specialist === "Diretor" && deep && providers.length >= 2) {
     const councilRoles = [

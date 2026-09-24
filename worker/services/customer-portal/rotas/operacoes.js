@@ -19,9 +19,11 @@ import {
   resumirOperacoes,
   slaDaOperacao,
 } from "../../../../src/features/logistics/operationTrackingDomain.js";
-import { scopedWhere } from "../../../../src/features/logistics/customerPortalDomain.js";
+import { clientCan, scopedWhere } from "../../../../src/features/logistics/customerPortalDomain.js";
+import { tiposDaEncomenda } from "../../../../src/features/logistics/clientRequestDomain.js";
 import { response } from "../../todogreen-client-helpers.js";
 import { logPortalEvent } from "../auditoria.js";
+import { linhaParaSolicitacao, tipoParaCliente } from "../solicitacoes.js";
 import { MAX_LIMIT, operacaoDoBanco } from "../visao-do-cliente.js";
 
 export async function rotaDasOperacoes({ request, env, url, resource, documentoPedido, subresource, user, escopo }) {
@@ -161,6 +163,22 @@ export async function rotaDasOperacoes({ request, env, url, resource, documentoP
       }
     }
 
+    // Solicitações desta encomenda (devolução, alteração de endereço,
+    // acareação) e os tipos que cabem na FASE dela. A fase decide o que a tela
+    // pode oferecer: entregue → acareação; em trânsito → devolução e endereço.
+    const entregueOp = Boolean(linha.delivered_at) || linha.status === "concluida";
+    const { sql: sqlSol, params: paramsSol } = scopedWhere(escopo);
+    const solicitacoesOp = await env.DB.prepare(
+      `SELECT id, type, subject, description, urgency, status, fields_json,
+              operation_id, due_at, opened_by, closed_at, created_at, updated_at
+         FROM todogreen_client_requests
+        WHERE ${sqlSol} AND operation_id = ?
+        ORDER BY created_at DESC LIMIT 50`,
+    )
+      .bind(...paramsSol, linha.id)
+      .all()
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
+
     return response({
       operacao,
       sla: slaDaOperacao(operacao),
@@ -176,6 +194,11 @@ export async function rotaDasOperacoes({ request, env, url, resource, documentoP
       assinatura: linha.signature_url
         ? { disponivel: true, impressaoDigital: linha.signature_hash || "" }
         : { disponivel: false, motivo: "A assinatura ainda não foi anexada a esta entrega." },
+      solicitacoes: (solicitacoesOp.results || []).map(linhaParaSolicitacao),
+      // Só oferece abrir se o acesso permite; a tela some com o formulário no
+      // lugar de mostrá-lo e falhar no envio.
+      podeAbrirSolicitacao: clientCan(escopo, "portal:request:create"),
+      tiposSolicitacao: tiposDaEncomenda(entregueOp).map(tipoParaCliente),
     });
   }
 

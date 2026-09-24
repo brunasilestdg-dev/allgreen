@@ -151,10 +151,10 @@ export const codigoDeConviteDaUrl = (search = "") => {
   const m = String(search).match(/[?&]convite=([^&]+)/);
   if (!m) return "";
   // `%` solto na URL faria o decodeURIComponent lançar e derrubar a tela; o
-  // servidor recusa o código torto com mensagem própria.
+  // link torto é ignorado.
   try {
-    return decodeURIComponent(m[1]);
+    return decodeURIComponent(m[1]).trim();
   } catch {
-    return m[1];
+    return "";
   }
 };

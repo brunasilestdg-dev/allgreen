@@ -45,6 +45,8 @@ import {
   evalFormula,
   sheetChartSeries,
   EMAIL_TEMPLATES,
+  BRASIL_BBOX,
+  photonSuggestionLabels,
 } from "./domain.js";
 import {
   DEFAULT_CHART_CONFIG,
@@ -91,10 +93,12 @@ import { escapeHtml, money, slugify, urlBase64ToUint8Array } from "./components/
 import { specialistData } from "./domain/especialistas.js";
 import {
   DOCUMENT_UPLOAD_LIMIT,
+  DOCUMENT_ACCEPT,
   documentFileKind,
   extractDocumentText,
 } from "./components/leituraDeArquivo.js";
 import Markdown from "./components/Markdown.jsx";
+import QrCodeImage from "./components/QrCodeImage.jsx";
 import SharingFields from "./components/SharingFields.jsx";
 import Tasks from "./features/tasks/TasksScreen.jsx";
 import Documents from "./features/documents/DocumentsScreen.jsx";
@@ -2873,7 +2877,7 @@ function UniversalRequest({ db, update, business, setToast }) {
           className="visually-hidden"
           type="file"
           multiple
-          accept=".pdf,.docx,.txt,.md,.markdown,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/csv"
+          accept={DOCUMENT_ACCEPT}
           aria-label="Anexar documentos ao chat"
           onChange={(event) => attachDocuments(event.target.files)}
         />
@@ -6167,22 +6171,33 @@ function PixCharge({ db, update, business, setToast }) {
 
       {code ? (
         <div className="card pix-result">
-          <span className="pix-result-label">Pix copia e cola</span>
-          <textarea className="pix-code" readOnly rows={4} value={code} />
-          <div className="form-actions">
-            <button className="btn primary" onClick={copyCode}>
-              <Copy size={16} /> Copiar código
-            </button>
-            <button className="btn ghost" onClick={shareWhatsapp}>
-              <Send size={16} /> Enviar por WhatsApp
-            </button>
-            <button className="btn ghost" onClick={saveCharge}>
-              Salvar
-            </button>
+          <div className="pix-result-body">
+            <QrCodeImage
+              value={code}
+              size={200}
+              label="QR Code do Pix para pagar pelo app do banco"
+              fileName="cobranca-pix.png"
+            />
+            <div className="pix-result-code">
+              <span className="pix-result-label">Pix copia e cola</span>
+              <textarea className="pix-code" readOnly rows={4} value={code} />
+              <div className="form-actions">
+                <button className="btn primary" onClick={copyCode}>
+                  <Copy size={16} /> Copiar código
+                </button>
+                <button className="btn ghost" onClick={shareWhatsapp}>
+                  <Send size={16} /> Enviar por WhatsApp
+                </button>
+                <button className="btn ghost" onClick={saveCharge}>
+                  Salvar
+                </button>
+              </div>
+            </div>
           </div>
           <p className="pix-hint">
-            O cliente paga em <strong>Pix → Copia e cola</strong> no app do
-            banco. Se você preencheu o valor, ele já vem preenchido.
+            O cliente paga lendo o <strong>QR Code</strong> ou em{" "}
+            <strong>Pix → Copia e cola</strong> no app do banco. Se você
+            preencheu o valor, ele já vem preenchido.
           </p>
         </div>
       ) : (
@@ -7035,7 +7050,7 @@ Use português do Brasil. Se algum campo não se aplicar, use lista vazia ou str
         <div>
           <h1>Análise de textos</h1>
           <p className="page-sub">
-            Cole um texto ou envie um PDF/DOCX e a IA resume, destaca os pontos
+            Cole um texto ou envie um PDF, DOCX, planilha ou foto e a IA resume, destaca os pontos
             importantes e responde suas perguntas — só com o que está no texto.
           </p>
         </div>
@@ -7075,7 +7090,7 @@ Use português do Brasil. Se algum campo não se aplicar, use lista vazia ou str
         <input
           ref={uploadRef}
           type="file"
-          accept=".pdf,.docx,.txt,.md,.markdown,.csv"
+          accept={DOCUMENT_ACCEPT}
           hidden
           onChange={(e) => importFile(e.target.files?.[0])}
         />
@@ -8913,21 +8928,23 @@ function RouterModal({ onClose, setToast }) {
   const [sugg, setSugg] = useState({});
   const [eta, setEta] = useState("");
   const suggTimer = useRef(null);
+  // Sugestões pelo Photon (komoot), feito para busca enquanto se digita. O
+  // Nominatim público, usado antes, proíbe autocompletar no navegador.
   const suggest = (i, q) => {
     clearTimeout(suggTimer.current);
     if (q.trim().length < 4) return;
     suggTimer.current = setTimeout(() => {
-      fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=4&countrycodes=br&q=${encodeURIComponent(q)}`,
-        { headers: { accept: "application/json" } },
-      )
-        .then((r) => (r.ok ? r.json() : []))
-        .then((list) =>
-          setSugg((cur) => ({ ...cur, [i]: (list || []).map((x) => x.display_name) })),
-        )
+      const params = new URLSearchParams({ q: q.trim(), limit: "4", bbox: BRASIL_BBOX });
+      fetch(`https://photon.komoot.io/api/?${params}`, {
+        headers: { accept: "application/json" },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => setSugg((cur) => ({ ...cur, [i]: photonSuggestionLabels(data) })))
         .catch(() => {});
     }, 550);
   };
+  // Tempo e distância pelo servidor (Geoapify, chave no cofre). Antes ia do
+  // navegador ao OSRM de demonstração, que é só para uso não comercial.
   const calcEta = async () => {
     const pts = clean();
     if (pts.length < 2) {
@@ -8936,31 +8953,26 @@ function RouterModal({ onClose, setToast }) {
     }
     setEta("calculando");
     try {
-      const coords = [];
-      for (const p of pts) {
-        const r = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(p)}`,
-          { headers: { accept: "application/json" } },
-        );
-        const j = await r.json();
-        if (!j[0]) throw new Error(`Endereço não encontrado: ${p.slice(0, 40)}`);
-        coords.push(`${j[0].lon},${j[0].lat}`);
+      const r = await fetch("/api/rotas/estimativa", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ stops: pts }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setEta("");
+        setToast(d.error || "Não foi possível calcular agora");
+        return;
       }
-      const or = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${coords.join(";")}?overview=false`,
-      );
-      const oj = await or.json();
-      const route = oj.routes && oj.routes[0];
-      if (!route) throw new Error("Não foi possível traçar a rota.");
-      const min = Math.round(route.duration / 60);
+      const min = Math.round(Number(d.durationSeconds || 0) / 60);
       const h = Math.floor(min / 60);
-      const km = (route.distance / 1000).toFixed(1);
+      const km = (Number(d.distanceMeters || 0) / 1000).toFixed(1);
       setEta(
-        `≈ ${h > 0 ? `${h}h${String(min % 60).padStart(2, "0")}` : `${min} min`} de carro · ${km} km (sem trânsito · dados © OpenStreetMap)`,
+        `≈ ${h > 0 ? `${h}h${String(min % 60).padStart(2, "0")}` : `${min} min`} de carro · ${km} km (sem trânsito · ${d.attribution || "dados © OpenStreetMap"})`,
       );
-    } catch (e) {
+    } catch {
       setEta("");
-      setToast(e.message || "Não foi possível calcular agora");
+      setToast("Não foi possível calcular agora");
     }
   };
   const setStop = (i, v) => setStops((s) => s.map((x, j) => (j === i ? v : x)));
@@ -9072,6 +9084,9 @@ function RouterModal({ onClose, setToast }) {
           <Plus size={16} />
           Adicionar parada
         </button>
+        <p className="route-attribution">
+          Sugestões de endereço: Photon · © colaboradores do OpenStreetMap
+        </p>
         {eta && (
           <div className="route-eta">
             {eta === "calculando" ? "Calculando rota..." : eta}
@@ -13638,7 +13653,7 @@ export default function App() {
       mode: db.preferences.mode || "business",
     });
   }, [db.user?.id, db.spaceKey, db.preferences.mode]);
-  useEntradaPorConvite(db.user, setToast);
+  useEntradaPorConvite();
   useEffect(() => {
     if (toast) {
       const t = setTimeout(() => setToast(""), 2400);

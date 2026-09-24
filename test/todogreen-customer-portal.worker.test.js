@@ -903,3 +903,77 @@ describe("central de atendimento automatizada", () => {
     expect(r.status).toBe(401);
   });
 });
+
+describe("solicitações por encomenda (devolução, endereço, acareação)", () => {
+  const agora = new Date().toISOString();
+  beforeAll(async () => {
+    // Uma encomenda em trânsito e uma entregue, do cliente A.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_client_operations
+         (id, tenant_id, client_id, workspace_owner_id, reference, status,
+          service_date, origin, destination, fields_json, delivered_at,
+          created_by, updated_by, created_at, updated_at)
+       VALUES
+         ('op-tk-transito','todogreen','cli-a','dono','OP-TK-T','active','2026-09-01','CD','Hub','{}',NULL,'seed','seed',?,?),
+         ('op-tk-entregue','todogreen','cli-a','dono','OP-TK-E','concluida','2026-09-01','CD','Hub','{}','2026-09-02T10:00:00.000Z','seed','seed',?,?)`,
+    ).bind(agora, agora, agora, agora).run();
+  });
+
+  const abrir = (op, corpo) =>
+    pedir("/api/todogreen/portal/solicitacoes", {
+      method: "POST",
+      token: pessoaA.token,
+      body: { operacaoId: op, ...corpo },
+    });
+
+  it("em trânsito: aceita devolução e alteração de endereço", async () => {
+    const dev = await abrir("op-tk-transito", {
+      tipo: "devolucao", assunto: "Solicitação de devolução",
+      descricao: "Motivo da devolução: produto errado.", campos: { motivo: "Produto errado" },
+    });
+    expect(dev.status).toBe(201);
+    const end = await abrir("op-tk-transito", {
+      tipo: "alteracao_endereco", assunto: "Alteração de endereço",
+      descricao: "Novo endereço: Rua X, 100.", campos: { novoEndereco: "Rua X, 100" },
+    });
+    expect(end.status).toBe(201);
+  });
+
+  it("em trânsito: recusa acareação (só depois da entrega)", async () => {
+    const r = await abrir("op-tk-transito", {
+      tipo: "acareacao", assunto: "Acareação",
+      descricao: "Motivo: contestação.", campos: { motivo: "Contestação" },
+    });
+    expect(r.status).toBe(409);
+  });
+
+  it("entregue: aceita acareação e recusa devolução", async () => {
+    const ok = await abrir("op-tk-entregue", {
+      tipo: "acareacao", assunto: "Acareação",
+      descricao: "Motivo: não recebi.", campos: { motivo: "Não recebi" },
+    });
+    expect(ok.status).toBe(201);
+    const nao = await abrir("op-tk-entregue", {
+      tipo: "devolucao", assunto: "Devolução",
+      descricao: "Motivo: arrependimento.", campos: { motivo: "Arrependimento" },
+    });
+    expect(nao.status).toBe(409);
+  });
+
+  it("o detalhe da encomenda traz suas solicitações e os tipos da fase", async () => {
+    const d = await (await pedir("/api/todogreen/portal/operacoes/op-tk-transito", { token: pessoaA.token })).json();
+    expect(d.tiposSolicitacao.map((t) => t.id).sort()).toEqual(["alteracao_endereco", "devolucao"]);
+    expect(d.solicitacoes.length).toBeGreaterThanOrEqual(2);
+    expect(d.solicitacoes.every((s) => s.operacaoId === "op-tk-transito")).toBe(true);
+    expect(d.podeAbrirSolicitacao).toBe(true);
+  });
+
+  it("o cliente B não abre solicitação numa encomenda do cliente A", async () => {
+    const r = await pedir("/api/todogreen/portal/solicitacoes", {
+      method: "POST",
+      token: pessoaB.token,
+      body: { operacaoId: "op-tk-transito", tipo: "devolucao", assunto: "Devolução", descricao: "Motivo: teste.", campos: { motivo: "teste" } },
+    });
+    expect(r.status).toBe(404);
+  });
+});

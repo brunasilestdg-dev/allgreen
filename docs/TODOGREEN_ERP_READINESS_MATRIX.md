@@ -172,7 +172,7 @@ ao servidor e à tela. Os que ainda são só domínio estão marcados **Parcial*
 
 | Processo | Implementado | Testado | Homologado | Evidência e fronteira |
 | --- | --- | --- | --- | --- |
-| Estimativa de energia/autonomia | Sim | Sim | Não registrado | `energyEstimationDomain.js`, usado pela viabilidade, pelo pré-flight e pelo `electric-plan`; elevação e clima com proveniência (0122), baseline por veículo (0123) devolvido pela API mas ainda sem substituir o consumo nominal. Com `GEOAPIFY_API_KEY`, a elevação vem primeiro da Geoapify. |
+| Estimativa de energia/autonomia | Sim | Sim | Não registrado | `energyEstimationDomain.js`, usado pela viabilidade, pelo pré-flight e pelo `electric-plan`; elevação e clima com proveniência (0122) — o clima vem da MET Norway, porque a API gratuita do Open-Meteo é só para uso não comercial —, baseline por veículo (0123) devolvido pela API mas ainda sem substituir o consumo nominal. Com `GEOAPIFY_API_KEY`, a elevação vem primeiro da Geoapify. |
 | Tarifa de energia de referência (ANEEL) | Sim | Sim | Não registrado | `energyTariffDomain.js` (hierarquia contrato > informada > ANEEL > fallback) e cache 0124. Testes: `energyTariffDomain.test.js`, `todogreen-energy.worker.test.js`. |
 | Preço de diesel de referência (ANP) | Sim | Sim | Não registrado | `anpDieselPriceDomain.js`, ingestão semanal ou `POST /energy/anp/import`, stale em 21 dias. |
 | Janela energética de recarga (ONS) | Sim | Sim | Não registrado | `gridWindowDomain.js` (pesos 60/40), perfil 24 h por subsistema. Sem fator de emissão horário. |

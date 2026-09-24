@@ -62,5 +62,3 @@ export const aceitarConviteDeColaboracao = (corpo) =>
   postJson("/api/collab/invite/accept", corpo, authHeaders());
 
 // Entrada num espaço compartilhado pelo código `?convite=` da URL.
-export const entrarPorCodigoDeConvite = (code) =>
-  postJson("/api/collab/join", { code }, authHeaders());

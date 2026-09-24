@@ -15,15 +15,15 @@ test.describe("jornadas críticas da To Do Green", () => {
   test("a entrada da vertical não apresenta Seu Funcionário", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/todogreen");
-    // A entrada do ERP é a tela limpa — a mesma que o teste de unidade
-    // `src/loginToDoGreen.test.jsx` descreve: marca da To Do Green, "LOGIN
-    // PRIVADO" e só e-mail e senha. O desenho antigo ("TRANSPORTADORA 100%
-    // ELÉTRICA", "Ambiente corporativo To Do Green") não aparece desde a
-    // entrada limpa; estas asserções pediam por ele e deixavam o gate crítico
-    // vermelho sem nenhuma regressão.
+    // A entrada do ERP é a tela limpa (`tdg-auth-entry`) — a mesma que o teste
+    // de unidade `src/loginToDoGreen.test.jsx` descreve: marca da To Do Green,
+    // "LOGIN PRIVADO" e só e-mail e senha. O painel antigo com "TRANSPORTADORA
+    // 100% ELÉTRICA" não é mais desenhado nesta rota; as asserções que pediam
+    // por ele deixavam o gate crítico vermelho sem nenhuma regressão.
+    await expect(page.getByRole("region", { name: "Entre no ambiente To Do Green" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Entrar" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "To Do Green" })).toBeVisible();
     await expect(page.getByText("LOGIN PRIVADO")).toBeVisible();
-    await expect(page.getByAltText("To Do Green")).toBeVisible();
     // O título vira "All Green" pelo observador do index.html; o que importa
     // aqui é que a aba nunca diga Seu Funcionário.
     await expect(page).not.toHaveTitle(/Seu Funcionário/);

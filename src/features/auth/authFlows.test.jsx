@@ -298,24 +298,25 @@ describe("primeiro acesso com senha provisória", () => {
   });
 });
 
-describe("entrada por código de convite na URL", () => {
-  it("troca o código pela entrada no espaço e limpa a URL", async () => {
-    history.replaceState({}, "", "/?convite=COD%20123");
-    const fetchMock = rotas({ "/api/collab/join": { ownerId: "owner-ana", ownerName: "Ana" } });
-    vi.stubGlobal("fetch", fetchMock);
-    const setToast = vi.fn();
-    renderHook(() => useEntradaPorConvite({ id: "u1" }, setToast));
-    await waitFor(() => expect(setToast).toHaveBeenCalledWith("Você entrou no espaço de Ana"));
-    expect(corpoDa(fetchMock, "/api/collab/join")).toEqual({ code: "COD 123" });
-    expect(window.location.search).toBe("");
-  });
-
-  it("sem pessoa logada o código espera na URL", () => {
-    history.replaceState({}, "", "/?convite=abc");
+describe("link antigo de convite (?convite=CÓDIGO)", () => {
+  // /api/collab/join não existe mais: o convite mora em /convite/:token
+  // (AcceptInvite), que atende quem tem e quem não tem conta.
+  it("redireciona para a página do convite, com ou sem pessoa logada", () => {
+    const replace = vi.fn();
     const fetchMock = rotas({});
     vi.stubGlobal("fetch", fetchMock);
-    renderHook(() => useEntradaPorConvite(null, vi.fn()));
+    vi.stubGlobal("location", { search: "?convite=COD%20123", pathname: "/", replace });
+    renderHook(() => useEntradaPorConvite());
+    expect(replace).toHaveBeenCalledWith("/convite/COD%20123");
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(window.location.search).toBe("?convite=abc");
+  });
+
+  it("sem código, ou com código torto, não sai do lugar", () => {
+    const replace = vi.fn();
+    vi.stubGlobal("location", { search: "?convite=100%", pathname: "/", replace });
+    renderHook(() => useEntradaPorConvite());
+    vi.stubGlobal("location", { search: "?x=1", pathname: "/", replace });
+    renderHook(() => useEntradaPorConvite());
+    expect(replace).not.toHaveBeenCalled();
   });
 });

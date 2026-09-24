@@ -1,6 +1,7 @@
 import { urlCurvaCargaOns, urlPrecosAnp } from "./todogreen-energy-reference.js";
 import { urlBuscaPncp, urlContratacoesComprasGov, urlGdelt } from "./todogreen-market-signals.js";
 import { urlPacoteAntt } from "./todogreen-road-risk.js";
+import { horarioDaMetNorway } from "../../src/features/logistics/geoProvidersDomain.js";
 
 const DEFAULT_TIMEOUT_MS = 7_000;
 
@@ -10,6 +11,11 @@ const finite = (value, fallback = null) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 };
+
+// A MET Norway recusa (403) quem não se identifica com um contato.
+const metNorwayUserAgent = (env) =>
+  text(env?.MET_NORWAY_USER_AGENT, 200) ||
+  `AllGreen/1.0 (+${text(env?.PUBLIC_APP_URL, 120) || "https://orianone.app"})`;
 
 const configuredUrl = (value) => {
   const raw = text(value, 2_000);
@@ -138,12 +144,14 @@ export function todoGreenExternalIntegrationCatalog(env = {}) {
       }),
     ],
     intelligence: [
+      // MET Norway no lugar do Open-Meteo: a API gratuita do Open-Meteo é só
+      // para uso não comercial; a da MET permite uso comercial com atribuição.
       item({
-        id: "open-meteo",
-        name: "Open-Meteo",
+        id: "met-norway",
+        name: "MET Norway",
         category: "intelligence",
         mode: "public-free",
-        detail: "Clima operacional por latitude e longitude.",
+        detail: "Clima operacional por latitude e longitude (Locationforecast, CC BY 4.0 — exige atribuição).",
         capabilities: ["forecast"],
       }),
       item({
@@ -337,11 +345,11 @@ export async function probeTodoGreenExternalIntegration(env = {}, provider) {
     case "ibge":
       result = await jsonFrom("https://servicodados.ibge.gov.br/api/v1/localidades/estados/SP", {}, "IBGE");
       break;
-    case "open-meteo":
+    case "met-norway":
       result = await jsonFrom(
-        "https://api.open-meteo.com/v1/forecast?latitude=-23.5505&longitude=-46.6333&current=temperature_2m",
-        {},
-        "Open-Meteo",
+        "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=-23.5505&lon=-46.6333",
+        { headers: { "user-agent": metNorwayUserAgent(env) } },
+        "MET Norway",
       );
       break;
     case "bcb":
@@ -513,21 +521,29 @@ export async function runTodoGreenExternalIntegration(env = {}, provider, action
     ).data;
   }
 
-  if (id === "open-meteo") {
+  if (id === "met-norway") {
     requireAction(op, ["forecast"]);
     const latitude = finite(input.latitude);
     const longitude = finite(input.longitude);
     if (latitude === null || latitude < -90 || latitude > 90) throw new Error("Latitude inválida.");
     if (longitude === null || longitude < -180 || longitude > 180) throw new Error("Longitude inválida.");
+    // Até 4 casas decimais: com mais que isso a MET responde 403.
     const params = new URLSearchParams({
-      latitude: String(latitude),
-      longitude: String(longitude),
-      current: "temperature_2m,precipitation,rain,wind_speed_10m,weather_code",
-      hourly: "temperature_2m,precipitation_probability,precipitation,rain,wind_speed_10m",
-      timezone: text(input.timezone, 80) || "America/Sao_Paulo",
-      forecast_days: String(Math.min(7, Math.max(1, Math.trunc(finite(input.days, 2))))),
+      lat: String(Math.round(latitude * 1e4) / 1e4),
+      lon: String(Math.round(longitude * 1e4) / 1e4),
     });
-    return (await jsonFrom(`https://api.open-meteo.com/v1/forecast?${params}`, {}, "Open-Meteo")).data;
+    const dados = (
+      await jsonFrom(
+        `https://api.met.no/weatherapi/locationforecast/2.0/compact?${params}`,
+        { headers: { "user-agent": metNorwayUserAgent(env) } },
+        "MET Norway",
+      )
+    ).data;
+    return {
+      ...horarioDaMetNorway(dados),
+      updatedAt: text(dados?.properties?.meta?.updated_at, 40),
+      attribution: "Dados de clima: MET Norway (CC BY 4.0)",
+    };
   }
 
   if (id === "bcb") {

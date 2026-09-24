@@ -1,21 +1,13 @@
 import { useEffect } from "react";
-import { entrarPorCodigoDeConvite } from "./authApi.js";
 import { codigoDeConviteDaUrl } from "./authDomain.js";
 
-// Link de convite com código (`/?convite=...`): assim que há uma pessoa logada,
-// o código é trocado pela entrada no espaço compartilhado e some da URL (não
-// pode ser reaproveitado ao recarregar nem vazar num print da barra).
-export function useEntradaPorConvite(user, setToast) {
+// Link antigo no formato `?convite=CÓDIGO`. Ele chamava /api/collab/join,
+// rota que não existe mais (o Worker respondia 404 "Ação não encontrada").
+// O convite hoje vive em /convite/:token (AcceptInvite), que valida o token
+// e serve quem tem ou não tem conta — então o link antigo só é redirecionado.
+export function useEntradaPorConvite() {
   useEffect(() => {
-    if (!user) return;
-    const code = codigoDeConviteDaUrl(location.search);
-    if (!code) return;
-    history.replaceState({}, "", location.pathname);
-    entrarPorCodigoDeConvite(code)
-      .then(({ data: d }) => {
-        if (d && d.ownerId) setToast(`Você entrou no espaço de ${d.ownerName}`);
-        else if (d && d.error) setToast(d.error);
-      })
-      .catch(() => {});
-  }, [user, setToast]);
+    const codigo = codigoDeConviteDaUrl(location.search);
+    if (codigo) location.replace(`/convite/${encodeURIComponent(codigo)}`);
+  }, []);
 }

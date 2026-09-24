@@ -8,6 +8,7 @@
 
 import {
   STATUS_SOLICITACAO,
+  TIPOS_SOLICITACAO,
   statusValido,
 } from "../../../src/features/logistics/clientRequestDomain.js";
 import { clean, parse, response } from "../todogreen-client-helpers.js";
@@ -16,16 +17,32 @@ import { logPortalEvent } from "./auditoria.js";
 export const linhaParaSolicitacao = (linha) => ({
   id: linha.id,
   tipo: linha.type,
+  // O rótulo legível do tipo, para a tela não precisar reimplementar o dicionário.
+  tipoRotulo: TIPOS_SOLICITACAO[linha.type]?.rotulo || linha.type,
   assunto: linha.subject,
   descricao: linha.description,
   urgencia: linha.urgency,
   status: linha.status,
   campos: parse(linha.fields_json, {}),
+  // Vazio para os pedidos gerais; preenchido para os que nascem de uma encomenda.
+  operacaoId: linha.operation_id || "",
   prazoEm: linha.due_at,
   abertaPor: linha.opened_by,
   encerradaEm: linha.closed_at,
   criadaEm: linha.created_at,
   atualizadaEm: linha.updated_at,
+});
+
+// Um tipo de solicitação como o cliente precisa vê-lo (sem os detalhes internos
+// de escopo/fase). Uma só forma, para lista geral e lista da encomenda não
+// divergirem.
+export const tipoParaCliente = (t) => ({
+  id: t.id,
+  rotulo: t.rotulo,
+  descricao: t.descricao,
+  prazoHoras: t.prazoHoras,
+  obrigatorios: t.obrigatorios,
+  camposRotulo: t.camposRotulo,
 });
 
 export async function inserirMensagem(env, escopo, requestId, { lado, email, nome, texto, interna = 0 }) {

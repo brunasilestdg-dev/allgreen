@@ -485,6 +485,36 @@ export const sugerirEmbarcador = (doc = {}, clientes = []) => {
 // Projeção na operação da vertical
 // ---------------------------------------------------------------------------
 
+// Origem e destino chegam do TRACK3R como CNPJ da unidade da transportadora
+// (ou uma grafia do nome dela) — número cru que não diz nada ao embarcador. Este
+// mapa, pequeno e EXPLÍCITO, troca o identificador pelo NOME. Só entra o que foi
+// confirmado (o CNPJ da To Do Green foi verificado na Receita): nada é inventado.
+// `opcoes.nomesDeUnidade` estende/sobrescreve, para novas unidades entrarem sem
+// tocar no código.
+export const NOMES_DE_UNIDADE = Object.freeze({
+  "41385427000132": "TO DO GREEN",
+  // Grafias equivalentes da mesma unidade, para a tela não mostrar dois nomes
+  // para o mesmo lugar.
+  "TO DO TECNOLOGIA": "TO DO GREEN",
+  "TO DO TECNOLOGIA E SERVICOS LTDA": "TO DO GREEN",
+});
+
+// Resolve um identificador de unidade (CNPJ com/sem máscara, ou nome) para o
+// nome. Sem correspondência, devolve o valor como veio — não apaga o dado nem
+// chuta um nome. Um código interno numérico do TRACK3R (ex.: "2713"), que não é
+// CNPJ e não tem nome na origem, permanece como está até haver de onde traduzir.
+export const nomeDaUnidade = (valor, mapa = {}) => {
+  const bruto = texto(valor);
+  if (!bruto) return "";
+  const efetivo = { ...NOMES_DE_UNIDADE, ...(mapa || {}) };
+  if (efetivo[bruto]) return efetivo[bruto];
+  // CNPJ pela regra central, que mantém as letras do CNPJ alfanumérico —
+  // tirar "tudo que não é dígito" faria um CNPJ com letras nunca casar.
+  const documento = normalizeDocument(bruto);
+  if (documento.length === 14 && efetivo[documento]) return efetivo[documento];
+  return bruto;
+};
+
 // Monta o registro de `todogreen_client_operations` a partir do documento. Pura:
 // devolve e não grava.
 //
@@ -518,8 +548,9 @@ export const projetarOperacao = (doc = {}, opcoes = {}) => {
     // A referência é o que a pessoa procura quando o cliente pergunta: número da
     // nota, ou o id do TRACK3R quando não há nota.
     referencia: texto(doc.invoiceNumber) || texto(doc.externalId),
-    origem: texto(doc.originUnit),
-    destino: texto(doc.currentUnit),
+    // Nome da unidade em vez do CNPJ/código cru — o que o embarcador entende.
+    origem: nomeDaUnidade(doc.originUnit, opcoes.nomesDeUnidade),
+    destino: nomeDaUnidade(doc.currentUnit, opcoes.nomesDeUnidade),
     distanceKm: Math.max(0, numero(doc.distanceKm)),
     vehiclePlate: texto(doc.vehiclePlate),
     // O nome do motorista continua no registro canônico porque a operação
@@ -572,7 +603,7 @@ export const projetarEvento = (doc = {}) => {
     // ocorrência mora aninhada em `ocorrencia.descricao`); nesse caso, usa a
     // descrição do payload em vez de deixar a linha do tempo muda.
     descricao: texto(doc.occurrence) || dadosDeEntregaDoPayload(doc.payload).occurrenceDescription,
-    local: texto(doc.currentUnit) || texto(doc.originUnit),
+    local: nomeDaUnidade(texto(doc.currentUnit) || texto(doc.originUnit)),
     ocorridoEm: texto(doc.occurredAt),
   };
 };

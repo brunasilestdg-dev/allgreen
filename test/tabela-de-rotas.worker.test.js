@@ -62,6 +62,7 @@ const AUTENTICADAS = [
   "/api/workspace/backups",
   "/api/tasks/action",
   "/api/transcribe",
+  "/api/rotas/estimativa",
   "/api/events",
   "/api/outbox/send",
   "/api/inbox/personal",

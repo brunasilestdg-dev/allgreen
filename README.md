@@ -15,7 +15,7 @@ All Green é uma plataforma de gestão empresarial em português do Brasil, publ
 - **Importação aberta**: contatos por CSV, financeiro por CSV/OFX e documentos em formatos comuns.
 - **Ações confirmáveis da IA**: respostas viram tarefa, documento ou projeto sem executar alterações silenciosas.
 
-O núcleo combina as cotas gratuitas de Google, Cloudflare, Groq, Cerebras, Mistral, OpenRouter, GitHub Models e Hugging Face. O provedor pago (xAI) fica fora da cascata automática e só é acionado após confirmação explícita. Se todas as rotas gratuitas falharem, o app entrega um plano de contingência local sem inventar informações.
+O núcleo combina as cotas gratuitas de Google, Cloudflare, Groq, Cerebras, SambaNova, Mistral, OpenRouter e Hugging Face, além de IA auto-hospedada (Ollama/vLLM) quando configurada. Pedido com dado pessoal sensível (CPF, cartão, senha, conta bancária, saúde) segue uma **rota sensível** só com provedores que não treinam com o conteúdo. O provedor pago (xAI) fica fora da cascata automática e só é acionado após confirmação explícita. Se todas as rotas gratuitas falharem, o app entrega um plano de contingência local sem inventar informações.
 
 ## Estrutura
 
@@ -70,7 +70,6 @@ npm run verify # roda lint e todos os testes
 | `CEREBRAS_API_KEY`                | Cerebras Free                                      |
 | `MISTRAL_API_KEY`                 | Mistral Free                                       |
 | `OPENROUTER_API_KEY`              | Roteador gratuito do OpenRouter                    |
-| `GITHUB_MODELS_TOKEN`             | GitHub Models, token limitado ao escopo de modelos |
 | `HF_TOKEN`                        | Hugging Face, crédito gratuito muito limitado      |
 | `XAI_API_KEY`                     | Uso pago opcional e sempre confirmado pelo usuário |
 | `VIDEO_AI_URL` + `VIDEO_AI_TOKEN` | Servidor próprio de vídeo (`video-ai/`)            |

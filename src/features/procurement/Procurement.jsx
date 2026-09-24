@@ -20,6 +20,7 @@ import {
   procurementNumber,
   uid,
 } from "../../domain.js";
+import { DOCUMENT_ACCEPT } from "../../components/leituraDeArquivo.js";
 
 const money = (value) =>
   Number(value || 0).toLocaleString("pt-BR", {
@@ -162,11 +163,11 @@ function ProposalForm({
             <FileUp />
             <span>
               <strong>{reading ? "Lendo proposta..." : "Importar proposta"}</strong>
-              <small>PDF, DOCX, TXT, MD ou CSV. A IA extrai e padroniza os valores.</small>
+              <small>PDF, DOCX, XLSX, TXT, CSV ou foto (lida por OCR no aparelho). A IA extrai e padroniza os valores.</small>
             </span>
             <input
               type="file"
-              accept=".pdf,.docx,.txt,.md,.csv"
+              accept={DOCUMENT_ACCEPT}
               disabled={reading}
               onChange={(e) => readFile(e.target.files?.[0])}
             />

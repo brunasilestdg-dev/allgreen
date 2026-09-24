@@ -147,11 +147,12 @@ describe("código de convite na URL", () => {
   it("lê e decodifica o parâmetro convite", () => {
     expect(codigoDeConviteDaUrl("?convite=ABC%20123")).toBe("ABC 123");
     expect(codigoDeConviteDaUrl("?x=1&convite=abc&y=2")).toBe("abc");
+    expect(codigoDeConviteDaUrl("?convite=%20abc%20")).toBe("abc");
     expect(codigoDeConviteDaUrl("?x=1")).toBe("");
     expect(codigoDeConviteDaUrl("")).toBe("");
   });
 
-  it("código com % solto não derruba a tela", () => {
-    expect(codigoDeConviteDaUrl("?convite=100%")).toBe("100%");
+  it("código com % solto é ignorado, sem derrubar a tela", () => {
+    expect(codigoDeConviteDaUrl("?convite=100%")).toBe("");
   });
 });

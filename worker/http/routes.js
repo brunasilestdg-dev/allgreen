@@ -69,6 +69,7 @@ import { handlePublicInvite } from "../services/public-invite.js";
 import { handlePublicSite } from "../services/public-site.js";
 import { handlePush } from "../services/push-subscriptions.js";
 import { createQuoteHandlers } from "../services/quotes.js";
+import { handleRouteEstimate } from "../services/route-estimate.js";
 import { handleSites } from "../services/sites.js";
 import { handleTaskAction } from "../services/task-action.js";
 import { handleTaskNotify } from "../services/task-notify.js";
@@ -360,6 +361,19 @@ export const ROTAS_AUTENTICADAS = Object.freeze([
       "Não foi possível transcrever o áudio agora. Tente novamente em instantes.",
     ),
     executar: ({ request, env }) => handleTranscribe(request, env),
+  },
+  {
+    // Tempo e distância do Roteirizador pelo servidor (Geoapify, chave no
+    // cofre), no lugar do OSRM de demonstração chamado do navegador. Não usa
+    // banco; o limite é por pessoa, 10 por minuto.
+    caminhos: ["/api/rotas/estimativa"],
+    rotulo: "Route estimate error",
+    falha: erro("Não foi possível calcular a rota agora. Tente novamente em instantes."),
+    executar: ({ request, env, user }) => {
+      if (!allowed(`rota-estimativa:${user.id}`, 10))
+        return json({ error: "Muitas consultas em pouco tempo. Aguarde um minuto." }, 429);
+      return handleRouteEstimate(request, env);
+    },
   },
   {
     caminhos: ["/api/events"],

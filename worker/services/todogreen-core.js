@@ -17,7 +17,6 @@ import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { routeTodoGreenApi } from "./todogreen-router.js";
 import { handleTodoGreenMasterData } from "./todogreen-master-data.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
-import { emailEnabled } from "../mensageria/envio.js";
 import { enviarConviteDeAcessoTodoGreen, handleTodoGreenAccessInvite } from "./todogreen-access-invites.js";
 
 const response = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -341,17 +340,20 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
         ).bind(TODO_GREEN_TENANT.id, espacoDaConcessao(access), normalized).first();
         if (!existing || existing.status !== "active")
           return response({ error:"Só é possível reenviar convite para um acesso ativo." },404);
-        if (!emailEnabled(env))
-          return response({ error:"O envio de e-mail não está configurado. Configure o canal antes de convidar pessoas." },503);
         try {
-          await enviarConviteDeAcessoTodoGreen({
+          const convite = await enviarConviteDeAcessoTodoGreen({
             env, access, user, email: normalized, role: existing.role,
             permissions: parse(existing.permissions_json, []), origin: url.origin,
           });
-          return response({ ok:true, email:normalized, invitationSent:true });
+          return response({
+            ok:true, email:normalized,
+            invitationSent: convite.emailSent,
+            inviteLink: convite.link,
+            inviteExpiresAt: convite.expiresAt,
+          });
         } catch (error) {
           console.error("todogreen resend access invitation", error);
-          return response({ error:"O acesso existe, mas o convite não pôde ser enviado agora." },502);
+          return response({ error:"O acesso existe, mas o convite não pôde ser gerado agora." },502);
         }
       }
 
@@ -397,21 +399,27 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       });
       let invitationSent = false;
       let invitationError = "";
+      let inviteLink = "";
+      let inviteExpiresAt = "";
       if (ativo && body.notify !== false) {
         try {
-          await enviarConviteDeAcessoTodoGreen({
+          const convite = await enviarConviteDeAcessoTodoGreen({
             env, access, user, email: normalized, name: String(body.name || "").trim(),
             role, permissions, origin: url.origin,
           });
-          invitationSent = true;
+          invitationSent = convite.emailSent;
+          inviteLink = convite.link;
+          inviteExpiresAt = convite.expiresAt;
+          if (!convite.emailSent)
+            invitationError = "O acesso foi salvo. O e-mail não está configurado — copie o link de convite abaixo e envie manualmente.";
         } catch (error) {
           console.error("todogreen access invitation", error);
-          invitationError = "O acesso foi salvo, mas o convite não pôde ser enviado agora.";
+          invitationError = "O acesso foi salvo, mas o convite não pôde ser gerado agora.";
         }
       }
       return response({
         ok:true,email:normalized,role,status:ativo ? "active" : "inactive",permissions,expiresAt,
-        invitationSent, invitationError,
+        invitationSent, invitationError, inviteLink, inviteExpiresAt,
         // A tela precisa saber se a pessoa já tem conta: sem conta, o vínculo
         // com o espaço só nasce no primeiro acesso dela.
         vinculadoAoEspaco: Boolean(ativo && conta?.id),
@@ -518,20 +526,26 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       });
       let invitationSent = false;
       let invitationError = "";
+      let inviteLink = "";
+      let inviteExpiresAt = "";
       try {
-        await enviarConviteDeAcessoTodoGreen({
+        const convite = await enviarConviteDeAcessoTodoGreen({
           env, access, user, email: alvo, name: pedido.name || "",
           role, permissions, origin: url.origin,
         });
-        invitationSent = true;
+        invitationSent = convite.emailSent;
+        inviteLink = convite.link;
+        inviteExpiresAt = convite.expiresAt;
+        if (!convite.emailSent)
+          invitationError = "O acesso foi aprovado. O e-mail não está configurado — copie o link de convite e envie manualmente.";
       } catch (error) {
         console.error("todogreen approved request invitation", error);
-        invitationError = "O acesso foi aprovado, mas o convite não pôde ser enviado agora.";
+        invitationError = "O acesso foi aprovado, mas o convite não pôde ser gerado agora.";
       }
       return response({
         ok:true, status:"approved", role, email:alvo,
         aguardandoCadastro: Boolean(!conta?.id),
-        invitationSent, invitationError,
+        invitationSent, invitationError, inviteLink, inviteExpiresAt,
       });
     }
     return response({ error:"Método não permitido." },405);
