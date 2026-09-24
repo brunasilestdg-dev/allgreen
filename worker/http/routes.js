@@ -355,8 +355,10 @@ export const ROTAS_AUTENTICADAS = Object.freeze([
   },
   {
     caminhos: ["/api/transcribe"],
-    rotulo: null,
-    falha: null,
+    rotulo: "Transcription error",
+    falha: erro(
+      "Não foi possível transcrever o áudio agora. Tente novamente em instantes.",
+    ),
     executar: ({ request, env }) => handleTranscribe(request, env),
   },
   {
@@ -495,14 +497,18 @@ export const ROTAS_AUTENTICADAS = Object.freeze([
   {
     caminhos: ["/api/ai"],
     metodo: "POST",
-    rotulo: null,
-    falha: null,
+    rotulo: "AI error",
+    falha: erro(
+      "Não foi possível gerar a resposta agora. Tente novamente em instantes.",
+    ),
     executar: ({ request, env, user }) => handleAi(request, env, user),
   },
   {
     caminhos: ["/api/media"],
-    rotulo: null,
-    falha: null,
+    rotulo: "Media error",
+    falha: erro(
+      "Não foi possível gerar a mídia agora. Tente novamente em instantes.",
+    ),
     executar: ({ request, env, url }) => handleMedia(request, env, url),
   },
   // Legado: o needsAuth antigo casava o prefixo /api/inbox inteiro, e o que
