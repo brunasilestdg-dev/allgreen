@@ -156,6 +156,44 @@ describe("solicitar acesso e a fila de aprovação", () => {
     expect(denovo.status).toBe(409);
   });
 
+  it("sem e-mail configurado, aprovar devolve um link de convite válido para entrega manual", async () => {
+    // O ambiente de teste não tem Brevo (BREVO_API_KEY/MAIL_SENDER), então o
+    // e-mail não sai — mas a autorização não pode ficar presa a isso. O convite
+    // continua válido e o link volta na resposta para o admin copiar e enviar.
+    const email = `linkmanual-${crypto.randomUUID()}@empresa.com.br`.toLowerCase();
+    await pedir("/api/todogreen/solicitar-acesso", { metodo: "POST", corpo: { nome: "Link Manual", email } });
+    const fila = await (await pedir("/api/todogreen/access-requests", { token: gestora.token })).json();
+    const pedido = fila.requests.find((item) => item.email === email);
+    expect(pedido).toBeTruthy();
+
+    const aprovar = await pedir("/api/todogreen/access-requests", {
+      metodo: "POST", token: gestora.token, corpo: { id: pedido.id, decisao: "aprovar", role: "auditor" },
+    });
+    expect(aprovar.status).toBe(200);
+    const corpo = await aprovar.json();
+    expect(corpo.invitationSent).toBe(false);
+    expect(typeof corpo.inviteLink).toBe("string");
+    expect(corpo.inviteLink).toContain("/todogreen/convite/");
+
+    // O convite ficou 'pending' (usável), não 'send_failed' — o link precisa valer.
+    const conviteRow = await env.DB.prepare(
+      "SELECT status FROM todogreen_access_invites WHERE tenant_id='todogreen' AND email=? ORDER BY created_at DESC LIMIT 1",
+    ).bind(email).first();
+    expect(conviteRow?.status).toBe("pending");
+
+    // O link é a credencial: com o token dele a pessoa define a senha e entra —
+    // exatamente o caminho que o e-mail traria, mas entregue à mão.
+    const token = corpo.inviteLink.split("/todogreen/convite/")[1];
+    expect(token).toBeTruthy();
+    const aceite = await pedir("/api/todogreen/access-invite", {
+      metodo: "POST", corpo: { token, password: "senha-forte-123", name: "Link Manual" },
+    });
+    expect(aceite.status).toBe(200);
+    const sessao = await aceite.json();
+    expect(sessao.user?.email).toBe(email);
+    expect(sessao.token).toBeTruthy();
+  });
+
   it("recusar marca o pedido como recusado sem conceder nada", async () => {
     const email = `recusa-${crypto.randomUUID()}@empresa.com.br`.toLowerCase();
     await pedir("/api/todogreen/solicitar-acesso", { metodo: "POST", corpo: { nome: "Recusada", email } });
