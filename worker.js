@@ -15,6 +15,7 @@ import {
   unhex,
 } from "./worker/auth/credenciais.js";
 import { rotear } from "./worker/http/router.js";
+import { ehDisparoSemanal } from "./worker/lib/cron.js";
 import {
   askOpenAICompatible,
   configuredAiProviders,
@@ -49,12 +50,16 @@ export { handleTranscribe };
 export default {
   async scheduled(controller, env, ctx) {
     const now = new Date(controller?.scheduledTime || Date.now());
-    if (controller?.cron === "0 12 * * 1")
+    // O disparo semanal roda só o que é semanal. Os jobs horários abaixo já
+    // rodam na invocação do CRON_HORARIO do mesmo minuto (worker/lib/cron.js).
+    if (ehDisparoSemanal(controller)) {
       ctx.waitUntil(
         sendWeeklySummaries(env, now).catch((error) =>
           console.error("scheduled weekly summary", error),
         ),
       );
+      return;
+    }
     ctx.waitUntil(
       runScheduledAutomations(env, now).catch((error) =>
         console.error("scheduled automations", error),
@@ -99,6 +104,9 @@ export default {
     // fresca para o cockpit e o portal do cliente sem ninguém clicar "sincronizar".
     // Auto-limitado: só integrações em polling, respeitando o intervalo ≥60min de
     // cada uma, no máximo 10 por disparo — não é uma enxurrada de chamadas externas.
+    // Roda SÓ aqui: o job não tem trava, e uma segunda chamada no mesmo disparo
+    // (o worker-entry.js já fez isso) lê as mesmas integrações vencidas e
+    // sincroniza em dobro com o fornecedor.
     ctx.waitUntil(
       runTodoGreenTrackerScheduled(env).catch((error) =>
         console.error("scheduled To Do Green tracker", error),
