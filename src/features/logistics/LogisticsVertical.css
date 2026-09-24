@@ -2737,7 +2737,6 @@
 /* A dica que faltava embaixo do seletor de navegação. */
 .tdg-nav-dica { color: var(--tdg-muted); display: block; font-size: .7rem; line-height: 1.35; margin: 6px 2px 0; }
 
-
 /* ===== Menu em acordeão: área → funcionalidades (pedido da titular) ===== */
 .tdg-nav-areas { display: grid; gap: 2px; padding: 8px 4px 2px 0; }
 .tdg-nav-area-cabeca { align-items: center; display: flex; gap: 4px; }
@@ -3144,3 +3143,12 @@
 .tdg-nav-item-personalizar:hover { background: var(--tdg-soft); }
 .tdg-nav-item-personalizar input { width: auto; margin: 0; }
 .tdg-nav-item-personalizar.oculto-preview { opacity: .5; }
+
+/* ===== Foco visível uniforme na vertical =====
+   Cada tela desenhava (ou não) o próprio anel de foco. Um só, na cor da marca,
+   para teclado e leitor de tela saberem sempre onde estão — sem afetar o clique
+   do mouse (`:focus-visible`). Regras mais específicas continuam valendo. */
+.tdg :is(button, a[href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--tdg-green);
+  outline-offset: 2px;
+}
