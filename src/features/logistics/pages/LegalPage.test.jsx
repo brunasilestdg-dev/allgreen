@@ -65,11 +65,26 @@ describe("página de Jurídico", () => {
     render(<LegalPage registros={registros} clients={clients} criar={criar} setToast={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Novo documento/ }));
     fireEvent.change(screen.getByPlaceholderText(/Contrato de operação/), { target: { value: "Contrato novo" } });
-    fireEvent.change(screen.getByPlaceholderText("Só números"), { target: { value: "12.345.678/0001-95" } });
+    fireEvent.change(screen.getByLabelText("CNPJ da contraparte"), { target: { value: "12.345.678/0001-95" } });
     fireEvent.change(screen.getByPlaceholderText(/Nome de quem assina/), { target: { value: "Maria Souza" } });
     fireEvent.click(screen.getByRole("button", { name: /Registrar documento/ }));
     await waitFor(() => expect(criar).toHaveBeenCalledTimes(1));
     expect(criar.mock.calls[0][1].campos).toMatchObject({ cnpj: "12345678000195", signatario: "Maria Souza" });
+  });
+
+  // CNPJ alfanumérico (emitido desde julho/2026): o campo aceita letras, e o
+  // que é guardado mantém as letras em vez de virar outro número.
+  it("aceita e guarda o CNPJ alfanumérico da contraparte", async () => {
+    const criar = vi.fn().mockResolvedValue({ id: "novo" });
+    render(<LegalPage registros={registros} clients={clients} criar={criar} setToast={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Novo documento/ }));
+    fireEvent.change(screen.getByPlaceholderText(/Contrato de operação/), { target: { value: "Contrato novo" } });
+    const campo = screen.getByLabelText("CNPJ da contraparte");
+    fireEvent.change(campo, { target: { value: "12.abc.345/01de-35" } });
+    expect(campo).toHaveValue("12.ABC.345/01DE-35");
+    fireEvent.click(screen.getByRole("button", { name: /Registrar documento/ }));
+    await waitFor(() => expect(criar).toHaveBeenCalledTimes(1));
+    expect(criar.mock.calls[0][1].campos).toMatchObject({ cnpj: "12ABC34501DE35" });
   });
 
   it("o filtro Todos revela também os encerrados", () => {

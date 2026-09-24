@@ -103,6 +103,31 @@ describe("CNPJ e CPF", () => {
     expect(formatDocument("52998224725")).toBe("529.982.247-25");
     expect(formatDocument("123")).toBe("123");
   });
+
+  // IN RFB nº 2.229/2024: novas inscrições desde julho/2026 podem ter letras
+  // nas 12 primeiras posições. Exemplo oficial da Receita: 12.ABC.345/01DE-35.
+  it("aceita o CNPJ alfanumérico com o dígito verificador oficial (ASCII − 48)", () => {
+    expect(normalizeDocument("12.ABC.345/01DE-35")).toBe("12ABC34501DE35");
+    expect(normalizeDocument("12.abc.345/01de-35")).toBe("12ABC34501DE35");
+    expect(documentKind("12.ABC.345/01DE-35")).toBe("cnpj");
+    expect(isValidCnpj("12.ABC.345/01DE-35")).toBe(true);
+    expect(isValidDocument("12ABC34501DE35")).toBe(true);
+    // Dígito verificador trocado continua sendo recusado.
+    expect(isValidCnpj("12ABC34501DE36")).toBe(false);
+    // Letra nos dígitos verificadores não é CNPJ.
+    expect(isValidCnpj("12ABC34501DE3X")).toBe(false);
+    expect(formatDocument("12ABC34501DE35")).toBe("12.ABC.345/01DE-35");
+    // Demais exemplos válidos do código oficial da Receita.
+    expect(isValidCnpj("ABCDEFGHIJKL80")).toBe(true);
+    expect(isValidCnpj("00000000000191")).toBe(true);
+  });
+
+  it("não deixa letra solta contaminar CPF, CNPJ numérico ou texto com prefixo", () => {
+    expect(normalizeDocument("CPF 529.982.247-25")).toBe("52998224725");
+    expect(normalizeDocument("CNPJ: 11.222.333/0001-81")).toBe("11222333000181");
+    expect(isValidCpf("529.982.247-25")).toBe(true);
+    expect(isValidCnpj("11.222.333/0001-81")).toBe(true);
+  });
 });
 
 describe("papéis da parte", () => {

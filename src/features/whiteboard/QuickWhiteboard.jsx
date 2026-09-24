@@ -409,9 +409,8 @@ export default function QuickWhiteboard({ db, update, business, setToast }) {
 
       <p className="qwb-hint">
         Salva sozinho a cada traço, então dá para retomar depois.{" "}
-        <strong>Reconhecimento de escrita à mão não está incluído</strong> — isso
-        exigiria um serviço de OCR pago. Edição simultânea entre pessoas também
-        não: depende de infraestrutura em tempo real que é cobrada à parte.
+        <strong>Reconhecimento de escrita à mão não está incluído</strong> ainda,
+        nem a edição simultânea entre pessoas: o quadro é de uma pessoa por vez.
       </p>
     </section>
   );

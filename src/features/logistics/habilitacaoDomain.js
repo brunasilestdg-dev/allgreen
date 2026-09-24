@@ -1,3 +1,4 @@
+import { normalizeDocument } from "./erpCoreDomain.js";
 // ===== Central de RFQ e RFI: o acervo de habilitação =====
 //
 // A titular mantinha isso numa página HTML solta no computador dela ("Central
@@ -56,7 +57,7 @@ export const codigoDaUnidade = ({ cnpj = "", cidade = "", uf = "", matriz = fals
     .toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "");
   const estado = texto(uf, 2).toUpperCase();
   if (matriz) return ["MATRIZ", estado].filter(Boolean).join("-");
-  const ordem = texto(cnpj, 20).replace(/\D/g, "").slice(8, 12);
+  const ordem = normalizeDocument(texto(cnpj, 20)).slice(8, 12);
   const filial = ordem && ordem !== "0001" ? `F${ordem.slice(-2)}` : "";
   return [filial, cidadeCodigo, estado].filter(Boolean).join("-");
 };

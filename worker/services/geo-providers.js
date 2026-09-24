@@ -4,7 +4,10 @@
 // localmente — nunca pagas por request:
 //   • elevação: Valhalla /height (tiles com relevo do mesmo extrato OSM, no
 //     mesmo servidor da rota de pesados) — DERIVED;
-//   • clima: Open-Meteo (licença aberta) na hora de saída — EXTERNAL.
+//   • clima: MET Norway (Locationforecast, CC BY 4.0 com atribuição) na hora
+//     de saída — EXTERNAL. A API gratuita do Open-Meteo, usada antes, é só para
+//     uso NÃO comercial (open-meteo.com/en/terms); a MET permite uso comercial
+//     e pede User-Agent com contato, coordenada com até 4 casas e cache.
 // Sem fonte: ELEVATION_NOT_AVAILABLE / WEATHER_NOT_AVAILABLE, o modelo de
 // energia assume o perfil plano/sem penalidade térmica e DIZ isso (assumption
 // + confiança menor). Nada é inventado.
@@ -20,6 +23,7 @@ import {
   amostrarGeometria,
   chaveGeo,
   perfilDeElevacao,
+  horarioDaMetNorway,
   pontoMedio,
   requisicaoAlturaValhalla,
   temperaturaNaSaida,
@@ -28,7 +32,13 @@ import {
 const TTL_ELEVACAO_MS = 30 * 24 * 60 * 60 * 1000;
 const TTL_CLIMA_MS = 60 * 60 * 1000;
 const TIMEOUT_MS = 15_000;
-const OPEN_METEO = "https://api.open-meteo.com/v1/forecast";
+const MET_NORWAY = "https://api.met.no/weatherapi/locationforecast/2.0/compact";
+export const ATRIBUICAO_MET_NORWAY = "Dados de clima: MET Norway (CC BY 4.0)";
+
+// A MET recusa (403) quem não se identifica; o contato pode vir do cofre.
+const userAgentDoClima = (env) =>
+  texto(env?.MET_NORWAY_USER_AGENT, 200) ||
+  `AllGreen/1.0 (+${texto(env?.PUBLIC_APP_URL, 120) || "https://orianone.app"})`;
 
 const texto = (v, max = 300) => String(v ?? "").trim().slice(0, max);
 const unir = (base, sufixo) => new URL(String(sufixo).replace(/^\//, ""), base).toString();
@@ -151,7 +161,7 @@ export async function elevacaoDaRota(env, geometry, { fetcher = fetch } = {}) {
 
 /**
  * WeatherProvider: temperatura na hora de saída no ponto médio da rota (ou
- * na coordenada informada). Fonte: Open-Meteo. Sem dado → WEATHER_NOT_AVAILABLE.
+ * na coordenada informada). Fonte: MET Norway. Sem dado → WEATHER_NOT_AVAILABLE.
  */
 export async function climaNaRota(env, { geometry, latitude, longitude, departureIso = "" } = {}, { fetcher = fetch } = {}) {
   const ponto = Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))
@@ -167,24 +177,29 @@ export async function climaNaRota(env, { geometry, latitude, longitude, departur
   if (cached) return { ...cached.payload, cached: true, ingestedAt: cached.ingestedAt, sourceUpdatedAt: cached.sourceUpdatedAt };
 
   try {
+    // Coordenada com no máximo 4 casas: com 5 ou mais a MET responde 403.
     const params = new URLSearchParams({
-      latitude: String(ponto.latitude),
-      longitude: String(ponto.longitude),
-      current: "temperature_2m",
-      hourly: "temperature_2m",
-      timezone: "America/Sao_Paulo",
-      forecast_days: "3",
+      lat: String(ponto.latitude),
+      lon: String(ponto.longitude),
     });
-    const data = await fetchJson(fetcher, `${OPEN_METEO}?${params}`, { headers: { accept: "application/json" } });
-    const leitura = temperaturaNaSaida(data, departureIso);
-    if (!leitura.ok) return { ...leitura, source: "open-meteo", detail: "Open-Meteo sem temperatura para o ponto/hora." };
-    const payload = { ...leitura, source: "open-meteo", latitude: ponto.latitude, longitude: ponto.longitude };
-    const sourceUpdatedAt = texto(data?.current?.time || "", 40) || null;
+    const data = await fetchJson(fetcher, `${MET_NORWAY}?${params}`, {
+      headers: { accept: "application/json", "user-agent": userAgentDoClima(env) },
+    });
+    const leitura = temperaturaNaSaida(horarioDaMetNorway(data), departureIso);
+    if (!leitura.ok) return { ...leitura, source: "met-norway", detail: "MET Norway sem temperatura para o ponto/hora." };
+    const payload = {
+      ...leitura,
+      source: "met-norway",
+      attribution: ATRIBUICAO_MET_NORWAY,
+      latitude: ponto.latitude,
+      longitude: ponto.longitude,
+    };
+    const sourceUpdatedAt = texto(data?.properties?.meta?.updated_at || "", 40) || null;
     const ingestedAt = new Date().toISOString();
-    await gravarCache(env, key, "weather", payload, { source: "open-meteo", sourceUpdatedAt, ttlMs: TTL_CLIMA_MS });
+    await gravarCache(env, key, "weather", payload, { source: "met-norway", sourceUpdatedAt, ttlMs: TTL_CLIMA_MS });
     return { ...payload, cached: false, ingestedAt, sourceUpdatedAt };
   } catch (erro) {
-    return { ok: false, reason: GEO_ERRORS.WEATHER_NOT_AVAILABLE, source: "open-meteo", detail: texto(erro?.message || "open_meteo_indisponivel") };
+    return { ok: false, reason: GEO_ERRORS.WEATHER_NOT_AVAILABLE, source: "met-norway", detail: texto(erro?.message || "met_norway_indisponivel") };
   }
 }
 

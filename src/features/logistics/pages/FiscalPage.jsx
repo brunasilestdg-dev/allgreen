@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, FileText, ReceiptText, RefreshCw, ShieldAlert } from "lucide-react";
 import { STATUS_FISCAL, dadosDacte } from "../fiscalDomain.js";
+import { code128cModules, formatarChaveDeAcesso } from "../code128Domain.js";
 import "./TodoGreenPages.css";
 import Modal from "../../../components/Modal.jsx";
 import { comRotulo } from "../rotulosDomain.js";
@@ -250,7 +251,27 @@ export default function FiscalPage({ authHeaders, setToast }) {
         y += tamanho * 0.6;
       };
       linha(`DACTE — ${comRotulo(NOME_TIPO, doc.docType)} (modelo ${dados.modelo})`, 14, true);
-      linha(`Chave de acesso: ${dados.chaveAcesso || "— (gerada ao assinar)"}`, 9);
+      linha(`Chave de acesso: ${formatarChaveDeAcesso(dados.chaveAcesso) || "— (gerada ao assinar)"}`, 9);
+      // Código de barras CODE-128C da chave, como no leiaute oficial: é por
+      // ele que portaria, posto fiscal e recebedor leem o documento. Sem chave
+      // (ainda não assinado) não há o que codificar.
+      const modulos = code128cModules(String(dados.chaveAcesso || "").replace(/\D/g, ""));
+      if (modulos) {
+        const larguraModulo = 0.3;
+        const alturaBarras = 12;
+        pdf.setFillColor(0, 0, 0);
+        for (let inicio = 0; inicio < modulos.length; ) {
+          if (modulos[inicio] !== "1") {
+            inicio += 1;
+            continue;
+          }
+          let fim = inicio;
+          while (fim < modulos.length && modulos[fim] === "1") fim += 1;
+          pdf.rect(14 + inicio * larguraModulo, y, (fim - inicio) * larguraModulo, alturaBarras, "F");
+          inicio = fim;
+        }
+        y += alturaBarras + 5;
+      }
       linha(`Série ${dados.serie} · Número ${dados.numero || "—"} · Emissão ${dia(dados.dataEmissao)}`, 9);
       y += 3;
       linha("Emitente", 11, true);
