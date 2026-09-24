@@ -1,242 +1,346 @@
 # Matriz de prontidão do ERP To Do Green
 
-Instantâneo originalmente aberto em 30/08/2026 e **revalidado em 13/09/2026** contra o `main` atual. O teste transversal `test/todogreen-erp-journey.worker.test.js` é a fonte de regressão da jornada order-to-cash. Os quatro antigos atalhos internos (Jurídico, evidência de assinatura, implantação ativa e tabela de preço real) já foram fechados; o único `it.todo` remanescente é a autorização oficial de CT-e pela SEFAZ, uma fronteira externa.
+**Revisada em 24/09/2026** contra o código da `main` (`9c760e8`) mais as mudanças
+do mesmo PR desta revisão. A versão anterior (aberta em 30/08 e "revalidada em
+13/09") não refletia as mudanças de 18 a 23/09 (monday.com, tokens do TRACK3R,
+separação All Green/`orianone.app`, migrações 0134–0143) e se contradizia em
+vários pontos — a lista do que mudou está em
+[Divergências corrigidas nesta revisão](#divergências-corrigidas-nesta-revisão).
 
-Esta matriz não mede se existe uma tela. Mede se o processo tem persistência real, regra de negócio no servidor, controle de acesso, trilha de auditoria e efeito verificável. Quando uma etapa depende de governo, banco, certificado, OAuth ou fornecedor, ela fica marcada como externa em vez de ganhar um falso status verde.
+Esta matriz não mede se existe uma tela. Para cada processo, ela responde a três
+perguntas **independentes** — um processo pode estar implementado e testado e,
+mesmo assim, nunca ter sido homologado em produção:
 
-## Legenda
+| Dimensão | Pergunta | Valores |
+| --- | --- | --- |
+| **Implementado** | O efeito de negócio existe no servidor — persistência no D1, regra server-side, controle de acesso (e tela, quando o processo tem tela)? | **Sim** · **Parcial** (núcleo real com lacuna declarada) · **Preparado** (código pronto e dormente até credencial, certificado ou infraestrutura externa) · **Não** (só catálogo, simulação ou nada) |
+| **Testado** | Há teste automatizado **específico** do comportamento, rodando no gate (`npm run verify`: unidade + worker; ou `npm run test:e2e:critical`)? | **Sim** · **Parcial** (só parte do comportamento, ou só o domínio puro) · **Não** · **n/a** |
+| **Homologado em produção** | Há **registro escrito** de validação com dado ou credencial real em produção (`orianone.app`, Worker `allgreen`)? | **Registrado** (com o código da evidência, H1–H7) · **Parcial** (a evidência cobre só parte — ex.: autenticação HTTP, sem dado real) · **Não registrado** |
 
-| Status | Critério |
-| --- | --- |
-| **REAL** | Executa e persiste o efeito de negócio no backend/D1, com regras server-side. |
-| **PARCIAL** | O núcleo é real, mas existe gate contornável, handoff não obrigatório ou fechamento ainda incompleto. |
-| **SIMULADO** | Calcula ou demonstra sem produzir o efeito de negócio que o nome sugere. |
-| **EXTERNO** | O fechamento depende de autoridade, certificado, OAuth, banco, provedor ou infraestrutura fora do ERP. |
+"Não registrado" não quer dizer que não funcione em produção: quer dizer que
+ninguém registrou a validação. Homologação nunca é inferida de "está no ar", de
+teste local ou de publicação bem-sucedida.
+
+**Resumo desta revisão:** nenhum processo de negócio tem homologação registrada
+com dados reais. As evidências escritas cobrem publicação e smoke HTTP (H1, H2,
+H7), a autenticação HTTP dos webhooks do TRACK3R (H3), a resolução de papéis num
+deploy paralelo (H4) e login Google/e-mail antes da separação All Green (H5, H6).
+Seis controles que a matriz anterior dava como fechados têm lacuna — ver
+[Lacunas de controle](#lacunas-de-controle).
+
+## Registro de homologação em produção
+
+Toda validação com dado ou credencial real em produção entra aqui, com data,
+ambiente e o que foi conferido. Linha nova no mesmo PR que muda o status.
+
+| Código | Data | Evidência escrita | O que prova — e o que não prova |
+| --- | --- | --- | --- |
+| **H1** | 13/09/2026 | `docs/DEPLOYMENT_RUNBOOK.md` §13a: publicações com smoke HTTP (`/api/status`, SPA 200, `/api/todogreen/records` 401, `/api/system/version` com SHA e migrações esperadas) | Publicação, migrações aplicadas e rotas vivas. Não prova processo com dado real. Anterior à separação All Green (20/09). |
+| **H2** | 19–20/09/2026 | `docs/HOMOLOGACAO_GO_LIVE.md` (versão conferida por HTTP; deploy do Workers Builds) | Publicação. O mesmo documento declara pendentes "homologar com dados/volume reais" e o backup/restore D1/R2. |
+| **H3** | 22/09/2026 | Mensagem do commit `3fa3876`: 11 segredos individuais dos webhooks TRACK3R cadastrados no Worker `allgreen` e conferidos no ar (200/401/503) | Só a autenticação HTTP de cada endpoint, sem evento real do fornecedor. |
+| **H4** | 20/09/2026 | Commit `913f4ef` ("homologação por perfil"; o doc de apoio foi removido na limpeza de 22/09 e existe só no histórico) | Papéis admin, financeiro, motorista, colaborador e vendedor resolvidos corretamente num deploy **paralelo** (`allgreen.brunapsiles.workers.dev`), com contas de teste. Prova acesso, não processo. |
+| **H5** | 17/07/2026 | `AGENTS.md`, "Pendências conhecidas": login Google, Gmail e Agenda com "fluxos reais validados" | Anterior ao domínio `orianone.app` e ao Worker atual. |
+| **H6** | antes de 20/09/2026 | `AGENTS.md`: verificação e recuperação por código via Brevo, segredos no cofre | Era do Seu Funcionário; não há registro para o Worker `allgreen`. |
+| **H7** | 13/09/2026 | `docs/CLOUDFLARE_BUILDS_SETUP.md`: consolidação que levou `d2396e44d8e4` a produção; `0119` aplicada no D1 de produção | Publicação e schema. |
 
 ## Comercial, cliente e receita
 
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Cadastro de cliente / Conta 360 | **REAL** | `todogreen_clients`, carteira, contatos, revisão e auditoria | Fontes proprietárias de inteligência continuam externas |
-| CRM / carteira | **REAL** | temperatura, estágio, decisores, contatos, responsáveis, comentários e ações persistidos | LinkedIn oficial não está integrado |
-| Oportunidade | **REAL** | tabela própria, `revision`, vínculo por `client_id` e auditoria | Nenhum gap estrutural encontrado |
-| Handoff de oportunidade ganha | **REAL** | `Fechada ganha` cria trabalho de implantação para Operações | Não substitui os gates de contrato/go-live |
-| Precificação | **REAL** | motor no servidor, parâmetros versionados e cenário em `pricing_scenarios` | Dados externos de rota podem depender de serviço público, com fallback manual |
-| Deal Desk | **REAL** | alçada calculada no servidor, segregação solicitante/decisor, versões e histórico | Nenhum gap estrutural encontrado |
-| Proposta | **REAL** | cenário obrigatório e bloqueio server-side quando Deal Desk não liberou | Aceite do cliente ainda é um estado de negócio informado ao ERP |
-| Contrato / versionamento | **REAL** | contrato só nasce de proposta aceita e cliente coerente, com SLA, faturamento, preço e auditoria | Aprovação, Jurídico e assinatura ainda têm gaps abaixo |
-| Jurídico no ciclo contratual | **REAL** | workflow legal real, sequencial e auditável; a transição do contrato para aprovado/assinado consulta a conclusão do Jurídico no servidor | Nenhum atalho interno conhecido |
-| Assinatura contratual | **REAL** | `signature_status=signed` exige documento assinado vinculado ao fluxo jurídico e registra status/data | Validade jurídica externa do provedor/certificado continua fora do ERP |
-| Provedor de assinatura | **EXTERNO** | estrutura de readiness existe | Depende do provedor e do método de identidade/certificado aplicável |
-| Implantação / go-live | **REAL** | readiness, centro de custo, dashboard, portal, tracking e ESG são reais; o gate consulta a tabela de preço e exige que exista, esteja ativa e pertença ao cliente/contrato | Integrações externas continuam dependendo dos provedores correspondentes |
-| Portal do cliente | **REAL** | escopo vem da sessão/banco, com operações, solicitações, documentos e indicadores | Canais externos dependem dos provedores correspondentes |
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Cadastro de cliente / Conta 360 | Sim | Sim | Não registrado | `todogreen_clients` (0032) e `todogreen_client_assignments` (0039); `handleTodoGreenClients` com `revision` e auditoria. Testes: `todogreen-client-assignments.worker.test.js`, `todogreen-customer-portal.worker.test.js`, passo 1 da jornada. Fontes proprietárias de inteligência seguem externas. |
+| CRM / carteira | Sim | Sim | Não registrado | Inteligência em `fields_json` (`todoGreenCrmDomain.js`), comentários (0078) e interações (0079). Testes: `todogreen-vertical-records.worker.test.js` ("interações do comercial…", "carteira: o vendedor não vê a oportunidade do colega"), `interacoesDomain.test.js`. LinkedIn oficial não integrado — só busca pública `site:linkedin.com`. |
+| Oportunidade | Sim | Sim | Não registrado | `todogreen_opportunities` (0041, título na 0081), vínculo por `client_id` e auditoria. Testes: vertical-records ("oportunidades saem do JSON do espaço", "escrita concorrente…"), `OpportunitiesPage.test.jsx`. |
+| Handoff de oportunidade ganha | Sim | Sim | Não registrado | `deveCriarHandoff` → trabalho em `todogreen_work_items` e implantação em `todogreen_implementation_projects`, idempotente. Testes: vertical-records ("remarcar como ganha não duplica a implantação"), `opportunityHandoff.test.js`. |
+| Precificação | Sim | Sim | Não registrado | Motor no servidor (`POST /api/todogreen/simulate`, `pricing_scenarios` 0027) e régua versionada (0060, `todogreen-pricing-parameters.js`). Testes: `todogreen-pricing-parameters.worker.test.js`, `pricingParametersDomain.test.js`; o `/simulate` só é exercitado no passo 3 da jornada. |
+| Deal Desk | Sim | Sim | Não registrado | Alçada calculada no servidor e segregação solicitante/decisor (0042, `todogreen-deal-desk.js`, gate `proposalLiberada`). Teste: `todogreen-deal-desk.worker.test.js` ("quem pede não decide o próprio pedido, nem chamando a API direto"). |
+| Proposta | Sim | Sim | Não registrado | Cenário obrigatório; gates do Deal Desk e da viabilidade na criação e no PATCH. Testes: vertical-records, `todogreen-viability.worker.test.js` ("gate server-side da proposta"). O aceite do cliente é um estado informado ao ERP (`situacao: "accepted"`), não um aceite eletrônico. |
+| Contrato / versionamento | Parcial | Sim | Não registrado | Nasce de proposta aceita e cliente coerente; cada alteração soma `version` e grava evento (0048/0052). Teste: vertical-records ("versiona alterações e preserva a trilha do ciclo contratual"). **Lacuna:** a coerência proposta↔cliente só é conferida na criação ([L5](#lacunas-de-controle)). |
+| Jurídico no ciclo contratual | Parcial | Sim | Não registrado | O gate existe: `juridicoConcluido` exige documento em `todogreen_legal_records` (0090) aprovado/assinado, na criação e na transição do contrato. Testes: jornada (409 antes do Jurídico), vertical-records ("conclui o gate pela página do Jurídico"), `legalWorkflowDomain.test.js`; o endpoint de eventos `POST /records/legal/:id/events` não tem teste de worker. **Lacuna:** o status do documento jurídico pode ser gravado direto ([L1](#lacunas-de-controle)). |
+| Assinatura contratual | Parcial | Parcial | Não registrado | `signed` exige anexo no cofre com contexto jurídico (`documentoDeAssinaturaVinculado`). **Lacuna:** o gate confere a existência do anexo, não o conteúdo nem a assinatura ([L2](#lacunas-de-controle)); nos testes o anexo é inserido por SQL, então o upload pelo cofre não é exercitado nesse gate. A validade jurídica do provedor/certificado é externa. |
+| Provedor de assinatura | Não | n/a | Não registrado | Não há integração com provedor (ClickSign, DocuSign, ZapSign, D4Sign…); o único "readiness" é `signatureStatus === "signed"` em `clientActivationDomain.js`. |
+| Implantação / go-live | Sim | Sim | Não registrado | O readiness exige tabela de preço existente, ativa e do cliente/contrato (`todogreen-client-activation.js`, 0059/0062). Testes: jornada (tabela inativa reprova), `clientActivationDomain.test.js`, `todogreen-client-briefing.worker.test.js`. |
+| Portal do cliente | Sim | Sim | Não registrado | Escopo vem da sessão e do banco (`clientScopeForSession`); operações, solicitações (0040), documentos, NPS (0115) e central de atendimento. Testes: `todogreen-customer-portal.worker.test.js` ("o cliente A nunca alcança o cliente B", "campo livre interno … não vaza"), `todogreen-portal-operacoes`, `todogreen-portal-multiempresa`, `todogreen-portal-nps`, e2e crítico `todogreen-portais-auth.spec.js`. |
 
 ## Operação, frota e execução
 
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Ordem de Serviço | **REAL** | contrato aprovado+assinado e implantação ativa são exigidos no servidor; preço é herdado e há máquina de estados | Nenhum atalho interno conhecido |
-| Planejamento / aceite | **REAL** | capacidade, produto, risco e decisão persistidos | Fontes externas podem enriquecer rota/telemetria |
-| Operação / viagem | **REAL** | `todogreen_client_operations` é fonte canônica compartilhada com o portal | Sincronização automática depende da integração configurada |
-| Ocorrências / eventos | **REAL** | eventos, timeline, SLA e evidências persistidos | Nenhum gap estrutural encontrado |
-| POD / comprovante | **REAL** | conclusão da OS é bloqueada sem POD; entrega pode gerar POD da OS vinculada | Captura física depende do canal/dispositivo |
-| Portal do motorista | **REAL** | recorte por motorista, viagens e eventos próprios | GPS/hardware depende do dispositivo/rastreador |
-| Frota | **REAL** | veículos, motoristas, custos, manutenção, disponibilidade e classes compatíveis | Telemetria depende do rastreador |
-| TMS Track3r por arquivo | **REAL** | importação, deduplicação, atualização e casamento por CNPJ | Nenhuma credencial necessária |
-| TMS Track3r API/webhook | **EXTERNO** | backend/readiness existem | Requer URL, token/webhook e teste real com fornecedor |
-| Rastreamento / telemetria | **PARCIAL** | posições e ponte para operação existem | Só pode ser chamado conectado depois de sincronização/teste bem-sucedido |
-| CIOT interno | **REAL** | payload, piso mínimo, estados, vínculo com OS e registro persistido | Emissão oficial é externa |
-| CIOT oficial ANTT | **EXTERNO** | conector preparado | Exige conector/certificado e confirmação oficial |
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Ordem de Serviço | Sim | Sim | Não registrado | Exige contrato aprovado e assinado e implantação ativa; preço herdado; máquina de estados (`todogreen-transactions.js`, 0056). Teste: `todogreen-transactions.worker.test.js` ("cria uma ordem somente sobre contrato aprovado e assinado", "aceite → OS: a ordem herda o preço"). |
+| Planejamento / aceite | Parcial | Parcial | Não registrado | O que persiste é a OS liberada pelo Planejamento, com produto e campos livres; **não há colunas de capacidade, risco ou decisão**. A tela de aceite de viagens (`TripViabilityPage.jsx`) só calcula. Testes: transições da OS e o cálculo (`tripViabilityDomain.test.js`). |
+| Operação / viagem | Sim | Sim | Não registrado | `todogreen_client_operations` (0033) é a fonte canônica compartilhada com o portal (a antiga `todogreen_operations` saiu na 0112). Testes: vertical-records ("a operação criada por dentro aparece no Portal do Cliente"), `todogreen-portal-operacoes`. |
+| Ocorrências / eventos | Sim | Sim | Não registrado | Ledger `todogreen_client_operation_events` (0045; idempotência 0094; medição 0105) via `aplicarEventoOperacional`. Testes: vertical-records ("linha do tempo operacional"), `todogreen-driver-portal.worker.test.js`, passo 16. |
+| POD / comprovante | Sim | Sim | Não registrado | Entrega sem prova é recusada e a OS não conclui por clique. Testes: transactions ("a entrega com POD conclui e gera elegibilidade"), passo 17. O POD pode ser só o nome do recebedor, sem arquivo; a captura física depende do dispositivo. |
+| Portal do motorista | Sim | Sim | Parcial (H4) | Recorte por `driver_id` (`todogreen-driver-portal.js`). Testes: driver-portal ("minhas viagens são só as minhas"), e2e crítico `todogreen-portais-auth.spec.js`. H4 cobre só a resolução do papel num deploy paralelo. |
+| Frota | Sim | Sim | Não registrado | Veículos, manutenção e eventos (0031), motoristas (0062), classes compatíveis. Teste: `todogreen-fleet.worker.test.js`. Telemetria depende do rastreador. |
+| TMS Track3r por arquivo | Sim | Sim | Não registrado | Importação, deduplicação e casamento por CNPJ (`todogreen-tms.js`, 0063). Teste: `todogreen-tms.worker.test.js` ("importação de arquivo — funciona sem credencial"). O gate de go-live pede "arquivo real importado", sem registro até agora. |
+| TMS Track3r API/webhook | Sim | Sim | Parcial (H3) | Receptor com inbox (0134), rejeições (0142), projetores (0135–0138), token por endpoint e reprocessamento no cron. Testes: `todogreen-tms-webhook`, `todogreen-tms-webhooks-all`, `todogreen-track3r-webhook-tokens`. Falta evento real do fornecedor. |
+| Rastreamento / telemetria | Parcial | Sim | Não registrado | Posições e ponte para a operação (`todogreen-tracker.js`, 0038/0107), retenção no cron. Testes: `todogreen-tracker`, `-readiness`, `-retention`. Só vira "conectado" depois de sincronização real. |
+| CIOT interno | Sim | Sim | Não registrado | Payload, piso mínimo, estados e vínculo com a OS (0057). Teste: transactions ("prepara CIOT e bloqueia frete abaixo do piso mínimo"). |
+| CIOT oficial ANTT | Preparado | Parcial | Não registrado | Conector host-side (`connectors/antt-ciot/`, `docs/todogreen-ciot-direct-connector.md`). Exige certificado e confirmação oficial. |
 
 ## Fiscal, faturamento e financeiro
 
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Fila de faturamento | **REAL** | OS concluída + POD gera item elegível; conferência e fechamento persistem | Nenhum gap estrutural encontrado |
-| Faturamento | **REAL** | billing run, invoice e título a receber são gerados | Documento fiscal oficial é outra etapa |
-| Motor fiscal | **REAL** | cálculo, validação, XML/DACTE, referências, eventos e ciclo de vida | Transmissão oficial depende de integração externa |
-| CT-e / MDF-e autorizado | **EXTERNO** | documento pode ser preparado e validado localmente | Só é autorizado depois do retorno oficial da SEFAZ; `CTE-*` interno não é autorização |
-| NFS-e autorizada | **EXTERNO** | preparação interna possível | Depende de município/provedor e credenciais |
-| Contas a receber | **REAL** | faturamento gera título e espelho no razão | Cobrança bancária automatizada é externa |
-| Recebimento / baixa | **REAL** | parcial/integral, concorrência e espelho no razão | Liquidação/retorno bancário automático depende do banco |
-| Tesouraria / conciliação | **REAL** | extrato, conciliação, saldo, aging e fechamento | Conexão bancária direta seria externa |
-| Custos / rateios | **REAL** | rateio por OS, operação, cliente, contrato, veículo, fornecedor e centro de custo | Nenhum gap estrutural encontrado |
-| Contas a pagar | **REAL** | compras e folha geram obrigações no razão | Pagamento bancário automático é externo |
-| Fechamento de competência | **REAL** | período fechado bloqueia alteração posterior | Nenhum gap estrutural encontrado |
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Fila de faturamento | Sim | Sim | Não registrado | OS concluída + POD gera item elegível; conferência e fechamento (0056). Teste: transactions ("confere, fecha, prepara documento e cria contas a receber"), passo 18. |
+| Faturamento | Sim | Sim | Não registrado | Billing run, invoice e título (0056). O documento fiscal oficial é outra etapa. |
+| Motor fiscal | Sim | Sim | Não registrado | Cálculo, validação, XML/DACTE e ciclo de vida (`todogreen-fiscal.js`, 0064/0069). Testes: `todogreen-fiscal.worker.test.js` ("dois documentos assinados nunca dividem o mesmo número"), `fiscalDomain.test.js`. |
+| CT-e / MDF-e autorizado | Preparado | Parcial | Não registrado | Só transmite com certificado + conector; `interpretarRetornoSefaz` exige cStat 100/104 **com protocolo**. A ponta real com a SEFAZ é o único `it.todo` da jornada. O ERP também aceita **registro manual** de documento autorizado com protocolo e chave digitados, sem consulta oficial. |
+| NFS-e autorizada | Preparado | Parcial | Não registrado | Cálculo e validação internos; depende de município/provedor e credenciais. |
+| Contas a receber | Sim | Sim | Não registrado | Título com espelho no razão (ponte 0069). Teste: transactions ("o título a receber aparece no razão como receita"). Cobrança bancária automatizada é externa. |
+| Recebimento / baixa | Sim | Sim | Não registrado | Baixa parcial/integral com concorrência e espelho no razão. Testes: transactions ("aceita baixa parcial e depois integral"), vertical-records (estorno), passo 20. |
+| Tesouraria / conciliação | Sim | Sim | Não registrado | Extrato, conciliação, saldo e fechamento de período (`todogreen-treasury.js`, 0068). Teste: `todogreen-treasury.worker.test.js`. Conexão bancária direta seria externa. |
+| Custos / rateios | Sim | Sim | Não registrado | Rateio multidimensional (0056). Teste: transactions ("recusa custo sem rateio integral…"). |
+| Contas a pagar | Sim | Sim | Não registrado | Compras e folha geram obrigações em `todogreen_financial_entries`. Testes: purchasing ("entra no estoque e gera o título a pagar…"), payroll ("fechar gera as quatro contas a pagar…"). Pagamento bancário é externo. |
+| Fechamento de competência | Parcial | Parcial | Não registrado | A trava vale na coleção `financial`, nas transações e na tesouraria. Teste: treasury ("mês fechado recusa lançamento novo…"). **Lacuna:** folha, recebimento de compras e NF do PJ gravam no razão sem consultar a trava ([L3](#lacunas-de-controle)). |
 
 ## Compras, suprimentos e estoque
 
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Requisição | **REAL** | itens, requisitante, centro de custo e estados persistidos | Nenhum gap estrutural encontrado |
-| Alçada de compras | **REAL** | etapas por valor no servidor, segregação e recálculo do valor | Faixas ainda são codificadas; devem virar configuração versionada |
-| Cotação / fornecedor | **REAL** | fornecedores e comparação de ofertas | Portal externo de fornecedor dependeria de integração |
-| Pedido de compra | **REAL** | nasce de requisição aprovada, com aprovação e estados | Nenhum gap estrutural encontrado |
-| Recebimento | **REAL** | idempotência, movimento de estoque e obrigação financeira | Nenhum gap estrutural encontrado |
-| Estoque | **REAL** | entradas, saídas, transferências, contagens e saldos | WMS externo seria integração |
-| Cadastros de suprimentos | **REAL** | materiais, depósitos e fornecedores persistidos e permissionados | Nenhum gap estrutural encontrado |
-
-A suíte `todogreen-purchasing.worker.test.js` já funciona como teste transversal de **procure-to-pay**: requisição → aprovação → pedido → recebimento → estoque + conta a pagar, incluindo bloqueio de pulo de etapa e invalidação de aprovação quando o valor muda.
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Requisição | Sim | Sim | Não registrado | Itens, requisitante, centro de custo e máquina de estados (0055/0087). Teste: purchasing ("segue o caminho declarado e recusa pulo de etapa"). |
+| Alçada de compras | Parcial | Parcial | Não registrado | Faixas **configuráveis por espaço** (0111, `GET/PUT /api/todogreen/purchasing-params`, `PurchaseApprovalPanel.jsx`), com revisão otimista e auditoria — sem histórico das versões anteriores (UPSERT com contador). Testes: `todogreen-purchasing-params.worker.test.js`, `purchaseApprovalEnterprise.test.js`; nenhum teste de worker cobre a aprovação em várias faixas. **Lacuna:** ver [L4](#lacunas-de-controle). |
+| Cotação / fornecedor | Parcial | Não | Não registrado | Fornecedores em `todogreen_parties` (0053) e `rfq_id` no pedido; a **comparação de ofertas não está no ERP** (só no app geral, `features/procurement/`). |
+| Pedido de compra | Sim | Sim | Não registrado | Nasce de requisição aprovada; editar depois de aprovado derruba a aprovação. Teste: purchasing ("editar depois de aprovado derruba a validade da aprovação"). |
+| Recebimento | Sim | Sim | Não registrado | Idempotente, com movimento de estoque e título. Teste: purchasing ("recebimento: o ponto com efeito"). |
+| Estoque | Sim | Sim | Não registrado | Movimentos append-only e contagens (0054); saída acima do saldo é 409. Teste: `todogreen-stock.worker.test.js`. WMS externo seria integração. |
+| Cadastros de suprimentos | Sim | Sim | Não registrado | Itens, depósitos e fornecedores permissionados. Teste: `todogreen-erp-core.worker.test.js`. |
 
 ## RH, Departamento Pessoal e pessoas
 
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Cadastro de colaboradores | **REAL** | pessoas, vínculo, cargo, centro de custo, documentos e revisão | Nenhum gap estrutural encontrado |
-| RH operacional / alocação | **REAL** | disponibilidade, escalas e vínculos operacionais | Ponto/benefícios podem depender de terceiros |
-| Folha | **REAL** | cálculo, itens, fechamento/reabertura e tabelas versionadas | Obrigações oficiais precisam de transmissão externa |
-| Férias | **REAL** | cálculo, status e lançamentos financeiros | Governo/banco são externos |
-| Rescisão | **REAL** | cálculo, desligamento e obrigações financeiras | eSocial/FGTS Digital/banco são externos |
-| eSocial / obrigações trabalhistas | **EXTERNO** | cálculo interno não é transmissão | Exige integração e credenciais oficiais |
-| Pagamento bancário da folha | **EXTERNO** | contas a pagar são geradas | Requer banco/CNAB/API |
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Cadastro de colaboradores | Sim | Sim | Não registrado | `todogreen_employees` e documentos (0062), só `hr:manage`. Teste: payroll ("LGPD: só o RH entra"). |
+| RH operacional / alocação | Sim | Sim | Não registrado | Disponibilidade, escalas (0110) e ponto (0066). Testes: payroll ("ponto e férias"), passo 15. |
+| Folha | Parcial | Parcial | Não registrado | Cálculo, itens, fechamento e reabertura (0066). Testes: payroll (fechamento, encargo, DSR, 13º); **a reabertura não tem teste**. **Lacuna:** a única tabela de INSS/IRRF/FGTS é `TABELAS_2025` (`payrollDomain.js`, versão "2025.1"), embutida no código — não há tabela de 2026 nem configuração persistida. |
+| Férias | Sim | Sim | Não registrado | Cálculo, status e lançamentos (0066). |
+| Rescisão | Sim | Sim | Não registrado | Cálculo, desligamento e obrigações. eSocial/FGTS Digital/banco são externos. |
+| eSocial / obrigações | Não | n/a | Não registrado | Só a flag `payrollTransmissionEnabled`; não há código de transmissão. |
+| Pagamento bancário da folha | Não | n/a | Não registrado | Não há CNAB; o adaptador SysPag atende GreenPay e a NF do PJ, não a folha. |
 
 ## Jurídico, Qualidade, Marketing e processos internos
 
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Workflow Jurídico | **REAL** | processos, eventos, responsáveis, duas aprovações e histórico | Ainda não é hard gate do contrato |
-| Negociação contratual | **REAL** | vínculo com cliente/contrato, pontos e histórico podem ser persistidos | Falta amarração obrigatória com o status final do contrato |
-| Qualidade / CAPA / não conformidade | **REAL** | aprovação sequencial Operação + Qualidade/Auditoria | Certificadoras externas continuam externas |
-| Marketing / campanhas | **REAL** | workflow persistido; orçamento eleva alçada para liderança/financeiro | Publicação em canais externos depende do canal |
-| Processos internos gerais | **REAL** | responsável, prazo, status, aprovação, histórico e recorrência | Casos específicos podem exigir template/regra própria |
-| Planner / Projetos / Work Center | **REAL** | tarefas, membros, visibilidade, boards, recorrência e handoffs | Nenhum gap transacional crítico encontrado |
-| Metas | **REAL** | CRUD, check-ins, aprovação e permissões | Nenhum gap estrutural encontrado |
-| Governança / auditoria | **REAL** | trilha de auditoria e eventos de negócio | Política de retenção/backup deve ser definida operacionalmente |
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Workflow Jurídico | Sim | Parcial | Não registrado | Duas etapas (Jurídico + liderança) em `todogreen-enterprise-workflows.js` (0076) e documentos jurídicos (0090/0104). **É lido pelo gate do contrato** (a versão anterior dizia que não era). Testes: `todogreen-enterprise-workflows.worker.test.js` (só casos de Jurídico), jornada. |
+| Negociação contratual | Parcial | Parcial | Não registrado | Pontos de negociação e "com quem está a bola" (`contratoNegociacaoDomain.js`) editados na tela; nenhum código de servidor lê nem exige que estejam resolvidos. Teste só do domínio. |
+| Qualidade / CAPA / não conformidade | Parcial | Parcial | Não registrado | Registro de NC real (0089, coleção `quality`); o plano de aprovação sequencial existe, mas é contornável ([L6](#lacunas-de-controle)). Testes só do registro de NC (vertical-records, `QualityPage.test.jsx`). |
+| Marketing / campanhas | Parcial | Não | Não registrado | Alçada por orçamento no plano (acima de 5 mil liderança; acima de 25 mil financeiro), contornável como a Qualidade. Sem teste. |
+| Processos internos gerais | Parcial | Não | Não registrado | O domínio `general` não tem etapas de aprovação (`approvalPlan` vazio) nem tela; a recorrência roda no cron, sem teste. |
+| Planner / Projetos / Work Center | Sim | Sim | Não registrado | Boards, membros, visibilidade e recorrência (0030/0065/0067). A tarefa canônica vive em `db.tasks` (ver "To Do Green — task canônica" no `AGENTS.md`). Testes: `todogreen-planner`, `todogreen-work-automations`, `WorkViews.test.jsx`. |
+| Metas | Sim | Sim | Não registrado | 0046/0050, `todogreen-goals.js`. Testes: `todogreen-goals.worker.test.js`, `GoalsPage.test.jsx`. |
+| Governança / auditoria | Sim | Parcial | Não registrado | `todogreen_audit_events` (0052) e `/api/todogreen/governance` (`audit:read`). A gravação é conferida em outras suítes; o endpoint de leitura não tem teste. Política de retenção/backup a definir. |
 
 ## ESG, evidências e documentos
 
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Impacto ambiental | **REAL** | cálculo auditável com inputs, metodologia e versões | Fatores precisam de governança quando atualizados |
-| Green Score | **REAL** | score persistido, pesos versionados e componentes abertos | É indicador proprietário, não certificação |
-| Evidências ESG/operacionais | **REAL** | vínculo por cliente/cálculo e rastreabilidade | Evidência de terceiro depende da fonte |
-| Cofre de documentos | **REAL** | upload interno, SHA-256, versionamento, download autenticado e referência externa | Arquivos grandes usam referência externa |
-| Documento contratual | **REAL** | arquivo pode ser guardado/versionado e a transição para `signed` exige evidência assinada vinculada ao fluxo jurídico | Provedor de assinatura/certificado permanece externo |
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Impacto ambiental | Sim | Sim | Não registrado | Cálculo auditável com entradas, metodologia e versão do fator (`todogreen-esg.js`, 0103/0108). Testes: `todogreen-esg`, `-esg-regua`, `-esg-report`. |
+| Green Score | Sim | Sim | Não registrado | Score persistido e pesos versionados (0033/0074). Indicador proprietário, não certificação. |
+| Evidências ESG/operacionais | Sim | Sim | Não registrado | `todogreen_evidences` (0034); impressão digital dos bytes. Teste: `todogreen-evidences.worker.test.js`. |
+| Cofre de documentos | Sim | Sim | Não registrado | SHA-256, versões e download autenticado (0076); pastas (0084). Os bytes ficam em chunks no D1: o binding R2 opcional `MEDIA_BUCKET` não está declarado no `wrangler.jsonc` (`docs/SECRETS.md`). Testes: `todogreen-file-vault`, `todogreen-file-store-r2`. |
+| Documento contratual | Parcial | Parcial | Não registrado | Mesmo gate e mesma lacuna da assinatura contratual ([L2](#lacunas-de-controle)). |
 
 ## Integrações
 
-| Integração / capacidade | Status | Situação |
-| --- | --- | --- |
-| Cloudflare Worker + D1 + Cron | **REAL** | infraestrutura nativa ativa |
-| Versão publicada (`GET /api/system/version`) | **REAL** | SHA, `buildTime`, `branch`, `publishedBy`, `environment` (var do Worker) e migrations esperadas, a partir do manifesto do build — sem segredo; público como `/api/status` |
-| Saúde do sistema (Administração) | **REAL** | `GET /api/todogreen/system-health` (sessão + `integration:manage`/`audit:read`) → componentes (Worker, App, D1 c/ latência e migrations aplicadas × esperadas, R2, IA, busca) e integrações da seção 113 com estado canônico (`systemHealthDomain` reaproveita `integrationStatusDomain`), métricas por integração (migration `0120`: latência, volume, último sucesso/falha) e alertas nomeados (`D1_BEHIND_CODE`, `CLIENT_SERVER_MISMATCH`); testes unitários + worker. Integração só vira *Operacional* com teste/sincronização real |
-| Automações internas | **REAL** | executadas no servidor e persistidas |
-| Webhooks de saída | **REAL** | motor existe; destino precisa estar configurado |
-| API pública / idempotência | **REAL** | infraestrutura disponível |
-| Pesquisa web pública | **PARCIAL** | funciona conforme provedores disponíveis; qualidade depende da fonte |
-| IA BYOK | **PARCIAL** | motor existe; cada provedor depende da conta/chave e teste positivo |
-| E-mail transacional | **EXTERNO** | exige provedor/remetente |
-| WhatsApp | **EXTERNO** | exige instância/Meta, chave e webhook conforme solução |
-| Google Login | **PARCIAL** | login OAuth não equivale a Gmail/Agenda |
-| Gmail / Google Agenda | **EXTERNO** | OAuth e escopos por usuário |
-| Microsoft 365 | **EXTERNO** | Graph/Entra ainda não conectado |
-| LinkedIn oficial | **EXTERNO** | pesquisa pública não equivale à API do LinkedIn |
-| monday.com | **EXTERNO** | sem conector backend ativo |
-| Power BI | **EXTERNO** | sem conector backend ativo |
-| SEFAZ | **EXTERNO** | certificado + homologação + transmissão |
-| ANTT CIOT | **EXTERNO** | conector + certificado + confirmação oficial |
-| Track3r API/webhook | **EXTERNO** | só vira conectado após sincronização real |
+| Integração / capacidade | Implementado | Testado | Homologado | Situação |
+| --- | --- | --- | --- | --- |
+| Cloudflare Worker + D1 + Cron | Sim | Sim | Parcial (H1, H2, H7) | Publicação e smoke registrados; não há registro de execução de cron em produção. Testes: `weekly-summary.worker.test.js`, `automations-scheduled.worker.test.js`. |
+| Versão publicada (`GET /api/system/version`) | Sim | Sim | Registrado (H1) | SHA, build, branch, `publishedBy`, ambiente e migrações esperadas, sem segredo. Teste: `system-health.worker.test.js`. |
+| Saúde do sistema (Administração) | Sim | Sim | Não registrado | `/api/todogreen/system-health` (`integration:manage`/`audit:read`), métricas (0120). O runbook descreve a conferência, sem resultado registrado. |
+| Automações internas | Sim | Sim | Não registrado | Blob (0018) e Central (0049) no cron horário. |
+| Webhooks de saída | Parcial | Parcial | Não registrado | O motor (`worker/services/webhooks.js`) só observa coleções do app geral; **nenhum evento das tabelas `todogreen_*`** (OS, POD, fatura, ocorrência) dispara webhook. Testes só do app geral. |
+| API pública do TMS / idempotência | Sim | Sim | Não registrado | `/api/tms/v1/*` com chaves `tdg_live_*` e idempotência (0088). Testes: `todogreen-tms-public-api`, `todogreen-routing-api`. |
+| Pesquisa web pública | Sim | Sim | Não registrado | Cascata de provedores (`web-search.js`); qualidade depende da fonte. |
+| IA BYOK | Sim | Sim | Não registrado | `ai-keys.js`, cifrado com `WORKSPACE_AI_VAULT_KEY`; cada provedor depende de chave e teste positivo. |
+| E-mail transacional (Brevo) | Sim | Sim | Parcial (H6) | Em uso em convites, portal, avisos e Central. H6 é da era anterior; o commit `9c760e8` trata falhas de entrega de convites no Worker atual. |
+| WhatsApp | Preparado | Sim | Não registrado | Envio pela Cloud API ou Evolution e receptor de entrada, dormentes sem segredo. **Sem `WHATSAPP_APP_SECRET` o webhook de entrada aceita POST sem conferir assinatura** (`docs/SECRETS.md`). |
+| Google Login | Sim | Não | Parcial (H5) | `/api/auth/google` valida o ID token; não há teste de worker. H5 é anterior ao domínio atual. |
+| Gmail / Google Agenda | Parcial | Parcial | Parcial (H5) | Envio, rascunho e evento **pelo navegador** (`src/integrations/google.js`, usado em `EnviarApresentacao.jsx`), testados com mock em `src/workflows.test.jsx`. Nada no backend; ler o Gmail exige OAuth de autorização com `gmail.readonly`, que não existe. |
+| Microsoft 365 | Não | n/a | Não registrado | Só a entrada de catálogo. |
+| LinkedIn oficial | Não | n/a | Não registrado | Catálogo e busca pública; não equivale à API. |
+| monday.com | Parcial | Não | Não registrado | OAuth 2.1/PKCE, receptor de webhook (JWT) e inbox (0139) existem; **falta a projeção** dos eventos para registros do ERP (ficam `received`) e não há teste. Conta ainda não conectada. |
+| Power BI | Não | n/a | Não registrado | Só a entrada de catálogo. |
+| SEFAZ | Preparado | Parcial | Não registrado | Ver CT-e/MDF-e. |
+| ANTT CIOT | Preparado | Parcial | Não registrado | Ver CIOT oficial. |
+| Track3r API/webhook | Sim | Sim | Parcial (H3) | Ver TMS Track3r API/webhook. |
 
-## Jornada order-to-cash auditada
+## Eletrificação, roteirização e viabilidade
 
-O teste transversal `test/todogreen-erp-journey.worker.test.js` percorre o caminho correto pelas APIs de negócio:
+Módulos de domínio puros, determinísticos e testados; a maioria já está ligada
+ao servidor e à tela. Os que ainda são só domínio estão marcados **Parcial**.
 
-1. cliente / CRM
-2. oportunidade
-3. simulação persistida
-4. Deal Desk com outro decisor
-5. proposta
-6. aceite
-7. tabela de preço
-8. contrato
-9. workflow Jurídico completo
-10. assinatura e aprovação registradas
-11. metodologia ESG
-12. operação real
-13. preparação e ativação da implantação
-14. OS com preço herdado
-15. execução
-16. ocorrência
-17. entrega + POD
-18. faturamento
-19. CT-e preparado internamente
-20. título a receber
-21. baixa
-22. razão quitado
+| Processo | Implementado | Testado | Homologado | Evidência e fronteira |
+| --- | --- | --- | --- | --- |
+| Estimativa de energia/autonomia | Sim | Sim | Não registrado | `energyEstimationDomain.js`, usado pela viabilidade, pelo pré-flight e pelo `electric-plan`; elevação e clima com proveniência (0122), baseline por veículo (0123) devolvido pela API mas ainda sem substituir o consumo nominal. Com `GEOAPIFY_API_KEY`, a elevação vem primeiro da Geoapify. |
+| Tarifa de energia de referência (ANEEL) | Sim | Sim | Não registrado | `energyTariffDomain.js` (hierarquia contrato > informada > ANEEL > fallback) e cache 0124. Testes: `energyTariffDomain.test.js`, `todogreen-energy.worker.test.js`. |
+| Preço de diesel de referência (ANP) | Sim | Sim | Não registrado | `anpDieselPriceDomain.js`, ingestão semanal ou `POST /energy/anp/import`, stale em 21 dias. |
+| Janela energética de recarga (ONS) | Sim | Sim | Não registrado | `gridWindowDomain.js` (pesos 60/40), perfil 24 h por subsistema. Sem fator de emissão horário. |
+| Plano de recarga por veículo | Sim | Sim | Não registrado | `planoDeRecargaPorVeiculo` no `/energy/plan`. Testes: `smartChargingPlan.test.js`, `smartChargingDomain.test.js`. Slots de 1 h; não envia comando OCPP. |
+| Radar de mercado estruturado (PNCP · Compras.gov · GDELT) | Sim | Sim | Não registrado | `marketSignalDomain.js`, `todogreen-market-signals.js` (0125, preferências 0133), "Criar oportunidade" a partir do sinal. Testes: `marketSignalDomain.test.js`, `todogreen-market-signals.worker.test.js`. |
+| Risk Map (PRF · ANTT) | Sim | Sim | Não registrado | `roadRiskDomain.js`, `todogreen-road-risk.js`; sem índice é `RISK_DATA_NOT_AVAILABLE`, nunca zero. PRF exige importação manual. |
+| Alternativas de rota com risco como custo | Parcial | Sim | Não registrado | Conectadas no OSRM e no Valhalla (`rankRouteAlternatives`, pedágio). **No caminho Geoapify — o primário quando a chave existe — não há alternativas nem ranking.** Teste: road-risk ("alternativas de rota com risco como custo"). |
+| Design system — tokens e regressão visual | Sim | Sim | n/a | Bloco canônico `.tdg` em `LogisticsVertical.css` e `src/design-system/tokens.css`; guarda `src/design-system/designTokens.test.js`; regressão visual em `e2e/visual/` (fora do gate crítico). Baselines gerados na sessão remota; o caminho Docker não foi exercitado. |
+| Green On — pontos de recarga e OCPP | Parcial | Sim | Não registrado | Pontos (0114), sessões, reservas e preço por kWh (0130); OCPP só PREPARED — nenhum comando sai do sistema e a sessão nasce digitada. |
+| GreenPay — razão e repasse | Sim (razão) · Preparado (repasse) | Sim | Não registrado | Razão interno e contratos de ganho (0113/0131); repasse PIX via SysPag dormente sem `SYSPAG_API_TOKEN` — "pago" é só o razão interno. |
+| Core All Green / Greenmob | Parcial | Parcial | Não registrado | As verticais Greenmob e Green On existem **só no frontend** (dados no blob do workspace), sem backend nem D1; o `tenant_id` é único (`todogreen`). |
+| Seleção de motor OSRM×Valhalla | Sim | Sim | Não registrado | `routingEngineSelectionDomain.js`, `routing-providers.js`; pesado sem Valhalla → `NO_SAFE_ROUTING_ENGINE` (409). Com Geoapify, pesados vão como `heavy_truck` pela Geoapify antes do seletor. |
+| Restrições viárias (OSM) | Parcial | Parcial | Não registrado | Só o domínio (`roadRestrictionDomain.js`), sem consumidor no worker nem nas telas; depende do grafo OSM/PostGIS. |
+| Snapshot de viabilidade | Sim | Sim | Não registrado | Append-only e versionado (0121) com gate server-side da proposta. Testes: `viabilitySnapshotDomain.test.js`, `todogreen-viability.worker.test.js`, passo 4b da jornada. |
+| Pré-flight operacional | Sim | Sim | Não registrado | Persistido e ligado à rota (0132); o despacho automático passa pelo mesmo gate. Testes: `preflightDomain.test.js`, `todogreen-preflight.worker.test.js`, `todogreen-dispatch.worker.test.js`. |
+| Action Queue | Sim | Sim | Não registrado | BLOCK/WARNING e risco alto viram itens na Torre de Controle, com dedupe. Sem fechamento automático do item. |
+| Proveniência de dados | Parcial | Sim | Não registrado | `dataProvenanceDomain.js` usado no worker (pré-flight, viabilidade), ainda não campo a campo nas telas. |
+| Perfil físico/energético do veículo | Sim | Sim | Não registrado | Colunas da 0123 gravadas pelo cadastro da frota. |
+| Fila offline do motorista | Sim | Sim | Não registrado | `driverOfflineQueueDomain.js` consumido pelo portal, com idempotência no servidor (0094). |
 
-### Gates internos da jornada
+## Módulos que não estavam na matriz
 
-Os quatro atalhos internos que esta matriz registrava foram fechados e estão cobertos no happy path transversal:
+Existem no código com persistência e teste, mas não constavam da versão anterior.
 
-1. **Jurídico → contrato:** aprovado/assinado exige workflow jurídico concluído.
-2. **Assinatura → evidência:** `signed` exige documento assinado vinculado.
-3. **Implantação → OS:** a OS exige `client_activation_state.status=active`.
-4. **Tabela de preço → go-live:** o readiness valida existência, estado ativo e vínculo correto da tabela.
+| Módulo | Implementado | Testado | Homologado | Evidência |
+| --- | --- | --- | --- | --- |
+| Portal do colaborador (PJ e CLT) e NF do PJ | Sim (pagamento: Preparado) | Sim | Não registrado | `todogreen-employee-portal.js`, `pjInvoiceDomain.js`, 0117; rota `/portal-colaborador`. Teste: `todogreen-employee-portal.worker.test.js`. |
+| Chamados do colaborador | Sim | Sim | Não registrado | `employeeTicketDomain.js`, 0118. |
+| Chave PIX do motorista e adaptador SysPag | Sim (repasse: Preparado) | Sim | Não registrado | 0116, `pixDomain.js`, `syspagDomain.js`, `todogreen-syspag.js`. |
+| Portal TMS, projeções TRACK3R, TMS manual e ponte local | Sim | Sim | Parcial (H3) | `TmsPortal.jsx` (`/portal-tms`), `todogreen-track3r-projectors.js` (0135–0138, 0142), `todogreen-tms-manual.js`, `todogreen-tms-local-bridge.js`. |
+| Central RFQ/RFI (acervo de habilitação) | Sim | Sim | Não registrado | `habilitacaoDomain.js`, 0083, `CentralRfqPage.jsx`; status é fórmula, nunca coluna. |
+| Pastas do cofre | Sim | Sim | Não registrado | `pastasDomain.js`, 0084; visibilidade pela linhagem. |
+| "Sobre o negócio", dossiê da IA e Plantû | Sim | Sim | Não registrado | `businessContextDomain.js`, 0082, `todogreen-semente.js`, 0091–0095. |
+| Automações configuráveis da Central | Sim | Sim | Não registrado | 0049, `runTodoGreenScheduledWorkAutomations`. Teste: `todogreen-work-automations.worker.test.js`. |
+| Radar por busca web e inteligência de mercado/conta | Sim | Parcial | Não registrado | `todogreen-market-radar.js`, `todogreen-market-intelligence.js` (0075), `todogreen-client-intelligence.js`. |
+| Acesso: pedidos, convites e senha provisória | Sim | Sim | Parcial (H4) | 0086, 0088, `users.must_change_password` (0143). Testes: `todogreen-access`, `-access-requests`, `-access-binding`, `temp-password-access`. |
+| Solicitações do cliente, atendimento automatizado e NPS | Sim | Sim | Não registrado | `todogreen-requests.js` (0040), `atendimentoAutomatizadoDomain.js`, 0115. |
+| Painel comercial (retrato de receita) | Sim | Parcial | Não registrado | `todogreen-commercial-panel.js` (0140/0141); só teste de unidade. |
+| Dashboards configuráveis | Sim | Sim | Não registrado | `todogreen-dashboards.js` (0039). |
+| Desempenho de preço (previsto × realizado) | Sim | Parcial | Não registrado | `todogreen-pricing-performance.js` (0051); só teste de unidade. |
+| Motor HC + DRE | Sim | Parcial | Não registrado | `todogreen-operation-params.js` (0099), `operationEngineDomain.js`; só teste de unidade. |
+| Vistoria, jornada, turnos, CNH e score do motorista | Sim | Sim | Não registrado | 0097, 0109, 0110; `driverChecklistDomain.js`, `driverJourneyDomain.js`, `driverScoreDomain.js`. |
+| Rota do dia, roteirizador e despacho inteligente | Sim | Sim | Não registrado | `todogreen_routes` (0100), 0106, `todogreen-dispatch.js`, `worker/vrp/`. Testes: `todogreen-dispatch`, `todogreen-dispatch-vroom`; e2e `todogreen-roteirizacao.spec.js` (fora do gate crítico). |
+| Pedágios, carregadores públicos, CEP e dados abertos | Sim | Sim | Não registrado | `todogreen-pedagios.js`, `todogreen-carregadores.js`, `todogreen-integration-gateway.js`. |
+| Conexões MCP | Sim | Sim | Não registrado | `worker/services/mcp-connections.js`. Teste: `mcp-connections.worker.test.js`. |
+| Caixa de entrada por e-mail (Brevo Inbound) | Sim | Sim | Não registrado | `worker/mensageria/inbound-email.js`, `/api/inbound/email`. Testes: `inbound.worker.test.js`, `src/inbound-email.test.js`. |
+| Itens menores | Sim | Sim | Não registrado | Modelos de importação de operações (0119), avisos de pendência (0101), fechamento ESG mensal (0108), régua ambiental (0103). |
+| Telas simuladoras (sem API nem persistência) | Não | Parcial (domínio) | n/a | Green On App, Roaming (OCPI), console OCPP, conta corporativa Green On, BESS/pico, fila de alertas, cobrança SaaS, acessos multi-tenant, grupo de entidades, segurança física, RASCI e locação Greenmob — calculam ou demonstram, sem efeito de negócio no servidor. |
 
-O limite restante não é um bug interno: **CT-e autorizado é EXTERNO** e só pode aparecer como autorizado após retorno oficial da SEFAZ. O teste transversal mantém exatamente esse caso como `it.todo`.
+## Lacunas de controle
 
-## Jornadas internas auditadas
+Controles que a versão anterior da matriz dava como fechados e que o código
+permite contornar. Cada item diz como foi constatado; os marcados "pela leitura"
+ainda não foram reproduzidos por teste.
 
-**Procure-to-pay:** requisição → alçada → pedido → envio → recebimento → estoque → conta a pagar → tesouraria. Núcleo **REAL**. Liquidação bancária automática **EXTERNA**.
+| Código | Lacuna | Onde | Como foi constatado |
+| --- | --- | --- | --- |
+| **L1** | O status do documento jurídico é gravado direto pela coleção genérica `legal` (`POST`/`PATCH /api/todogreen/records/legal`), que só exige `proposal:manage` — permissão do vendedor. Isso satisfaz `juridicoConcluido` sem passar pela máquina de estados (`registrarEventoJuridico`) nem por `compliance:manage`. A Central Jurídica (`tdgLegalBridge.js`/`useTdgLegalRecords.js`) também grava `situacao` direto. | coleção `legal` em `todogreen-vertical-records.js` | pela leitura; o próprio teste de vertical-records cria o documento já `aprovado` |
+| **L2** | O gate de assinatura confere só a **existência** de um anexo com contexto jurídico — aceita inclusive referência externa sem bytes — e o upload exige só `proposal:manage`. | `documentoDeAssinaturaVinculado` / `temAnexoNoCofre` | pela leitura |
+| **L3** | Folha, recebimento de compras e aprovação da NF do PJ gravam em `todogreen_financial_entries` sem consultar a trava de competência fechada. | `todogreen-payroll.js`, `todogreen-purchasing.js`, `todogreen-employee-portal.js` | pela leitura |
+| **L4** | A alçada de compras é interceptada por comparação exata de `status` (`"aprovada"`/`"aprovado"`), enquanto o handler interno faz `trim`: um status com espaço no fim pode pular as faixas por valor e a segregação. | `todogreen-purchasing-enterprise.js` × `todogreen-purchasing.js` | pela leitura |
+| **L5** | O PATCH do contrato aceita trocar `propostaId`/`clientId` sem repetir a checagem de proposta aceita e cliente coerente, que só roda na criação. | coleção `contracts` em `todogreen-vertical-records.js` | pela leitura |
+| **L6** | Nos fluxos de Qualidade, Marketing e processos gerais, o PATCH aceita `status` arbitrário sem passar pelas etapas de aprovação, e a criação aceita `requireApproval: false`. | `todogreen-enterprise-workflows.js` | pela leitura |
 
-**Hire-to-pay / DP:** colaborador → folha/férias/rescisão → fechamento → obrigação financeira → contas a pagar. Núcleo **REAL**. eSocial, FGTS Digital e banco **EXTERNOS**.
+Corrigir essas lacunas muda comportamento de telas (a Central Jurídica, por
+exemplo, grava o status direto) e por isso fica fora de uma revisão de
+documentação: cada uma pede o próprio PR, com teste que reproduza o contorno
+antes da correção.
 
-**Legal / Quality / Marketing:** abertura → responsável → aprovação sequencial → histórico → conclusão → recorrência. Motor **REAL**. Integrações/autoridades externas ficam separadas.
+## Jornada order-to-cash
+
+O teste transversal `test/todogreen-erp-journey.worker.test.js` percorre, num
+único caso, o caminho correto pelas APIs de negócio — e é a fonte de regressão
+da jornada:
+
+1. cliente / CRM · 2. oportunidade · 3. simulação persistida · 4. Deal Desk com
+outro decisor · 4b. snapshot de viabilidade · 5. proposta · 6. aceite ·
+7. tabela de preço · 8. contrato · 9. workflow Jurídico (pelo caminho de
+`enterprise-workflows`) · 10. assinatura e aprovação (o anexo é inserido por SQL)
+· 11. metodologia ESG · 12. operação · 13. preparação e ativação da implantação ·
+14. OS com preço herdado · 15. execução (despacho com pré-flight PASS, vistoria
+reprovada e aprovada, início e fim de jornada) · 16. ocorrência · 17. entrega +
+POD · visão do Portal do Cliente · 18. faturamento · 19. CT-e preparado
+internamente · 20. título a receber · 21. baixa · 22. razão quitado.
+
+**Gates internos cobertos pela jornada:** Jurídico → contrato (409 antes do
+Jurídico); assinatura → evidência; implantação ativa → OS; tabela de preço →
+go-live. Os quatro estão implementados e testados, mas o do Jurídico e o da
+assinatura têm lacuna (L1, L2) — a afirmação anterior de que "os atalhos foram
+fechados" não se sustenta para eles.
+
+**Fronteira externa:** CT-e autorizado só depois do retorno oficial da SEFAZ —
+é o único `it.todo` do repositório.
+
+**Homologação:** não registrada. O `docs/HOMOLOGACAO_GO_LIVE.md` lista como
+pendente "homologar com dados/volume reais em produção".
+
+## Jornadas internas
+
+| Jornada | Implementado | Testado | Homologado | Observação |
+| --- | --- | --- | --- | --- |
+| Procure-to-pay (requisição → alçada → pedido → recebimento → estoque → conta a pagar) | Sim (com L3/L4) | Parcial | Não registrado | `todogreen-purchasing.worker.test.js` cobre as etapas em casos separados; envio, tesouraria e alçada em várias faixas não têm teste de worker. Liquidação bancária é externa. |
+| Hire-to-pay (colaborador → folha/férias/rescisão → fechamento → contas a pagar) | Sim (com L3) | Sim | Não registrado | `todogreen-payroll.worker.test.js`. eSocial, FGTS Digital e banco são externos. |
+| Jurídico / Qualidade / Marketing (abertura → aprovação sequencial → histórico → conclusão → recorrência) | Parcial (L6) | Parcial | Não registrado | Só o Jurídico tem teste; Qualidade, Marketing, geral e a recorrência não têm. |
 
 ## Prioridades resultantes
 
-**P0:** impedir bypass do pré-flight no despacho automático — **FECHADO nesta rodada de hardening**: `/dispatch/aplicar` registra o pré-flight, aplica a mesma guarda canônica da rota, recusa BLOCK, exige justificativa para WARNING e grava `preflight_id/status`.
+- **P0 — pré-flight no despacho automático: fechado.** `/dispatch/aplicar`
+  registra o pré-flight, aplica a guarda canônica da rota, recusa BLOCK e exige
+  justificativa em WARNING (`test/todogreen-dispatch.worker.test.js`).
+- **P0 — produção só publica após gate de navegador: parcial.** `test:e2e:critical`
+  é gate antes do merge e no fallback manual `deploy.yml`; dentro do Workers
+  Builds ele não roda (o container não instala Chromium). Os E2E críticos
+  conferem que as telas e os portais abrem com a sessão real, não efeitos de
+  negócio.
+- **P0 — lacunas de controle L1–L6:** cada uma em PR próprio, com teste que
+  reproduza o contorno.
+- **P1 — proteger a `main`** por configuração do GitHub
+  (`docs/GITHUB_MAIN_PROTECTION.md`, `scripts/github/protect-main.sh`); não é
+  verificável pelo repositório.
+- **P1 — homologar com dado real** e registrar na tabela de homologação: TRACK3R
+  (evento real), importação de arquivo real, portal do cliente, e-mail no Worker
+  `allgreen`.
+- **P1 — tabelas da folha de 2026** e sua configuração fora do código.
+- **P2 — capacidade:** o harness k6 (`scripts/load/todogreen-smoke.k6.js`) existe,
+  mas não há resultado registrado em `docs/LOAD_TEST.md`.
 
-**P0:** produção só publica após gate mínimo de navegador — **PARCIAL (honesto)**: a suíte `test:e2e:critical` existe e é gate obrigatório **antes do merge** (local/sessão remota) e no fallback manual `deploy.yml` (instala Chromium); dentro do Workers Builds ela **não roda** — o container não instala navegador e a tentativa de embutir o Playwright no `deploy:cloudflare` (`cd8f90b`, 13/09) travou a publicação da `main` até ser revertida. Fechar de verdade exige o runner self-hosted (`GITHUB_SELF_HOSTED_RUNNER.md`) ou proteger a `main` com PR obrigatório + gate declarado (P1 abaixo) — decisão da titular.
+## Divergências corrigidas nesta revisão
 
-**P1:** proteger `main` por configuração administrativa do GitHub (PR obrigatório e bloqueio de push direto). Esta proteção não é representável apenas por código versionado.
+A versão anterior afirmava, e o código não confirma:
 
-**P1:** manter esta matriz sincronizada com `test/todogreen-erp-journey.worker.test.js` e com o runbook.
+1. "Workflow Jurídico — ainda não é hard gate do contrato": é gate
+   (`juridicoConcluido`), e a própria matriz dizia isso em outra linha.
+2. "Jurídico no ciclo contratual — nenhum atalho interno" e "os quatro atalhos
+   foram fechados": ver L1 e L2.
+3. "Provedor de assinatura — estrutura de readiness existe": não há.
+4. "Alçada de compras — faixas ainda são codificadas": já são configuráveis por
+   espaço (0111), sem histórico de versões.
+5. "Cotação / fornecedor — comparação de ofertas": não está no ERP.
+6. "monday.com — sem conector backend ativo": o conector existe; falta a projeção.
+7. "Seleção de motor — alternativas de rota ainda não conectadas": estão, fora do
+   caminho Geoapify.
+8. "Não há vertical Greenmob": há, só de frontend.
+9. "Planejamento / aceite — capacidade, produto, risco e decisão persistidos":
+   só a OS é persistida.
+10. "Fechamento de competência — nenhum gap": ver L3.
+11. "Folha — tabelas versionadas": só existe a tabela de 2025, no código.
+12. "Webhooks de saída" REAL para o ERP: nenhum evento `todogreen_*` dispara.
+13. "Negociação contratual — falta amarração com o status final": o status final
+    já depende do Jurídico; o que falta é amarrar os pontos de negociação.
+14. Qualidade, Marketing e processos gerais com "aprovação sequencial" e "motor
+    REAL": a aprovação é contornável (L6) e só o Jurídico tem teste.
+15. E-mail transacional como EXTERNO: está implementado e em uso.
+16. Gmail/Agenda como só EXTERNO: há envio real pelo navegador.
+17. O cabeçalho da seção de eletrificação dizia PARCIAL e que o snapshot de
+    viabilidade ainda precisava de D1 e gate — ambos existem.
+18. Contagens de testes citadas não batiam (ex.: 19 × 18 na tarifa ANEEL; 13 × 11
+    no snapshot) — por isso a matriz deixou de citar contagem.
+19. Caminhos errados: `design-system/…` fica em `src/design-system/…`.
+20. Módulos inteiros ausentes — ver [Módulos que não estavam na matriz](#módulos-que-não-estavam-na-matriz).
 
-**P2:** medir capacidade com o harness k6 em `scripts/load/todogreen-smoke.k6.js`; sem execução controlada não existe número honesto de usuários simultâneos.
+## Como manter esta matriz
 
-## Eletrificação, roteirização e viabilidade (camada de decisão)
-
-Iteração recente: módulos de domínio PUROS, DETERMINÍSTICOS e testados que
-transformam frota/rota/energia/restrições em decisão. Seguindo o critério
-honesto desta matriz, ficam **PARCIAL** enquanto não têm persistência D1
-dedicada e UI própria — o núcleo (regra + teste) é real e parte já responde por
-endpoint. Não são marcados REAL para não inflar status (seções 14, 55).
-
-**Reconciliação puro→conectado (sem 3ª camada):** a regra de decisão mora num
-único domínio puro e o caminho conectado o REUSA — não há reimplementação no
-worker. Hoje o `POST /routes/electric-plan` já devolve, sobre o MESMO par
-veículo/rota, `energyEstimate` (energia/autonomia), `routingEngineSelection`
-(OSRM×Valhalla) e `preflight` (PASS/WARNING/BLOCK + sugestões calculadas).
-Faltam ligar ao caminho conectado, nesta ordem de valor: `viabilitySnapshot`
-(persistência D1 + bloqueio de avanço da proposta) e a aplicação de
-`dataProvenance` campo a campo na UI. `roadRestriction` só vira efetivo com o
-grafo OSM/PostGIS carregado.
-
-| Processo | Status | O que já é real | Fronteira encontrada |
-| --- | --- | --- | --- |
-| Estimativa de energia/autonomia | **REAL** | `energyEstimationDomain` (puro) consumido pelo electric-plan, pelo pré-flight e pela **viabilidade persistida** (`POST /api/todogreen/viability-snapshots`, energia estimada no servidor); **elevação** via Valhalla `/height` (DEM aberto, cache 30 d) e **temperatura** na hora de saída via Open-Meteo (cache 1 h) preenchem o que o chamador não informou, com proveniência (`DERIVED`/`EXTERNAL`) — indisponível vira `ELEVATION_NOT_AVAILABLE`/`WEATHER_NOT_AVAILABLE` e confiança menor, nunca número inventado; **baseline por veículo** (`todogreen_vehicle_energy_observations`, mediana/p90/correção sobre o nominal) pronto para substituir o consumo nominal | Ingestão automática de observações por telemetria/OCPP ainda não ligada (hoje POST manual/importado); relevo depende dos tiles do Valhalla |
-| Tarifa de energia de referência (ANEEL) | **REAL** | `energyTariffDomain` (puro, 19 testes): hierarquia **contrato > informada > ANEEL > fallback declarado** com proveniência (INFORMED/EXTERNAL/DERIVED), curva 24 h por posto (ponta/fora/intermediário; faixas da distribuidora ou da tarifa branca como *assumption*), vigência e `stale`; cache `todogreen_energy_tariff_reference` ingerido do datastore de dados abertos da ANEEL (só *Tarifa de Aplicação* em MWh, por distribuidora/subgrupo/modalidade do **perfil de energia** do espaço — `todogreen_energy_profiles`, `GET/PUT /api/todogreen/energy/profile`); `GET /api/todogreen/energy/plan` devolve a tarifa em uso com origem, data da fonte e vigência; Saúde do sistema mostra a fonte (NOT_CONFIGURED sem perfil, STALE quando velha) | Faixas horárias de ponta por distribuidora não vêm da ANEEL (informadas no perfil ou régua padrão); a lista de distribuidoras é a sigla `SigAgente` do datastore |
-| Preço de diesel de referência (ANP) | **REAL** | `anpDieselPriceDomain` (puro): parser do CSV oficial do levantamento (`;`, vírgula decimal, dd/mm/aaaa, BOM), agregação em **mediana por município/UF/região/país e semana** — nenhum posto/CNPJ retido — e `resolveDieselPrice` pela hierarquia **contrato > frota > ANP município > UF > região > país > fallback** com `stale` (21 d); ingestão semanal pelo cron (arquivo "últimas 4 semanas") ou `POST /api/todogreen/energy/anp/import`; o plano devolve o preço com origem, data de coleta e amostras | Série histórica longa não é ingerida (só o arquivo corrente das últimas semanas); município precisa estar grafado como na ANP (maiúsculas, sem acento — normalizado) |
-| Janela energética de recarga (ONS) | **REAL** | `gridWindowDomain` (puro, 14 testes): perfil médio das 24 h da **curva de carga horária do SIN** por subsistema (ONS, dados abertos; cache `todogreen_grid_load_profiles`, ingestão diária) → janela **financeira** (menor tarifa), **energética** (menor carga do SIN — proxy de sistema leve, não medição de carbono) e **recomendada** (ponderada 60/40) restritas às horas em que a frota está parada (retorno→saída; sem retorno, 12 h antes da saída como *assumption* declarada); sem ONS a energética é `ONS_NOT_AVAILABLE` e a recomendada iguala a financeira | Sem fator de emissão horário (o ONS não publica intensidade de carbono horária em dado aberto estável); pesos fixos 60/40 |
-| Plano de recarga por veículo (Smart Charging) | **REAL** | `planoDeRecargaPorVeiculo` (`smartChargingDomain`, 8 testes): veículos × pontos × curva tarifária × demanda contratada → agenda determinística (saída mais cedo primeiro; horas mais baratas em que o veículo está parado; potência = mín(ponto, veículo, folga da demanda); um ponto por veículo por hora) com sessões (início/fim/kW/kWh/custo), **motivo** para quem não fecha a energia (sem ponto compatível, demanda limitante, horas insuficientes), pico kW, custo e economia vs. hora mais cara; servido em `GET /api/todogreen/energy/plan` a partir da frota elétrica (bateria × (1 − SOC de chegada)) e dos pontos cadastrados; tela Energia (`EnergyReferenceSection`) mostra tudo com origem e premissas | Slots de 1 h e potência constante (sem curva de carga da bateria); SOC de chegada é um valor único do perfil (não por veículo/telemetria); não envia comandos OCPP |
-| Radar de mercado — fontes estruturadas (PNCP · Compras.gov · GDELT) | **REAL** | `marketSignalDomain` (puro, 9 testes): normalização das três fontes num só `market_signal`, **fingerprint** determinístico (número de controle do PNCP > URL canônica > título) para dedupe entre fontes e execuções, **score explicável** (cada ponto com motivo; rejeições contadas por motivo: fora de escopo, equipamento incompatível, sem transporte, prazo/processo encerrado) e o mesmo léxico do radar web; `todogreen-market-signals.js`: sync PNCP (API de busca do portal, editais recebendo proposta), Compras.gov (contratações Lei 14.133, pregão/concorrência) e GDELT (DOC 2.0, país BR, 1 termo por hora), cron auto-limitado, `GET /api/todogreen/market-signals` (filtros por fonte/UF/score/status) com triagem por espaço (`PATCH …/:id`), `POST …/sync`; Saúde do sistema com data da fonte/ingestão; painel na Inteligência (RFQs/RFIs) ao lado do radar web — e o endpoint `/api/todogreen/market-radar` da tela, que estava sem rota, voltou a ser servido | Compras.gov filtra só pelas modalidades configuradas; GDELT depende do limite de taxa da fonte (1 consulta/5 s); UF de foco entra como bônus no score, não como filtro obrigatório. **Complementos (rodada 3):** termos PNCP/GDELT e UFs de foco **configuráveis por espaço** (`todogreen_market_radar_prefs`, migration `0133`; `GET/PUT /api/todogreen/market-signals/prefs`; a sincronização manual usa os do espaço, o cron a união padrão + espaços) e **"Criar oportunidade"** a partir do sinal (`POST …/:id/opportunity` → mesma esteira de `records/opportunities`, triagem `converted` com o id; exige `market:research` + `crm:manage`) |
-| Risk Map — risco viário histórico (PRF · ANTT) | **REAL** | `roadRiskDomain` (puro, 10 testes): parser do CSV oficial da PRF (ocorrências com lat/lon, UPS DENATRAN 1/5/13) → **células de ~1,1 km**; parser do demonstrativo por km da ANTT → **segmentos rodovia/km**; `riscoDaRota` amostra o traçado a cada 250 m e devolve score 0–100 (UPS/km saturada), trechos críticos, confiança e metodologia; sem índice → `RISK_DATA_NOT_AVAILABLE` (nunca zero). `todogreen-road-risk.js`: `POST /api/todogreen/risk/import/prf` (CSV, teto 40 MB), ANTT via CKAN um recurso por hora (cron), `POST /api/todogreen/risk/route`, `GET /api/todogreen/risk/status`; Saúde do sistema com PRF/ANTT reais | Sem fator de exposição (VDM) — o score compara trechos pela UPS histórica, não calcula probabilidade; ANTT não traz gravidade (UPS = 1 por acidente); PRF exige importação manual (links da fonte em armazenamento sem API) |
-| Alternativas de rota com risco como custo | **REAL** | `POST /api/todogreen/maps/route` aceita `alternatives: true` → OSRM (`alternatives=true`, `steps` para refs das vias) ou Valhalla (`alternates: 2`); cada rota recebe `risk` (Risk Map) e `roadRefs`; `rankRouteAlternatives` (routeAlternativesDomain, agora **conectado**) devolve `ranking` (mais rápida, menor custo total com risco como dinheiro, menor risco, menor consumo, equilibrada); Roteirização mostra o cartão *Risco viário histórico* (score, ocorrências, vias, avisos por rodovia) e as alternativas com "Usar esta rota" | Custo monetário usa a régua padrão (`DEFAULT_COST_ASSUMPTIONS`); Valhalla alternativas dependem do servidor self-hosted. **Complemento (rodada 3):** com `tolls: true` o backend conta as praças da ANTT em CADA alternativa (mesma consulta da tela, injetável) e, com a tarifa média informada (`tollPerPlaza`, vinda do campo da Roteirização), o pedágio entra no custo total do ranking; sem tarifa a contagem aparece e a nota do ranking declara que o pedágio valeu 0; a ANTT não publica tarifa nem cobre concessões estaduais |
-| Design system — tokens canônicos, aliases legados e regressão visual (P1.4) | **REAL** | Um único bloco canônico `.tdg` em `LogisticsVertical.css` (claro) + `:root[data-theme="dark"] .tdg` (escuro) com os valores efetivos de antes (o segundo bloco `.tdg` que sobrescrevia bg/card/muted/line/shadow foi removido); **16 aliases legados** (`--tdg-surface`, `--tdg-text`, `--tdg-border`, `--tdg-danger`, `--tdg-warning`, `--tdg-primary`, `--tdg-accent`…) que só valiam pelo fallback passam a existir com o valor do fallback predominante e a seguir o tema escuro; `--ds-*` continua em `design-system/tokens.css`; **guarda** `design-system/designTokens.test.js` (sem duplicata por arquivo+seletor, tokens de base num arquivo só, todo `var(--tdg-…)` definido); **regressão visual** numa suíte só (`playwright.visual.config.js` + `e2e/visual/regressao-visual.spec.js`, consolidando o spec do PR #371 e o porte do Codex): 16 telas do ERP em desktop claro e escuro, 8 em mobile, portal TMS e entrada dos portais externos, relógio congelado, máscaras para relógio/versão/latência/mapa, baselines versionados em `e2e/visual/__baselines__/` — ao lado dos e2e de layout e legibilidade já existentes | `--ds-*` referenciam `--tdg-*` com fallback no `:root`, então herdam o tema só quando o `.tdg` está acima — fora da vertical valem os fallbacks; baselines gerados na sessão remota (Chromium/Linux); o caminho Docker (`npm run test:visual:docker`) ainda não foi exercitado — ver `docs/VISUAL_REGRESSION.md` |
-| Green On — pontos de recarga próprios e OCPP | **PARCIAL** | Cadastro de pontos (`todogreen_charging_points`, servem pesado, mapa da Roteirização), plano de recarga por veículo (P4) e status OCPP **PREPARED** (`ocppStatus`: catálogo/probe, sem sessão viva). **Na `main` pelo Codex (`c38c627`, migration `0130`):** sessões de recarga com energia **MEDIDA** por medidor (`todogreen_charging_sessions`, `source` manual hoje, `ocpp` reservado), **reservas** de carregador e **regras de preço por kWh** (base/segmento/cliente, `chargingBillingDomain`), servidas como coleções de `records` e com telas próprias (Sessões, Reservas, Cobrança) | Sem CSMS/OCPP conectado: nenhum comando de recarga sai do sistema e a sessão nasce digitada (a medição automática entra quando a central alimentar `source: ocpp`); a energia medida das sessões ainda não alimenta o baseline de consumo do veículo (P3) — ligação natural, não feita — decisão de produto/infra (P7) |
-| GreenPay — razão interno e repasse | **REAL (razão) / EXTERNAL (repasse)** | Ledger interno operacional (`greenpay` OPERATIONAL na Saúde do sistema); **fase 2 na `main` pelo Codex (`0131`)**: contratos de ganho fixo mensal do motorista (`todogreen_driver_earning_contracts`) com "gerar mês" explícito e referência única anti-duplicata (`greenPayStatementDomain`); repasse PIX via SysPag **NOT_CONFIGURED** sem `SYSPAG_API_TOKEN` — "pago" é só o razão interno, declarado | Dinheiro só sai quando o token existir e o contrato de repasse for definido pela titular (P7) |
-| Core All Green / Greenmob — identidade e multi-vertical | **PREPARADO** | `tenant_id` único (`todogreen`), espaços por `workspace_owner_id`, SSO interno ERP/TMS/Central da Frota com portais externos isolados (guarda estática, #358); referências públicas (energia, mercado, risco) já são tenant-wide para reuso por outra vertical | Não há vertical Greenmob nem catálogo compartilhado ainda; identidade multi-tenant real exige decisão de arquitetura (P7) |
-| Seleção de motor OSRM×Valhalla | **REAL** | `routingProvidersDomain` + `routing-providers.js`: `POST /api/todogreen/maps/route` recebe `vehicle`, escolhe o motor pela classe/restrição (`routingEngineSelectionDomain`), chama OSRM (próprio → público como contingência declarada) ou **Valhalla real** (truck costing com altura/largura/comprimento/peso/eixos/hazmat, polyline6 → GeoJSON) e devolve o mesmo formato à tela com `engine/profile/fallback`; pesado sem Valhalla → `NO_SAFE_ROUTING_ENGINE` (409). Catálogo/probe (`/status`) e Saúde do sistema; `infra/tms-routing` com serviço `valhalla` atrás do gateway | Valhalla precisa existir (self-hosted); alternativas de rota (seção 83) ainda não conectadas |
-| Restrições viárias (OSM) | **PARCIAL** | `roadRestrictionDomain` (13 testes): tags maxheight/weight/width/length/hgv/access → compatibilidade e rota mais curta compatível com motivo | Depende do grafo OSM local/PostGIS com as tags carregadas em lote |
-| Snapshot de viabilidade | **REAL** | `viabilitySnapshotDomain` (puro, 13 testes) + tabela `todogreen_viability_snapshots` (migration `0121`, append-only, `UNIQUE(owner, oportunidade, cenário, versão)`) + `GET/POST /api/todogreen/viability-snapshots` (permissão, energia ESTIMADA no servidor pelo `energyEstimationDomain`, proveniência em `dataSources`, auditoria `viability.calculated`) + painel na oportunidade (última versão, faltas, proveniência expansível, recálculo) + **gate server-side**: proposta ligada a oportunidade só é liberada (sent/approved/accepted, no POST e na transição do PATCH) com snapshot sem faltas, e grava em `campos.viabilidade` qual versão a autorizou; testes worker dedicados + jornada order-to-cash com o passo de viabilidade | Snapshot parte de números informados/estimados; elevação e clima reais dependem de fonte DEM/clima (P3) |
-| Pré‑flight operacional | **REAL** | `preflightDomain` (13 testes): PASS/WARNING/BLOCK (motorista/veículo/capacidade/autonomia/SLA) + sugestões CALCULADAS; **agora persistido e ligado à rota** (migration `0132`, `todogreen_preflight_results` só-INSERT + `preflight_id`/`preflight_status` em `todogreen_routes`): `POST /api/todogreen/preflight` resolve a entrada pelo **cadastro** (motorista: disponibilidade e CNH; veículo da frota: status, documentos, manutenção, capacidade, bateria, consumo, SOC da telemetria; pontos de recarga próprios + carregadores do mapa; veículos alternativos disponíveis), roda o domínio e grava checagens, sugestões, energia e proveniência; **gate server-side** na coleção `rotas` (`guardaDeEscrita`): atribuir/mudar o par motorista+veículo+paradas exige pré-flight do MESMO par (assinatura `routeFingerprint`), dentro do prazo (`TDG_PREFLIGHT_TTL_HOURS`, 24 h), não-BLOCK — WARNING só com justificativa, gravada na linha e na auditoria (`preflight.overridden`); editar nome/notas/status não reabre o gate; sem veículo da frota é WARNING honesto, nunca PASS por omissão; **Roteirização** ganhou o passo "Rodar pré-flight" (veículo da frota, checagens, sugestões, justificativa) e o botão de atribuir obedece à mesma régua (`decisaoDoPreflight`); 13 testes de worker (gate, override, kill switch, fila) + 3 de endpoint do electric-plan continuam | Rotas criadas pelo **despacho automático** (`todogreen-dispatch.js`) **agora passam pelo gate**: `/dispatch/aplicar` registra o pré-flight, aplica a mesma guarda canônica da rota, recusa BLOCK, exige justificativa em WARNING e grava `preflight_id`/`preflight_status` (cobertura em `test/todogreen-dispatch.worker.test.js`) — coerente com o P0 marcado FECHADO na seção "Prioridades resultantes"; jornada e treinamento do motorista não são rastreados no cadastro (não entram como checagem); `TDG_PREFLIGHT_GATE_DISABLED=1` desliga só o gate (decisão da titular; padrão ligado) |
-| Action Queue — fila de ação operacional | **REAL** | Reutiliza a Central de Trabalho: checagens BLOCK/WARNING do pré-flight e **risco viário alto** do traçado (Risk Map, score ≥ `TDG_RISK_ACTION_THRESHOLD`, padrão 60) viram itens `plano-de-acao` no quadro seed **Torre de Controle** (`enfileirarAcoesOperacionais`, `todogreen-work-center.js`), com prioridade (alta para BLOCK/risco), descrição com motivo e sugestões calculadas, `relations` para pré-flight/rota/motorista/veículo e **dedupe** por `fields.sourceKey` (a mesma causa no mesmo par não duplica item aberto) — sem entidade paralela | Sem fechamento automático do item quando a causa é resolvida (o operador conclui no quadro); sem notificação push além do que a Central já faz |
-| Proveniência de dados | **PARCIAL** | `dataProvenanceDomain` (12 testes): envelope medido×estimado, frescor (stale), melhor fonte por hierarquia | Aplicação campo a campo nas telas ainda a fazer |
-| Perfil físico/energético do veículo | **REAL** | `todogreen_fleet_vehicles` ganhou altura/largura/comprimento/tara/PBT/eixos/conector/potência de recarga/consumo de referência (migration `0123`), gravados no cadastro (POST/PATCH `/api/todogreen/fleet`) e no formulário da Frota; alimentam o truck costing do Valhalla e o pré-flight | Preenchimento depende da operação |
-| Fila offline do motorista | **REAL (núcleo)** | `driverOfflineQueueDomain` (12 testes) extraído do `DriverPortalPage` e consumido pelo dreno: dedupe idempotente, colapso de singletons, ordem, remoção por chave | Chave determinística por parada (evitar duplicidade em clique repetido no servidor) fica como próximo passo com id de parada |
-
-Todos os módulos acima entram na suíte `npm run test:unit` e não dependem de
-credencial externa para rodar. O que os torna REAL de ponta a ponta é
-persistência D1 + UI no momento da decisão (seção 50) + auditoria — o backlog
-está nomeado acima, sem status verde antecipado.
+- Mudou o comportamento de um processo? Atualize a linha **no mesmo PR**.
+- **Implementado** e **Testado** se provam com código e teste do repositório;
+  **Homologado** só com linha nova no [registro de homologação](#registro-de-homologação-em-produção).
+- Cite arquivo de teste e o nome do caso, não contagem de testes nem número de
+  linha — os dois envelhecem calados.
+- Os caminhos citados nos documentos são conferidos por
+  `src/docs-references.test.js`: arquivo renomeado ou removido reprova o teste
+  até a documentação acompanhar.

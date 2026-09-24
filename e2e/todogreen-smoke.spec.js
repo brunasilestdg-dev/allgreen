@@ -15,9 +15,20 @@ test.describe("jornadas críticas da To Do Green", () => {
   test("a entrada da vertical não apresenta Seu Funcionário", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/todogreen");
-    await expect(page.getByText("TRANSPORTADORA 100% ELÉTRICA")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Ambiente corporativo To Do Green/i })).toBeVisible();
+    // A entrada do ERP é a tela limpa — a mesma que o teste de unidade
+    // `src/loginToDoGreen.test.jsx` descreve: marca da To Do Green, "LOGIN
+    // PRIVADO" e só e-mail e senha. O desenho antigo ("TRANSPORTADORA 100%
+    // ELÉTRICA", "Ambiente corporativo To Do Green") não aparece desde a
+    // entrada limpa; estas asserções pediam por ele e deixavam o gate crítico
+    // vermelho sem nenhuma regressão.
+    await expect(page.getByRole("heading", { name: "Entrar" })).toBeVisible();
+    await expect(page.getByText("LOGIN PRIVADO")).toBeVisible();
+    await expect(page.getByAltText("To Do Green")).toBeVisible();
+    // O título vira "All Green" pelo observador do index.html; o que importa
+    // aqui é que a aba nunca diga Seu Funcionário.
+    await expect(page).not.toHaveTitle(/Seu Funcionário/);
     await expect(page.getByText("Tenha o funcionário que sua empresa precisa")).toHaveCount(0);
+    await expect(page.getByAltText("Seu Funcionário")).toHaveCount(0);
   });
 
   test("login e navegação percorrem a jornada comercial, operacional e de integrações", async ({ page }) => {
