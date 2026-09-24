@@ -28,14 +28,80 @@ chave existir (seção 32), nunca forjada como ativa (seção 14).
 ### IA gratuita adicional (opcionais)
 
 `GROQ_API_KEY`, `SAMBANOVA_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`,
-`OPENROUTER_API_KEY`, `GITHUB_MODELS_TOKEN`, `HF_TOKEN` — cada um liga um
-provedor gratuito na cascata quando cadastrado.
+`OPENROUTER_API_KEY`, `HF_TOKEN` — cada um liga um provedor gratuito na cascata
+quando cadastrado. `GITHUB_MODELS_TOKEN` não é mais lido: o GitHub Models foi
+aposentado em 30/07/2026 (docs.github.com/en/github-models) e saiu da cascata.
+
+Modelo de cada provedor (opcional, sobrescreve o padrão do código):
+`GROQ_MODEL`, `SAMBANOVA_MODEL`, `CEREBRAS_MODEL`, `MISTRAL_MODEL`, `HF_MODEL`,
+`OPENAI_MODEL`, `ANTHROPIC_MODEL`.
+
+**Rota sensível (LGPD)**: pedido com CPF, cartão, senha/chave, conta bancária ou
+termo clínico vai só para quem não treina com o conteúdo (IA local, Cerebras,
+Groq, Workers AI, SambaNova e chaves pagas do próprio espaço). A Gemini API
+gratuita usa o conteúdo para melhorar produtos e pode ter revisão humana
+(ai.google.dev/gemini-api/terms), por isso fica fora dessa rota. Para o Groq,
+ligue o *Zero Data Retention* em Data Controls no console.
+
+### IA auto-hospedada (opcional)
+
+| Variável | Uso |
+| --- | --- |
+| `TODOGREEN_OLLAMA_BASE_URL` + `TODOGREEN_OLLAMA_MODEL` | servidor Ollama (API compatível com a OpenAI em `/v1`); entra na cascata e lidera a rota sensível |
+| `TODOGREEN_OLLAMA_API_KEY` | só se o Ollama estiver atrás de um proxy com autenticação |
+| `TODOGREEN_VLLM_BASE_URL` + `TODOGREEN_VLLM_MODEL` + `TODOGREEN_VLLM_API_KEY` | servidor vLLM |
+
+### Chaves trazidas pelo espaço (cofre cifrado)
+
+`WORKSPACE_AI_VAULT_KEY` (mínimo 32 caracteres) cifra as chaves que cada espaço
+cadastra em Integrações: IA ("traga sua chave"), busca web e conexões MCP. Sem
+ele, essas três telas mostram "Cofre indisponível".
 
 ### Notificações push (pendente da titular)
 
 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e (opcional) `VAPID_SUBJECT`. Sem eles,
 `pushEnabled(env)` é `false` e o app funciona normalmente, sem notificações do
-navegador. Ver `handleAuth`/`vapidHeaders` em `worker.js` para o formato.
+navegador (em 24/09/2026 o `/api/config` de produção ainda devolvia
+`vapidPublicKey: null`). Para gerar um par no formato certo:
+`node scripts/gerar-chaves-vapid.mjs` e depois `npx wrangler secret put` de cada um.
+
+### E-mail (envio e recebimento)
+
+| Variável | Uso | Sem ela |
+| --- | --- | --- |
+| `SUPPORT_EMAIL` | canal de suporte mostrado no app | usa `MAIL_SENDER` |
+| `INBOUND_EMAIL_SECRET` | autentica o webhook de e-mail recebido (`/api/inbound/email`, Brevo Inbound Parsing) | e-mail recebido é recusado |
+| `EMAIL_INBOUND_OWNER_ID` / `INBOUND_WEBHOOK_OWNER_ID` | dono do espaço que recebe o e-mail | — |
+
+Em 24/09/2026 o `/api/config` de produção devolvia `supportEmail: ""`, o que só
+acontece com `SUPPORT_EMAIL` e `MAIL_SENDER` vazios — e sem `MAIL_SENDER` o
+`emailEnabled` é falso: "Esqueci minha senha" responde 503, convite sai sem
+e-mail e o cadastro não pede código. Conferir no cofre.
+
+### Mensageria (opcional — ver custos antes de ligar)
+
+`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN`,
+`WHATSAPP_APP_SECRET`, `WHATSAPP_API_VERSION`, `WHATSAPP_INBOUND_OWNER_ID` (API
+oficial da Meta). A partir de 01/10/2026 a Meta cobra mensagens de serviço
+acima de 1.000 por mês por número e para de entregar sem cartão cadastrado.
+`EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE` ligam a
+Evolution API, que usa o protocolo não oficial do WhatsApp Web — os Termos do
+WhatsApp proíbem automação não autorizada (risco de banimento do número).
+
+### Outras integrações opcionais
+
+| Variável | Uso |
+| --- | --- |
+| `OPENCHARGEMAP_API_KEY` | pontos de recarga públicos (Open Charge Map) |
+| `MET_NORWAY_USER_AGENT` | identificação enviada à MET Norway (clima); padrão `AllGreen/1.0 (+URL do app)` |
+| `TDG_WEATHER_DISABLED=1` | desliga a consulta de clima do modelo de energia |
+| `TODOGREEN_NOMINATIM_BASE_URL`, `TODOGREEN_OSRM_BASE_URL`, `TODOGREEN_VROOM_BASE_URL` | instâncias próprias de geocodificação/rota/otimização |
+| `MONDAY_CLIENT_ID` (var), `MONDAY_CLIENT_SECRET`, `MONDAY_SIGNING_SECRET`, `MONDAY_TOKEN_ENCRYPTION_KEY` | integração monday.com |
+| `SYSPAG_API_TOKEN`, `SYSPAG_AUTH_HEADER`, `SYSPAG_AUTH_SCHEME` | repasse PIX (GreenPay/PJ) — dormente sem token |
+| `TODOGREEN_CIOT_VAULT_KEY` | cifra credenciais do CIOT (cai em `SESSION_SECRET` se ausente) |
+| `TODOGREEN_TRACKER_RETENTION_DAYS` | retenção das posições do rastreador (padrão 90, mínimo 7) |
+| `PUBLIC_APP_URL` | URL pública usada em links e identificação junto a APIs |
+| `OUTBOX_TEST_DELIVERY` | só para testes |
 
 ### Busca web (todas com cota gratuita; cascata, nunca paralelo)
 
@@ -49,7 +115,7 @@ reserva gratuita. Ver `AGENTS.md` para a ordem da cascata.
 
 | Variável | Uso | Sem ela |
 | --- | --- | --- |
-| `GEOAPIFY_API_KEY` | geocodificação e roteamento cloud para leves e pesados | usa Nominatim/OSRM/Valhalla conforme contingências configuradas |
+| `GEOAPIFY_API_KEY` | geocodificação e roteamento cloud para leves e pesados; também calcula o "Tempo e distância" do Roteirizador das Ferramentas (`/api/rotas/estimativa`). Plano grátis: 3.000 créditos/dia, uso comercial permitido com atribuição | a vertical usa Nominatim/OSRM/Valhalla conforme contingências configuradas (as instâncias públicas proíbem uso comercial/de rastreio — ver `docs/CATALOGO_RECURSOS_GRATUITOS.md`); o Roteirizador manda abrir no Maps |
 | `TDG_ROUTING_URL` | endpoint do otimizador VROOM (`/routes/optimize`) | otimização responde `routing_not_configured` (503) |
 | `TDG_ROUTING_TOKEN` | bearer do VROOM auto‑hospedado | chamada sem autenticação |
 | `TDG_OSRM_BASE_URL` | motor OSRM (perfil genérico) | OSRM não é oferecido na seleção de motor |

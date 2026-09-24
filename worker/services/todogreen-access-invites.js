@@ -51,8 +51,6 @@ export async function enviarConviteDeAcessoTodoGreen({
 }) {
   const alvo = String(email || "").trim().toLowerCase();
   if (!emailValido(alvo)) throw new Error("E-mail de convite inválido.");
-  if (!emailEnabled(env))
-    throw new Error("O envio de e-mail ainda não está configurado.");
   const workspaceOwnerId = String(access?.ownerId || "").trim();
   if (!workspaceOwnerId) throw new Error("Espaço da To Do Green não encontrado.");
 
@@ -84,20 +82,28 @@ export async function enviarConviteDeAcessoTodoGreen({
 
   const base = String(origin || "").replace(/\/$/, "");
   const link = `${base}/todogreen/convite/${token}`;
-  try {
-    await sendEmail(
-      env,
-      alvo,
-      "Convite de acesso — To Do Green",
-      conviteHtml({ name: recipientName, role, link }),
-    );
-  } catch (error) {
-    await env.DB.prepare(
-      "UPDATE todogreen_access_invites SET status='send_failed', updated_at=? WHERE id=?",
-    ).bind(new Date().toISOString(), id).run().catch(() => {});
-    throw error;
+  // O convite vale pelo LINK, não pelo e-mail. Devolvemos o link para o
+  // administrador copiar e entregar por onde quiser (WhatsApp, etc.) — assim o
+  // acesso nunca fica preso à entrega do e-mail, que pode cair no spam, falhar
+  // ou nem estar configurado (Brevo ausente). O e-mail, quando disponível, é só
+  // a conveniência de já mandar sozinho: se falhar, o convite continua `pending`
+  // e o link segue na resposta. Mesmo desenho de `handleCollab` para os convites
+  // do time — nada de canal externo pago obrigatório.
+  let emailSent = false;
+  if (emailEnabled(env)) {
+    try {
+      await sendEmail(
+        env,
+        alvo,
+        "Convite de acesso — To Do Green",
+        conviteHtml({ name: recipientName, role, link }),
+      );
+      emailSent = true;
+    } catch (error) {
+      console.error("todogreen convite e-mail", error);
+    }
   }
-  return { email: alvo, expiresAt };
+  return { email: alvo, expiresAt, link, emailSent };
 }
 
 export async function handleTodoGreenAccessInvite(request, env, url) {

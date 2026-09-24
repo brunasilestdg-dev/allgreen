@@ -109,6 +109,15 @@ describe("Cobrança Pix", () => {
     expect(codeBox.value).toContain("ana@doces.com");
     expect(codeBox.value).toContain("25.00");
 
+    // O mesmo código vira QR Code (lib `qrcode` de verdade, que também roda
+    // no jsdom) para o cliente pagar pela câmera do app do banco.
+    const qr = await screen.findByRole("img", { name: /QR Code do Pix/ });
+    expect(qr.getAttribute("src")).toMatch(/^data:image\/png;base64,/);
+    expect(screen.getByRole("link", { name: "Baixar QR Code" })).toHaveAttribute(
+      "download",
+      "cobranca-pix.png",
+    );
+
     // Salvar cria um card em "Cobranças salvas".
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     const savedSection = screen

@@ -654,3 +654,23 @@ describe("constantes", () => {
     expect(arredondarMoeda(0.1 + 0.2)).toBe(0.3);
   });
 });
+
+describe("CNPJ alfanumérico no fiscal (IN RFB 2.229/2024)", () => {
+  it("o XML guarda o CNPJ com as letras, sem virar outro número", () => {
+    const xml = construirXmlCte({
+      chaveAcesso: "",
+      emitente: { cnpj: "12.345.678/0001-99", uf: "SP" },
+      remetente: { cnpj: "12.ABC.345/01DE-35", nome: "Remetente Novo" },
+      destinatario: { cnpj: "55666777000188", nome: "Destinatário" },
+      ide: { cfop: "6353", serie: 1, numero: 1, dataEmissao: "2026-09-01T10:00:00-03:00" },
+    });
+    expect(xml).toContain("<CNPJ>12ABC34501DE35</CNPJ>");
+    expect(xml).not.toContain("<CNPJ>123450135</CNPJ>");
+  });
+
+  it("não monta chave de acesso errada para emitente com CNPJ alfanumérico", () => {
+    expect(
+      gerarChaveDeAcesso({ cuf: 35, aamm: "2609", cnpj: "12ABC34501DE35", mod: 57, serie: 1, numero: 1, codigo: "00000001" }),
+    ).toBeNull();
+  });
+});

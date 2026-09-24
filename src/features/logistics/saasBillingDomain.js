@@ -1,3 +1,4 @@
+import { normalizeDocument } from "./erpCoreDomain.js";
 // ===== SaaS · Billing multi-tenant (bloco 24) =====
 // Camada pura. Sem HTTP, sem cofre, sem cobrança externa.
 //
@@ -140,7 +141,7 @@ export const faturarCiclo = (assinatura, uso = {}) => {
 export const criarTenant = (bruto = {}) => ({
   id: String(bruto.id || `tenant-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
   razaoSocial: String(bruto.razaoSocial || "").trim(),
-  cnpj: String(bruto.cnpj || "").replace(/\D/g, ""),
+  cnpj: normalizeDocument(bruto.cnpj),
   status: bruto.status === "suspenso" ? "suspenso" : "ativo",
   plano: normalizarPlano(bruto.plano || {}),
   criadoEm: bruto.criadoEm || new Date().toISOString(),

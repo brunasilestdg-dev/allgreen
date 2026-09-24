@@ -24,7 +24,7 @@ import { Button, Empty, Field, LIST_PAGE_SIZE, LoadMoreButton, PageTitle } from 
 import { aiWorkspaceContext, trackProductEvent } from "../../session/telemetria.js";
 import { authHeaders } from "../../session/armazenamento.js";
 import { slugify } from "../../components/formato.js";
-import { DOCUMENT_ACCEPT, DOCUMENT_FORMATS_HINT, describeOcrProgress, documentTitleFromFilename, extractDocumentText } from "../../components/leituraDeArquivo.js";
+import { DOCUMENT_ACCEPT, describeOcrProgress, documentTitleFromFilename, extractDocumentText } from "../../components/leituraDeArquivo.js";
 import SharingFields from "../../components/SharingFields.jsx";
 import { uid } from "../../domain.js";
 
@@ -602,7 +602,7 @@ function Documents({
           // Texto lido de imagem é sugestão, não verdade: o aviso do documento
           // pede conferência de nomes, datas e valores.
           importedWithOcr: Boolean(extracted.ocr),
-          importedOcrPages: extracted.ocr,
+          importedOcrPages: extracted.ocr || null,
           blocks: textToDocumentBlocks(extracted.content),
           originalFileName: file.name,
           originalMimeType: file.type || "application/octet-stream",
@@ -967,7 +967,7 @@ function Documents({
               ? ocrStatus || "Lendo e organizando seus arquivos..."
               : "Arraste documentos para cá ou clique para escolher"}
           </strong>
-          <small>{DOCUMENT_FORMATS_HINT} · até 10 MB por arquivo</small>
+          <small>PDF (inclusive escaneado), DOCX, XLSX, TXT, Markdown, CSV ou foto · até 10 MB por arquivo</small>
         </span>
       </button>
       {uploadErrors.length > 0 && (
@@ -1164,8 +1164,8 @@ function Documents({
                 <span>
                   Conteúdo importado de <strong>{form.originalFileName}</strong>
                   {form.importedOcrPages &&
-                  form.importedOcrPages.pages < form.importedOcrPages.totalPages
-                    ? `. Foram lidas as primeiras ${form.importedOcrPages.pages} de ${form.importedOcrPages.totalPages} páginas.`
+                  form.importedOcrPages.paginas < form.importedOcrPages.totalPaginas
+                    ? `. Foram lidas as primeiras ${form.importedOcrPages.paginas} de ${form.importedOcrPages.totalPaginas} páginas.`
                     : form.importedContentTruncated
                       ? ". O texto era muito extenso e foi limitado para manter a sincronização segura."
                       : ". Você pode editar, aprimorar e exportar normalmente."}

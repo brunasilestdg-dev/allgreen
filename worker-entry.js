@@ -1,8 +1,5 @@
-import appWorker from "./worker.js";
+import appWorker, { WEEKLY_SUMMARY_CRON } from "./worker.js";
 import { withInternalSessionAuthorization } from "./worker/auth/internal-session-request.js";
-import {
-  runTodoGreenTrackerScheduled,
-} from "./worker/services/todogreen-tracker.js";
 import { exigirAcessoTodoGreen } from "./worker/services/todogreen-access.js";
 import { handleTodoGreenMarketRadar } from "./worker/services/todogreen-market-radar.js";
 import {
@@ -182,11 +179,21 @@ export default {
     return appWorker.fetch(request, env, ctx);
   },
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(runTodoGreenTrackerScheduled(env));
-    ctx.waitUntil(runTodoGreenEnterpriseWorkflowScheduled(env));
-    // Dreno dos webhooks do TMS cuja projeção falhou/ficou pendente, para o
-    // evento durável na inbox não ficar preso sem retry.
-    ctx.waitUntil(reprocessarWebhooksTrack3r(env).catch(() => {}));
+    // O rastreador NÃO é chamado aqui: o scheduled do app (worker.js) já o
+    // roda. Chamar nos dois lugares fazia cada disparo sincronizar duas vezes
+    // as mesmas integrações, sem trava entre as duas execuções.
+    // O disparo semanal é só do resumo por push; os jobs abaixo são horários e
+    // o cron de hora em hora dispara no mesmo minuto.
+    if (controller?.cron !== WEEKLY_SUMMARY_CRON) {
+      ctx.waitUntil(
+        runTodoGreenEnterpriseWorkflowScheduled(env).catch((error) =>
+          console.error("scheduled To Do Green enterprise workflows", error),
+        ),
+      );
+      // Dreno dos webhooks do TMS cuja projeção falhou/ficou pendente, para o
+      // evento durável na inbox não ficar preso sem retry.
+      ctx.waitUntil(reprocessarWebhooksTrack3r(env).catch(() => {}));
+    }
     if (typeof appWorker.scheduled === "function") return appWorker.scheduled(controller, env, ctx);
   },
 };

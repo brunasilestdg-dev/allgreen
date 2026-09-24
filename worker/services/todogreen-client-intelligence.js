@@ -2,6 +2,7 @@ import { podeNaVertical, recorteDeCarteira, TENANT_ID } from "./todogreen-access
 import { searchWeb, webSearchConfiguration } from "./web-search.js";
 import { envComChavesDeBuscaDoEspaco } from "./search-keys.js";
 import { normalizedPhone } from "../../src/features/logistics/crmContactNormalizationDomain.js";
+import { isValidCnpj, normalizeDocument } from "../../src/features/logistics/erpCoreDomain.js";
 
 const clean = (value, max = 1000) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 const parse = (value, fallback) => { try { return JSON.parse(value || ""); } catch { return fallback; } };
@@ -81,19 +82,10 @@ const AMBIGUOUS_PLACE_BRANDS = {
   },
 };
 
-const cnpjDigits = (value) => clean(value, 40).replace(/\D/g, "");
-const validCnpj = (value) => {
-  const digits = cnpjDigits(value);
-  if (digits.length !== 14 || /^(\d)\1+$/.test(digits)) return false;
-  const digit = (base, weights) => {
-    const sum = weights.reduce((total, weight, index) => total + Number(base[index]) * weight, 0);
-    const remainder = sum % 11;
-    return remainder < 2 ? 0 : 11 - remainder;
-  };
-  const first = digit(digits.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-  const second = digit(`${digits.slice(0, 12)}${first}`, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-  return digits.endsWith(`${first}${second}`);
-};
+// Validação e normalização vêm do domínio central (erpCoreDomain), que já
+// entende o CNPJ alfanumérico. Esta cópia local só aceitava dígitos.
+const cnpjDigits = (value) => normalizeDocument(clean(value, 40));
+const validCnpj = (value) => isValidCnpj(value);
 
 const registryText = (value) => typeof value === "object" && value
   ? clean(value.descricao || value.nome || value.description, 240)

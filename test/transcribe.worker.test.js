@@ -58,14 +58,45 @@ describe("handleTranscribe", () => {
     expect(res.status).toBe(400);
   });
 
-  it("devolve o texto transcrito pelo Whisper", async () => {
+  it("devolve o texto transcrito pelo Whisper turbo, em português", async () => {
     const run = vi.fn().mockResolvedValue({ text: "  bom dia a todos  " });
     const res = await handleTranscribe(post({ audio: audioBase64 }), {
       AI: { run },
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ text: "bom dia a todos" });
+    // O base64 vai direto, sem virar array de bytes no Worker (CPU do Free).
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith("@cf/openai/whisper-large-v3-turbo", {
+      audio: audioBase64,
+      language: "pt",
+      vad_filter: true,
+    });
+  });
+
+  it("passa os nomes informados como dica de contexto ao modelo", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "Ana e Joaquim" });
+    await handleTranscribe(
+      post({ audio: audioBase64, hint: "Participantes: Ana,\nJoaquim" }),
+      { AI: { run } },
+    );
     expect(run).toHaveBeenCalledWith(
+      "@cf/openai/whisper-large-v3-turbo",
+      expect.objectContaining({ initial_prompt: "Participantes: Ana, Joaquim" }),
+    );
+  });
+
+  it("cai para o Whisper antigo quando o turbo falha", async () => {
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("modelo indisponível"))
+      .mockResolvedValueOnce({ text: "texto pelo modelo antigo" });
+    const res = await handleTranscribe(post({ audio: audioBase64 }), {
+      AI: { run },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ text: "texto pelo modelo antigo" });
+    expect(run).toHaveBeenLastCalledWith(
       "@cf/openai/whisper",
       expect.objectContaining({ audio: expect.any(Array) }),
     );

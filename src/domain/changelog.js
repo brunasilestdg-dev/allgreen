@@ -8,9 +8,9 @@ export const CHANGELOG_ENTRIES = [
   {
     id: "2026-09-24-ocr-documentos",
     date: "2026-09-24",
-    title: "Fotos e PDFs escaneados agora viram texto",
+    title: "Fotos, PDFs escaneados e planilhas agora viram texto",
     description:
-      "Documentos, Análise de textos, anexos do chat e propostas de fornecedor em Compras leem imagens (PNG, JPG, WEBP) e PDFs digitalizados. A leitura acontece no seu aparelho, sem custo, e o texto chega marcado para você conferir nomes, datas e valores antes de usar.",
+      "Documentos, Análise de textos, anexos do chat e propostas de fornecedor em Compras leem imagens (PNG, JPG, WEBP), PDFs digitalizados e planilhas XLSX. A leitura acontece no seu aparelho, sem custo, e o texto chega marcado para você conferir nomes, datas e valores antes de usar.",
   },
   {
     id: "2026-09-24-extensao-navegador",

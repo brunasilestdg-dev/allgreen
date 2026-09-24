@@ -92,3 +92,24 @@ describe("cache e ponto médio", () => {
     expect(pontoMedio([])).toBeNull();
   });
 });
+
+describe("adaptador da MET Norway", () => {
+  it("converte a série em UTC para a hora de Brasília que o modelo já lê", async () => {
+    const { horarioDaMetNorway, temperaturaNaSaida } = await import("./geoProvidersDomain.js");
+    const dados = {
+      properties: {
+        timeseries: [
+          { time: "2026-09-24T12:00:00Z", data: { instant: { details: { air_temperature: 15.6 } } } },
+          { time: "2026-09-24T13:00:00Z", data: { instant: { details: { air_temperature: 16.4 } } } },
+          { time: "sem-data", data: { instant: { details: { air_temperature: 99 } } } },
+          { time: "2026-09-24T14:00:00Z", data: { instant: { details: {} } } },
+        ],
+      },
+    };
+    const horario = horarioDaMetNorway(dados);
+    expect(horario.hourly).toEqual({ time: ["2026-09-24T09:00", "2026-09-24T10:00"], temperature_2m: [15.6, 16.4] });
+    expect(horario.current).toEqual({ time: "2026-09-24T09:00", temperature_2m: 15.6 });
+    expect(temperaturaNaSaida(horario, "2026-09-24T10:05:00")).toMatchObject({ ok: true, temperatureC: 16.4 });
+    expect(horarioDaMetNorway({}).hourly).toEqual({ time: [], temperature_2m: [] });
+  });
+});

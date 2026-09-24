@@ -15,8 +15,13 @@ test.describe("jornadas críticas da To Do Green", () => {
   test("a entrada da vertical não apresenta Seu Funcionário", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/todogreen");
-    await expect(page.getByText("TRANSPORTADORA 100% ELÉTRICA")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Ambiente corporativo To Do Green/i })).toBeVisible();
+    // A entrada da vertical tem layout próprio (`tdg-auth-entry`): logo da To
+    // Do Green e o cartão de login privado. O painel antigo com "TRANSPORTADORA
+    // 100% ELÉTRICA" não é mais desenhado nesta rota — o teste procurava por ele
+    // e falhava também na main.
+    await expect(page.getByRole("region", { name: "Entre no ambiente To Do Green" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "To Do Green" })).toBeVisible();
+    await expect(page.getByText("LOGIN PRIVADO")).toBeVisible();
     await expect(page.getByText("Tenha o funcionário que sua empresa precisa")).toHaveCount(0);
   });
 

@@ -4,48 +4,28 @@
 // quatro telas diferentes, o que é exatamente o motivo de não morar dentro de
 // nenhuma delas.
 //
-// Imagem e PDF digitalizado passam por OCR (tesseract.js), no próprio aparelho
-// e sem custo — o mesmo leitor que a Roteirização já usava para a foto da
-// etiqueta. O arquivo não sai do navegador: só o motor e o idioma são baixados
-// da CDN na primeira leitura. Antes, este arquivo recusava a foto de um recibo
-// e o PDF escaneado de um contrato dizendo que "precisam de OCR", enquanto o
-// OCR estava instalado a uma tela de distância.
+// Tudo roda no aparelho: foto e PDF escaneado passam por OCR com o
+// tesseract.js (o mesmo que a Roteirização já usava para etiqueta) e a planilha
+// .xlsx pelo read-excel-file — nada sai do navegador, o que importa para
+// contrato, nota e documento com CPF. As duas libs entram por import dinâmico:
+// só baixa quem usa.
 
 export const DOCUMENT_UPLOAD_LIMIT = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_LIMIT = 300_000;
-// Cada página leva segundos no celular; um contrato de 80 páginas travaria a
-// tela. As primeiras páginas entram e o resultado sai marcado como truncado.
-export const OCR_PAGE_LIMIT = 10;
-// SVG fica de fora de propósito: é código e pode carregar script.
-const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp"];
+// OCR de PDF escaneado é página a página no aparelho: acima disso a espera
+// fica longa demais no celular. O resultado diz quantas páginas foram lidas.
+export const OCR_PDF_MAX_PAGES = 10;
+const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "bmp"];
 
-// Um lugar só para o que os seletores de arquivo aceitam e para o texto de
-// ajuda — antes cada tela tinha a sua lista, e a imagem teria de ser lembrada
-// em quatro lugares.
+// Uma lista só para o seletor de arquivo e o leitor não divergirem.
 export const DOCUMENT_ACCEPT = [
-  ".pdf",
-  ".docx",
-  ".txt",
-  ".md",
-  ".markdown",
-  ".csv",
-  ...IMAGE_EXTENSIONS.map((extensao) => `.${extensao}`),
+  ".pdf,.docx,.txt,.md,.markdown,.csv,.xlsx,.jpg,.jpeg,.png,.webp,.bmp",
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
-  "text/markdown",
-  "text/csv",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/bmp",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain,text/markdown,text/csv",
+  "image/jpeg,image/png,image/webp,image/bmp",
 ].join(",");
-export const DOCUMENT_FORMATS_HINT =
-  "PDF (inclusive escaneado), DOCX, TXT, Markdown, CSV ou foto (PNG, JPG, WEBP)";
-
-// Frase de andamento do OCR, igual em todas as telas que leem arquivo.
-export const describeOcrProgress = (fileName, { page = 1, pages = 1, progress = 0 } = {}) =>
-  `Lendo o texto de ${fileName || "arquivo"}${pages > 1 ? ` — página ${page} de ${pages}` : ""} (${progress}%)`;
 
 export function documentFileKind(file) {
   const extension = String(file?.name || "")
@@ -54,14 +34,87 @@ export function documentFileKind(file) {
     .pop();
   if (extension === "pdf") return { id: "pdf", label: "PDF importado" };
   if (extension === "docx") return { id: "docx", label: "Documento Word" };
+  if (extension === "xlsx") return { id: "xlsx", label: "Planilha Excel" };
+  if (IMAGE_EXTENSIONS.includes(extension))
+    return { id: "image", label: "Imagem (texto lido por OCR)" };
   if (["txt", "md", "markdown", "csv"].includes(extension))
     return {
       id: "text",
       label: extension === "csv" ? "Planilha CSV" : "Documento importado",
     };
-  if (IMAGE_EXTENSIONS.includes(extension))
-    return { id: "image", label: "Imagem (texto lido por OCR)" };
   return null;
+}
+
+// OCR no aparelho. Português é a língua do produto; um único worker lê todas
+// as páginas e é encerrado no fim, para não deixar memória presa no celular.
+async function lerTextoPorOcr(imagens, onProgress) {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("por");
+  try {
+    const partes = [];
+    for (let indice = 0; indice < imagens.length; indice += 1) {
+      onProgress?.({ etapa: "ocr", atual: indice + 1, total: imagens.length });
+      const { data } = await worker.recognize(imagens[indice]);
+      partes.push(String(data?.text || "").trim());
+    }
+    return partes;
+  } finally {
+    await worker.terminate();
+  }
+}
+
+// Só há canvas no navegador de verdade (o jsdom dos testes não desenha).
+const podeDesenhar = () => {
+  try {
+    return (
+      typeof document !== "undefined" &&
+      Boolean(document.createElement("canvas").getContext("2d"))
+    );
+  } catch {
+    return false;
+  }
+};
+
+async function paginasComoImagem(pdf, limite) {
+  const imagens = [];
+  for (let indice = 1; indice <= Math.min(pdf.numPages, limite); indice += 1) {
+    const page = await pdf.getPage(indice);
+    // Escala 2: letra de documento escaneado fica pequena demais para o OCR
+    // na resolução de tela.
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    await page.render({ canvas, viewport }).promise;
+    imagens.push(canvas);
+    page.cleanup();
+  }
+  return imagens;
+}
+
+const celulaComoTexto = (valor) => {
+  if (valor === null || valor === undefined) return "";
+  if (valor instanceof Date)
+    return Number.isNaN(valor.getTime()) ? "" : valor.toLocaleDateString("pt-BR");
+  return String(valor).replace(/[\r\n\t]+/g, " ").trim();
+};
+
+// Cada aba vira um bloco com o nome dela e as linhas separadas por "; " — o
+// mesmo separador do CSV em português, legível pela pessoa e pela IA.
+async function lerPlanilhaXlsx(file) {
+  const { default: readXlsxFile, readSheetNames } = await import("read-excel-file");
+  const abas = await readSheetNames(file);
+  const blocos = [];
+  for (const aba of abas) {
+    const linhas = await readXlsxFile(file, { sheet: aba });
+    const texto = linhas
+      .map((linha) => linha.map(celulaComoTexto))
+      .filter((linha) => linha.some(Boolean))
+      .map((linha) => linha.join("; "))
+      .join("\n");
+    if (texto) blocos.push(abas.length > 1 ? `## ${aba}\n${texto}` : texto);
+  }
+  return blocos.join("\n\n");
 }
 
 export const documentTitleFromFilename = (name) =>
@@ -71,164 +124,116 @@ export const documentTitleFromFilename = (name) =>
     .replace(/\s+/g, " ")
     .trim() || "Documento importado";
 
-// O OCR devolve espaço sobrando no fim das linhas e buracos de várias linhas
-// em branco; limpa sem mexer no conteúdo.
-export const cleanOcrText = (texto) =>
-  String(texto || "")
-    .split("\n")
-    .map((linha) => linha.replace(/[ \t]+$/g, ""))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-// Página de PDF → canvas. A escala mira ~2000 px no lado maior: nitidez
-// suficiente para o OCR sem estourar a memória do celular.
-async function renderPdfPageForOcr(pdf, index) {
-  const page = await pdf.getPage(index);
-  const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(2.5, 2000 / Math.max(base.width, base.height));
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(viewport.width);
-  canvas.height = Math.ceil(viewport.height);
-  const canvasContext = canvas.getContext("2d");
-  await page.render({ canvas, canvasContext, viewport }).promise;
-  page.cleanup();
-  return canvas;
-}
-
-async function readTextWithOcr(images, onProgress) {
-  let worker;
-  let current = 0;
-  // Preparar o leitor é o passo que depende da rede (motor + idioma vêm da
-  // CDN na primeira vez); ler a imagem não. Mensagens separadas para a pessoa
-  // não ir conferir o Wi-Fi quando o problema é o arquivo.
-  try {
-    const { createWorker } = await import("tesseract.js");
-    worker = await createWorker("por", 1, {
-      logger: (message) => {
-        if (message?.status === "recognizing text")
-          onProgress?.({
-            page: current + 1,
-            pages: images.length,
-            progress: Math.round((message.progress || 0) * 100),
-          });
-      },
-    });
-  } catch {
-    await worker?.terminate?.();
-    throw new Error(
-      "Não foi possível preparar o leitor de texto. Na primeira leitura o app baixa o leitor — confira a conexão e tente de novo.",
-    );
-  }
-  try {
-    const texts = [];
-    for (const [index, image] of images.entries()) {
-      current = index;
-      const { data } = await worker.recognize(image);
-      texts.push(cleanOcrText(data?.text));
-    }
-    return texts;
-  } catch {
-    throw new Error(
-      "Não consegui ler o texto deste arquivo. Confira se ele abre normalmente e tente de novo.",
-    );
-  } finally {
-    await worker?.terminate?.();
-  }
-}
-
-export async function extractDocumentText(file, options = {}) {
-  const { onProgress, renderPage = renderPdfPageForOcr } = options;
+export async function extractDocumentText(file, { onProgress } = {}) {
   const kind = documentFileKind(file);
   if (!kind)
     throw new Error(
-      "Formato não aceito. Use PDF, DOCX, TXT, Markdown, CSV ou imagem (PNG, JPG, WEBP).",
+      "Formato não aceito. Use PDF, DOCX, XLSX, TXT, Markdown, CSV ou imagem (JPG, PNG, WebP).",
     );
   if (!file?.size) throw new Error("O arquivo está vazio.");
   if (file.size > DOCUMENT_UPLOAD_LIMIT)
     throw new Error("O arquivo ultrapassa o limite de 10 MB.");
-  let text = "";
   let ocr = null;
   if (kind.id === "image") {
-    text = (await readTextWithOcr([file], onProgress)).join("\n\n");
-    ocr = { pages: 1, totalPages: 1 };
-  } else {
-    const arrayBuffer = await file.arrayBuffer();
-    if (kind.id === "text") {
-      text = new TextDecoder("utf-8").decode(arrayBuffer);
-    } else if (kind.id === "docx") {
-      const module = await import("mammoth");
-      const mammoth = module.default || module;
-      const result = await mammoth.extractRawText(
-        typeof globalThis.Buffer !== "undefined"
-          ? { buffer: globalThis.Buffer.from(arrayBuffer) }
-          : { arrayBuffer },
+    const [lido] = await lerTextoPorOcr([file], onProgress);
+    const text = String(lido || "").replace(/\u0000/g, "").trim();
+    if (!text)
+      throw new Error(
+        "Não consegui ler texto nesta imagem. Tente uma foto mais nítida, reta e com boa luz.",
       );
-      text = result.value || "";
+    return {
+      content: text.slice(0, DOCUMENT_TEXT_LIMIT),
+      truncated: text.length > DOCUMENT_TEXT_LIMIT,
+      kind,
+      ocr: { paginas: 1, totalPaginas: 1 },
+    };
+  }
+  if (kind.id === "xlsx") {
+    const text = (await lerPlanilhaXlsx(file)).trim();
+    if (!text) throw new Error("A planilha está vazia.");
+    return {
+      content: text.slice(0, DOCUMENT_TEXT_LIMIT),
+      truncated: text.length > DOCUMENT_TEXT_LIMIT,
+      kind,
+    };
+  }
+  const arrayBuffer = await file.arrayBuffer();
+  let text = "";
+  if (kind.id === "text") {
+    text = new TextDecoder("utf-8").decode(arrayBuffer);
+  } else if (kind.id === "docx") {
+    const module = await import("mammoth");
+    const mammoth = module.default || module;
+    const result = await mammoth.extractRawText(
+      typeof globalThis.Buffer !== "undefined"
+        ? { buffer: globalThis.Buffer.from(arrayBuffer) }
+        : { arrayBuffer },
+    );
+    text = result.value || "";
+  } else {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    if (typeof globalThis.Worker === "undefined") {
+      globalThis.pdfjsWorker =
+        await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
     } else {
-      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      if (typeof globalThis.Worker === "undefined") {
-        globalThis.pdfjsWorker =
-          await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
-      } else {
-        const worker =
-          await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
-        pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-      }
-      const loadingTask = pdfjs.getDocument({
-        data: new Uint8Array(arrayBuffer),
-      });
-      const pdf = await loadingTask.promise;
+      const worker =
+        await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
+      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+    }
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(arrayBuffer),
+    });
+    const pdf = await loadingTask.promise;
+    const pages = [];
+    for (let index = 1; index <= pdf.numPages; index += 1) {
+      const page = await pdf.getPage(index);
+      const content = await page.getTextContent();
+      pages.push(
+        content.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ")
+          .trim(),
+      );
+      page.cleanup();
+    }
+    text = pages.filter(Boolean).join("\n\n");
+    // PDF sem texto selecionável é, quase sempre, papel escaneado. Antes a
+    // leitura parava aqui com "precisa de OCR"; agora o OCR é feito no próprio
+    // aparelho, página a página, até o limite.
+    if (!text.replace(/\u0000/g, "").trim() && podeDesenhar()) {
       try {
-        const pages = [];
-        for (let index = 1; index <= pdf.numPages; index += 1) {
-          const page = await pdf.getPage(index);
-          const content = await page.getTextContent();
-          pages.push(
-            content.items
-              .map((item) => ("str" in item ? item.str : ""))
-              .join(" ")
-              .trim(),
-          );
-          page.cleanup();
-        }
-        text = pages.filter(Boolean).join("\n\n");
-        // Sem texto selecionável, cada página é uma foto: PDF digitalizado.
-        if (!text.replace(/\u0000/g, "").trim() && pdf.numPages > 0) {
-          const pagesToRead = Math.min(pdf.numPages, OCR_PAGE_LIMIT);
-          const images = [];
-          for (let index = 1; index <= pagesToRead; index += 1)
-            images.push(await renderPage(pdf, index));
-          text = (await readTextWithOcr(images, onProgress))
-            .filter(Boolean)
-            .join("\n\n");
-          ocr = { pages: pagesToRead, totalPages: pdf.numPages };
-        }
-      } finally {
-        if (typeof pdf.cleanup === "function") await pdf.cleanup();
-        if (typeof loadingTask.destroy === "function")
-          await loadingTask.destroy();
+        const imagens = await paginasComoImagem(pdf, OCR_PDF_MAX_PAGES);
+        const lidas = await lerTextoPorOcr(imagens, onProgress);
+        text = lidas.filter(Boolean).join("\n\n");
+        ocr = { paginas: imagens.length, totalPaginas: pdf.numPages };
+      } catch {
+        text = "";
       }
     }
+    if (typeof pdf.cleanup === "function") await pdf.cleanup();
+    if (typeof loadingTask.destroy === "function") await loadingTask.destroy();
   }
   text = String(text)
     .replace(/\u0000/g, "")
     .trim();
   if (!text)
     throw new Error(
-      kind.id === "image"
-        ? "Não encontrei texto legível na imagem. Tente uma foto mais nítida, reta e bem iluminada."
-        : ocr
-          ? "Não encontrei texto legível neste PDF digitalizado. Tente uma cópia com mais resolução."
-          : "Não foi possível encontrar texto nesse arquivo.",
+      kind.id === "pdf"
+        ? "Não consegui ler texto neste PDF. Se for digitalizado, tente uma cópia mais nítida ou envie as páginas como imagem."
+        : "Não foi possível encontrar texto nesse arquivo.",
     );
   return {
     content: text.slice(0, DOCUMENT_TEXT_LIMIT),
+    // Página escaneada além do limite de OCR também é conteúdo que ficou de fora.
     truncated:
       text.length > DOCUMENT_TEXT_LIMIT ||
-      Boolean(ocr && ocr.pages < ocr.totalPages),
+      Boolean(ocr && ocr.totalPaginas > ocr.paginas),
     kind,
-    ocr,
+    ...(ocr ? { ocr } : {}),
   };
 }
+
+// Frase de andamento do OCR, igual em todas as telas que leem arquivo. Recebe
+// o que `extractDocumentText` passa ao `onProgress`.
+export const describeOcrProgress = (fileName, { atual = 1, total = 1 } = {}) =>
+  `Lendo o texto de ${fileName || "arquivo"}${total > 1 ? ` — página ${atual} de ${total}` : ""}…`;

@@ -163,7 +163,7 @@ function ProposalForm({
             <FileUp />
             <span>
               <strong>{reading ? "Lendo proposta..." : "Importar proposta"}</strong>
-              <small>PDF (inclusive escaneado), DOCX, TXT, MD, CSV ou foto. A IA extrai e padroniza os valores.</small>
+              <small>PDF, DOCX, XLSX, TXT, CSV ou foto (lida por OCR no aparelho). A IA extrai e padroniza os valores.</small>
             </span>
             <input
               type="file"
