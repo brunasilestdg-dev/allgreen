@@ -51,7 +51,7 @@ ambiente e o que foi conferido. Linha nova no mesmo PR que muda o status.
 | CRM / carteira | Sim | Sim | Não registrado | Inteligência em `fields_json` (`todoGreenCrmDomain.js`), comentários (0078) e interações (0079). Testes: `todogreen-vertical-records.worker.test.js` ("interações do comercial…", "carteira: o vendedor não vê a oportunidade do colega"), `interacoesDomain.test.js`. LinkedIn oficial não integrado — só busca pública `site:linkedin.com`. |
 | Oportunidade | Sim | Sim | Não registrado | `todogreen_opportunities` (0041, título na 0081), vínculo por `client_id` e auditoria. Testes: vertical-records ("oportunidades saem do JSON do espaço", "escrita concorrente…"), `OpportunitiesPage.test.jsx`. |
 | Handoff de oportunidade ganha | Sim | Sim | Não registrado | `deveCriarHandoff` → trabalho em `todogreen_work_items` e implantação em `todogreen_implementation_projects`, idempotente. Testes: vertical-records ("remarcar como ganha não duplica a implantação"), `opportunityHandoff.test.js`. |
-| Precificação | Sim | Sim | Não registrado | Motor no servidor (`POST /api/todogreen/simulate`, `pricing_scenarios` 0027) e régua versionada (0060, `todogreen-pricing-parameters.js`). Testes: `todogreen-pricing-parameters.worker.test.js`, `pricingParametersDomain.test.js`; o `/simulate` só é exercitado no passo 3 da jornada. |
+| Precificação | Sim | Sim | Não registrado | Motor no servidor (`POST /api/todogreen/simulate`, `pricing_scenarios` 0027) e régua versionada (0060, `todogreen-pricing-parameters.js`). Salvar a simulação exige `pricing:simulate` ([L7](#lacunas-de-controle), corrigida). Testes: `todogreen-pricing-parameters.worker.test.js`, `pricingParametersDomain.test.js`, `todogreen-simulate.worker.test.js` e o passo 3 da jornada. |
 | Deal Desk | Sim | Sim | Não registrado | Alçada calculada no servidor e segregação solicitante/decisor (0042, `todogreen-deal-desk.js`, gate `proposalLiberada`). Teste: `todogreen-deal-desk.worker.test.js` ("quem pede não decide o próprio pedido, nem chamando a API direto"). |
 | Proposta | Sim | Sim | Não registrado | Cenário obrigatório; gates do Deal Desk e da viabilidade na criação e no PATCH. Testes: vertical-records, `todogreen-viability.worker.test.js` ("gate server-side da proposta"). O aceite do cliente é um estado informado ao ERP (`situacao: "accepted"`), não um aceite eletrônico. |
 | Contrato / versionamento | Parcial | Sim | Não registrado | Nasce de proposta aceita e cliente coerente; cada alteração soma `version` e grava evento (0048/0052). Teste: vertical-records ("versiona alterações e preserva a trilha do ciclo contratual"). **Lacuna:** a coerência proposta↔cliente só é conferida na criação ([L5](#lacunas-de-controle)). |
@@ -99,7 +99,7 @@ ambiente e o que foi conferido. Linha nova no mesmo PR que muda o status.
 | Processo | Implementado | Testado | Homologado | Evidência e fronteira |
 | --- | --- | --- | --- | --- |
 | Requisição | Sim | Sim | Não registrado | Itens, requisitante, centro de custo e máquina de estados (0055/0087). Teste: purchasing ("segue o caminho declarado e recusa pulo de etapa"). |
-| Alçada de compras | Parcial | Parcial | Não registrado | Faixas **configuráveis por espaço** (0111, `GET/PUT /api/todogreen/purchasing-params`, `PurchaseApprovalPanel.jsx`), com revisão otimista e auditoria — sem histórico das versões anteriores (UPSERT com contador). Testes: `todogreen-purchasing-params.worker.test.js`, `purchaseApprovalEnterprise.test.js`; nenhum teste de worker cobre a aprovação em várias faixas. **Lacuna:** ver [L4](#lacunas-de-controle). |
+| Alçada de compras | Sim | Sim | Não registrado | Faixas **configuráveis por espaço** (0111, `GET/PUT /api/todogreen/purchasing-params`, `PurchaseApprovalPanel.jsx`), com revisão otimista e auditoria — sem histórico das versões anteriores (UPSERT com contador). O portão (`todogreen-purchasing-enterprise.js`, ligado em `worker-entry.js`) é o único que escreve a trilha de aprovação, e a aprovação só leva a decisão ([L4](#lacunas-de-controle), corrigida). Testes: purchasing ("alçada: o corpo do pedido não contorna o portão", "alçada com segregação para a equipe"), `todogreen-purchasing-params.worker.test.js`, `purchaseApprovalEnterprise.test.js`. **Decisão pendente:** aprovações parciais sobrevivem a uma edição de valor entre etapas — a régua é recalculada e mantém as etapas compatíveis ("recalcula a régua sem apagar aprovações compatíveis"); se a política for "a aprovação vale para o valor aprovado", a trilha precisa guardar o total e recomeçar quando ele muda. |
 | Cotação / fornecedor | Parcial | Não | Não registrado | Fornecedores em `todogreen_parties` (0053) e `rfq_id` no pedido; a **comparação de ofertas não está no ERP** (só no app geral, `features/procurement/`). |
 | Pedido de compra | Sim | Sim | Não registrado | Nasce de requisição aprovada; editar depois de aprovado derruba a aprovação. Teste: purchasing ("editar depois de aprovado derruba a validade da aprovação"). |
 | Recebimento | Sim | Sim | Não registrado | Idempotente, com movimento de estoque e título. Teste: purchasing ("recebimento: o ponto com efeito"). |
@@ -225,22 +225,29 @@ Existem no código com persistência e teste, mas não constavam da versão ante
 ## Lacunas de controle
 
 Controles que a versão anterior da matriz dava como fechados e que o código
-permite contornar. Cada item diz como foi constatado; os marcados "pela leitura"
-ainda não foram reproduzidos por teste.
+permite contornar. Todas foram **reproduzidas por teste exploratório em
+24/09/2026** — requisições HTTP reais contra o Worker local, com os papéis
+citados. As corrigidas têm teste de regressão que falhava antes da correção.
 
-| Código | Lacuna | Onde | Como foi constatado |
+| Código | Lacuna | Onde | Situação |
 | --- | --- | --- | --- |
-| **L1** | O status do documento jurídico é gravado direto pela coleção genérica `legal` (`POST`/`PATCH /api/todogreen/records/legal`), que só exige `proposal:manage` — permissão do vendedor. Isso satisfaz `juridicoConcluido` sem passar pela máquina de estados (`registrarEventoJuridico`) nem por `compliance:manage`. A Central Jurídica (`tdgLegalBridge.js`/`useTdgLegalRecords.js`) também grava `situacao` direto. | coleção `legal` em `todogreen-vertical-records.js` | pela leitura; o próprio teste de vertical-records cria o documento já `aprovado` |
-| **L2** | O gate de assinatura confere só a **existência** de um anexo com contexto jurídico — aceita inclusive referência externa sem bytes — e o upload exige só `proposal:manage`. | `documentoDeAssinaturaVinculado` / `temAnexoNoCofre` | pela leitura |
-| **L3** | Folha, recebimento de compras e aprovação da NF do PJ gravam em `todogreen_financial_entries` sem consultar a trava de competência fechada. | `todogreen-payroll.js`, `todogreen-purchasing.js`, `todogreen-employee-portal.js` | pela leitura |
-| **L4** | A alçada de compras é interceptada por comparação exata de `status` (`"aprovada"`/`"aprovado"`), enquanto o handler interno faz `trim`: um status com espaço no fim pode pular as faixas por valor e a segregação. | `todogreen-purchasing-enterprise.js` × `todogreen-purchasing.js` | pela leitura |
-| **L5** | O PATCH do contrato aceita trocar `propostaId`/`clientId` sem repetir a checagem de proposta aceita e cliente coerente, que só roda na criação. | coleção `contracts` em `todogreen-vertical-records.js` | pela leitura |
-| **L6** | Nos fluxos de Qualidade, Marketing e processos gerais, o PATCH aceita `status` arbitrário sem passar pelas etapas de aprovação, e a criação aceita `requireApproval: false`. | `todogreen-enterprise-workflows.js` | pela leitura |
+| **L1** | O status do documento jurídico é gravado direto pela coleção genérica `legal` (`POST`/`PATCH /api/todogreen/records/legal`), que só exige `proposal:manage` — permissão do vendedor. Isso satisfaz `juridicoConcluido` sem passar pela máquina de estados (`registrarEventoJuridico`) nem por `compliance:manage`. A Central Jurídica (`tdgLegalBridge.js`/`useTdgLegalRecords.js`) também grava `situacao` direto. | coleção `legal` em `todogreen-vertical-records.js` | **Aberta.** Reproduzida: um vendedor grava o documento já `aprovado` com `campos.contractId` e o contrato passa pela aprovação (200). O teste de vertical-records também cria o documento já `aprovado`. |
+| **L2** | O gate de assinatura confere só a **existência** de um anexo com contexto jurídico — aceita inclusive referência externa sem bytes — e o upload exige só `proposal:manage`. | `documentoDeAssinaturaVinculado` / `temAnexoNoCofre` | **Aberta.** Reproduzida: uma referência externa de 0 byte no cofre, com contexto jurídico, satisfaz o gate. Somada à L1, um vendedor leva o contrato sozinho a aprovado e assinado. |
+| **L3** | Folha, recebimento de compras e aprovação da NF do PJ gravam em `todogreen_financial_entries` sem consultar a trava de competência fechada. | `todogreen-payroll.js`, `todogreen-purchasing.js`, `todogreen-employee-portal.js` | **Aberta.** Reproduzida nos três: fechar a folha, receber a compra e aprovar a NF do PJ lançam no razão de um mês fechado. |
+| **L4** | A alçada de compras era contornável pelo corpo do pedido: (a) o portão comparava o `status` cru e o serviço de compras apara — `"aprovada "` passava como edição comum e chegava como aprovação, sem faixas nem segregação; (b) a trilha `campos.purchaseApprovalFlow` era aceita do cliente, na criação ou numa edição (inclusive no reenvio do requisitante, que não tem `purchase:manage`), com todas as etapas "aprovadas"; (c) o clique de aprovar podia trocar as linhas: a alçada avaliava R$ 100 gravados e o pedido saía aprovado com R$ 500 mil e `aprovacaoValida: true`. | `todogreen-purchasing-enterprise.js` × `todogreen-purchasing.js` | **Corrigida.** O portão lê o status com o mesmo leitor do serviço (`statusDoCorpo`), é o único que escreve a trilha e a aprovação só leva a decisão (`status`, `revision`, `notaDecisao`). Teste: purchasing ("alçada: o corpo do pedido não contorna o portão"). |
+| **L5** | O PATCH do contrato aceita trocar `propostaId`/`clientId` sem repetir a checagem de proposta aceita e cliente coerente, que só roda na criação. | coleção `contracts` em `todogreen-vertical-records.js` | **Aberta.** Reproduzida: o PATCH troca `propostaId` por uma proposta em rascunho e `clientId` por outro cliente (200). |
+| **L6** | Nos fluxos de Qualidade, Marketing e processos gerais, o PATCH aceita `status` arbitrário sem passar pelas etapas de aprovação, e a criação aceita `requireApproval: false`. | `todogreen-enterprise-workflows.js` | **Aberta.** Reproduzida: `PATCH` com `status: approved` conclui o fluxo sem etapa, e a criação aceita `requireApproval: false`. |
+| **L7** | A simulação oficial (`POST /api/todogreen/simulate` com `persist: true`) gravava cenário em `pricing_scenarios` para qualquer papel da vertical, enquanto a coleção de simulações e o Deal Desk exigem `pricing:simulate`. O cenário salvo entra no painel comercial e pode embasar um pedido ao Deal Desk. | `todogreen-core.js` | **Corrigida.** Reproduzida com um usuário de RH (200 e linha gravada); salvar agora exige `pricing:simulate`. Teste: `test/todogreen-simulate.worker.test.js`. |
 
-Corrigir essas lacunas muda comportamento de telas (a Central Jurídica, por
-exemplo, grava o status direto) e por isso fica fora de uma revisão de
-documentação: cada uma pede o próprio PR, com teste que reproduza o contorno
-antes da correção.
+As abertas mudam comportamento de telas (a Central Jurídica, por exemplo, grava
+o status direto) ou pedem decisão de política (quem pode lançar em mês fechado);
+cada uma pede o próprio PR, com teste que reproduza o contorno antes da correção.
+
+Ainda sem decisão, fora da tabela: o cálculo sem gravar
+(`POST /api/todogreen/calculate` e `simulate` sem `persist`) roda com os
+parâmetros de preço do espaço para qualquer papel da vertical, embora ler esses
+parâmetros exija `pricing:simulate`, `pricing:manage` ou o papel de auditor.
+Nenhuma tela chama esses dois endpoints hoje.
 
 ## Jornada order-to-cash
 
@@ -274,7 +281,7 @@ pendente "homologar com dados/volume reais em produção".
 
 | Jornada | Implementado | Testado | Homologado | Observação |
 | --- | --- | --- | --- | --- |
-| Procure-to-pay (requisição → alçada → pedido → recebimento → estoque → conta a pagar) | Sim (com L3/L4) | Parcial | Não registrado | `todogreen-purchasing.worker.test.js` cobre as etapas em casos separados; envio, tesouraria e alçada em várias faixas não têm teste de worker. Liquidação bancária é externa. |
+| Procure-to-pay (requisição → alçada → pedido → recebimento → estoque → conta a pagar) | Sim (com L3) | Parcial | Não registrado | `todogreen-purchasing.worker.test.js` cobre as etapas em casos separados, inclusive a alçada em várias faixas; envio e tesouraria não têm teste de worker. Liquidação bancária é externa. |
 | Hire-to-pay (colaborador → folha/férias/rescisão → fechamento → contas a pagar) | Sim (com L3) | Sim | Não registrado | `todogreen-payroll.worker.test.js`. eSocial, FGTS Digital e banco são externos. |
 | Jurídico / Qualidade / Marketing (abertura → aprovação sequencial → histórico → conclusão → recorrência) | Parcial (L6) | Parcial | Não registrado | Só o Jurídico tem teste; Qualidade, Marketing, geral e a recorrência não têm. |
 
@@ -288,8 +295,8 @@ pendente "homologar com dados/volume reais em produção".
   Builds ele não roda (o container não instala Chromium). Os E2E críticos
   conferem que as telas e os portais abrem com a sessão real, não efeitos de
   negócio.
-- **P0 — lacunas de controle L1–L6:** cada uma em PR próprio, com teste que
-  reproduza o contorno.
+- **P0 — lacunas de controle abertas (L1, L2, L3, L5, L6):** cada uma em PR
+  próprio, com teste que reproduza o contorno. L4 e L7 foram corrigidas.
 - **P1 — proteger a `main`** por configuração do GitHub
   (`docs/GITHUB_MAIN_PROTECTION.md`, `scripts/github/protect-main.sh`); não é
   verificável pelo repositório.

@@ -556,6 +556,11 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
 
   if (request.method === "POST" && resource === "simulate") {
     const body = await request.json().catch(() => ({}));
+    // Salvar pede a mesma permissão dos outros caminhos que gravam cenário (a
+    // coleção de simulações e o Deal Desk): o cenário salvo entra no painel
+    // comercial e pode embasar um pedido de aprovação.
+    if (body.persist === true && !podeNaVertical(access,"pricing:simulate"))
+      return response({ error:"Seu papel não pode salvar simulações." },403);
     const productId = String(body.productId || "");
     const inputs = body.inputs || {};
     let scenario;

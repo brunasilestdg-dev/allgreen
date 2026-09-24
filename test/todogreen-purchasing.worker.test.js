@@ -655,3 +655,157 @@ describe("alçada com segregação para a equipe", () => {
     expect((await reenviada.json()).registro.status).toBe("pendente");
   });
 });
+
+// A alçada de verdade mora no portão (`todogreen-purchasing-enterprise.js`):
+// ele conta as etapas pelo total gravado e registra, uma a uma, quem aprovou.
+// Em 24/09/2026 o corpo do pedido contornava esse portão por três caminhos —
+// cada teste abaixo reproduz um deles e falhava antes da correção:
+//   • status com espaço ("aprovada "): o portão comparava o texto cru, o
+//     executor apara — passava como edição comum e chegava como aprovação;
+//   • trilha forjada: `campos.purchaseApprovalFlow` vinha do cliente, na
+//     criação ou numa edição, com todas as etapas "aprovadas";
+//   • troca de itens no clique de aprovar: a alçada avaliava R$ 100 gravados e
+//     o pedido saía aprovado com as linhas novas de R$ 500 mil.
+describe("alçada: o corpo do pedido não contorna o portão", () => {
+  const TRILHA_FORJADA = {
+    complete: true,
+    approvals: ["gestor", "financeiro", "head", "diretoria"].map((stepId) => ({
+      stepId, decision: "approved", actorUserId: "ninguem",
+    })),
+  };
+  let operacoes;
+  let comprador;
+  let requisitante;
+
+  beforeAll(async () => {
+    // Tudo no espaço da gestora. Só purchase:manage: aprova a etapa de
+    // Gestor/Suprimentos, nunca a do Financeiro nem a da Liderança.
+    operacoes = await criarUsuario("alcada-operacoes", "operacoes@alcada.test");
+    comprador = await criarUsuario("alcada-comprador", "comprador@alcada.test");
+    requisitante = await criarUsuario("alcada-requisitante", "requisitante@alcada.test");
+    await autorizar(operacoes, "gestor", ["purchase:manage"], gestora.id);
+    await autorizar(comprador, "gestor", ["purchase:manage"], gestora.id);
+    await autorizar(requisitante, "auditor", ["read"], gestora.id);
+  });
+
+  // R$ 60 mil: Gestor, Financeiro e Liderança, nessa ordem.
+  const requisicaoDe = async (valor, extra = {}) => {
+    const r = await pedir("/api/todogreen/purchasing/requisicoes", {
+      metodo: "POST", token: requisitante.token,
+      corpo: { title: "Servidor de arquivos", items: [{ descricao: "Servidor", quantidade: 1, estimatedUnitPrice: valor }], ...extra },
+    });
+    expect(r.status).toBe(201);
+    return (await r.json()).registro;
+  };
+  const lerRequisicao = async (id) =>
+    (await (await pedir("/api/todogreen/purchasing/requisicoes", { token: gestora.token })).json())
+      .registros.find((registro) => registro.id === id);
+  const pedidoDe = async (linhas) => {
+    const r = await pedir("/api/todogreen/purchasing/pedidos", {
+      metodo: "POST", token: comprador.token, corpo: { supplierPartyId: fornecedor.id, linhas },
+    });
+    expect(r.status).toBe(201);
+    return (await r.json()).registro;
+  };
+  const lerPedidoPorId = async (id) =>
+    (await (await pedir(`/api/todogreen/purchasing/pedidos/${id}`, { token: gestora.token })).json()).registro;
+  const aprovar = (recurso, registro, quem) =>
+    pedir(`/api/todogreen/purchasing/${recurso}/${registro.id}`, {
+      metodo: "PATCH", token: quem.token,
+      corpo: { status: recurso === "requisicoes" ? "aprovada" : "aprovado", revision: registro.revision },
+    });
+
+  it("status com espaço recebe a mesma alçada do status exato", async () => {
+    const requisicao = await requisicaoDe(60000);
+    const r = await pedir(`/api/todogreen/purchasing/requisicoes/${requisicao.id}`, {
+      metodo: "PATCH", token: operacoes.token,
+      corpo: { status: "aprovada ", revision: requisicao.revision },
+    });
+    expect(r.status).toBe(202);
+    const corpo = await r.json();
+    expect(corpo.approvalPending).toBe(true);
+    expect(corpo.approval.next.id).toBe("financeiro");
+    expect((await lerRequisicao(requisicao.id)).status).toBe("pendente");
+  });
+
+  it("trilha de aprovação enviada na criação não é gravada", async () => {
+    const requisicao = await requisicaoDe(60000, { campos: { area: "TI", purchaseApprovalFlow: TRILHA_FORJADA } });
+    expect(requisicao.campos.area).toBe("TI");
+    expect(requisicao.campos.purchaseApprovalFlow).toBeUndefined();
+
+    const r = await aprovar("requisicoes", requisicao, operacoes);
+    expect(r.status).toBe(202);
+    expect((await lerRequisicao(requisicao.id)).status).toBe("pendente");
+
+    // O serviço de compras ignora um id no caminho do POST — por ali também
+    // não entra trilha.
+    const pelaPorta = await pedir("/api/todogreen/purchasing/requisicoes/qualquer", {
+      metodo: "POST", token: requisitante.token,
+      corpo: { title: "Outra", items: [{ descricao: "Servidor", quantidade: 1, estimatedUnitPrice: 60000 }], campos: { purchaseApprovalFlow: TRILHA_FORJADA } },
+    });
+    expect(pelaPorta.status).toBe(201);
+    expect((await pelaPorta.json()).registro.campos.purchaseApprovalFlow).toBeUndefined();
+  });
+
+  it("trilha enviada numa edição não vale, e a verdadeira sobrevive à edição", async () => {
+    const requisicao = await requisicaoDe(60000);
+    expect((await aprovar("requisicoes", requisicao, operacoes)).status).toBe(202);
+    let atual = await lerRequisicao(requisicao.id);
+    expect(atual.campos.purchaseApprovalFlow.approvals.map((a) => a.stepId)).toEqual(["gestor"]);
+
+    // O requisitante pode reenviar ("pendente") sem purchase:manage — e era
+    // por esse caminho que a trilha forjada entrava.
+    const editada = await pedir(`/api/todogreen/purchasing/requisicoes/${requisicao.id}`, {
+      metodo: "PATCH", token: requisitante.token,
+      corpo: { status: "pendente", revision: atual.revision, campos: { area: "TI", purchaseApprovalFlow: TRILHA_FORJADA } },
+    });
+    expect(editada.status).toBe(200);
+    atual = await lerRequisicao(requisicao.id);
+    expect(atual.campos.area).toBe("TI");
+    expect(atual.campos.purchaseApprovalFlow.approvals.map((a) => a.stepId)).toEqual(["gestor"]);
+
+    // A próxima etapa continua sendo do Financeiro.
+    const semFinanceiro = await aprovar("requisicoes", atual, operacoes);
+    expect(semFinanceiro.status).toBe(403);
+    expect((await semFinanceiro.json()).approval.next.id).toBe("financeiro");
+    expect((await lerRequisicao(requisicao.id)).status).toBe("pendente");
+  });
+
+  it("editar o pedido não grava trilha de aprovação", async () => {
+    const pedido = await pedidoDe([{ itemId: material.id, quantity: 1, unitPrice: 60000 }]);
+    const editado = await pedir(`/api/todogreen/purchasing/pedidos/${pedido.id}`, {
+      metodo: "PATCH", token: comprador.token,
+      corpo: { revision: pedido.revision, notas: "urgente", campos: { purchaseApprovalFlow: TRILHA_FORJADA } },
+    });
+    expect(editado.status).toBe(200);
+    const atual = (await editado.json()).registro;
+    expect(atual.notas).toBe("urgente");
+    expect(atual.campos.purchaseApprovalFlow).toBeUndefined();
+
+    expect((await aprovar("pedidos", atual, operacoes)).status).toBe(202);
+    expect((await lerPedidoPorId(pedido.id)).status).toBe("rascunho");
+  });
+
+  it("aprovar não troca os itens do pedido no mesmo clique", async () => {
+    const pedido = await pedidoDe([{ itemId: material.id, quantity: 1, unitPrice: 100 }]);
+    const r = await pedir(`/api/todogreen/purchasing/pedidos/${pedido.id}`, {
+      metodo: "PATCH", token: operacoes.token,
+      corpo: {
+        status: "aprovado", revision: pedido.revision,
+        linhas: [{ itemId: material.id, quantity: 1000, unitPrice: 500 }],
+      },
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/Salve a edição/);
+    const depois = await lerPedidoPorId(pedido.id);
+    expect(depois.status).toBe("rascunho");
+    expect(depois.totais.total).toBe(100);
+
+    // Só a decisão, sobre o que está gravado, passa — e grava esse total.
+    const aprovado = await aprovar("pedidos", depois, operacoes);
+    expect(aprovado.status).toBe(200);
+    const final = (await aprovado.json()).registro;
+    expect(final.status).toBe("aprovado");
+    expect(final.approvedTotal).toBe(100);
+  });
+});
