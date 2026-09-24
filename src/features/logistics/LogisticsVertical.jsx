@@ -83,7 +83,7 @@ import {
   situacaoDoResultado,
 } from "./pricingPremisesDomain.js";
 import { liberacaoDaProposta } from "./dealDeskDomain.js";
-import { endSession } from "../../session/armazenamento.js";
+import { activeSpaceId as espacoAtivoDoApp, endSession } from "../../session/armazenamento.js";
 import { useSaidaPorInatividade } from "../../session/useSaidaPorInatividade.js";
 import { useVerticalRecords, descreverAreasComErro } from "./useVerticalRecords.js";
 import { inputsDePrecificacaoDaOportunidade } from "./electrificationJourneyDomain.js";
@@ -104,12 +104,6 @@ import TodoGreenProfile from "./TodoGreenProfile.jsx";
 import { comRotulo } from "./rotulosDomain.js";
 import { calcularDistancia, resumoDaDistancia } from "./distanciaRodoviariaDomain.js";
 import { todoGreenCanonicalPage } from "./todoGreenRouteOwnership.js";
-import {
-  aplicarEdicaoPlannerNaTarefa,
-  aplicarPartilhaDoPlanoNaTarefa,
-  contextoComercialDaTarefa,
-  desvincularTarefaDoPlanner,
-} from "./plannerIntegrationDomain.js";
 import { sugestaoDeContrato } from "./contratoSugeridoDomain.js";
 
 const EsgCenter = lazy(() => import("./EsgCenter.jsx"));
@@ -3169,7 +3163,7 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
   );
 }
 
-export default function LogisticsVertical({ db, update, setToast, access = {}, authHeaders }) {
+export default function LogisticsVertical({ db, update, setToast, access = {}, authHeaders, workspaceServerWrite }) {
   const [path, setPath] = useState(todoGreenPath());
   const [query, setQuery] = useState("");
   // O modo de navegação (por área × por funcionalidade) é preferência de quem
@@ -3993,38 +3987,17 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
         clientes={clientes}
         oportunidades={verticalData.opportunities}
         onNavigate={navigate}
+        // As ações do plano são lidas e gravadas pelo servidor, no quadro do
+        // DONO do espaço da vertical — assim quem vê o plano vê todas as
+        // ações, esteja ou não no espaço do app da titular. `canonicalTasks` e
+        // `onDeleteCanonicalTask` ficam só para resgatar ações antigas que
+        // foram gravadas no workspace pessoal de quem as criou.
         canonicalTasks={db?.tasks || []}
-        // Quem vê o plano precisa ver as tarefas dele — e elas moram em
-        // `db.tasks`, com a visibilidade do app (`canSeeTask`). Ao criar ou
-        // recompartilhar um plano, a mesma partilha desce para as tarefas.
-        onSyncPlanSharing={(plano) => update?.((current) => ({
-          ...current,
-          tasks: (current.tasks || []).map((item) => aplicarPartilhaDoPlanoNaTarefa(item, plano)),
-        }))}
-        onUpsertCanonicalTask={(tarefa, plano) => update?.((current) => {
-          const tarefas = current.tasks || [];
-          const rawId = tarefa.rawTaskId || tarefa.id;
-          const existente = tarefas.find((item) => item.id === rawId)
-            || tarefas.find((item) => item.canonicalTaskId && item.canonicalTaskId === tarefa.canonicalTaskId);
-          const { clientId } = contextoComercialDaTarefa(tarefa);
-          const cliente = clientes.find((item) => item.id === clientId);
-          const canonica = aplicarEdicaoPlannerNaTarefa(tarefa, plano, existente || {}, {
-            clientLabel: cliente?.name || cliente?.nome || existente?.clientLabel || "",
-          });
-          return {
-            ...current,
-            tasks: existente
-              ? tarefas.map((item) => (item.id === existente.id ? canonica : item))
-              : [canonica, ...tarefas],
-          };
-        })}
+        espacoDoApp={espacoAtivoDoApp() || db?.user?.id || ""}
+        workspaceServerWrite={workspaceServerWrite}
         onDeleteCanonicalTask={(taskId) => update?.((current) => ({
           ...current,
           tasks: (current.tasks || []).filter((item) => item.id !== taskId),
-        }))}
-        onDetachCanonicalPlanTasks={(planId) => update?.((current) => ({
-          ...current,
-          tasks: (current.tasks || []).map((item) => desvincularTarefaDoPlanner(item, planId)),
         }))}
       /></Suspense>}
       {page === "avancos" && <Suspense fallback={<section className="tdg-panel">Carregando os avanços da semana...</section>}><AvancosDaSemanaPage opportunities={verticalData.opportunities} comments={verticalData.comments} interactions={verticalData.interactions} onComment={(registro) => criar("comments", registro)} onNavigate={navigate} setToast={setToast} /></Suspense>}

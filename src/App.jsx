@@ -1448,6 +1448,56 @@ function useDatabase() {
     return payload;
   };
 
+  // Escrita que o SERVIDOR faz no workspace de um espaço (hoje: as ações do
+  // Planner, gravadas no quadro do dono do espaço da To Do Green). Quando esse
+  // espaço é o mesmo que esta aba tem aberto, a aba precisa (1) salvar antes o
+  // que tem pendente, para a gravação do servidor partir da versão certa, e
+  // (2) adotar a revisão e as tarefas que o servidor devolveu — senão o próximo
+  // salvamento automático bateria em 409 e abriria o aviso de conflito à toa.
+  // Em outro espaço, só executa: o workspace desta aba não é o que mudou.
+  const workspaceServerWrite = async (targetOwnerId, run) => {
+    const mesmoEspaco = Boolean(targetOwnerId) && targetOwnerId === spaceKey;
+    if (mesmoEspaco) {
+      clearTimeout(syncTimer.current);
+      await syncChain.current.catch(() => {});
+      const synced = await performSync();
+      if (!synced)
+        throw new Error("Não foi possível salvar suas alterações antes desta ação.");
+    }
+    const payload = await run();
+    const espaco = payload?.espaco;
+    if (mesmoEspaco && espaco) {
+      const revision = Number(espaco.revision);
+      if (Number.isInteger(revision) && revision >= 0) {
+        revisionRef.current = revision;
+        storeWorkspaceRevision(spaceKey, revision);
+      }
+      const alteradas = Array.isArray(espaco.tarefas) ? espaco.tarefas : [];
+      const removidas = new Set(Array.isArray(espaco.removidas) ? espaco.removidas : []);
+      if (alteradas.length || removidas.size) {
+        setDb((current) => {
+          const porId = new Map(alteradas.map((t) => [t.id, t]));
+          const atuais = (current.tasks || []).filter((t) => !removidas.has(t.id));
+          const vistos = new Set();
+          const tasks = atuais.map((t) => {
+            if (!porId.has(t.id)) return t;
+            vistos.add(t.id);
+            return porId.get(t.id);
+          });
+          const novas = alteradas.filter((t) => !vistos.has(t.id));
+          const next = {
+            ...current,
+            tasks: [...novas, ...tasks],
+            updatedAt: espaco.updatedAt || new Date().toISOString(),
+          };
+          skipSyncDb.current = next;
+          return next;
+        });
+      }
+    }
+    return payload;
+  };
+
   const update = (fn) =>
     setDb((current) => {
       const next =
@@ -1465,6 +1515,7 @@ function useDatabase() {
     workspaceAction,
     sessionStatus,
     markSessionAuthenticated,
+    workspaceServerWrite,
   ];
 }
 
@@ -14841,6 +14892,7 @@ export default function App() {
       workspaceAction,
       sessionStatus,
       markSessionAuthenticated,
+      workspaceServerWrite,
     ] = useDatabase(),
     [page, setPage] = useState("inicio"),
     [collapsed, setCollapsed] = useState(!!savedUi.collapsed),
@@ -15118,6 +15170,7 @@ export default function App() {
         setToast={setToast}
         authHeaders={authHeaders}
         onAuthenticated={markSessionAuthenticated}
+        workspaceServerWrite={workspaceServerWrite}
         PublicSite={PublicSite}
         AcceptInvite={AcceptInvite}
         Login={Login}
