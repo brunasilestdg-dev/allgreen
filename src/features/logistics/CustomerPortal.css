@@ -604,6 +604,52 @@
 .cp-op-evento small { display: block; opacity: 0.7; }
 .cp-op-evento p { line-height: 1.55; margin: 5px 0 0; }
 
+/* Solicitações amarradas à encomenda (devolução, endereço, acareação) */
+.cp-op-solic { display: grid; gap: 12px; margin-top: 18px; }
+.cp-op-solic-lista { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.cp-op-solic-lista li {
+  align-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+.cp-op-solic-lista small { display: block; opacity: 0.7; }
+.cp-op-solic-status {
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.cp-op-solic-aberta, .cp-op-solic-em_analise { color: #b45309; }
+.cp-op-solic-aguardando_cliente, .cp-op-solic-respondida { color: #1d4ed8; }
+.cp-op-solic-concluida { color: #16a34a; }
+.cp-op-solic-recusada, .cp-op-solic-cancelada { opacity: 0.7; }
+.cp-op-solic-form {
+  border: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+.cp-op-solic-form label { display: grid; gap: 4px; }
+.cp-op-solic-form label > span { font-size: 0.85rem; opacity: 0.85; }
+.cp-op-solic-form select,
+.cp-op-solic-form input,
+.cp-op-solic-form textarea {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  padding: 8px 10px;
+}
+.cp-op-solic-form textarea { resize: vertical; }
+.cp-op-solic-desc { font-size: 0.9rem; margin: 0; opacity: 0.75; }
+
 .cp-op-paginacao { align-items: center; display: flex; gap: 14px; justify-content: center; margin-top: 16px; }
 .cp-op-paginacao button {
   align-items: center;

@@ -29,11 +29,14 @@ import {
 } from "../../src/features/logistics/customerPortalDomain.js";
 import {
   STATUS_SOLICITACAO,
-  TIPOS_LISTA,
+  TIPOS_SOLICITACAO,
   aplicarTransicao,
   prazoDaSolicitacao,
   resumoParaCliente,
   statusValido,
+  tipoDaEncomendaPermitido,
+  tiposDaEncomenda,
+  tiposGerais,
   validarSolicitacao,
 } from "../../src/features/logistics/clientRequestDomain.js";
 import {
@@ -1193,6 +1196,22 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       }
     }
 
+    // Solicitações desta encomenda (devolução, alteração de endereço,
+    // acareação) e os tipos que cabem na FASE dela. A fase decide o que a tela
+    // pode oferecer: entregue → acareação; em trânsito → devolução e endereço.
+    const entregueOp = Boolean(linha.delivered_at) || linha.status === "concluida";
+    const { sql: sqlSol, params: paramsSol } = scopedWhere(escopo);
+    const solicitacoesOp = await env.DB.prepare(
+      `SELECT id, type, subject, description, urgency, status, fields_json,
+              operation_id, due_at, opened_by, closed_at, created_at, updated_at
+         FROM todogreen_client_requests
+        WHERE ${sqlSol} AND operation_id = ?
+        ORDER BY created_at DESC LIMIT 50`,
+    )
+      .bind(...paramsSol, linha.id)
+      .all()
+      .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
+
     return response({
       operacao,
       sla: slaDaOperacao(operacao),
@@ -1208,6 +1227,11 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       assinatura: linha.signature_url
         ? { disponivel: true, impressaoDigital: linha.signature_hash || "" }
         : { disponivel: false, motivo: "A assinatura ainda não foi anexada a esta entrega." },
+      solicitacoes: (solicitacoesOp.results || []).map(linhaParaSolicitacao),
+      // Só oferece abrir se o acesso permite; a tela some com o formulário no
+      // lugar de mostrá-lo e falhar no envio.
+      podeAbrirSolicitacao: clientCan(escopo, "portal:request:create"),
+      tiposSolicitacao: tiposDaEncomenda(entregueOp).map(tipoParaCliente),
     });
   }
 
@@ -1542,15 +1566,18 @@ export async function handleTodoGreenCustomerPortal(request, env) {
 
     if (request.method === "GET") {
       const { sql, params } = scopedWhere(escopo);
+      // Filtro opcional por encomenda: a tela da operação lista só os pedidos
+      // dela; a aba de atendimento (sem o parâmetro) lista todos.
+      const operacaoFiltro = clean(url.searchParams.get("operacaoId"), 60);
       const linhas = await env.DB.prepare(
         `SELECT id, type, subject, description, urgency, status, fields_json,
-                due_at, opened_by, closed_at, created_at, updated_at
+                operation_id, due_at, opened_by, closed_at, created_at, updated_at
            FROM todogreen_client_requests
-          WHERE ${sql}
+          WHERE ${sql}${operacaoFiltro ? " AND operation_id = ?" : ""}
           ORDER BY created_at DESC
           LIMIT ?`,
       )
-        .bind(...params, MAX_LIMIT)
+        .bind(...params, ...(operacaoFiltro ? [operacaoFiltro] : []), MAX_LIMIT)
         .all()
         .catch((erro) => (console.error("Portal do cliente: consulta falhou", erro?.message || erro), { results: [] }));
 
@@ -1582,14 +1609,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
         solicitacoes,
         mensagens,
         resumo: resumoParaCliente(solicitacoes),
-        tipos: TIPOS_LISTA.map((t) => ({
-          id: t.id,
-          rotulo: t.rotulo,
-          descricao: t.descricao,
-          prazoHoras: t.prazoHoras,
-          obrigatorios: t.obrigatorios,
-          camposRotulo: t.camposRotulo,
-        })),
+        tipos: tiposGerais().map(tipoParaCliente),
       });
     }
 
@@ -1607,6 +1627,35 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       const emResposta = clean(body.solicitacaoId, 60);
       if (emResposta) return responderSolicitacao(env, escopo, user, emResposta, body);
 
+      // Pedido amarrado a uma encomenda (devolução, alteração de endereço,
+      // acareação). A operação tem de ser do próprio cliente e o tipo tem de
+      // caber na FASE dela: a fase é reconferida no servidor, nunca confiando
+      // no que a tela ofereceu.
+      const operacaoId = clean(body.operacaoId, 60);
+      let operacaoDoPedido = null;
+      if (operacaoId) {
+        const { sql, params } = scopedWhere(escopo);
+        operacaoDoPedido = await env.DB.prepare(
+          `SELECT id, reference, status, delivered_at FROM todogreen_client_operations
+            WHERE ${sql} AND id = ? LIMIT 1`,
+        )
+          .bind(...params, operacaoId)
+          .first()
+          .catch(() => null);
+        if (!operacaoDoPedido)
+          return response({ error: "Encomenda não encontrada." }, 404);
+        const entregue = Boolean(operacaoDoPedido.delivered_at) || operacaoDoPedido.status === "concluida";
+        if (!tipoDaEncomendaPermitido(body.tipo, entregue))
+          return response(
+            {
+              error: entregue
+                ? "Esta encomenda já foi entregue: só é possível abrir uma acareação."
+                : "Esta encomenda ainda não foi entregue: acareação só depois da entrega.",
+            },
+            409,
+          );
+      }
+
       const validacao = validarSolicitacao(body);
       if (!validacao.valido)
         return response({ error: validacao.erros[0], erros: validacao.erros }, 400);
@@ -1614,11 +1663,16 @@ export async function handleTodoGreenCustomerPortal(request, env) {
       const agora = new Date().toISOString();
       const id = crypto.randomUUID();
       const { tipo, assunto, descricao, urgencia, campos } = validacao.limpo;
+      // Assunto herda a referência da encomenda quando o cliente não escreveu um
+      // — a fila da equipe abre o pedido já sabendo de qual entrega se trata.
+      const assuntoFinal = operacaoDoPedido
+        ? `${TIPOS_SOLICITACAO[tipo]?.rotulo || assunto} — encomenda ${operacaoDoPedido.reference || operacaoId}`.slice(0, 160)
+        : assunto;
       await env.DB.prepare(
         `INSERT INTO todogreen_client_requests
            (id, tenant_id, client_id, workspace_owner_id, type, subject, description,
-            urgency, status, fields_json, due_at, opened_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?)`,
+            urgency, status, fields_json, operation_id, due_at, opened_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?, ?)`,
       )
         .bind(
           id,
@@ -1626,10 +1680,11 @@ export async function handleTodoGreenCustomerPortal(request, env) {
           escopo.clientId,
           escopo.workspaceOwnerId || "",
           tipo,
-          assunto,
+          assuntoFinal,
           descricao,
           urgencia,
           JSON.stringify(campos),
+          operacaoId,
           prazoDaSolicitacao(tipo, urgencia, agora),
           escopo.email,
           agora,
@@ -1646,7 +1701,7 @@ export async function handleTodoGreenCustomerPortal(request, env) {
         texto: descricao,
       });
 
-      await logPortalEvent(env, escopo, user, "solicitacao_aberta", id, assunto);
+      await logPortalEvent(env, escopo, user, "solicitacao_aberta", id, assuntoFinal);
       return response({ ok: true, id }, 201);
     }
 
@@ -1846,16 +1901,32 @@ export async function handleTodoGreenCustomerPortal(request, env) {
 const linhaParaSolicitacao = (linha) => ({
   id: linha.id,
   tipo: linha.type,
+  // O rótulo legível do tipo, para a tela não precisar reimplementar o dicionário.
+  tipoRotulo: TIPOS_SOLICITACAO[linha.type]?.rotulo || linha.type,
   assunto: linha.subject,
   descricao: linha.description,
   urgencia: linha.urgency,
   status: linha.status,
   campos: parse(linha.fields_json, {}),
+  // Vazio para os pedidos gerais; preenchido para os que nascem de uma encomenda.
+  operacaoId: linha.operation_id || "",
   prazoEm: linha.due_at,
   abertaPor: linha.opened_by,
   encerradaEm: linha.closed_at,
   criadaEm: linha.created_at,
   atualizadaEm: linha.updated_at,
+});
+
+// Um tipo de solicitação como o cliente precisa vê-lo (sem os detalhes internos
+// de escopo/fase). Uma só forma, para lista geral e lista da encomenda não
+// divergirem.
+const tipoParaCliente = (t) => ({
+  id: t.id,
+  rotulo: t.rotulo,
+  descricao: t.descricao,
+  prazoHoras: t.prazoHoras,
+  obrigatorios: t.obrigatorios,
+  camposRotulo: t.camposRotulo,
 });
 
 async function inserirMensagem(env, escopo, requestId, { lado, email, nome, texto, interna = 0 }) {

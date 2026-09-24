@@ -7,6 +7,7 @@ import {
   eventoDoCodigoDeOcorrencia,
   hashDoDocumento,
   mapearStatusParaEvento,
+  nomeDaUnidade,
   normalizarDocumento,
   normalizarOcorrenciaDoWebhook,
   normalizeDate,
@@ -380,6 +381,40 @@ describe("projeção na operação", () => {
     });
     expect(doc.occurrence).toBe("");
     expect(projetarEvento(doc).descricao).toBe("Em rota de entrega");
+  });
+});
+
+describe("nome da unidade de origem/destino", () => {
+  it("troca o CNPJ da To Do Green (com ou sem máscara) pelo nome", () => {
+    expect(nomeDaUnidade("41385427000132")).toBe("TO DO GREEN");
+    expect(nomeDaUnidade("41.385.427/0001-32")).toBe("TO DO GREEN");
+  });
+
+  it("unifica as grafias equivalentes da mesma unidade", () => {
+    expect(nomeDaUnidade("TO DO TECNOLOGIA")).toBe("TO DO GREEN");
+    expect(nomeDaUnidade("TO DO TECNOLOGIA E SERVICOS LTDA")).toBe("TO DO GREEN");
+  });
+
+  it("código interno sem nome conhecido (ex.: 2713) fica como veio — não inventa", () => {
+    expect(nomeDaUnidade("2713")).toBe("2713");
+    expect(nomeDaUnidade("")).toBe("");
+  });
+
+  it("aceita novas unidades por opção, sem tocar no código", () => {
+    expect(nomeDaUnidade("2713", { 2713: "Centro de Distribuição SP" })).toBe("Centro de Distribuição SP");
+  });
+
+  it("a projeção já entrega origem/destino com o nome", () => {
+    const doc = {
+      ...normalizarDocumento(linhaDoRelatorio({
+        "Unidade Origem da Coleta": "41385427000132",
+        "Unidade Atual da Coleta": "TO DO TECNOLOGIA",
+      })),
+      clientId: "c-mrk",
+    };
+    const op = projetarOperacao(doc);
+    expect(op.origem).toBe("TO DO GREEN");
+    expect(op.destino).toBe("TO DO GREEN");
   });
 });
 

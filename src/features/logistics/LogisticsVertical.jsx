@@ -2922,6 +2922,22 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
   const [saving, setSaving] = useState(false);
   const [loadedAt, setLoadedAt] = useState(0);
   const [form, setForm] = useState({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
+  // Quando o e-mail não está configurado (ou o envio falha), o convite continua
+  // válido e o link volta na resposta. Guardamos aqui para o administrador
+  // copiar e entregar manualmente (WhatsApp, etc.) — o acesso nunca fica preso
+  // à entrega automática. `{ email, link, expiresAt }`.
+  const [conviteManual, setConviteManual] = useState(null);
+  const [linkCopiado, setLinkCopiado] = useState(false);
+  const copiarConvite = async () => {
+    if (!conviteManual?.link) return;
+    try {
+      await navigator.clipboard.writeText(conviteManual.link);
+      setLinkCopiado(true);
+      setTimeout(() => setLinkCopiado(false), 2500);
+    } catch {
+      setToast?.("Não foi possível copiar. Selecione o link e copie manualmente.");
+    }
+  };
   // Fila dos pedidos feitos na tela de login (migração 0086). Aprovar aqui
   // concede pelo mesmo caminho da liberação manual por e-mail.
   const [pedidos, setPedidos] = useState([]);
@@ -2956,6 +2972,8 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível decidir o pedido.");
+      if (decisao === "aprovar" && !payload.invitationSent && payload.inviteLink)
+        setConviteManual({ email: pedido.email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt });
       setToast?.(decisao === "aprovar"
         ? payload.invitationSent
           ? `Acesso aprovado e convite enviado para ${pedido.email}.`
@@ -3000,6 +3018,8 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       const response = await fetch(`/api/todogreen/access-list?owner=${encodeURIComponent(ownerId())}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível salvar o acesso.");
+      if (!payload.invitationSent && payload.inviteLink)
+        setConviteManual({ email: payload.email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt });
       setForm({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
       setToast?.(
         payload.invitationSent
@@ -3051,7 +3071,13 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível reenviar o convite.");
-      setToast?.(`Convite reenviado para ${email}.`);
+      if (!payload.invitationSent && payload.inviteLink)
+        setConviteManual({ email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt });
+      setToast?.(
+        payload.invitationSent
+          ? `Convite reenviado para ${email}.`
+          : `Convite gerado para ${email}. Copie o link abaixo e envie manualmente.`,
+      );
     } catch (error) {
       setToast?.(error.message);
     }
@@ -3059,6 +3085,19 @@ function AccessPanel({ role, permissions, authHeaders, setToast }) {
   if (!canManage) return <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Você tem acesso, mas não pode gerenciar usuários.</h2></div><strong>{role || "sem papel"}</strong></div></section>;
   return (
     <section className="tdg-panel tdg-access-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Autorize usuários por perfil pronto ou selecione cada funcionalidade.</h2></div><strong>{loading ? "carregando" : `${emails.length} e-mail(s)`}</strong></div>
+      {conviteManual && (
+        <div className="tdg-invite-link" role="status">
+          <div className="tdg-invite-link-topo">
+            <strong>Link de convite para {conviteManual.email}</strong>
+            <button type="button" className="tdg-invite-link-fechar" aria-label="Fechar" onClick={() => setConviteManual(null)}>×</button>
+          </div>
+          <p>O e-mail automático não está configurado (ou o envio falhou). O acesso já está autorizado — copie o link abaixo e envie para a pessoa (WhatsApp, etc.). Nele ela define a própria senha no primeiro acesso.{conviteManual.expiresAt ? ` O convite expira em ${new Date(conviteManual.expiresAt).toLocaleDateString("pt-BR")}.` : ""}</p>
+          <div className="tdg-invite-link-campo">
+            <input type="text" readOnly value={conviteManual.link} onFocus={(e) => e.target.select()} />
+            <button type="button" className="tdg-action" onClick={copiarConvite}>{linkCopiado ? "Copiado!" : "Copiar link"}</button>
+          </div>
+        </div>
+      )}
       {(() => {
         const pendentes = pedidos.filter((item) => item.status === "pending");
         const decididos = pedidos.filter((item) => item.status !== "pending").slice(0, 20);
