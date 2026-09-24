@@ -82,8 +82,44 @@ export async function sendEmail(env, to, subject, html) {
   });
   if (!resp.ok) {
     const t = await resp.text().catch(() => "");
-    throw new Error(`Falha no envio (${resp.status}) ${t.slice(0, 140)}`);
+    let providerCode = "";
+    let providerMessage = t.slice(0, 200);
+    try {
+      const parsed = JSON.parse(t);
+      providerCode = String(parsed?.code || "");
+      providerMessage = String(parsed?.message || providerMessage).slice(0, 200);
+    } catch {}
+    const error = new Error(`Falha no envio (${resp.status}) ${providerMessage}`);
+    error.status = resp.status;
+    error.providerCode = providerCode;
+    error.providerMessage = providerMessage;
+    throw error;
   }
+}
+
+// Traduz a recusa do Brevo num motivo que quem convidou consegue resolver.
+// Sem isso o erro ficava só no log do worker e a tela dizia apenas "copie o
+// link" — ninguém sabia que o remetente não estava verificado ou que o IP do
+// Cloudflare estava bloqueado. Nunca inclui a chave nem o corpo do e-mail.
+export function emailFailureReason(error) {
+  if (!error) return "";
+  const status = Number(error.status) || 0;
+  const text = `${error.providerCode || ""} ${error.providerMessage || error.message || ""}`.toLowerCase();
+  if (/ip address|unrecognised ip|unrecognized ip/.test(text))
+    return "O Brevo bloqueou o envio porque o IP do servidor não está autorizado. No Brevo, em Segurança → IPs autorizados, desative o bloqueio de IP para a chave de API.";
+  if (/sender/.test(text))
+    return "O remetente configurado (MAIL_SENDER) não está validado no Brevo. Valide o remetente/domínio em Remetentes, domínios e IPs.";
+  if (status === 401 || /unauthorized|key not found|api key/.test(text))
+    return "A chave do Brevo (BREVO_API_KEY) é inválida ou foi revogada.";
+  if (status === 402 || /credit|quota|limit/.test(text))
+    return "A cota de envio do Brevo acabou (plano gratuito: 300 e-mails por dia).";
+  if (status === 403 || /not activated|suspend|blocked/.test(text))
+    return "A conta do Brevo não está liberada para e-mail transacional (conta suspensa ou ainda não ativada).";
+  if (status === 400)
+    return `O Brevo recusou o e-mail: ${error.providerMessage || "dados inválidos"}.`;
+  return status
+    ? `O Brevo recusou o envio (código ${status}).`
+    : "Não foi possível falar com o serviço de e-mail agora.";
 }
 
 const plainTextHtml = (text) =>

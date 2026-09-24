@@ -69,7 +69,8 @@ export async function handleAuth(request, env, url) {
     try {
       user = await env.DB.prepare(
         `SELECT users.id, users.name, users.email,
-                users.avatar_url AS avatarUrl, users.status_emoji AS statusEmoji, users.status_text AS statusText
+                users.avatar_url AS avatarUrl, users.status_emoji AS statusEmoji, users.status_text AS statusText,
+                users.must_change_password AS mustChangePassword
         FROM sessions
         JOIN users ON users.id = sessions.user_id
         WHERE sessions.token_hash = ? AND sessions.expires_at > ?`,
@@ -80,6 +81,10 @@ export async function handleAuth(request, env, url) {
         JOIN users ON users.id = sessions.user_id
         WHERE sessions.token_hash = ? AND sessions.expires_at > ?`,
       ).bind(tokenHash, agoraSessao).first();
+    }
+    if (user) {
+      if (user.mustChangePassword) user.mustChangePassword = true;
+      else delete user.mustChangePassword;
     }
     return user
       ? json({ user })
@@ -371,6 +376,52 @@ export async function handleAuth(request, env, url) {
     });
   }
 
+  // Troca de senha com sessão ativa: exige a senha atual. É também o passo
+  // obrigatório de quem entrou com senha provisória (must_change_password).
+  if (url.pathname === "/api/auth/password") {
+    const account = await sessionUser(request, env);
+    if (!account)
+      return json({ error: "Sua sessão expirou. Entre novamente." }, 401);
+    const current =
+      typeof body.currentPassword === "string" ? body.currentPassword : "";
+    const next = typeof body.newPassword === "string" ? body.newPassword : "";
+    if (next.length < 8 || next.length > 128)
+      return json(
+        { error: "A nova senha precisa ter entre 8 e 128 caracteres." },
+        400,
+      );
+    if (next === current)
+      return json(
+        { error: "A nova senha precisa ser diferente da atual." },
+        400,
+      );
+    const row = await env.DB.prepare(
+      "SELECT password_hash, password_salt FROM users WHERE id = ?",
+    )
+      .bind(account.id)
+      .first();
+    const valid =
+      row &&
+      sameHash(await passwordHash(current, row.password_salt), row.password_hash);
+    if (!valid) return json({ error: "Senha atual incorreta." }, 401);
+    const salt = randomHex(16);
+    const keepHash = await sha256(sessionToken(request) || "");
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE users SET password_hash = ?, password_salt = ?, must_change_password = 0 WHERE id = ?",
+      ).bind(await passwordHash(next, salt), salt, account.id),
+      // Quem tinha a senha antiga (inclusive quem a gerou) perde as sessões
+      // abertas com ela; só este aparelho continua logado.
+      env.DB.prepare(
+        "DELETE FROM sessions WHERE user_id = ? AND token_hash != ?",
+      ).bind(account.id, keepHash),
+    ]);
+    return json({
+      ok: true,
+      user: { id: account.id, name: account.name, email: account.email },
+    });
+  }
+
   if (url.pathname === "/api/auth/profile") {
     const account = await sessionUser(request, env);
     if (!account)
@@ -594,7 +645,7 @@ export async function handleAuth(request, env, url) {
         429,
       );
     const account = await env.DB.prepare(
-      "SELECT id, name, email, password_hash, password_salt FROM users WHERE email = ?",
+      "SELECT id, name, email, password_hash, password_salt, must_change_password FROM users WHERE email = ?",
     )
       .bind(email)
       .first();
@@ -606,6 +657,7 @@ export async function handleAuth(request, env, url) {
       );
     if (!valid) return json({ error: "E-mail ou senha incorretos." }, 401);
     const user = { id: account.id, name: account.name, email: account.email };
+    if (account.must_change_password) user.mustChangePassword = true;
     return issueSession(env, user);
   }
 

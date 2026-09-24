@@ -8,10 +8,29 @@
 import { logAudit } from "../lib/audit.js";
 import { allowed, json } from "../lib/http.js";
 import { membershipRole } from "../lib/membership.js";
-import { randomHex, sha256 } from "../auth/credenciais.js";
-import { emailEnabled, inviteEmailHtml, sendEmail } from "../mensageria/envio.js";
+import { passwordHash, randomHex, sha256 } from "../auth/credenciais.js";
+import {
+  emailEnabled,
+  emailFailureReason,
+  inviteEmailHtml,
+  sendEmail,
+} from "../mensageria/envio.js";
 
 const VALID_ROLES = ["admin", "gestor", "colaborador"];
+// Senha provisória legível para ditar/copiar: sem 0/O, 1/l/I. 12 caracteres
+// de um alfabeto de 54 símbolos (~69 bits) — forte o bastante para o tempo
+// curto em que vale, já que o primeiro acesso obriga a trocar.
+const TEMP_PASSWORD_ALPHABET =
+  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+export function generateTempPassword(length = 12) {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  let out = "";
+  for (const b of bytes) out += TEMP_PASSWORD_ALPHABET[b % TEMP_PASSWORD_ALPHABET.length];
+  return `${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8)}`;
+}
+
+const EMAIL_NOT_CONFIGURED =
+  "O envio automático de e-mail não está configurado neste ambiente (faltam BREVO_API_KEY/MAIL_SENDER).";
 
 export async function handleCollab(request, env, user, url) {
   const action = url.pathname.replace("/api/collab", "").replace(/^\//, "");
@@ -25,7 +44,8 @@ export async function handleCollab(request, env, user, url) {
       const members = await env.DB.prepare(
         `SELECT users.id, users.name, users.email, memberships.role, memberships.status,
           memberships.function_title AS functionTitle, memberships.bond_type AS bondType,
-          memberships.direct_manager_id AS directManagerId, memberships.created_at AS createdAt
+          memberships.direct_manager_id AS directManagerId, memberships.created_at AS createdAt,
+        users.must_change_password AS mustChangePassword
         FROM memberships
         JOIN users ON users.id = memberships.member_id WHERE memberships.owner_id = ? ORDER BY memberships.created_at`,
       )
@@ -65,7 +85,8 @@ export async function handleCollab(request, env, user, url) {
     const members = await env.DB.prepare(
       `SELECT users.id, users.name, users.email, memberships.role, memberships.status,
         memberships.function_title AS functionTitle, memberships.bond_type AS bondType,
-        memberships.direct_manager_id AS directManagerId, memberships.created_at AS createdAt
+        memberships.direct_manager_id AS directManagerId, memberships.created_at AS createdAt,
+        users.must_change_password AS mustChangePassword
       FROM memberships
       JOIN users ON users.id = memberships.member_id WHERE memberships.owner_id = ? ORDER BY memberships.created_at`,
     )
@@ -214,6 +235,7 @@ export async function handleCollab(request, env, user, url) {
     // se falhar, o convite continua de pé e o link segue na resposta.
     const link = `${url.origin}/convite/${token}`;
     let emailSent = false;
+    let emailError = "";
     if (emailEnabled(env)) {
       try {
         await sendEmail(
@@ -225,10 +247,111 @@ export async function handleCollab(request, env, user, url) {
         emailSent = true;
       } catch (e) {
         console.error("invite mail", e);
+        emailError = emailFailureReason(e);
       }
+    } else {
+      emailError = EMAIL_NOT_CONFIGURED;
     }
     await logAudit(env, scopeOwnerId, user, "convite_criado", email, `papel: ${role}`);
-    return json({ id: code, expiresAt, link, emailSent });
+    return json({ id: code, expiresAt, link, emailSent, emailError });
+  }
+  // Contingência ao convite por e-mail: cria a conta já com uma senha
+  // provisória que aparece UMA vez para o admin repassar por outro canal.
+  // Não substitui o convite — serve para quando o e-mail não chega.
+  // Só vale para e-mail SEM conta: definir senha de uma conta que já existe
+  // entregaria ao admin o acesso aos outros espaços dessa pessoa.
+  if (action === "create-access") {
+    const name =
+      typeof body.name === "string" ? body.name.trim().slice(0, 100) : "";
+    const email =
+      typeof body.email === "string"
+        ? body.email.trim().toLowerCase().slice(0, 160)
+        : "";
+    const role = VALID_ROLES.includes(body.role) ? body.role : "colaborador";
+    const functionTitle =
+      typeof body.functionTitle === "string"
+        ? body.functionTitle.trim().slice(0, 100)
+        : "";
+    const bondType =
+      typeof body.bondType === "string" ? body.bondType.trim().slice(0, 40) : "";
+    const directManagerId =
+      typeof body.directManagerId === "string" && body.directManagerId
+        ? body.directManagerId
+        : null;
+    if (name.length < 2) return json({ error: "Informe o nome." }, 400);
+    if (!/^\S+@\S+\.\S+$/.test(email))
+      return json({ error: "Informe um e-mail válido." }, 400);
+    if (email === user.email || email === actingOnBehalfOf.email)
+      return json({ error: "Você não pode criar acesso para si mesmo." }, 400);
+    const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
+      .bind(email)
+      .first();
+    if (existing)
+      return json(
+        {
+          error:
+            "Este e-mail já tem conta. Use o convite: a pessoa entra com a senha dela e aceita pelo link.",
+        },
+        409,
+      );
+    const tempPassword = generateTempPassword();
+    const salt = randomHex(16);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, name, email, password_hash, password_salt, created_at, must_change_password)
+        VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      ).bind(id, name, email, await passwordHash(tempPassword, salt), salt, now),
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO memberships
+          (id, owner_id, member_id, role, created_at, status, function_title, bond_type, direct_manager_id)
+        VALUES (?, ?, ?, ?, ?, 'ativo', ?, ?, ?)`,
+      ).bind(
+        crypto.randomUUID(),
+        scopeOwnerId,
+        id,
+        role,
+        now,
+        functionTitle,
+        bondType,
+        directManagerId,
+      ),
+    ]);
+    await logAudit(env, scopeOwnerId, user, "acesso_criado", email, `papel: ${role}`);
+    return json({ ok: true, memberId: id, email, tempPassword, loginUrl: url.origin });
+  }
+  // Gera outra senha provisória para quem AINDA NÃO fez o primeiro acesso
+  // (perdeu a senha repassada). Depois que a pessoa troca, a senha é só dela
+  // e o caminho passa a ser o "Esqueci minha senha".
+  if (action === "reset-access") {
+    const memberId = typeof body.memberId === "string" ? body.memberId : "";
+    const member = await env.DB.prepare(
+      `SELECT users.id, users.email, users.must_change_password AS mustChangePassword
+      FROM memberships JOIN users ON users.id = memberships.member_id
+      WHERE memberships.owner_id = ? AND memberships.member_id = ?`,
+    )
+      .bind(scopeOwnerId, memberId)
+      .first();
+    if (!member) return json({ error: "Membro não encontrado." }, 404);
+    if (!member.mustChangePassword)
+      return json(
+        {
+          error:
+            "Esta pessoa já definiu a própria senha. Se esqueceu, ela usa \"Esqueci minha senha\" na tela de login.",
+        },
+        409,
+      );
+    const tempPassword = generateTempPassword();
+    const salt = randomHex(16);
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE users SET password_hash = ?, password_salt = ?, must_change_password = 1 WHERE id = ?",
+      ).bind(await passwordHash(tempPassword, salt), salt, member.id),
+      env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(member.id),
+    ]);
+    await logAudit(env, scopeOwnerId, user, "senha_provisoria_gerada", member.email, "");
+    return json({ ok: true, email: member.email, tempPassword, loginUrl: url.origin });
   }
   if (action === "resend") {
     const id = typeof body.id === "string" ? body.id : "";
@@ -252,6 +375,7 @@ export async function handleCollab(request, env, user, url) {
     // Gera um link novo (o token antigo deixa de valer) e o devolve para copiar.
     const link = `${url.origin}/convite/${token}`;
     let emailSent = false;
+    let emailError = "";
     if (emailEnabled(env)) {
       try {
         await sendEmail(
@@ -263,10 +387,13 @@ export async function handleCollab(request, env, user, url) {
         emailSent = true;
       } catch (e) {
         console.error("resend invite mail", e);
+        emailError = emailFailureReason(e);
       }
+    } else {
+      emailError = EMAIL_NOT_CONFIGURED;
     }
     await logAudit(env, scopeOwnerId, user, "convite_reenviado", invite.email, "");
-    return json({ ok: true, expiresAt, link, emailSent });
+    return json({ ok: true, expiresAt, link, emailSent, emailError });
   }
   if (action === "cancel") {
     const id = typeof body.id === "string" ? body.id : "";
