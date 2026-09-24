@@ -317,6 +317,27 @@ describe("montarKanbanDeOportunidades (kanban editável do ERP)", () => {
     ]);
   });
 
+  it("reconhece etapas terminais Ganho e Perdido/Descartado (variantes)", () => {
+    const k = montarKanbanDeOportunidades([
+      { id: "a", cliente: "A", estagio: "Ganho", valorMensal: 100 },
+      { id: "b", cliente: "B", estagio: "won", valorMensal: 100 },
+      { id: "c", cliente: "C", estagio: "Perdido/Descartado", valorMensal: 100 },
+      { id: "d", cliente: "D", estagio: "Perdido / Descartado", valorMensal: 100 },
+      { id: "e", cliente: "E", estagio: "Descartado", valorMensal: 100 },
+      { id: "f", cliente: "F", estagio: "Fechamento", valorMensal: 100 },
+    ]);
+    const porEtapa = Object.fromEntries(k.pipeline.etapas.map((s) => [s.etapa, s.quantidade]));
+    expect(porEtapa).toEqual({
+      "Fechamento": 1,
+      "Ganho": 2, // "Ganho" + "won"
+      "Perdido/Descartado": 3, // "Perdido/Descartado" + "Perdido / Descartado" + "Descartado"
+    });
+    // Ganho não é fundido em Fechamento; ordem do funil: Fechamento < Ganho < Perdido.
+    expect(k.pipeline.etapas.map((e) => e.etapa)).toEqual([
+      "Fechamento", "Ganho", "Perdido/Descartado",
+    ]);
+  });
+
   it("mantém etapa desconhecida como coluna própria (não some dentro de outra)", () => {
     const k = montarKanbanDeOportunidades([
       { id: "x", cliente: "X", estagio: "Etapa Nova do Board", valorMensal: 100 },

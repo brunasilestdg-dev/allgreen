@@ -37,12 +37,15 @@ export const normalizarNome = (valor) =>
 // "Proposta / BID"). Consolidamos por uma chave normalizada para o Kanban não
 // quebrar a MESMA etapa em várias colunas, e ordenamos na sequência do funil.
 const FUNIL_CANONICO = [
-  { canon: "Prospecção", variantes: ["prospecao", "prospeccao", "prospeccao", "prospect", "prospeccao"] },
+  { canon: "Prospecção", variantes: ["prospecao", "prospeccao", "prospect"] },
   { canon: "Apresentação", variantes: ["apresentacao"] },
   { canon: "Proposta/BID", variantes: ["proposta", "proposta/bid", "proposta bid"] },
   { canon: "Negociação", variantes: ["negociacao", "negociacao/bid", "negociacao bid"] },
   { canon: "Homologação", variantes: ["homologacao"] },
-  { canon: "Fechamento", variantes: ["fechamento", "fechado", "ganho", "cliente fechado", "won"] },
+  { canon: "Fechamento", variantes: ["fechamento", "fechado", "cliente fechado"] },
+  // Resultados terminais: "Ganho" (fechou) e "Perdido/Descartado" (não seguiu).
+  { canon: "Ganho", variantes: ["ganho", "ganha", "ganhamos", "won", "cliente ganho"] },
+  { canon: "Perdido/Descartado", variantes: ["perdido/descartado", "perdido descartado", "perdido", "descartado", "descarte", "perda", "lost"] },
   { canon: "Sem Classificação", variantes: ["sem classificacao", ""] },
 ];
 // Chave de casamento: normaliza (minúsculas/sem acento/espaços) e junta os dois
