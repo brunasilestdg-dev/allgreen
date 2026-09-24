@@ -5241,3 +5241,9 @@
 .tdg-comparativos .tdg-kpi-comp em { font-style: normal; font-size: 0.8rem; margin-left: 4px; }
 .tdg-kpi-comp strong { font-size: 1rem; }
 .tdg-sem-base { color: var(--tdg-muted); font-weight: 500; font-size: 0.9rem; }
+
+/* Planner · compartilhamento: quem ainda não alcança a To Do Green neste espaço
+   aparece marcado — o plano só chega a essa pessoa depois de liberar em Acessos. */
+.tdg-planner-chip.sem-acesso { border-color: #e6b98a; background: #fff6ec; color: #8a4b0b; }
+.tdg-planner-chip.sem-acesso em { font-size: .72rem; font-style: normal; font-weight: 700; }
+.tdg-planner-aviso { color: #8a4b0b; font-size: .8rem; font-weight: 500; line-height: 1.4; margin: 0; }

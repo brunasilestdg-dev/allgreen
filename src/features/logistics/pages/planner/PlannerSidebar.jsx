@@ -32,7 +32,7 @@ export default function PlannerSidebar({
 
       <div className="plr-rail-secao">
         {aberto && <span>Meus planos</span>}
-        <button type="button" className="plr-icone" onClick={onNovoPlano} aria-label="Novo plano" title="Novo plano"><Plus size={16} /></button>
+        {onNovoPlano && <button type="button" className="plr-icone" onClick={onNovoPlano} aria-label="Novo plano" title="Novo plano"><Plus size={16} /></button>}
       </div>
 
       <ul className="plr-rail-lista">

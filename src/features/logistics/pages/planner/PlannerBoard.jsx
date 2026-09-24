@@ -149,7 +149,7 @@ export default function PlannerBoard({
             </header>
 
             <div className="plr-col-corpo">
-              {porBalde && coluna.chave !== "__sem__" && (
+              {porBalde && onAdicionarRapida && coluna.chave !== "__sem__" && (
                 rascunho[coluna.chave] !== undefined ? (
                   <form className="plr-rapida" onSubmit={(e) => { e.preventDefault(); enviarRapida(coluna.chave); }}>
                     <input

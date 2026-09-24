@@ -13,7 +13,7 @@
 // gravado é só o rótulo (nao_iniciada / em_andamento / concluida) — a barra é
 // calculada no domínio.
 
-import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
+import { TENANT_ID, alcancaEspacoNaVertical, paginacao, podeNaVertical } from "./todogreen-access.js";
 import {
   normalizarBaldes,
   normalizarMembros,
@@ -161,6 +161,27 @@ const membrosValidados = async (env, access, valor) => {
   return validos;
 };
 
+// Ser "gente do espaço" (memberships/tenant_users) não é o mesmo que conseguir
+// ABRIR a To Do Green neste espaço: quem entrou só pelo espaço do app (convite
+// do Seu Funcionário) é aceito na lista, mas o servidor da vertical o recusa na
+// porta — e a titular via "compartilhado com 2 pessoas" enquanto ninguém via o
+// plano. A lista é mantida (quando o acesso for liberado em Acessos, o plano
+// aparece sem precisar compartilhar de novo); o que muda é que a resposta DIZ
+// quem ainda não alcança, para a tela avisar em vez de prometer.
+const membrosQueNaoAlcancam = async (env, access, ids) => {
+  if (!ids.length) return [];
+  const { results } = await env.DB.prepare(
+    `SELECT id, email FROM users WHERE id IN (${ids.map(() => "?").join(",")})`,
+  ).bind(...ids).all();
+  const porId = new Map((results || []).map((u) => [u.id, u]));
+  const alcance = await Promise.all(ids.map(async (id) => {
+    const pessoa = porId.get(id);
+    if (!pessoa) return false;
+    return alcancaEspacoNaVertical(env, pessoa, access.ownerId);
+  }));
+  return ids.filter((_, i) => !alcance[i]);
+};
+
 const criarPlano = async (env, access, corpo) => {
   const erros = validarPlano({ name: corpo.name || corpo.nome });
   if (erros.length) return json({ error: "Plano com pendências.", erros }, 400);
@@ -179,7 +200,7 @@ const criarPlano = async (env, access, corpo) => {
     access.userId, access.userId, agora, agora,
   ).run();
   const row = await env.DB.prepare("SELECT * FROM todogreen_planner_plans WHERE id = ?").bind(id).first();
-  return json(planoDaLinha(row), 201);
+  return json({ ...planoDaLinha(row), membrosSemAcesso: await membrosQueNaoAlcancam(env, access, membros) }, 201);
 };
 
 // Editar a estrutura do plano (nome, baldes, visibilidade) é do criador — e da
@@ -208,7 +229,7 @@ const atualizarPlano = async (env, access, id, corpo) => {
     JSON.stringify(membros), dados.fields_json, access.userId, new Date().toISOString(), id, TENANT_ID, access.ownerId,
   ).run();
   const row = await env.DB.prepare("SELECT * FROM todogreen_planner_plans WHERE id = ?").bind(id).first();
-  return json(planoDaLinha(row));
+  return json({ ...planoDaLinha(row), membrosSemAcesso: await membrosQueNaoAlcancam(env, access, membros) });
 };
 
 const arquivarPlano = async (env, access, id) => {
@@ -469,7 +490,14 @@ const pessoasDoEspaco = async (env, access) => {
       unicos.push({ id: pessoa.id, name: pessoa.name, email: pessoa.email || "" });
     }
   }
-  return json({ registros: unicos });
+  // `alcancaPlanner`: se esta pessoa consegue abrir a vertical neste espaço —
+  // isto é, se compartilhar um plano com ela vai de fato mostrá-lo. Quem está
+  // só no espaço do app vem marcado false, e a tela explica o que falta
+  // (liberar em Acessos) em vez de deixar a titular achar que compartilhou.
+  const alcances = await Promise.all(
+    unicos.map((pessoa) => alcancaEspacoNaVertical(env, pessoa, access.ownerId)),
+  );
+  return json({ registros: unicos.map((pessoa, i) => ({ ...pessoa, alcancaPlanner: alcances[i] })) });
 };
 
 export async function handleTodoGreenPlanner(request, env, access) {
