@@ -16,6 +16,7 @@ import {
   validarDocumentoJuridico,
 } from "../legalDomain.js";
 import "./TodoGreenPages.css";
+import { formatDocument, normalizeDocument } from "../erpCoreDomain.js";
 
 const ROTULO_EVENTO = {
   submissao: "Enviado ao Jurídico", reenvio: "Reenviado", validado: "Validado",
@@ -46,13 +47,13 @@ const dataBR = (valor) => {
   return Number.isNaN(d.getTime()) ? valor : d.toLocaleDateString("pt-BR");
 };
 
-// Só dígitos e no máximo 14; o CNPJ é opcional, mas quando vem, guarda limpo.
-const soDigitos = (valor) => String(valor || "").replace(/\D/g, "").slice(0, 14);
-const formatarCnpj = (valor) => {
-  const d = soDigitos(valor);
-  if (d.length !== 14) return d;
-  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
-};
+// O CNPJ é opcional, mas quando vem é guardado sem pontuação pela regra
+// central (erpCoreDomain), que já entende o CNPJ alfanumérico emitido desde
+// julho/2026. Na digitação só se aceitam letras, números e a pontuação da
+// máscara — normalizar a cada tecla apagaria as letras de um CNPJ pela metade.
+const digitacaoDeCnpj = (valor) =>
+  String(valor || "").toUpperCase().replace(/[^0-9A-Z./\-\s]/g, "").slice(0, 18);
+const formatarCnpj = (valor) => formatDocument(valor);
 
 // O texto e o tom do aviso de vigência a partir dos dias que faltam. É o que
 // transforma "fimVigencia: 2026-09-20" em "Vence em 10 dias" com a cor certa.
@@ -146,7 +147,7 @@ export default function LegalPage({ registros = [], clients = [], proposals = []
       // (que liga o Jurídico ao gate do contrato) viajam em `campos`, sem
       // migração — o worker grava em fields_json e devolve em `campos`.
       const { cnpj, signatario, signatarioEmail, proposalId, ...base } = form;
-      await criar?.("legal", { ...base, campos: { cnpj: soDigitos(cnpj), signatario: signatario.trim(), signatarioEmail: signatarioEmail.trim(), proposalId: proposalId.trim() } });
+      await criar?.("legal", { ...base, campos: { cnpj: normalizeDocument(cnpj), signatario: signatario.trim(), signatarioEmail: signatarioEmail.trim(), proposalId: proposalId.trim() } });
       setForm(formVazio);
       setAberto(false);
       setToast?.("Documento jurídico registrado.");
@@ -210,7 +211,7 @@ export default function LegalPage({ registros = [], clients = [], proposals = []
               une o Jurídico ao contrato num sistema só. */}
           <label><span>Proposta / contrato vinculado</span><select value={form.proposalId} onChange={(e) => setForm({ ...form, proposalId: e.target.value })}><option value="">Não vincular</option>{propostasVinculaveis.map((p) => <option key={p.id} value={p.id}>{p.titulo || "Proposta"}{p.cliente ? ` · ${p.cliente}` : ""}</option>)}</select></label>
           <label><span>Contraparte (razão social)</span><input value={form.contraparte} onChange={(e) => setForm({ ...form, contraparte: e.target.value })} placeholder="Empresa que assina do outro lado" /></label>
-          <label><span>CNPJ da contraparte</span><input value={form.cnpj} inputMode="numeric" onChange={(e) => setForm({ ...form, cnpj: soDigitos(e.target.value) })} placeholder="Só números" /></label>
+          <label><span>CNPJ da contraparte</span><input value={form.cnpj} autoCapitalize="characters" autoComplete="off" onChange={(e) => setForm({ ...form, cnpj: digitacaoDeCnpj(e.target.value) })} placeholder="Ex.: 12.345.678/0001-95 ou 12.ABC.345/01DE-35" /></label>
           <label><span>Signatário (quem assina)</span><input value={form.signatario} onChange={(e) => setForm({ ...form, signatario: e.target.value })} placeholder="Nome de quem assina pela contraparte" /></label>
           <label><span>E-mail do signatário</span><input type="email" value={form.signatarioEmail} onChange={(e) => setForm({ ...form, signatarioEmail: e.target.value })} placeholder="Para envio da assinatura" /></label>
           <label><span>Início da vigência</span><input type="date" value={form.inicioVigencia} onChange={(e) => setForm({ ...form, inicioVigencia: e.target.value })} /></label>

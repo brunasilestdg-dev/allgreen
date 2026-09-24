@@ -1466,3 +1466,40 @@ export const signatureBlockText = (signatures, content) => {
     "certificado digital ICP-Brasil quando este for exigido por lei.",
   ].join("\n\n");
 };
+
+// ===== Sugestões de endereço (Photon/komoot) =====
+// O Roteirizador sugeria endereços pelo Nominatim público, cuja política proíbe
+// autocompletar no navegador. O Photon é feito para isso (busca enquanto se
+// digita, dados do OpenStreetMap) e aceita recorte por caixa geográfica.
+export const BRASIL_BBOX = "-74.0,-33.8,-34.7,5.3";
+
+// Rótulo legível de cada sugestão: nome, rua e número, bairro, cidade e UF,
+// sem repetir partes (o nome de uma rua costuma vir também como "street").
+export function photonSuggestionLabels(data, limite = 4) {
+  const features = Array.isArray(data?.features) ? data.features : [];
+  const vistos = new Set();
+  const rotulos = [];
+  for (const feature of features) {
+    const p = feature?.properties || {};
+    const rua = [p.street, p.housenumber].filter(Boolean).join(", ");
+    const partes = [];
+    for (const parte of [p.name, rua, p.district || p.locality, p.city, p.state]) {
+      const valor = String(parte || "").trim();
+      if (!valor) continue;
+      // "Avenida Paulista" (nome) e "Avenida Paulista, 1000" (rua) são a mesma
+      // parte: fica a versão mais completa, no lugar da primeira.
+      const igual = partes.findIndex(
+        (ja) => ja === valor || valor.startsWith(`${ja},`) || ja.startsWith(`${valor},`),
+      );
+      if (igual === -1) partes.push(valor);
+      else if (valor.length > partes[igual].length) partes[igual] = valor;
+    }
+    const rotulo = partes.join(", ");
+    if (rotulo && !vistos.has(rotulo)) {
+      vistos.add(rotulo);
+      rotulos.push(rotulo);
+    }
+    if (rotulos.length >= limite) break;
+  }
+  return rotulos;
+}

@@ -39,6 +39,7 @@ import {
   validarNfse,
   CODIGO_UF,
 } from "../../src/features/logistics/fiscalDomain.js";
+import { normalizeDocument } from "../../src/features/logistics/erpCoreDomain.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -207,7 +208,7 @@ const salvarPerfil = async (env, access, user, corpo) => {
   const dados = {
     razao_social: texto(corpo.razaoSocial, 200),
     nome_fantasia: texto(corpo.nomeFantasia, 200),
-    cnpj: texto(corpo.cnpj, 18).replace(/\D/g, ""),
+    cnpj: normalizeDocument(texto(corpo.cnpj, 18)),
     inscricao_estadual: texto(corpo.inscricaoEstadual, 20),
     inscricao_municipal: texto(corpo.inscricaoMunicipal, 20),
     cnae: texto(corpo.cnae, 10),
@@ -1039,7 +1040,7 @@ const adicionarReferencia = async (env, access, user, docId, corpo) => {
     texto(corpo.chaveAcesso, 50),
     texto(corpo.numero, 20),
     texto(corpo.serie, 10),
-    texto(corpo.emitenteCnpj, 18).replace(/\D/g, ""),
+    normalizeDocument(texto(corpo.emitenteCnpj, 18)),
     texto(corpo.emitenteNome, 200),
     numero(corpo.valor), numero(corpo.pesoKg), Math.trunc(numero(corpo.volumes)),
     JSON.stringify(objeto(corpo.campos)), agora,

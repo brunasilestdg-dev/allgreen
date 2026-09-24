@@ -6,7 +6,8 @@
 //     sobre tiles com relevo, do mesmo extrato OSM) — nunca paga por request;
 //     sem fonte, o modelo assume perfil plano e DIZ isso (assumption +
 //     confiança menor), em vez de inventar subida.
-//   • CLIMA vem do Open-Meteo (licença aberta) na hora de saída; sem fonte →
+//   • CLIMA vem da MET Norway (Locationforecast, CC BY 4.0 — uso comercial
+//     permitido com atribuição) na hora de saída; sem fonte →
 //     WEATHER_NOT_AVAILABLE, temperatura ausente, confiança reduzida.
 //
 // Este módulo transforma respostas cruas em números com proveniência e
@@ -113,6 +114,30 @@ export function alturasDaRespostaValhalla(data = {}) {
  * `hourly.temperature_2m[]` alinhados; escolhe a hora mais próxima de
  * `departureIso`. Sem hora → `current.temperature_2m`.
  */
+/**
+ * MET Norway (Locationforecast 2.0 compact) → o mesmo formato horário que
+ * `temperaturaNaSaida` lê. A MET devolve horário em UTC; aqui ele vira hora de
+ * Brasília sem fuso ("2026-09-24T09:00"), exatamente como a fonte anterior
+ * entregava com timezone=America/Sao_Paulo — sem isso a hora de saída, que o
+ * app trata como hora local, casaria com a temperatura de 3 horas antes.
+ */
+export function horarioDaMetNorway(data = {}) {
+  const serie = Array.isArray(data?.properties?.timeseries) ? data.properties.timeseries : [];
+  const time = [];
+  const temperature_2m = [];
+  for (const item of serie) {
+    const instante = Date.parse(item?.time || "");
+    const temperatura = num(item?.data?.instant?.details?.air_temperature);
+    if (!Number.isFinite(instante) || temperatura === null) continue;
+    time.push(new Date(instante - 3 * 60 * 60 * 1000).toISOString().slice(0, 16));
+    temperature_2m.push(temperatura);
+  }
+  return {
+    hourly: { time, temperature_2m },
+    current: time.length ? { time: time[0], temperature_2m: temperature_2m[0] } : {},
+  };
+}
+
 export function temperaturaNaSaida(data = {}, departureIso = "") {
   const horas = Array.isArray(data?.hourly?.time) ? data.hourly.time : [];
   const temps = Array.isArray(data?.hourly?.temperature_2m) ? data.hourly.temperature_2m : [];

@@ -5,6 +5,47 @@
 .pix-result {
   padding: 16px;
 }
+/* QR à esquerda e o "copia e cola" ao lado; no celular um embaixo do outro.
+   `minmax(0, 1fr)` para o texto longo do código nunca empurrar o cartão para
+   fora da tela (ver "Layout no celular" no AGENTS.md). */
+.pix-result-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.pix-result-code {
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .pix-result-body {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+  .pix-result-code {
+    width: 100%;
+  }
+}
+/* Fundo branco fixo: leitor de QR do banco erra com o módulo claro sobre o
+   fundo escuro do tema noturno. */
+.qr-image {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+.qr-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px;
+}
+.qr-image-loading {
+  border-radius: 10px;
+  background: var(--surface-2, rgba(148, 163, 184, 0.12));
+}
 .pix-result-label {
   font-size: 12px;
   font-weight: 700;

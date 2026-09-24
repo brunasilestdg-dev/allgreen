@@ -312,3 +312,15 @@ describe("makeMeeting", () => {
     expect(m.businessId).toBe("b1");
   });
 });
+
+describe("dica de contexto para a transcrição", () => {
+  it("junta participantes e cliente, sem repetir nem inventar", async () => {
+    const { transcriptionHint } = await import("./features/meetings/meetingDomain.js");
+    expect(
+      transcriptionHint({ participants: ["Ana", " Joaquim ", "Ana", ""], client: "Três Corações" }),
+    ).toBe("Participantes: Ana, Joaquim. Cliente: Três Corações.");
+    expect(transcriptionHint({ participants: [], client: "" })).toBe("");
+    expect(transcriptionHint(null)).toBe("");
+    expect(transcriptionHint({ participants: ["x".repeat(400)] })).toHaveLength(300);
+  });
+});

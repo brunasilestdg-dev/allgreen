@@ -157,4 +157,43 @@ describe("automações executadas pelo servidor", () => {
     expect(current.data.tasks).toEqual([]);
     expect(current.data.notifications).toEqual([]);
   }, TEMPO_DE_CRON);
+
+  // Na segunda às 12:00 UTC os dois crons disparam no mesmo minuto. O semanal
+  // é só do resumo por push: se ele também rodasse os jobs horários, cada
+  // segunda repetia PNCP, ANEEL, rastreador e automações em dobro.
+  it("o disparo semanal não repete os jobs de hora em hora", async () => {
+    const userId = "scheduled-automation-weekly-cron";
+    await createUser(userId);
+    await seedWorkspace(userId, {
+      tasks: [],
+      notifications: [],
+      automations: [
+        {
+          id: "weekly-cron-rule",
+          name: "Planejamento semanal",
+          enabled: true,
+          frequency: "weekly",
+          day: 1,
+          actionType: "task",
+          actionText: "Planejar a semana",
+          history: {},
+        },
+      ],
+    });
+
+    const promises = [];
+    const ctx = { waitUntil: (promise) => promises.push(promise) };
+    await worker.scheduled(
+      { scheduledTime: Date.parse("2026-07-20T12:00:00.000Z"), cron: "0 12 * * 1" },
+      env,
+      ctx,
+    );
+    await Promise.all(promises);
+    expect((await workspace(userId)).revision).toBe(0);
+
+    await runHourly("2026-07-20T12:00:00.000Z");
+    const current = await workspace(userId);
+    expect(current.revision).toBe(1);
+    expect(current.data.tasks).toHaveLength(1);
+  }, TEMPO_DE_CRON);
 });

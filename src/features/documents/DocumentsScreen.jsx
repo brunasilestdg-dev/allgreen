@@ -24,7 +24,7 @@ import { Button, Empty, Field, LIST_PAGE_SIZE, LoadMoreButton, PageTitle } from 
 import { aiWorkspaceContext, trackProductEvent } from "../../session/telemetria.js";
 import { authHeaders } from "../../session/armazenamento.js";
 import { slugify } from "../../components/formato.js";
-import { documentTitleFromFilename, extractDocumentText } from "../../components/leituraDeArquivo.js";
+import { DOCUMENT_ACCEPT, documentTitleFromFilename, extractDocumentText } from "../../components/leituraDeArquivo.js";
 import SharingFields from "../../components/SharingFields.jsx";
 import { uid } from "../../domain.js";
 
@@ -925,7 +925,7 @@ function Documents({
         className="visually-hidden"
         type="file"
         multiple
-        accept=".pdf,.docx,.txt,.md,.markdown,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/csv"
+        accept={DOCUMENT_ACCEPT}
         aria-label="Selecionar documentos para enviar"
         onChange={(event) => importFiles(event.target.files)}
       />
@@ -959,7 +959,7 @@ function Documents({
               ? "Lendo e organizando seus arquivos..."
               : "Arraste documentos para cá ou clique para escolher"}
           </strong>
-          <small>PDF, DOCX, TXT, Markdown ou CSV · até 10 MB por arquivo</small>
+          <small>PDF (inclusive escaneado), DOCX, XLSX, TXT, Markdown, CSV ou foto · até 10 MB por arquivo</small>
         </span>
       </button>
       {uploadErrors.length > 0 && (

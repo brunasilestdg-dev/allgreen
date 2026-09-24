@@ -361,7 +361,7 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
   const vroomSelfHosted = Boolean(vroom?.configured) || urlValida(env?.TDG_ROUTING_URL);
   const valhalla = doGateway("valhalla");
   const nominatim = doGateway("nominatim");
-  const clima = doGateway("open-meteo");
+  const clima = doGateway("met-norway");
   const aneel = doGateway("aneel-open-data");
   const ons = doGateway("ons-open-data");
   const anp = doGateway("anp-open-data");
@@ -512,10 +512,10 @@ export async function coletarSaudeDoSistema(env, { access, origin, clientSha = "
       detalheSem: "Sem ingestão da ANP o TCO usa contrato > frota informada > fallback, sem referência municipal/estadual.",
     }),
     clima && {
-      ...doCatalogo(clima, saudePorId.get("open-meteo"), {
+      ...doCatalogo(clima, saudePorId.get("met-norway"), {
         group: "energia",
         implementation: IMPLEMENTATION.REAL,
-        detail: "Temperatura na hora de saída para o modelo de energia (Open-Meteo, licença aberta), cache local de 1 h. Sem dado → WEATHER_NOT_AVAILABLE e confiança reduzida — nunca temperatura inventada.",
+        detail: "Temperatura na hora de saída para o modelo de energia (MET Norway, CC BY 4.0 com atribuição), cache local de 1 h. Sem dado → WEATHER_NOT_AVAILABLE e confiança reduzida — nunca temperatura inventada.",
       }),
     },
     ocm && {

@@ -76,16 +76,39 @@ describe("ElevationProvider (Valhalla /height) com cache", () => {
   });
 });
 
-describe("WeatherProvider (Open-Meteo) com cache", () => {
+describe("WeatherProvider (MET Norway) com cache", () => {
   it("lê a temperatura da hora de saída e cacheia por hora", async () => {
     let chamadas = 0;
-    const fetcher = async (url) => {
+    const fetcher = async (url, init) => {
       chamadas += 1;
-      expect(String(url)).toContain("api.open-meteo.com/v1/forecast");
-      return jsonResp({ current: { time: "2026-09-13T09:00", temperature_2m: 22 }, hourly: { time: ["2026-09-13T06:00", "2026-09-13T07:00"], temperature_2m: [13.5, 15] } });
+      // Open-Meteo gratuito é só para uso não comercial; a MET permite uso
+      // comercial, mas recusa quem não se identifica e coordenada com 5+ casas.
+      expect(String(url)).toContain("api.met.no/weatherapi/locationforecast/2.0/compact");
+      expect(init?.headers?.["user-agent"]).toMatch(/AllGreen/);
+      const { searchParams } = new URL(String(url));
+      expect(searchParams.get("lat")).toMatch(/^-?\d+(\.\d{1,4})?$/);
+      expect(searchParams.get("lon")).toMatch(/^-?\d+(\.\d{1,4})?$/);
+      // Horário da MET é UTC: 09:00Z = 06:00 em Brasília.
+      return jsonResp({
+        properties: {
+          meta: { updated_at: "2026-09-13T08:30:00Z" },
+          timeseries: [
+            { time: "2026-09-13T09:00:00Z", data: { instant: { details: { air_temperature: 13.5 } } } },
+            { time: "2026-09-13T10:00:00Z", data: { instant: { details: { air_temperature: 15 } } } },
+          ],
+        },
+      });
     };
     const a = await climaNaRota(env, { geometry: GEO, departureIso: "2026-09-13T06:10:00" }, { fetcher });
-    expect(a).toMatchObject({ ok: true, temperatureC: 13.5, source: "open-meteo", measurementType: "EXTERNAL", cached: false });
+    expect(a).toMatchObject({
+      ok: true,
+      temperatureC: 13.5,
+      source: "met-norway",
+      attribution: "Dados de clima: MET Norway (CC BY 4.0)",
+      measurementType: "EXTERNAL",
+      cached: false,
+      sourceUpdatedAt: "2026-09-13T08:30:00Z",
+    });
     const b = await climaNaRota(env, { geometry: GEO, departureIso: "2026-09-13T06:40:00" }, { fetcher });
     expect(b).toMatchObject({ ok: true, cached: true });
     expect(chamadas).toBe(1);

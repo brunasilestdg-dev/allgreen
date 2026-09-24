@@ -12,6 +12,7 @@ import {
 } from "./worker/auth/credenciais.js";
 import { cleanText, moneyBRL } from "./worker/lib/format.js";
 import { allowed, json } from "./worker/lib/http.js";
+import { handleRouteEstimate } from "./worker/services/route-estimate.js";
 import { logAudit } from "./worker/lib/audit.js";
 import { membershipRole } from "./worker/lib/membership.js";
 import { ensureWorkspaceSnapshotsSchema } from "./worker/lib/workspaceSchema.js";
@@ -1452,6 +1453,10 @@ function weeklySummaryBody(summary) {
   const list = parts.join(", ").replace(/,([^,]*)$/, " e$1");
   return `Semana passada você teve ${list}. Bom trabalho — bora fazer esta semana render também!`;
 }
+
+// Mesmo valor de `triggers.crons` no wrangler.jsonc. O worker-entry.js também
+// usa esta constante para não repetir os jobs horários no disparo semanal.
+export const WEEKLY_SUMMARY_CRON = "0 12 * * 1";
 
 // Envia o resumo da semana anterior por push para todo dono com atividade e
 // pelo menos uma assinatura ativa. Roda uma vez por semana (Cron de segunda).
@@ -3855,6 +3860,12 @@ async function handleMedia(request, env, url) {
   });
 }
 
+// Transcrição no Workers AI (já no plano, sem serviço externo). O turbo custa
+// ~13% mais neurons por minuto que o antigo e acerta mais português.
+const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo";
+const WHISPER_FALLBACK_MODEL = "@cf/openai/whisper";
+const BASE64_AUDIO = /^[A-Za-z0-9+/]+={0,2}$/;
+
 // Transcreve áudio com Whisper no Workers AI. O áudio é gravado ou escolhido no
 // navegador e chega aqui em base64; nada é armazenado no servidor.
 export async function handleTranscribe(request, env) {
@@ -3879,18 +3890,38 @@ export async function handleTranscribe(request, env) {
       { error: "Áudio muito longo. Divida em partes de até 5 minutos." },
       413,
     );
-  let bytes;
-  try {
-    const binary = atob(base64);
-    bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  } catch {
+  // Confere o formato sem decodificar: a regex é nativa e linear, enquanto o
+  // `atob` + laço byte a byte + `[...bytes]` de antes montava um array JS de
+  // milhões de itens — o bastante para estourar os 10 ms de CPU do plano Free.
+  if (!BASE64_AUDIO.test(base64))
     return json({ error: "Áudio em formato inválido." }, 400);
-  }
+  // Nomes próprios que a pessoa informou (participantes, cliente): o Whisper
+  // erra nome com frequência, e o `initial_prompt` é a dica de contexto dele.
+  const dica = String(body?.hint || "")
+    .replace(/[\r\n\t]+/g, " ")
+    .trim()
+    .slice(0, 300);
   try {
-    const result = await env.AI.run("@cf/openai/whisper", {
-      audio: [...bytes],
-    });
+    let result;
+    try {
+      // large-v3-turbo aceita o base64 direto e o idioma — o `whisper` antigo
+      // não tinha parâmetro de idioma e adivinhava a língua a cada áudio.
+      result = await env.AI.run(WHISPER_MODEL, {
+        audio: base64,
+        language: "pt",
+        vad_filter: true,
+        ...(dica ? { initial_prompt: dica } : {}),
+      });
+    } catch (error) {
+      // Contingência: o modelo antigo, que exige os bytes. Só entra quando o
+      // turbo falha, então o custo de CPU da conversão fica fora do caminho
+      // normal.
+      console.error("Transcribe turbo error", error);
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      result = await env.AI.run(WHISPER_FALLBACK_MODEL, { audio: [...bytes] });
+    }
     const text = String(result?.text || "").trim();
     if (!text)
       return json({ error: "Não foi possível entender o áudio." }, 422);
@@ -4226,12 +4257,17 @@ async function handlePublicApi(request, env, url) {
 export default {
   async scheduled(controller, env, ctx) {
     const now = new Date(controller?.scheduledTime || Date.now());
-    if (controller?.cron === "0 12 * * 1")
+    // O cron semanal só entrega o resumo. Na segunda às 12:00 UTC o cron de
+    // hora em hora dispara no mesmo minuto e já roda os jobs abaixo; rodá-los
+    // aqui também dobrava as chamadas externas (PNCP, ANEEL, rastreador...).
+    if (controller?.cron === WEEKLY_SUMMARY_CRON) {
       ctx.waitUntil(
         sendWeeklySummaries(env, now).catch((error) =>
           console.error("scheduled weekly summary", error),
         ),
       );
+      return;
+    }
     ctx.waitUntil(
       runScheduledAutomations(env, now).catch((error) =>
         console.error("scheduled automations", error),
@@ -4538,6 +4574,7 @@ export default {
       url.pathname === "/api/plan" ||
       url.pathname === "/api/ai/stream" ||
       url.pathname === "/api/transcribe" ||
+      url.pathname === "/api/rotas/estimativa" ||
       url.pathname === "/api/media" ||
       url.pathname === "/api/workspace" ||
       url.pathname === "/api/workspace/backups" ||
@@ -4680,6 +4717,11 @@ export default {
       }
       if (url.pathname === "/api/transcribe") {
         return await handleTranscribe(request, env);
+      }
+      if (url.pathname === "/api/rotas/estimativa") {
+        if (!allowed(`rota-estimativa:${user.id}`, 10))
+          return json({ error: "Muitas consultas em pouco tempo. Aguarde um minuto." }, 429);
+        return await handleRouteEstimate(request, env);
       }
       if (url.pathname === "/api/events") {
         try {

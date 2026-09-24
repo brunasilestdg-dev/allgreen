@@ -2,6 +2,8 @@
 // Puro, sem efeitos colaterais, todo resultado reproduzível.
 // Transmissão à SEFAZ desligada por ausência de certificado digital.
 
+import { normalizeDocument } from "./erpCoreDomain.js";
+
 // ─── Constantes ──────────────────────────────────────────────
 
 export const TIPOS_DOCUMENTO_FISCAL = Object.freeze({
@@ -55,6 +57,11 @@ export const escaparXml = (valor) =>
 function soNumeros(v) {
   return String(v ?? "").replace(/\D/g, "");
 }
+
+// CNPJ no XML: sem pontuação, preservando as letras do CNPJ alfanumérico
+// (IN RFB 2.229/2024). `soNumeros` apagava as letras e gravava outro número —
+// rejeição certa na SEFAZ, e silenciosa até lá.
+const docFiscal = (v) => normalizeDocument(v);
 
 // ─── ICMS interestadual ─────────────────────────────────────
 // Resolução do Senado Federal 22/1989
@@ -245,6 +252,11 @@ function digitoVerificadorMod11(corpo) {
 }
 
 export function gerarChaveDeAcesso({ cuf, aamm, cnpj, mod, serie, numero, tpEmis = 1, codigo }) {
+  // Emitente com CNPJ alfanumérico: a chave muda de regra (letras na posição
+  // do CNPJ) e não montamos uma chave errada por cima — `soNumeros` a
+  // encurtaria e o zero à esquerda a disfarçaria. Quem transmite (o conector
+  // SEFAZ) gera a chave oficial nesse caso.
+  if (/[A-Z]/i.test(normalizeDocument(cnpj))) return null;
   const partes = [
     String(cuf).padStart(2, "0"),
     String(aamm).padStart(4, "0"),
@@ -446,7 +458,7 @@ export function construirXmlCte({
 
   const xmlEmit = [
     "<emit>",
-    tagSe("CNPJ", soNumeros(emitente?.cnpj)),
+    tagSe("CNPJ", docFiscal(emitente?.cnpj)),
     tagSe("IE", soNumeros(emitente?.inscricaoEstadual)),
     tagSe("xNome", emitente?.razaoSocial),
     tagSe("xFant", emitente?.nomeFantasia),
@@ -456,7 +468,7 @@ export function construirXmlCte({
 
   const xmlRem = remetente ? [
     "<rem>",
-    tagSe("CNPJ", soNumeros(remetente.cnpj)),
+    tagSe("CNPJ", docFiscal(remetente.cnpj)),
     tagSe("xNome", remetente.nome),
     tagEndereco("enderReme", remetente),
     "</rem>",
@@ -464,7 +476,7 @@ export function construirXmlCte({
 
   const xmlDest = destinatario ? [
     "<dest>",
-    tagSe("CNPJ", soNumeros(destinatario.cnpj)),
+    tagSe("CNPJ", docFiscal(destinatario.cnpj)),
     tagSe("xNome", destinatario.nome),
     tagEndereco("enderDest", destinatario),
     "</dest>",
@@ -553,7 +565,7 @@ export function construirXmlMdfe({
 
   const xmlEmit = [
     "<emit>",
-    tagSe("CNPJ", soNumeros(emitente?.cnpj)),
+    tagSe("CNPJ", docFiscal(emitente?.cnpj)),
     tagSe("IE", soNumeros(emitente?.inscricaoEstadual)),
     tagSe("xNome", emitente?.razaoSocial),
     tagEndereco("enderEmit", emitente),
