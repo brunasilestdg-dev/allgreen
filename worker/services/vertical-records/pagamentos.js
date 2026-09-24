@@ -3,9 +3,10 @@
 // Contrato: `listarPagamentos`, `registrarPagamento` e `estornarPagamento`
 // (env, access, user, entryId[, corpo | paymentId]) devolvem Response. O razão
 // é imutável: a baixa soma, o estorno lança o compensatório negativo.
-// Autorização: o roteador exige a permissão de escrita do financeiro; aqui o
-// lançamento precisa estar no espaço e na carteira (`noAlcanceDaCarteira`),
-// senão 404. A baixa exige a `revision` lida (409 se mudou).
+// Autorização: o roteador exige a leitura da coleção para listar e a permissão
+// de escrita do financeiro para registrar ou estornar; aqui o lançamento
+// precisa estar no espaço e na carteira (`noAlcanceDaCarteira`), senão 404. A
+// baixa exige a `revision` lida (409 se mudou).
 
 import { TENANT_ID } from "../todogreen-access.js";
 import { registrarAuditoriaTodoGreen } from "../todogreen-governance.js";

@@ -8,10 +8,12 @@
 // Entradas: (request, env, access, user) já autenticados pelo roteador
 // (`internalReadAccess`); saída: Response. Autorização: o espaço é sempre o do
 // vínculo (`access.ownerId`); quem não vê a carteira inteira só alcança os
-// clientes atribuídos a ele (404 fora dela); gerir, excluir e liberar portal
-// exigem owner/admin ou clients:manage/clients:assign; criar e importar
-// aceitam também crm:manage; definir carteira exige clients:assign. Os campos
-// do CRM são normalizados por `crm-fields.js` antes de gravar.
+// clientes atribuídos a ele (404 fora dela) — e é esse alcance que vale para
+// editar (PATCH com `revision`, inclusive ligar/desligar o portal) e para o
+// envio de e-mail. Excluir cliente e ver, liberar ou remover quem entra no
+// portal exigem owner/admin ou clients:manage/clients:assign; criar e
+// importar aceitam também crm:manage; a carteira em si exige clients:assign.
+// Os campos do CRM são normalizados por `crm-fields.js` antes de gravar.
 
 import { emailEnabled, escMail, sendEmail } from "../mensageria/envio.js";
 import {
