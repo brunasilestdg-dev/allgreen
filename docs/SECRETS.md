@@ -281,7 +281,7 @@ segredo por espaço, sempre lidos de `env`.
 | --- | --- | --- |
 | `GEOAPIFY_API_KEY` | geocodificação, roteamento cloud (leves e pesados) e elevação; também calcula o "Tempo e distância" do Roteirizador das Ferramentas (`/api/rotas/estimativa`). Plano grátis: 3.000 créditos/dia, uso comercial permitido com atribuição | a vertical usa Nominatim/OSRM/Valhalla conforme contingências configuradas (as instâncias públicas proíbem uso comercial/de rastreio — ver `docs/CATALOGO_RECURSOS_GRATUITOS.md`); o Roteirizador manda abrir no Maps |
 | `TDG_ROUTING_URL` / `TDG_ROUTING_TOKEN` | otimizador VROOM auto-hospedado (`/routes/optimize`) e seu bearer | otimização responde `routing_not_configured` (503) |
-| `TDG_OSRM_BASE_URL` / `TODOGREEN_OSRM_BASE_URL` | motor OSRM (perfil genérico) | OSRM não é oferecido na seleção de motor |
+| `TDG_OSRM_BASE_URL` / `TODOGREEN_OSRM_BASE_URL` | motor OSRM próprio (perfil genérico) | o OSRM continua na seleção de motor, apontando para o servidor público de demonstração (`publicFallback: true` em `routingProvidersDomain.js`) — uso que o `AGENTS.md` proíbe para a operação; pesado segue exigindo o Valhalla |
 | `TDG_VALHALLA_BASE_URL` / `TODOGREEN_VALHALLA_BASE_URL` | motor Valhalla (truck costing, restrições, elevação) | pesado sem motor seguro: `NO_SAFE_ROUTING_ENGINE` (409) |
 | `TODOGREEN_VROOM_BASE_URL` | VROOM pelo gateway de integrações | — |
 | `TODOGREEN_NOMINATIM_BASE_URL` | geocodificação própria | Nominatim público |
