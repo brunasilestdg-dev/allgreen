@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, TrendingUp, KanbanSquare, Truck, CircleDashed } from "lucide-react";
-import { comparativosDeSerie } from "../commercialPanelDomain.js";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { RefreshCw, TrendingUp, KanbanSquare, Truck, CircleDashed, X, ExternalLink } from "lucide-react";
+import { comparativosDeSerie, agruparSlaPorBase } from "../commercialPanelDomain.js";
+import { rotuloDoTipo, RESULTADOS_DA_INTERACAO } from "../interacoesDomain.js";
 import "./TodoGreenPages.css";
 
 const brl = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -20,6 +21,84 @@ const mesLabel = (mes) => {
 // Paleta categórica validada (dataviz): distinta e CVD-safe em claro/escuro.
 // Cores por CSS var → o modo escuro troca sozinho. "Outros" fica neutro.
 const VIZ = ["var(--viz-1)", "var(--viz-2)", "var(--viz-3)", "var(--viz-4)", "var(--viz-5)", "var(--viz-outros)"];
+
+const RESULTADO_ROTULO = new Map(RESULTADOS_DA_INTERACAO.map((r) => [r.id, r.rotulo]));
+const dataHora = (iso) => {
+  const s = String(iso || "");
+  if (!s) return "—";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString("pt-BR", s.length > 10 ? { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit", year: "numeric" });
+};
+
+// Painel lateral que abre as interações reais de UMA oportunidade — o que o
+// contador "💬 N" no Kanban/FUP prometia e não abria. Busca do servidor com o
+// MESMO escopo do contador (tenant + opportunity_id), por isso bate com o "💬 N"
+// mesmo para interações importadas sem client_id (a lista geral do front, por
+// ser recortada por carteira, as escondia). Só leitura: registrar/editar segue
+// na tela Oportunidades, para onde o rodapé leva.
+function InteracoesDrawer({ oportunidade, authHeaders, onFechar, onAbrirOportunidades }) {
+  const [lista, setLista] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
+  useEffect(() => {
+    const esc = (e) => { if (e.key === "Escape") onFechar(); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onFechar]);
+  useEffect(() => {
+    if (!oportunidade?.id) return;
+    let vivo = true;
+    setCarregando(true); setErro("");
+    fetch(`/api/todogreen/comercial/painel?opportunityId=${encodeURIComponent(oportunidade.id)}`, { headers: authHeaders?.() || {} })
+      .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || "Não foi possível carregar as interações."); return d; })
+      .then((d) => { if (vivo) setLista(Array.isArray(d.interacoes) ? d.interacoes : []); })
+      .catch((e) => { if (vivo) setErro(e.message); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, [oportunidade, authHeaders]);
+  if (!oportunidade) return null;
+  return (
+    <div className="tdg-drawer-overlay" onClick={onFechar}>
+      <aside className="tdg-drawer" role="dialog" aria-label={`Interações de ${oportunidade.cliente}`} onClick={(e) => e.stopPropagation()}>
+        <header className="tdg-drawer-head">
+          <div><span className="tdg-kicker">INTERAÇÕES</span><h3>{oportunidade.cliente}</h3><small>{carregando ? "carregando…" : `${lista.length} registro(s)`}</small></div>
+          <button type="button" className="tdg-mini" onClick={onFechar} aria-label="Fechar"><X size={16} /></button>
+        </header>
+        <div className="tdg-drawer-corpo">
+          {carregando ? (
+            <p className="tdg-panel-vazio">Carregando interações…</p>
+          ) : erro ? (
+            <p className="tdg-panel-vazio">{erro}</p>
+          ) : lista.length === 0 ? (
+            <p className="tdg-panel-vazio">Nenhuma interação registrada nesta oportunidade ainda.</p>
+          ) : lista.map((it) => (
+            <article className="tdg-interacao" key={it.id}>
+              <div className="tdg-interacao-topo">
+                <span className="tdg-tag">{rotuloDoTipo(it.tipo)}</span>
+                <time>{dataHora(it.ocorridaEm)}</time>
+              </div>
+              {it.assunto && <strong className="tdg-interacao-assunto">{it.assunto}</strong>}
+              {it.ata && <p className="tdg-interacao-ata">{it.ata}</p>}
+              <div className="tdg-interacao-pe">
+                {it.autorEmail && <span title="Autor do registro">👤 {it.autorEmail}</span>}
+                {it.resultado && <span className="tdg-tag tdg-tag-suave">{RESULTADO_ROTULO.get(it.resultado) || it.resultado}</span>}
+                {it.proximoPasso && <span title="Próximo passo">→ {it.proximoPasso}{it.proximoPassoEm ? ` (${dataHora(it.proximoPassoEm)})` : ""}</span>}
+              </div>
+            </article>
+          ))}
+        </div>
+        {onAbrirOportunidades && (
+          <footer className="tdg-drawer-pe">
+            <button type="button" className="tdg-mini" onClick={() => onAbrirOportunidades(oportunidade)}>
+              <ExternalLink size={14} /> Abrir na tela Oportunidades (registrar/editar)
+            </button>
+          </footer>
+        )}
+      </aside>
+    </div>
+  );
+}
 
 const deltaClass = (d) => (d === null || d === undefined ? "" : d >= 0 ? "tdg-ok" : "tdg-alerta");
 const deltaTxt = (d) => (d === null || d === undefined ? "—" : `${d >= 0 ? "▲ +" : "▼ "}${(d * 100).toFixed(1)}%`);
@@ -50,6 +129,12 @@ function Comparativos({ dados, formato = num }) {
 }
 
 const Vazio = ({ children }) => <p className="tdg-panel-vazio">{children}</p>;
+
+// Marca as seções que só têm o total do período (sem quebra mensal ainda) quando
+// há um mês em foco — pra deixar claro que aquele quadro NÃO está filtrado.
+const TagPeriodo = ({ mesFoco }) => (mesFoco
+  ? <div className="tdg-tag-periodo-wrap"><span className="tdg-tag-periodo" title="Esta seção mostra o período completo — a quebra por mês chega com o feed pedido-a-pedido do Track3R.">período completo · não filtra por mês ainda</span></div>
+  : null);
 
 const Secao = ({ titulo, kicker, nota, children }) => (
   <section className="tdg-panel">
@@ -90,18 +175,21 @@ const Barras = ({ itens, valor, rotulo, formato = num, onClick, selKey, keyOf, c
 
 // Gráfico de linha/área (inline SVG) com eixo de valores, grade, rótulos diretos
 // no pico e no último ponto, % do dia (comPct) e tooltip nativo por ponto.
-const LinhaSVG = ({ serie, meta = null, formatoY = num, comPct = false, altura = 150 }) => {
+// A área de plotagem tem altura fixa própria (svg preenche 100% dela) e o eixo
+// de datas fica FORA dela — assim a sobreposição (ticks, pontos, rótulos) cai
+// exatamente sobre a linha, sem o descolamento de antes.
+const LinhaSVG = ({ serie, meta = null, formatoY = num, comPct = false, altura = 170 }) => {
   const largura = 720;
-  const pad = { t: 12, r: 12, b: 12, l: 12 };
+  const pad = { t: 18, r: 16, b: 10, l: 16 };
   const ys = serie.map((p) => Number(p.y) || 0);
   const maxV = Math.max(...ys, meta ?? 0);
-  const yMax = maxV * 1.08 || 1;
-  const lo = meta !== null ? Math.min(...ys, meta) * 0.98 : 0;
+  const yMax = maxV * 1.12 || 1;
+  const lo = meta !== null ? Math.max(0, Math.min(...ys, meta) * 0.96) : 0;
   const span = yMax - lo || 1;
   const soma = ys.reduce((s, v) => s + v, 0) || 1;
   const x = (i) => pad.l + (i / Math.max(1, serie.length - 1)) * (largura - pad.l - pad.r);
   const y = (v) => pad.t + (1 - (v - lo) / span) * (altura - pad.t - pad.b);
-  const linha = serie.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(Number(p.y) || 0).toFixed(1)}`).join(" ");
+  const linha = serie.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(ys[i]).toFixed(1)}`).join(" ");
   const area = `${linha} L${x(serie.length - 1).toFixed(1)},${(altura - pad.b).toFixed(1)} L${x(0).toFixed(1)},${(altura - pad.b).toFixed(1)} Z`;
   const metaY = meta !== null ? y(meta) : null;
   const seg = serie.length > 1 ? (largura - pad.l - pad.r) / (serie.length - 1) : largura;
@@ -114,26 +202,34 @@ const LinhaSVG = ({ serie, meta = null, formatoY = num, comPct = false, altura =
     return `${formatoY(v)}${comPct ? ` · ${((v / soma) * 100).toFixed(1)}%` : ""}`;
   };
   return (
-    <div className="tdg-chart tdg-chart-rico" style={{ height: altura }}>
-      <svg viewBox={`0 0 ${largura} ${altura}`} preserveAspectRatio="none" role="img" aria-label="gráfico de linha">
-        {ticksFrac.map((f, k) => <line key={k} className="tdg-chart-grade" x1={pad.l} x2={largura - pad.r} y1={pad.t + (1 - f) * (altura - pad.t - pad.b)} y2={pad.t + (1 - f) * (altura - pad.t - pad.b)} />)}
-        <path d={area} className="tdg-chart-area" />
-        <path d={linha} className="tdg-chart-linha" />
-        {metaY !== null && <line x1={pad.l} x2={largura - pad.r} y1={metaY} y2={metaY} className="tdg-chart-meta" />}
-        {serie.map((p, i) => (
-          <rect key={i} className="tdg-chart-hit" x={x(i) - seg / 2} y={0} width={seg} height={altura} fill="transparent">
-            <title>{`${p.label}: ${rotuloPonto(i)}`}</title>
-          </rect>
-        ))}
-      </svg>
-      <div className="tdg-chart-overlay">
-        {ticksFrac.map((f, k) => (
-          <span key={k} className="tdg-chart-ytick" style={{ top: `${((pad.t + (1 - f) * (altura - pad.t - pad.b)) / altura) * 100}%` }}>{formatoY(lo + f * span)}</span>
-        ))}
-        {serie.map((p, i) => <span key={i} className={`tdg-chart-dot${i === maxIdx ? " pico" : ""}`} style={pos(i, ys[i])} />)}
-        {rotulados.map((i) => (
-          <span key={i} className={`tdg-chart-rotulo${i === maxIdx ? " pico" : ""}`} style={pos(i, ys[i])}>{rotuloPonto(i)}</span>
-        ))}
+    <div className="tdg-chart-rico">
+      <div className="tdg-chart-plot" style={{ height: altura }}>
+        <svg viewBox={`0 0 ${largura} ${altura}`} preserveAspectRatio="none" role="img" aria-label="gráfico de linha">
+          <defs>
+            <linearGradient id="tdg-area-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--tdg-green)" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="var(--tdg-green)" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          {ticksFrac.map((f, k) => <line key={k} className="tdg-chart-grade" x1={pad.l} x2={largura - pad.r} y1={pad.t + (1 - f) * (altura - pad.t - pad.b)} y2={pad.t + (1 - f) * (altura - pad.t - pad.b)} />)}
+          <path d={area} className="tdg-chart-area" fill="url(#tdg-area-grad)" />
+          <path d={linha} className="tdg-chart-linha" />
+          {metaY !== null && <line x1={pad.l} x2={largura - pad.r} y1={metaY} y2={metaY} className="tdg-chart-meta" />}
+          {serie.map((p, i) => (
+            <rect key={i} className="tdg-chart-hit" x={x(i) - seg / 2} y={0} width={seg} height={altura} fill="transparent">
+              <title>{`${p.label}: ${rotuloPonto(i)}`}</title>
+            </rect>
+          ))}
+        </svg>
+        <div className="tdg-chart-overlay">
+          {ticksFrac.map((f, k) => (
+            <span key={k} className="tdg-chart-ytick" style={{ top: `${((pad.t + (1 - f) * (altura - pad.t - pad.b)) / altura) * 100}%` }}>{formatoY(lo + f * span)}</span>
+          ))}
+          {rotulados.map((i) => <span key={`d${i}`} className={`tdg-chart-dot${i === maxIdx ? " pico" : ""}`} style={pos(i, ys[i])} />)}
+          {rotulados.map((i) => (
+            <span key={`r${i}`} className={`tdg-chart-rotulo${i === maxIdx ? " pico" : ""}`} style={pos(i, ys[i])}>{rotuloPonto(i)}</span>
+          ))}
+        </div>
       </div>
       <div className="tdg-chart-eixo"><span>{serie[0]?.label}</span>{meta !== null && <span className="tdg-chart-meta-rot">meta {formatoY(meta)}</span>}<span>{serie[serie.length - 1]?.label}</span></div>
     </div>
@@ -188,19 +284,26 @@ const Donut = ({ segmentos, formato = brl, selecionado = null, onSelecionar }) =
 };
 
 // ===== Aba Receita =====
-function AbaReceita({ receita }) {
+function AbaReceita({ receita, mesFoco = null, setMesFoco }) {
   const { porPeriodo, previsao, concentracao, resumoMensal, ticketMedio } = receita;
   const vazio = "Sem faturamento ainda. Preenche quando o Track3R enviar (artefato, importação ou webhook).";
   const mesesDisp = porPeriodo?.meses?.map((m) => m.mes) || [];
-  const [mesSel, setMesSel] = useState(null);
   const [tomadorSel, setTomadorSel] = useState(null);
-  const mesAtivo = mesSel || mesesDisp[mesesDisp.length - 1];
+  const mesAtivo = mesFoco || mesesDisp[mesesDisp.length - 1];
   const serieDiaria = (porPeriodo?.porDia?.[mesAtivo] || []).map((d) => ({ label: d.dia.slice(8), y: d.receita }));
   const clienteSel = tomadorSel ? concentracao?.clientes?.find((c) => c.tomador === tomadorSel) : null;
+  // Comparativos ancoram no último ponto da série — truncar até o mês focado faz
+  // MoM/MTD/YoY se referirem àquele mês. Sem foco, série inteira (mês corrente).
   const compReceita = useMemo(() => comparativosDeSerie({
-    mensal: (porPeriodo?.meses || []).map((m) => ({ mes: m.mes, valor: m.receita })),
-    diaria: Object.values(porPeriodo?.porDia || {}).flat().map((d) => ({ dia: d.dia, valor: d.receita })),
-  }), [porPeriodo]);
+    mensal: (porPeriodo?.meses || []).filter((m) => !mesFoco || m.mes <= mesFoco).map((m) => ({ mes: m.mes, valor: m.receita })),
+    diaria: Object.values(porPeriodo?.porDia || {}).flat().filter((d) => !mesFoco || String(d.dia).slice(0, 7) <= mesFoco).map((d) => ({ dia: d.dia, valor: d.receita })),
+  }), [porPeriodo, mesFoco]);
+  // Concentração: no mês focado usa o recorte porMes de cada tomador; sem foco, o
+  // total do período. Fica claro no rótulo qual dos dois está na tela.
+  const concentracaoSegmentos = (concentracao?.clientes || []).map((c) => ({
+    label: c.tomador,
+    valor: mesFoco ? (c.porMes?.[mesFoco] || 0) : c.total,
+  })).filter((s) => s.valor > 0);
 
   return (
     <>
@@ -209,11 +312,11 @@ function AbaReceita({ receita }) {
           <Comparativos dados={compReceita} formato={brl} />
         </Secao>
       )}
-      <Secao titulo="Receita por período" kicker="FATURAMENTO" nota="Clique num mês para ver o dia a dia dele.">
+      <Secao titulo="Receita por período" kicker="FATURAMENTO" nota="Clique num mês (aqui ou no filtro acima) para focar o painel inteiro naquele mês; clique de novo para voltar ao período completo.">
         {porPeriodo.disponivel ? (
           <>
             <Barras itens={porPeriodo.meses} valor={(i) => i.receita} rotulo={(i) => mesLabel(i.mes)} formato={brl}
-              comPct onClick={(i) => setMesSel(i.mes)} selKey={mesAtivo} keyOf={(i) => i.mes} />
+              comPct onClick={(i) => setMesFoco?.(mesFoco === i.mes ? null : i.mes)} selKey={mesFoco} keyOf={(i) => i.mes} />
             {serieDiaria.length > 1 && (
               <>
                 <div className="tdg-chart-controls"><span className="tdg-nota">Dia a dia · <strong>{mesLabel(mesAtivo)}</strong> · total {brl(serieDiaria.reduce((s, d) => s + (Number(d.y) || 0), 0))}</span></div>
@@ -237,7 +340,10 @@ function AbaReceita({ receita }) {
       <Secao titulo="Concentração por cliente (tomador)" kicker="CARTEIRA" nota="Clique numa fatia (ou na legenda) para isolar o cliente e ver o mês a mês dele.">
         {concentracao.disponivel ? (
           <div className="tdg-split">
-            <Donut segmentos={concentracao.clientes.map((c) => ({ label: c.tomador, valor: c.total }))} selecionado={tomadorSel} onSelecionar={setTomadorSel} />
+            <div className="tdg-filtro-detalhe" style={{ flex: "0 0 auto" }}>
+              <div className="tdg-chart-controls"><span className="tdg-nota">Participação {mesFoco ? <>em <strong>{mesLabel(mesFoco)}</strong></> : "no período completo"}</span></div>
+              <Donut segmentos={concentracaoSegmentos.length ? concentracaoSegmentos : concentracao.clientes.map((c) => ({ label: c.tomador, valor: c.total }))} selecionado={tomadorSel} onSelecionar={setTomadorSel} />
+            </div>
             {clienteSel ? (
               <div className="tdg-filtro-detalhe">
                 <div className="tdg-chart-controls">
@@ -265,17 +371,18 @@ function AbaReceita({ receita }) {
         {resumoMensal.disponivel ? (
           <table className="tdg-tabela">
             <thead><tr><th>Mês</th><th>Receita</th><th>Var. MoM</th><th>{resumoMensal.clientePrincipal || "Principal"}</th><th>Outros</th></tr></thead>
-            <tbody>{resumoMensal.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{brl(m.receita)}</td><td>{varLabel(m.varMoM)}</td><td>{brl(m.principal)}</td><td>{brl(m.outros)}</td></tr>)}</tbody>
+            <tbody>{resumoMensal.meses.map((m) => <tr key={m.mes} className={mesFoco === m.mes ? "tdg-row-foco" : ""}><td>{mesLabel(m.mes)}</td><td>{brl(m.receita)}</td><td>{varLabel(m.varMoM)}</td><td>{brl(m.principal)}</td><td>{brl(m.outros)}</td></tr>)}</tbody>
           </table>
         ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo="Ticket médio por cliente" kicker="RECEITA ÷ PEDIDOS">
         {ticketMedio.disponivel ? (
+          <><TagPeriodo mesFoco={mesFoco} />
           <table className="tdg-tabela">
             <thead><tr><th>Cliente</th><th>Receita</th><th>Pedidos</th><th>Ticket médio</th></tr></thead>
             <tbody>{ticketMedio.clientes.slice(0, 12).map((c) => <tr key={c.cliente}><td>{c.cliente}</td><td>{brl(c.receita)}</td><td>{c.pedidos ? num(c.pedidos) : "—"}</td><td>{c.ticketMedio === null ? "—" : brlFull(c.ticketMedio)}</td></tr>)}</tbody>
-          </table>
+          </table></>
         ) : <Vazio>{vazio}</Vazio>}
       </Secao>
     </>
@@ -285,13 +392,20 @@ function AbaReceita({ receita }) {
 // ===== Aba Kanban (editável quando vem das oportunidades do ERP) =====
 const ETAPAS_PADRAO = ["Prospecção", "Apresentação", "Negociação", "Proposta / BID", "Homologação", "Fechamento"];
 
-function CartaoKanban({ item, etapas, editavel, onMover, onValor }) {
+function CartaoKanban({ item, etapas, editavel, onMover, onValor, onVerInteracoes, onRenomear, onAbrir }) {
   const [editandoValor, setEditandoValor] = useState(false);
   const [valor, setValor] = useState(item.valor);
+  const [nome, setNome] = useState(item.cliente);
   useEffect(() => { setValor(item.valor); }, [item.valor]);
+  useEffect(() => { setNome(item.cliente); }, [item.cliente]);
   return (
     <div className="tdg-kanban-cartao">
-      <strong>{item.cliente}</strong>
+      {editavel && item.id ? (
+        <input className="tdg-inline-cell tdg-kanban-nome" value={nome} title="Editar o nome da oportunidade"
+          onChange={(e) => setNome(e.target.value)}
+          onBlur={() => { const v = nome.trim(); if (v && v !== item.cliente) onRenomear?.(item.id, v); else if (!v) setNome(item.cliente); }}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+      ) : <strong>{item.cliente}</strong>}
       {editavel && item.id ? (
         <>
           {editandoValor ? (
@@ -307,7 +421,12 @@ function CartaoKanban({ item, etapas, editavel, onMover, onValor }) {
           </select>
         </>
       ) : <small>{brl(item.valor)}</small>}
-      {item.interacoes > 0 && <small className="tdg-card-interacoes" title="Interações registradas nesta oportunidade">💬 {item.interacoes} interação(ões)</small>}
+      {item.interacoes > 0 && (item.id && onVerInteracoes
+        ? <button type="button" className="tdg-card-interacoes tdg-card-interacoes-btn" title="Ver as interações desta oportunidade" onClick={() => onVerInteracoes(item)}>💬 {item.interacoes} interação(ões)</button>
+        : <small className="tdg-card-interacoes">💬 {item.interacoes} interação(ões)</small>)}
+      {editavel && item.id && onAbrir && (
+        <button type="button" className="tdg-card-abrir" onClick={() => onAbrir(item)} title="Abrir na tela Oportunidades para preencher todas as informações">↗ abrir / editar tudo</button>
+      )}
     </div>
   );
 }
@@ -323,7 +442,7 @@ function NotaFup({ item, onNota }) {
   );
 }
 
-function FupRow({ c, etapas, onRenomear, onValor, onMover, onFup, onNota, onExcluir }) {
+function FupRow({ c, etapas, onRenomear, onValor, onMover, onFup, onNota, onExcluir, onVerInteracoes }) {
   const [nome, setNome] = useState(c.cliente);
   const [valor, setValor] = useState(c.valor);
   useEffect(() => { setNome(c.cliente); }, [c.cliente]);
@@ -348,7 +467,9 @@ function FupRow({ c, etapas, onRenomear, onValor, onMover, onFup, onNota, onExcl
       <td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
       <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
       <td className="tdg-td-texto"><NotaFup item={c} onNota={onNota} /></td>
-      <td className="tdg-num">{c.interacoes > 0 ? `💬 ${c.interacoes}` : "—"}</td>
+      <td className="tdg-num">{c.interacoes > 0
+        ? <button type="button" className="tdg-link-interacoes" title="Ver as interações desta oportunidade" onClick={() => onVerInteracoes?.(c)}>💬 {c.interacoes}</button>
+        : "—"}</td>
       <td className="tdg-fup-acoes">
         <button type="button" className="tdg-mini" onClick={() => onFup(c.id)} title="Registrar follow-up hoje (zera o contador)">✓ FUP</button>
         <button type="button" className="tdg-mini tdg-mini-danger" title="Excluir (vai para arquivados)"
@@ -358,7 +479,7 @@ function FupRow({ c, etapas, onRenomear, onValor, onMover, onFup, onNota, onExcl
   );
 }
 
-function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear, onExcluir }) {
+function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear, onExcluir, onVerInteracoes, onAbrir }) {
   const { pipeline, fup, updatesSemana, atualizado, editavel } = kanban;
   const etapas = useMemo(() => {
     const doPipe = pipeline.etapas.map((e) => e.etapa);
@@ -390,7 +511,7 @@ function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear
               {etapasComEtapa.map((e) => (
                 <div className="tdg-kanban-coluna" key={e.etapa}>
                   <div className="tdg-kanban-cabeca"><strong>{e.etapa}</strong><small>{e.quantidade} · {brl(e.valor)}</small></div>
-                  {e.itens.map((i, idx) => <CartaoKanban key={i.id || idx} item={i} etapas={etapas} editavel={editavel} onMover={onMover} onValor={onValor} />)}
+                  {e.itens.map((i, idx) => <CartaoKanban key={i.id || idx} item={i} etapas={etapas} editavel={editavel} onMover={onMover} onValor={onValor} onVerInteracoes={onVerInteracoes} onRenomear={onRenomear} onAbrir={onAbrir} />)}
                 </div>
               ))}
             </div>
@@ -417,12 +538,14 @@ function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear
             <thead><tr><th>Cliente</th><th>Etapa</th><th>Valor</th><th>Última atualização</th><th>Sem FUP há</th><th>Contexto</th><th>Interações</th>{editavel && <th>Ações</th>}</tr></thead>
             <tbody>{fup.clientes.map((c, idx) => (
               editavel && c.id
-                ? <FupRow key={c.id} c={c} etapas={etapas} onRenomear={onRenomear} onValor={onValor} onMover={onMover} onFup={onFup} onNota={onNota} onExcluir={onExcluir} />
+                ? <FupRow key={c.id} c={c} etapas={etapas} onRenomear={onRenomear} onValor={onValor} onMover={onMover} onFup={onFup} onNota={onNota} onExcluir={onExcluir} onVerInteracoes={onVerInteracoes} />
                 : (
                   <tr key={c.id || idx}><td>{c.cliente}</td><td>{c.etapa}</td><td>{brl(c.valor)}</td><td>{c.atualizadoEm ? new Date(c.atualizadoEm).toLocaleDateString("pt-BR") : "—"}</td>
                     <td className={c.semFupDias >= 20 ? "tdg-alerta" : ""}>{c.semFupDias === null ? "—" : `${c.semFupDias} dia(s)`}</td>
                     <td className="tdg-td-texto">{c.texto || "—"}</td>
-                    <td className="tdg-num">{c.interacoes > 0 ? `💬 ${c.interacoes}` : "—"}</td></tr>
+                    <td className="tdg-num">{c.interacoes > 0
+                      ? (c.id && onVerInteracoes ? <button type="button" className="tdg-link-interacoes" title="Ver as interações desta oportunidade" onClick={() => onVerInteracoes(c)}>💬 {c.interacoes}</button> : `💬 ${c.interacoes}`)
+                      : "—"}</td></tr>
                 )
             ))}</tbody>
           </table>
@@ -433,16 +556,22 @@ function AbaKanban({ kanban, onMover, onValor, onFup, onNota, onNova, onRenomear
 }
 
 // ===== Aba Operacional =====
-function AbaOperacional({ operacional }) {
+function AbaOperacional({ operacional, mesFoco = null, setMesFoco }) {
   const { volume, otd, efetividade, ocorrencias, leadtime, slaRota, reentrega, atualizado, periodo, servicoNota } = operacional;
+  const otdFoco = mesFoco ? (otd.meses || []).find((m) => m.mes === mesFoco) : null;
+  const efeFoco = mesFoco ? (efetividade.meses || []).find((m) => m.mes === mesFoco) : null;
   const vazio = "Sem dados operacionais ainda. Preenche quando o Track3R enviar ocorrências/encomendas.";
   const [ocKey, setOcKey] = useState(null);
   const [motivoSel, setMotivoSel] = useState(null);
   const [pracaClienteSel, setPracaClienteSel] = useState(null);
+  const [slaModo, setSlaModo] = useState("base");
+  const [baseAberta, setBaseAberta] = useState(null);
+  const slaBases = useMemo(() => agruparSlaPorBase(slaRota.rows || []), [slaRota]);
   const praca = operacional.praca || { disponivel: false, pracas: [], matriz: [] };
   const clientesDaMatriz = [...new Set((praca.matriz || []).map((m) => m.cliente))];
   const matrizFiltrada = pracaClienteSel ? (praca.matriz || []).filter((m) => m.cliente === pracaClienteSel) : (praca.matriz || []);
-  const ocMes = ocorrencias.meses.find((m) => m.key === (ocKey || ocorrencias.defaultKey)) || ocorrencias.meses[ocorrencias.meses.length - 1] || null;
+  const ocFocoKey = mesFoco ? (ocorrencias.meses.find((m) => m.key === mesFoco || mesLabel(m.mes) === mesLabel(mesFoco))?.key || null) : null;
+  const ocMes = ocorrencias.meses.find((m) => m.key === (ocKey || ocFocoKey || ocorrencias.defaultKey)) || ocorrencias.meses[ocorrencias.meses.length - 1] || null;
   const serieOtd = (otd.daily || []).map((d) => ({ label: d.data?.slice(5), y: d.pct }));
 
   return (
@@ -453,16 +582,17 @@ function AbaOperacional({ operacional }) {
 
       {volume.disponivel && (
         <Secao titulo="Comparativos de volume" kicker="MoM · YoY">
-          <Comparativos dados={comparativosDeSerie({ mensal: (volume.meses || []).map((m) => ({ mes: m.mes, valor: m.pedidos })), diaria: [] })} formato={num} />
+          <Comparativos dados={comparativosDeSerie({ mensal: (volume.meses || []).filter((m) => !mesFoco || m.mes <= mesFoco).map((m) => ({ mes: m.mes, valor: m.pedidos })), diaria: [] })} formato={num} />
         </Secao>
       )}
 
-      <Secao titulo="Volume de pedidos" kicker="POR MÊS">
-        {volume.disponivel ? <Barras itens={volume.meses} valor={(i) => i.pedidos} rotulo={(i) => mesLabel(i.mes)} comPct /> : <Vazio>{vazio}</Vazio>}
+      <Secao titulo="Volume de pedidos" kicker="POR MÊS" nota="Clique num mês para focar o painel inteiro nele.">
+        {volume.disponivel ? <Barras itens={volume.meses} valor={(i) => i.pedidos} rotulo={(i) => mesLabel(i.mes)} comPct onClick={(i) => setMesFoco?.(mesFoco === i.mes ? null : i.mes)} selKey={mesFoco} keyOf={(i) => i.mes} /> : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo="Por praça de embarque (cliente × origem)" kicker="PRAÇA DE EMBARQUE"
-        nota="Praça = unidade de origem por encomenda (Track3R). Preenche quando as encomendas do Track3R entrarem.">
+        nota="Praça = unidade de origem por encomenda (Track3R). Filtre por cliente para ver de quais praças ele embarca. A comparação mês-a-mês por praça — pra flagrar se um cliente (ex.: MAERSK) tirou volume de alguma praça — chega com o feed pedido-a-pedido do Track3R.">
+        <TagPeriodo mesFoco={mesFoco} />
         {praca.disponivel ? (
           <div className="tdg-split">
             <div className="tdg-filtro-detalhe">
@@ -480,6 +610,7 @@ function AbaOperacional({ operacional }) {
                     {clientesDaMatriz.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
+                {pracaClienteSel && <span className="tdg-nota">{pracaClienteSel}: {num(matrizFiltrada.reduce((s, m) => s + (Number(m.pedidos) || 0), 0))} pedidos em {matrizFiltrada.length} praça(s)</span>}
               </div>
               <table className="tdg-tabela">
                 <thead><tr><th>Cliente</th><th>Praça de embarque</th><th>Pedidos</th></tr></thead>
@@ -487,16 +618,19 @@ function AbaOperacional({ operacional }) {
               </table>
             </div>
           </div>
-        ) : <Vazio>Sem origem por encomenda ainda. Esta visão (cliente × praça de embarque) preenche automaticamente quando os webhooks do Track3R entrarem.</Vazio>}
+        ) : <Vazio>Sem origem por encomenda ainda. Esta visão (cliente × praça de embarque, e a tendência mês-a-mês pra detectar perda de volume por praça) preenche automaticamente quando os webhooks do Track3R entrarem.</Vazio>}
       </Secao>
 
       <Secao titulo={`OTD — On Time Delivery (meta ${otd.meta}%)`} kicker="PONTUALIDADE">
         {otd.disponivel ? (
           <>
-            <div className="tdg-kpi-row"><div className="tdg-kpi"><span>OTD acumulado</span><strong className={otd.acumuladoPct >= otd.meta ? "tdg-ok" : "tdg-alerta"}>{pctN(otd.acumuladoPct)}</strong></div></div>
+            <div className="tdg-kpi-row">
+              <div className="tdg-kpi"><span>OTD acumulado</span><strong className={otd.acumuladoPct >= otd.meta ? "tdg-ok" : "tdg-alerta"}>{pctN(otd.acumuladoPct)}</strong></div>
+              {otdFoco && <div className="tdg-kpi"><span>OTD em {mesLabel(mesFoco)}</span><strong className={otdFoco.pct >= otd.meta ? "tdg-ok" : "tdg-alerta"}>{pctN(otdFoco.pct)}</strong></div>}
+            </div>
             {serieOtd.length > 1 && <LinhaSVG serie={serieOtd} meta={otd.meta} formatoY={(v) => `${v}%`} />}
             <table className="tdg-tabela"><thead><tr><th>Mês</th><th>Total</th><th>No prazo</th><th>Fora</th><th>OTD</th></tr></thead>
-              <tbody>{otd.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{num(m.total)}</td><td>{num(m.noPrazo)}</td><td>{num(m.foraPrazo)}</td><td className={m.pct >= otd.meta ? "tdg-ok" : "tdg-alerta"}>{pctN(m.pct)}</td></tr>)}</tbody>
+              <tbody>{otd.meses.map((m) => <tr key={m.mes} className={mesFoco === m.mes ? "tdg-row-foco" : ""}><td>{mesLabel(m.mes)}</td><td>{num(m.total)}</td><td>{num(m.noPrazo)}</td><td>{num(m.foraPrazo)}</td><td className={m.pct >= otd.meta ? "tdg-ok" : "tdg-alerta"}>{pctN(m.pct)}</td></tr>)}</tbody>
             </table>
           </>
         ) : <Vazio>{vazio}</Vazio>}
@@ -505,9 +639,12 @@ function AbaOperacional({ operacional }) {
       <Secao titulo="Efetividade de entregas" kicker="FINALIZADAS ÷ TOTAL">
         {efetividade.disponivel ? (
           <>
-            <div className="tdg-kpi-row"><div className="tdg-kpi"><span>Efetividade acumulada</span><strong>{pctN(efetividade.acumuladoPct)}</strong></div></div>
+            <div className="tdg-kpi-row">
+              <div className="tdg-kpi"><span>Efetividade acumulada</span><strong>{pctN(efetividade.acumuladoPct)}</strong></div>
+              {efeFoco && <div className="tdg-kpi"><span>Efetividade em {mesLabel(mesFoco)}</span><strong>{pctN(efeFoco.pctEfetividade)}</strong></div>}
+            </div>
             <table className="tdg-tabela"><thead><tr><th>Mês</th><th>Total</th><th>Finalizadas</th><th>Insucessos</th><th>Efetividade</th></tr></thead>
-              <tbody>{efetividade.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{num(m.total)}</td><td>{num(m.finalizadas)}</td><td>{num(m.insucessos)}</td><td>{pctN(m.pctEfetividade)}</td></tr>)}</tbody>
+              <tbody>{efetividade.meses.map((m) => <tr key={m.mes} className={mesFoco === m.mes ? "tdg-row-foco" : ""}><td>{mesLabel(m.mes)}</td><td>{num(m.total)}</td><td>{num(m.finalizadas)}</td><td>{num(m.insucessos)}</td><td>{pctN(m.pctEfetividade)}</td></tr>)}</tbody>
             </table>
           </>
         ) : <Vazio>{vazio}</Vazio>}
@@ -534,22 +671,63 @@ function AbaOperacional({ operacional }) {
       <Secao titulo="Lead time — do pedido à entrega" kicker="PRAZO" nota={leadtime.nota}>
         {leadtime.disponivel ? (
           <table className="tdg-tabela"><thead><tr><th>Mês</th><th>Mediana</th><th>Média</th><th>Entregas</th></tr></thead>
-            <tbody>{leadtime.meses.map((m) => <tr key={m.mes}><td>{mesLabel(m.mes)}</td><td>{m.medianaH === null ? "—" : `${m.medianaH.toFixed(1)} h`}</td><td>{`${(Number(m.mediaH) || 0).toFixed(1)} h`}</td><td>{num(m.count)}</td></tr>)}</tbody>
+            <tbody>{leadtime.meses.map((m) => <tr key={m.mes} className={mesFoco === m.mes ? "tdg-row-foco" : ""}><td>{mesLabel(m.mes)}</td><td>{m.medianaH === null ? "—" : `${m.medianaH.toFixed(1)} h`}</td><td>{`${(Number(m.mediaH) || 0).toFixed(1)} h`}</td><td>{num(m.count)}</td></tr>)}</tbody>
           </table>
         ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
-      <Secao titulo="SLA por rota" kicker={slaRota.topN ? `TOP ${slaRota.topN} ROTAS` : "FORA DO PRAZO"} nota={slaRota.nota}>
+      <Secao titulo="SLA — pontualidade por base" kicker={slaModo === "base" ? "NO PRAZO POR BASE" : (slaRota.topN ? `TOP ${slaRota.topN} ROTAS` : "POR ROTA")} nota={slaRota.nota}>
         {slaRota.disponivel ? (
-          <table className="tdg-tabela"><thead><tr><th>Rota</th><th>Pedidos</th><th>Fora do prazo</th><th>% fora</th></tr></thead>
-            <tbody>{slaRota.rows.map((r) => <tr key={r.rota}><td>{r.rota}</td><td>{num(r.total)}</td><td>{num(r.foraPrazo)}</td><td className={r.pctForaPrazo > 5 ? "tdg-alerta" : ""}>{pctN(r.pctForaPrazo)}</td></tr>)}</tbody>
-          </table>
+          <>
+            <TagPeriodo mesFoco={mesFoco} />
+            <div className="tdg-chart-controls">
+              <div className="tdg-toggle" role="group" aria-label="Agrupar SLA">
+                <button type="button" className={`tdg-toggle-btn${slaModo === "base" ? " ativo" : ""}`} onClick={() => setSlaModo("base")}>Por base</button>
+                <button type="button" className={`tdg-toggle-btn${slaModo === "rota" ? " ativo" : ""}`} onClick={() => setSlaModo("rota")}>Por rota</button>
+              </div>
+              <span className="tdg-nota">SLA = % de pedidos entregues <strong>no prazo</strong>{slaModo === "base" ? " — clique numa base para ver as rotas dela." : "."}</span>
+            </div>
+            {slaModo === "base" ? (
+              <table className="tdg-tabela">
+                <thead><tr><th>Base</th><th>Pedidos</th><th>No prazo</th><th>Fora</th><th>SLA (no prazo)</th></tr></thead>
+                <tbody>
+                  {slaBases.bases.map((b) => (
+                    <Fragment key={b.base}>
+                      <tr className="clicavel" onClick={() => setBaseAberta(baseAberta === b.base ? null : b.base)}>
+                        <td><span className="tdg-drill-seta">{baseAberta === b.base ? "▾" : "▸"}</span> {b.base}</td>
+                        <td>{num(b.total)}</td>
+                        <td>{num(b.noPrazo)}</td>
+                        <td>{num(b.foraPrazo)}</td>
+                        <td className={b.pctNoPrazo !== null && b.pctNoPrazo < 95 ? "tdg-alerta" : "tdg-ok"}>{pctN(b.pctNoPrazo)}</td>
+                      </tr>
+                      {baseAberta === b.base && b.rotas.map((r) => (
+                        <tr key={r.rota} className="tdg-subrow">
+                          <td>↳ {r.rota}</td><td>{num(r.total)}</td><td>{num(r.total - r.foraPrazo)}</td><td>{num(r.foraPrazo)}</td>
+                          <td className={r.pctNoPrazo !== null && r.pctNoPrazo < 95 ? "tdg-alerta" : ""}>{pctN(r.pctNoPrazo)}</td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="tdg-tabela">
+                <thead><tr><th>Rota</th><th>Pedidos</th><th>No prazo</th><th>Fora</th><th>SLA (no prazo)</th></tr></thead>
+                <tbody>{slaRota.rows.map((r) => {
+                  const pctNo = 100 - (Number(r.pctForaPrazo) || 0);
+                  return <tr key={r.rota}><td>{r.rota}</td><td>{num(r.total)}</td><td>{num(r.total - r.foraPrazo)}</td><td>{num(r.foraPrazo)}</td><td className={pctNo < 95 ? "tdg-alerta" : ""}>{pctN(pctNo)}</td></tr>;
+                })}</tbody>
+              </table>
+            )}
+            <p className="tdg-nota">Abrir cada pedido e ver o status individual chega com o feed pedido-a-pedido do Track3R (webhooks). Hoje o SLA vem agregado do artefato.</p>
+          </>
         ) : <Vazio>{vazio}</Vazio>}
       </Secao>
 
       <Secao titulo="Reentrega — pedidos com mais de uma tentativa" kicker="REENTREGA" nota={reentrega.nota}>
         {reentrega.disponivel ? (
           <>
+            <TagPeriodo mesFoco={mesFoco} />
             <div className="tdg-kpi-row"><div className="tdg-kpi"><span>Reentrega geral</span><strong>{pctN(reentrega.pctGeral)}</strong></div></div>
             {reentrega.distribuicao.length > 0 && (
               <table className="tdg-tabela"><thead><tr><th>Tentativas</th><th>Pedidos</th></tr></thead>
@@ -572,10 +750,21 @@ const ABAS = [
   { id: "operacional", label: "Modelo Operacional", Icon: Truck },
 ];
 
-export default function CommercialPanelPage({ authHeaders, setToast }) {
+export default function CommercialPanelPage({ authHeaders, setToast, onNavigate }) {
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [aba, setAba] = useState("receita");
+  const [opInteracoes, setOpInteracoes] = useState(null);
+  // Filtro global de mês: clicar num mês (aqui ou numa barra) foca TODAS as
+  // seções com granularidade mensal naquele mês. null = período completo.
+  const [mesFoco, setMesFoco] = useState(null);
+  const mesesGlobais = useMemo(() => {
+    const set = new Set();
+    (dados?.receita?.porPeriodo?.meses || []).forEach((m) => m?.mes && set.add(m.mes));
+    (dados?.operacional?.volume?.meses || []).forEach((m) => m?.mes && set.add(m.mes));
+    (dados?.operacional?.otd?.meses || []).forEach((m) => m?.mes && set.add(m.mes));
+    return [...set].sort();
+  }, [dados]);
 
   const carregar = async () => {
     setLoading(true);
@@ -665,9 +854,28 @@ export default function CommercialPanelPage({ authHeaders, setToast }) {
         ))}
       </div>
 
-      {dados && aba === "receita" && <AbaReceita receita={dados.receita} />}
-      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNota={salvarNotaFup} onNova={novaOportunidade} onRenomear={renomearOportunidade} onExcluir={excluirOportunidade} />}
-      {dados && aba === "operacional" && <AbaOperacional operacional={dados.operacional} />}
+      {aba !== "kanban" && mesesGlobais.length > 1 && (
+        <div className="tdg-mes-filtro" role="group" aria-label="Filtrar por mês">
+          <span className="tdg-mes-filtro-rot">Mês:</span>
+          <button type="button" className={`tdg-mes-chip${mesFoco === null ? " ativo" : ""}`} onClick={() => setMesFoco(null)}>Período completo</button>
+          {mesesGlobais.map((m) => (
+            <button type="button" key={m} className={`tdg-mes-chip${mesFoco === m ? " ativo" : ""}`} onClick={() => setMesFoco(m)}>{mesLabel(m)}</button>
+          ))}
+        </div>
+      )}
+
+      {dados && aba === "receita" && <AbaReceita receita={dados.receita} mesFoco={mesFoco} setMesFoco={setMesFoco} />}
+      {dados && aba === "kanban" && <AbaKanban kanban={dados.kanban} onMover={moverOportunidade} onValor={valorOportunidade} onFup={registrarFup} onNota={salvarNotaFup} onNova={novaOportunidade} onRenomear={renomearOportunidade} onExcluir={excluirOportunidade} onVerInteracoes={setOpInteracoes} onAbrir={onNavigate ? (op) => onNavigate(`/todogreen/oportunidades?opportunity=${encodeURIComponent(op.id)}`) : undefined} />}
+      {dados && aba === "operacional" && <AbaOperacional operacional={dados.operacional} mesFoco={mesFoco} setMesFoco={setMesFoco} />}
+
+      {opInteracoes && (
+        <InteracoesDrawer
+          oportunidade={opInteracoes}
+          authHeaders={authHeaders}
+          onFechar={() => setOpInteracoes(null)}
+          onAbrirOportunidades={onNavigate ? (op) => { onNavigate(`/todogreen/oportunidades?opportunity=${encodeURIComponent(op.id)}`); setOpInteracoes(null); } : null}
+        />
+      )}
     </div>
   );
 }

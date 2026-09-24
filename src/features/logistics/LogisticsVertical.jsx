@@ -4088,7 +4088,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       {page === "acessos" && <AccessPanel role={role} permissions={remoteAccess.permissions} authHeaders={authHeaders} setToast={setToast} />}
       {page === "integracoes" && <Suspense fallback={<section className="tdg-panel">Carregando integrações...</section>}><IntegrationsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {page === "conectores" && <Suspense fallback={<section className="tdg-panel">Carregando conectores...</section>}><BusinessConnectorsPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
-      {page === "painel-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando painel comercial...</section>}><CommercialPanelPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
+      {page === "painel-comercial" && <Suspense fallback={<section className="tdg-panel">Carregando painel comercial...</section>}><CommercialPanelPage authHeaders={authHeaders} setToast={setToast} interactions={verticalData.interactions} onNavigate={navigate} /></Suspense>}
       {page === "saude-sistema" && <Suspense fallback={<section className="tdg-panel">Carregando saúde do sistema...</section>}><SystemHealthPage authHeaders={authHeaders} setToast={setToast} /></Suspense>}
       {!Object.keys(MODULE_IMPLEMENTATION).includes(page) && !["central-trabalho", "custos", "comissoes"].includes(page) && <DashboardPanel data={verticalData} dashboard={dashboard} tasks={db?.tasks || []} onNavigate={navigate} />}
 

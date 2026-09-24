@@ -16,6 +16,7 @@ import {
   rankingClientesPorVolume,
   leadTimeDeEntrega,
   slaPorRota,
+  agruparSlaPorBase,
   reentregaPorRota,
   operacionalPorPraca,
   comparativosDeSerie,
@@ -398,5 +399,47 @@ describe("Aba Operacional", () => {
     expect(r.disponivel).toBe(true);
     const mg = r.rotas.find((x) => x.rota.includes("MG"));
     expect(mg.comReentrega).toBe(1); // E2 teve 2 tentativas
+  });
+});
+
+describe("agruparSlaPorBase", () => {
+  const rows = [
+    { rota: "ZS-BRK", total: 100, foraPrazo: 5 },
+    { rota: "ZS-VLM", total: 100, foraPrazo: 15 },
+    { rota: "CE-CCR", total: 50, foraPrazo: 0 },
+    { rota: "SEMHIFEN", total: 10, foraPrazo: 2 },
+  ];
+
+  it("agrupa rotas pela base (prefixo antes do hífen) e soma pedidos/fora", () => {
+    const { disponivel, bases } = agruparSlaPorBase(rows);
+    expect(disponivel).toBe(true);
+    const zs = bases.find((b) => b.base === "ZS");
+    expect(zs.total).toBe(200);
+    expect(zs.foraPrazo).toBe(20);
+    expect(zs.noPrazo).toBe(180);
+    expect(zs.rotas).toHaveLength(2);
+  });
+
+  it("calcula SLA no prazo (não só o que ficou fora)", () => {
+    const { bases } = agruparSlaPorBase(rows);
+    const zs = bases.find((b) => b.base === "ZS");
+    expect(zs.pctNoPrazo).toBeCloseTo(90, 5); // 180/200
+    expect(zs.pctForaPrazo).toBeCloseTo(10, 5);
+    const ce = bases.find((b) => b.base === "CE");
+    expect(ce.pctNoPrazo).toBe(100);
+  });
+
+  it("rota sem hífen vira a própria base", () => {
+    const { bases } = agruparSlaPorBase(rows);
+    expect(bases.some((b) => b.base === "SEMHIFEN")).toBe(true);
+  });
+
+  it("ordena as bases pelo volume de pedidos (maior primeiro)", () => {
+    const { bases } = agruparSlaPorBase(rows);
+    expect(bases[0].total).toBeGreaterThanOrEqual(bases[bases.length - 1].total);
+  });
+
+  it("vazio quando não há linhas", () => {
+    expect(agruparSlaPorBase([]).disponivel).toBe(false);
   });
 });

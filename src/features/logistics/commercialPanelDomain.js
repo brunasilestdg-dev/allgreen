@@ -528,6 +528,44 @@ export function slaPorRota(encomendas = []) {
   return { disponivel: rotas.length > 0, rotas };
 }
 
+// Agrupa as linhas de SLA por rota pela BASE — o prefixo antes do "-" no código
+// da rota ("ZS-BRK" -> "ZS"); sem "-", a própria rota é a base. Devolve o SLA
+// CHEIO (percentual no prazo), não só o que ficou fora (pedido da titular), e
+// mantém as rotas de cada base para o detalhamento (drill). Aceita linhas já
+// agregadas {rota, total, foraPrazo} — funciona igual vindo do artefato ou do
+// canônico, sem depender do pedido-a-pedido.
+export function agruparSlaPorBase(rows = []) {
+  const porBase = new Map();
+  for (const r of rows) {
+    const rota = textoLimpo(r?.rota) || "—";
+    const idx = rota.indexOf("-");
+    const base = idx > 0 ? rota.slice(0, idx).trim() : rota;
+    const total = soNumero(r?.total);
+    const fora = soNumero(r?.foraPrazo);
+    if (!porBase.has(base)) porBase.set(base, { base, total: 0, foraPrazo: 0, rotas: [] });
+    const reg = porBase.get(base);
+    reg.total += total;
+    reg.foraPrazo += fora;
+    reg.rotas.push({
+      rota, total, foraPrazo: fora,
+      pctForaPrazo: total > 0 ? (fora / total) * 100 : 0,
+      pctNoPrazo: total > 0 ? ((total - fora) / total) * 100 : null,
+    });
+  }
+  const bases = [...porBase.values()]
+    .map((b) => ({
+      base: b.base,
+      total: b.total,
+      foraPrazo: b.foraPrazo,
+      noPrazo: b.total - b.foraPrazo,
+      pctForaPrazo: b.total > 0 ? (b.foraPrazo / b.total) * 100 : 0,
+      pctNoPrazo: b.total > 0 ? ((b.total - b.foraPrazo) / b.total) * 100 : null,
+      rotas: b.rotas.sort((a, c) => c.total - a.total),
+    }))
+    .sort((a, b) => b.total - a.total);
+  return { disponivel: bases.length > 0, bases };
+}
+
 // Operacional por PRAÇA DE EMBARQUE (unidade de origem, Track3R) e a matriz
 // cliente × praça. Preenche quando as encomendas do Track3R chegarem.
 export function operacionalPorPraca(encomendas = []) {

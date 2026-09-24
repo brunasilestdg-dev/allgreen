@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus, TrendingUp } from "lucide-react";
 import {
   ESTAGIOS_FUNIL,
@@ -50,9 +50,15 @@ export default function SalesFunnelPage({ opportunities = [], onNavigate, setToa
         total: soma(itens, "valorContrato"),
         weighted: soma(itens, "valorPonderado"),
         probabilidade: PROBABILIDADE_POR_ESTAGIO[estagio] || 0,
+        // Para o clique abrir a lista das oportunidades da etapa (nome + valor),
+        // cada uma com link para o registro na tela Oportunidades.
+        oportunidades: itens
+          .map((x) => ({ id: x.o.id, nome: x.o.cliente || x.o.titulo || "Oportunidade", valor: x.financeiro.valorContrato || 0 }))
+          .sort((a, b) => b.valor - a.valor),
       };
     });
     const maxTotal = Math.max(1, ...porEtapa.map((e) => e.total));
+    const somaTotal = porEtapa.reduce((s, e) => s + e.total, 0);
 
     const hoje = new Date();
     const meses = [];
@@ -72,11 +78,14 @@ export default function SalesFunnelPage({ opportunities = [], onNavigate, setToa
       cicloMedio: ciclos.length ? Math.round(ciclos.reduce((s, d) => s + d, 0) / ciclos.length) : 0,
       porEtapa,
       maxTotal,
+      somaTotal,
       meses,
     };
   }, [opportunities]);
 
+  const [etapaAberta, setEtapaAberta] = useState(null);
   const irParaOportunidades = () => onNavigate?.("/todogreen/oportunidades");
+  const abrirOportunidade = (id) => id && onNavigate?.(`/todogreen/oportunidades?opportunity=${encodeURIComponent(id)}`);
 
   return (
     <section className="tdg-panel tdg-page tdg-funil">
@@ -101,13 +110,33 @@ export default function SalesFunnelPage({ opportunities = [], onNavigate, setToa
         <section className="tdg-panel">
           <div className="tdg-section-head"><div><span className="tdg-kicker">FUNIL</span><h3>Funil por etapa</h3></div></div>
           <ul className="tdg-funil-etapas">
-            {dados.porEtapa.map((e) => (
-              <li key={e.estagio}>
-                <span className="tdg-funil-etapa-nome" title={`${e.probabilidade}% de probabilidade`}>{e.estagio}</span>
-                <span className="tdg-funil-barra"><span style={{ width: `${Math.round((e.total / dados.maxTotal) * 100)}%` }} /></span>
-                <span className="tdg-funil-etapa-valor">{e.count} · {BRL.format(e.total)}</span>
+            {dados.porEtapa.map((e) => {
+              const pct = dados.somaTotal > 0 ? Math.round((e.total / dados.somaTotal) * 1000) / 10 : 0;
+              const aberta = etapaAberta === e.estagio;
+              return (
+              <li key={e.estagio} className={aberta ? "aberta" : ""}>
+                <button type="button" className="tdg-funil-linha" aria-expanded={aberta}
+                  disabled={e.count === 0}
+                  title={e.count ? "Clique para ver as oportunidades desta etapa" : "Sem oportunidades nesta etapa"}
+                  onClick={() => setEtapaAberta(aberta ? null : e.estagio)}>
+                  <span className="tdg-funil-etapa-nome"><span className="tdg-funil-seta">{e.count ? (aberta ? "▾" : "▸") : "·"}</span> {e.estagio} <em title="probabilidade da etapa">{e.probabilidade}%</em></span>
+                  <span className="tdg-funil-barra"><span style={{ width: `${Math.round((e.total / dados.maxTotal) * 100)}%` }} /></span>
+                  <span className="tdg-funil-etapa-valor">{e.count} · {BRL.format(e.total)} <em className="tdg-funil-pct">{pct}%</em></span>
+                </button>
+                {aberta && e.oportunidades.length > 0 && (
+                  <ul className="tdg-funil-oportunidades">
+                    {e.oportunidades.map((o, idx) => (
+                      <li key={o.id || idx}>
+                        <button type="button" className="tdg-funil-op" onClick={() => abrirOportunidade(o.id)} title="Abrir na tela Oportunidades">
+                          <span>{o.nome}</span><b>{BRL.format(o.valor)}</b>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
 
