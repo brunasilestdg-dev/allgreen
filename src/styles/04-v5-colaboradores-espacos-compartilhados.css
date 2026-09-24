@@ -441,3 +441,28 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.temp-access-data {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+.temp-access-data dt {
+  color: var(--text2);
+}
+.temp-access-data dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.temp-access-data code {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
