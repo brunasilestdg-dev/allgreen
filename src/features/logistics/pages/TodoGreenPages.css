@@ -526,7 +526,6 @@
   .tdg-via-rubricas li select { grid-column: 1 / -1; }
 }
 
-
 /* ===== Metas To Do Green ===== */
 .tdg-goals-page { position: relative; }
 .tdg-goal-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
@@ -1089,7 +1088,6 @@
 @media (max-width: 800px) { .tdg-crm-detail-hero { display: grid; } .tdg-crm-detail-actions { justify-content: flex-start; } .tdg-crm-detail-metrics,.tdg-crm-portal-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .tdg-crm-portal-content { grid-template-columns: minmax(0,1fr); } }
 @media (max-width: 560px) { .tdg-crm-filter-grid,.tdg-crm-card-grid,.tdg-crm-detail-metrics,.tdg-crm-portal-metrics,.tdg-crm-detail-section .tdg-crm-roles,.tdg-crm-task-form > div,.tdg-crm-strategy-grid,.tdg-crm-relationship-map { grid-template-columns: minmax(0, 1fr); } .tdg-crm-kanban { grid-auto-columns: minmax(235px, 88vw); } .tdg-crm-portal-preview > header { display: grid; } }
 @media (max-width: 900px) { .tdg-metric-manager-grid { grid-template-columns: minmax(0, 1fr); } .tdg-metric-manager-grid > aside { border-bottom: 1px solid #e1e9e5; border-right: 0; padding: 0 0 12px; } .tdg-metric-criterion { grid-template-columns: 1fr 1fr; } }
-
 
 /* ===== Abas internas dos cadastros do ERP =====
    Diferentes da navegação da vertical de propósito: aquela troca de TELA, esta
@@ -1752,30 +1750,11 @@
 .tdg-people-folha-abrir { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin-bottom:1rem; }
 .tdg-people-folha-abrir input { padding:.5rem .7rem; border:1px solid var(--tdg-line); border-radius:10px; background:var(--tdg-card); color:var(--tdg-ink); }
 
-/* ── Planner (estilo Microsoft Planner) ─────────────────────── */
+/* ── Planner: formulários dos modais. O quadro, o rail, a tabela, a linha do
+   tempo e os gráficos vivem em pages/planner/planner.css (prefixo plr-). ── */
 .tdg-planner-form { display: grid; gap: 12px; padding: 18px 24px 22px; }
 .tdg-planner-grid3 { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.tdg-planner-toggle {
-  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line);
-  border-radius: 10px; color: var(--tdg-ink); cursor: pointer; display: inline-flex;
-  font-weight: 750; gap: 7px; min-height: 40px; padding: 9px 13px;
-}
-.tdg-planner-toggle[data-ativo="true"] { background: var(--tdg-soft); border-color: var(--tdg-green); color: var(--tdg-green); }
 
-.tdg-planner-bar { margin-bottom: 14px; }
-.tdg-planner-plans { display: flex; flex-wrap: wrap; gap: 8px; }
-.tdg-planner-loading { color: var(--tdg-muted); font-size: 13px; padding: 6px 0; }
-.tdg-planner-plan {
-  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line);
-  border-radius: 999px; color: var(--tdg-ink); cursor: pointer; display: inline-flex;
-  font-weight: 750; gap: 8px; padding: 7px 13px;
-}
-.tdg-planner-plan[data-ativo="true"] { background: var(--tdg-soft); border-color: var(--tdg-green); color: var(--tdg-green); }
-.tdg-planner-plan svg { opacity: .65; }
-.tdg-planner-dot { border-radius: 50%; height: 10px; width: 10px; flex: none; }
-
-.tdg-planner-head { display: grid; gap: 12px; margin-bottom: 14px; }
-.tdg-planner-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 /* Botão que recolhe/expande os painéis de análise (pedido da titular: tela
    limpa por padrão, análise a um clique). Discreto, alinhado à direita. */
 .tdg-analise-toggle { display: flex; justify-content: flex-end; margin: 2px 0 10px; }
@@ -1785,44 +1764,10 @@
   min-height: 32px; padding: 5px 14px;
 }
 .tdg-analise-toggle button:hover { color: var(--tdg-ink); border-color: var(--tdg-ink); }
-.tdg-planner-radar { display: flex; flex-wrap: wrap; gap: 8px; }
-.tdg-planner-radar-sinal {
-  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line);
-  border-radius: 999px; color: var(--tdg-muted); display: inline-flex; font-size: 12px;
-  font-weight: 600; gap: 6px; padding: 4px 11px;
-}
-.tdg-planner-radar-sinal.urgente { background: #fde7e3; border-color: #f4b7ab; color: #b02a12; }
-.tdg-planner-radar-sinal.total { background: transparent; color: var(--tdg-ink); }
-.tdg-planner-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
-.tdg-planner-search {
-  background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 10px; color: var(--tdg-ink);
-  flex: 1; min-height: 40px; min-width: 180px; padding: 9px 12px;
-}
-.tdg-planner-analise-btn {
-  background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 10px;
-  color: var(--tdg-muted); cursor: pointer; font-size: 13px; font-weight: 600;
-  min-height: 40px; padding: 0 14px;
-}
-.tdg-planner-analise-btn:hover { color: var(--tdg-ink); border-color: var(--tdg-ink); }
-.tdg-planner-cortes { display: inline-flex; background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 10px; overflow: hidden; }
-.tdg-planner-cortes button {
-  align-items: center; background: transparent; border: 0; color: var(--tdg-muted); cursor: pointer;
-  display: inline-flex; font: inherit; font-weight: 750; gap: 6px; padding: 9px 12px;
-}
-.tdg-planner-cortes button[data-ativo="true"] { background: var(--tdg-soft); color: var(--tdg-green); }
+
 /* Filtro de status por chips: multi-seleção, cada chip liga/desliga um status.
    Marcado = pílula verde com check; desmarcado = contorno apagado. */
-.tdg-planner-status-filtro { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.tdg-planner-status-chip {
-  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line);
-  border-radius: 999px; color: var(--tdg-muted); cursor: pointer; display: inline-flex;
-  font: inherit; font-size: .8rem; font-weight: 700; gap: 5px; padding: 7px 12px;
-}
-.tdg-planner-status-chip[data-ativo="true"] {
-  background: var(--tdg-soft); border-color: var(--tdg-green); color: var(--tdg-green);
-}
-.tdg-planner-status-chip[data-ativo="false"] { opacity: .72; text-decoration: line-through; }
-.tdg-planner-status-chip:hover { border-color: var(--tdg-green); }
+
 .tdg-planner-icon {
   align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 9px;
   color: var(--tdg-muted); cursor: pointer; display: inline-flex; justify-content: center; min-height: 38px; min-width: 38px;
@@ -1831,108 +1776,15 @@
 .tdg-planner-danger:hover { border-color: #d9a59c; }
 
 /* O quadro: colunas que rolam na horizontal quando não cabem. */
-.tdg-planner-board {
-  align-items: start; display: grid; gap: 14px; grid-auto-columns: minmax(270px, 1fr);
-  grid-auto-flow: column; overflow-x: auto; padding-bottom: 8px;
-}
-.tdg-planner-col { background: var(--tdg-bg); border: 1px solid var(--tdg-line); border-radius: 14px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
-.tdg-planner-col > header { align-items: center; display: flex; justify-content: space-between; }
-.tdg-planner-col > header strong { font-size: 13px; }
-.tdg-planner-col > header span { background: var(--tdg-card); border-radius: 999px; color: var(--tdg-muted); font-size: 11px; font-weight: 800; padding: 2px 9px; }
-.tdg-planner-col-body { display: grid; gap: 9px; }
-.tdg-planner-col-empty { color: var(--tdg-muted); font-size: 12px; margin: 4px 0; text-align: center; }
 
-.tdg-planner-card {
-  background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 12px; cursor: pointer;
-  display: grid; gap: 8px; overflow: hidden; padding: 12px 12px 11px; position: relative;
-}
-.tdg-planner-card:hover { border-color: var(--tdg-green); box-shadow: 0 4px 14px rgba(20, 45, 36, .08); }
-.tdg-planner-prio-bar { height: 3px; inset: 0 0 auto 0; position: absolute; }
-.tdg-planner-card-top { align-items: start; display: flex; gap: 9px; }
-.tdg-planner-card-top p { margin: 2px 0 0; font-size: 13.5px; font-weight: 650; line-height: 1.3; }
-.tdg-planner-check {
-  align-items: center; background: var(--tdg-card); border: 1.5px solid var(--tdg-line); border-radius: 50%;
-  color: transparent; cursor: pointer; display: inline-flex; flex: none; height: 21px; justify-content: center; width: 21px;
-}
-.tdg-planner-check[data-feito="true"] { background: var(--tdg-green); border-color: var(--tdg-green); color: #fff; }
-.tdg-planner-bararea { align-items: center; display: flex; }
-.tdg-planner-bar-track { background: #e6eeea; border-radius: 999px; flex: 1; height: 5px; overflow: hidden; }
-.tdg-planner-bar-track span { background: var(--tdg-green); border-radius: 999px; display: block; height: 100%; }
-.tdg-planner-card-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
-.tdg-planner-tag {
-  align-items: center; background: var(--tdg-bg); border-radius: 7px; color: var(--tdg-muted);
-  display: inline-flex; font-size: 11px; font-weight: 700; gap: 4px; padding: 3px 7px;
-}
-.tdg-planner-tag.atrasada { background: #fff1ee; color: #a23b2d; }
 /* Sinais dinâmicos (Faça agora + chips do cartão): risco = vermelho, atenção =
    âmbar. O rótulo já vem pronto do domínio (plannerDomain.sinaisDaTarefa). */
-.tdg-planner-sinal {
-  align-items: center; border-radius: 7px; display: inline-flex; font-size: 11px;
-  font-weight: 800; gap: 4px; padding: 3px 8px; white-space: nowrap;
-}
-.tdg-planner-sinal.risco { background: #fdecea; color: #a5271a; }
-.tdg-planner-sinal.atencao { background: #fef4e2; color: #92600c; }
-.tdg-planner-focus {
-  background: linear-gradient(180deg, #f2fbf7, var(--tdg-card));
-  border: 1px solid #cfe6da; border-radius: 16px; margin: 0 0 14px; padding: 14px 16px;
-}
-.tdg-planner-focus-head {
-  align-items: center; color: var(--tdg-green); display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
-}
-.tdg-planner-focus-head strong { font-size: 15px; }
-.tdg-planner-focus-head span { color: var(--tdg-muted); font-size: 12px; font-weight: 600; }
-.tdg-planner-focus-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
-.tdg-planner-focus-list > li > button {
-  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 12px;
-  color: inherit; cursor: pointer; display: flex; font: inherit; gap: 10px; padding: 9px 12px;
-  text-align: left; width: 100%;
-}
-.tdg-planner-focus-list > li > button:hover { border-color: var(--tdg-green); }
-.tdg-planner-focus-prio { border-radius: 999px; flex: 0 0 auto; height: 10px; width: 10px; }
-.tdg-planner-focus-title { flex: 1 1 auto; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tdg-planner-focus-sinais { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.tdg-planner-focus-quem {
-  background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); flex: 0 0 auto;
-  font-size: 11px; font-weight: 700; padding: 3px 9px;
-}
-.tdg-planner-focus-quem.sem { background: #fef4e2; color: #92600c; }
-@media (max-width: 640px) {
-  .tdg-planner-focus-list > li > button { flex-wrap: wrap; }
-  .tdg-planner-focus-title { flex-basis: 100%; white-space: normal; }
-}
-.tdg-planner-assignee {
-  background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-green); font-size: 11px;
-  font-weight: 750; margin-left: auto; padding: 3px 9px;
-}
-.tdg-planner-quick { margin-top: 2px; }
-.tdg-planner-quick input {
-  background: var(--tdg-card); border: 1px dashed var(--tdg-line); border-radius: 9px; color: var(--tdg-ink);
-  font: inherit; min-height: 36px; padding: 7px 10px; width: 100%;
-}
-.tdg-planner-quick input:focus { border-style: solid; border-color: var(--tdg-green); outline: none; }
 
 /* Minhas tarefas */
-.tdg-planner-mytasks { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
-.tdg-planner-mytasks button {
-  align-items: center; background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: 11px;
-  cursor: pointer; display: flex; gap: 10px; padding: 11px 13px; text-align: left; width: 100%;
-}
-.tdg-planner-mytasks button:hover { border-color: var(--tdg-green); }
-.tdg-planner-mytasks strong { font-size: 13.5px; font-weight: 650; }
-.tdg-planner-mytasks em { color: var(--tdg-muted); font-size: 12px; font-style: normal; }
-.tdg-planner-prio { border-radius: 999px; flex: none; height: 12px; width: 4px; }
-.tdg-planner-due { align-items: center; color: var(--tdg-muted); display: inline-flex; font-size: 12px; gap: 4px; margin-left: auto; }
-.tdg-planner-status { border-radius: 999px; font-size: 11px; font-weight: 750; padding: 3px 9px; }
-.tdg-planner-status[data-status="concluida"] { background: var(--tdg-soft); color: var(--tdg-green); }
-.tdg-planner-status[data-status="em_andamento"] { background: #fff6e8; color: #a76a12; }
-.tdg-planner-status[data-status="nao_iniciada"] { background: #f0f2f4; color: #5b6b78; }
 
 /* Modais do Planner */
 .tdg-planner-visibility { border: 1px solid var(--tdg-line); border-radius: 10px; display: grid; gap: 8px; margin: 0; padding: 12px; }
-.tdg-planner-radio { align-items: start; display: flex; gap: 8px; }
-.tdg-planner-radio input { margin-top: 3px; width: auto; }
-.tdg-planner-radio span { color: var(--tdg-muted); font-size: 12.5px; }
-.tdg-planner-radio strong { color: var(--tdg-ink); }
+
 .tdg-planner-checklist { border-top: 1px solid var(--tdg-line); padding-top: 10px; }
 .tdg-planner-checkrow { align-items: center; display: flex; gap: 8px; margin-top: 7px; }
 /* O modal é portalado para fora do .tdg — então NÃO herda o estilo de `.tdg
@@ -1957,13 +1809,13 @@
 .tdg-planner-spacer { flex: 1; }
 
 @media (max-width: 900px) {
-  .tdg-planner-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
   .tdg-planner-grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 620px) {
-  .tdg-planner-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
   .tdg-planner-grid3 { grid-template-columns: minmax(0, 1fr); }
-  .tdg-planner-controls { align-items: stretch; flex-direction: column; }
+
 }
 
 /* ── Frota: cartão clicável e ordens de manutenção no modal ─── */
@@ -2730,7 +2582,6 @@
   .tdg-audit-stream article { align-items: start; grid-template-columns: minmax(0, 1fr); }
 }
 
-
 /* Conexão MCP */
 .tdg-mcp-panel { display: grid; gap: 14px; }
 .tdg-mcp-connection {
@@ -3128,7 +2979,6 @@
 .tdg-pasta-ajuda { font-size: 12px; color: var(--tdg-muted, var(--tdg-muted)); margin: -4px 0 8px; }
 .tdg-req-registro-nota { font-size: 12.5px; color: var(--tdg-muted, var(--tdg-muted)); background: var(--tdg-accent-soft, var(--tdg-soft)); border-radius: 9px; padding: 9px 12px; margin: 0 0 10px; }
 
-
 /* RFQ: anexar arquivo de verdade (upload ao cofre) ao lado do link. */
 .tdg-rfq-arquivo { align-items: end; display: grid; gap: 10px; grid-template-columns: 1fr auto; }
 .tdg-rfq-upload { cursor: pointer; }
@@ -3422,92 +3272,10 @@
   padding: 0 8px;
 }
 
-.tdg-planner-radio {
-  align-items: flex-start;
-  background: var(--tdg-card);
-  border: 1px solid #c9ded4;
-  border-radius: 12px;
-  cursor: pointer;
-  display: block;
-  min-height: 0;
-  padding: 12px 12px 12px 44px;
-  position: relative;
-  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
-}
-
-.tdg-planner-radio:hover,
-.tdg-planner-radio:focus-within {
-  border-color: #96bfaf;
-  box-shadow: 0 10px 22px rgba(16, 36, 31, 0.08);
-  transform: translateY(-1px);
-}
-
-.tdg-planner-radio[data-ativo="true"] {
-  background: var(--tdg-bg);
-  border-color: #17624f;
-  box-shadow: inset 0 0 0 1px rgba(23, 98, 79, 0.18), 0 10px 22px rgba(16, 36, 31, 0.08);
-}
-
 /* O rádio nativo é escondido de forma robusta (some, mas continua clicável por
    teclado e foco); o círculo visível é desenhado como pseudo-elemento do label,
    imune a qualquer regra global de tamanho de input que inflava o nativo. O
    estado marcado vem do data-ativo do label, não do :checked do input. */
-.tdg-planner-radio input[type="radio"] {
-  position: absolute;
-  opacity: 0;
-  width: 1px !important;
-  height: 1px !important;
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  pointer-events: none;
-}
-
-.tdg-planner-radio::before {
-  content: "";
-  position: absolute;
-  left: 14px;
-  top: 15px;
-  width: 18px;
-  height: 18px;
-  box-sizing: border-box;
-  border: 2px solid #98beb0;
-  border-radius: 50%;
-  background: #ffffff;
-  transition: border-color 0.14s ease, background 0.14s ease;
-}
-
-.tdg-planner-radio[data-ativo="true"]::before {
-  border-color: #17624f;
-  background: radial-gradient(#17624f 0 4px, #ffffff 5px);
-}
-
-.tdg-planner-radio-copy {
-  color: #4b675c;
-  display: grid;
-  font-size: 12.5px;
-  gap: 5px;
-  line-height: 1.35;
-}
-
-.tdg-planner-radio-copy > span {
-  align-items: center;
-  color: var(--tdg-ink);
-  display: inline-flex;
-  gap: 7px;
-}
-
-.tdg-planner-radio-copy strong {
-  color: var(--tdg-ink);
-  font-size: 13.5px;
-}
-
-.tdg-planner-radio-copy small {
-  color: #536c62;
-  font-size: 12.5px;
-  line-height: 1.35;
-}
 
 .tdg-planner-membros {
   background: var(--tdg-card);
@@ -3572,9 +3340,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .tdg-planner-radio {
-    min-height: auto;
-  }
 }
 
 /* ===== Page action and request filters polish v43 ===== */
@@ -3727,8 +3492,6 @@
 .tdg-page-actions button,
 .tdg-crm-admin-actions button,
 .tdg-goal-admin-actions button,
-.tdg-planner-toggle,
-.tdg-planner-plan,
 .tdg-planner-icon,
 .tdg-form-actions button {
   border-radius: 10px;
@@ -3742,22 +3505,14 @@
   min-height: 40px;
 }
 
-.tdg-planner-cortes button,
 .tdg-crm-view-switch button,
 .tdg-view-switch button {
   border-radius: 8px;
 }
 
-.tdg-planner-cortes,
 .tdg-crm-view-switch,
 .tdg-view-switch {
   border-radius: 10px;
-}
-
-.tdg-planner-cortes button {
-  aspect-ratio: auto;
-  height: auto;
-  min-width: 0;
 }
 
 .tdg-planner-icon {
@@ -4562,14 +4317,6 @@
 .tdg-campo-cep-nota.erro { color: #b91c1c; }
 
 /* v60 — botão de compartilhar plano com rótulo (não mais ícone mudo) */
-.tdg-planner-share-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border-radius: 999px;
-  border: 1px solid var(--tdg-border, #d1d5db);
-  background: var(--tdg-surface, var(--tdg-card)); color: var(--tdg-ink, #111827);
-  font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
-}
-.tdg-planner-share-btn:hover { border-color: var(--tdg-primary, #15803d); color: var(--tdg-primary, #15803d); }
 
 /* v61 — previsão de compra (Suprimentos): totais + tabela de reposição */
 .tdg-previsao-totais { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; }
@@ -4671,7 +4418,6 @@
 .tdg-quality-prazo { color: var(--tdg-muted); font-size: .74rem; }
 .tdg-quality-situacao select { border: 1px solid var(--tdg-line); border-radius: 8px; font: inherit; font-size: .78rem; padding: 5px 8px; }
 
-
 /* Planner universal: o contexto comercial é opcional e visualmente secundário. */
 .tdg-planner-business-context {
   border: 1px solid #cfe1dc;
@@ -4697,38 +4443,6 @@
   font-size: 0.78rem;
   line-height: 1.45;
 }
-
-.tdg-planner-context {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 26px;
-  padding: 4px 8px;
-  border: 1px solid #b8d9d1;
-  border-radius: 999px;
-  background: #edf8f5;
-  color: #17624f;
-  font: inherit;
-  font-size: 0.7rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.tdg-planner-context:hover {
-  border-color: #1b8b73;
-  background: #ddf2ec;
-}
-
-.tdg-planner-context:focus-visible {
-  outline: 3px solid rgba(27, 139, 115, 0.24);
-  outline-offset: 2px;
-}
-
-.tdg-planner-context:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 
 .tdg-crm-contact-cta {
   display: flex;
@@ -4955,7 +4669,6 @@
 .tdg-legal-detalhe dt { align-items: center; color: var(--tdg-muted); display: inline-flex; font-size: .68rem; font-weight: 700; gap: 4px; text-transform: uppercase; }
 .tdg-legal-detalhe dd { font-size: .82rem; margin: 0; }
 .tdg-legal-card footer { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
-
 
 /* CRM progressivo: funciona da primeira pista ao histórico completo. */
 .tdg-progressive-form > p { margin:0; color:var(--tdg-muted); line-height:1.55; }
@@ -5254,7 +4967,6 @@
 .tdg-health-foot { color: var(--tdg-muted); font-size: 12px; line-height: 1.5; padding: 0 4px; }
 .tdg-system-health .tdg-access-row > span { display: grid; gap: 4px; min-width: 0; }
 
-
 /* ===== Viabilidade operacional na oportunidade (seções 47–50) ===== */
 .tdg-viab-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .tdg-viab-selo { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--tdg-line); background: var(--tdg-soft); color: var(--tdg-ink); }
@@ -5271,12 +4983,10 @@
 .tdg-viab-form .tdg-opp-ressalva, .tdg-viab-acoes { grid-column: 1 / -1; }
 .tdg-viab-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
 
-
 /* ===== Roteirizador: classe do veículo (OSRM × Valhalla) ===== */
 .tdg-roteirizacao-classe { display: grid; gap: 4px; margin: 8px 0 4px; max-width: 420px; }
 .tdg-roteirizacao-classe span { font-size: 12px; font-weight: 600; color: var(--tdg-ink); }
 .tdg-roteirizacao-classe small { font-size: 11px; color: var(--tdg-muted); line-height: 1.4; }
-
 
 /* ===== Frota: perfil físico e recarga do veículo (seção 38) ===== */
 .df-perfil-fisico { border: 1px solid var(--tdg-line); border-radius: 12px; padding: 10px 12px 12px; margin: 6px 0 4px; min-width: 0; }
@@ -5368,7 +5078,6 @@
   resize: vertical;
 }
 .tdg-roteirizacao-preflight-fila { color: var(--tdg-muted, #5b6b64); font-size: 0.76rem; }
-
 
 .tdg-dispatch-preflight-warning {
   display: grid;
