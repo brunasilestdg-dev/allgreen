@@ -12,7 +12,7 @@ Objetivo: impedir push direto na `main` sem tornar o repositório impraticável 
 - exclusão da branch desativada;
 - **nenhum status check do GitHub Actions é obrigatório enquanto o runner/quota está indisponível**.
 
-O gate de produção fica no Cloudflare: `deploy:cloudflare` executa o E2E crítico em Chromium antes de migrations/publicação.
+O gate de produção fica no Cloudflare Workers Builds: o build command roda `npm ci && npm run verify && npm run build` antes do `deploy:cloudflare` (migrations + publicação). O E2E crítico (`test:e2e:critical`) **não** roda lá — o container não instala Chromium; ele é gate antes do merge e no fallback manual `deploy.yml` (`deploy:cloudflare:gated` encadeia os dois para quem publica com navegador).
 
 Quando houver runner estável novamente, a proteção deve evoluir para exigir o check de qualidade do PR.
 
@@ -40,6 +40,6 @@ REPO=owner/repo BRANCH=main bash scripts/github/protect-main.sh
 
 ## Depois que o GitHub Actions voltar
 
-Adicione required status checks somente depois que o check estiver executando de forma confiável em PRs. Não exija hoje o `test-and-build` quebrado por quota, porque isso tornaria todos os merges impossíveis.
+Hoje não existe nenhum check de qualidade no GitHub para exigir (o único workflow é o `deploy.yml`, manual). Adicione required status checks somente depois que um check existir e estiver executando de forma confiável em PRs (`GITHUB_SELF_HOSTED_RUNNER.md`) — exigir um check que não roda tornaria todos os merges impossíveis.
 
 A proteção de branch não substitui o gate do deploy: uma mudança pode ser semanticamente ruim mesmo com PR. O fluxo continua sendo **PR → validação → merge → Cloudflare gate → produção**.

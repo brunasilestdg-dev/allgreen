@@ -46,10 +46,18 @@
 
 ## Publicação
 
-1. `npm test`
-2. `npm run build`
-3. Revisar `git diff` e ausência de segredos.
-4. Aplicar migrações remotas.
-5. Publicar o Worker.
-6. Validar `/api/status`, login e um fluxo autenticado real.
-7. Registrar versão, horário e responsável.
+O caminho normal é o merge na `main`: o Cloudflare Workers Builds roda
+`npm ci && npm run verify && npm run build` e depois `npm run deploy:cloudflare`
+(migrações + publicação). Antes do merge, e em qualquer publicação manual:
+
+1. `npm run verify` (lint + testes de unidade + testes de worker) — `npm test`
+   sozinho não roda o lint.
+2. `npm run build`.
+3. `npm run test:e2e:critical` (jornadas críticas no Chromium).
+4. Revisar `git diff` e ausência de segredos.
+5. `npm run deploy:cloudflare` — aplica as migrações remotas e publica o Worker,
+   nessa ordem.
+6. Validar `/api/system/version` (o `sha` publicado), `/api/status`, login e um
+   fluxo autenticado real.
+7. Registrar versão, horário e responsável (tabela da seção 13a do
+   `docs/DEPLOYMENT_RUNBOOK.md`).

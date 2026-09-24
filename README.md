@@ -19,13 +19,17 @@ O núcleo combina as cotas gratuitas de Google, Cloudflare, Groq, Cerebras, Mist
 
 ## Estrutura
 
-| Caminho       | O que é                                                                       |
-| ------------- | ----------------------------------------------------------------------------- |
-| `src/`        | Interface do aplicativo (React + Vite)                                        |
-| `worker.js`   | Backend (Cloudflare Worker): login, chat de IA, mídia, sites públicos e leads |
-| `migrations/` | Banco de dados de contas (Cloudflare D1)                                      |
-| `public/`     | Arquivos estáticos (ícones, manifest, service worker)                         |
-| `video-ai/`   | Servidor próprio e opcional de geração de vídeo (GPU, Docker)                 |
+| Caminho           | O que é                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| `src/`            | Interface do aplicativo (React + Vite); cada área em `src/features/<área>/`                      |
+| `worker-entry.js` | Entrada do Worker publicado (`wrangler.jsonc → main`): API do TMS e rotas da To Do Green         |
+| `worker.js`       | Composição do app geral (roteador e tarefas agendadas), para onde a entrada delega o resto       |
+| `worker/`         | Serviços do backend por domínio (`worker/services/`), autenticação, mensageria e bibliotecas     |
+| `migrations/`     | Banco de dados (Cloudflare D1), migrações numeradas e incrementais                               |
+| `public/`         | Arquivos estáticos (ícones, manifest, service worker)                                            |
+| `test/`, `e2e/`   | Testes de worker (D1 local) e de ponta a ponta (Playwright)                                      |
+| `docs/`           | Runbooks de deploy e operação, segredos (`docs/SECRETS.md`) e matriz de prontidão do ERP         |
+| `video-ai/`       | Servidor próprio e opcional de geração de vídeo (GPU, Docker)                                    |
 
 ## Rodar no seu computador
 
@@ -78,7 +82,7 @@ Sem as opcionais o app continua funcionando: o chat usa a cascata disponível, i
 
 ## Segurança
 
-- Senhas protegidas com PBKDF2 (100.000 iterações) e sal individual; sessões expiram em 30 dias.
+- Senhas protegidas com PBKDF2 (100.000 iterações) e sal individual; a sessão vale 24 horas (prazo absoluto) e, na To Do Green, termina após 30 minutos sem uso.
 - As rotas de IA exigem login, evitando que estranhos consumam a cota gratuita.
 - Limite de requisições por IP contra abuso.
 - Sites públicos recebem HTML higienizado e uma política CSP; os leads ficam vinculados ao dono do site.

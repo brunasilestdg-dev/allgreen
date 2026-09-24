@@ -15,7 +15,9 @@ código. Complementa o `AGENTS.md` (comandos do dia a dia) e o
 
 ## 0. Pré‑requisitos
 
-- Node.js 22 (mesma versão do CI — ver `.github/workflows/ci.yml`).
+- Node.js 22 (a versão do fallback `.github/workflows/deploy.yml`; o repositório
+  não fixa versão em `.nvmrc`/`engines`, então o Workers Builds usa a padrão da
+  imagem de build).
 - Conta Cloudflare com Workers habilitado.
 - `npm i -g wrangler` (ou usar `npx wrangler`).
 - Acesso ao repositório GitHub de destino.
@@ -24,7 +26,7 @@ código. Complementa o `AGENTS.md` (comandos do dia a dia) e o
 
 ```bash
 git clone <URL_DO_REPOSITORIO>
-cd Seufuncionario
+cd allgreen
 npm ci
 ```
 
@@ -60,7 +62,7 @@ usar domínio próprio, *Zone:DNS:Edit* + *Workers Routes:Edit*.
 ## 4. Criar o banco D1 e apontar o `wrangler.jsonc`
 
 ```bash
-wrangler d1 create seu-funcionario-db
+wrangler d1 create allgreen-db
 ```
 
 O comando devolve um `database_id`. **Troque o `database_id`** em
@@ -80,10 +82,10 @@ schema num D1 novo, em ordem.
 
 ```bash
 # ambiente novo (remoto):
-npx wrangler d1 migrations apply seu-funcionario-db --remote
+npx wrangler d1 migrations apply allgreen-db --remote
 
 # desenvolvimento local:
-npx wrangler d1 migrations apply seu-funcionario-db --local
+npx wrangler d1 migrations apply allgreen-db --local
 ```
 
 Nunca edite uma migration já aplicada — crie uma nova numerada (regra do
@@ -92,15 +94,23 @@ Nunca edite uma migration já aplicada — crie uma nova numerada (regra do
 ## 6. R2 (armazenamento de arquivos), se aplicável
 
 Arquivos (POD, cofre de documentos, mídia) usam **binding**, nunca URL fixa
-(seção 41). Para um ambiente novo:
+(seção 41). O código lê um único binding R2, **opcional**: `MEDIA_BUCKET`
+(`worker/services/todogreen-file-store.js`). Sem ele — o estado atual de
+produção, já que o `wrangler.jsonc` não declara `r2_buckets` — os bytes ficam
+em chunks base64 no D1, que funciona mas tem teto de escala. Para ligar:
 
 ```bash
 wrangler r2 bucket create <nome-do-bucket>
 ```
 
-Adicione o binding correspondente em `wrangler.jsonc` (`r2_buckets`) com o mesmo
-nome de binding que o código espera. Confira em `worker/services/*` quais
-bindings de R2 são lidos de `env` antes de nomear.
+e declare em `wrangler.jsonc`:
+
+```jsonc
+"r2_buckets": [{ "binding": "MEDIA_BUCKET", "bucket_name": "<nome-do-bucket>" }]
+```
+
+Arquivo gravado antes continua sendo lido do D1; só o que chega depois vai
+para o R2.
 
 ## 7. Bindings já esperados pelo Worker
 
@@ -110,10 +120,11 @@ De `wrangler.jsonc`:
 | --- | --- | --- |
 | `ASSETS` | Assets estáticos (`./dist`) | SPA + `run_worker_first` para rotas de API/portais |
 | `AI` | Workers AI | contingência local de IA |
-| `DB` | D1 (`seu-funcionario-db`) | banco operacional |
+| `DB` | D1 (`allgreen-db`) | banco operacional |
+| `MEDIA_BUCKET` | R2 (**opcional**, não declarado hoje) | bytes do POD e do cofre; sem ele ficam em chunks no D1 (seção 6) |
 
 `vars` públicas (não são segredo): `GEMINI_MODEL`, `XAI_MODEL`,
-`TODOGREEN_ADMIN_EMAILS`, `TDG_ENVIRONMENT`.
+`MONDAY_CLIENT_ID`, `TODOGREEN_ADMIN_EMAILS`, `TDG_ENVIRONMENT`.
 
 > `TDG_ENVIRONMENT` é o **ambiente declarado pelo próprio Worker** (`production`,
 > `preview`, `staging`…). Aparece em `GET /api/system/version` e na tela
@@ -171,11 +182,11 @@ novo cron aqui, com o handler no roteador do Worker.
 
 ## 11. GitHub Actions / deploy automático
 
-- `.github/workflows/ci.yml` (**Qualidade**): roda em push/PR — lint, testes,
-  build e E2E. **Enquanto o GitHub Actions estiver sem minutos** (runner vazio,
-  `steps: []`, workflow "Publicar" *skipped*), isso **não** é erro de código e o
-  gate obrigatório passa a ser o **local** (seção 12a) ou o do Cloudflare Builds —
-  `verify`, `build`, Cloudflare Builds ou deploy manual vermelho, esses sim, bloqueiam.
+- **Não há workflow de qualidade no GitHub.** O único workflow do repositório é o
+  `deploy.yml` (abaixo). O gate obrigatório é o **local/sessão remota** antes do
+  merge (seção 2) e o do Cloudflare Builds; `verify`, `build`, `test:e2e:critical`,
+  Cloudflare Builds ou deploy manual vermelho bloqueiam. Para ter um check no
+  GitHub sem gastar minutos, ver `docs/GITHUB_SELF_HOSTED_RUNNER.md`.
 - Cloudflare Workers Builds (conectado ao repo): em push na `main`, roda
   `npm ci && npm run verify && npm run build` e depois `npm run deploy:cloudflare`
   (`wrangler d1 migrations apply --remote && wrangler deploy`). O E2E de navegador
@@ -217,7 +228,7 @@ npm run lint && npm run test:unit && npm run test:worker && npm run build
 
 export CLOUDFLARE_API_TOKEN=***         # token da titular; NUNCA em arquivo versionado
 npx wrangler whoami                     # confirma a conta
-npx wrangler d1 migrations list seu-funcionario-db --remote   # compara com migrations/
+npx wrangler d1 migrations list allgreen-db --remote   # compara com migrations/
 npm run deploy:cloudflare               # aplica pendentes + publica (idempotente)
 ```
 
@@ -249,8 +260,9 @@ após a publicação.
 
 ## 13a. Registrar o SHA publicado
 
-Produção ≠ `main` até prova em contrário. Após cada publicação, anote em
-`docs/AUDITORIA_CONSOLIDACAO_TDG.md` (ou no relatório da rodada):
+Produção ≠ `main` até prova em contrário. Após cada publicação, acrescente uma
+linha nesta tabela (ou no relatório da rodada, se a publicação fizer parte de
+um PR — nesse caso, cite o PR aqui):
 
 | Data (UTC) | SHA publicado | Como | Version ID (wrangler) | Smoke |
 | --- | --- | --- | --- | --- |

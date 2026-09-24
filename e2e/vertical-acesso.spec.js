@@ -9,9 +9,9 @@ import { api, contaNova, criarConta, habilitarTodoGreen } from "./apoio.js";
 // não pode chegar a produção — com a menor superfície possível: poucos
 // testes, sem preencher formulário de produto.
 //
-// ESTADO: promovido — `.fixme` removido, e o passo entrou em
-// `.github/workflows/ci.yml`. Duas causas reais de instabilidade, as duas
-// corrigidas:
+// ESTADO: promovido — `.fixme` removido, e o arquivo faz parte do gate
+// `npm run test:e2e:critical` (antes do merge e no fallback `deploy.yml`).
+// Duas causas reais de instabilidade, as duas corrigidas:
 //
 // 1) `habilitarTodoGreen()` escrevia um negócio chamado "To Do Green" no
 //    espaço de trabalho — a forma antiga de ganhar acesso à vertical, que o

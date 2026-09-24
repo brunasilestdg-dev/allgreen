@@ -1,19 +1,21 @@
 # GitHub Actions com runner self-hosted (fallback opcional)
 
-> **Para que serve:** rodar os testes do GitHub Actions ("Qualidade": lint +
-> unidade + worker + build, e opcionalmente o E2E visual) **sem consumir os
-> minutos pagos do GitHub-hosted**. Uma máquina sua (ligada) executa os jobs.
+> **Para que serve:** ter um check de qualidade no GitHub (lint + unidade +
+> worker + build, e opcionalmente o E2E) **sem consumir os minutos pagos do
+> GitHub-hosted**. Uma máquina sua (ligada) executa os jobs.
 >
-> **Isto é OPCIONAL.** O CI/CD principal é o Cloudflare Workers Builds
-> (`CLOUDFLARE_BUILDS_SETUP.md`). O runner self-hosted só interessa se você
-> quiser manter o check "Qualidade" verde no GitHub e/ou rodar os testes de
-> screenshot (que precisam de navegador) num ambiente controlado.
+> **Isto é OPCIONAL e ainda não existe.** Hoje o repositório tem um único
+> workflow, o "Publicar" (`.github/workflows/deploy.yml`, manual). O CI/CD
+> principal é o Cloudflare Workers Builds (`CLOUDFLARE_BUILDS_SETUP.md`) e o gate
+> de qualidade roda antes do merge. O runner self-hosted só interessa se você
+> quiser um check verde/vermelho no próprio PR e/ou rodar os testes de
+> navegador num ambiente controlado.
 
 ## Requisitos
 
 - Uma máquina **Linux ou Windows** que possa **ficar ligada** quando você quiser
   que o CI rode (se estiver desligada, os jobs ficam na fila).
-- Node.js 22 (o mesmo do `ci.yml`).
+- Node.js 22 (o mesmo do `deploy.yml`).
 - Para o E2E visual: o navegador do Playwright instalado
   (`npx playwright install chromium`).
 
@@ -30,23 +32,36 @@
 
 ## Apontar um workflow para o runner
 
-O workflow atual usa `runs-on: ubuntu-latest` (GitHub-hosted). Para usar o seu
-runner, trocaria para `runs-on: [self-hosted, tdg-local]`. **Não** faça essa
-troca no `ci.yml` principal antes de o runner existir — senão os jobs ficam
-presos na fila. O caminho recomendado é criar um workflow separado
-(ex.: `.github/workflows/qualidade-selfhosted.yml`) com `workflow_dispatch` e
-`runs-on: [self-hosted, tdg-local]`, rodando exatamente:
+O `deploy.yml` usa `runs-on: ubuntu-latest` (GitHub-hosted) e deve continuar
+assim. Para o check de qualidade, crie **depois de o runner existir** um workflow
+separado — se ele apontar para um runner que ainda não existe, os jobs ficam
+presos na fila. Exemplo de `.github/workflows/qualidade-selfhosted.yml`:
 
-```bash
-npm ci
-npm run verify        # lint + unidade + worker (gate obrigatório)
-npm run build
-# opcional (gate visual — precisa de navegador):
-npx playwright install chromium
-npm run test:e2e:todogreen
+```yaml
+name: Qualidade (runner próprio)
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gate:
+    runs-on: [self-hosted, tdg-local]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run verify        # lint + unidade + worker (gate obrigatório)
+      - run: npm run build
+      # gate de navegador (precisa do Chromium do Playwright no runner):
+      - run: npm run test:e2e:critical
 ```
 
-Assim você liga o gate quando quiser, sem mexer no fluxo que já existe.
+Só depois de ele rodar de forma confiável em PRs vale torná-lo obrigatório na
+proteção da `main` (`GITHUB_MAIN_PROTECTION.md`).
 
 ## Segurança (ler antes de ligar)
 
@@ -70,5 +85,5 @@ Assim você liga o gate quando quiser, sem mexer no fluxo que já existe.
 |---|---|
 | Publicar (produção) | **Cloudflare Workers Builds** (automático em push na `main`) |
 | Rodar testes no GitHub sem gastar minutos | **Runner self-hosted** (este doc) |
-| Testes de screenshot (navegador) | Runner self-hosted **ou** local (`npm run test:e2e:todogreen`) |
+| Testes de navegador | Runner self-hosted **ou** local (`npm run test:e2e:critical`; screenshots: `npm run test:visual`) |
 | Republicar de emergência | `npm run deploy:cloudflare` local, ou "Publicar" manual |
