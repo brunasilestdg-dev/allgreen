@@ -379,6 +379,14 @@ input[readonly] {
   margin-top: 1px;
   color: #f59e0b;
 }
+/* Passo a passo da extensão do navegador: a nota vira lista numerada. Sem
+   isto o `display: flex` da nota enfileira os passos lado a lado. */
+.settings-note.extension-steps {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+  list-style: decimal;
+}
 
 /* Configurações: uma superfície editorial, em vez de um mosaico de cartões. */
 .settings-title,

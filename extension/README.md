@@ -9,12 +9,28 @@ a extensão mostra **Executar ação no ERP** para gravar depois da sua confirma
 pequeno pacote de extensão que conversa com o endpoint da vertical
 `/api/todogreen/semente`, usando o seu token de acesso.
 
+## Onde baixar
+
+O próprio app entrega o pacote: o build grava esta pasta em
+`/extensao-todogreen.zip` (`scripts/extension-package.js`). O botão
+**Baixar a extensão** aparece em dois lugares:
+
+- **To Do Green**: avatar no cabeçalho → **Meu perfil** → **Extensão do navegador**.
+- **App geral**: **Configurações** → **Extensão do navegador**.
+
+Descompacte o arquivo: a pasta `extensao-todogreen` é a que se escolhe abaixo.
+
 ## Como instalar (Chrome / Edge / Brave)
 
 1. Abra `chrome://extensions`.
 2. Ligue o **Modo do desenvolvedor** (canto superior direito).
-3. Clique em **Carregar sem compactação** e escolha esta pasta `extension/`.
+3. Clique em **Carregar sem compactação** e escolha a pasta `extensao-todogreen`
+   (ou esta pasta `extension/`, para quem trabalha no código).
 4. Fixe a extensão na barra (ícone de quebra-cabeça → alfinete).
+
+O `manifest.json` usa `default_locale: "pt_BR"`, então a pasta
+`_locales/pt_BR/messages.json` é obrigatória: sem ela o Chrome recusa carregar
+a extensão inteira. `src/extension-manifest.test.js` trava isso.
 
 ## Como instalar (Firefox)
 
@@ -24,9 +40,12 @@ pequeno pacote de extensão que conversa com o endpoint da vertical
 
 ## Como conectar
 
-1. No app, vá em **Administração → Integrações → Extensão do navegador** e copie o **token**.
+1. No mesmo lugar do download, copie o **token de acesso**.
 2. Clique no ícone da extensão → **Config** → cole o token → **Salvar**.
    O token fica salvo só no seu navegador.
+3. O token é o da sua sessão e **vale por 24 horas**. Quando entrar de novo no
+   app, copie o novo e cole outra vez. A extensão conversa com o Plantû da
+   To Do Green, então precisa de uma conta com acesso à vertical.
 
 ## O que ela faz
 

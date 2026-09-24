@@ -3,7 +3,7 @@
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "sf-ask",
-    title: "Perguntar ao Plantû no ERP",
+    title: chrome.i18n.getMessage("contextMenuTitle") || "Perguntar ao Plantû no ERP",
     contexts: ["selection", "page"],
   });
 });
