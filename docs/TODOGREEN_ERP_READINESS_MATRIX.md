@@ -1,7 +1,7 @@
 # Matriz de prontidão do ERP To Do Green
 
-**Revisada em 24/09/2026** contra o código da `main` (`9c760e8`) mais as mudanças
-do mesmo PR desta revisão. A versão anterior (aberta em 30/08 e "revalidada em
+**Revisada em 24/09/2026** contra o código do PR #15 — a `main` até `49adc35`
+mais as mudanças do próprio PR. A versão anterior (aberta em 30/08 e "revalidada em
 13/09") não refletia as mudanças de 18 a 23/09 (monday.com, tokens do TRACK3R,
 separação All Green/`orianone.app`, migrações 0134–0143) e se contradizia em
 vários pontos — a lista do que mudou está em
@@ -25,8 +25,15 @@ teste local ou de publicação bem-sucedida.
 com dados reais. As evidências escritas cobrem publicação e smoke HTTP (H1, H2,
 H7), a autenticação HTTP dos webhooks do TRACK3R (H3), a resolução de papéis num
 deploy paralelo (H4) e login Google/e-mail antes da separação All Green (H5, H6).
-Seis controles que a matriz anterior dava como fechados têm lacuna — ver
-[Lacunas de controle](#lacunas-de-controle).
+Sete controles que a matriz anterior dava como fechados tinham lacuna; três
+foram corrigidos neste PR (L4, L5, L7) e quatro seguem abertos — ver
+[Lacunas de controle](#lacunas-de-controle). Em 24/09 a produção não rodava a
+`main` — ver [Estado observado da publicação](#estado-observado-da-publicação-não-é-homologação).
+
+`src/readiness-matrix.test.js` trava o que dá para provar daqui: o vocabulário
+das três colunas, homologação só com código do registro, e que toda linha
+"Testado: Sim/Parcial" cite um teste do gate cujo caso exista, literalmente,
+no arquivo citado.
 
 ## Registro de homologação em produção
 
@@ -43,12 +50,21 @@ ambiente e o que foi conferido. Linha nova no mesmo PR que muda o status.
 | **H6** | antes de 20/09/2026 | `AGENTS.md`: verificação e recuperação por código via Brevo, segredos no cofre | Era do Seu Funcionário; não há registro para o Worker `allgreen`. |
 | **H7** | 13/09/2026 | `docs/CLOUDFLARE_BUILDS_SETUP.md`: consolidação que levou `d2396e44d8e4` a produção; `0119` aplicada no D1 de produção | Publicação e schema. |
 
+### Estado observado da publicação (não é homologação)
+
+O que a produção responde publicamente. Serve para saber **qual código está no
+ar** — não prova que um processo funciona com dado real.
+
+| Quando | `GET /api/system/version` | Leitura |
+| --- | --- | --- |
+| 24/09/2026 19:18 UTC | `sha 6399f4a49f18`, build 14:09 UTC, `publishedBy: manual`, `branch: publish-tickets`, última migração `0144_client_requests_operation` | Publicação **manual**: o build não rodou no Workers Builds nem no GitHub Actions (`vite.config.js` só grava o provedor de CI quando há um), e sim a partir de um ramo local. A `main` estava em `49adc35` — o merge do PR #14 às 14:17 UTC ainda não estava no ar cinco horas depois, então **a produção não era a `main`**. O `/api/status` ainda devolvia o bloco `roadmap` fixo que este PR remove. |
+
 ## Comercial, cliente e receita
 
 | Processo | Implementado | Testado | Homologado | Evidência e fronteira |
 | --- | --- | --- | --- | --- |
 | Cadastro de cliente / Conta 360 | Sim | Sim | Não registrado | `todogreen_clients` (0032) e `todogreen_client_assignments` (0039); `handleTodoGreenClients` com `revision` e auditoria. Testes: `todogreen-client-assignments.worker.test.js`, `todogreen-customer-portal.worker.test.js`, passo 1 da jornada. Fontes proprietárias de inteligência seguem externas. |
-| CRM / carteira | Sim | Sim | Não registrado | Inteligência em `fields_json` (`todoGreenCrmDomain.js`), comentários (0078) e interações (0079). Testes: `todogreen-vertical-records.worker.test.js` ("interações do comercial…", "carteira: o vendedor não vê a oportunidade do colega"), `interacoesDomain.test.js`. LinkedIn oficial não integrado — só busca pública `site:linkedin.com`. Até 24/09 os comentários e as interações salvos não apareciam em Clientes, Oportunidades e Avanços da semana (`montarDadosDaVertical` não os repassava); corrigido, teste `shell/dadosDaVertical.test.js`. |
+| CRM / carteira | Sim | Sim | Não registrado | Inteligência em `fields_json` (`todoGreenCrmDomain.js`), comentários (0078) e interações (0079). Testes: `todogreen-vertical-records.worker.test.js` ("interações do comercial…", "carteira: o vendedor nao ve a oportunidade do colega"), `interacoesDomain.test.js`. LinkedIn oficial não integrado — só busca pública `site:linkedin.com`. Até 24/09 os comentários e as interações salvos não apareciam em Clientes, Oportunidades e Avanços da semana (`montarDadosDaVertical` não os repassava); corrigido, teste `shell/dadosDaVertical.test.js`. |
 | Oportunidade | Sim | Sim | Não registrado | `todogreen_opportunities` (0041, título na 0081), vínculo por `client_id` e auditoria. Testes: vertical-records ("oportunidades saem do JSON do espaço", "escrita concorrente…"), `OpportunitiesPage.test.jsx`. |
 | Handoff de oportunidade ganha | Sim | Sim | Não registrado | `deveCriarHandoff` → trabalho em `todogreen_work_items` e implantação em `todogreen_implementation_projects`, idempotente. Testes: vertical-records ("remarcar como ganha não duplica a implantação"), `opportunityHandoff.test.js`. |
 | Precificação | Sim | Sim | Não registrado | Motor no servidor (`POST /api/todogreen/simulate`, `pricing_scenarios` 0027) e régua versionada (0060, `todogreen-pricing-parameters.js`). Salvar a simulação exige `pricing:simulate` ([L7](#lacunas-de-controle), corrigida). Testes: `todogreen-pricing-parameters.worker.test.js`, `pricingParametersDomain.test.js`, `todogreen-simulate.worker.test.js` e o passo 3 da jornada. |
@@ -59,7 +75,7 @@ ambiente e o que foi conferido. Linha nova no mesmo PR que muda o status.
 | Assinatura contratual | Parcial | Parcial | Não registrado | `signed` exige anexo no cofre com contexto jurídico (`documentoDeAssinaturaVinculado`). **Lacuna:** o gate confere a existência do anexo, não o conteúdo nem a assinatura ([L2](#lacunas-de-controle)); nos testes o anexo é inserido por SQL, então o upload pelo cofre não é exercitado nesse gate. A validade jurídica do provedor/certificado é externa. |
 | Provedor de assinatura | Não | n/a | Não registrado | Não há integração com provedor (ClickSign, DocuSign, ZapSign, D4Sign…); o único "readiness" é `signatureStatus === "signed"` em `clientActivationDomain.js`. |
 | Implantação / go-live | Sim | Sim | Não registrado | O readiness exige tabela de preço existente, ativa e do cliente/contrato (`todogreen-client-activation.js`, 0059/0062). Testes: jornada (tabela inativa reprova), `clientActivationDomain.test.js`, `todogreen-client-briefing.worker.test.js`. |
-| Portal do cliente | Sim | Sim | Não registrado | Escopo vem da sessão e do banco (`clientScopeForSession`); operações, solicitações (0040), documentos, NPS (0115) e central de atendimento. Testes: `todogreen-customer-portal.worker.test.js` ("o cliente A nunca alcança o cliente B", "campo livre interno … não vaza"), `todogreen-portal-operacoes`, `todogreen-portal-multiempresa`, `todogreen-portal-nps`, e2e crítico `todogreen-portais-auth.spec.js`. Nas operações, o que sai para o cliente é lista fechada (`customerPortalViewContract.test.js`, `todogreen-portal-contrato.worker.test.js`). **Risco:** as solicitações ainda enviam `fields_json` sem lista fechada — hoje `registradaPor` (e-mail interno), `canalDeOrigem` e `triagemMotivo` — e `abertaPor` mostra o e-mail da equipe quando é ela quem registra; ligar ou desligar o portal de um cliente (`portal_enabled`) vale para quem o alcança na carteira, sem exigir gestão. |
+| Portal do cliente | Sim | Sim | Não registrado | Escopo vem da sessão e do banco (`clientScopeForSession`); operações, solicitações (0040), documentos, NPS (0115) e central de atendimento. Testes: `todogreen-customer-portal.worker.test.js` ("o cliente A nunca alcança o cliente B", "campo livre interno (margem, custo, CPF) não vaza no payload do portal"), `todogreen-portal-operacoes`, `todogreen-portal-multiempresa`, `todogreen-portal-nps`, e2e crítico `todogreen-portais-auth.spec.js`. Nas operações, o que sai para o cliente é lista fechada (`customerPortalViewContract.test.js`, `todogreen-portal-contrato.worker.test.js`). **Risco:** as solicitações ainda enviam `fields_json` sem lista fechada — hoje `registradaPor` (e-mail interno), `canalDeOrigem` e `triagemMotivo` — e `abertaPor` mostra o e-mail da equipe quando é ela quem registra; ligar ou desligar o portal de um cliente (`portal_enabled`) vale para quem o alcança na carteira, sem exigir gestão. |
 
 ## Operação, frota e execução
 
@@ -297,6 +313,11 @@ pendente "homologar com dados/volume reais em produção".
   negócio.
 - **P0 — lacunas de controle abertas (L1, L2, L3, L6):** cada uma em PR
   próprio, com teste que reproduza o contorno. L4, L5 e L7 foram corrigidas.
+- **P1 — publicação automática da `main`:** em 24/09 a produção veio de
+  publicação manual e estava atrás da `main`. Depois de um merge,
+  `/api/system/version` deve responder o `sha` da `main` com
+  `publishedBy: cloudflare-workers-builds`; conferir a configuração do Workers
+  Builds (`docs/CLOUDFLARE_BUILDS_SETUP.md`).
 - **P1 — proteger a `main`** por configuração do GitHub
   (`docs/GITHUB_MAIN_PROTECTION.md`, `scripts/github/protect-main.sh`); não é
   verificável pelo repositório.

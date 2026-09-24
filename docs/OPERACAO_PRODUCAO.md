@@ -58,6 +58,8 @@ O caminho normal é o merge na `main`: o Cloudflare Workers Builds roda
 5. `npm run deploy:cloudflare` — aplica as migrações remotas e publica o Worker,
    nessa ordem.
 6. Validar `/api/system/version` (o `sha` publicado), `/api/status`, login e um
-   fluxo autenticado real.
+   fluxo autenticado real. Depois de um merge, o `sha` tem de ser o da `main` e
+   `publishedBy`, `cloudflare-workers-builds`; `manual` quer dizer que alguém
+   publicou à mão, de fora do CI.
 7. Registrar versão, horário e responsável (tabela da seção 13a do
    `docs/DEPLOYMENT_RUNBOOK.md`).
