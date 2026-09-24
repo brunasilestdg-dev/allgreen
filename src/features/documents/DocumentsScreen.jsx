@@ -24,7 +24,7 @@ import { Button, Empty, Field, LIST_PAGE_SIZE, LoadMoreButton, PageTitle } from 
 import { aiWorkspaceContext, trackProductEvent } from "../../session/telemetria.js";
 import { authHeaders } from "../../session/armazenamento.js";
 import { slugify } from "../../components/formato.js";
-import { DOCUMENT_ACCEPT, documentTitleFromFilename, extractDocumentText } from "../../components/leituraDeArquivo.js";
+import { DOCUMENT_ACCEPT, describeOcrProgress, documentTitleFromFilename, extractDocumentText } from "../../components/leituraDeArquivo.js";
 import SharingFields from "../../components/SharingFields.jsx";
 import { uid } from "../../domain.js";
 
@@ -476,6 +476,7 @@ function Documents({
     [exportBusy, setExportBusy] = useState(""),
     [uploading, setUploading] = useState(false),
     [uploadErrors, setUploadErrors] = useState([]),
+    [ocrStatus, setOcrStatus] = useState(""),
     [templatePicker, setTemplatePicker] = useState(false),
     [mergeOpen, setMergeOpen] = useState(false),
     [signingId, setSigningId] = useState(null),
@@ -590,12 +591,18 @@ function Documents({
     const errors = [];
     for (const file of files) {
       try {
-        const extracted = await extractDocumentText(file);
+        const extracted = await extractDocumentText(file, {
+          onProgress: (andamento) => setOcrStatus(describeOcrProgress(file.name, andamento)),
+        });
         imported.push({
           id: uid(),
           title: documentTitleFromFilename(file.name),
           type: extracted.kind.label,
           content: extracted.content,
+          // Texto lido de imagem é sugestão, não verdade: o aviso do documento
+          // pede conferência de nomes, datas e valores.
+          importedWithOcr: Boolean(extracted.ocr),
+          importedOcrPages: extracted.ocr || null,
           blocks: textToDocumentBlocks(extracted.content),
           originalFileName: file.name,
           originalMimeType: file.type || "application/octet-stream",
@@ -634,6 +641,7 @@ function Documents({
       success: imported.length > 0,
     });
     setUploading(false);
+    setOcrStatus("");
     if (uploadRef.current) uploadRef.current.value = "";
   };
   const save = (e) => {
@@ -956,7 +964,7 @@ function Documents({
         <span>
           <strong>
             {uploading
-              ? "Lendo e organizando seus arquivos..."
+              ? ocrStatus || "Lendo e organizando seus arquivos..."
               : "Arraste documentos para cá ou clique para escolher"}
           </strong>
           <small>PDF (inclusive escaneado), DOCX, XLSX, TXT, Markdown, CSV ou foto · até 10 MB por arquivo</small>
@@ -1143,6 +1151,7 @@ function Documents({
                     "PDF importado",
                     "Documento importado",
                     "Planilha CSV",
+                    "Imagem (texto lido por OCR)",
                   ].map((x) => (
                     <option key={x}>{x}</option>
                   ))}
@@ -1154,9 +1163,14 @@ function Documents({
                 <Upload />
                 <span>
                   Conteúdo importado de <strong>{form.originalFileName}</strong>
-                  {form.importedContentTruncated
-                    ? ". O texto era muito extenso e foi limitado para manter a sincronização segura."
-                    : ". Você pode editar, aprimorar e exportar normalmente."}
+                  {form.importedOcrPages &&
+                  form.importedOcrPages.paginas < form.importedOcrPages.totalPaginas
+                    ? `. Foram lidas as primeiras ${form.importedOcrPages.paginas} de ${form.importedOcrPages.totalPaginas} páginas.`
+                    : form.importedContentTruncated
+                      ? ". O texto era muito extenso e foi limitado para manter a sincronização segura."
+                      : ". Você pode editar, aprimorar e exportar normalmente."}
+                  {form.importedWithOcr &&
+                    " O texto foi lido da imagem por OCR: confira nomes, datas e valores antes de usar."}
                 </span>
               </div>
             )}

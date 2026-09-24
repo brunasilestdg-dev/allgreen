@@ -5,18 +5,21 @@
 // o ganho vem de normalização agressiva, radicais e glossário — que resolve o
 // caso real de um negócio pequeno sem custo e sem depender de modelo.
 
+// `page` é a tela do app que abre cada coleção. O id da coleção ("tasks",
+// "wikiPages") não é id de tela: "Abrir" mandava para uma página inexistente
+// e a pessoa via uma tela em branco.
 export const SEARCHABLE_SOURCES = [
-  { id: "tasks", label: "Tarefas", titleField: "title", bodyFields: ["notes", "project"] },
-  { id: "documents", label: "Documentos", titleField: "title", bodyFields: ["content", "type"] },
-  { id: "meetings", label: "Reuniões", titleField: "title", bodyFields: ["transcript", "client"] },
-  { id: "leads", label: "CRM", titleField: "name", bodyFields: ["company", "notes", "status"] },
-  { id: "contacts", label: "Contatos", titleField: "name", bodyFields: ["email", "phone", "notes"] },
-  { id: "bills", label: "Contas", titleField: "description", bodyFields: ["contactName", "category"] },
-  { id: "transactions", label: "Financeiro", titleField: "description", bodyFields: ["category", "type"] },
-  { id: "opportunities", label: "Funil", titleField: "title", bodyFields: ["contactName", "notes"] },
-  { id: "objectives", label: "Metas", titleField: "title", bodyFields: ["description"] },
-  { id: "wikiPages", label: "Base de conhecimento", titleField: "title", bodyFields: ["content"] },
-  { id: "memories", label: "Memória da IA", titleField: "text", bodyFields: ["scopeRef"] },
+  { id: "tasks", label: "Tarefas", page: "operacao", titleField: "title", bodyFields: ["notes", "project"] },
+  { id: "documents", label: "Documentos", page: "documentos", titleField: "title", bodyFields: ["content", "type"] },
+  { id: "meetings", label: "Reuniões", page: "reunioes", titleField: "title", bodyFields: ["transcript", "client"] },
+  { id: "leads", label: "CRM", page: "vendas", titleField: "name", bodyFields: ["company", "notes", "status"] },
+  { id: "contacts", label: "Contatos", page: "contatos", titleField: "name", bodyFields: ["email", "phone", "notes"] },
+  { id: "bills", label: "Contas", page: "contas", titleField: "description", bodyFields: ["contactName", "category"] },
+  { id: "transactions", label: "Financeiro", page: "financeiro", titleField: "description", bodyFields: ["category", "type"] },
+  { id: "opportunities", label: "Funil", page: "funil", titleField: "title", bodyFields: ["contactName", "notes"] },
+  { id: "objectives", label: "Metas", page: "metas", titleField: "title", bodyFields: ["description"] },
+  { id: "wikiPages", label: "Base de conhecimento", page: "wiki", titleField: "title", bodyFields: ["content"] },
+  { id: "memories", label: "Memória da IA", page: "memoria-busca", titleField: "text", bodyFields: ["scopeRef"] },
 ];
 
 // Palavras muito comuns em português não ajudam a distinguir nada.
@@ -113,6 +116,7 @@ export const buildIndex = (db, { businessId = null, userId = null } = {}) => {
         id: `${fonte.id}:${item.id}`,
         sourceId: fonte.id,
         sourceLabel: fonte.label,
+        sourcePage: fonte.page,
         itemId: item.id,
         title: titulo || "(sem título)",
         body: corpo,
@@ -203,6 +207,7 @@ export const searchWorkspace = (
       id: doc.id,
       sourceId: doc.sourceId,
       sourceLabel: doc.sourceLabel,
+      sourcePage: doc.sourcePage,
       itemId: doc.itemId,
       title: doc.title,
       snippet: snippetFor(doc.body || doc.title, tokens),

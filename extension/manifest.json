@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "To Do Green ERP",
-  "version": "1.0.0",
-  "description": "Leve o Plantû e o ERP To Do Green para o navegador: resumir páginas, preparar respostas, sugerir tarefas e registrar próximos passos.",
+  "name": "__MSG_extName__",
+  "version": "1.0.1",
+  "description": "__MSG_extDescription__",
   "default_locale": "pt_BR",
   "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
   "host_permissions": ["https://orianone.app/*"],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "To Do Green ERP"
+    "default_title": "__MSG_actionTitle__"
   },
   "background": {
     "service_worker": "background.js"

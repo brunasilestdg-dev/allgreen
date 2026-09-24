@@ -248,7 +248,7 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
               <ol>
                 {resposta.fontes.map((f) => (
                   <li key={f.id}>
-                    <button onClick={() => go?.(f.sourceId)}>
+                    <button onClick={() => go?.(f.sourcePage || "memoria-busca")}>
                       {f.sourceLabel} — {f.title}
                     </button>
                   </li>
@@ -278,7 +278,7 @@ export default function KnowledgeCenter({ db, update, business, setToast, go }) 
                 </header>
                 <Trecho texto={r.snippet} />
                 <footer>
-                  <button className="btn ghost sm" onClick={() => go?.(r.sourceId)}>
+                  <button className="btn ghost sm" onClick={() => go?.(r.sourcePage || "memoria-busca")}>
                     Abrir {r.sourceLabel}
                   </button>
                   {r.updatedAt && <small>{String(r.updatedAt).slice(0, 10)}</small>}
