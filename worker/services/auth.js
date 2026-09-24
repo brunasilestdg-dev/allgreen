@@ -16,6 +16,7 @@ import {
   withSessionCookie,
 } from "../auth/credenciais.js";
 import { allowed, edgeIp, json } from "../lib/http.js";
+import { exigirTurnstile } from "../lib/turnstile.js";
 import {
   codeEmailHtml,
   emailEnabled,
@@ -144,6 +145,9 @@ export async function handleAuth(request, env, url) {
       env.DB.prepare("DELETE FROM weekly_summary_log WHERE user_id = ?").bind(
         account.id,
       ),
+      env.DB.prepare("DELETE FROM busca_vetores WHERE user_id = ?").bind(
+        account.id,
+      ),
       env.DB.prepare("DELETE FROM audit_log WHERE owner_id = ?").bind(
         account.id,
       ),
@@ -236,6 +240,11 @@ export async function handleAuth(request, env, url) {
   }
 
   if (url.pathname === "/api/auth/resend") {
+    const barradoNoReenvio = await exigirTurnstile(request, env, body, {
+      acao: "entrada",
+      responder: json,
+    });
+    if (barradoNoReenvio) return barradoNoReenvio;
     const vemail =
       typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const p = await env.DB.prepare(
@@ -279,6 +288,11 @@ export async function handleAuth(request, env, url) {
       typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!/^\S+@\S+\.\S+$/.test(vemail))
       return json({ error: "Informe um e-mail válido." }, 400);
+    const barradoNaSenha = await exigirTurnstile(request, env, body, {
+      acao: "entrada",
+      responder: json,
+    });
+    if (barradoNaSenha) return barradoNaSenha;
     if (!emailEnabled(env))
       return json(
         { error: "A recuperação por e-mail não está configurada." },
@@ -566,6 +580,13 @@ export async function handleAuth(request, env, url) {
         : "";
     if (name.length < 2 || name.length > 100)
       return json({ error: "Informe um nome válido." }, 400);
+    // Antes do hash da senha e do e-mail de verificação: robô sem token não
+    // gasta CPU nem a cota de e-mail.
+    const barradoNoCadastro = await exigirTurnstile(request, env, body, {
+      acao: "entrada",
+      responder: json,
+    });
+    if (barradoNoCadastro) return barradoNoCadastro;
     const exists = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
       .bind(email)
       .first();
@@ -644,6 +665,13 @@ export async function handleAuth(request, env, url) {
         },
         429,
       );
+    // Tentativa em massa com senhas vazadas vem de muitos IPs; o limite por
+    // conta ajuda, o anti-robô corta antes de calcular hash de senha.
+    const barradoNoLogin = await exigirTurnstile(request, env, body, {
+      acao: "entrada",
+      responder: json,
+    });
+    if (barradoNoLogin) return barradoNoLogin;
     const account = await env.DB.prepare(
       "SELECT id, name, email, password_hash, password_salt, must_change_password FROM users WHERE email = ?",
     )
