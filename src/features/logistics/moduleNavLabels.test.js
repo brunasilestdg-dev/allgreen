@@ -18,7 +18,7 @@ const pasta = path.dirname(new URL(import.meta.url).pathname);
 const fonte = fs.readFileSync(path.join(pasta, "LogisticsVertical.jsx"), "utf8");
 // O esqueleto inteiro: o componente principal e o que saiu dele. As travas de
 // "isto não pode voltar" valem para todos os arquivos, não só para o principal.
-const PASTAS_DO_ESQUELETO = ["shell"];
+const PASTAS_DO_ESQUELETO = ["shell", "journeys"];
 const arquivosDoEsqueleto = [
   "LogisticsVertical.jsx",
   ...PASTAS_DO_ESQUELETO.flatMap((subpasta) =>
