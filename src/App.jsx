@@ -92,8 +92,9 @@ import {
 import { escapeHtml, money, slugify, urlBase64ToUint8Array } from "./components/formato.js";
 import { specialistData } from "./domain/especialistas.js";
 import {
-  DOCUMENT_UPLOAD_LIMIT,
   DOCUMENT_ACCEPT,
+  DOCUMENT_UPLOAD_LIMIT,
+  describeOcrProgress,
   documentFileKind,
   extractDocumentText,
 } from "./components/leituraDeArquivo.js";
@@ -154,6 +155,8 @@ import CRM from "./features/omnichannel/CRM.jsx";
 import Appointments from "./features/omnichannel/Appointments.jsx";
 import Quotes from "./features/omnichannel/Quotes.jsx";
 import TimeTracking from "./features/omnichannel/TimeTracking.jsx";
+import ExtensionCard from "./features/extension/ExtensionCard.jsx";
+import VerticalShortcuts from "./features/verticals/VerticalShortcuts.jsx";
 import { textoDoToast, tomDoToast } from "./toastTone.js";
 import Login from "./features/auth/Login.jsx";
 import AcceptInvite from "./features/auth/AcceptInvite.jsx";
@@ -6925,6 +6928,7 @@ export function Analyzer({ db, update, business, setToast }) {
   const [sourceName, setSourceName] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState("");
   const [err, setErr] = useState("");
   const [result, setResult] = useState(null);
   const uploadRef = useRef(null);
@@ -6939,15 +6943,21 @@ export function Analyzer({ db, update, business, setToast }) {
     setUploading(true);
     setErr("");
     try {
-      const extracted = await extractDocumentText(file);
+      const extracted = await extractDocumentText(file, {
+        onProgress: (andamento) =>
+          setOcrStatus(describeOcrProgress(file.name, andamento)),
+      });
       setText(extracted.content || "");
       setSourceName(file.name);
       if (extracted.truncated)
         setToast("Arquivo grande: analisei o começo do conteúdo");
+      else if (extracted.ocr)
+        setToast("Texto lido da imagem por OCR — confira antes de analisar");
     } catch (e) {
       setErr(e.message);
     } finally {
       setUploading(false);
+      setOcrStatus("");
       if (uploadRef.current) uploadRef.current.value = "";
     }
   };
@@ -7102,7 +7112,7 @@ Use português do Brasil. Se algum campo não se aplicar, use lista vazia ou str
             disabled={uploading}
           >
             <FileText size={16} />
-            {uploading ? "Lendo arquivo..." : "Enviar arquivo"}
+            {uploading ? ocrStatus || "Lendo arquivo..." : "Enviar arquivo"}
           </button>
           <button className="btn primary" onClick={analyze} disabled={busy}>
             <Sparkles size={16} />
@@ -10549,7 +10559,9 @@ function HistoryPage({ db, update, business, setToast, go }) {
       ],
     }));
     setOpen(null);
-    go("inicio");
+    // A conversa mora em "Falar com seu Funcionário" desde que o chat saiu do
+    // Início; mandar para "inicio" deixava a pessoa sem a conversa retomada.
+    go("conversar");
   };
   const refineProject = async (item) => {
     if (busy) return;
@@ -10744,7 +10756,8 @@ function HistoryPage({ db, update, business, setToast, go }) {
               ],
             }));
             setOpen(null);
-            setToast("Conversa retomada — abra o Início para continuar de onde parou");
+            setToast("Conversa retomada — continue de onde parou");
+            go("conversar");
           };
           return (
             <Modal wide title={x.title} onClose={() => setOpen(null)}>
@@ -12292,58 +12305,6 @@ function Team({ db, update, setToast }) {
   );
 }
 
-function ExtensionCard({ setToast }) {
-  const [shown, setShown] = useState(false);
-  const token =
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem(AUTH_TOKEN_KEY) || ""
-      : "";
-  const masked = token ? `${token.slice(0, 6)}${"•".repeat(12)}` : "";
-  const copy = async () => {
-    if (!token) return;
-    try {
-      await navigator.clipboard.writeText(token);
-      setToast("Token copiado — cole na extensão");
-    } catch {
-      setToast("Não foi possível copiar agora");
-    }
-  };
-  return (
-    <section className="settings-card" id="settings-extension">
-      <div className="settings-card-head">
-        <span className="settings-icon">
-          <Plug />
-        </span>
-        <div>
-          <h2>Extensão do navegador</h2>
-          <p>Use a IA do app em qualquer página da internet.</p>
-        </div>
-      </div>
-      <p className="settings-note">
-        Instale a extensão (pasta <code>extension/</code> do projeto) e conecte
-        com o token abaixo. Ele fica só no seu navegador e serve para a extensão
-        falar com a mesma IA — sem custo extra.
-      </p>
-      <Field label="Seu token de acesso">
-        <input
-          value={shown ? token : masked}
-          readOnly
-          className="readonly"
-          aria-label="Token de acesso"
-        />
-      </Field>
-      <div className="settings-actions">
-        <Button variant="secondary" onClick={() => setShown((s) => !s)}>
-          {shown ? "Ocultar" : "Mostrar"}
-        </Button>
-        <Button icon={Copy} onClick={copy} disabled={!token}>
-          Copiar token
-        </Button>
-      </div>
-    </section>
-  );
-}
-
 function AccountSettings({ db, update, setToast, go }) {
   const [name, setName] = useState(db.user.name);
   // Perfil: foto (lembrete forte, mas pulável) + status (emoji + frase).
@@ -13875,6 +13836,7 @@ export default function App() {
               db={db}
               update={update}
               business={business}
+              go={go}
               setToast={setToast}
             />
           </Suspense>
@@ -14756,6 +14718,7 @@ export default function App() {
               <span>{label}</span>
             </button>
           ))}
+          <VerticalShortcuts authHeaders={authHeaders} collapsed={collapsed} />
         </nav>
         <div className="side-bottom">
           <button

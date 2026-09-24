@@ -2,14 +2,11 @@
 // demonstração, os estados da confirmação de acesso e a leitura da resposta
 // do servidor.
 import { TODO_GREEN_PRODUCTION_DATA_POLICY, TODO_GREEN_ROLES } from "../logisticsVerticalDomain.js";
+import { todoGreenOwnerId } from "../../verticals/verticalAccess.js";
 
-export const ownerId = () => {
-  try {
-    return localStorage.getItem("sf-space") || localStorage.getItem("sf-active-user") || "";
-  } catch {
-    return "";
-  }
-};
+// A regra mora em verticalAccess.js: o app geral pergunta o acesso com o
+// mesmo recorte de espaço para decidir se mostra o atalho da vertical.
+export const ownerId = () => todoGreenOwnerId(globalThis.localStorage);
 
 export const demoModeEnabled = (db = {}, access = {}) => Boolean(db?.[TODO_GREEN_PRODUCTION_DATA_POLICY.demoModeFlag] || access.demoMode);
 

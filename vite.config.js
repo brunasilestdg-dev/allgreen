@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { extensionPackagePlugin } from "./scripts/extension-package.js";
 
 const git = (args) => {
   try {
@@ -62,7 +63,7 @@ const versionManifest = () => ({
 });
 
 export default defineConfig({
-  plugins: [react(), versionManifest()],
+  plugins: [react(), versionManifest(), extensionPackagePlugin()],
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
     "import.meta.env.VITE_BUILD_TIME": JSON.stringify(buildTime),

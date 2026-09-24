@@ -34,6 +34,7 @@ import {
 import Semente from "./Semente.jsx";
 import Modal from "../../components/Modal.jsx";
 import TodoGreenProfile from "./TodoGreenProfile.jsx";
+import { NUCLEO_ALL_GREEN } from "../verticals/verticalAccess.js";
 import { IMPLEMENTED_MODULE_IDS, MODULE_IMPLEMENTATION } from "./shell/catalogoDeModulos.js";
 import {
   PRIMARY_NAVIGATION,
@@ -570,6 +571,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <a href="/greenmob" className="tdg-vertical-link">
               <strong>Greenmob</strong>
               <small>Locação de veículos elétricos — CRM, frota, contratos</small>
+            </a>
+            {/* O núcleo compartilhado: ferramentas gerais que a vertical não
+                embute (agentes, wiki, reuniões, diagramas, metas). Mesma conta
+                e mesma sessão — a raiz, para quem está logado, é o núcleo. */}
+            <a href={NUCLEO_ALL_GREEN.route} className="tdg-vertical-link">
+              <strong>{NUCLEO_ALL_GREEN.name}</strong>
+              <small>{NUCLEO_ALL_GREEN.subtitle}</small>
             </a>
           </div>
           {/* Um menu só, do jeito que a titular pediu: as áreas na frente e,
