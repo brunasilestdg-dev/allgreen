@@ -1,5 +1,11 @@
 # Homologação e go-live da vertical To Do Green
 
+> **Instantâneo de 19–20/09/2026.** O "PR #440" citado aqui é da numeração do
+> repositório anterior (`brunapsiles/Seufuncionario`); neste repositório
+> (`brunasilestdg-dev/allgreen`) a numeração recomeçou em #1. O estado atual de
+> cada processo — implementado, testado e homologado em produção — está na
+> `docs/TODOGREEN_ERP_READINESS_MATRIX.md`.
+
 Estado da homologação pedida (PR #440 + frentes seguintes) e, no fim, o que
 **só a titular** pode concluir (credenciais/produção). O lado de código de cada
 frente foi feito e validado localmente (lint + testes + build + e2e com Chromium)
@@ -29,7 +35,7 @@ Os valores nunca aparecem aqui — só o nome e onde rotacionar.
 3. **GOOGLE_API_KEY** — console.cloud.google.com → Credenciais → regenerar **e restringir** as APIs → `npx wrangler secret put GOOGLE_API_KEY`
 4. **BREVO_API_KEY** — app.brevo.com → SMTP & API → revogar e gerar → `npx wrangler secret put BREVO_API_KEY`
 5. **Token Cloudflare de deploy** — dash.cloudflare.com/profile/api-tokens → *roll* → atualizar o secret **`CLOUDFLARE_API_TOKEN` no GitHub** (Settings → Secrets → Actions). Não é `wrangler secret`.
-6. **VAPID** (se o par compartilhado em conversa foi o cadastrado) — gerar par novo (comando em `PENDENCIAS_DA_TITULAR.md`) → `npx wrangler secret put VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` (atualizar também a chave pública embutida no frontend).
+6. **VAPID** (se o par compartilhado em conversa foi o cadastrado) — gerar par novo (como gerar: seção "Segredos" do `AGENTS.md`) → `npx wrangler secret put VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` (atualizar também a chave pública embutida no frontend).
 
 Depois de cada uma: `npx wrangler secret list` para conferir e testar a função
 afetada. Segredos são lidos em runtime (não exige redeploy).
@@ -38,7 +44,7 @@ afetada. Segredos são lidos em runtime (não exige redeploy).
 
 - **Mergear o PR #440**: revise e aprove; o merge na `main` publica em produção
   pelo Workers Builds. (Não faço merge/aprovação por política.)
-- **TRACK3R webhook**: criar a integração em modo Arquivo para obter o ID real e as 13 URLs, gerar **um token distinto por endpoint** e cadastrar cada segredo no Cloudflare (`docs/TRACK3R_TOKENS_INDIVIDUAIS.md`). Enviar ao fornecedor cada par URL + token por canal seguro. Pedir a tabela oficial de códigos de ocorrência (`PENDENCIAS_DA_TITULAR.md`) e homologar com eventos reais. **Não** enviar o token legado compartilhado.
+- **TRACK3R webhook**: criar a integração em modo Arquivo para obter o ID real e as 13 URLs, gerar **um token distinto por endpoint** e cadastrar cada segredo no Cloudflare (`docs/TRACK3R_TOKENS_INDIVIDUAIS.md`). Enviar ao fornecedor cada par URL + token por canal seguro. Pedir a tabela oficial de códigos de ocorrência (ver `docs/todogreen-tms-track3r.md`) e homologar com eventos reais. **Não** enviar o token legado compartilhado.
 - **monday.com**: conectar a conta na Central de Integrações (OAuth) e mapear os quadros/campos aos registros do ERP.
 - **Backup/restore D1/R2**: validar em produção com a conta Cloudflare (runbook em `docs/DEPLOYMENT_RUNBOOK.md`).
 

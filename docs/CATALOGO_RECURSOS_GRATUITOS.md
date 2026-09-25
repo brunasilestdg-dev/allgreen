@@ -72,7 +72,7 @@ O que não dá para ver sem login (chaves de IA extras, Geoapify, cofre
 | Problema encontrado | Correção | Onde |
 | --- | --- | --- |
 | Job do rastreador rodava **2× por disparo** do cron, sem trava | chamado só no `scheduled` do app | `worker-entry.js`, `worker.js` |
-| Às segundas 12h UTC os dois crons disparam e **todos os jobs horários rodavam em dobro** (PNCP, ANEEL, automações…) | o cron semanal só envia o resumo | `worker.js` (`WEEKLY_SUMMARY_CRON`) + teste |
+| Às segundas 12h UTC os dois crons disparam e **todos os jobs horários rodavam em dobro** (PNCP, ANEEL, automações…) | o cron semanal só envia o resumo | `worker/lib/cron.js` (`CRON_SEMANAL`) + teste |
 | Link `?convite=` chamava `/api/collab/join`, rota inexistente (404) | redireciona para `/convite/:token` | `src/App.jsx` |
 | Roteirizador fazia **autocompletar no Nominatim público** do navegador — a política diz "you must not implement such a service on the client side" | sugestões pelo **Photon** (feito para busca enquanto se digita) + atribuição OSM | `src/App.jsx`, `photonSuggestionLabels` em `src/domain.js` |
 | "Tempo e distância" usava o **OSRM de demonstração** — "reasonable, non-commercial use-cases" | novo `/api/rotas/estimativa` no Worker, só com **Geoapify** (plano grátis permite uso comercial); sem chave, manda abrir no Maps | `worker/services/route-estimate.js` + teste |
@@ -84,7 +84,7 @@ O que não dá para ver sem login (chaves de IA extras, Geoapify, cofre
 | `tesseract.js` instalado, mas o **leitor comum recusava imagem e PDF escaneado** ("precisam de OCR") | OCR no aparelho para foto e PDF escaneado (até 10 páginas); **XLSX** pelo `read-excel-file` | `components/leituraDeArquivo.js` (chat, Análise, Compras, Documentos, anexos) |
 | `qrcode` instalado, mas a **Cobrança Pix não mostrava QR** | QR do "copia e cola" com download | `components/QrCodeImage.jsx` |
 | DACTE em PDF **sem o código de barras** da chave de acesso | CODE-128C gerado por função pura, validado lendo com o `@zxing` | `logistics/code128Domain.js`, `FiscalPage.jsx` |
-| Transcrição com o `whisper` antigo (sem idioma) e laço byte a byte que pesa nos 10 ms de CPU do plano Free | `whisper-large-v3-turbo` com base64 direto, `language: "pt"`, VAD e nomes da reunião como dica | `worker.js`, `Meetings.jsx` |
+| Transcrição com o `whisper` antigo (sem idioma) e laço byte a byte que pesa nos 10 ms de CPU do plano Free | `whisper-large-v3-turbo` com base64 direto, `language: "pt"`, VAD e nomes da reunião como dica | `worker/services/transcribe.js`, `Meetings.jsx` |
 | Tela do Whiteboard dizia a quem usa que escrita à mão e edição simultânea "exigem serviço pago" | texto honesto: ainda não incluído | `QuickWhiteboard.jsx` |
 | Push sem caminho claro para ligar | `node scripts/gerar-chaves-vapid.mjs` gera o par no formato exato da lib (teste prova) | `scripts/` |
 

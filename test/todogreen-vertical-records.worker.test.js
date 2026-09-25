@@ -1887,3 +1887,83 @@ describe("operação de recarga: sessão medida e reserva sem conflito", () => {
     expect(registro).toMatchObject({ escopo: "base", precoPorKwh: 1.89 });
   });
 });
+
+// `todogreen_routes` não tem `client_id`: a rota é da operação da empresa, não
+// da carteira de ninguém. Até 24/09/2026 a coleção não declarava isso, e o
+// recorte de carteira referenciava `t.client_id` para quem lê rotas sem ver a
+// carteira inteira — planejamento e auditor recebiam 500 na tela de rotas.
+describe("rotas do dia são da operação, não da carteira", () => {
+  it("planejamento e auditor do espaço leem as rotas", async () => {
+    const agora = new Date().toISOString();
+    const rotaId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_routes
+         (id, tenant_id, workspace_owner_id, name, driver_id, status, stops_json, created_at, updated_at)
+       VALUES (?, 'todogreen', ?, 'Rota do planejamento', 'motorista-1', 'planejada', '[]', ?, ?)`,
+    ).bind(rotaId, gestora.id, agora, agora).run();
+
+    const planejadora = await criarUsuario("rec-planejadora", "planejadora@parceiro.com.br");
+    const auditora = await criarUsuario("rec-auditora-rotas", "auditora.rotas@parceiro.com.br");
+    await autorizar(planejadora, "planejamento", ["read", "planning:manage"], gestora.id);
+    await autorizar(auditora, "auditor", ["read", "audit:read"], gestora.id);
+
+    for (const pessoa of [planejadora, auditora]) {
+      const r = await pedir("/api/todogreen/records/rotas", { token: pessoa.token });
+      expect(r.status, pessoa.email).toBe(200);
+      expect((await r.json()).registros.map((rota) => rota.id)).toContain(rotaId);
+    }
+  });
+});
+
+// A criação do contrato confere o par proposta + cliente: proposta aceita, do
+// mesmo cliente, sem outro contrato ativo. Até 24/09/2026 o PATCH aceitava
+// trocar qualquer um dos dois sem repetir a checagem — um contrato nascido de
+// proposta aceita passava a apontar para um rascunho, ou para outro cliente.
+describe("o contrato não troca de proposta nem de cliente por fora do gate", () => {
+  it("o PATCH repete a checagem da criação quando proposta ou cliente mudam", async () => {
+    const clienteId = `cli-par-${crypto.randomUUID()}`;
+    const outroCliente = `cli-par-outro-${crypto.randomUUID()}`;
+    await criarCliente(gestora, clienteId, "Cliente do par");
+    await criarCliente(gestora, outroCliente, "Outro cliente");
+    let sequencia = 0;
+    const proposta = async (situacao, cliente = clienteId) => (await (await pedir("/api/todogreen/records/proposals", {
+      metodo: "POST", token: gestora.token,
+      corpo: { clientId: cliente, cliente: "Cliente do par", titulo: `Proposta ${situacao}`, cenarioId: `cen-par-${++sequencia}`, situacao },
+    })).json()).registro;
+    const aceita = await proposta("accepted");
+    const rascunho = await proposta("draft");
+    const outraAceita = await proposta("accepted");
+    const criado = await pedir("/api/todogreen/records/contracts", {
+      metodo: "POST", token: gestora.token,
+      corpo: { clientId: clienteId, propostaId: aceita.id, titulo: "Contrato do par" },
+    });
+    expect(criado.status).toBe(201);
+    const contrato = (await criado.json()).registro;
+    const patch = (corpo) => pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { revision: contrato.revision, ...corpo },
+    });
+
+    const paraRascunho = await patch({ propostaId: rascunho.id });
+    expect(paraRascunho.status).toBe(409);
+    expect((await paraRascunho.json()).error).toMatch(/Aceite a proposta/);
+
+    const paraOutroCliente = await patch({ clientId: outroCliente });
+    expect(paraOutroCliente.status).toBe(409);
+    expect((await paraOutroCliente.json()).error).toMatch(/cliente do contrato não corresponde/);
+
+    // Outra proposta aceita do mesmo cliente é troca legítima (aditivo).
+    const paraOutraAceita = await patch({ propostaId: outraAceita.id });
+    expect(paraOutraAceita.status).toBe(200);
+    const trocado = (await paraOutraAceita.json()).registro;
+    expect(trocado.propostaId).toBe(outraAceita.id);
+    // A linhagem acompanha a proposta nova, como na criação.
+    expect(trocado.cenarioId).toBe(outraAceita.cenarioId);
+
+    // E a edição que não mexe no par continua livre.
+    const renomeado = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: trocado.revision, titulo: "Contrato do par, revisado" },
+    });
+    expect(renomeado.status).toBe(200);
+  });
+});

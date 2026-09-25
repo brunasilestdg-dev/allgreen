@@ -12,12 +12,13 @@ name: Publicar
 # primeiro e explica o que fazer, em vez de falhar com erro incompreensível.
 
 on:
-  # O CI/CD principal passou a ser o Cloudflare Workers Builds (publica em push
-  # na main; ver docs/CLOUDFLARE_BUILDS_SETUP.md). Este fluxo fica como FALLBACK
-  # MANUAL — para republicar sem depender do Builds, ou quando os minutos do
-  # GitHub Actions voltarem. O gatilho automático (workflow_run da "Qualidade")
-  # foi removido de propósito para evitar PUBLICAÇÃO DUPLICADA (Actions +
-  # Cloudflare ao mesmo tempo). O workflow continua registrado para uso manual.
+  # O CI/CD principal é o Cloudflare Workers Builds (publica em push na main;
+  # ver docs/CLOUDFLARE_BUILDS_SETUP.md). Este fluxo é só o FALLBACK MANUAL —
+  # para republicar sem depender do Builds. Não há gatilho automático, de
+  # propósito: publicar pelo Actions e pelo Cloudflare ao mesmo tempo seria
+  # PUBLICAÇÃO DUPLICADA. Este é o único workflow do repositório; não existe
+  # um fluxo "Qualidade" no GitHub — o gate de qualidade roda antes do merge e
+  # no próprio Workers Builds.
   workflow_dispatch:
 
 permissions:
@@ -54,13 +55,11 @@ jobs:
           fi
           echo "Chave encontrada."
 
+      # Sem `ref`: o checkout usa o commit exato do disparo manual (`github.sha`
+      # do branch escolhido em "Run workflow"). É esse commit que passa pelo
+      # gate abaixo e é publicado — nada que tenha chegado depois do clique.
       - name: Baixar código
         uses: actions/checkout@v4
-        with:
-          # O commit exato que a Qualidade aprovou. Sem isto o checkout pegaria
-          # o topo da main, que pode já ter avançado — e aí publicaria código
-          # que nenhum fluxo verificou.
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Preparar Node.js
         uses: actions/setup-node@v4

@@ -222,11 +222,24 @@ describe("endpoints e triagem por espaço", () => {
   });
 
   it("o radar por busca web está roteado (regressão: a tela chamava um endpoint sem rota)", async () => {
-    const r = await call("/api/todogreen/market-radar?q=teste", { token: vendedor.token });
-    // Sem provedor de busca configurado o radar responde 200 com configuração/avisos, nunca 404.
-    expect([200, 500]).toContain(r.status);
-    expect(r.status).not.toBe(404);
-    expect((await call("/api/todogreen/market-radar", { token: outro.token })).status).toBe(403);
+    // Sem provedor pago, a busca cai nos gratuitos (DuckDuckGo, Wikidata,
+    // Wikipédia) — e o teste não pode depender da rede de verdade: em 24/09 um
+    // DuckDuckGo lento (15 s, depois 503) estourou o tempo deste caso. Aqui a
+    // rede responde vazio na hora; o que se confere é a rota, não a internet.
+    const buscas = [];
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      buscas.push(String(url?.url || url));
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    try {
+      const r = await call("/api/todogreen/market-radar?q=teste", { token: vendedor.token });
+      // Sem resultado nos provedores, o radar responde 200 com configuração e avisos, nunca 404.
+      expect(r.status).toBe(200);
+      expect(buscas.length).toBeGreaterThan(0);
+      expect((await call("/api/todogreen/market-radar", { token: outro.token })).status).toBe(403);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

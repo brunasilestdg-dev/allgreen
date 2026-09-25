@@ -1,8 +1,8 @@
 /* @vitest-environment jsdom */
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BLOCKED_PATTERNS, polirTexto } from "./rotulosBanidos.js";
+import { MODULE_IMPLEMENTATION } from "./shell/catalogoDeModulos.js";
+import { MANAGEMENT_TOOLS, PRIMARY_NAVIGATION } from "./shell/navegacao.js";
 
 // ===== O apagador de jargão não pode comer rótulo de tela =====
 //
@@ -13,26 +13,18 @@ import { BLOCKED_PATTERNS, polirTexto } from "./rotulosBanidos.js";
 // botão do menu ficou com fundo e SEM NOME (31/08): o grupo se chamava
 // "Workspace", e o apagador o esvaziava depois do React montar.
 //
-// O arquivo é lido como texto, no padrão de moduleNavLabels.test.js: importar
-// LogisticsVertical.jsx arrastaria a árvore inteira para dentro do teste.
+// O menu e o catálogo de telas moram em módulos puros (./shell/), então o
+// teste importa os dados reais em vez de ler LogisticsVertical.jsx como texto.
+// São os mesmos rótulos que o texto mostrava: o nome de cada área do menu, o
+// rótulo curto e o título de cada tela, e o título das ferramentas de
+// Configurações (que ficavam no mesmo trecho do arquivo).
 
-const fonte = fs.readFileSync(
-  path.join(path.dirname(new URL(import.meta.url).pathname), "LogisticsVertical.jsx"),
-  "utf8",
-);
-
-const blocoDaNavegacao = fonte.slice(
-  fonte.indexOf("const PRIMARY_NAVIGATION"),
-  fonte.indexOf("const MANAGEMENT_TOOLS"),
-);
-const blocoDosModulos = fonte.slice(
-  fonte.indexOf("const MODULE_IMPLEMENTATION"),
-  fonte.indexOf("const fieldLabels"),
-);
-
-const rotulosDoMenu = [...blocoDaNavegacao.matchAll(/label: "([^"]+)"/g)].map((m) => m[1]);
-const navLabels = [...blocoDosModulos.matchAll(/navLabel: "([^"]+)"/g)].map((m) => m[1]);
-const titulos = [...blocoDosModulos.matchAll(/title: "([^"]+)"/g)].map((m) => m[1]);
+const rotulosDoMenu = PRIMARY_NAVIGATION.map((area) => area.label);
+const navLabels = Object.values(MODULE_IMPLEMENTATION).map((modulo) => modulo.navLabel);
+const titulos = [
+  ...Object.values(MODULE_IMPLEMENTATION).map((modulo) => modulo.title),
+  ...MANAGEMENT_TOOLS.map((ferramenta) => ferramenta.title),
+];
 
 describe("rótulos sobrevivem ao polimento", () => {
   it("nenhum rótulo de área do menu é alterado pelo apagador", () => {

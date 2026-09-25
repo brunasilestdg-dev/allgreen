@@ -15,7 +15,9 @@ código. Complementa o `AGENTS.md` (comandos do dia a dia) e o
 
 ## 0. Pré‑requisitos
 
-- Node.js 22 (mesma versão do CI — ver `.github/workflows/ci.yml`).
+- Node.js 22 (a versão do fallback `.github/workflows/deploy.yml`; o repositório
+  não fixa versão em `.nvmrc`/`engines`, então o Workers Builds usa a padrão da
+  imagem de build).
 - Conta Cloudflare com Workers habilitado.
 - `npm i -g wrangler` (ou usar `npx wrangler`).
 - Acesso ao repositório GitHub de destino.
@@ -24,7 +26,7 @@ código. Complementa o `AGENTS.md` (comandos do dia a dia) e o
 
 ```bash
 git clone <URL_DO_REPOSITORIO>
-cd Seufuncionario
+cd allgreen
 npm ci
 ```
 
@@ -60,7 +62,7 @@ usar domínio próprio, *Zone:DNS:Edit* + *Workers Routes:Edit*.
 ## 4. Criar o banco D1 e apontar o `wrangler.jsonc`
 
 ```bash
-wrangler d1 create seu-funcionario-db
+wrangler d1 create allgreen-db
 ```
 
 O comando devolve um `database_id`. **Troque o `database_id`** em
@@ -80,10 +82,10 @@ schema num D1 novo, em ordem.
 
 ```bash
 # ambiente novo (remoto):
-npx wrangler d1 migrations apply seu-funcionario-db --remote
+npx wrangler d1 migrations apply allgreen-db --remote
 
 # desenvolvimento local:
-npx wrangler d1 migrations apply seu-funcionario-db --local
+npx wrangler d1 migrations apply allgreen-db --local
 ```
 
 Nunca edite uma migration já aplicada — crie uma nova numerada (regra do
@@ -92,15 +94,23 @@ Nunca edite uma migration já aplicada — crie uma nova numerada (regra do
 ## 6. R2 (armazenamento de arquivos), se aplicável
 
 Arquivos (POD, cofre de documentos, mídia) usam **binding**, nunca URL fixa
-(seção 41). Para um ambiente novo:
+(seção 41). O código lê um único binding R2, **opcional**: `MEDIA_BUCKET`
+(`worker/services/todogreen-file-store.js`). Sem ele — o estado atual de
+produção, já que o `wrangler.jsonc` não declara `r2_buckets` — os bytes ficam
+em chunks base64 no D1, que funciona mas tem teto de escala. Para ligar:
 
 ```bash
 wrangler r2 bucket create <nome-do-bucket>
 ```
 
-Adicione o binding correspondente em `wrangler.jsonc` (`r2_buckets`) com o mesmo
-nome de binding que o código espera. Confira em `worker/services/*` quais
-bindings de R2 são lidos de `env` antes de nomear.
+e declare em `wrangler.jsonc`:
+
+```jsonc
+"r2_buckets": [{ "binding": "MEDIA_BUCKET", "bucket_name": "<nome-do-bucket>" }]
+```
+
+Arquivo gravado antes continua sendo lido do D1; só o que chega depois vai
+para o R2.
 
 ## 7. Bindings já esperados pelo Worker
 
@@ -110,10 +120,11 @@ De `wrangler.jsonc`:
 | --- | --- | --- |
 | `ASSETS` | Assets estáticos (`./dist`) | SPA + `run_worker_first` para rotas de API/portais |
 | `AI` | Workers AI | contingência local de IA |
-| `DB` | D1 (`seu-funcionario-db`) | banco operacional |
+| `DB` | D1 (`allgreen-db`) | banco operacional |
+| `MEDIA_BUCKET` | R2 (**opcional**, não declarado hoje) | bytes do POD e do cofre; sem ele ficam em chunks no D1 (seção 6) |
 
 `vars` públicas (não são segredo): `GEMINI_MODEL`, `XAI_MODEL`,
-`TODOGREEN_ADMIN_EMAILS`, `TDG_ENVIRONMENT`.
+`MONDAY_CLIENT_ID`, `TODOGREEN_ADMIN_EMAILS`, `TDG_ENVIRONMENT`.
 
 > `TDG_ENVIRONMENT` é o **ambiente declarado pelo próprio Worker** (`production`,
 > `preview`, `staging`…). Aparece em `GET /api/system/version` e na tela
@@ -153,12 +164,19 @@ Já declarados em `wrangler.jsonc → triggers.crons`:
 > (acidentes por ocorrência) em `POST /api/todogreen/risk/import/prf` (teto 40 MB) → células de ~1,1 km
 > em `todogreen_road_risk_cells`. Sem importação, o risco por rota é `RISK_DATA_NOT_AVAILABLE` — nunca zero.
 
-- `0 * * * *` — de hora em hora.
-- `0 12 * * 1` — segunda‑feira meio‑dia (UTC).
+- `0 * * * *` — de hora em hora: automações do app e da Central To Do Green,
+  vigilâncias e inteligência de mercado, referências de energia, sinais de
+  mercado, Risk Map, rastreador (uma vez por disparo) e retenção das posições,
+  avisos de pendência, processos recorrentes e o dreno dos webhooks do TMS.
+- `0 12 * * 1` — segunda‑feira meio‑dia (UTC): **só** o resumo semanal por push.
+  Às segundas os dois disparam no mesmo minuto, cada um na sua invocação; os
+  jobs horários daquele minuto já rodam na invocação horária.
 
-São aplicados no `wrangler deploy`. Novas ingestões periódicas (ANP, ANEEL, ONS,
-GDELT, PRF/ANTT — seções 6–14) devem reaproveitar esses gatilhos ou adicionar um
-novo cron aqui, com o handler no roteador do Worker.
+Os padrões ficam em `worker/lib/cron.js` e precisam bater com `triggers.crons`
+(`test/cron.worker.test.js` confere). São aplicados no `wrangler deploy`. Novas
+ingestões periódicas (ANP, ANEEL, ONS, GDELT, PRF/ANTT — seções 6–14) entram no
+`scheduled` do `worker.js`, na invocação horária, ou ganham um cron novo aqui e
+em `worker/lib/cron.js`.
 
 ## 10. Domínio
 
@@ -171,11 +189,11 @@ novo cron aqui, com o handler no roteador do Worker.
 
 ## 11. GitHub Actions / deploy automático
 
-- `.github/workflows/ci.yml` (**Qualidade**): roda em push/PR — lint, testes,
-  build e E2E. **Enquanto o GitHub Actions estiver sem minutos** (runner vazio,
-  `steps: []`, workflow "Publicar" *skipped*), isso **não** é erro de código e o
-  gate obrigatório passa a ser o **local** (seção 12a) ou o do Cloudflare Builds —
-  `verify`, `build`, Cloudflare Builds ou deploy manual vermelho, esses sim, bloqueiam.
+- **Não há workflow de qualidade no GitHub.** O único workflow do repositório é o
+  `deploy.yml` (abaixo). O gate obrigatório é o **local/sessão remota** antes do
+  merge (seção 2) e o do Cloudflare Builds; `verify`, `build`, `test:e2e:critical`,
+  Cloudflare Builds ou deploy manual vermelho bloqueiam. Para ter um check no
+  GitHub sem gastar minutos, ver `docs/GITHUB_SELF_HOSTED_RUNNER.md`.
 - Cloudflare Workers Builds (conectado ao repo): em push na `main`, roda
   `npm ci && npm run verify && npm run build` e depois `npm run deploy:cloudflare`
   (`wrangler d1 migrations apply --remote && wrangler deploy`). O E2E de navegador
@@ -217,7 +235,7 @@ npm run lint && npm run test:unit && npm run test:worker && npm run build
 
 export CLOUDFLARE_API_TOKEN=***         # token da titular; NUNCA em arquivo versionado
 npx wrangler whoami                     # confirma a conta
-npx wrangler d1 migrations list seu-funcionario-db --remote   # compara com migrations/
+npx wrangler d1 migrations list allgreen-db --remote   # compara com migrations/
 npm run deploy:cloudflare               # aplica pendentes + publica (idempotente)
 ```
 
@@ -249,8 +267,9 @@ após a publicação.
 
 ## 13a. Registrar o SHA publicado
 
-Produção ≠ `main` até prova em contrário. Após cada publicação, anote em
-`docs/AUDITORIA_CONSOLIDACAO_TDG.md` (ou no relatório da rodada):
+Produção ≠ `main` até prova em contrário. Após cada publicação, acrescente uma
+linha nesta tabela (ou no relatório da rodada, se a publicação fizer parte de
+um PR — nesse caso, cite o PR aqui):
 
 | Data (UTC) | SHA publicado | Como | Version ID (wrangler) | Smoke |
 | --- | --- | --- | --- | --- |
@@ -267,6 +286,9 @@ Produção ≠ `main` até prova em contrário. Após cada publicação, anote e
 | 2026-09-13 14:04–14:40 | `a363850` → `037ab2538fb5` (Codex direto na `main`: P5/P6 complementos do PR #374, PR #372 recuperado, Design System fase 1, hardenings) | Cloudflare Workers Builds | `0133` aplicada no D1 remoto | `/api/system/version` = `037ab2538fb5`, `migrations.expected` 136, última `0133`; gate local desses commits rodado só depois (rodada 3-bis) |
 | 2026-09-13 17:11 | `cd8f90b` (Codex: hardening de despacho + E2E no `deploy:cloudflare`) | Cloudflare Workers Builds | — | **não publicou**: 30+ min sem novo deployment (`wrangler deployments list`), produção seguiu em `037ab25`; causa: Playwright dentro do deploy command do Cloudflare — desfeito na rodada 3-bis (ver seção 11) |
 | 2026-09-13 18:07 | `3d83b2b7e6fe` (PR #379, rodada 3-bis: lint, guarda de tokens, `deploy:cloudflare` sem Playwright, E2E e visual) | Cloudflare Workers Builds | — | **produção voltou a publicar**: `/api/system/version` = `3d83b2b7e6fe` 70 s após o merge (estava presa em `037ab25` desde 14:40); `migrations.expected` 136, última `0133`; D1 remoto sem pendências; `/api/todogreen/preflight` e `/market-signals/prefs` respondem 401 sem sessão; gate local: lint 0 erros, unit 357/357, worker 107/107, build ok, E2E crítico 11/11, visual 4/4 |
+| 2026-09-24 (build 14:09) | `6399f4a49f18` (ramo `publish-tickets`, não a `main`) | manual, fora de CI (`publishedBy: manual`) | — | `/api/system/version` conferido às 19:18, 20:19 e 23:24 UTC com essa mesma resposta, enquanto a `main` recebia os PRs #14, #16 e #17 — registrado na matriz do ERP (PR #15) |
+| 2026-09-24 23:30 | `f856e9f6fadf` (PR #17) | GitHub Actions — botão "Publicar" (`deploy.yml`, `workflow_dispatch`, execução 2) | — | não conferido: às 00:14 a produção já estava no `sha` seguinte |
+| 2026-09-24 23:53 | `f6b9548f6c84` (= `main`, PR #21) | GitHub Actions — botão "Publicar" (execução 3) | — | `/api/system/version` às 00:14 UTC de 25/09: `publishedBy: github-actions`, `branch: main`, `migrations.expected` 148, última `0145_busca_vetores`; `/api/status` com `antiRobo` e `aiGateway` desligados |
 
 > **Estado atual do gate:** `deploy:cloudflare` = migrations + publicação (é o deploy
 > command do Workers Builds e precisa rodar sem navegador). O gate de navegador

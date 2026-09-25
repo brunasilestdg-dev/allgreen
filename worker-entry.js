@@ -1,5 +1,6 @@
-import appWorker, { WEEKLY_SUMMARY_CRON } from "./worker.js";
+import appWorker from "./worker.js";
 import { withInternalSessionAuthorization } from "./worker/auth/internal-session-request.js";
+import { ehDisparoSemanal } from "./worker/lib/cron.js";
 import { exigirAcessoTodoGreen } from "./worker/services/todogreen-access.js";
 import { handleTodoGreenMarketRadar } from "./worker/services/todogreen-market-radar.js";
 import {
@@ -179,12 +180,10 @@ export default {
     return appWorker.fetch(request, env, ctx);
   },
   async scheduled(controller, env, ctx) {
-    // O rastreador NÃO é chamado aqui: o scheduled do app (worker.js) já o
-    // roda. Chamar nos dois lugares fazia cada disparo sincronizar duas vezes
-    // as mesmas integrações, sem trava entre as duas execuções.
-    // O disparo semanal é só do resumo por push; os jobs abaixo são horários e
-    // o cron de hora em hora dispara no mesmo minuto.
-    if (controller?.cron !== WEEKLY_SUMMARY_CRON) {
+    // Jobs horários da vertical: ficam fora do disparo semanal, como os do
+    // worker.js (worker/lib/cron.js). O rastreador não é chamado aqui — roda
+    // uma vez por disparo horário, no scheduled do worker.js.
+    if (!ehDisparoSemanal(controller)) {
       ctx.waitUntil(
         runTodoGreenEnterpriseWorkflowScheduled(env).catch((error) =>
           console.error("scheduled To Do Green enterprise workflows", error),

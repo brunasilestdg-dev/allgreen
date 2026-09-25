@@ -20,7 +20,7 @@ import { handleTodoGreenRequests } from "./todogreen-requests.js";
 import { handleTodoGreenVerticalRecords } from "./todogreen-vertical-records.js";
 import { handleTodoGreenCommercialPanel } from "./todogreen-commercial-panel.js";
 import { handleTodoGreenStock } from "./todogreen-stock.js";
-import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
+import { handleTodoGreenPurchasingEnterprise } from "./todogreen-purchasing-enterprise.js";
 import { handleTodoGreenPurchasingParams } from "./todogreen-purchasing-params.js";
 import { handleTodoGreenTransactions } from "./todogreen-transactions.js";
 import { handleTodoGreenTreasury } from "./todogreen-treasury.js";
@@ -347,11 +347,14 @@ export async function routeTodoGreenApi(request, env, ctx) {
     });
   }
 
+  // Hoje o `worker-entry.js` atende /purchasing antes deste roteador; se um dia
+  // vier só para cá, a compra continua passando pelo portão de alçada — o
+  // serviço de compras sozinho não conhece faixas nem segregação.
   if (path.startsWith("/api/todogreen/purchasing")) {
     return guarded("To Do Green purchasing error", "Não foi possível processar a compra.", async () => {
       const resolved = await internalReadAccess(request, env);
       if (resolved.response) return resolved.response;
-      return handleTodoGreenPurchasing(request, env, resolved.access, resolved.user);
+      return handleTodoGreenPurchasingEnterprise(request, env, resolved.access, resolved.user);
     });
   }
 
