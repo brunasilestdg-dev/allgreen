@@ -237,8 +237,15 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId, opcoes
   // permissões (mesmo vazia). Sem elas, as permissões derivam do papel mínimo do
   // vínculo — não podem ficar vazias, senão o portal do motorista/colaborador não
   // teria nem a própria permissão (driver:self / colaborador:self).
+  // O administrador global vira "admin" com "*", mas isso não pode apagar um
+  // perfil de desenvolvedor dado explicitamente a ele: a Central de Integrações
+  // ignora "*" e admin de propósito (`ehPerfilDesenvolvedor`), então sem este
+  // marcador quem está nas duas listas perdia a tela sem aviso.
+  const explicitos = [autorizado, vinculo].filter(Boolean);
+  const perfilDevExplicito = explicitos.some((item) =>
+    item.role === "desenvolvedor" || parse(item.permissions_json, []).includes?.("dev:access"));
   const permissions = ehAdministrador
-    ? ["*"]
+    ? (perfilDevExplicito ? ["*", "dev:access"] : ["*"])
     : autorizado || vinculo
       ? parse(autorizado?.permissions_json || vinculo?.permissions_json, [])
       : TODO_GREEN_PERMISSIONS[role] || [];
