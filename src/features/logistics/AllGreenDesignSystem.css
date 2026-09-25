@@ -2550,7 +2550,8 @@ html:has(main.tdg) body {
 
 .tdg .tdg-opp-kb-col[style] > header strong,
 .tdg .tdg-opp-kb-col > header strong {
-  color: var(--tdg-muted);
+  /* Texto secundário FORTE: o muted caía a 4,2:1 no tom mais escuro da rampa. */
+  color: var(--ds-ink-soft);
   font-size: var(--ds-text-2xs);
   font-weight: var(--ds-weight-semibold);
   letter-spacing: var(--ds-tracking-caps);
@@ -2635,6 +2636,49 @@ html:has(main.tdg) body {
   border-color: color-mix(in srgb, var(--tdg-green) 50%, transparent);
   color: var(--tdg-green);
   font-weight: var(--ds-weight-semibold);
+}
+
+/* Funil do CRM. A faixa segue escurecendo da primeira etapa à última (formato
+   pedido pela titular), mas só até onde o texto escuro mantém AA: a rampa
+   antiga ia ao verde cheio com o texto clareando junto, e no meio da faixa os
+   dois se encontravam (≈1,6:1); no escuro, a primeira etapa sumia. hsl()
+   calculado pelo mesmo motivo do quadro de oportunidades. */
+.tdg .tdg-crm-funil-card {
+  /* Valor sempre na base: etapa de nome longo quebra em duas linhas e o
+     número descia, fora da linha dos vizinhos. */
+  align-content: space-between;
+  background: hsl(152 32% calc(95% - var(--funil-passo, 0) * 25%));
+  border-radius: var(--ds-radius-lg);
+  box-shadow: inset 0 0 0 1px hsl(152 26% calc(86% - var(--funil-passo, 0) * 22%));
+  color: var(--ds-ink);
+  min-height: 88px;
+}
+
+.tdg .tdg-crm-funil-card strong {
+  color: var(--ds-ink-soft);
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: var(--ds-tracking-caps);
+  opacity: 1;
+}
+
+.tdg .tdg-crm-funil-card b {
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.015em;
+}
+
+.tdg .tdg-crm-funil-card:hover {
+  box-shadow: inset 0 0 0 1px var(--tdg-green), var(--ds-shadow-sm);
+  filter: none;
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.tdg .tdg-crm-funil-card:focus-visible {
+  filter: none;
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
 }
 
 /* CRM: barra de busca + visão e filtros como uma só ferramenta. */
@@ -2795,6 +2839,12 @@ html:has(main.tdg) body {
    o secundário comum dava 4,47:1 sobre o fundo de risco. */
 .tdg .tdg-premissas-incompleta :is(p, span, small) {
   color: var(--ds-ink-soft);
+}
+
+/* Entrada rápida ("Registrar uma pista"): o primeiro campo é o que importa e
+   ocupa a linha — na grade de três colunas ele ficava com um terço. */
+.tdg .tdg-progressive-form > .tdg-form-row:first-of-type > label:first-child {
+  grid-column: 1 / -1;
 }
 
 /* Planner: formulário com o mesmo ritmo do resto. */
@@ -3002,6 +3052,17 @@ html:has(main.tdg) body {
 
 :root[data-theme="dark"] .tdg .tdg-opp-kb-col > header {
   background: hsl(160 32% calc(12% + var(--kb-tom, 0) * 1.6%));
+}
+
+/* No escuro o funil clareia rumo ao fim (ênfase = mais luz), com o texto
+   claro do tema acima de 5:1 em toda a faixa. */
+:root[data-theme="dark"] .tdg .tdg-crm-funil-card {
+  background: hsl(156 30% calc(15% + var(--funil-passo, 0) * 12%));
+  box-shadow: inset 0 0 0 1px hsl(156 26% calc(22% + var(--funil-passo, 0) * 12%));
+}
+
+:root[data-theme="dark"] .tdg .tdg-crm-funil-card:hover {
+  box-shadow: inset 0 0 0 1px var(--tdg-green), var(--ds-shadow-sm);
 }
 
 :root[data-theme="dark"] .tdg .tdg-ledger-status.overdue {

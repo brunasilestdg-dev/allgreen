@@ -1,6 +1,6 @@
 .tdg-page-header {
   align-items: flex-start;
-  background: color-mix(in srgb, var(--tdg-surface, #fff) 94%, #dff2ed);
+  background: color-mix(in srgb, var(--tdg-surface, #fff) 94%, var(--tdg-green-soft, #dff2ed));
   border: 1px solid var(--tdg-line, #c7e7df);
   border-radius: 22px;
   box-shadow: 0 12px 34px rgba(6, 57, 63, 0.08);
@@ -50,7 +50,7 @@
 }
 
 .tdg-page-actions button {
-  background: #fff;
+  background: var(--tdg-card, #fff);
   border: 1px solid var(--tdg-line, #c7e7df);
   border-radius: 12px;
   color: var(--tdg-text, #092f34);
@@ -157,7 +157,7 @@
 
 .tdg-price-summary > div.risk {
   background: var(--ds-danger-soft);
-  border-color: #efb9ae;
+  border-color: var(--tdg-danger-line, #efb9ae);
 }
 
 .tdg-price-summary span,

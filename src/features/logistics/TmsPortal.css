@@ -62,6 +62,19 @@
   --tdg-warn: #b7791f;
   --tdg-warning: var(--ds-warning, #b45309);
   --tdg-danger: var(--ds-danger, #b3261e);
+  /* Pares de função (aviso, risco, informação) com os valores CLAROS do
+     design system fixados, e não `var(--ds-…)`: o tema escuro do app marca o
+     `:root` inteiro, e este portal — que só tem tema claro — herdaria o fundo
+     escuro dos avisos sobre cartão branco. As linhas são a mistura de 35% que
+     a vertical usa, já calculada sobre branco. */
+  --tdg-warning-soft: #fbf1dc;
+  --tdg-warning-ink: #865b0b;
+  --tdg-warning-line: #d5c6aa;
+  --tdg-danger-soft: #fbe9e7;
+  --tdg-danger-ink: #b0382f;
+  --tdg-danger-line: #e3b9b6;
+  --tdg-info-soft: #e6f0f7;
+  --tdg-info-ink: #1f5f8b;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);

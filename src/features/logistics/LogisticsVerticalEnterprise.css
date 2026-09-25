@@ -1,6 +1,6 @@
 .tdg-routine-map {
-  background: #ffffff;
-  border: 1px solid #d6e8df;
+  background: var(--tdg-card, #ffffff);
+  border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 26px;
   box-shadow: 0 12px 34px rgba(16, 36, 31, 0.06);
   display: grid;
@@ -22,7 +22,7 @@
 }
 
 .tdg-routine-head p {
-  color: #62766f;
+  color: var(--tdg-muted, #62766f);
   line-height: 1.55;
   margin: 0;
   max-width: 760px;
@@ -45,10 +45,10 @@
 }
 
 .tdg-routine-card {
-  background: linear-gradient(180deg, #fbfdfb, #ffffff);
-  border: 1px solid #d6e8df;
+  background: linear-gradient(180deg, var(--tdg-surface-muted, #fbfdfb), var(--tdg-card, #ffffff));
+  border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 20px;
-  color: #10241f;
+  color: var(--tdg-ink, #10241f);
   cursor: pointer;
   display: grid;
   gap: 10px;
@@ -74,9 +74,9 @@
 }
 
 .tdg-routine-card b {
-  background: #e8f5ef;
+  background: var(--tdg-green-soft, #e8f5ef);
   border-radius: 999px;
-  color: #17624f;
+  color: var(--tdg-green, #17624f);
   font-size: 11px;
   padding: 5px 8px;
 }
@@ -87,7 +87,7 @@
 }
 
 .tdg-routine-card p {
-  color: #62766f;
+  color: var(--tdg-muted, #62766f);
   font-size: 13px;
   line-height: 1.48;
   margin: 0;
@@ -101,10 +101,10 @@
 }
 
 .tdg-routine-sub span {
-  background: #eef7e9;
+  background: var(--tdg-green-soft, #eef7e9);
   border: 1px solid rgba(23, 98, 79, 0.12);
   border-radius: 999px;
-  color: #17624f;
+  color: var(--tdg-green, #17624f);
   font-size: 11px;
   font-weight: 760;
   padding: 5px 8px;

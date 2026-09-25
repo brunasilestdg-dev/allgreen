@@ -529,7 +529,9 @@ export default function RoteirizacaoPage({ setToast, authHeaders, pontosProprios
     const grupo = L.layerGroup();
     L.polyline(resultado.pontos, { color: "#17624f", weight: 5, opacity: 0.85 }).addTo(grupo);
     resultado.paradas.forEach((parada, indice) => {
-      const cor = indice === 0 ? "#0b9f8f" : indice === resultado.paradas.length - 1 ? "#b4471f" : "#2c6fb0";
+      // Mesmas cores do número na lista de paradas (TodoGreenPages.css); a origem
+      // é o verde-azulado escurecido até o branco do número passar de 4,5:1.
+      const cor = indice === 0 ? "#0b7d70" : indice === resultado.paradas.length - 1 ? "#b4471f" : "#2c6fb0";
       marcador(parada.coord, indice + 1, cor).bindPopup(`${indice + 1}. ${parada.rotulo}`).addTo(grupo);
     });
     grupo.addTo(mapa);

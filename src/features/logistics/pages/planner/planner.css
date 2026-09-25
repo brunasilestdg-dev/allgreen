@@ -121,8 +121,8 @@
 .plr-menu button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plr-menu button svg:last-child:not(:first-child) { color: var(--tdg-muted); }
 .plr-menu button[aria-selected="true"] { background: var(--tdg-soft); font-weight: 750; }
-.plr-menu button.is-perigo { color: #a5271a; }
-.plr-menu button.is-perigo:hover { background: #fdecea; }
+.plr-menu button.is-perigo { color: var(--tdg-danger-ink, #a5271a); }
+.plr-menu button.is-perigo:hover { background: var(--tdg-danger-soft, #fdecea); }
 .plr-menu-sep { border-top: 1px solid var(--tdg-line); display: block !important; margin: 4px 2px; }
 
 .plr-popover {
@@ -254,12 +254,12 @@
   font-weight: 700; gap: 4px; padding: 3px 7px; white-space: nowrap;
 }
 .plr-chip--icone { padding: 3px 5px; }
-.plr-chip--data.is-breve { background: #fef4e2; color: #92600c; }
-.plr-chip--data.is-atrasada { background: #fdecea; color: #a5271a; }
+.plr-chip--data.is-breve { background: var(--tdg-warning-soft, #fef4e2); color: var(--tdg-warning-ink, #92600c); }
+.plr-chip--data.is-atrasada { background: var(--tdg-danger-soft, #fdecea); color: var(--tdg-danger-ink, #a5271a); }
 .plr-prio { flex: none; }
-.plr-prio--urgente { color: #b42318; }
-.plr-prio--alta { color: #c4700b; }
-.plr-prio--baixa { color: #5b6b78; }
+.plr-prio--urgente { color: var(--tdg-danger-ink, #b42318); }
+.plr-prio--alta { color: var(--tdg-warning-ink, #c4700b); }
+.plr-prio--baixa { color: var(--tdg-muted, #5b6b78); }
 
 .plr-avatar {
   align-items: center; background: var(--plr-av-fundo, #dcefe0); border: 1.5px solid var(--tdg-card); border-radius: 50%; color: var(--plr-av-texto, #1d5b2f);
@@ -274,11 +274,11 @@
 .plr-rotulo button { background: transparent; border: 0; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; margin: -2px -3px -2px 1px; padding: 0 2px; opacity: .7; }
 .plr-rotulo button:hover { opacity: 1; }
 .plr-sinal { align-items: center; border-radius: 5px; display: inline-flex; font-size: 11px; font-style: normal; font-weight: 800; gap: 4px; padding: 3px 8px; white-space: nowrap; }
-.plr-sinal.risco { background: #fdecea; color: #a5271a; }
-.plr-sinal.atencao { background: #fef4e2; color: #92600c; }
+.plr-sinal.risco { background: var(--tdg-danger-soft, #fdecea); color: var(--tdg-danger-ink, #a5271a); }
+.plr-sinal.atencao { background: var(--tdg-warning-soft, #fef4e2); color: var(--tdg-warning-ink, #92600c); }
 .plr-status { border-radius: 999px; font-size: 11px; font-weight: 750; padding: 3px 9px; white-space: nowrap; }
 .plr-status[data-status="concluida"] { background: var(--tdg-soft); color: var(--tdg-green); }
-.plr-status[data-status="em_andamento"] { background: #e6f0fb; color: #1d4f91; }
+.plr-status[data-status="em_andamento"] { background: var(--tdg-info-soft, #e6f0fb); color: var(--tdg-info-ink, #1d4f91); }
 .plr-status[data-status="nao_iniciada"] { background: var(--tdg-bg); color: var(--tdg-muted); }
 
 /* ---- Tabela ---- */
@@ -299,7 +299,7 @@
 .plr-td-titulo { min-width: 240px; }
 .plr-td-titulo > div { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
 .plr-td-nome { font-weight: 650; }
-.plr-tabela td.is-atrasada { color: #a5271a; font-weight: 750; }
+.plr-tabela td.is-atrasada { color: var(--tdg-danger-ink, #a5271a); font-weight: 750; }
 .plr-texto-vazio { color: var(--tdg-muted); }
 .plr-pessoa { align-items: center; display: inline-flex; gap: 7px; white-space: nowrap; }
 .plr-prio-texto { align-items: center; display: inline-flex; gap: 5px; white-space: nowrap; }
@@ -309,7 +309,7 @@
 }
 .plr .plr-select-inline:hover { border-color: var(--tdg-line-strong); }
 .plr .plr-select-inline[data-progresso="concluida"] { background: var(--tdg-soft); color: var(--tdg-green); }
-.plr .plr-select-inline[data-progresso="em_andamento"] { background: #e6f0fb; color: #1d4f91; }
+.plr .plr-select-inline[data-progresso="em_andamento"] { background: var(--tdg-info-soft, #e6f0fb); color: var(--tdg-info-ink, #1d4f91); }
 
 /* ---- Linha do tempo ---- */
 .plr-timeline { display: grid; gap: 12px; }
@@ -365,7 +365,7 @@
 .plr-metrica strong { font-size: clamp(1.3rem, 2vw, 1.7rem); letter-spacing: -.03em; line-height: 1.1; }
 .plr-metrica span { color: var(--tdg-muted); font-size: 12px; font-weight: 650; }
 .plr-metrica.is-risco { border-color: #e9a29a; }
-.plr-metrica.is-risco strong { color: #a5271a; }
+.plr-metrica.is-risco strong { color: var(--tdg-danger-ink, #a5271a); }
 .plr-graficos-grade { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .plr-grafico { background: var(--tdg-card); border: 1px solid var(--tdg-line); border-radius: var(--plr-raio); display: grid; gap: 12px; padding: 14px 16px; align-content: start; }
 .plr-grafico h3 { align-items: baseline; display: flex; font-size: 14px; gap: 8px; letter-spacing: -.01em; margin: 0; }
