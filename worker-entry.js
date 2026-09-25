@@ -1,7 +1,7 @@
 import appWorker from "./worker.js";
 import { withInternalSessionAuthorization } from "./worker/auth/internal-session-request.js";
 import { ehDisparoSemanal } from "./worker/lib/cron.js";
-import { exigirAcessoTodoGreen } from "./worker/services/todogreen-access.js";
+import { exigirAcessoTodoGreen, recusaDoPortalDoPapel } from "./worker/services/todogreen-access.js";
 import { handleTodoGreenMarketRadar } from "./worker/services/todogreen-market-radar.js";
 import {
   handleTodoGreenEnterpriseWorkflows,
@@ -17,7 +17,8 @@ import { reprocessarWebhooksTrack3r } from "./worker/services/todogreen-tms-webh
 import { handlePublicTodoGreenRoutingApi } from "./worker/services/todogreen-public-routing-api.js";
 import { routeTodoGreenApi } from "./worker/services/todogreen-router.js";
 
-const forbiddenDriver = () => new Response(JSON.stringify({ error: "Este recurso é restrito ao portal interno." }), {
+// Motorista e colaborador só alcançam o próprio portal (`recusaDoPortalDoPapel`).
+const forbiddenPortalRole = (error) => new Response(JSON.stringify({ error }), {
   status: 403,
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
 });
@@ -25,7 +26,8 @@ const forbiddenDriver = () => new Response(JSON.stringify({ error: "Este recurso
 const resolveInternal = async (request, env) => {
   const resolved = await exigirAcessoTodoGreen(request, env);
   if (resolved.response) return resolved;
-  if (resolved.access?.role === "motorista") return { ...resolved, response: forbiddenDriver() };
+  const recusa = recusaDoPortalDoPapel(resolved.access);
+  if (recusa) return { ...resolved, response: forbiddenPortalRole(recusa) };
   return resolved;
 };
 

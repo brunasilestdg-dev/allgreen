@@ -439,3 +439,97 @@ describe("compartilhar com quem não alcança a vertical", () => {
     expect(alheio.status).toBe(404);
   });
 });
+
+describe("ações do plano no quadro único do espaço", () => {
+  // O segundo bug relatado: "permanece invisível para os demais". Cada pessoa
+  // gravava as ações no PRÓPRIO workspace; quem recebia o plano abria um
+  // quadro vazio. As ações agora moram no db.tasks do dono do espaço e são
+  // lidas com o corte do PLANO: quem vê o plano vê todas as ações.
+  let planId;
+  const quadroDaAna = async () => {
+    const row = await env.DB.prepare("SELECT data, revision FROM workspaces WHERE user_id = ?").bind(ana.id).first();
+    return { tarefas: JSON.parse(row?.data || "{}").tasks || [], revision: row?.revision ?? -1 };
+  };
+
+  it("a colega cria uma ação e ela vai para o quadro da dona do espaço", async () => {
+    const plano = await (await pedir("/api/todogreen/planner/planos", {
+      metodo: "POST", token: ana.token,
+      corpo: { name: "Novos Negócios (ações)", visibility: "private", members: [bia.id] },
+    })).json();
+    planId = plano.id;
+
+    const antes = (await quadroDaAna()).revision;
+    const r = await pedir(`/api/todogreen/planner/planos/${planId}/acoes/acao-bia-1`, {
+      metodo: "PUT", token: bia.token,
+      corpo: { tarefa: { title: "Informar ID do Mercado Livre", priority: "alta", progress: "nao_iniciada", dueDate: "2026-09-25", bucketId: "a_fazer" } },
+    });
+    expect(r.status).toBe(200);
+    const { tarefa, espaco } = await r.json();
+    expect(tarefa).toMatchObject({ id: "acao-bia-1", plannerPlanId: planId, ownerId: bia.id, priority: "Alta", status: "A fazer" });
+    expect(espaco.revision).toBe(antes + 1);
+
+    const quadro = await quadroDaAna();
+    const gravada = quadro.tarefas.find((t) => t.id === "acao-bia-1");
+    expect(gravada).toBeTruthy();
+    // A criadora do plano entra na partilha da ação (To Do/Meu Dia dela).
+    expect(gravada.sharedWith).toEqual([ana.id]);
+  });
+
+  it("a dona cria outra; as duas pessoas do plano veem as DUAS ações", async () => {
+    await pedir(`/api/todogreen/planner/planos/${planId}/acoes/acao-ana-1`, {
+      metodo: "PUT", token: ana.token,
+      corpo: { tarefa: { title: "Integração Mercado Livre", priority: "alta", progress: "em_andamento" } },
+    });
+    for (const pessoa of [ana, bia]) {
+      const { registros } = await (await pedir(`/api/todogreen/planner/planos/${planId}/acoes`, { token: pessoa.token })).json();
+      expect(registros.map((t) => t.id).sort()).toEqual(["acao-ana-1", "acao-bia-1"]);
+      const todas = await (await pedir("/api/todogreen/planner/acoes", { token: pessoa.token })).json();
+      expect(todas.registros.filter((t) => t.plannerPlanId === planId)).toHaveLength(2);
+    }
+  });
+
+  it("quem é do espaço mas não está no plano não vê as ações (404 / fora da lista)", async () => {
+    expect((await pedir(`/api/todogreen/planner/planos/${planId}/acoes`, { token: leo.token })).status).toBe(404);
+    const todas = await (await pedir("/api/todogreen/planner/acoes", { token: leo.token })).json();
+    expect(todas.registros.some((t) => t.plannerPlanId === planId)).toBe(false);
+    // E outro espaço não alcança nada.
+    expect((await pedir(`/api/todogreen/planner/planos/${planId}/acoes`, { token: externo.token })).status).toBe(404);
+  });
+
+  it("quem só lê vê, mas não grava (403); id de tarefa de fora do plano não é sequestrado (409)", async () => {
+    // Leo passa a ver: plano aberto ao espaço.
+    const atual = (await (await pedir("/api/todogreen/planner/planos", { token: ana.token })).json()).registros.find((p) => p.id === planId);
+    await pedir(`/api/todogreen/planner/planos/${planId}`, { metodo: "PATCH", token: ana.token, corpo: { revision: atual.revision, visibility: "shared", members: [] } });
+    const doLeo = await (await pedir(`/api/todogreen/planner/planos/${planId}/acoes`, { token: leo.token })).json();
+    expect(doLeo.registros).toHaveLength(2);
+    expect((await pedir(`/api/todogreen/planner/planos/${planId}/acoes/x1`, {
+      metodo: "PUT", token: leo.token, corpo: { tarefa: { title: "Não pode" } },
+    })).status).toBe(403);
+
+    // "Todo o espaço" desceu para as ações no quadro (To Do de quem é do espaço).
+    const quadro = await quadroDaAna();
+    expect(quadro.tarefas.filter((t) => t.plannerPlanId === planId).every((t) => t.visibility === "espaco_todo")).toBe(true);
+
+    // Uma tarefa do To Do que não é do plano não é tomada por um PUT.
+    const { revision } = await quadroDaAna();
+    const row = await env.DB.prepare("SELECT data FROM workspaces WHERE user_id = ?").bind(ana.id).first();
+    const dados = JSON.parse(row.data);
+    dados.tasks = [{ id: "todo-solta", title: "Do To Do", ownerId: ana.id }, ...dados.tasks];
+    await env.DB.prepare("UPDATE workspaces SET data = ?, revision = revision + 1 WHERE user_id = ? AND revision = ?").bind(JSON.stringify(dados), ana.id, revision).run();
+    expect((await pedir(`/api/todogreen/planner/planos/${planId}/acoes/todo-solta`, {
+      metodo: "PUT", token: bia.token, corpo: { tarefa: { title: "Sequestro" } },
+    })).status).toBe(409);
+  });
+
+  it("remover tira a ação do quadro; arquivar o plano mantém as ações, só desvinculadas", async () => {
+    const del = await pedir(`/api/todogreen/planner/planos/${planId}/acoes/acao-bia-1`, { metodo: "DELETE", token: bia.token });
+    expect((await del.json()).espaco.removidas).toEqual(["acao-bia-1"]);
+    expect((await quadroDaAna()).tarefas.some((t) => t.id === "acao-bia-1")).toBe(false);
+
+    const arq = await pedir(`/api/todogreen/planner/planos/${planId}`, { metodo: "DELETE", token: ana.token });
+    expect(arq.status).toBe(200);
+    const restante = (await quadroDaAna()).tarefas.find((t) => t.id === "acao-ana-1");
+    expect(restante).toMatchObject({ plannerPlanId: "", title: "Integração Mercado Livre" });
+    expect(restante.visibility).toBe("privado");
+  });
+});
