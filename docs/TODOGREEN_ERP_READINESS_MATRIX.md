@@ -34,7 +34,8 @@ antigo H6 foi retirado, porque não é registro de validação. Doze controles
 tinham lacuna: três foram corrigidos neste PR (L4, L5, L7) e nove seguem
 abertos, cinco deles achados nesta segunda passada (L8–L12). Há ainda um
 defeito que quebra o faturamento a partir da segunda fatura do mesmo tipo no
-espaço ([D1](#defeitos)). Em 24/09 a produção não rodava a `main` — ver
+espaço ([D1](#defeitos)). Em 24/09 a produção passou o dia sem rodar a `main`
+e só a alcançou às 23:53 UTC, pelo botão manual do GitHub Actions — ver
 [Estado observado da publicação](#estado-observado-da-publicação-não-é-homologação).
 
 ## Registro de homologação em produção
