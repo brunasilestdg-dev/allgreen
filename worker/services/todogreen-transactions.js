@@ -154,6 +154,34 @@ async function reserveNumber(env, ownerId, docType, prefix, now) {
   return `${row?.prefix || prefix}${String(row?.value || 1).padStart(row?.padding || 6, "0")}`;
 }
 
+// Número da fatura interna do fechamento (o número FISCAL é outro: nasce na
+// assinatura, em todogreen_fiscal_series — 0069). A série de documentos
+// (0053) só aceita os tipos do seu CHECK, e reservar com cte/nfse/nfe fazia o
+// INSERT OR IGNORE descartar a linha em silêncio: toda fatura saía com 1, e o
+// segundo fechamento do mesmo tipo no espaço batia no índice único (500). A
+// fatura usa o tipo 'nota_fiscal', com o tipo fiscal no `series` (um contador
+// por tipo), e a série nasce do maior número já gravado — quem faturou antes
+// desta correção já tem um CTE-000001 e não pode recebê-lo de novo.
+async function reservarNumeroDaFatura(env, ownerId, documentType, prefix, now) {
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO todogreen_document_series
+       (id,tenant_id,workspace_owner_id,doc_type,series,prefix,next_number,padding,created_at,updated_at)
+     SELECT ?,?,?,'nota_fiscal',?,?,COALESCE(MAX(CAST(substr(number, ?) AS INTEGER)), 0) + 1,6,?,?
+       FROM todogreen_invoices
+      WHERE tenant_id=? AND workspace_owner_id=? AND document_type=? AND number LIKE ?`,
+  ).bind(
+    crypto.randomUUID(), TENANT_ID, ownerId, documentType, prefix, prefix.length + 1, now, now,
+    TENANT_ID, ownerId, documentType, `${prefix}%`,
+  ).run();
+  const row = await env.DB.prepare(
+    `UPDATE todogreen_document_series SET next_number=next_number+1,updated_at=?
+      WHERE tenant_id=? AND workspace_owner_id=? AND doc_type='nota_fiscal' AND series=?
+      RETURNING prefix,next_number-1 AS value,padding`,
+  ).bind(now, TENANT_ID, ownerId, documentType).first();
+  if (!row) throw new Error("Série da fatura não foi reservada.");
+  return `${row.prefix}${String(row.value).padStart(row.padding || 6, "0")}`;
+}
+
 const orderView = (row) => ({
   id: row.id, number: row.number, clientId: row.client_id, contractId: row.contract_id,
   operationId: row.operation_id, serviceId: row.service_id, priceTableId: row.price_table_id,
@@ -1104,14 +1132,15 @@ async function closeBilling(env, access, user, body) {
   const runNumber = `FAT-${now.slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
   const documentType = ["cte", "nfse", "nfe"].includes(text(body.documentType, 20)) ? text(body.documentType, 20) : "cte";
   const documentPrefix = { cte: "CTE-", nfse: "NFSE-", nfe: "NFE-" }[documentType];
-  const invoiceNumber = await reserveNumber(env, access.ownerId, documentType, documentPrefix, now);
-  const titleNumber = await reserveNumber(env, access.ownerId, "titulo", "REC-", now);
   const dueDate = text(body.dueDate, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return json({ error: "Informe o vencimento do título." }, 400);
   const competence = text(body.competenceDate, 10) || items[0].competence_date;
   const mesFechado = await competenciaFechada(env, access.ownerId, competence);
   if (mesFechado)
     return json({ error: `O período ${mesFechado} está fechado na Tesouraria. Fature em competência aberta ou reabra o período com justificativa.` }, 409);
+  // Os números só são reservados depois das recusas: pedido recusado não gasta número.
+  const invoiceNumber = await reservarNumeroDaFatura(env, access.ownerId, documentType, documentPrefix, now);
+  const titleNumber = await reserveNumber(env, access.ownerId, "titulo", "REC-", now);
   const contractId = new Set(items.map((item) => item.contract_id)).size === 1 ? items[0].contract_id : "";
   const statements = [
     env.DB.prepare(`INSERT INTO todogreen_billing_runs
