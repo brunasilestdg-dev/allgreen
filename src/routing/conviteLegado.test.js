@@ -14,6 +14,12 @@ describe("link antigo de convite", () => {
     expect(destinoDoConviteLegado("?outro=1")).toBe("");
   });
 
+  it("descarta espaços em volta do código e ignora % solto", () => {
+    expect(destinoDoConviteLegado("?x=1&convite=abc&y=2")).toBe("/convite/abc");
+    expect(destinoDoConviteLegado("?convite=%20abc%20")).toBe("/convite/abc");
+    expect(destinoDoConviteLegado("?convite=100%")).toBe("");
+  });
+
   it("o App não volta a chamar a rota morta /api/collab/join", async () => {
     const { readFileSync } = await import("node:fs");
     const app = readFileSync(new URL("../App.jsx", import.meta.url), "utf8");

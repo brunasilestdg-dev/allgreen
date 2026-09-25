@@ -32,7 +32,7 @@ Instale o k6 na máquina/runner conforme a documentação oficial do k6. O proje
 Suba o Worker local em outro terminal:
 
 ```bash
-npx wrangler d1 migrations apply seu-funcionario-db --local
+npx wrangler d1 migrations apply allgreen-db --local
 npx wrangler dev --local --port 8788
 ```
 

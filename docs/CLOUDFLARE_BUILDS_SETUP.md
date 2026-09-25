@@ -4,17 +4,17 @@
 > Actions**. O Cloudflare Workers Builds vira o CI/CD **principal**: em cada push
 > na `main`, ele clona o repo, instala dependências, valida, compila, aplica migrations e publica.
 >
-> O GitHub Actions continua **registrado** (workflows não foram apagados) —
-> "Qualidade" para rodar testes quando os minutos voltarem, e "Publicar" como
-> **botão manual de emergência** (não publica mais sozinho, para não haver
-> publicação dupla).
+> No GitHub Actions existe **um único workflow**, o "Publicar"
+> (`.github/workflows/deploy.yml`), como **botão manual de emergência** (não
+> publica sozinho, para não haver publicação dupla). Não há workflow de
+> qualidade no GitHub: o gate roda antes do merge e no próprio Workers Builds.
 
 ## O que é cada peça
 
 | Peça | Papel |
 |---|---|
 | **Cloudflare Workers Builds** | **CI/CD principal.** Publica automaticamente em push na `main`. |
-| GitHub Actions "Qualidade" (`.github/workflows/ci.yml`) | Testes no CI do GitHub. Hoje falha por falta de minutos; volta a servir quando a franquia renovar ou com runner self-hosted (ver `GITHUB_SELF_HOSTED_RUNNER.md`). |
+| Gate antes do merge (local ou sessão remota) | `npm run verify`, `npm run build` e `npm run test:e2e:critical`. Não existe check de qualidade no GitHub; para ter um sem gastar minutos, ver `GITHUB_SELF_HOSTED_RUNNER.md`. |
 | GitHub Actions "Publicar" (`.github/workflows/deploy.yml`) | **Fallback manual** (workflow_dispatch). Não publica mais sozinho. |
 
 O Worker se chama **`allgreen`** (`wrangler.jsonc` → `name`). O nome no
@@ -63,7 +63,7 @@ o log distinguir "falhou na validação" de "falhou ao publicar".
 ## Segredos e variáveis
 
 - O Worker **já tem os segredos no cofre da Cloudflare** (Gemini, xAI, Google,
-  Brevo, etc. — ver `AGENTS.md`/`PENDENCIAS_DA_TITULAR.md`). O Workers Builds
+  Brevo, etc. — inventário completo em `docs/SECRETS.md`). O Workers Builds
   publica **no mesmo Worker**, então ele herda esses bindings/segredos em
   produção. Não é preciso recadastrar nada para publicar.
 - Para o **deploy command** aplicar migrations e publicar, o Builds precisa de
@@ -84,10 +84,10 @@ o log distinguir "falhou na validação" de "falhou ao publicar".
   que faltam — então uma migration já aplicada **não** é reaplicada.
 - **NUNCA** renomear, reordenar, reaplicar ou apagar uma migration já aplicada.
   Isso quebra o rastreamento e pode falhar o deploy.
-- Nota de auditoria: o D1 de produção já tem a `0119_todogreen_operation_import_templates.sql`
-  aplicada (veio de branch ainda não mergeada). Quando essa branch mergear, o
-  wrangler verá a 0119 como já aplicada e **não** vai duplicar. Ver
-  `AUDITORIA_CONSOLIDACAO_TDG.md` seção 2.
+- Caso real que ilustra a regra: a `0119_todogreen_operation_import_templates.sql`
+  foi aplicada no D1 de produção antes de o branch que a criou ser mergeado.
+  Hoje ela está em `migrations/` com o mesmo nome, e o wrangler a reconhece como
+  aplicada — sem duplicar. Renomeá-la teria quebrado o deploy.
 
 ## Como confirmar o primeiro deploy
 

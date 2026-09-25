@@ -53,6 +53,12 @@ const json = (data, status = 200) =>
   });
 
 const texto = (valor, max = 500) => String(valor ?? "").trim().slice(0, max);
+
+// O status pedido no corpo, lido do jeito que a máquina de estados o aplica. O
+// portão de alçada (`todogreen-purchasing-enterprise.js`) usa este MESMO leitor:
+// quando cada lado lia de um jeito, "aprovada " passava pelo portão como edição
+// comum e chegava aqui, aparada, como aprovação.
+export const statusDoCorpo = (corpo) => texto(corpo?.status, 40);
 const numero = (valor) => {
   const n = Number(valor);
   return Number.isFinite(n) ? n : 0;
@@ -296,7 +302,7 @@ const atualizarRequisicao = async (env, access, user, id, corpo) => {
   ).bind(id, TENANT_ID, access.ownerId).first();
   if (!atual) return json({ error: "Requisição não encontrada." }, 404);
 
-  const novoStatus = texto(corpo.status, 40) || atual.status;
+  const novoStatus = statusDoCorpo(corpo) || atual.status;
   if (novoStatus !== atual.status && !podeMudarStatusDaRequisicao(atual.status, novoStatus))
     return json({
       error: `Uma requisição ${atual.status} não pode ir para ${novoStatus}.`,
@@ -438,7 +444,7 @@ const atualizarPedido = async (env, access, user, id, corpo) => {
   ).bind(id, TENANT_ID, access.ownerId).first();
   if (!atual) return json({ error: "Pedido não encontrado." }, 404);
 
-  const novoStatus = texto(corpo.status, 40) || atual.status;
+  const novoStatus = statusDoCorpo(corpo) || atual.status;
   if (novoStatus !== atual.status && !podeMudarStatusDoPedido(atual.status, novoStatus))
     return json({ error: `Um pedido ${atual.status} não pode ir para ${novoStatus}.` }, 409);
 
@@ -680,7 +686,7 @@ export async function handleTodoGreenPurchasing(request, env, access, user) {
   // restritos a purchase:manage logo abaixo.
   if (request.method === "POST" && recurso === "requisicoes")
     return criarRequisicao(env, access, user, corpo);
-  if (request.method === "PATCH" && id && recurso === "requisicoes" && texto(corpo.status, 40) === "pendente")
+  if (request.method === "PATCH" && id && recurso === "requisicoes" && statusDoCorpo(corpo) === "pendente")
     return atualizarRequisicao(env, access, user, id, corpo);
 
   if (!podeNaVertical(access, "purchase:manage"))

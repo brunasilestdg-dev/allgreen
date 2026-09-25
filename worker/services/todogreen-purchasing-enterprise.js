@@ -1,5 +1,5 @@
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
-import { handleTodoGreenPurchasing } from "./todogreen-purchasing.js";
+import { handleTodoGreenPurchasing, statusDoCorpo } from "./todogreen-purchasing.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -11,6 +11,15 @@ const parse = (value, fallback = {}) => {
   try { return JSON.parse(value || ""); } catch { return fallback; }
 };
 const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const objeto = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
+
+// Reenvia ao serviço de compras com outro corpo. O content-length do original
+// não vale para o corpo novo, então não é copiado.
+const comCorpo = (request, body) => {
+  const headers = new Headers(request.headers);
+  headers.delete("content-length");
+  return new Request(request.url, { method: request.method, headers, body: JSON.stringify(body) });
+};
 
 // A matriz fica no servidor. Quem pede a compra não escolhe o próprio teto.
 // Cada clique aprova UMA etapa, deixando explícito quem ainda precisa decidir.
@@ -143,13 +152,9 @@ const approve = async (request, env, access, user, resource, id, body) => {
   const flow = normalizedPurchaseApprovalFlow(total, fields, bands);
   const next = flow.next;
   if (!next) {
-    const forwarded = new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: JSON.stringify({
-        ...body,
-        campos: { ...fields, purchaseApprovalFlow: { total, steps: flow.steps, approvals: flow.approvals, complete: true } },
-      }),
+    const forwarded = comCorpo(request, {
+      ...body,
+      campos: { ...fields, purchaseApprovalFlow: { total, steps: flow.steps, approvals: flow.approvals, complete: true } },
     });
     return handleTodoGreenPurchasing(forwarded, env, access, user);
   }
@@ -185,14 +190,10 @@ const approve = async (request, env, access, user, resource, id, body) => {
   };
 
   if (nextFlow.complete) {
-    const forwarded = new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: JSON.stringify({
-        ...body,
-        campos: newFields,
-        notaDecisao: body.notaDecisao || `Alçada concluída em ${now}`,
-      }),
+    const forwarded = comCorpo(request, {
+      ...body,
+      campos: newFields,
+      notaDecisao: body.notaDecisao || `Alçada concluída em ${now}`,
     });
     return handleTodoGreenPurchasing(forwarded, env, access, user);
   }
@@ -208,16 +209,55 @@ const approve = async (request, env, access, user, resource, id, body) => {
   }, 202);
 };
 
+// Num pedido de aprovação só viaja a decisão. Aprovar é dizer sim ao que está
+// gravado — ao total que a alçada avaliou; trocar linhas, valores ou campos no
+// mesmo clique aprovaria o que ninguém viu (R$ 100 avaliados, R$ 500 mil
+// aprovados).
+const CHAVES_DA_DECISAO = new Set(["status", "revision", "notaDecisao"]);
+
+const TABELA_DO_RECURSO = { requisicoes: "todogreen_purchase_requests", pedidos: "todogreen_purchase_orders" };
+
+// Este portão é o único que escreve a trilha (`campos.purchaseApprovalFlow`).
+// Vinda do cliente — na criação ou em qualquer edição, inclusive no reenvio que
+// o requisitante faz sem purchase:manage —, ela marcaria como aprovadas as
+// etapas dos outros. Na edição, a trilha gravada segue adiante: mudar a área de
+// uma requisição não apaga quem já aprovou.
+const camposSemTrilhaDoCliente = async (env, access, resource, id, campos) => {
+  const { purchaseApprovalFlow: _ignorada, ...proprios } = objeto(campos);
+  if (!id) return proprios;
+  const row = await env.DB.prepare(`SELECT fields_json FROM ${TABELA_DO_RECURSO[resource]} WHERE id=? AND tenant_id=? AND workspace_owner_id=?`)
+    .bind(id, TENANT_ID, access.ownerId).first();
+  const gravada = parse(row?.fields_json, {}).purchaseApprovalFlow;
+  return gravada === undefined ? proprios : { ...proprios, purchaseApprovalFlow: gravada };
+};
+
 export async function handleTodoGreenPurchasingEnterprise(request, env, access, user) {
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
   const resource = parts[3] || "";
   const id = parts[4] || "";
-  if (request.method === "PATCH" && id && ["requisicoes", "pedidos"].includes(resource)) {
-    const clone = request.clone();
-    const body = await clone.json().catch(() => ({}));
-    const wantsApproval = (resource === "requisicoes" && body.status === "aprovada") || (resource === "pedidos" && body.status === "aprovado");
-    if (wantsApproval) return approve(request, env, access, user, resource, id, body);
+  // Todo POST cria (o serviço de compras ignora um id no caminho do POST), então
+  // todo POST passa por aqui; PATCH só com id.
+  const escreve = request.method === "POST" || (request.method === "PATCH" && id);
+  if (!escreve || !TABELA_DO_RECURSO[resource]) return handleTodoGreenPurchasing(request, env, access, user);
+
+  const body = await request.clone().json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return handleTodoGreenPurchasing(request, env, access, user);
+
+  // O status é lido pelo mesmo leitor do serviço de compras — o que o portão vê
+  // é exatamente o que a máquina de estados vai aplicar.
+  const status = statusDoCorpo(body);
+  const wantsApproval = request.method === "PATCH"
+    && ((resource === "requisicoes" && status === "aprovada") || (resource === "pedidos" && status === "aprovado"));
+  if (wantsApproval) {
+    const alteracoes = Object.keys(body).filter((chave) => !CHAVES_DA_DECISAO.has(chave) && body[chave] !== undefined);
+    if (alteracoes.length)
+      return json({ error: "Aprovar não altera a compra. Salve a edição primeiro e aprove em seguida." }, 400);
+    return approve(request, env, access, user, resource, id, { status, revision: body.revision, notaDecisao: body.notaDecisao });
   }
-  return handleTodoGreenPurchasing(request, env, access, user);
+
+  // Sem campos (ou `null`), o serviço de compras mantém os gravados.
+  if (body.campos == null) return handleTodoGreenPurchasing(request, env, access, user);
+  const campos = await camposSemTrilhaDoCliente(env, access, resource, request.method === "PATCH" ? id : "", body.campos);
+  return handleTodoGreenPurchasing(comCorpo(request, { ...body, campos }), env, access, user);
 }

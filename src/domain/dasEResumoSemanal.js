@@ -2,7 +2,8 @@
 //
 // Dois lembretes que o produto manda sozinho, e a razão de estarem juntos: os
 // dois são função pura que roda em dois lugares. Aqui, para a tela; e em
-// worker.js, para o Cron disparar o push mesmo com o app fechado.
+// worker/services/weekly-summary.js, para o Cron disparar o push mesmo com o
+// app fechado.
 //
 // É esse "existe em dois lugares" que torna a extração necessária. Enquanto
 // moravam no meio de App.jsx, manter as duas cópias em sincronia dependia de
@@ -78,7 +79,7 @@ export const buildDasReminder = (
 // ── Resumo semanal ──────────────────────────────────────────────────────
 // Prova de valor recorrente: números tangíveis da semana (vendas, caixa,
 // tarefas) entregues por push — não uma tela que a pessoa precisa lembrar de
-// abrir. computeWeeklySummary é puro e existe também em worker.js (que envia
+// abrir. computeWeeklySummary é puro e existe também em worker/services/weekly-summary.js (que envia
 // o push via Cron mesmo com o app fechado); manter as duas cópias em sincronia.
 export const weekRange = (ymd = today()) => {
   const d = new Date(`${ymd}T12:00:00`);
