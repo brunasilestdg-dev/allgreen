@@ -787,9 +787,13 @@ html:has(main.tdg) body {
   transition: border-color var(--ds-motion-fast), background-color var(--ds-motion-fast);
 }
 
+/* Foco sempre visível (a folha da Codex, bab4fa0, cobrava isso em todo
+   controle): a borda de 1px a 55% era sinal fraco sobre a coluna escura; o
+   anel de 2px no lima da marca dá ≈ 9:1 sobre ela. */
 .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search:focus-within {
   background: rgba(231, 242, 237, .09);
-  border-color: color-mix(in srgb, var(--ds-nav-indicator) 55%, transparent);
+  border-color: var(--ds-nav-indicator);
+  box-shadow: 0 0 0 1px var(--ds-nav-indicator);
 }
 
 .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search svg {
@@ -1914,6 +1918,16 @@ html:has(main.tdg) body {
 
 .tdg table tbody tr:last-child > :is(td, th) {
   border-bottom: 0;
+}
+
+/* Coluna de número alinha dígito com dígito, e data ou valor não quebra no
+   meio (da folha da Codex, bab4fa0). */
+.tdg table :is(td, th) {
+  font-variant-numeric: tabular-nums;
+}
+
+.tdg table :is(td, th):has(> time, > [data-currency]) {
+  white-space: nowrap;
 }
 
 /* 4.7 Filtros, chips e alternadores de visão ----------------------------- */
@@ -3062,6 +3076,23 @@ html:has(main.tdg) body {
 
 :root[data-theme="dark"] .tdg .tdg-opp-kb-col > header {
   background: hsl(160 32% calc(12% + var(--kb-tom, 0) * 1.6%));
+}
+
+/* Barra de rolagem no escuro: o polegar verde-escuro translúcido da base
+   (LogisticsVertical.css) sumia sobre o fundo escuro. Tom claro, como a folha
+   da Codex (bab4fa0) já fazia. */
+:root[data-theme="dark"] .tdg * {
+  scrollbar-color: rgba(232, 245, 239, .28) transparent;
+}
+
+:root[data-theme="dark"] .tdg ::-webkit-scrollbar-thumb {
+  background: rgba(232, 245, 239, .24);
+  background-clip: padding-box;
+}
+
+:root[data-theme="dark"] .tdg ::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 245, 239, .4);
+  background-clip: padding-box;
 }
 
 /* No escuro o funil clareia rumo ao fim (ênfase = mais luz), com o texto
