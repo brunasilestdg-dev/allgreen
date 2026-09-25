@@ -1,0 +1,3107 @@
+/* ==========================================================================
+   ALL GREEN — Design System da vertical To Do Green
+   ==========================================================================
+
+   Camada canônica de acabamento. É a ÚLTIMA folha importada em `src/main.jsx`
+   e a referência para qualquer tela nova. Substitui as camadas de correção que
+   foram se empilhando sobre o shell (MenuCompact, MenuDensityFix, ShellPolish,
+   EnterpriseRefinement e AllGreenVisualSystemV2) — cada uma redecidia raio,
+   cor e altura com `!important`, e a soma era uma tela com cinco tamanhos de
+   botão e um tema escuro com modal branco.
+
+   Regras desta camada (valem para quem vier depois):
+     1. Cor só por token: `--tdg-*` (marca e superfície, tema claro/escuro) e
+        `--ds-*` (papéis, escala e coluna de navegação). Cor literal aqui é
+        exceção explicada, nunca atalho — é o que mantém o escuro legível.
+     2. Escala única: texto 11/12/13/14/16/20/24/30, controle 32/36/40, raio
+        6/8/12/16, espaço em múltiplos de 4. Tela nova não inventa medida.
+     3. `!important` só onde uma folha mais antiga ainda o usa sobre a mesma
+        propriedade. Especificidade se ganha com escopo (`.tdg:is(...)`), não
+        com martelo.
+     4. Nenhuma regra de negócio mora aqui: rota, permissão e dado ficam no JSX.
+
+   Direção visual
+     - A marca emoldura, o conteúdo respira: a coluna de navegação e o canto do
+       logo usam o verde profundo do monograma (#14412d escurecido); o palco é
+       neutro e os cartões são planos, com borda — sombra só no que flutua.
+     - Verde de ação (--tdg-green) para o que se clica; lima só como sinal
+       (indicador do item ativo, destaque sobre fundo escuro).
+     - Hierarquia por peso e contraste, não por tamanho gigante: Plus Jakarta
+       Sans nos títulos, Inter no resto, números tabulares nos indicadores.
+     - Movimento curto (120–260ms) e com desaceleração, respeitando quem pede
+       menos movimento.
+
+   Escopo do shell: `.tdg:is(.tdg-module-page, .tdg-overview-page)` — é o
+   `<main>` de `LogisticsVertical.jsx`. Componentes valem para todo `.tdg`.
+   ========================================================================== */
+
+
+/* --------------------------------------------------------------------------
+   0. Documento
+   -------------------------------------------------------------------------- */
+
+/* `overflow-x: hidden` em html/body (52-personalizar-menu.css) transforma o
+   body num contêiner de rolagem, e aí nada gruda com `position: sticky` — o
+   cabeçalho e o menu rolavam junto com a página. `clip` corta o estouro do
+   mesmo jeito sem criar contêiner de rolagem. Só onde a vertical está. */
+@supports (overflow: clip) {
+  html:has(main.tdg),
+  html:has(main.tdg) body {
+    overflow-x: clip;
+  }
+}
+
+/* Fundo da página atrás da vertical — é o que aparece quando a rolagem é
+   puxada além do fim no celular. É o --tdg-bg de cada tema; aqui fora da .tdg
+   o token não existe, então o valor vem literal (os dois andam juntos). O
+   `var(--ds-bg)` de antes era claro nos dois temas. */
+html:has(main.tdg),
+html:has(main.tdg) body {
+  background: #f4f7f5;
+}
+
+:root[data-theme="dark"]:has(main.tdg),
+:root[data-theme="dark"]:has(main.tdg) body {
+  background: #0b1d18;
+}
+
+
+/* --------------------------------------------------------------------------
+   1. Base tipográfica da vertical
+   -------------------------------------------------------------------------- */
+
+.tdg {
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading);
+  text-rendering: optimizeLegibility;
+}
+
+/* Especificidade baixa (`:where`): título sobre superfície escura (destaques,
+   faixa de decisão, ficha da conta) continua com a cor que o componente dá. */
+.tdg :where(h1, h2, h3, h4) {
+  font-family: var(--ds-font-display);
+  letter-spacing: -0.015em;
+  line-height: var(--ds-leading-tight);
+}
+
+.tdg ::selection {
+  background: color-mix(in srgb, var(--tdg-green) 22%, transparent);
+}
+
+/* Números de indicador alinham na vertical e não "dançam" ao atualizar. */
+.tdg :is(strong, b, td, .tdg-metric, .tdg-kpi, [class*="metric"], [class*="resumo"]) {
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* --------------------------------------------------------------------------
+   2. Moldura do app (desktop, a partir de 900px)
+   -------------------------------------------------------------------------- */
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) {
+  background: var(--tdg-bg);
+  gap: 0;
+  grid-template-rows: auto 1fr;
+  margin: 0;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 0;
+  width: 100%;
+}
+
+/* Em software operacional, estabilidade visual pesa mais que cartão entrando
+   em cascata: painéis e indicadores aparecem prontos. Hover, foco, carregamento
+   e modais continuam animados. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) :is(.tdg-panel, .tdg-section, .tdg-metric, .tdg-operation-card, .tdg-module-card, .tdg-product-card, .tdg-home-metric-link, .tdg-home-metrics > article, .tdg-home-painel-card) {
+  animation: none;
+}
+
+/* 2.1 Cabeçalho: fixo no topo; o canto do logo é continuação da coluna de
+   navegação, então marca e menu formam um só bloco. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) > .tdg-shell-header {
+  align-items: stretch;
+  background: var(--tdg-card);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0;
+  height: var(--ds-header-h);
+  min-height: var(--ds-header-h);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: var(--ds-z-header);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-location {
+  align-items: center;
+  background: var(--ds-nav-bg);
+  flex: 0 0 var(--ds-sidebar-w);
+  gap: 8px;
+  padding: 0 16px;
+  width: var(--ds-sidebar-w);
+}
+
+/* O h1 e a descrição da página ficam aqui só para leitor de tela; com o canto
+   escuro, levam a cor da coluna (o teste de legibilidade mede até o oculto). */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-location .tdg-shell-sr-only {
+  color: var(--ds-nav-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo {
+  border-radius: var(--ds-radius-md);
+  padding: 6px 8px;
+  transition: background-color var(--ds-motion-fast);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo:hover,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo:focus-visible {
+  background: var(--ds-nav-hover);
+  transform: none;
+}
+
+/* O monograma é verde-escuro sobre transparente: na coluna escura ele vira a
+   versão negativa (branca), como qualquer marca aplicada sobre cor. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo img {
+  filter: brightness(0) invert(1);
+  height: 30px;
+  opacity: .95;
+  width: auto;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions {
+  align-items: center;
+  box-shadow: inset 0 -1px 0 var(--tdg-line);
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: 0 20px 0 24px;
+}
+
+/* Botão de menu do celular: existe no DOM sempre, aparece só < 900px. */
+.tdg .tdg-menu-movel {
+  display: none;
+}
+
+/* 2.2 Controles do cabeçalho: uma só família de altura, raio e tipografia. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > button,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-md);
+  box-shadow: none;
+  color: var(--ds-ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  gap: 8px;
+  height: var(--ds-control-md);
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1;
+  min-height: var(--ds-control-md);
+  padding: 0 12px;
+  transition: background-color var(--ds-motion-fast), border-color var(--ds-motion-fast), color var(--ds-motion-fast);
+  white-space: nowrap;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > button:hover:not(:disabled),
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary:hover {
+  background: var(--tdg-soft);
+  border-color: transparent;
+  color: var(--tdg-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > button:focus-visible,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary:focus-visible {
+  box-shadow: var(--ds-focus-ring);
+  outline: none;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > button svg {
+  height: 16px;
+  width: 16px;
+}
+
+/* Busca de ferramentas: vira o campo de comando à esquerda do cabeçalho —
+   o lugar onde se procura antes de navegar. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-search {
+  background: var(--ds-surface-sunken);
+  border-color: var(--tdg-line);
+  color: var(--tdg-muted);
+  font-weight: var(--ds-weight-regular);
+  justify-content: flex-start;
+  margin-right: auto;
+  max-width: 380px;
+  order: -1;
+  padding: 0 12px;
+  width: clamp(200px, 30vw, 380px);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-search:hover:not(:disabled) {
+  background: var(--tdg-card);
+  border-color: var(--tdg-line-strong);
+  color: var(--tdg-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-pendencias {
+  background: var(--ds-warning-soft);
+  color: var(--ds-warning);
+  font-weight: var(--ds-weight-semibold);
+  order: 1;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-pendencias:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-warning) 16%, var(--tdg-card));
+  color: var(--ds-warning);
+}
+
+/* Vermelho fixo nos dois temas: o `--ds-danger` do escuro é claro e o número
+   branco sumia (2,3:1). */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-pendencias-selo {
+  background: #c2412d;
+  border-radius: var(--ds-radius-pill);
+  color: #fff;
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-bold);
+  line-height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-theme {
+  order: 2;
+  padding: 0;
+  width: var(--ds-control-md);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu {
+  order: 3;
+  position: relative;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary {
+  list-style: none;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Seta do menu de Configurações (e engrenagem no celular) desenhadas por
+   máscara: herdam a cor do texto e não dependem de ícone no JSX. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary::after {
+  background: currentColor;
+  content: "";
+  height: 14px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: .7;
+  transition: transform var(--ds-motion-fast);
+  width: 14px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu[open] > summary {
+  background: var(--tdg-soft);
+  color: var(--tdg-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+/* Menu suspenso de Configurações: superfície flutuante de verdade. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > div {
+  animation: ag-pop var(--ds-motion) both;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-pop);
+  display: grid;
+  gap: 2px;
+  min-width: 240px;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: var(--ds-z-popover);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > div button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  color: var(--tdg-ink);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  justify-content: flex-start;
+  min-height: var(--ds-control-md);
+  padding: 0 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > div button:hover:not(:disabled) {
+  background: var(--tdg-soft);
+  color: var(--tdg-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > div button.active {
+  background: var(--ds-brand-soft);
+  color: var(--tdg-green);
+  font-weight: var(--ds-weight-semibold);
+}
+
+/* "Sair de todos os aparelhos" é a última opção e a única destrutiva. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > div button:last-child {
+  border-top: 1px solid var(--tdg-line);
+  border-radius: 0 0 var(--ds-radius-sm) var(--ds-radius-sm);
+  color: var(--ds-danger);
+  margin-top: 4px;
+  padding-top: 2px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > div button:last-child:hover:not(:disabled) {
+  background: var(--ds-danger-soft);
+  color: var(--ds-danger);
+}
+
+/* Perfil: avatar + nome, sem moldura — é identidade, não ação principal. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-perfil-chip {
+  border-radius: var(--ds-radius-pill);
+  gap: 8px;
+  max-width: 220px;
+  order: 4;
+  padding: 0 12px 0 4px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-perfil-avatar {
+  background: var(--tdg-green);
+  box-shadow: 0 0 0 2px var(--tdg-card), 0 0 0 3px var(--tdg-line);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-bold);
+  height: 28px;
+  width: 28px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-perfil-quem strong {
+  color: var(--tdg-ink);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-perfil-quem small {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-2xs);
+}
+
+/* Sair: sempre à vista (decisão da titular), mas discreto até a intenção. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-sair {
+  color: var(--tdg-muted);
+  order: 5;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-sair:hover:not(:disabled) {
+  background: var(--ds-danger-soft);
+  color: var(--ds-danger);
+}
+
+/* Entre 900 e 1280px o cabeçalho não cabe inteiro: primeiro o nome do perfil
+   e o texto de Sair viram só ícone; abaixo de 1100px, Configurações e
+   Pendências também. O nome acessível continua no botão. */
+@media (min-width: 900px) and (max-width: 1279.98px) {
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-search {
+    width: clamp(160px, 22vw, 280px);
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-perfil-quem {
+    display: none;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-perfil-chip {
+    padding: 0 4px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-sair {
+    font-size: 0;
+    gap: 0;
+    padding: 0;
+    width: var(--ds-control-md);
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-pendencias,
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary {
+    font-size: 0;
+    gap: 0;
+    padding: 0;
+    position: relative;
+    width: var(--ds-control-md);
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-pendencias-selo {
+    font-size: 10px;
+    line-height: 16px;
+    min-width: 16px;
+    padding: 0 4px;
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary::after {
+    height: 18px;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+    opacity: 1;
+    transform: none;
+    width: 18px;
+  }
+}
+
+/* 2.3 Grade: coluna de navegação + palco. */
+@media (min-width: 900px) {
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-layout {
+    align-items: start;
+    /* A coluna escura acompanha a página inteira mesmo quando o menu (fixo
+       na tela) é mais curto que o conteúdo. */
+    background: linear-gradient(90deg, var(--ds-nav-bg) 0, var(--ds-nav-bg) var(--ds-sidebar-w), transparent var(--ds-sidebar-w)) !important;
+    gap: 0;
+    grid-template-columns: var(--ds-sidebar-w) minmax(0, 1fr) !important;
+    min-height: calc(100vh - var(--ds-header-h)) !important;
+    min-height: calc(100dvh - var(--ds-header-h)) !important;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-layout.menu-oculto {
+    background: none !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar {
+    align-self: start;
+    height: calc(100vh - var(--ds-header-h));
+    height: calc(100dvh - var(--ds-header-h));
+    max-height: none;
+    min-width: 0;
+    position: sticky;
+    top: var(--ds-header-h);
+  }
+
+  /* Menu escondido: o cabeçalho deixa de ter o canto escuro e o logo volta
+     à cor original. */
+  .tdg:is(.tdg-module-page, .tdg-overview-page):has(> .tdg-erp-layout.menu-oculto) .tdg-shell-location {
+    background: transparent;
+    box-shadow: inset 0 -1px 0 var(--tdg-line);
+    flex-basis: auto;
+    width: auto;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page):has(> .tdg-erp-layout.menu-oculto) .tdg-shell-logo img {
+    filter: none;
+    opacity: 1;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page):has(> .tdg-erp-layout.menu-oculto) .tdg-shell-logo:hover {
+    background: var(--tdg-soft);
+  }
+}
+
+/* "Mostrar menu" quando a pessoa escondeu a coluna. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-mostrar {
+  align-items: center;
+  align-self: start;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-ink-soft);
+  display: inline-flex;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  gap: 6px;
+  justify-self: start;
+  margin: 16px 0 0 28px;
+  min-height: var(--ds-control-sm);
+  padding: 0 12px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-mostrar:hover:not(:disabled) {
+  background: var(--tdg-soft);
+  border-color: var(--tdg-line-strong);
+  color: var(--tdg-ink);
+}
+
+/* 2.4 Coluna de navegação. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar {
+  background: var(--ds-nav-bg) !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--ds-nav-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 12px 24px;
+  scrollbar-color: rgba(231, 242, 237, .18) transparent;
+  scrollbar-width: thin;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar::-webkit-scrollbar { width: 6px; }
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(231, 242, 237, .16);
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+}
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar:hover::-webkit-scrollbar-thumb { background: rgba(231, 242, 237, .28); }
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar > * {
+  flex: 0 0 auto;
+}
+
+/* Espaço de trabalho atual + ações do menu. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head {
+  align-items: center;
+  border-bottom: 1px solid var(--ds-nav-line);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0 0 8px;
+  padding: 2px 4px 12px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head > div:first-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head strong {
+  color: var(--ds-nav-ink);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head small {
+  color: var(--ds-nav-ink-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.3;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head-acoes {
+  display: flex;
+  gap: 2px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head-acoes button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-nav-ink-muted);
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  width: 30px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head-acoes button:hover:not(:disabled),
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head-acoes button.ativo {
+  background: var(--ds-nav-hover);
+  color: var(--ds-nav-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar-head-acoes button.ativo {
+  border-color: var(--ds-nav-line);
+}
+
+/* Modo "personalizar menu". */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-personalizar-caixa {
+  background: rgba(231, 242, 237, .05);
+  border: 1px solid var(--ds-nav-line);
+  border-radius: var(--ds-radius-md);
+  display: grid;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-personalizar-dica {
+  color: var(--ds-nav-ink-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-restaurar-ordem {
+  background: transparent;
+  border: 1px solid var(--ds-nav-line);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-nav-ink);
+  font-size: var(--ds-text-xs);
+  justify-self: start;
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+/* Item de navegação: um só desenho para Início, Projetos e tarefas, áreas,
+   subitens, resultados da busca e ambientes. Ativo = fundo sutil + barra
+   lima à esquerda (o único lugar em que o lima aparece no menu). */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry, .tdg-vertical-link, .tdg-tabs > button, .tdg-nav-area-itens > button, .tdg-nav-area-itens > a, .tdg-nav-area-cabeca > button:first-child) {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--ds-radius-md);
+  box-shadow: none;
+  color: var(--ds-nav-ink-muted);
+  display: flex;
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  gap: 10px;
+  justify-content: flex-start;
+  letter-spacing: 0;
+  line-height: 1.3;
+  min-height: 34px;
+  padding: 6px 10px;
+  position: relative;
+  text-align: left;
+  text-decoration: none;
+  transform: none;
+  transition: background-color var(--ds-motion-fast), color var(--ds-motion-fast);
+  width: 100%;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry, .tdg-vertical-link, .tdg-tabs > button, .tdg-nav-area-itens > button, .tdg-nav-area-itens > a, .tdg-nav-area-cabeca > button:first-child):hover:not(:disabled) {
+  background: var(--ds-nav-hover);
+  color: var(--ds-nav-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry, .tdg-vertical-link, .tdg-tabs > button, .tdg-nav-area-itens > button, .tdg-nav-area-itens > a, .tdg-nav-area-cabeca > button:first-child):focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ds-nav-indicator);
+  outline: none;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry.active, .tdg-work-entry.active, .tdg-vertical-link[aria-current="page"], .tdg-tabs > button.active, .tdg-nav-area-itens > button.active) {
+  background: var(--ds-nav-active);
+  color: var(--ds-nav-active-ink);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry.active, .tdg-work-entry.active, .tdg-vertical-link[aria-current="page"], .tdg-tabs > button.active, .tdg-nav-area-itens > button.active)::before {
+  background: var(--ds-nav-indicator);
+  border-radius: 0 3px 3px 0;
+  content: "";
+  height: 18px;
+  left: -12px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+}
+
+/* Início e Projetos e tarefas: acesso fixo, com ícone. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry) {
+  color: var(--ds-nav-ink);
+  font-weight: var(--ds-weight-medium);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry) > svg {
+  color: var(--ds-nav-ink-muted);
+  flex: 0 0 auto;
+  height: 18px;
+  margin: 0;
+  width: 18px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry).active > svg {
+  color: var(--ds-nav-indicator);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry) > span {
+  display: block;
+  min-width: 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry, .tdg-work-entry, .tdg-vertical-link) strong {
+  color: inherit;
+  display: block;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1.3;
+}
+
+/* Subtítulos dos acessos fixos e dos ambientes ficam para o leitor de tela:
+   no menu eles só alongavam a lista (pedido anterior da titular). */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar :is(.tdg-home-entry small, .tdg-work-entry small, .tdg-vertical-link > small, .tdg-vertical-link > span) {
+  border: 0;
+  clip: rect(0 0 0 0);
+  color: var(--ds-nav-ink-muted);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-work-entry {
+  margin-bottom: 6px;
+}
+
+/* Busca do menu. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search {
+  align-items: center;
+  background: rgba(231, 242, 237, .06);
+  border: 1px solid var(--ds-nav-line);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-nav-ink-muted);
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 10px;
+  min-height: var(--ds-control-md);
+  padding: 0 10px;
+  transition: border-color var(--ds-motion-fast), background-color var(--ds-motion-fast);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search:focus-within {
+  background: rgba(231, 242, 237, .09);
+  border-color: color-mix(in srgb, var(--ds-nav-indicator) 55%, transparent);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search svg {
+  color: var(--ds-nav-ink-muted);
+  flex: 0 0 auto;
+  height: 15px;
+  width: 15px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search input:not([type="checkbox"]):not([type="radio"]) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--ds-nav-ink);
+  font-size: var(--ds-text-sm);
+  height: 34px;
+  min-height: 0;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search input::placeholder {
+  color: var(--ds-nav-ink-muted);
+  opacity: 1;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search input:focus,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search input:focus-visible {
+  box-shadow: none;
+  outline: 0;
+}
+
+/* Resultado da busca do menu: duas linhas (nome + assuntos). */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-tabs {
+  background: transparent;
+  border: 0;
+  display: grid;
+  gap: 2px;
+  padding: 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-tabs > button {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-tabs > button small {
+  color: var(--ds-nav-label);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-regular);
+  line-height: 1.35;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-vazio {
+  color: var(--ds-nav-ink-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.5;
+  margin: 4px 10px;
+}
+
+/* Áreas em acordeão. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-nav-areas {
+  align-content: start;
+  display: grid;
+  gap: 1px;
+  padding: 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-nav-area {
+  margin: 0;
+  padding: 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-nav-area-cabeca {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  min-height: 34px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-cabeca > button:first-child.active,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area.aberta > .tdg-nav-area-cabeca > button:first-child {
+  color: var(--ds-nav-ink);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-seta {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-nav-label);
+  display: inline-flex;
+  flex: 0 0 28px;
+  height: 28px;
+  justify-content: center;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  width: 28px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-seta:hover:not(:disabled) {
+  background: var(--ds-nav-hover);
+  color: var(--ds-nav-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-seta svg {
+  transition: transform var(--ds-motion);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-seta svg.aberta {
+  transform: rotate(180deg);
+}
+
+/* Segundo nível: recuado, com guia vertical. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-itens {
+  border-left: 1px solid var(--ds-nav-line);
+  display: grid;
+  gap: 1px;
+  margin: 2px 0 6px 18px;
+  padding: 0 0 0 8px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-itens > button,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-itens > a {
+  font-weight: var(--ds-weight-regular);
+  min-height: 30px;
+  padding: 5px 10px;
+  white-space: normal;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-itens > button.active::before {
+  left: -9px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-extra {
+  color: var(--ds-nav-label);
+  font-size: var(--ds-text-xs);
+}
+
+/* Personalizar: caixas, setas de ordem e itens ocultos em pré-visualização. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-check,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-item-personalizar input {
+  accent-color: var(--ds-nav-indicator);
+  flex: 0 0 auto;
+  height: 15px;
+  margin: 0 4px 0 6px;
+  width: 15px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-ordem {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-mover {
+  background: transparent;
+  border: 1px solid var(--ds-nav-line);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-nav-ink-muted);
+  font-size: var(--ds-text-xs);
+  height: 24px;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0;
+  width: 24px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-area-mover:hover:not(:disabled) {
+  background: var(--ds-nav-hover);
+  color: var(--ds-nav-ink);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-item-personalizar {
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-nav-ink-muted);
+  font-size: var(--ds-text-sm);
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 6px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-nav-item-personalizar:hover {
+  background: var(--ds-nav-hover);
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .oculta-preview,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .oculto-preview {
+  opacity: .45;
+}
+
+/* Outros ambientes (Green On, Greenmob, TMS, núcleo): ficam no pé do menu,
+   como troca de ambiente — não competem com as áreas da vertical. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-verticais-links {
+  border-top: 1px solid var(--ds-nav-line);
+  display: grid;
+  gap: 1px;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-verticais-links::before {
+  color: var(--ds-nav-label);
+  content: "Outros ambientes";
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: var(--ds-tracking-caps);
+  padding: 0 10px 6px;
+  text-transform: uppercase;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-vertical-link {
+  font-weight: var(--ds-weight-regular);
+  min-height: 32px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-vertical-link::after {
+  background: currentColor;
+  content: "";
+  flex: 0 0 auto;
+  height: 12px;
+  margin-left: auto;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17 17 7'/%3E%3Cpath d='M7 7h10v10'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17 17 7'/%3E%3Cpath d='M7 7h10v10'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0;
+  transition: opacity var(--ds-motion-fast);
+  width: 12px;
+}
+
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-vertical-link:hover::after,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar .tdg-vertical-link:focus-visible::after {
+  opacity: .8;
+}
+
+/* 2.5 Palco: largura de leitura confortável e respiro para o botão da Semente. */
+/* Trilha `minmax(0, 1fr)` e nunca automática: com trilha automática um botão
+   de texto longo ou uma faixa de abas empurrava a folha inteira para fora da
+   tela no celular (a lição da v155, no AGENTS.md). */
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-stage {
+  align-content: start;
+  background: var(--tdg-bg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding: 24px 28px 96px;
+}
+
+/* O conteúdo ocupa só a altura que precisa: esticado até o fim da tela, as
+   linhas internas das seções dividiam a sobra e abriam vãos no meio. */
+.tdg:is(.tdg-module-page, .tdg-overview-page) [data-tdg-page-content="true"] {
+  align-content: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  margin-inline: auto;
+  max-width: var(--ds-content-max);
+  min-width: 0;
+  width: 100%;
+}
+
+
+/* --------------------------------------------------------------------------
+   3. Moldura no celular e tablet em retrato (< 900px): menu vira gaveta
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 899.98px) {
+  .tdg:is(.tdg-module-page, .tdg-overview-page) > .tdg-shell-header {
+    border-bottom: 1px solid var(--tdg-line);
+    height: 56px;
+    min-height: 56px;
+    padding: 0 8px 0 max(8px, env(safe-area-inset-left));
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-location {
+    background: transparent;
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 0;
+    width: auto;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo {
+    padding: 4px 6px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo img {
+    filter: none;
+    height: 28px;
+    opacity: 1;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo:hover {
+    background: var(--tdg-soft);
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-movel {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--ds-radius-md);
+    color: var(--tdg-ink);
+    display: inline-flex;
+    height: 40px;
+    justify-content: center;
+    min-height: 40px;
+    min-width: 40px;
+    padding: 0;
+    width: 40px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-movel:hover:not(:disabled) {
+    background: var(--tdg-soft);
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions {
+    box-shadow: none;
+    gap: 2px;
+    padding: 0;
+  }
+
+  /* Ações viram ícones: o nome continua no botão para o leitor de tela (o
+     texto só some da vista com font-size 0; o SVG tem tamanho próprio). */
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > button,
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary {
+    font-size: 0;
+    gap: 0;
+    height: 40px;
+    min-height: 40px;
+    min-width: 40px;
+    padding: 0;
+    width: 40px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > button svg {
+    height: 18px;
+    width: 18px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-search {
+    background: transparent;
+    border-color: transparent;
+    color: var(--ds-ink-soft);
+    margin-right: 0;
+    order: 0;
+    width: 40px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-shell-pendencias {
+    position: relative;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-pendencias-selo {
+    font-size: 10px;
+    line-height: 16px;
+    min-width: 16px;
+    padding: 0 4px;
+    position: absolute;
+    right: 2px;
+    top: 2px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > summary::after {
+    height: 18px;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+    opacity: 1;
+    transform: none;
+    width: 18px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu[open] > summary::after {
+    transform: none;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-management-menu > div {
+    position: fixed;
+    right: 8px;
+    top: 60px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions > .tdg-perfil-chip {
+    padding: 0;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-perfil-quem {
+    display: none;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-layout,
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-layout.menu-oculto {
+    background: none !important;
+    display: block;
+    min-height: 0 !important;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-mostrar {
+    display: none;
+  }
+
+  /* Gaveta: fechada ela não existe na tela (display: none) — nem para o
+     teclado, nem para quem mede a página. A entrada desliza com
+     `@starting-style`; navegador sem suporte só mostra, sem animar. */
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar {
+    bottom: 0;
+    box-shadow: var(--ds-shadow-pop);
+    display: none;
+    height: auto;
+    left: 0;
+    max-height: none;
+    max-width: 320px;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(24px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    position: fixed !important;
+    top: 0;
+    transform: translateX(-104%);
+    transition: transform var(--ds-motion-slow);
+    transition: transform var(--ds-motion-slow), display var(--ds-motion-slow) allow-discrete;
+    width: 86vw;
+    z-index: var(--ds-z-drawer);
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar.movel-aberto {
+    display: flex;
+    transform: none;
+  }
+
+  @starting-style {
+    .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-sidebar.movel-aberto {
+      transform: translateX(-104%);
+    }
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-menu-movel-fundo {
+    animation: ag-fade var(--ds-motion) both;
+    background: rgba(6, 20, 16, .52);
+    inset: 0;
+    position: fixed;
+    z-index: calc(var(--ds-z-drawer) - 1);
+  }
+
+  html:has(.tdg-erp-sidebar.movel-aberto) body {
+    overflow: hidden;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-erp-stage {
+    padding: 16px 14px 96px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) [data-tdg-page-content="true"] {
+    gap: 14px;
+  }
+}
+
+/* Telas muito estreitas (iPhone SE de 1ª geração): as ações rolam dentro do
+   próprio cabeçalho em vez de empurrar a página. */
+@media (max-width: 359.98px) {
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-actions::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   4. Componentes
+   -------------------------------------------------------------------------- */
+
+/* 4.0 Fonte dos controles ---------------------------------------------------
+   `.tdg button { font: inherit }` (LogisticsVertical.css) devolvia 16px a todo
+   botão e anulava a escala; o mesmo acontecia com campos de páginas que
+   fixavam 16–17px. Aqui só FONTE, com especificidade para vencer esses casos —
+   contorno, altura e recuo continuam com a especificidade baixa do 4.2, para
+   campo com desenho próprio (busca com ícone, chat) seguir mandando. */
+.tdg button {
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  line-height: 1.25;
+}
+
+/* Botão "rico" (cartão, linha de lista, indicador): peso normal no corpo; o
+   <strong> de dentro continua em negrito. */
+.tdg button:has(small, strong) {
+  font-weight: var(--ds-weight-regular);
+}
+
+.tdg :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-md);
+}
+
+/* 4.1 Botões ---------------------------------------------------------------
+   Base (secundário): superfície, borda, texto escuro. Principal: verde de
+   ação. Fantasma: sem moldura. Perigo: vermelho de função. A base de
+   especificidade zero continua em TodoGreenCommercialExperience.css (o teste
+   `todogreen-button-system.test.js` a guarda); aqui entra só o acabamento. */
+:where(.tdg) button {
+  border-color: var(--tdg-line-strong);
+  border-radius: var(--ds-radius-md);
+  color: var(--tdg-ink);
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  gap: 8px;
+  letter-spacing: 0;
+  min-height: var(--ds-control-md);
+  padding: 0 14px;
+  transition: color var(--ds-motion-fast), background-color var(--ds-motion-fast), border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast), transform var(--ds-motion-fast);
+}
+
+:where(.tdg) button:hover:not(:disabled) {
+  background: var(--tdg-soft);
+  border-color: color-mix(in srgb, var(--tdg-green) 45%, var(--tdg-line-strong));
+  color: var(--tdg-ink);
+}
+
+:where(.tdg) button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--tdg-green) 12%, var(--tdg-card));
+  transform: translateY(1px);
+}
+
+:where(.tdg) button:focus-visible {
+  border-color: var(--tdg-green);
+  box-shadow: var(--ds-focus-ring);
+  outline: none;
+}
+
+:where(.tdg) button svg {
+  height: 16px;
+  width: 16px;
+}
+
+/* Secundário de página ("Importar pipeline", "Atualizar"…): três folhas
+   antigas davam `background: #fff` fixo, que no escuro virava um bloco branco. */
+.tdg .tdg-page-actions button:not(.tdg-action):not([class*="danger"]):not([class*="delete"]) {
+  background: var(--tdg-card);
+  border-color: var(--tdg-line-strong);
+  color: var(--tdg-ink);
+}
+
+.tdg .tdg-page-actions button:not(.tdg-action):not([class*="danger"]):not([class*="delete"]):hover:not(:disabled) {
+  background: var(--tdg-soft);
+}
+
+/* Botões de página que o CSS antigo deixava com fonte de 16px herdada. */
+.tdg :is(.tdg-page-actions, .tdg-section-head, .tdg-form-actions, .tdg-page-title) button:not(.tdg-nav-area-seta) {
+  font-size: var(--ds-text-sm);
+  min-height: var(--ds-control-md);
+}
+
+/* Principal. */
+.tdg :is(.tdg-action, .btn-primary, button[type="submit"]),
+.tdg .button.primary,
+.tdg .ds-btn--primary {
+  background: var(--tdg-green);
+  border-color: var(--tdg-green);
+  box-shadow: var(--ds-shadow-xs);
+  color: #fff;
+  display: inline-flex;
+  font-weight: var(--ds-weight-semibold);
+}
+
+.tdg :is(.tdg-action, .btn-primary, button[type="submit"]):hover:not(:disabled),
+.tdg .button.primary:hover:not(:disabled),
+.tdg .ds-btn--primary:hover:not(:disabled) {
+  background: var(--ds-brand-strong);
+  border-color: var(--ds-brand-strong);
+  color: #fff;
+}
+
+.tdg :is(.tdg-action, .btn-primary, button[type="submit"]):active:not(:disabled) {
+  background: var(--ds-brand-strong);
+}
+
+:root[data-theme="dark"] .tdg :is(.tdg-action, .btn-primary, button[type="submit"]),
+:root[data-theme="dark"] .tdg :is(.tdg-action, .btn-primary, button[type="submit"]):hover:not(:disabled),
+:root[data-theme="dark"] .tdg .button.primary,
+:root[data-theme="dark"] .tdg .ds-btn--primary {
+  color: var(--ds-brand-contrast);
+}
+
+/* Secundário explícito e fantasma. */
+.tdg :is(.tdg-secondary-action, .tdg-action-ghost, .tdg-btn-ghost, .button.secondary, .ds-btn--secondary) {
+  align-items: center;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line-strong);
+  border-radius: var(--ds-radius-md);
+  color: var(--tdg-ink);
+  display: inline-flex;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  gap: 8px;
+  min-height: var(--ds-control-md);
+  padding: 0 14px;
+}
+
+.tdg :is(.tdg-action-ghost, .tdg-btn-ghost, .button.ghost, .ds-btn--ghost) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--tdg-green);
+}
+
+/* Fantasma que também carrega `.tdg-action` ("Sincronizar"): continua
+   fantasma nos dois temas — no escuro herdava o texto escuro da ação
+   principal sobre fundo transparente (1,1:1). */
+.tdg .tdg-action.tdg-action-ghost,
+:root[data-theme="dark"] .tdg .tdg-action.tdg-action-ghost {
+  background: transparent;
+  border-color: var(--tdg-line-strong);
+  box-shadow: none;
+  color: var(--tdg-green);
+}
+
+.tdg :is(.tdg-secondary-action, .tdg-action-ghost, .tdg-btn-ghost, .button.secondary, .button.ghost, .ds-btn--secondary, .ds-btn--ghost):hover:not(:disabled) {
+  background: var(--tdg-soft);
+  border-color: var(--tdg-line-strong);
+  color: var(--tdg-ink);
+}
+
+/* Perigo: a mesma geometria, cor de função. */
+.tdg :is(.danger, [class*="danger"], [class*="delete"], [class*="remove"]):is(button, a) {
+  background: var(--tdg-card);
+  border-color: color-mix(in srgb, var(--ds-danger) 38%, var(--tdg-line));
+  color: var(--ds-danger);
+}
+
+.tdg :is(.danger, [class*="danger"], [class*="delete"], [class*="remove"]):is(button, a):hover:not(:disabled) {
+  background: var(--ds-danger-soft);
+  border-color: var(--ds-danger);
+  color: var(--ds-danger);
+}
+
+/* Ícone sozinho: quadrado, sem borda. */
+.tdg .icon-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-md);
+  color: var(--tdg-muted);
+  display: inline-flex;
+  height: var(--ds-control-md);
+  justify-content: center;
+  min-height: var(--ds-control-md);
+  min-width: var(--ds-control-md);
+  padding: 0;
+  width: var(--ds-control-md);
+}
+
+.tdg .icon-button:hover:not(:disabled) {
+  background: var(--tdg-soft);
+  border-color: transparent;
+  color: var(--tdg-ink);
+}
+
+/* Estado ocupado/indisponível perceptível sem sumir. */
+.tdg button:disabled,
+.tdg button[aria-disabled="true"] {
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+/* O botão com ícone + texto quebrava em duas linhas porque herdava
+   `display: grid` de regras de cartão ("Importar Excel, CSV ou JSON"). */
+.tdg .tdg-page-title .tdg-action,
+.tdg .tdg-page-actions .tdg-action,
+.tdg .tdg-section-head .tdg-action {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  grid-auto-flow: column;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+/* 4.2 Campos ---------------------------------------------------------------
+   14px no desktop (16px no celular, ver bloco 7), 36px de altura, contorno
+   visível e anel de foco na cor da marca. `:where` mantém a especificidade
+   baixa para campos com desenho próprio (busca do menu, chat) continuarem
+   mandando. */
+:where(.tdg) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]), select, textarea) {
+  background-color: var(--tdg-card);
+  border: 1px solid var(--tdg-line-strong);
+  border-radius: var(--ds-radius-md);
+  color: var(--tdg-ink);
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-regular);
+  line-height: 1.4;
+  max-width: 100%;
+  min-height: var(--ds-control-md);
+  padding: 7px 11px;
+  transition: border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast), background-color var(--ds-motion-fast);
+}
+
+:where(.tdg) textarea {
+  line-height: var(--ds-leading);
+  min-height: 88px;
+  resize: vertical;
+}
+
+:where(.tdg) select {
+  cursor: pointer;
+}
+
+:where(.tdg) :where(input, select, textarea)::placeholder {
+  color: color-mix(in srgb, var(--tdg-muted) 82%, transparent);
+  opacity: 1;
+}
+
+:where(.tdg) :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):hover:not(:disabled):not(:focus) {
+  border-color: color-mix(in srgb, var(--tdg-ink) 30%, var(--tdg-line-strong));
+}
+
+:where(.tdg) :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+  border-color: var(--tdg-green);
+  box-shadow: var(--ds-focus-ring);
+  outline: none;
+}
+
+:where(.tdg) :where(input, select, textarea):disabled {
+  background-color: var(--ds-surface-sunken);
+  color: var(--tdg-muted);
+  cursor: not-allowed;
+}
+
+:where(.tdg) :where(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--ds-danger);
+}
+
+.tdg :where(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--tdg-green);
+  cursor: pointer;
+  height: 16px;
+  width: 16px;
+}
+
+/* Rótulo de campo: o <span> dentro do <label> que as telas usam. */
+.tdg :where(label > span:first-child:not([class])) {
+  color: var(--ds-ink-soft);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.tdg :where(fieldset) {
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  margin: 0;
+  min-width: 0;
+  padding: 14px 16px 16px;
+}
+
+.tdg :where(fieldset) > legend {
+  color: var(--tdg-ink);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  padding: 0 6px;
+}
+
+/* Rodapé de formulário: ações à direita, principal por último. */
+.tdg .tdg-form-actions {
+  align-items: center;
+  border-top: 1px solid var(--tdg-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+  padding-top: 14px;
+}
+
+/* Campo que esticava até o fim da célula e deixava o input "caído" no rodapé
+   do bloco (Cliente, na precificação): o rótulo não estica. */
+.tdg fieldset > label,
+.tdg .tdg-form-row > label {
+  align-content: start;
+  align-self: start;
+}
+
+/* 4.3 Cabeçalho de página e de seção -------------------------------------- */
+
+/* O rótulo acima do título: pequeno, espaçado, na cor legível da marca. */
+.tdg :where(.tdg-kicker, .tdg-page-title > div > span:first-child, .tdg-home-section > header span:first-child, .eyebrow) {
+  color: var(--tdg-green);
+  display: inline-block;
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.tdg .tdg-page-title {
+  align-items: flex-end;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--tdg-line);
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  justify-content: space-between;
+  margin: 0 0 20px;
+  padding: 0 0 16px;
+}
+
+.tdg .tdg-page-title > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tdg .tdg-page-title h2,
+.tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-page-title h2,
+.tdg .ds-pagehead__title {
+  color: var(--tdg-ink);
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+/* Sem parágrafo explicativo no topo de cada tela (pedido da titular — o
+   `index.html` também esconde no domínio All Green). O conteúdo segue no DOM. */
+.tdg .tdg-page-title p,
+.tdg .ds-pagehead__description,
+.tdg :is(.page-title, .page-head, .tdg-page-header, .tdg-page-heading) p {
+  display: none;
+}
+
+/* Cabeçalhos de telas do núcleo que aparecem dentro da vertical. */
+.tdg :is(.page-title, .page-head, .tdg-page-header, .ds-pagehead) {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--tdg-line);
+  border-radius: 0;
+  box-shadow: none;
+  margin-bottom: 16px;
+  padding: 0 0 14px;
+}
+
+.tdg :is(.page-title, .page-head, .tdg-page-heading) :is(h1, h2) {
+  color: var(--tdg-ink);
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 2px 0 0;
+}
+
+.tdg .tdg-page-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.tdg .tdg-page-actions > strong {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  margin-right: 4px;
+}
+
+.tdg .tdg-section-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 16px;
+}
+
+.tdg .tdg-section-head > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tdg .tdg-section-head h2 {
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.tdg .tdg-section-head h3 {
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-semibold);
+  margin: 0;
+}
+
+.tdg .tdg-section-head p {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+  line-height: 1.55;
+  margin: 2px 0 0;
+  max-width: 72ch;
+}
+
+/* 4.4 Superfícies ----------------------------------------------------------
+   Um nível de cartão por vez: a folha da página é branca com borda; dentro
+   dela, blocos usam borda ou fundo suave — não outro cartão com sombra. */
+.tdg .tdg-panel,
+.tdg .tdg-section {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-xs);
+  padding: 24px;
+}
+
+.tdg .tdg-panel .tdg-panel,
+.tdg .tdg-panel .tdg-section {
+  box-shadow: none;
+  padding: 20px;
+}
+
+/* Painel que empilha blocos numa grade sem colunas declaradas: a trilha
+   implícita vira `minmax(0, 1fr)` (só a implícita — grade com colunas
+   próprias continua como está) e os filhos podem encolher. Sem isso o texto
+   mais largo de um botão decidia a largura da folha no celular. */
+.tdg :is(.tdg-panel, .tdg-page, .tdg-section, .tdg-space, .tdg-space-embedded-tool, .tdg-task-workspace, .tdg-task-home, .tdg-erp-home) {
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+.tdg :is(.tdg-panel, .tdg-page, .tdg-section, .tdg-space, .tdg-space-embedded-tool, .tdg-task-workspace, .tdg-task-home, .tdg-erp-home) > *,
+.tdg:is(.tdg-module-page, .tdg-overview-page) [data-tdg-page-content="true"] > * {
+  min-width: 0;
+}
+
+.tdg :is(.tdg-page-actions, .tdg-crm-admin-actions) {
+  flex-wrap: wrap;
+}
+
+/* 4.5 Indicadores ----------------------------------------------------------
+   Rótulo pequeno, número em destaque (tabular), apoio discreto. Mesmo
+   desenho em Operação, Oportunidades, CRM e demais telas. */
+.tdg :is(.tdg-metric, .tdg-kpi, .tdg-opp-resumo > article, .tdg-crm-metric-card) {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: none;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+  padding: 16px;
+  text-align: left;
+}
+
+.tdg :is(.tdg-metric, .tdg-kpi) > span:first-child,
+.tdg .tdg-opp-resumo > article > small:first-child {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.tdg :is(.tdg-metric, .tdg-kpi, .tdg-opp-resumo > article) > strong {
+  color: var(--tdg-ink);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.tdg :is(.tdg-metric, .tdg-kpi) > small,
+.tdg .tdg-opp-resumo > article > span {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.4;
+}
+
+/* Grupos de indicador das telas comerciais: sem degradê nem barra colorida
+   no rodapé de cada cartão (enfeite que não dizia nada e ficava claro no
+   tema escuro). */
+.tdg :is(.tdg-crm-metrics, .tdg-opp-resumo, .tdg-performance-summary, .tdg-funil-metrics, .tdg-tracker-metrics, .tdg-dashboard-preview) {
+  gap: 12px;
+}
+
+.tdg :is(.tdg-crm-metrics, .tdg-opp-resumo, .tdg-performance-summary, .tdg-funil-metrics, .tdg-tracker-metrics, .tdg-dashboard-preview) > * {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: none;
+  min-height: 0;
+}
+
+.tdg :is(.tdg-crm-metrics, .tdg-opp-resumo, .tdg-performance-summary, .tdg-funil-metrics) > *::after {
+  display: none;
+}
+
+.tdg .tdg-crm-metric-card {
+  align-content: start;
+  align-items: start;
+  gap: 6px 10px;
+  padding: 16px;
+  transition: border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast), transform var(--ds-motion-fast);
+}
+
+.tdg .tdg-crm-metric-card > span {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  line-height: 1.35;
+  padding-right: 0;
+}
+
+.tdg .tdg-crm-metric-card > svg {
+  color: var(--tdg-green);
+  height: 16px;
+  opacity: .85;
+  width: 16px;
+}
+
+.tdg .tdg-crm-metric-card > strong {
+  color: var(--tdg-ink);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.tdg .tdg-crm-metric-card > small {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.4;
+  padding-right: 0;
+}
+
+.tdg .tdg-crm-metric-card:hover:not(:disabled) {
+  background: var(--tdg-card);
+  border-color: color-mix(in srgb, var(--tdg-green) 40%, var(--tdg-line));
+  box-shadow: var(--ds-shadow-md);
+  transform: translateY(-1px);
+}
+
+.tdg .tdg-crm-metric-card[aria-pressed="true"] {
+  background: var(--ds-brand-soft);
+  border-color: var(--tdg-green);
+  box-shadow: inset 0 0 0 1px var(--tdg-green);
+}
+
+.tdg .tdg-metric.good { box-shadow: inset 0 3px 0 var(--ds-success); }
+.tdg .tdg-metric.risk { box-shadow: inset 0 3px 0 var(--ds-danger); }
+
+.tdg .tdg-result,
+.tdg .tdg-opp-resumo {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+/* 4.6 Tabelas --------------------------------------------------------------
+   Cabeçalho discreto em caixa-alta pequena, linhas de 44px, zebra por hover.
+   A rolagem lateral fica dentro do quadro da tabela, nunca da página. */
+.tdg :is(.tdg-table-wrap, .tdg-tabela-frame) {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tdg table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--ds-text-sm);
+  width: 100%;
+}
+
+.tdg table :is(th, td) {
+  border-bottom: 1px solid var(--tdg-line);
+  line-height: 1.4;
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.tdg table thead th {
+  background: var(--ds-surface-sunken);
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: .06em;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.tdg table tbody tr {
+  transition: background-color var(--ds-motion-fast);
+}
+
+.tdg table tbody tr:hover {
+  background: color-mix(in srgb, var(--tdg-soft) 70%, transparent);
+}
+
+.tdg table tbody tr:last-child > :is(td, th) {
+  border-bottom: 0;
+}
+
+/* 4.7 Filtros, chips e alternadores de visão ----------------------------- */
+.tdg :is(.tdg-crm-view-switch, .tdg-view-switch, .ds-segmented) {
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-md);
+  display: inline-flex;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 3px;
+}
+
+.tdg :is(.tdg-crm-view-switch, .tdg-view-switch) button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  min-height: 30px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.tdg :is(.tdg-crm-view-switch, .tdg-view-switch) button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--tdg-ink);
+}
+
+.tdg :is(.tdg-crm-view-switch, .tdg-view-switch) button:is(.active, [aria-pressed="true"], [aria-selected="true"], [data-active="true"]) {
+  background: var(--tdg-card);
+  box-shadow: var(--ds-shadow-sm);
+  color: var(--tdg-ink);
+  font-weight: var(--ds-weight-semibold);
+}
+
+/* Chip de filtro (Todas / Quentes / Críticas…, filtros de prazo da fila). */
+.tdg :is(.tdg-crm-filters, .tdg-workday-filters) button {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-pill);
+  color: var(--ds-ink-soft);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.tdg :is(.tdg-crm-filters, .tdg-workday-filters) button:hover:not(:disabled) {
+  background: var(--tdg-soft);
+  border-color: var(--tdg-line-strong);
+}
+
+.tdg :is(.tdg-crm-filters, .tdg-workday-filters) button:is(.active, [aria-pressed="true"]) {
+  background: var(--ds-brand-soft);
+  border-color: color-mix(in srgb, var(--tdg-green) 55%, transparent);
+  color: var(--tdg-green);
+  font-weight: var(--ds-weight-semibold);
+}
+
+/* ErpHome.css é carregada junto com a tela (depois desta folha) e pinta o
+   filtro ativo de verde cheio com seletor forte; aqui o mesmo seletor com um
+   nível a mais, para a fila da home seguir o chip do resto do produto. */
+.tdg .tdg-home-queue > .tdg-workday-filters button[aria-pressed="true"] {
+  background: var(--ds-brand-soft);
+  border-color: color-mix(in srgb, var(--tdg-green) 55%, transparent);
+  color: var(--tdg-green);
+}
+
+.tdg .tdg-workday-filters button > span {
+  background: var(--tdg-soft);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-2xs);
+  min-width: 18px;
+  padding: 1px 6px;
+  text-align: center;
+}
+
+.tdg .tdg-workday-filters button[aria-pressed="true"] > span {
+  background: var(--tdg-card);
+}
+
+/* 4.8 Avisos ---------------------------------------------------------------- */
+.tdg .tdg-alert {
+  align-items: center;
+  background: var(--ds-warning-soft);
+  border: 1px solid color-mix(in srgb, var(--ds-warning) 30%, transparent);
+  border-radius: var(--ds-radius-lg);
+  color: var(--tdg-ink);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--ds-text-sm);
+  gap: 10px 12px;
+  line-height: 1.5;
+  padding: 12px 14px;
+}
+
+.tdg .tdg-alert > svg {
+  color: var(--ds-warning);
+  flex: 0 0 auto;
+}
+
+.tdg .tdg-alert > span {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.tdg .tdg-page-error {
+  background: var(--ds-danger-soft);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 30%, transparent);
+  border-radius: var(--ds-radius-lg);
+  color: var(--ds-danger);
+  font-size: var(--ds-text-sm);
+  padding: 12px 14px;
+}
+
+/* 4.9 Estado vazio: diz o que falta e onde começar, sem parecer erro. */
+.tdg :is(.tdg-empty, .tdg-empty-access, .tdg-page-empty, .tdg-opp-kb-vazio) {
+  align-items: center;
+  background: var(--ds-surface-sunken);
+  border: 1px dashed var(--tdg-line-strong);
+  border-radius: var(--ds-radius-lg);
+  color: var(--tdg-muted);
+  display: grid;
+  font-size: var(--ds-text-sm);
+  justify-items: center;
+  line-height: 1.55;
+  min-height: 96px;
+  padding: 24px;
+  text-align: center;
+}
+
+/* 4.10 Modal: superfície do tema (o escuro tinha modal branco fixo). */
+.tdg .modal-backdrop {
+  animation: ag-fade var(--ds-motion) both;
+  backdrop-filter: blur(3px);
+  background: rgba(8, 24, 19, .5);
+}
+
+.tdg .modal {
+  animation: ag-pop var(--ds-motion) both;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-xl);
+  box-shadow: var(--ds-shadow-pop);
+  color: var(--tdg-ink);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  width: min(720px, calc(100vw - 32px));
+}
+
+.tdg .modal.wide {
+  width: min(980px, calc(100vw - 32px));
+}
+
+.tdg .modal > .modal-head {
+  align-items: center;
+  background: var(--tdg-card);
+  border-bottom: 1px solid var(--tdg-line);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.tdg .modal > .modal-head h2 {
+  color: var(--tdg-ink);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.tdg .modal > :not(.modal-head) {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tdg .modal > form,
+.tdg .modal > .modal-body,
+.tdg .modal > .tdg-form-em-modal {
+  padding: 20px;
+}
+
+/* 4.11 Status e selos ------------------------------------------------------- */
+.tdg .tdg-ledger-status {
+  align-items: center;
+  border-radius: var(--ds-radius-pill);
+  display: inline-flex;
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-semibold);
+  gap: 4px;
+  letter-spacing: .02em;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+/* 4.12 Semente (Todô) ------------------------------------------------------ */
+.tdg .semente-launcher {
+  border-radius: var(--ds-radius-pill);
+  box-shadow: var(--ds-shadow-md);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  min-height: 44px;
+  padding: 6px 16px 6px 8px;
+}
+
+.tdg .semente-launcher:hover:not(:disabled) {
+  background: var(--ds-brand-strong);
+  box-shadow: var(--ds-shadow-pop);
+  color: #fff;
+}
+
+:root[data-theme="dark"] .tdg .semente-launcher,
+:root[data-theme="dark"] .tdg .semente-launcher:hover:not(:disabled) {
+  color: var(--ds-brand-contrast);
+}
+
+/* "Esconder": o X pequeno no canto. A base de botões o inflava para 38px e
+   ele virava um círculo branco solto atrás do botão. */
+.tdg .semente-launcher-wrap .semente-launcher-ocultar {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line-strong);
+  border-radius: var(--ds-radius-pill);
+  box-shadow: var(--ds-shadow-sm);
+  color: var(--tdg-muted);
+  height: 22px;
+  min-height: 22px;
+  min-width: 22px;
+  opacity: 0;
+  padding: 0;
+  right: -6px;
+  top: -8px;
+  transition: opacity var(--ds-motion-fast);
+  width: 22px;
+}
+
+.tdg .semente-launcher-wrap .semente-launcher-ocultar svg {
+  height: 12px;
+  width: 12px;
+}
+
+.tdg .semente-launcher-wrap:hover .semente-launcher-ocultar,
+.tdg .semente-launcher-wrap:focus-within .semente-launcher-ocultar {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tdg .semente-launcher-wrap .semente-launcher-ocultar {
+    opacity: 1;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   5. Início (ErpHome)
+   -------------------------------------------------------------------------- */
+
+.tdg .tdg-erp-home {
+  display: grid;
+  gap: 16px;
+}
+
+/* Saudação: faixa da marca, compacta. */
+.tdg .tdg-home-welcome {
+  align-items: center;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(166, 214, 90, .12), transparent 55%),
+    linear-gradient(120deg, #0f2a22 0%, #14412d 58%, #17624f 100%);
+  border: 0;
+  border-radius: var(--ds-radius-xl);
+  box-shadow: none;
+  color: #fff;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  justify-content: space-between;
+  margin: 0;
+  min-height: 0;
+  padding: 24px 28px;
+  width: 100%;
+}
+
+.tdg .tdg-home-welcome .tdg-kicker {
+  color: var(--tdg-lime-texto-escuro);
+}
+
+.tdg .tdg-home-welcome h2 {
+  color: #fff;
+  font-size: var(--ds-text-3xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.025em;
+  margin: 4px 0 0;
+}
+
+.tdg .tdg-home-welcome > div > p {
+  display: none;
+}
+
+.tdg .tdg-home-identity {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.tdg .tdg-home-identity > span {
+  color: rgba(255, 255, 255, .72);
+  flex-basis: 100%;
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  text-align: right;
+}
+
+.tdg .tdg-home-identity button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: var(--ds-radius-md);
+  box-shadow: none;
+  color: #fff;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  min-height: var(--ds-control-md);
+  padding: 0 14px;
+}
+
+.tdg .tdg-home-identity button svg {
+  color: var(--tdg-lime-texto-escuro);
+}
+
+.tdg .tdg-home-identity button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, .15);
+  border-color: rgba(255, 255, 255, .3);
+  color: #fff;
+}
+
+.tdg .tdg-home-identity button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(166, 214, 90, .45);
+}
+
+/* "Onde você quer trabalhar?": três portas de entrada. */
+.tdg .tdg-workday-routes {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.tdg .tdg-workday-routes > button {
+  align-content: start;
+  align-items: start;
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: none;
+  display: grid;
+  gap: 6px;
+  justify-content: stretch;
+  justify-items: start;
+  min-height: 0;
+  padding: 16px 18px;
+  text-align: left;
+  transition: border-color var(--ds-motion-fast), box-shadow var(--ds-motion-fast), transform var(--ds-motion-fast);
+}
+
+.tdg .tdg-workday-routes > button:hover:not(:disabled) {
+  background: var(--tdg-card);
+  border-color: color-mix(in srgb, var(--tdg-green) 45%, var(--tdg-line));
+  box-shadow: var(--ds-shadow-md);
+  transform: translateY(-1px);
+}
+
+.tdg .tdg-workday-routes > button strong {
+  align-items: center;
+  color: var(--tdg-ink);
+  display: flex;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-bold);
+  gap: 8px;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.tdg .tdg-workday-routes > button strong svg {
+  color: var(--tdg-green);
+  transition: transform var(--ds-motion-fast);
+}
+
+.tdg .tdg-workday-routes > button:hover strong svg {
+  transform: translateX(3px);
+}
+
+.tdg .tdg-workday-routes > button > span {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-regular);
+  line-height: 1.5;
+}
+
+/* Aviso de base vazia. */
+.tdg .tdg-home-empty {
+  align-items: center;
+  color: var(--tdg-ink);
+  display: flex;
+  gap: 12px;
+}
+
+.tdg .tdg-home-empty > svg {
+  color: var(--tdg-green);
+  flex: 0 0 auto;
+}
+
+.tdg .tdg-home-empty > span {
+  display: grid;
+  gap: 2px;
+}
+
+.tdg .tdg-home-empty strong {
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.tdg .tdg-home-empty small {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.tdg .tdg-home-empty-operational {
+  background: var(--ds-brand-soft);
+  border: 1px solid color-mix(in srgb, var(--tdg-green) 18%, transparent);
+  border-radius: var(--ds-radius-lg);
+  padding: 14px 16px;
+}
+
+/* Indicadores da área: faixa única, células alinhadas à esquerda. */
+.tdg .tdg-home-metrics {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: none;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  overflow: hidden;
+}
+
+.tdg .tdg-home-metrics > :is(article, .tdg-home-metric-link) {
+  align-content: start;
+  align-items: start;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset -1px 0 0 var(--tdg-line), inset 0 -1px 0 var(--tdg-line);
+  display: grid;
+  gap: 6px;
+  justify-content: stretch;
+  justify-items: start;
+  min-height: 108px;
+  padding: 18px 20px;
+  text-align: left;
+  width: auto;
+}
+
+.tdg .tdg-home-metrics > .tdg-home-metric-link:hover:not(:disabled) {
+  background: var(--tdg-soft);
+}
+
+.tdg .tdg-home-metrics span {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tdg .tdg-home-metrics strong {
+  color: var(--tdg-ink);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.tdg .tdg-home-metrics small {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.4;
+}
+
+/* Seções da home. */
+.tdg .tdg-home-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tdg .tdg-home-section {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: none;
+  padding: 20px 24px;
+}
+
+.tdg .tdg-home-section > header {
+  align-items: flex-end;
+  border-bottom: 1px solid var(--tdg-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+}
+
+.tdg .tdg-home-section > header h3 {
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-bold);
+  margin: 2px 0 0;
+}
+
+.tdg .tdg-home-section > header small {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.tdg .tdg-home-section > header > button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--tdg-green);
+  font-size: var(--ds-text-sm);
+  min-height: var(--ds-control-sm);
+  padding: 0 10px;
+}
+
+.tdg .tdg-home-section > header > button:hover:not(:disabled) {
+  background: var(--ds-brand-soft);
+  color: var(--tdg-green);
+}
+
+.tdg .tdg-home-painel-vazio {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+  margin: 0 0 12px;
+}
+
+.tdg .tdg-home-painel-card {
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+}
+
+.tdg .tdg-home-queue > button {
+  border-radius: var(--ds-radius-md);
+  font-weight: var(--ds-weight-regular);
+  justify-content: stretch;
+  min-height: 56px;
+  padding: 10px 8px;
+}
+
+.tdg .tdg-home-queue > button:hover:not(:disabled) {
+  background: var(--tdg-soft);
+  border-color: var(--tdg-line);
+}
+
+.tdg .tdg-workday-all {
+  background: transparent;
+  border: 0;
+  color: var(--tdg-green);
+  justify-self: start;
+  margin-top: 8px;
+  padding: 0 8px;
+}
+
+.tdg .tdg-workday-all:hover:not(:disabled) {
+  background: var(--ds-brand-soft);
+  color: var(--tdg-green);
+}
+
+.tdg .tdg-home-shortcuts > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tdg .tdg-home-shortcuts > div > button {
+  border-color: var(--tdg-line);
+  font-weight: var(--ds-weight-medium);
+}
+
+/* Catálogo de rotinas (details no fim da home). */
+.tdg .tdg-tool-catalog {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+}
+
+
+/* --------------------------------------------------------------------------
+   6. Ajustes pontuais de telas (layout que o CSS antigo quebrava)
+   -------------------------------------------------------------------------- */
+
+/* Oportunidades: "Ver análise do forecast" era uma pílula gigante sozinha. */
+.tdg .tdg-analise-toggle {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tdg .tdg-analise-toggle > button {
+  background: transparent;
+  border: 1px solid var(--tdg-line-strong);
+  border-radius: var(--ds-radius-md);
+  color: var(--tdg-green);
+  min-height: var(--ds-control-sm);
+  padding: 0 12px;
+}
+
+/* Quadro de oportunidades. O tom do cabeçalho acompanha o funil — clareia na
+   prospecção e escurece rumo ao fechamento (formato pedido pela titular) —,
+   mas agora como tinta sobre a superfície e uma faixa no topo, com texto
+   sempre escuro: o degradê anterior chegava a verde-claro saturado com texto
+   branco (2,3:1). */
+.tdg .tdg-opp-kb-col {
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+}
+
+.tdg .tdg-opp-kb-col > header {
+  /* hsl() calculado (e não color-mix) porque o navegador o devolve como rgb(),
+     o formato que o teste de legibilidade sabe medir. */
+  background: hsl(152 30% calc(97% - var(--kb-tom, 0) * 2.2%));
+  border-bottom: 1px solid var(--tdg-line);
+  box-shadow: inset 0 3px 0 color-mix(in srgb, var(--tdg-green) calc(25% + var(--kb-tom, 0) * 15%), transparent);
+  gap: 4px;
+  padding: 14px 14px 12px;
+}
+
+.tdg .tdg-opp-kb-col[style] > header strong,
+.tdg .tdg-opp-kb-col > header strong {
+  /* Texto secundário FORTE: o muted caía a 4,2:1 no tom mais escuro da rampa. */
+  color: var(--ds-ink-soft);
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: var(--ds-tracking-caps);
+}
+
+.tdg .tdg-opp-kb-col[style] > header span,
+.tdg .tdg-opp-kb-col > header span {
+  color: var(--tdg-ink);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.015em;
+}
+
+.tdg .tdg-opp-kb-body {
+  gap: 8px;
+  padding: 10px;
+}
+
+/* Cartão do quadro: título (até duas linhas), cliente e valor empilhados —
+   lado a lado eles viravam "Mid…" e um valor cortado. */
+.tdg .tdg-opp-kb-card {
+  align-items: start;
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-shadow-xs);
+  display: grid;
+  gap: 3px;
+  justify-content: stretch;
+  justify-items: start;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.tdg .tdg-opp-kb-card:hover:not(:disabled) {
+  background: var(--tdg-card);
+  border-color: color-mix(in srgb, var(--tdg-green) 45%, var(--tdg-line));
+  box-shadow: var(--ds-shadow-md);
+  transform: translateY(-1px);
+}
+
+.tdg .tdg-opp-kb-card span {
+  -webkit-box-orient: vertical;
+  color: var(--tdg-ink);
+  display: -webkit-box;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  -webkit-line-clamp: 2;
+  line-height: 1.35;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.tdg .tdg-opp-kb-card em {
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.tdg .tdg-opp-kb-card b {
+  color: var(--tdg-green);
+  font-size: var(--ds-text-sm);
+  margin-top: 4px;
+}
+
+/* "Etapas no quadro": chips de filtro, não botões cheios. */
+.tdg .tdg-opp-kb-colunas button {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-pill);
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  min-height: 28px;
+  padding: 0 12px;
+}
+
+.tdg .tdg-opp-kb-colunas button.active {
+  background: var(--ds-brand-soft);
+  border-color: color-mix(in srgb, var(--tdg-green) 50%, transparent);
+  color: var(--tdg-green);
+  font-weight: var(--ds-weight-semibold);
+}
+
+/* Funil do CRM. A faixa segue escurecendo da primeira etapa à última (formato
+   pedido pela titular), mas só até onde o texto escuro mantém AA: a rampa
+   antiga ia ao verde cheio com o texto clareando junto, e no meio da faixa os
+   dois se encontravam (≈1,6:1); no escuro, a primeira etapa sumia. hsl()
+   calculado pelo mesmo motivo do quadro de oportunidades. */
+.tdg .tdg-crm-funil-card {
+  /* Valor sempre na base: etapa de nome longo quebra em duas linhas e o
+     número descia, fora da linha dos vizinhos. */
+  align-content: space-between;
+  background: hsl(152 32% calc(95% - var(--funil-passo, 0) * 25%));
+  border-radius: var(--ds-radius-lg);
+  box-shadow: inset 0 0 0 1px hsl(152 26% calc(86% - var(--funil-passo, 0) * 22%));
+  color: var(--ds-ink);
+  min-height: 88px;
+}
+
+.tdg .tdg-crm-funil-card strong {
+  color: var(--ds-ink-soft);
+  font-size: var(--ds-text-2xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: var(--ds-tracking-caps);
+  opacity: 1;
+}
+
+.tdg .tdg-crm-funil-card b {
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-bold);
+  letter-spacing: -0.015em;
+}
+
+.tdg .tdg-crm-funil-card:hover {
+  box-shadow: inset 0 0 0 1px var(--tdg-green), var(--ds-shadow-sm);
+  filter: none;
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.tdg .tdg-crm-funil-card:focus-visible {
+  filter: none;
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+/* CRM: barra de busca + visão e filtros como uma só ferramenta. */
+.tdg .tdg-crm-toolbar {
+  align-items: center;
+  gap: 12px;
+}
+
+/* Espaço de trabalho: as jornadas (Visão geral, To Do, Estrutura…) são abas
+   de verdade — à esquerda, sublinhadas, sem moldura de cartão em volta. */
+.tdg .tdg-space-toolbar {
+  align-items: flex-end;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--tdg-line);
+  border-radius: 0;
+  box-shadow: none;
+  flex-direction: row;
+  padding: 0;
+}
+
+.tdg .tdg-space-toolbar .tdg-space-tabs {
+  align-items: flex-end;
+  border-bottom: 0;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: flex-start;
+  min-height: 0;
+  width: 100%;
+}
+
+.tdg .tdg-space-toolbar .tdg-space-tabs > button,
+.tdg .tdg-space-toolbar .tdg-space-more > .tdg-space-more-summary {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  gap: 7px;
+  margin-bottom: -1px;
+  min-height: 42px;
+  padding: 0 10px;
+  width: auto;
+}
+
+.tdg .tdg-space-toolbar .tdg-space-tabs > button:hover:not(:disabled),
+.tdg .tdg-space-toolbar .tdg-space-more > .tdg-space-more-summary:hover:not(:disabled) {
+  background: transparent;
+  color: var(--tdg-ink);
+}
+
+.tdg .tdg-space-toolbar .tdg-space-tabs > button.active {
+  border-bottom-color: var(--tdg-green);
+  color: var(--tdg-ink);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.tdg .tdg-space-toolbar .tdg-space-tabs > button svg,
+.tdg .tdg-space-toolbar .tdg-space-more-summary svg {
+  height: 15px;
+  width: 15px;
+}
+
+.tdg .tdg-space-toolbar .tdg-space-more {
+  margin-left: auto;
+  width: auto;
+}
+
+.tdg .tdg-space-toolbar .tdg-space-more.is-open > .tdg-space-more-summary {
+  color: var(--tdg-green);
+}
+
+.tdg .tdg-space-more > .tdg-space-more-menu {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-pop);
+  gap: 2px;
+  padding: 6px;
+}
+
+.tdg .tdg-space-more > .tdg-space-more-menu > button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  font-weight: var(--ds-weight-medium);
+  min-height: var(--ds-control-md);
+}
+
+.tdg .tdg-space-more > .tdg-space-more-menu > button.active {
+  background: var(--ds-brand-soft);
+  color: var(--tdg-green);
+}
+
+/* To Do: seções com cabeçalho discreto; o vazio é uma linha de texto, não
+   outra caixa branca dentro do cartão. */
+.tdg .tdg-task-tab-actions {
+  margin: 0;
+}
+
+.tdg .tdg-task-section {
+  border-radius: var(--ds-radius-lg) !important;
+}
+
+.tdg .tdg-task-section > header {
+  min-height: 0;
+  padding: 12px 16px !important;
+}
+
+.tdg .tdg-task-section > header h3 {
+  font-size: var(--ds-text-md) !important;
+  font-weight: var(--ds-weight-semibold);
+}
+
+.tdg .tdg-task-empty {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--tdg-muted);
+  font-size: var(--ds-text-sm);
+  margin: 0;
+  padding: 14px 16px;
+}
+
+/* Tarefas do núcleo (quadro, cartões) quando abertas dentro da vertical. */
+.tdg .kanban {
+  gap: 12px;
+}
+
+.tdg :is(.kanban-column, .kanban-col) {
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: none;
+}
+
+.tdg :is(.task-card, .kanban-card, .task-focus-card) {
+  background: var(--tdg-card);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-shadow-xs);
+}
+
+.tdg :is(.task-card, .kanban-card):hover {
+  border-color: var(--tdg-line-strong);
+}
+
+.tdg :is(.tabs, .view-tabs, .filter-tabs, .filters, .toolbar) {
+  border-color: var(--tdg-line);
+  box-shadow: none;
+}
+
+/* Alerta de premissas (precificação): texto de apoio no secundário forte —
+   o secundário comum dava 4,47:1 sobre o fundo de risco. */
+.tdg .tdg-premissas-incompleta :is(p, span, small) {
+  color: var(--ds-ink-soft);
+}
+
+/* Entrada rápida ("Registrar uma pista"): o primeiro campo é o que importa e
+   ocupa a linha — na grade de três colunas ele ficava com um terço. */
+.tdg .tdg-progressive-form > .tdg-form-row:first-of-type > label:first-child {
+  grid-column: 1 / -1;
+}
+
+/* Planner: formulário com o mesmo ritmo do resto. */
+.tdg .tdg-planner-form {
+  display: grid;
+  gap: 14px;
+}
+
+.tdg .tdg-planner-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.tdg .tdg-planner-grid3 {
+  gap: 12px;
+}
+
+
+/* --------------------------------------------------------------------------
+   7. Responsivo dos componentes
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 899.98px) {
+  /* iOS: campo abaixo de 16px dá zoom ao tocar e não volta. */
+  .tdg :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+    font-size: 16px;
+  }
+
+  .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-sidebar-search input:not([type="checkbox"]):not([type="radio"]) {
+    font-size: 16px;
+  }
+
+  .tdg .tdg-panel,
+  .tdg .tdg-section {
+    padding: 16px;
+  }
+
+  .tdg .tdg-page-title {
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .tdg .tdg-page-title h2 {
+    font-size: var(--ds-text-xl);
+  }
+
+  .tdg .tdg-page-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .tdg .tdg-page-title .tdg-action,
+  .tdg .tdg-page-actions .tdg-action,
+  .tdg .tdg-section-head .tdg-action {
+    white-space: normal;
+  }
+
+  .tdg .tdg-home-welcome {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .tdg .tdg-home-welcome h2 {
+    font-size: var(--ds-text-2xl);
+  }
+
+  .tdg .tdg-home-identity {
+    justify-content: flex-start;
+  }
+
+  .tdg .tdg-home-identity > span {
+    text-align: left;
+  }
+
+  .tdg .tdg-home-section {
+    padding: 16px;
+  }
+
+  .tdg .modal,
+  .tdg .modal.wide {
+    border-radius: var(--ds-radius-lg);
+    max-height: calc(100dvh - 20px);
+    width: calc(100vw - 20px);
+  }
+
+  .tdg .modal > form,
+  .tdg .modal > .modal-body,
+  .tdg .modal > .tdg-form-em-modal {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 979.98px) {
+  /* As abas do Espaço rolam na horizontal em vez de virar uma pilha de
+     botões de largura total. */
+  .tdg .tdg-space-toolbar {
+    align-items: flex-end;
+    flex-direction: row;
+    padding: 0;
+  }
+
+  .tdg .tdg-space-toolbar .tdg-space-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tdg .tdg-space-toolbar .tdg-space-tabs > button,
+  .tdg .tdg-space-toolbar .tdg-space-more,
+  .tdg .tdg-space-toolbar .tdg-space-more > .tdg-space-more-summary {
+    flex: 0 0 auto;
+    justify-content: center;
+    width: auto;
+  }
+}
+
+@media (max-width: 719.98px) {
+  /* Faixa do To Do: texto em cima, números embaixo, sem largura mínima. */
+  .tdg .tdg-task-hero {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .tdg .tdg-task-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    min-width: 0 !important;
+    width: 100%;
+  }
+}
+
+@media (max-width: 559.98px) {
+  .tdg .tdg-home-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tdg .tdg-home-metrics > :is(article, .tdg-home-metric-link) {
+    min-height: 96px;
+    padding: 14px;
+  }
+
+  .tdg .tdg-home-metrics strong,
+  .tdg :is(.tdg-metric, .tdg-kpi, .tdg-opp-resumo > article) > strong {
+    font-size: var(--ds-text-xl);
+  }
+
+  .tdg .tdg-result,
+  .tdg .tdg-opp-resumo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   8. Tema escuro: acertos que token sozinho não resolve
+   -------------------------------------------------------------------------- */
+
+/* Controles nativos (rádio, caixa, data, rolagem, lista do select) no tema. */
+:root[data-theme="dark"] .tdg {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .tdg:is(.tdg-module-page, .tdg-overview-page) .tdg-shell-logo img {
+  filter: brightness(0) invert(1);
+}
+
+:root[data-theme="dark"] .tdg .tdg-home-welcome {
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(166, 214, 90, .1), transparent 55%),
+    linear-gradient(120deg, #0c2a21 0%, #12382b 58%, #165744 100%);
+  border: 1px solid var(--tdg-line);
+}
+
+:root[data-theme="dark"] .tdg :is(.danger, [class*="danger"], [class*="delete"], [class*="remove"]):is(button, a) {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .tdg .modal-backdrop {
+  background: rgba(0, 0, 0, .6);
+}
+
+/* Sobre a marca clara do escuro (menta), texto escuro — branco dava 2,1:1. */
+:root[data-theme="dark"] .tdg :is(.tdg-perfil-avatar, .tdg-product-card.active) {
+  color: var(--ds-brand-contrast);
+}
+
+:root[data-theme="dark"] .tdg .tdg-product-card.active span {
+  color: #0f3b2e;
+}
+
+/* Textos de risco e alerta fixados em vermelho/âmbar escuros (feitos para
+   fundo claro) sumiam no escuro: seguem a cor semântica do tema. Só no
+   escuro e só dentro da vertical — no claro nada muda, e portais que usam as
+   mesmas folhas sem tema escuro próprio (TMS) ficam de fora. */
+:root[data-theme="dark"] .tdg :is(.tdg-premissas-incompleta strong, .tdg-dd-decisao.risk, .tdg-tag-risco, .tdg-campo-cep-nota.erro) {
+  color: var(--ds-danger);
+}
+
+:root[data-theme="dark"] .tdg :is(.tdg-eref-avisos, .tdg-eref-tabela tr.incompleto td, .tdg-roteirizacao-alternativas-nota) {
+  color: var(--ds-warning);
+}
+
+:root[data-theme="dark"] .tdg :is(.tdg-eref-badge.stale, .tdg-roteirizacao-risco-score.nivel-medio) {
+  background: var(--ds-warning-soft);
+  color: var(--ds-warning);
+}
+
+:root[data-theme="dark"] .tdg .tdg-opp-kb-col > header {
+  background: hsl(160 32% calc(12% + var(--kb-tom, 0) * 1.6%));
+}
+
+/* No escuro o funil clareia rumo ao fim (ênfase = mais luz), com o texto
+   claro do tema acima de 5:1 em toda a faixa. */
+:root[data-theme="dark"] .tdg .tdg-crm-funil-card {
+  background: hsl(156 30% calc(15% + var(--funil-passo, 0) * 12%));
+  box-shadow: inset 0 0 0 1px hsl(156 26% calc(22% + var(--funil-passo, 0) * 12%));
+}
+
+:root[data-theme="dark"] .tdg .tdg-crm-funil-card:hover {
+  box-shadow: inset 0 0 0 1px var(--tdg-green), var(--ds-shadow-sm);
+}
+
+:root[data-theme="dark"] .tdg .tdg-ledger-status.overdue {
+  background: var(--ds-danger-soft);
+  color: var(--ds-danger);
+}
+
+
+/* --------------------------------------------------------------------------
+   9. Movimento
+   -------------------------------------------------------------------------- */
+
+@keyframes ag-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ag-pop {
+  from { opacity: 0; transform: translateY(4px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tdg *,
+  .tdg *::before,
+  .tdg *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}

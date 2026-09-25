@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { chaveDeRecuperacao, deveRecarregarPorVersaoTrocada } from "./features/app/chunkRecovery.js";
 import "./styles.css";
+// Tokens do design system (escala, papéis de cor, coluna de navegação) valem
+// para o app inteiro, não só para quem importa src/design-system/.
+import "./design-system/tokens.css";
 import "./features/logistics/LogisticsVertical.css";
 import "./features/logistics/TodoGreenWorkspace.css";
 import "./features/logistics/TodoGreenCommercialExperience.css";
@@ -11,13 +14,11 @@ import "./features/logistics/LogisticsVerticalNavigation.css";
 import "./features/logistics/LogisticsVerticalAccess.css";
 import "./features/logistics/LogisticsVerticalEnterprise.css";
 import "./features/logistics/LogisticsVerticalRecovery.css";
-import "./features/logistics/LogisticsVerticalEnterpriseRefinement.css";
-import "./features/logistics/LogisticsVerticalEnterpriseShellPolish.css";
 import "./features/logistics/ErpHomeEnterprise.css";
-import "./features/logistics/LogisticsVerticalMenuCompact.css";
-import "./features/logistics/AllGreenVisualSystemV2.css";
-import "./features/logistics/AllGreenMenuDensityFix.css";
 import "./features/logistics/AllGreenTaskExperienceV3.css";
+// Camada canônica do design system da vertical: sempre a ÚLTIMA folha. Tela
+// nova se apoia nela — não abra outra "camada de correção" por cima.
+import "./features/logistics/AllGreenDesignSystem.css";
 import "./features/logistics/allGreenMenuEnhancements.js";
 import "./features/logistics/LogisticsVerticalRecovery.js";
 import "./features/logistics/LogisticsVerticalCredentials.js";

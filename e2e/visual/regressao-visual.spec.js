@@ -60,6 +60,10 @@ const SELETORES_VOLATEIS = [
   ".tdg-health-version",
   ".tdg-health-meta",
   ".tdg-health-checked",
+  // O detalhe do Worker e dos assets traz o SHA, a branch e a hora do build:
+  // sem máscara, a referência vencia no commit seguinte ao que a gerou.
+  '.tdg-health-card[data-component="worker"] > small',
+  '.tdg-health-card[data-component="app"] > small',
   ".tdg-shell-clock",
   ".leaflet-container",
 ];

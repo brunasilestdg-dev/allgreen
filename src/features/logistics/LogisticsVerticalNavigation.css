@@ -1,6 +1,6 @@
 .tdg-page-header {
   align-items: flex-start;
-  background: color-mix(in srgb, var(--tdg-surface, #fff) 94%, #dff2ed);
+  background: color-mix(in srgb, var(--tdg-surface, #fff) 94%, var(--tdg-green-soft, #dff2ed));
   border: 1px solid var(--tdg-line, #c7e7df);
   border-radius: 22px;
   box-shadow: 0 12px 34px rgba(6, 57, 63, 0.08);
@@ -50,7 +50,7 @@
 }
 
 .tdg-page-actions button {
-  background: #fff;
+  background: var(--tdg-card, #fff);
   border: 1px solid var(--tdg-line, #c7e7df);
   border-radius: 12px;
   color: var(--tdg-text, #092f34);
@@ -134,7 +134,7 @@
 }
 
 .tdg-price-summary > div {
-  background: #f7fbf9;
+  background: var(--ds-surface-sunken);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 18px;
   display: grid;
@@ -151,13 +151,13 @@
 }
 
 .tdg-price-summary > div.good {
-  background: #edf8f2;
+  background: var(--ds-success-soft);
   border-color: #9ad3bc;
 }
 
 .tdg-price-summary > div.risk {
-  background: #fff4f1;
-  border-color: #efb9ae;
+  background: var(--ds-danger-soft);
+  border-color: var(--tdg-danger-line, #efb9ae);
 }
 
 .tdg-price-summary span,
@@ -187,7 +187,7 @@
 }
 
 .tdg-price-details > span {
-  background: #f7fbf9;
+  background: var(--ds-surface-sunken);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 14px;
   display: grid;
@@ -206,7 +206,7 @@
 }
 
 .tdg-price-guidance {
-  background: #f2f8f5;
+  background: var(--ds-surface-sunken);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 20px;
   display: grid;
@@ -235,7 +235,7 @@
 }
 
 .tdg-environmental-summary {
-  background: #fff;
+  background: var(--tdg-card, #fff);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 16px;
   display: grid;

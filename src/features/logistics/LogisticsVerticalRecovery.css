@@ -1,6 +1,6 @@
 .tdg-load-recovery {
   align-items: center;
-  background: linear-gradient(180deg, #e8f6f1 0%, #f6fbf8 100%);
+  background: linear-gradient(180deg, var(--tdg-green-soft, #e8f6f1) 0%, var(--tdg-surface-muted, #f6fbf8) 100%);
   display: flex;
   justify-content: center;
   min-height: 100dvh;
@@ -8,11 +8,11 @@
 }
 
 .tdg-load-recovery-card {
-  background: #ffffff;
-  border: 1px solid #cfe4da;
+  background: var(--tdg-card, #ffffff);
+  border: 1px solid var(--tdg-line, #cfe4da);
   border-radius: 22px;
   box-shadow: 0 18px 50px rgba(16, 36, 31, 0.12);
-  color: #10241f;
+  color: var(--tdg-ink, #10241f);
   display: grid;
   gap: 14px;
   max-width: 520px;
@@ -28,7 +28,7 @@
 
 .tdg-load-recovery-card p,
 .tdg-load-recovery-card small {
-  color: #5f746c;
+  color: var(--tdg-muted, #5f746c);
   line-height: 1.5;
   margin: 0;
 }
@@ -63,9 +63,9 @@
 }
 
 .tdg-load-recovery-actions a {
-  background: #eef7f2;
-  border: 1px solid #cfe4da;
-  color: #17624f;
+  background: var(--tdg-soft, #eef7f2);
+  border: 1px solid var(--tdg-line, #cfe4da);
+  color: var(--tdg-green, #17624f);
 }
 
 @media (min-width: 640px) {
@@ -221,7 +221,7 @@
 }
 
 .tdg-planner-taskform .tdg-planner-danger {
-  color: #b42318 !important;
+  color: var(--tdg-danger-ink, #b42318) !important;
 }
 
 :root[data-theme="dark"] .tdg-planner-taskform .tdg-planner-danger {

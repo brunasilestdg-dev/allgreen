@@ -982,6 +982,31 @@ verificados em fonte oficial) em `docs/CATALOGO_RECURSOS_GRATUITOS.md`.
 - **Memória e busca → "Responder com citações"** lia `text`, mas `/api/ai`
   responde `content`: o botão nunca mostrava a resposta. Corrigido.
 
+## Design system da vertical (25/09/2026) — camada canônica
+
+- **Onde mora.**
+  - Tokens em `src/design-system/tokens.css` (`--ds-*`): escala de tipografia, espaço, raio, altura de controle, sombra, movimento e camadas; papéis de cor; coluna de navegação; cores semânticas no claro e no escuro. Importado no início de `src/main.jsx`.
+  - Paleta de marca e superfície: continua nos `--tdg-*` de `LogisticsVertical.css` (claro em `.tdg`, escuro em `:root[data-theme="dark"] .tdg`).
+  - Componentes, moldura do app (coluna de navegação, cabeçalho fixo, gaveta no celular) e ajustes de tela: `src/features/logistics/AllGreenDesignSystem.css`, **a última folha importada** em `main.jsx`.
+- **Duas escalas no mesmo `tokens.css`.** O `:root` mantém os valores que as telas fora da vertical já usam (Portal TMS, Green On, Greenmob): elas não passaram pelo redesenho. O bloco `.tdg` traz a escala nova (Inter, pesos 400–700, texto em px, controles de 32/36/40px, raios de 6/8/12px). Token redeclarado com valor claro em `.tdg` precisa do par em `:root[data-theme="dark"] .tdg`, senão o escuro herda o claro.
+- **Não abrir outra "camada de correção" por cima.** Ajuste visual novo entra na seção certa de `AllGreenDesignSystem.css` ou na folha da própria tela. As camadas empilhadas antigas (`LogisticsVerticalEnterpriseRefinement`, `LogisticsVerticalEnterpriseShellPolish`, `LogisticsVerticalMenuCompact`, `AllGreenVisualSystemV2`, `AllGreenMenuDensityFix`, `AllGreenDesignSystemFinal`) foram apagadas. `!important` só para vencer `!important` antigo.
+- **Cor só por token, com a cor antiga como reserva.**
+  - Nas folhas de tela, estado usa os pares de função `--tdg-{warning,danger,info}-{soft,ink}` (e `-line` no contorno). Superfície e texto usam `--tdg-green-soft`, `--tdg-soft`, `--tdg-surface-muted`, `--tdg-line(-strong)`, `--tdg-ink`, `--ds-ink-soft` e `--tdg-muted`.
+  - Sempre no formato `var(--tdg-warning-soft, #fff8ef)`. Dentro da vertical vale o token, que troca com o tema; fora dela vale a reserva (o Portal TMS importa `TodoGreenPages.css`).
+  - Cor clara fixa em folha de tela vira placa branca no tema escuro. Foi isso que deixou ilegíveis (até 1,0:1) o cabeçalho da tabela do CRM, as colunas do kanban por etapas, os cartões do Espaço e as travas do forecast.
+- **Token novo em `.tdg` também entra em `.tms-portal`** (`todogreen-button-system.test.js` cobra). Lá os pares de função são valores claros fixos: o portal não tem tema escuro, e o atributo de tema marca o `:root` do app inteiro.
+- **Texto e fundo que o e2e mede** (`e2e/legibilidade.spec.js`) usam hex literal ou `hsl()`, nunca `color-mix()`: o navegador devolve a mistura como `color(srgb …)`, que o teste não lê. Fundo translúcido atrás de texto é medido como opaco.
+- **CSS de página carregado sob demanda** (`TodoGreenPages.css`, `ErpHome.css`, `planner.css`) entra DEPOIS da folha canônica e vence empate de especificidade. Regra canônica que disputa com elas precisa de um seletor a mais (`.tdg .x`).
+- **Menu no celular (< 900px) é gaveta.**
+  - Abre pelo botão do cabeçalho; o fundo escurecido fecha.
+  - Esc fecha e devolve o foco ao botão.
+  - Fecha sozinha ao navegar: o estado guarda a rota em que abriu.
+  - Fechada fica `display:none`; entra deslizando com `@starting-style`; a rolagem do corpo trava enquanto está aberta.
+- **Validar em Chromium real, nos dois temas e nos estados.**
+  - Estados = visões Tabela/Kanban/Funil, abas e modais; a tela padrão sozinha esconde defeitos. Os de 25/09 só apareceram depois de clicar nas visões.
+  - As referências da regressão visual (`e2e/visual/__baselines__/`, `npm run test:visual`) foram regeneradas em 25/09 com o redesenho, na sessão remota (mesma origem das anteriores, ver `docs/VISUAL_REGRESSION.md`). Na comparação com a `main`, Portal TMS, portais do cliente e do motorista, Green On, Greenmob e o app geral saíram idênticos (0,000% de pixels diferentes).
+  - O detalhe dos cartões Worker e App da Saúde do sistema (SHA, branch e hora do build) é mascarado; sem isso, a referência vencia no commit seguinte.
+
 ## Pendências conhecidas
 
 - "Esqueci minha senha": ✅ implementado (/api/auth/forgot e /api/auth/reset, códigos via Brevo)

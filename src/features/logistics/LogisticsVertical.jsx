@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   House,
@@ -6,6 +6,7 @@ import {
   ListTodo,
   LockKeyhole,
   LogOut,
+  Menu,
   Search,
   SlidersHorizontal,
   ChevronDown,
@@ -110,6 +111,29 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
       return proximo;
     });
   }, []);
+  // No celular o menu é uma gaveta. Guardar a ROTA em que ela foi aberta (em
+  // vez de um booleano) faz a gaveta fechar sozinha ao navegar: trocou a rota,
+  // `menuMovelEm` deixa de bater com `path` — sem efeito, sem estado duplicado.
+  // Não mexe na preferência persistida do desktop (`menuOculto`).
+  const [menuMovelEm, setMenuMovelEm] = useState(null);
+  const botaoMenuMovelRef = useRef(null);
+  const menuLateralRef = useRef(null);
+  const menuMovelAberto = menuMovelEm !== null && menuMovelEm === path;
+  const fecharMenuMovel = useCallback(() => {
+    setMenuMovelEm(null);
+    botaoMenuMovelRef.current?.focus();
+  }, []);
+  // Gaveta aberta: Escape fecha, e o foco entra no primeiro item do menu para
+  // teclado e leitor de tela começarem onde a pessoa acabou de abrir.
+  useEffect(() => {
+    if (!menuMovelAberto) return undefined;
+    menuLateralRef.current?.querySelector(".tdg-home-entry")?.focus({ preventScroll: true });
+    const aoTeclar = (evento) => {
+      if (evento.key === "Escape") fecharMenuMovel();
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [menuMovelAberto, fecharMenuMovel]);
   // Personalizar o menu (pedido da titular: "quero que o usuário possa
   // selecionar o que deixar disponível"). A pessoa marca quais áreas aparecem;
   // desmarcadas somem da lateral (mas continuam acessíveis por link direto e
@@ -392,6 +416,18 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               do <main> e para o leitor de tela ainda anunciar a página.
               Substituiu o ModuleBadge genérico numerado — a titular pediu o
               logo da marca To Do Green, não o símbolo do bloco 04. */}
+          {/* Abre o menu como gaveta no celular; no desktop o CSS o esconde. */}
+          <button
+            type="button"
+            ref={botaoMenuMovelRef}
+            className="tdg-menu-movel"
+            aria-label={menuMovelAberto ? "Fechar menu de navegação" : "Abrir menu de navegação"}
+            aria-expanded={menuMovelAberto}
+            aria-controls="tdg-menu-lateral"
+            onClick={() => (menuMovelAberto ? fecharMenuMovel() : setMenuMovelEm(path))}
+          >
+            <Menu size={20} />
+          </button>
           <button
             type="button"
             className="tdg-shell-logo"
@@ -509,7 +545,13 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <PanelLeftOpen size={16} />Menu
           </button>
         )}
-        <aside className="tdg-erp-sidebar" hidden={menuOculto}>
+        {menuMovelAberto && <div className="tdg-menu-movel-fundo" aria-hidden="true" onClick={fecharMenuMovel} />}
+        <aside
+          id="tdg-menu-lateral"
+          ref={menuLateralRef}
+          className={`tdg-erp-sidebar${menuMovelAberto ? " movel-aberto" : ""}`}
+          hidden={menuOculto && !menuMovelAberto}
+        >
           <div className="tdg-erp-sidebar-head">
             <div><strong>To Do Green</strong><small>Espaço corporativo</small></div>
             <div className="tdg-erp-sidebar-head-acoes">
@@ -523,7 +565,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               >
                 <SlidersHorizontal size={15} />
               </button>
-              <button type="button" className="tdg-menu-ocultar" onClick={alternarMenu} aria-label="Esconder menu lateral" title="Esconder menu">
+              <button type="button" className="tdg-menu-ocultar" onClick={menuMovelAberto ? fecharMenuMovel : alternarMenu} aria-label="Esconder menu lateral" title="Esconder menu">
                 <PanelLeftClose size={16} />
               </button>
             </div>
@@ -560,27 +602,6 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
             <ListTodo size={18} />
             <span><strong>Projetos e tarefas</strong><small>Boards, Kanban, Gantt e Workload</small></span>
           </button>
-          {/* Verticais irmãs (Green On e Greenmob): quem opera nas três precisa
-              trocar de ambiente sem digitar URL. A vertical de origem (To Do
-              Green) preserva TODAS as suas telas; estes atalhos abrem apenas o
-              shell específico de cada vertical. */}
-          <div className="tdg-verticais-links" role="group" aria-label="Outras verticais da plataforma">
-            <a href="/greenon" className="tdg-vertical-link">
-              <strong>Green On</strong>
-              <small>Recarga e energia — CRM, sites, operação</small>
-            </a>
-            <a href="/greenmob" className="tdg-vertical-link">
-              <strong>Greenmob</strong>
-              <small>Locação de veículos elétricos — CRM, frota, contratos</small>
-            </a>
-            {/* O núcleo compartilhado: ferramentas gerais que a vertical não
-                embute (agentes, wiki, reuniões, diagramas, metas). Mesma conta
-                e mesma sessão — a raiz, para quem está logado, é o núcleo. */}
-            <a href={NUCLEO_ALL_GREEN.route} className="tdg-vertical-link">
-              <strong>{NUCLEO_ALL_GREEN.name}</strong>
-              <small>{NUCLEO_ALL_GREEN.subtitle}</small>
-            </a>
-          </div>
           {/* Um menu só, do jeito que a titular pediu: as áreas na frente e,
               dentro de cada área, o segundo nível com todas as funcionalidades
               dela. A busca fica sempre à mão e, enquanto há termo digitado,
@@ -738,6 +759,29 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
               })}
             </nav>
           )}
+          {/* Verticais irmãs (Green On e Greenmob): quem opera nas três precisa
+              trocar de ambiente sem digitar URL. A vertical de origem (To Do
+              Green) preserva TODAS as suas telas; estes atalhos abrem apenas o
+              shell específico de cada vertical. Ficam no pé do menu, depois das
+              áreas: são troca de ambiente, e a ordem do DOM igual à visual faz
+              o teclado seguir o que a tela mostra. */}
+          <div className="tdg-verticais-links" role="group" aria-label="Outras verticais da plataforma">
+            <a href="/greenon" className="tdg-vertical-link">
+              <strong>Green On</strong>
+              <small>Recarga e energia — CRM, sites, operação</small>
+            </a>
+            <a href="/greenmob" className="tdg-vertical-link">
+              <strong>Greenmob</strong>
+              <small>Locação de veículos elétricos — CRM, frota, contratos</small>
+            </a>
+            {/* O núcleo compartilhado: ferramentas gerais que a vertical não
+                embute (agentes, wiki, reuniões, diagramas, metas). Mesma conta
+                e mesma sessão — a raiz, para quem está logado, é o núcleo. */}
+            <a href={NUCLEO_ALL_GREEN.route} className="tdg-vertical-link">
+              <strong>{NUCLEO_ALL_GREEN.name}</strong>
+              <small>{NUCLEO_ALL_GREEN.subtitle}</small>
+            </a>
+          </div>
         </aside>
 
         <section className="tdg-erp-stage">
