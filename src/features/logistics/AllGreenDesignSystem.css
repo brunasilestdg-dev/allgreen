@@ -51,8 +51,18 @@
   }
 }
 
+/* Fundo da página atrás da vertical — é o que aparece quando a rolagem é
+   puxada além do fim no celular. É o --tdg-bg de cada tema; aqui fora da .tdg
+   o token não existe, então o valor vem literal (os dois andam juntos). O
+   `var(--ds-bg)` de antes era claro nos dois temas. */
+html:has(main.tdg),
 html:has(main.tdg) body {
-  background: var(--ds-bg);
+  background: #f4f7f5;
+}
+
+:root[data-theme="dark"]:has(main.tdg),
+:root[data-theme="dark"]:has(main.tdg) body {
+  background: #0b1d18;
 }
 
 

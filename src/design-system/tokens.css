@@ -23,26 +23,34 @@
    inverso (`--tms-*` nasce de `--ds-*` e `--tdg-*` de `--tms-*`), e apontar
    `--ds-*` de volta para `--tdg-*` fecharia um ciclo que anula as cores.
 
+   Duas escalas, de propósito. O `:root` guarda os valores que as telas FORA
+   da vertical já usam (Portal TMS, Green On, Greenmob, vitrine
+   `/design-system`) — elas não passaram pelo redesenho e ficam como estavam.
+   O bloco `.tdg` abaixo traz a escala do redesenho da vertical (25/09/2026):
+   Inter, pesos 400/500/600/700, texto em px, controles de 32/36/40px, raios
+   6/8/12px. Levar a escala nova a outra área é decisão de design dela, com a
+   validação dela — não um efeito colateral deste arquivo.
+
    Prefixo `--ds-*` para não colidir com `--tdg-*` nem com a base. */
 
 :root {
   /* ---- Marca e superfície (valores de reserva fora da vertical) ---- */
   --ds-brand: #17624f;
-  --ds-brand-strong: #124f40;
+  --ds-brand-strong: #0c6a61;
   --ds-brand-soft: #e7f2ed;
   --ds-brand-contrast: #ffffff;
   --ds-accent: #92c83e;
   --ds-accent-ink: #3d6b1f;
 
-  --ds-bg: #f3f6f4;
+  --ds-bg: #f3f8f5;
   --ds-surface: #ffffff;
-  --ds-surface-soft: #eef4f1;
+  --ds-surface-soft: #e8f5ef;
   --ds-surface-sunken: #f6f9f7;
   --ds-ink: #10241f;
   --ds-ink-soft: #2e463e;
-  --ds-ink-muted: #577266;
-  --ds-line: #d5e2db;
-  --ds-line-strong: #a9c2b7;
+  --ds-ink-muted: #52645c;
+  --ds-line: #d6e8df;
+  --ds-line-strong: #91b9aa;
 
   /* ---- Coluna de navegação (verde profundo do monograma To Do Green) ----
      O logo é #14412d; a coluna usa o mesmo matiz, escurecido, para a marca
@@ -63,7 +71,7 @@
   /* ---- Cores semânticas (função, não enfeite) — claro ---- */
   --ds-success: #1c7a4a;
   --ds-success-soft: #e6f5ec;
-  --ds-warning: #865b0b;
+  --ds-warning: #9a6a10;
   --ds-warning-soft: #fbf1dc;
   --ds-danger: #b0382f;
   --ds-danger-soft: #fbe9e7;
@@ -71,8 +79,8 @@
   --ds-info-soft: #e6f0f7;
 
   /* ---- Anel de foco acessível ---- */
-  --ds-focus: #17624f;
-  --ds-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ds-focus) 26%, transparent);
+  --ds-focus: #0b8073;
+  --ds-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ds-focus) 35%, transparent);
 
   /* ---- Escala de espaçamento (base 4px) ---- */
   --ds-space-1: 4px;
@@ -85,9 +93,9 @@
   --ds-space-10: 40px;
 
   /* ---- Raio: controle < cartão < superfície flutuante ---- */
-  --ds-radius-sm: 6px;
-  --ds-radius-md: 8px;
-  --ds-radius-lg: 12px;
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 10px;
+  --ds-radius-lg: 14px;
   --ds-radius-xl: 16px;
   --ds-radius-pill: 999px;
 
@@ -97,28 +105,28 @@
      leitura densa de ERP. Campo de texto sobe para 16px no celular — abaixo
      disso o iPhone dá zoom e não volta. Hierarquia por peso e contraste, não
      por tamanho gigante. */
-  --ds-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ds-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --ds-font-display: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --ds-text-2xs: 11px;
-  --ds-text-xs: 12px;
-  --ds-text-sm: 13px;
-  --ds-text-md: 14px;
-  --ds-text-lg: 16px;
-  --ds-text-xl: 20px;
+  --ds-text-xs: .72rem;
+  --ds-text-sm: .82rem;
+  --ds-text-md: .92rem;
+  --ds-text-lg: 1.05rem;
+  --ds-text-xl: 1.3rem;
   --ds-text-2xl: 24px;
   --ds-text-3xl: 30px;
   --ds-leading-tight: 1.2;
   --ds-leading: 1.5;
   --ds-tracking-caps: .08em;
-  --ds-weight-regular: 400;
-  --ds-weight-medium: 500;
+  --ds-weight-regular: 500;
+  --ds-weight-medium: 620;
   --ds-weight-semibold: 600;
-  --ds-weight-bold: 700;
+  --ds-weight-bold: 760;
 
   /* ---- Alturas de controle consistentes ---- */
-  --ds-control-sm: 32px;
-  --ds-control-md: 36px;
-  --ds-control-lg: 40px;
+  --ds-control-sm: 34px;
+  --ds-control-md: 40px;
+  --ds-control-lg: 46px;
   --ds-touch: 44px;
 
   /* ---- Moldura do app ---- */
@@ -130,12 +138,12 @@
   --ds-shadow-xs: 0 1px 2px rgba(16, 36, 31, .05);
   --ds-shadow-sm: 0 1px 2px rgba(16, 36, 31, .06), 0 1px 3px rgba(16, 36, 31, .08);
   --ds-shadow-md: 0 8px 24px rgba(16, 36, 31, .1);
-  --ds-shadow-pop: 0 16px 40px rgba(16, 36, 31, .16);
+  --ds-shadow-pop: 0 12px 32px rgba(16, 36, 31, .16);
 
   /* ---- Movimento: curto e com desaceleração; nada que quique ---- */
   --ds-ease: cubic-bezier(.2, .8, .2, 1);
-  --ds-motion-fast: 120ms cubic-bezier(.2, .8, .2, 1);
-  --ds-motion: 180ms cubic-bezier(.2, .8, .2, 1);
+  --ds-motion-fast: 120ms ease;
+  --ds-motion: 180ms ease;
   --ds-motion-slow: 260ms cubic-bezier(.2, .8, .2, 1);
 
   /* ---- Camadas (a Semente fica em 60 e os modais em 100) ---- */
@@ -167,6 +175,30 @@
   --ds-line: var(--tdg-line);
   --ds-line-strong: var(--tdg-line-strong);
   --ds-focus: var(--tdg-green);
+  --ds-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ds-focus) 26%, transparent);
+  /* Âmbar do texto de aviso: o #9a6a10 do :root dá 4,3:1 sobre o fundo de
+     aviso; este passa de 5:1. */
+  --ds-warning: #865b0b;
+
+  /* Escala do redesenho da vertical (ver o cabeçalho). */
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
+  --ds-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ds-text-xs: 12px;
+  --ds-text-sm: 13px;
+  --ds-text-md: 14px;
+  --ds-text-lg: 16px;
+  --ds-text-xl: 20px;
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-bold: 700;
+  --ds-control-sm: 32px;
+  --ds-control-md: 36px;
+  --ds-control-lg: 40px;
+  --ds-shadow-pop: 0 16px 40px rgba(16, 36, 31, .16);
+  --ds-motion-fast: 120ms cubic-bezier(.2, .8, .2, 1);
+  --ds-motion: 180ms cubic-bezier(.2, .8, .2, 1);
 }
 
 /* Escuro — o atributo é o que a vertical usa (`preferences.theme`); a media
@@ -181,7 +213,7 @@
     --ds-shadow-xs: 0 1px 2px rgba(0, 0, 0, .35);
     --ds-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
     --ds-shadow-md: 0 10px 28px rgba(0, 0, 0, .45);
-    --ds-shadow-pop: 0 18px 44px rgba(0, 0, 0, .55);
+    --ds-shadow-pop: 0 14px 36px rgba(0, 0, 0, .5);
   }
 }
 :root[data-theme="dark"] {
@@ -196,7 +228,7 @@
   --ds-shadow-xs: 0 1px 2px rgba(0, 0, 0, .35);
   --ds-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
   --ds-shadow-md: 0 10px 28px rgba(0, 0, 0, .45);
-  --ds-shadow-pop: 0 18px 44px rgba(0, 0, 0, .55);
+  --ds-shadow-pop: 0 14px 36px rgba(0, 0, 0, .5);
 }
 /* No escuro a marca é clara (menta), então "mais forte" é mais clara. */
 :root[data-theme="dark"] .tdg {
@@ -204,8 +236,14 @@
   --ds-brand-soft: #173f35;
   --ds-surface-sunken: #0d231d;
   --ds-ink-soft: #c3d7ce;
+  /* O .tdg redeclara estes dois com o valor claro; sem o par aqui, o escuro
+     herdaria o claro. */
+  --ds-warning: #e2b45e;
+  --ds-shadow-pop: 0 18px 44px rgba(0, 0, 0, .55);
 }
 
+/* `.tdg` também: a vertical redeclara a duração e taparia o zero do :root. */
 @media (prefers-reduced-motion: reduce) {
-  :root { --ds-motion-fast: 0ms; --ds-motion: 0ms; --ds-motion-slow: 0ms; }
+  :root,
+  .tdg { --ds-motion-fast: 0ms; --ds-motion: 0ms; --ds-motion-slow: 0ms; }
 }

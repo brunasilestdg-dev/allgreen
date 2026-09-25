@@ -988,6 +988,7 @@ verificados em fonte oficial) em `docs/CATALOGO_RECURSOS_GRATUITOS.md`.
   - Tokens em `src/design-system/tokens.css` (`--ds-*`): escala de tipografia, espaço, raio, altura de controle, sombra, movimento e camadas; papéis de cor; coluna de navegação; cores semânticas no claro e no escuro. Importado no início de `src/main.jsx`.
   - Paleta de marca e superfície: continua nos `--tdg-*` de `LogisticsVertical.css` (claro em `.tdg`, escuro em `:root[data-theme="dark"] .tdg`).
   - Componentes, moldura do app (coluna de navegação, cabeçalho fixo, gaveta no celular) e ajustes de tela: `src/features/logistics/AllGreenDesignSystem.css`, **a última folha importada** em `main.jsx`.
+- **Duas escalas no mesmo `tokens.css`.** O `:root` mantém os valores que as telas fora da vertical já usam (Portal TMS, Green On, Greenmob): elas não passaram pelo redesenho. O bloco `.tdg` traz a escala nova (Inter, pesos 400–700, texto em px, controles de 32/36/40px, raios de 6/8/12px). Token redeclarado com valor claro em `.tdg` precisa do par em `:root[data-theme="dark"] .tdg`, senão o escuro herda o claro.
 - **Não abrir outra "camada de correção" por cima.** Ajuste visual novo entra na seção certa de `AllGreenDesignSystem.css` ou na folha da própria tela. As camadas empilhadas antigas (`LogisticsVerticalEnterpriseRefinement`, `LogisticsVerticalEnterpriseShellPolish`, `LogisticsVerticalMenuCompact`, `AllGreenVisualSystemV2`, `AllGreenMenuDensityFix`, `AllGreenDesignSystemFinal`) foram apagadas. `!important` só para vencer `!important` antigo.
 - **Cor só por token, com a cor antiga como reserva.**
   - Nas folhas de tela, estado usa os pares de função `--tdg-{warning,danger,info}-{soft,ink}` (e `-line` no contorno). Superfície e texto usam `--tdg-green-soft`, `--tdg-soft`, `--tdg-surface-muted`, `--tdg-line(-strong)`, `--tdg-ink`, `--ds-ink-soft` e `--tdg-muted`.
@@ -1003,7 +1004,8 @@ verificados em fonte oficial) em `docs/CATALOGO_RECURSOS_GRATUITOS.md`.
   - Fechada fica `display:none`; entra deslizando com `@starting-style`; a rolagem do corpo trava enquanto está aberta.
 - **Validar em Chromium real, nos dois temas e nos estados.**
   - Estados = visões Tabela/Kanban/Funil, abas e modais; a tela padrão sozinha esconde defeitos. Os de 25/09 só apareceram depois de clicar nas visões.
-  - A regressão visual (`npm run test:visual`) compara com referências geradas na imagem Docker fixa. Depois deste redesenho, gere-as de novo com `npm run test:visual:docker:update`.
+  - As referências da regressão visual (`e2e/visual/__baselines__/`, `npm run test:visual`) foram regeneradas em 25/09 com o redesenho, na sessão remota (mesma origem das anteriores, ver `docs/VISUAL_REGRESSION.md`). Na comparação com a `main`, Portal TMS, portais do cliente e do motorista, Green On, Greenmob e o app geral saíram idênticos (0,000% de pixels diferentes).
+  - O detalhe dos cartões Worker e App da Saúde do sistema (SHA, branch e hora do build) é mascarado; sem isso, a referência vencia no commit seguinte.
 
 ## Pendências conhecidas
 
