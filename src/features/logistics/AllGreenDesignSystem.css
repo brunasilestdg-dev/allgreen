@@ -2711,70 +2711,108 @@ html:has(main.tdg) body {
   gap: 12px;
 }
 
-/* Espaço de trabalho: as jornadas (Visão geral, To Do, Estrutura…) são abas
-   de verdade — à esquerda, sublinhadas, sem moldura de cartão em volta. */
+/* Abas de seção — as jornadas do Espaço (Visão geral, To Do, Estrutura…), as
+   do To Do (Hoje, Próximas, Quadro, Projetos) e as da Inteligência: barra
+   segmentada, com a aba ativa em superfície elevada. Decisão da titular em
+   25/09/2026, a partir da versão da Codex (bab4fa0), no lugar das abas
+   sublinhadas; a troca de visão (Lista × Kanban) segue pílula. Regra única:
+   o V3 e o LogisticsVertical.css não estilizam mais estas abas. */
 .tdg .tdg-space-toolbar {
-  align-items: flex-end;
+  align-items: stretch;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--tdg-line);
   border-radius: 0;
   box-shadow: none;
   flex-direction: row;
   padding: 0;
 }
 
-.tdg .tdg-space-toolbar .tdg-space-tabs {
-  align-items: flex-end;
-  border-bottom: 0;
+.tdg :is(.tdg-space-tabs, .tdg-task-tabs, .tdg-intelligence-tabs) {
+  align-items: center;
+  background: var(--tdg-surface2);
+  border: 1px solid var(--tdg-line);
+  border-radius: var(--ds-radius-md);
+  display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: 3px;
+  /* flex-start sempre: o alinhamento à direita do Espaço vem da margem
+     automática (abaixo); o flex-end antigo do TodoGreenWorkspace.css
+     escondia as primeiras abas quando a barra transbordava. */
   justify-content: flex-start;
   min-height: 0;
+  overflow-x: auto;
+  padding: 3px;
+  scrollbar-width: none;
   width: 100%;
 }
 
-.tdg .tdg-space-toolbar .tdg-space-tabs > button,
-.tdg .tdg-space-toolbar .tdg-space-more > .tdg-space-more-summary {
+.tdg :is(.tdg-space-tabs, .tdg-task-tabs, .tdg-intelligence-tabs)::-webkit-scrollbar {
+  display: none;
+}
+
+.tdg :is(.tdg-space-tabs, .tdg-task-tabs, .tdg-intelligence-tabs) > button,
+.tdg .tdg-space-tabs .tdg-space-more > .tdg-space-more-summary {
+  align-items: center;
   background: transparent;
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: var(--ds-radius-sm);
   box-shadow: none;
   color: var(--tdg-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
   font-size: var(--ds-text-sm);
   font-weight: var(--ds-weight-medium);
   gap: 7px;
-  margin-bottom: -1px;
-  min-height: 42px;
-  padding: 0 10px;
+  justify-content: center;
+  margin: 0;
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
   width: auto;
 }
 
-.tdg .tdg-space-toolbar .tdg-space-tabs > button:hover:not(:disabled),
-.tdg .tdg-space-toolbar .tdg-space-more > .tdg-space-more-summary:hover:not(:disabled) {
+.tdg :is(.tdg-space-tabs, .tdg-task-tabs, .tdg-intelligence-tabs) > button:hover:not(:disabled):not(.active),
+.tdg .tdg-space-tabs .tdg-space-more > .tdg-space-more-summary:hover {
   background: transparent;
   color: var(--tdg-ink);
 }
 
-.tdg .tdg-space-toolbar .tdg-space-tabs > button.active {
-  border-bottom-color: var(--tdg-green);
-  color: var(--tdg-ink);
+.tdg :is(.tdg-space-tabs, .tdg-task-tabs, .tdg-intelligence-tabs) > button.active {
+  background: var(--tdg-card);
+  box-shadow: var(--ds-shadow-xs);
+  color: var(--tdg-green);
   font-weight: var(--ds-weight-semibold);
 }
 
-.tdg .tdg-space-toolbar .tdg-space-tabs > button svg,
-.tdg .tdg-space-toolbar .tdg-space-more-summary svg {
+/* Selo dentro da aba (workflow, ao vivo, contagem): continua visível na aba
+   ativa, que agora é clara — o branco translúcido antigo era para o verde
+   cheio. */
+.tdg .tdg-intelligence-tabs > button.active b {
+  background: var(--ds-brand-soft);
+}
+
+.tdg :is(.tdg-space-tabs, .tdg-task-tabs, .tdg-intelligence-tabs) > button svg,
+.tdg .tdg-space-tabs .tdg-space-more-summary svg {
   height: 15px;
   width: 15px;
 }
 
-.tdg .tdg-space-toolbar .tdg-space-more {
+/* No Espaço o grupo fica à direita da barra, como na versão da Codex. Com
+   margem automática, e não `justify-content: flex-end`: quando as abas não
+   cabem (celular), a margem vira zero e a barra rola a partir da primeira —
+   com flex-end, as primeiras ficariam fora de alcance, à esquerda. */
+.tdg .tdg-space-toolbar .tdg-space-tabs > :first-child {
   margin-left: auto;
+}
+
+.tdg .tdg-space-toolbar .tdg-space-more {
+  flex: 0 0 auto;
+  margin-left: 0;
   width: auto;
 }
 
 .tdg .tdg-space-toolbar .tdg-space-more.is-open > .tdg-space-more-summary {
+  background: var(--tdg-card);
   color: var(--tdg-green);
 }
 

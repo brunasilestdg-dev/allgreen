@@ -991,10 +991,10 @@ verificados em fonte oficial) em `docs/CATALOGO_RECURSOS_GRATUITOS.md`.
 - **Duas escalas no mesmo `tokens.css`.** O `:root` mantém os valores que as telas fora da vertical já usam (Portal TMS, Green On, Greenmob): elas não passaram pelo redesenho. O bloco `.tdg` traz a escala nova (Inter, pesos 400–700, texto em px, controles de 32/36/40px, raios de 6/8/12px). Token redeclarado com valor claro em `.tdg` precisa do par em `:root[data-theme="dark"] .tdg`, senão o escuro herda o claro.
 - **Versão paralela da Codex integrada (25/09).** O commit `bab4fa0` foi publicado direto do ambiente local, fora do GitHub, e depois integrado aqui a partir do patch dos fontes.
   - Entraram: `aria-current="page"` no item ativo do menu, anel de foco visível na busca do menu, barra de rolagem visível no escuro, e data e valor sem quebra de linha nas tabelas.
+  - Por decisão da titular, as abas de seção (Espaço, To Do e Inteligência) viraram barra segmentada, como na versão da Codex. A regra é única, em `AllGreenDesignSystem.css`; o V3 e o `LogisticsVertical.css` não estilizam mais essas abas, e a hierarquia documentada neste último foi atualizada. No Espaço, o grupo fica à direita com margem automática, não com `flex-end`, para as primeiras abas continuarem alcançáveis quando a barra rola.
   - Ficaram de fora, de propósito:
     - o prefixo `--ag-*`, que seria um terceiro conjunto de tokens para os mesmos papéis; as regras usam `--ds-*`/`--tdg-*`;
     - a folha AllGreenDesignSystemFinal, que segue removida: a última folha continua sendo esta;
-    - as abas segmentadas em `.tdg-space-tabs`/`.tdg-intelligence-tabs`/`.tdg-task-tabs`: pela hierarquia de `LogisticsVertical.css`, aba de seção é sublinhada e só a troca de visão é pílula;
     - o hover do botão principal no escuro (`#247f67` com texto escuro dá 3,5:1);
     - regras sem uso na vertical (`.empty`, `.modal-actions`).
 - **Não abrir outra "camada de correção" por cima.** Ajuste visual novo entra na seção certa de `AllGreenDesignSystem.css` ou na folha da própria tela. As camadas empilhadas antigas (`LogisticsVerticalEnterpriseRefinement`, `LogisticsVerticalEnterpriseShellPolish`, `LogisticsVerticalMenuCompact`, `AllGreenVisualSystemV2`, `AllGreenMenuDensityFix`, `AllGreenDesignSystemFinal`) foram apagadas. `!important` só para vencer `!important` antigo.
