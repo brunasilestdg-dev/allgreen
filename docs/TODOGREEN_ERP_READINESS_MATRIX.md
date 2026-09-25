@@ -36,7 +36,8 @@ oito seguem abertos, quatro deles achados nesta segunda passada (L9–L12). Há
 ainda um defeito, já corrigido, que quebrava o faturamento a partir da segunda
 fatura do mesmo tipo no espaço ([D1](#defeitos)). Em 24/09 a produção passou o
 dia sem rodar a `main` e só a alcançou às 23:53 UTC, pelo botão manual do
-GitHub Actions — ver
+GitHub Actions; em 25/09, entre 12:33 e 16:00 UTC, voltou a rodar um ramo
+local fora do GitHub, até o PR #28 levar a `main` ao ar — ver
 [Estado observado da publicação](#estado-observado-da-publicação-não-é-homologação).
 
 ## Registro de homologação em produção
@@ -67,6 +68,8 @@ ar** — não prova que um processo funciona com dado real.
 | 25/09/2026 01:40 UTC | `sha 92dfbc432c78`, build 01:38 UTC, `publishedBy: github-actions`, `branch: main`, última migração `0145_busca_vetores` | O PR #15 no ar, pelo botão manual "Publicar" (execução 4, 01:29–01:40 UTC, com verify, build e e2e crítico no próprio fluxo): o merge das 01:23 não tinha sido publicado pelo Workers Builds seis minutos depois. O `/api/status` já não traz o bloco `roadmap`; `/f/*` chega ao Worker (formulário inexistente → 404 do Worker, antes 200 com a SPA) e `/api/*` desconhecido responde 404 em JSON (antes 200 com a SPA). |
 | 25/09/2026 02:08 UTC | `sha 8744fb58342d`, build 02:06 UTC, `publishedBy: github-actions`, `branch: main`, última migração `0145_busca_vetores` | Botão "Publicar" (execução 5) depois dos merges dos PRs #25, #23, #24 e #10, que o Workers Builds não publicou em seis minutos. Primeira versão com a correção da L8 no ar. |
 | 25/09/2026 02:24 UTC | `sha 44f3445533b0`, build 02:21 UTC, `publishedBy: manual`, `branch: main`, última migração `0145_busca_vetores` | Merge do PR #22 (D1) publicado direto pela Cloudflare (`npm run deploy:cloudflare`), sem o GitHub Actions, a pedido da responsável pela conta, depois do gate local na mesma `main` (verify, build e e2e crítico). Aqui `manual` é a `main` validada, não um ramo local como em 24/09. |
+| 25/09/2026 12:36 UTC | `sha bab4fa0cd79b`, build 12:33 UTC, `publishedBy: manual`, `branch: codex/design-system-refresh`, última migração `0145_busca_vetores` | Publicação **manual** de um ramo local cujo commit não está no GitHub: a versão da Codex, com a folha AllGreenDesignSystemFinal ativada, feita pela titular. A `main` estava em `c2cb64c` (PR #27, merge das 12:35), que não chegou ao ar — **a produção não era a `main`** até o PR #28 integrar as duas versões. |
+| 25/09/2026 16:00 UTC | `sha 8f103af05e76`, build 15:57 UTC, `publishedBy: github-actions`, `branch: main`, última migração `0145_busca_vetores` | O PR #28 no ar pelo botão "Publicar" (execução 6, 15:47–16:00 UTC, com verify, build e e2e crítico no próprio fluxo), depois de seis minutos sem o Workers Builds publicar o merge. A produção volta a ser a `main`, com a versão da Codex integrada ao design system do PR #27. |
 
 ## Comercial, cliente e receita
 
@@ -408,7 +411,9 @@ pendente "homologar com dados/volume reais em produção".
   também não foi publicado pelo Workers Builds: foi ao ar às 01:40 pelo mesmo
   botão, e os merges seguintes (PRs #25, #23, #24, #10 e #22) também dependeram
   de publicação manual — o botão às 02:07 e, às 02:24, `npm run deploy:cloudflare`
-  direto, sem o GitHub Actions. Depois de um merge, `/api/system/version` deve responder o `sha` da
+  direto, sem o GitHub Actions. Às 12:33 a produção voltou a receber um ramo
+  local fora do GitHub (`bab4fa0`), e o merge do PR #28 também dependeu do
+  botão (execução 6, 15:47–16:00). Depois de um merge, `/api/system/version` deve responder o `sha` da
   `main` com `publishedBy: cloudflare-workers-builds` sem ninguém apertar
   botão; conferir a configuração do Workers Builds
   (`docs/CLOUDFLARE_BUILDS_SETUP.md`).
