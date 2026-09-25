@@ -82,47 +82,8 @@
   line-height: 1.05;
 }
 
-/* Navegação da tarefa como barra de produto, não coleção de pills. */
-.tdg .tdg-task-tabs {
-  display: flex !important;
-  align-items: center;
-  gap: 2px !important;
-  padding: 0 0 8px !important;
-  border-bottom: 1px solid var(--tdg-line, #dce5e1);
-  background: transparent !important;
-}
-
-.tdg .tdg-task-tabs button {
-  position: relative;
-  min-height: 34px !important;
-  padding: 6px 12px !important;
-  border: 0 !important;
-  border-radius: 4px !important;
-  background: transparent !important;
-  color: var(--tdg-muted) !important;
-  box-shadow: none !important;
-  font-size: .76rem !important;
-}
-
-.tdg .tdg-task-tabs button:hover {
-  background: var(--tdg-soft) !important;
-  color: var(--tdg-ink) !important;
-}
-
-.tdg .tdg-task-tabs button.active {
-  background: var(--ds-brand-soft) !important;
-  color: var(--tdg-ink) !important;
-}
-
-.tdg .tdg-task-tabs button.active::after {
-  content: "";
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -9px;
-  height: 2px;
-  background: var(--tdg-green);
-}
+/* Abas de tarefa (Hoje, Próximas, Quadro, Projetos): regra única em
+   AllGreenDesignSystem.css, barra segmentada (decisão de 25/09/2026). */
 
 .tdg .tdg-task-tab-actions {
   display: flex;

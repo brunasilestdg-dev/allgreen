@@ -2646,52 +2646,14 @@
 /* ===== Camada de clareza (pedido: simplificar sem excluir telas) =====
    O app tinha um jeito de aba por tela e dois títulos grandes competindo em
    cada página. A regra vira UMA só, e o olho aprende uma vez:
-   - Nível 2 (seções de uma tela): abas sublinhadas, como as da área.
+   - Nível 2 (seções de uma tela): barra segmentada, com a aba ativa em
+     superfície elevada (decisão de 25/09/2026, a partir da versão da Codex;
+     regra única em AllGreenDesignSystem.css).
    - Nível 3 (troca de visão: Lista×Kanban, Por área×Funcionalidades): pílula
      segmentada.
    - Título grande é um por tela — o do topo do shell; cabeçalho interno vira
      compacto. Nenhum conteúdo sai; só o excesso de moldura. */
 
-.tdg .tdg-space-tabs,
-.tdg .tdg-intelligence-tabs {
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--tdg-line);
-  border-radius: 0;
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 18px;
-  min-height: 38px;
-  overflow-x: auto;
-  padding: 0;
-  scrollbar-width: none;
-}
-.tdg .tdg-space-tabs::-webkit-scrollbar,
-.tdg .tdg-intelligence-tabs::-webkit-scrollbar { display: none; }
-.tdg .tdg-space-tabs button,
-.tdg .tdg-intelligence-tabs button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  color: var(--tdg-muted);
-  display: inline-flex;
-  flex: 0 0 auto;
-  font: inherit;
-  font-size: .9rem;
-  font-weight: 750;
-  gap: 7px;
-  min-height: 0;
-  padding: 7px 1px 10px;
-}
-.tdg .tdg-space-tabs button.active,
-.tdg .tdg-intelligence-tabs button.active {
-  background: transparent;
-  border-bottom-color: var(--tdg-green);
-  box-shadow: none;
-  color: var(--tdg-green);
-}
 .tdg .tdg-intelligence-tabs button b {
   background: var(--tdg-soft);
   border-radius: 999px;

@@ -740,6 +740,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
                             <button
                               type="button"
                               className={page === id ? "active" : ""}
+                              aria-current={page === id ? "page" : undefined}
                               onClick={() => navigate(modulo.route)}
                               key={id}
                             >
