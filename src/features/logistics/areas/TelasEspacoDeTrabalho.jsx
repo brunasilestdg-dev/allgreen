@@ -3,6 +3,7 @@
 import { Suspense, lazy } from "react";
 import {
   aplicarEdicaoPlannerNaTarefa,
+  aplicarPartilhaDoPlanoNaTarefa,
   contextoComercialDaTarefa,
   desvincularTarefaDoPlanner,
 } from "../plannerIntegrationDomain.js";
@@ -48,11 +49,19 @@ export default function TelasEspacoDeTrabalho({ contexto }) {
         setToast={setToast}
         currentUserId={db?.user?.id}
         role={role}
+        permissions={remoteAccess.permissions}
         espacoId={remoteAccess.ownerId || ""}
         clientes={clientes}
         oportunidades={verticalData.opportunities}
         onNavigate={navigate}
         canonicalTasks={db?.tasks || []}
+        // Quem vê o plano precisa ver as tarefas dele — e elas moram em
+        // `db.tasks`, com a visibilidade do app (`canSeeTask`). Ao criar ou
+        // recompartilhar um plano, a mesma partilha desce para as tarefas.
+        onSyncPlanSharing={(plano) => update?.((current) => ({
+          ...current,
+          tasks: (current.tasks || []).map((item) => aplicarPartilhaDoPlanoNaTarefa(item, plano)),
+        }))}
         onUpsertCanonicalTask={(tarefa, plano) => update?.((current) => {
           const tarefas = current.tasks || [];
           const rawId = tarefa.rawTaskId || tarefa.id;

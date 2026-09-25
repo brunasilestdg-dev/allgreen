@@ -73,7 +73,12 @@ export const NEGADO = {
   espacoNaoAutorizado: "espaco-nao-autorizado",
 };
 
-export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
+// `opcoes.registrarAcesso` (padrão true) carimba `last_access_at` na liberação
+// por e-mail. Quem só PERGUNTA se uma pessoa alcança um espaço (o Planner, ao
+// compartilhar um plano) passa false — senão a auditoria mostraria acesso de
+// gente que nunca entrou.
+export async function resolveTodoGreenAccess(env, user, requestedOwnerId, opcoes = {}) {
+  const { registrarAcesso = true } = opcoes;
   if (!user?.id || !env?.DB) return { access: null, motivo: NEGADO.semVinculo };
 
   const email = String(user.email || "").trim().toLowerCase();
@@ -238,7 +243,7 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
       ? parse(autorizado?.permissions_json || vinculo?.permissions_json, [])
       : TODO_GREEN_PERMISSIONS[role] || [];
 
-  if (autorizado?.id) {
+  if (registrarAcesso && autorizado?.id) {
     await env.DB.prepare(
       "UPDATE todogreen_access_emails SET last_access_at=? WHERE id=? AND tenant_id=?",
     ).bind(new Date().toISOString(), autorizado.id, TENANT_ID).run().catch(() => null);
@@ -257,6 +262,25 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId) {
     },
     motivo: null,
   };
+}
+
+// "Esta pessoa consegue abrir a vertical NESTE espaço?" — a pergunta que o
+// compartilhamento do Planner precisa responder antes de prometer que alguém
+// verá um plano. Reusa `resolveTodoGreenAccess` com o espaço pedido, exatamente
+// como o servidor decidirá quando a pessoa entrar: sem vínculo com o espaço
+// (membro só do espaço do app, conta de outro espaço) é `false`; papel que não
+// lê a vertical (motorista, colaborador de portal) também é `false`, porque a
+// tela do Planner nunca abriria para ele. Não carimba último acesso.
+export async function alcancaEspacoNaVertical(env, pessoa, ownerId, permissao = "read") {
+  const espaco = clean(ownerId, 100);
+  if (!pessoa?.id || !espaco) return false;
+  const { access } = await resolveTodoGreenAccess(env, pessoa, espaco, { registrarAcesso: false });
+  return Boolean(
+    access
+      && access.ownerId === espaco
+      && access.role !== "motorista"
+      && verticalPermite(access.role, access.permissions, permissao),
+  );
 }
 
 // Fachada única para os handlers: autentica, resolve e devolve a resposta
