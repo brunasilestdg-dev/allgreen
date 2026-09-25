@@ -18,6 +18,57 @@ const PRIORIDADE_PLANNER_PARA_TAREFA = {
   baixa: "Baixa",
 };
 
+const lista = (valor) => (Array.isArray(valor) ? valor : []);
+const idsUnicos = (...listas) =>
+  [...new Set(listas.flat().map((v) => String(v ?? "").trim()).filter(Boolean))];
+
+// ===== Partilha do plano → visibilidade das tarefas =====
+//
+// O plano vive na vertical (todogreen_planner_plans) e diz quem o vê; as
+// tarefas vivem em `db.tasks`, no workspace do app, e quem as vê é decidido por
+// `canSeeTask` (ownerId, assigneeId, sharedWith, visibility === "espaco_todo").
+// São duas regras diferentes — e sem esta ponte uma pessoa "com quem
+// compartilhei" abria o plano e via um quadro vazio (só a tarefa atribuída a
+// ela). A partilha do plano desce para as tarefas dele:
+//   • pessoas específicas → `sharedWith` ganha os membros, com permissão de
+//     editar (o combinado do Planner é que quem participa TRABALHA nas tarefas);
+//   • todo o espaço → `visibility: "espaco_todo"`;
+//   • privado → o que o Planner tinha adicionado é retirado.
+// O que a pessoa compartilhou à mão continua: guardamos em `plannerSharedWith`
+// e `plannerVisibility` só o que veio do plano, para saber o que é nosso na
+// hora de desfazer. Sem nada a compartilhar nem a desfazer, a tarefa volta
+// intacta (mesma referência) — o sync roda sobre a coleção inteira.
+export const partilhaDoPlanoNaTarefa = (tarefa = {}, plano = {}) => {
+  const donoDaTarefa = String(tarefa.ownerId || "");
+  const membros = idsUnicos(plano.members || plano.membros).filter((id) => id !== donoDaTarefa);
+  const compartilhadoComEspaco = String(plano.visibility || plano.visibilidade || "") === "shared";
+  const anteriores = idsUnicos(tarefa.plannerSharedWith);
+  const visibilidadeAnterior = String(tarefa.plannerVisibility || "");
+  if (!membros.length && !compartilhadoComEspaco && !anteriores.length && !visibilidadeAnterior) return tarefa;
+
+  const manuais = idsUnicos(tarefa.sharedWith).filter((id) => !anteriores.includes(id));
+  const sharedWith = idsUnicos(manuais, membros);
+  const resultado = { ...tarefa, sharedWith, plannerSharedWith: membros };
+
+  if (compartilhadoComEspaco) {
+    resultado.visibility = "espaco_todo";
+    resultado.plannerVisibility = "espaco_todo";
+  } else {
+    // Só desfaz o "todo o espaço" que o próprio Planner tinha ligado.
+    if (visibilidadeAnterior === "espaco_todo" && tarefa.visibility === "espaco_todo") resultado.visibility = "privado";
+    resultado.plannerVisibility = "";
+  }
+  if (sharedWith.length || compartilhadoComEspaco) resultado.sharingPermission = "editar";
+  return resultado;
+};
+
+// Versão para varrer `db.tasks`: só toca as tarefas DESTE plano.
+export const aplicarPartilhaDoPlanoNaTarefa = (tarefa = {}, plano = {}) => {
+  if (!plano?.id || tarefa?.plannerPlanId !== plano.id) return tarefa;
+  const proxima = partilhaDoPlanoNaTarefa(tarefa, plano);
+  return proxima === tarefa ? tarefa : { ...proxima, updatedAt: new Date().toISOString() };
+};
+
 export const contextoComercialDaTarefa = (tarefa = {}) => ({
   clientId: String(tarefa.campos?.clientId || ""),
   opportunityId: String(tarefa.campos?.opportunityId || ""),
@@ -110,7 +161,8 @@ export const desvincularTarefaDoPlanner = (tarefa = {}, planId = "") => {
   const sourceLinks = { ...(tarefa.sourceLinks || {}) };
   delete sourceLinks.planner;
   return {
-    ...tarefa,
+    // Sem plano, a partilha que veio do plano também vai embora; a manual fica.
+    ...partilhaDoPlanoNaTarefa(tarefa, { members: [], visibility: "private" }),
     plannerPlanId: "",
     plannerTaskId: "",
     plannerRevision: 0,
@@ -131,7 +183,7 @@ export const aplicarEdicaoPlannerNaTarefa = (tarefaPlanner = {}, plano = {}, exi
   const canonicalTaskId = existente.canonicalTaskId || tarefaPlanner.canonicalTaskId || rawTaskId;
   const plannerPlanId = tarefaPlanner.planId || plano?.id || existente.plannerPlanId || "";
   const now = new Date().toISOString();
-  return {
+  return partilhaDoPlanoNaTarefa({
     ...existente,
     id: rawTaskId,
     canonicalTaskId,
@@ -166,7 +218,7 @@ export const aplicarEdicaoPlannerNaTarefa = (tarefaPlanner = {}, plano = {}, exi
     },
     updatedAt: now,
     createdAt: existente.createdAt || now,
-  };
+  }, plano);
 };
 
 // ===== Rótulo da lista "Depende de" (#142) =====

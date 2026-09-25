@@ -788,7 +788,13 @@ export const MODULE_IMPLEMENTATION = Object.freeze({
     route: "/todogreen/planner",
     area: "produtividade",
     status: "functional",
-    permission: "planner:manage",
+    // Abrir o Planner é LER: o servidor já entrega os planos compartilhados a
+    // quem só tem `read` (auditor, papéis sob medida sem `planner:manage`), e
+    // gerir (criar plano, compartilhar, arquivar) continua exigindo
+    // `planner:manage` — checado no servidor e usado pela tela para esconder o
+    // que ele recusaria. Exigir `planner:manage` para ENTRAR era o motivo de
+    // uma pessoa "com quem compartilhei" nem ver o item no menu.
+    permission: ["read", "planner:manage"],
     description: "Planos com tarefas, prazo, prioridade e checklist.",
   },
   // Blocos das 6 lacunas dos 26 blocos All Green — cada tela abre uma rota

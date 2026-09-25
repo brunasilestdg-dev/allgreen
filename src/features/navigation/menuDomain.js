@@ -129,6 +129,38 @@ export const buildNavigation = (nav = [], menu = [], groups = []) => {
   return { main: principal, rest: restoPorGrupo };
 };
 
+// Os pacotes do negócio (menu "custom" da Central do negócio) só escolhem o
+// que aparece em destaque. Antes eles filtravam a navegação ANTES de montar o
+// menu, e a tela fora dos pacotes sumia do menu, da lista completa e da busca —
+// um criador de conteúdo perdia Tarefas e Meu trabalho, enquanto o "Foco de
+// hoje" continuava mandando para lá. Agora:
+//   - menu principal SALVO pela pessoa vence os pacotes (é escolha explícita);
+//   - o menu padrão, sem escolha salva, segue filtrado pelos pacotes;
+//   - o que os pacotes escondem vai para um grupo próprio na lista completa.
+export const HIDDEN_BY_PACKS_LABEL = "FORA DOS PACOTES DO NEGÓCIO";
+
+export const buildNavigationForBusiness = (
+  fullNav = [],
+  visibleNav = [],
+  menu = [],
+  groups = [],
+) => {
+  const escolhaSalva = Array.isArray(menu) && menu.length > 0;
+  const visiveis = new Set(visibleNav.map((item) => item[0]));
+  const base = escolhaSalva
+    ? fullNav.filter((item) => visiveis.has(item[0]) || menu.includes(item[0]))
+    : visibleNav;
+  const navegacao = buildNavigation(base, menu, groups);
+  const presentes = new Set([
+    ...navegacao.main.map((item) => item[0]),
+    ...navegacao.rest.flatMap((grupo) => grupo.items.map((item) => item[0])),
+  ]);
+  const ocultos = fullNav.filter((item) => !presentes.has(item[0]));
+  if (ocultos.length)
+    navegacao.rest.push({ label: HIDDEN_BY_PACKS_LABEL, items: ocultos });
+  return navegacao;
+};
+
 // Nada pode ficar inalcançável: todo item da navegação tem de aparecer no menu
 // principal OU na lista completa. Serve de rede de segurança para a interface.
 export const everythingReachable = (nav = [], menu = [], groups = []) => {

@@ -148,16 +148,3 @@ export const ROLE_LABELS_PT = Object.freeze({
   gestor: "Gestor",
   colaborador: "Colaborador",
 });
-
-// Código de convite para espaço compartilhado vindo na URL (`?convite=...`).
-export const codigoDeConviteDaUrl = (search = "") => {
-  const m = String(search).match(/[?&]convite=([^&]+)/);
-  if (!m) return "";
-  // `%` solto na URL faria o decodeURIComponent lançar e derrubar a tela; o
-  // link torto é ignorado.
-  try {
-    return decodeURIComponent(m[1]).trim();
-  } catch {
-    return "";
-  }
-};

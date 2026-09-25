@@ -1,10 +1,12 @@
 # Matriz de prontidão do ERP To Do Green
 
 **Revisada em 24/09/2026** contra o código do PR #15 — a `main` até `f856e9f`
-mais as mudanças do próprio PR. Cada linha foi reconferida contra o código, e
-todo achado novo de controle foi reproduzido por requisição HTTP contra o
-Worker local antes de entrar em [Lacunas de controle](#lacunas-de-controle); o
-que só a leitura do código mostrou está separado, em
+mais as mudanças do próprio PR; em 25/09, a linha do Planner foi atualizada
+com a `main` até `f6b9548` (compartilhamento de plano e menu por pacotes).
+Cada linha foi reconferida contra o código, e todo achado novo de controle foi
+reproduzido por requisição HTTP contra o Worker local antes de entrar em
+[Lacunas de controle](#lacunas-de-controle); o que só a leitura do código
+mostrou está separado, em
 [Achados de leitura](#achados-de-leitura-ainda-não-reproduzidos). A versão
 anterior (aberta em 30/08 e "revalidada em 13/09") não refletia as mudanças de
 18 a 23/09 e se contradizia em vários pontos — a lista do que mudou está em
@@ -32,7 +34,8 @@ antigo H6 foi retirado, porque não é registro de validação. Doze controles
 tinham lacuna: três foram corrigidos neste PR (L4, L5, L7), a L8 em seguida, e
 oito seguem abertos, quatro deles achados nesta segunda passada (L9–L12). Há ainda um
 defeito que quebra o faturamento a partir da segunda fatura do mesmo tipo no
-espaço ([D1](#defeitos)). Em 24/09 a produção não rodava a `main` — ver
+espaço ([D1](#defeitos)). Em 24/09 a produção passou o dia sem rodar a `main`
+e só a alcançou às 23:53 UTC, pelo botão manual do GitHub Actions — ver
 [Estado observado da publicação](#estado-observado-da-publicação-não-é-homologação).
 
 ## Registro de homologação em produção
@@ -59,6 +62,7 @@ ar** — não prova que um processo funciona com dado real.
 | --- | --- | --- |
 | 24/09/2026 19:18 UTC | `sha 6399f4a49f18`, build 14:09 UTC, `publishedBy: manual`, `branch: publish-tickets`, última migração `0144_client_requests_operation` | Publicação **manual**: o build não rodou no Workers Builds nem no GitHub Actions (`vite.config.js` só grava o provedor de CI quando há um), e sim a partir de um ramo local. A `main` estava em `49adc35` — o merge do PR #14 às 14:17 UTC ainda não estava no ar cinco horas depois, então **a produção não era a `main`**. O `/api/status` ainda devolvia o bloco `roadmap` fixo que este PR remove. |
 | 24/09/2026 20:19 UTC | a mesma resposta (`6399f4a49f18`, `manual`, `publish-tickets`, `0144`) | A `main` já estava em `13ac6f8`: a produção seguia sem os PRs #14 e #16 — entre outras coisas, a extensão instalável, o anti-robô e a migração `0145`. |
+| 25/09/2026 00:14 UTC | `sha f6b9548f6c84`, build 23:50 UTC de 24/09, `publishedBy: github-actions`, `branch: main`, última migração `0145_busca_vetores` | A produção passou a ser a `main` (merge do PR #21, com os PRs #14, #16, #17 e #19), publicada pelo botão manual "Publicar" do GitHub Actions (`deploy.yml`, `workflow_dispatch`, execução 3, 23:41–23:53 UTC); a execução 2 tinha publicado `f856e9f` (PR #17) às 23:30. O Workers Builds continua sem publicar sozinho. Este PR ainda não está no ar: o `/api/status` de produção segue com o bloco `roadmap` fixo. No mesmo `/api/status`, `antiRobo.configured` e `aiGateway.configured` vêm `false`: o Turnstile e o AI Gateway estão publicados, mas inertes, sem as chaves. |
 
 ## Comercial, cliente e receita
 
@@ -157,7 +161,7 @@ ar** — não prova que um processo funciona com dado real.
 | Qualidade / CAPA / não conformidade | Parcial | Parcial | Não registrado | A tela Qualidade grava NC real na coleção `quality` (0089, `vertical-records/colecoes/qualidade.js`, `operations:manage`), com situação livre e sem etapa. O plano CAPA sequencial fica no fluxo empresarial (domínio `quality`: CAPA, auditoria e NC) — contornável (L6) e com painel que nenhum menu monta. Testes só do registro de NC: `todogreen-vertical-records.worker.test.js` ("cria, lista, atualiza situação e recusa NC sem título", "valores fora da lista caem no padrão em vez de gravar lixo", "quem só lê não cria não conformidade"), `QualityPage.test.jsx` ("registra uma nova não conformidade com título obrigatório", "muda a situação de uma NC pela própria lista"). |
 | Marketing / campanhas | Parcial | Não | Não registrado | Aba Campanhas na página de marketing, com alçada por orçamento (acima de 5 mil, liderança; acima de 25 mil, financeiro). **Contornável além da L6:** a própria tela deixa desmarcar "Exigir fluxo de aprovação" e concluir sem aprovação; até 5 mil há uma etapa só, que quem abriu aprova sozinho; e a alçada é recalculada pelo orçamento atual, então baixar o orçamento antes da decisão tira etapas. Sem teste. |
 | Processos internos gerais | Parcial | Parcial | Não registrado | O domínio `general` não tem etapas (`approvalPlan` vazio) nem tela. A recorrência roda no cron horário e tem teste; a criação e a edição pela API, não. Teste: `cron.worker.test.js` ("o disparo horário roda os jobs horários e o rastreador uma vez só", "o disparo manual, sem cron, continua rodando os jobs horários"). |
-| Planner / Projetos / Work Center | Sim | Sim | Não registrado | Boards, membros (0077), visibilidade e recorrência (0030/0065/0067). A tarefa canônica vive em `db.tasks` (ver "To Do Green — task canônica" no `AGENTS.md`). A tela do Planner segue o formato do Microsoft Planner (quadro com baldes editáveis, tabela, linha do tempo e gráficos); arrastar um cartão grava pela mesma tarefa canônica, sem caminho paralelo. Testes: `PlannerPage.test.jsx` ("arrastar um cartão para outro balde grava a tarefa canônica com o novo balde", "adicionar e renomear balde fazem PATCH no plano com a revision lida", "'Quadro To Do' continua levando ao lugar único de tarefas"), `plannerBoardDomain.test.js` ("renomear preserva o id (a tarefa aponta para ele) e mover troca a ordem"), `todogreen-planner.worker.test.js` ("sem planner:manage, o auditor lê mas não cria (403)", "a colega vê o compartilhado, não vê o privado", "bloqueia escrita direta de tarefa sem opt-in legado", "só quem criou mexe na lista; tirar a pessoa fecha a porta na hora"), `todogreen-work-automations.worker.test.js` ("bloqueia conclusão com dependência pendente e cria a próxima recorrência"), `WorkViews.test.jsx` ("mostra o resumo e desenha o Gantt com caminho crítico por padrão"). |
+| Planner / Projetos / Work Center | Sim | Sim | Não registrado | Boards, membros (0077), visibilidade e recorrência (0030/0065/0067). A tarefa canônica vive em `db.tasks` (ver "To Do Green — task canônica" no `AGENTS.md`). A tela do Planner segue o formato do Microsoft Planner (quadro com baldes editáveis, tabela, linha do tempo e gráficos); arrastar um cartão grava pela mesma tarefa canônica, sem caminho paralelo. Para abrir o Planner basta `read`; toda escrita (criar, compartilhar, arquivar) segue exigindo `planner:manage`. Compartilhar só promete o que o servidor cumpre: `/planner/pessoas` marca quem alcança a vertical no espaço (`alcancaEspacoNaVertical`), e criar ou editar o plano devolve `membrosSemAcesso` — a pessoa fica na lista e passa a ver o plano quando for liberada em Acessos. A partilha do plano desce para as tarefas dele em `db.tasks` (`aplicarPartilhaDoPlanoNaTarefa`), mas só nas tarefas de quem é dono delas: para os demais, `mergeRecordsFromMember` (`worker/services/workspace.js`) tranca `sharedWith` e `visibility`. O aviso na tela e a chamada de `onSyncPlanSharing` não têm teste de tela. Testes: `PlannerPage.test.jsx` ("arrastar um cartão para outro balde grava a tarefa canônica com o novo balde", "adicionar e renomear balde fazem PATCH no plano com a revision lida", "'Quadro To Do' continua levando ao lugar único de tarefas"), `plannerBoardDomain.test.js` ("renomear preserva o id (a tarefa aponta para ele) e mover troca a ordem"), `todogreen-planner.worker.test.js` ("sem planner:manage, o auditor lê mas não cria (403)", "a colega vê o compartilhado, não vê o privado", "bloqueia escrita direta de tarefa sem opt-in legado", "só quem criou mexe na lista; tirar a pessoa fecha a porta na hora", "/pessoas marca quem alcança o Planner neste espaço", "o plano aceita a pessoa na lista, mas avisa que ela ainda não alcança; a vertical a recusa (403)"), `plannerIntegrationDomain.test.js` ("tarefa criada pelo Planner num plano com pessoas específicas nasce compartilhada com elas, para editar", "plano 'todo o espaço' liga espaco_todo; voltar a privado desliga só o que o Planner ligou"), `shellNavegacao.test.js` ("telas restritas declaram a permissão que o menu já usa"), `todogreen-work-automations.worker.test.js` ("bloqueia conclusão com dependência pendente e cria a próxima recorrência"), `WorkViews.test.jsx` ("mostra o resumo e desenha o Gantt com caminho crítico por padrão"). |
 | Metas | Sim | Sim | Não registrado | 0046/0050, `todogreen-goals.js`. Testes: `todogreen-goals.worker.test.js` ("vendedor enxerga somente a meta vinculada a ele", "vendedor não cria nem altera o alvo", "meta com evidência obrigatória recusa check-in sem comprovação", "registra check-in, snapshot e histórico sem reescrever o passado", "protege alteração concorrente da meta"), `GoalsPage.test.jsx` ("permite ao administrador criar uma métrica com critérios próprios"). |
 | Governança / auditoria | Sim | Parcial | Não registrado | `todogreen_audit_events` (0052) e `/api/todogreen/governance` (`audit:read`). A gravação é conferida em outras suítes; o endpoint de leitura e a `GovernancePage.jsx` não têm teste. Política de retenção/backup a definir. Testes: `todogreen-client-briefing.worker.test.js` ("a alteração fica na auditoria da vertical"), `todogreen-preflight.worker.test.js` ("WARNING exige justificativa; com justificativa grava o override auditado e a rota nasce com status WARNING"). |
 
@@ -392,10 +396,12 @@ pendente "homologar com dados/volume reais em produção".
 - **P1 — reproduzir os achados de leitura (O1–O9)** e movê-los para a tabela
   certa, ou tirá-los daqui.
 - **P1 — publicação automática da `main`:** em 24/09 a produção veio de
-  publicação manual e continuava atrás da `main` depois de duas fusões. Depois
-  de um merge, `/api/system/version` deve responder o `sha` da `main` com
-  `publishedBy: cloudflare-workers-builds`; conferir a configuração do Workers
-  Builds (`docs/CLOUDFLARE_BUILDS_SETUP.md`).
+  publicação manual a partir de um ramo local e ficou horas atrás da `main`;
+  às 23:53 UTC alcançou a `main`, mas pelo botão manual do GitHub Actions
+  (`publishedBy: github-actions`). Depois de um merge, `/api/system/version`
+  deve responder o `sha` da `main` com `publishedBy: cloudflare-workers-builds`
+  sem ninguém apertar botão; conferir a configuração do Workers Builds
+  (`docs/CLOUDFLARE_BUILDS_SETUP.md`).
 - **P1 — proteger a `main`** por configuração do GitHub
   (`docs/GITHUB_MAIN_PROTECTION.md`, `scripts/github/protect-main.sh`); não é
   verificável pelo repositório.
