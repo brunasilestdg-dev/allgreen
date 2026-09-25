@@ -4,17 +4,35 @@
  * Mantém os componentes e dados canônicos; melhora leitura, foco e resposta.
  */
 
+/* Paleta da experiência comercial. Era um teal (#07988b) herdado do
+   produto-base; agora é a família verde do monograma To Do Green, a mesma dos
+   `--tdg-*`, para CRM, funil e acesso não parecerem outro produto. */
 :root {
-  --tdg-x-ink: #092f31;
-  --tdg-x-ink-soft: #315255;
-  --tdg-x-deep: #063f3d;
-  --tdg-x-brand: #07988b;
-  --tdg-x-brand-strong: #08786f;
-  --tdg-x-mint: #53d7bf;
-  --tdg-x-wash: #edf7f4;
-  --tdg-x-line: #cfe2dc;
+  --tdg-x-ink: #10241f;
+  --tdg-x-ink-soft: #2e463e;
+  --tdg-x-deep: #14412d;
+  --tdg-x-brand: #17624f;
+  --tdg-x-brand-strong: #124f40;
+  --tdg-x-mint: #6fbf9e;
+  --tdg-x-wash: #edf4f0;
+  --tdg-x-line: #d8e3dd;
   --tdg-x-paper: #fff;
-  --tdg-x-shadow: 0 18px 42px rgba(7, 55, 53, .09);
+  --tdg-x-shadow: 0 1px 2px rgba(16, 36, 31, .05), 0 8px 24px rgba(16, 36, 31, .06);
+}
+
+/* Tema escuro, só dentro da vertical (as telas de acesso seguem claras).
+   `--tdg-x-deep` continua escuro porque é fundo de botão com texto branco. */
+:root[data-theme="dark"] .tdg {
+  --tdg-x-ink: #e8f5ef;
+  --tdg-x-ink-soft: #b9d0c6;
+  --tdg-x-deep: #0f3b2e;
+  --tdg-x-brand: #4bc9a2;
+  --tdg-x-brand-strong: #6fd6b5;
+  --tdg-x-mint: #4bc9a2;
+  --tdg-x-wash: #163a31;
+  --tdg-x-line: #23443b;
+  --tdg-x-paper: #102822;
+  --tdg-x-shadow: 0 18px 44px rgba(0, 0, 0, .4);
 }
 
 /* Todo botão da vertical parte do design system, nunca do navegador */
@@ -463,7 +481,7 @@
   padding: 12px;
   border: 1px solid var(--tdg-x-line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, .94);
+  background: var(--tdg-card);
   box-shadow: 0 8px 24px rgba(7, 55, 53, .06);
   backdrop-filter: blur(10px);
 }
@@ -630,7 +648,7 @@
   padding: 12px 20px;
   margin: 0 -20px;
   border-bottom: 1px solid var(--tdg-x-line);
-  background: rgba(255, 255, 255, .96);
+  background: var(--tdg-card);
   backdrop-filter: blur(10px);
 }
 

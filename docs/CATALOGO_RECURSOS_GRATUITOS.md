@@ -48,7 +48,7 @@ dinâmicos, `React.lazy` e `@import` de CSS.
 | --- | --- |
 | Arquivos de produção carregados | **623 de 630** |
 | Só testados, fora do app | `logistics/roadRestrictionDomain.js` (restrição OSM × veículo: `chooseCompatibleRoute` não é chamado — falta a malha OSM, ver `system-health`), `verticals/ModuleBadge.jsx` + CSS (substituído a pedido da titular) |
-| Nunca carregado | `logistics/AllGreenDesignSystemFinal.css` — o cabeçalho diz "carregada por último e deve ser a referência", mas nenhum arquivo a importa desde que entrou no repositório |
+| Nunca carregado | a folha "AllGreenDesignSystemFinal" (nunca importada) foi apagada em 25/09/2026; a camada canônica passou a ser `logistics/AllGreenDesignSystem.css`, importada por último em `src/main.jsx` |
 | Rotas `/api` chamadas pela tela | 162 prefixos; só `/api/collab/join` não existia (corrigido) |
 | Dependências npm | todas usadas em produção; `@zxing/library` é par obrigatório do `@zxing/browser`; `vite` e `@vitejs/plugin-react` estão em `dependencies` mas só servem ao build (higiene, sem efeito) |
 | Variáveis de ambiente | o Worker lê **98**; ~55 não estavam em `docs/SECRETS.md` (agora documentadas) |
@@ -96,7 +96,6 @@ O que não dá para ver sem login (chaves de IA extras, Geoapify, cofre
 | `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` | push desligado | `node scripts/gerar-chaves-vapid.mjs` → `wrangler secret put` |
 | `GEOAPIFY_API_KEY` (grátis, 3.000 créditos/dia, uso comercial ok) | tira a vertical dos serviços públicos que proíbem uso comercial/de rastreio e liga o "Tempo e distância" | criar conta em geoapify.com e cadastrar a chave |
 | Groq: ligar *Zero Data Retention*; Mistral: desligar "Anonymous improvement data" | privacidade dos provedores que já recebem pedidos | nos consoles de cada provedor |
-| Decidir `AllGreenDesignSystemFinal.css` | nunca foi carregado; ligar muda o visual da vertical inteira | revisão visual antes de importar — ou apagar |
 | Limites de D1 no plano Free (desde 01/09/2026: 5 M linhas lidas e 100 mil escritas por dia) | acima disso as consultas são recusadas | acompanhar em Saúde do sistema |
 | Turnstile: `TURNSTILE_SITE_KEY` (var) + `TURNSTILE_SECRET_KEY` (segredo) | liga o anti-robô no cadastro, no login e nos formulários públicos | Cloudflare → Turnstile → Add widget (Managed) com `orianone.app` e `www.orianone.app`; `wrangler secret put TURNSTILE_SECRET_KEY` |
 | AI Gateway: `AI_GATEWAY_ID` (var) e, para os provedores externos, `AI_GATEWAY_TOKEN` | painel de uso da IA, cache e limite de taxa | `AI_GATEWAY_ID=default` já basta para o Workers AI; token com a permissão "AI Gateway Run" liga o resto. No gateway, ligar **Require provider credentials** e não comprar créditos |

@@ -759,12 +759,12 @@
 .tdg-crm-card-grid header small,.tdg-crm-card-grid footer small { color: var(--tdg-muted); font-size: 10.5px; }
 .tdg-crm-card-grid header b { align-items: center; background: var(--tdg-soft); border-radius: 50%; color: var(--tdg-green); display: inline-flex; flex: 0 0 auto; height: 36px; justify-content: center; width: 36px; }
 .tdg-crm-card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
-.tdg-crm-card-tags em { background: #f1f6f3; border-radius: 999px; color: #52675f; font-size: 9.5px; font-style: normal; font-weight: 750; padding: 5px 7px; }
+.tdg-crm-card-tags em { background: var(--tdg-soft); border-radius: 999px; color: var(--tdg-muted); font-size: 9.5px; font-style: normal; font-weight: 750; padding: 5px 7px; }
 /* O alerta principal da conta — o PORQUÊ de ela pedir atenção, na própria
    lista. Crítico em vermelho, atenção em âmbar; o resto do chip herda o pill. */
 .tdg-crm-card-tags em.tdg-crm-card-alerta { align-items: center; display: inline-flex; gap: 3px; }
-.tdg-crm-card-tags em.tdg-crm-card-alerta.critical { background: #fdecea; color: #a5271a; }
-.tdg-crm-card-tags em.tdg-crm-card-alerta.attention { background: #fef4e2; color: #92600c; }
+.tdg-crm-card-tags em.tdg-crm-card-alerta.critical { background: var(--ds-danger-soft); color: var(--ds-danger); }
+.tdg-crm-card-tags em.tdg-crm-card-alerta.attention { background: var(--ds-warning-soft); color: var(--ds-warning); }
 .tdg-crm-card-grid dl { border-block: 1px solid #e5ece8; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0; padding: 10px 0; }
 .tdg-crm-card-grid dl div { display: grid; gap: 2px; padding: 0 8px; }
 .tdg-crm-card-grid dl div + div { border-left: 1px solid #e5ece8; }
@@ -907,7 +907,7 @@
 .tdg-crm-temp-inline .ds-seg { background: #ffffff1f; border: 1px solid #ffffff4d; }
 .tdg-crm-temp-inline .ds-seg__opt { color: #ffffffd9; font-weight: 750; }
 .tdg-crm-temp-inline .ds-seg__opt:hover:not(:disabled) { color: #fff; background: #ffffff26; }
-.tdg-crm-temp-inline .ds-seg__opt.is-active { background: #fff; color: #173d31; }
+.tdg-crm-temp-inline .ds-seg__opt.is-active { background: var(--tdg-card); color: #173d31; }
 .tdg-crm-account-tabs { border-bottom: 1px solid var(--tdg-line); display: flex; gap: 18px; overflow-x: auto; scrollbar-width: none; }
 .tdg-crm-account-tabs::-webkit-scrollbar { display: none; }
 .tdg-crm-account-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--tdg-muted); cursor: pointer; flex: 0 0 auto; font-size: 11.5px; font-weight: 800; padding: 8px 1px 11px; }
@@ -3575,7 +3575,7 @@
   margin: 0;
   padding: 4px;
   list-style: none;
-  background: #fff;
+  background: var(--tdg-card);
   border: 1px solid var(--tdg-line, #dce7e2);
   border-radius: 10px;
   box-shadow: 0 12px 28px rgba(15, 42, 34, .16);
@@ -4490,7 +4490,7 @@
 
 .tdg-crm-untreated-actions button:not(.tdg-action) {
   align-items: center;
-  background: #fff;
+  background: var(--tdg-card);
   border: 1px solid #9fd4a8;
   border-radius: 8px;
   color: #16391f;
@@ -4921,10 +4921,10 @@
 .tdg-recarga-nota { color: var(--tdg-muted); font-size: .8rem; margin: 0 0 12px; }
 .tdg-recarga-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); margin-bottom: 14px; }
 .tdg-recarga-card { background: var(--tdg-surface, #fff); border: 1px solid var(--tdg-line); border-radius: 12px; display: grid; gap: 3px; padding: 12px 14px; }
-.tdg-recarga-card.destaque { background: #eef6f1; border-color: #cfe6d9; }
+.tdg-recarga-card.destaque { background: var(--ds-brand-soft); border-color: var(--tdg-line, #cfe6d9); }
 .tdg-recarga-card small { align-items: center; color: var(--tdg-muted); display: flex; font-size: .74rem; font-weight: 700; gap: 5px; }
 .tdg-recarga-card strong { font-size: 1.35rem; line-height: 1.1; }
-.tdg-recarga-card.destaque strong { color: #1f7a44; }
+.tdg-recarga-card.destaque strong { color: var(--ds-success); }
 .tdg-recarga-card em { color: var(--tdg-muted); font-size: .76rem; font-style: normal; }
 .tdg-tarifa-svg { display: block; height: auto; max-width: 100%; width: 100%; }
 .tdg-tarifa-legenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; }

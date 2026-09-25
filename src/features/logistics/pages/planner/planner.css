@@ -416,7 +416,7 @@
 .plr-vazio p { margin: 0; max-width: 52ch; }
 .plr-vazio--hero { padding: 60px 24px; }
 .plr-vazio--hero h2 { color: var(--tdg-ink); font-size: 1.4rem; margin: 0; }
-.plr-vazio--hero svg { color: var(--tdg-green); }
+.plr-vazio--hero > svg { color: var(--tdg-green); }
 
 /* ---- Modais (portalados: tokens com fallback) ---- */
 .plr-form .plr-form-plano-nome { align-items: end; display: grid; gap: 12px; grid-template-columns: 44px minmax(0, 1fr); }

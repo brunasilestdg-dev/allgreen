@@ -17,16 +17,23 @@
   --pink: #17624f;
   --blue: #0f4a3b;
 
-  /* ---- Superfícies e texto ---- */
-  --tdg-bg: #edf5f1;
+  /* ---- Superfícies e texto ----
+     Fundo neutro levemente esverdeado: a marca aparece em ação e estado, não
+     tingindo a tela inteira. Estes são os valores EFETIVOS do shell — antes
+     eles moravam numa sobrescrita escondida em LogisticsVerticalEnterprise.css
+     (`:root:not([data-theme="dark"]) .tdg.tdg-module-page`), que vencia este
+     bloco por especificidade; agora a fonte é uma só. */
+  --tdg-bg: #f4f7f5;
   --tdg-card: #ffffff;
-  --tdg-soft: #e8f5ef;
+  --tdg-soft: #edf4f0;
   --tdg-ink: #10241f;
-  /* Texto secundário: 4,7:1 sobre --tdg-bg e 5,2:1 sobre branco (mínimo AA 4,5:1).
-     O teste e2e de legibilidade mede o contraste real de cada tela. */
+  /* Texto secundário: 4,9:1 sobre --tdg-bg, 4,7:1 sobre --tdg-soft e 5,2:1
+     sobre branco (mínimo AA 4,5:1). O teste e2e de legibilidade mede o
+     contraste real de cada tela. */
   --tdg-muted: #577266;
-  --tdg-line: #bdd7cc;
-  --tdg-line-strong: #91b9aa;
+  /* Linha para divisória e borda de cartão; a forte, para contorno de campo. */
+  --tdg-line: #d8e3dd;
+  --tdg-line-strong: #9db7ab;
   --tdg-green: #17624f;
   /* O lima da marca. Serve para PREENCHER (folha do avatar, olho da Semente,
      realce sobre verde escuro) — nunca para escrever sobre fundo claro: ali
@@ -39,7 +46,8 @@
      tela de acesso) quem fica ilegível é o tom escuro. Ali vale o lima
      clareado — 5,1:1 sobre --tdg-green. */
   --tdg-lime-texto-escuro: #bfe56b;
-  --tdg-shadow: 0 18px 44px rgba(11, 42, 34, 0.1);
+  /* Plano por padrão: cartão tem borda, não sombra de flutuação. */
+  --tdg-shadow: 0 1px 2px rgba(16, 36, 31, 0.05), 0 2px 8px rgba(16, 36, 31, 0.04);
 
   /* ---- Aliases legados ----------------------------------------------------
      Nomes que telas mais antigas usam via `var(--tdg-…, fallback)`. Antes não
@@ -47,11 +55,11 @@
      o MESMO valor do fallback predominante — nenhuma tela muda de cor no claro,
      e no escuro passam a seguir o tema em vez de ficar presas ao valor claro. */
   --tdg-surface: var(--tdg-card);
-  --tdg-surface2: #eef4ef;
+  --tdg-surface2: #f1f4f2;
   --tdg-surface-soft: rgba(16, 122, 87, 0.05);
-  --tdg-surface-muted: #f6faf8;
+  --tdg-surface-muted: #f8faf9;
   --tdg-text: var(--tdg-ink);
-  --tdg-border: #e3e8e5;
+  --tdg-border: #dfe6e2;
   --tdg-primary: var(--tdg-green);
   --tdg-brand: #1f8a54;
   --tdg-deep: #14532d;
@@ -576,7 +584,7 @@
 
 .tdg-search {
   align-items: center;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--tdg-card);
   border-radius: 16px;
   color: var(--tdg-muted);
   display: flex;
@@ -1539,7 +1547,7 @@
   padding: 12px 14px;
   border: 1px solid rgba(46, 128, 104, 0.18);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--tdg-card);
 }
 
 .tdg-esg-pesos small {
@@ -1573,7 +1581,7 @@
   padding: 14px 16px;
   border: 1px solid rgba(46, 128, 104, 0.18);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--tdg-card);
 }
 
 .tdg-esg-ponto {
@@ -1603,7 +1611,7 @@
   margin-top: 14px;
   border: 1px solid rgba(46, 128, 104, 0.18);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--tdg-card);
 }
 
 .tdg-tabela {
@@ -1776,8 +1784,10 @@
 .tdg-premissas p { color: var(--tdg-muted); line-height: 1.5; margin: 6px 0 0; }
 .tdg-premissas .tdg-check-field { margin-top: 12px; }
 
+/* Fundo opaco (token semântico) em vez de vermelho translúcido: legível nos
+   dois temas e mensurável pelo teste de contraste. */
 .tdg-premissas-incompleta {
-  background: color-mix(in srgb, #dc2626 7%, transparent);
+  background: var(--ds-danger-soft);
   border-color: color-mix(in srgb, #dc2626 38%, var(--tdg-line));
 }
 .tdg-premissas-incompleta strong { color: #b91c1c; }
@@ -3050,23 +3060,23 @@
   --primary2: #5fe0c2;
   --pink: #3fbf9a;
   --blue: #57c9a6;
-  --tdg-bg: #0a1f1b;
-  --tdg-card: #12302a;
-  --tdg-soft: #17403a;
-  --tdg-ink: #eafff7;
-  --tdg-muted: #a6c3b9;
-  --tdg-line: #274c43;
-  --tdg-line-strong: #35695b;
+  --tdg-bg: #0b1d18;
+  --tdg-card: #102822;
+  --tdg-soft: #163a31;
+  --tdg-ink: #e8f5ef;
+  --tdg-muted: #a2beb3;
+  --tdg-line: #23443b;
+  --tdg-line-strong: #35604f;
   --tdg-green: #4bc9a2;
   --tdg-lime: #9fe870;
   --tdg-lime-texto: #bfe56b;
   --tdg-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
   /* Aliases legados no escuro: superfícies e bordas seguem o tema; as cores
      semânticas clareiam para não sumir sobre o fundo escuro. */
-  --tdg-surface2: #17403a;
+  --tdg-surface2: #163a31;
   --tdg-surface-soft: rgba(75, 201, 162, 0.08);
-  --tdg-surface-muted: #12302a;
-  --tdg-border: #274c43;
+  --tdg-surface-muted: #102822;
+  --tdg-border: #23443b;
   --tdg-brand: #4bc9a2;
   --tdg-deep: #9fe870;
   --tdg-accent: #58c78a;
@@ -3075,10 +3085,7 @@
   --tdg-warning: #e2b45e;
   --tdg-danger: #f0908a;
   color: var(--tdg-ink);
-  background:
-    radial-gradient(circle at 8% -8%, rgba(75, 201, 162, 0.16), transparent 30%),
-    radial-gradient(circle at 88% 0%, rgba(23, 98, 79, 0.22), transparent 28%),
-    linear-gradient(180deg, #07201b 0%, #05130f 100%);
+  background: var(--tdg-bg);
 }
 
 /* Legibilidade no modo escuro — rodada 1.

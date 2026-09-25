@@ -134,7 +134,7 @@
 }
 
 .tdg-price-summary > div {
-  background: #f7fbf9;
+  background: var(--ds-surface-sunken);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 18px;
   display: grid;
@@ -151,12 +151,12 @@
 }
 
 .tdg-price-summary > div.good {
-  background: #edf8f2;
+  background: var(--ds-success-soft);
   border-color: #9ad3bc;
 }
 
 .tdg-price-summary > div.risk {
-  background: #fff4f1;
+  background: var(--ds-danger-soft);
   border-color: #efb9ae;
 }
 
@@ -187,7 +187,7 @@
 }
 
 .tdg-price-details > span {
-  background: #f7fbf9;
+  background: var(--ds-surface-sunken);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 14px;
   display: grid;
@@ -206,7 +206,7 @@
 }
 
 .tdg-price-guidance {
-  background: #f2f8f5;
+  background: var(--ds-surface-sunken);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 20px;
   display: grid;
@@ -235,7 +235,7 @@
 }
 
 .tdg-environmental-summary {
-  background: #fff;
+  background: var(--tdg-card, #fff);
   border: 1px solid var(--tdg-line, #d6e8df);
   border-radius: 16px;
   display: grid;
