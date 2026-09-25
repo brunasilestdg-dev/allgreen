@@ -66,7 +66,7 @@ import {
   scheduleRiskSummary,
 } from "./features/projects/scheduleDomain.js";
 import {
-  buildNavigation,
+  buildNavigationForBusiness,
   writeVisit,
 } from "./features/navigation/menuDomain.js";
 import Modal from "./components/Modal.jsx";
@@ -13687,7 +13687,9 @@ export default function App() {
       .normalize("NFD")
       .replace(/[̀-ͯ]/g, "")
       .toLowerCase();
-  const searchableNav = [...visibleNav, ...navSecondary];
+  // A busca enxerga todas as telas: os pacotes do negócio organizam o menu,
+  // nunca tiram uma ferramenta do alcance.
+  const searchableNav = [...navForMode(mode), ...navSecondary];
   const searchResults = searchQuery.trim()
     ? searchableNav.filter(([, label]) =>
         normalizeSearch(label).includes(normalizeSearch(searchQuery)),
@@ -14642,7 +14644,8 @@ export default function App() {
             // O menu principal é escolhido por quem usa. O que fica de fora NÃO
             // perde acesso: cai em "Todas as ferramentas", logo abaixo, e
             // continua achável pela busca. Escolher menu é organizar atalho.
-            const { main, rest } = buildNavigation(
+            const { main, rest } = buildNavigationForBusiness(
+              navForMode(mode),
               visibleNav,
               db.preferences?.mainMenu,
               navGroups,

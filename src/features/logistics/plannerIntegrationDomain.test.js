@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   aplicarEdicaoPlannerNaTarefa,
+  aplicarPartilhaDoPlanoNaTarefa,
+  partilhaDoPlanoNaTarefa,
   contextoComercialDaTarefa,
   desvincularTarefaDoPlanner,
   listaDependenciasComRotulo,
@@ -245,5 +247,56 @@ describe("rótulo da dependência sem confundir clientes (#142)", () => {
       { id: "x", title: "Precificação", clientLabel: "DHL", status: "Concluído" },
     ]);
     expect(opcoes[0].rotulo).toBe("Precificação · DHL (Concluído)");
+  });
+});
+
+describe("a partilha do plano desce para as tarefas (quem vê o plano vê o quadro)", () => {
+  const plano = { id: "plan-1", name: "Novos Negócios", visibility: "private", members: ["u-jeb", "u-bruna"] };
+
+  it("tarefa criada pelo Planner num plano com pessoas específicas nasce compartilhada com elas, para editar", () => {
+    const tarefa = aplicarEdicaoPlannerNaTarefa(
+      { id: "t1", title: "Informar ID", planId: "plan-1" },
+      plano,
+      { ownerId: "u-bruna" },
+    );
+    expect(tarefa.sharedWith).toEqual(["u-jeb"]); // a dona não se compartilha consigo
+    expect(tarefa.sharingPermission).toBe("editar");
+    expect(tarefa.plannerSharedWith).toEqual(["u-jeb"]);
+    expect(tarefa.visibility).toBeUndefined();
+  });
+
+  it("plano 'todo o espaço' liga espaco_todo; voltar a privado desliga só o que o Planner ligou", () => {
+    const aberta = partilhaDoPlanoNaTarefa({ id: "t1", ownerId: "u-bruna" }, { ...plano, visibility: "shared", members: [] });
+    expect(aberta.visibility).toBe("espaco_todo");
+    expect(aberta.plannerVisibility).toBe("espaco_todo");
+    const fechada = partilhaDoPlanoNaTarefa(aberta, { ...plano, visibility: "private", members: [] });
+    expect(fechada.visibility).toBe("privado");
+    expect(fechada.plannerVisibility).toBe("");
+    // espaco_todo escolhido à mão (sem marca do Planner) não é desfeito
+    const manual = partilhaDoPlanoNaTarefa({ id: "t2", visibility: "espaco_todo", plannerSharedWith: ["u-x"], sharedWith: ["u-x"] }, { ...plano, members: [] });
+    expect(manual.visibility).toBe("espaco_todo");
+    expect(manual.sharedWith).toEqual([]);
+  });
+
+  it("recompartilhar troca só o que veio do plano e preserva quem foi compartilhado à mão", () => {
+    const antes = { id: "t1", plannerPlanId: "plan-1", sharedWith: ["u-manual", "u-jeb"], plannerSharedWith: ["u-jeb"] };
+    const depois = aplicarPartilhaDoPlanoNaTarefa(antes, { ...plano, members: ["u-novo"] });
+    expect(depois.sharedWith).toEqual(["u-manual", "u-novo"]);
+    expect(depois.plannerSharedWith).toEqual(["u-novo"]);
+  });
+
+  it("não toca tarefa de outro plano nem tarefa sem nada a compartilhar (mesma referência)", () => {
+    const outra = { id: "t9", plannerPlanId: "plan-2", sharedWith: ["u-a"] };
+    expect(aplicarPartilhaDoPlanoNaTarefa(outra, plano)).toBe(outra);
+    const solta = { id: "t3", plannerPlanId: "plan-1" };
+    expect(aplicarPartilhaDoPlanoNaTarefa(solta, { ...plano, members: [] })).toBe(solta);
+  });
+
+  it("arquivar o plano retira a partilha que veio dele", () => {
+    const tarefa = { id: "t1", plannerPlanId: "plan-1", sharedWith: ["u-manual", "u-jeb"], plannerSharedWith: ["u-jeb"], visibility: "espaco_todo", plannerVisibility: "espaco_todo" };
+    const solta = desvincularTarefaDoPlanner(tarefa, "plan-1");
+    expect(solta.plannerPlanId).toBe("");
+    expect(solta.sharedWith).toEqual(["u-manual"]);
+    expect(solta.visibility).toBe("privado");
   });
 });

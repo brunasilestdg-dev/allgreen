@@ -59,6 +59,7 @@ let ana; // criadora e dona do espaço
 let bia; // colega no mesmo espaço
 let leo; // auditor no mesmo espaço, sem planner:manage
 let externo; // outro espaço (dono do próprio)
+let colab; // só no espaço do APP (memberships), sem vínculo com a vertical
 
 beforeAll(async () => {
   await env.DB.prepare(
@@ -75,6 +76,12 @@ beforeAll(async () => {
   await vincular(bia, "vendedor", ["read", "planner:manage"], ana.id);
   await vincular(leo, "auditor", ["read"], ana.id);
   await vincular(externo, "vendedor", ["read", "planner:manage"], externo.id);
+  // Colaborador convidado pelo "Seu Funcionário": existe em memberships do
+  // espaço da Ana, mas nunca foi liberado na To Do Green.
+  colab = await criarUsuario("plan-colab", "colab@plan.test");
+  await env.DB.prepare(
+    "INSERT INTO memberships (id, owner_id, member_id, role, created_at, status) VALUES (?, ?, ?, 'colaborador', ?, 'ativo')",
+  ).bind(crypto.randomUUID(), ana.id, colab.id, new Date().toISOString()).run();
 });
 
 describe("permissão de escrita", () => {
@@ -381,5 +388,54 @@ describe("Planner universal com contexto comercial opcional", () => {
     });
     expect(resposta.status).toBe(400);
     expect((await resposta.json()).error).toMatch(/Cliente vinculado não encontrado/);
+  });
+});
+
+describe("compartilhar com quem não alcança a vertical", () => {
+  // O bug relatado pela titular: "compartilhei e as pessoas não conseguem
+  // ver". A lista de pessoas aceitava quem só está no espaço do app
+  // (memberships) — e a vertical recusa essa pessoa na porta. Agora o servidor
+  // DIZ quem alcança e quem não, e a resposta do plano lista quem ficou de fora.
+  it("/pessoas marca quem alcança o Planner neste espaço", async () => {
+    const { registros } = await (await pedir("/api/todogreen/planner/pessoas", { token: ana.token })).json();
+    const porId = Object.fromEntries(registros.map((p) => [p.id, p]));
+    expect(porId[bia.id]?.alcancaPlanner).toBe(true);
+    // Auditor lê a vertical: vê plano compartilhado com ele, mesmo sem planner:manage.
+    expect(porId[leo.id]?.alcancaPlanner).toBe(true);
+    // Só no espaço do app: aparece (é gente do espaço), mas não alcança.
+    expect(porId[colab.id]?.alcancaPlanner).toBe(false);
+    // Quem é de outro espaço nem aparece.
+    expect(porId[externo.id]).toBeUndefined();
+  });
+
+  it("o plano aceita a pessoa na lista, mas avisa que ela ainda não alcança; a vertical a recusa (403)", async () => {
+    const r = await pedir("/api/todogreen/planner/planos", {
+      metodo: "POST", token: ana.token,
+      corpo: { name: "Novos Negócios", visibility: "private", members: [bia.id, colab.id] },
+    });
+    expect(r.status).toBe(201);
+    const plano = await r.json();
+    expect(plano.members).toEqual([bia.id, colab.id]);
+    expect(plano.membrosSemAcesso).toEqual([colab.id]);
+
+    expect((await pedir("/api/todogreen/planner/planos", { token: colab.token })).status).toBe(403);
+
+    // Liberada na vertical, a mesma pessoa passa a ver o plano sem recompartilhar.
+    await vincular(colab, "auditor", ["read"], ana.id);
+    const daColab = await (await pedir("/api/todogreen/planner/planos", { token: colab.token })).json();
+    expect(daColab.registros.some((p) => p.id === plano.id)).toBe(true);
+
+    const patch = await pedir(`/api/todogreen/planner/planos/${plano.id}`, {
+      metodo: "PATCH", token: ana.token,
+      corpo: { revision: plano.revision, members: [bia.id, colab.id] },
+    });
+    expect((await patch.json()).membrosSemAcesso).toEqual([]);
+  });
+
+  it("?owner= do próprio espaço não muda o recorte; espaço alheio é recusado", async () => {
+    const proprio = await pedir(`/api/todogreen/planner/planos?owner=${ana.id}`, { token: bia.token });
+    expect(proprio.status).toBe(200);
+    const alheio = await pedir(`/api/todogreen/planner/planos?owner=${externo.id}`, { token: bia.token });
+    expect(alheio.status).toBe(404);
   });
 });
