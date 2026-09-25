@@ -554,6 +554,11 @@ export async function handleTodoGreenTreasury(request, env, access, user) {
   const acao = texto(partes[4], 40);
 
   if (request.method === "GET") {
+    // Saldo, extrato, cobrança e resultado são dinheiro da empresa: a mesma
+    // leitura que o razão exige (coleção `financial`) — finance:manage ou
+    // audit:read. Antes bastava o vínculo com o espaço (L8 da matriz).
+    if (!podeNaVertical(access, "finance:manage") && !podeNaVertical(access, "audit:read"))
+      return json({ error: "Seu papel não pode consultar a tesouraria." }, 403);
     if (recurso === "extrato") return listarExtrato(env, access, url);
     if (recurso === "saldos") return listarSaldos(env, access);
     if (recurso === "sugestoes") return sugestoesDeConciliacao(env, access, url);

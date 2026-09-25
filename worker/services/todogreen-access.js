@@ -331,6 +331,21 @@ export const recorteDeCarteira = (access, email, alias, colunaCliente = "client_
   };
 };
 
+// Papéis que só alcançam o PRÓPRIO portal: nunca a vertical interna
+// (carteira, financeiro, compras, estoque, cadastros). O corte é pelo PAPEL, e
+// não pela permissão "read", de propósito: acessos sob medida de outros papéis,
+// com lista estreitada, continuam valendo. Até 24/09 só o motorista era barrado
+// — o colaborador PJ/CLT lia saldos, títulos, compras e estoque do espaço (L8
+// da matriz de prontidão). Toda rota interna pergunta aqui; os portais
+// (`/driver-portal`, `/employee-portal`) não passam por este corte.
+const PORTAL_DO_PAPEL = Object.freeze({
+  motorista: "Motoristas usam o portal do motorista (/portal-motorista).",
+  colaborador: "Colaboradores usam o portal do colaborador (/portal-colaborador).",
+});
+
+// A mensagem de recusa quando o papel é só de portal; "" quando pode seguir.
+export const recusaDoPortalDoPapel = (access) => PORTAL_DO_PAPEL[access?.role] || "";
+
 // Permissão de verdade, lida do vínculo — nunca de rótulo de tela. Delega para
 // a mesma regra que o front usa: uma divergência entre as duas seria um botão
 // liberado na tela que o servidor recusa (ou o contrário).

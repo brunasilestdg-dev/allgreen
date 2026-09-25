@@ -11,7 +11,7 @@ import {
 } from "../../src/features/logistics/logisticsVerticalDomain.js";
 import { parametrosResolvidos } from "./todogreen-pricing-parameters.js";
 import { reguaEsgEmVigor } from "./todogreen-environmental-parameters.js";
-import { podeNaVertical, resolveTodoGreenAccess } from "./todogreen-access.js";
+import { podeNaVertical, recusaDoPortalDoPapel, resolveTodoGreenAccess } from "./todogreen-access.js";
 import { handleTodoGreenGoals } from "./todogreen-goals.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { routeTodoGreenApi } from "./todogreen-router.js";
@@ -284,15 +284,17 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
   const path = url.pathname;
   const resource = path.split("/").filter(Boolean)[2] || "access";
 
-  if (path.startsWith("/api/todogreen/transactions"))
+  // Defesa em profundidade: transações e cadastros mestres (PII de motoristas,
+  // CNH, chave PIX) barram por PAPEL quem só usa o próprio portal, como as
+  // demais rotas internas — motorista e colaborador têm portal próprio.
+  const recusaDoPortal = recusaDoPortalDoPapel(access);
+  if (path.startsWith("/api/todogreen/transactions")) {
+    if (recusaDoPortal) return response({ error: recusaDoPortal }, 403);
     return handleTransactionsWithControls(request, env, access, user);
+  }
 
   if (path.startsWith("/api/todogreen/master-data")) {
-    // Defesa em profundidade: os cadastros mestres guardam PII (motoristas, CNH,
-    // chave PIX). Além da permissão por recurso, o motorista é barrado por PAPEL
-    // aqui, como nas demais rotas internas — ele usa o portal do motorista.
-    if (access.role === "motorista")
-      return response({ error: "Motoristas usam o portal do motorista (/portal-motorista)." }, 403);
+    if (recusaDoPortal) return response({ error: recusaDoPortal }, 403);
     const masterResource = path.replace(/^\/api\/todogreen\/master-data\/?/, "").split("/").filter(Boolean)[0] || "";
     const required = MASTER_PERMISSIONS[masterResource] || [];
     if (required.length && !canAny(access, required))
