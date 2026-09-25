@@ -227,7 +227,10 @@ describe("endpoints e triagem por espaço", () => {
     expect([200, 500]).toContain(r.status);
     expect(r.status).not.toBe(404);
     expect((await call("/api/todogreen/market-radar", { token: outro.token })).status).toBe(403);
-  });
+    // Folga própria: a rota percorre a cascata de busca e, com a suíte inteira
+    // rodando em paralelo (container do Cloudflare Builds), passou dos 15 s
+    // padrão sem nenhum defeito — sozinho, termina em ~2 s.
+  }, 45_000);
 });
 
 describe("preferências do radar por espaço (0133) e sinal → oportunidade", () => {
