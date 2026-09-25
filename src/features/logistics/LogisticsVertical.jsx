@@ -76,7 +76,7 @@ export { secaoDaRota, permissaoDaPagina, trilhaDaPagina } from "./shell/navegaca
 export { produtoDaRota, todoGreenRouteToPage } from "./shell/rotas.js";
 export { ACESSO, lerRespostaDeAcesso } from "./shell/acesso.js";
 
-export default function LogisticsVertical({ db, update, setToast, access = {}, authHeaders }) {
+export default function LogisticsVertical({ db, update, setToast, access = {}, authHeaders, workspaceServerWrite }) {
   const [path, setPath] = useState(todoGreenPath());
   const [query, setQuery] = useState("");
   // O modo de navegação (por área × por funcionalidade) é preferência de quem
@@ -378,6 +378,7 @@ export default function LogisticsVertical({ db, update, setToast, access = {}, a
     primaryNavigation, ehDev, registros, criar, atualizar, arquivar, registrarPagamento,
     estornarPagamento, registrarEventoOperacao, listarSubrecurso, pedidosDeAprovacao,
     clientes, setClientes, verticalData, dashboard, saveHomePreferences,
+    workspaceServerWrite,
   };
 
   return (

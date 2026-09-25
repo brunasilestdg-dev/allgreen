@@ -40,7 +40,11 @@ const idsUnicos = (...listas) =>
 // intacta (mesma referência) — o sync roda sobre a coleção inteira.
 export const partilhaDoPlanoNaTarefa = (tarefa = {}, plano = {}) => {
   const donoDaTarefa = String(tarefa.ownerId || "");
-  const membros = idsUnicos(plano.members || plano.membros).filter((id) => id !== donoDaTarefa);
+  // Quem criou o plano também participa: a ação que um colega cria precisa
+  // aparecer no To Do de quem criou o plano (quando não é o dono da tarefa).
+  const pessoasDoPlano = idsUnicos(plano.members || plano.membros);
+  const membros = idsUnicos(pessoasDoPlano, pessoasDoPlano.length ? [plano.ownerUserId] : [])
+    .filter((id) => id !== donoDaTarefa);
   const compartilhadoComEspaco = String(plano.visibility || plano.visibilidade || "") === "shared";
   const anteriores = idsUnicos(tarefa.plannerSharedWith);
   const visibilidadeAnterior = String(tarefa.plannerVisibility || "");
