@@ -95,7 +95,9 @@ beforeAll(async () => {
   auditor = await criarUsuario("tes-auditor", "auditor@tesouraria.test");
   await autorizar(gestora);
   await autorizar(colega);
-  await autorizar(auditor, "auditor", ["read"]);
+  // O auditor do catálogo de papéis: "read" + "audit:read". Ler a tesouraria
+  // exige finance:manage ou audit:read, a mesma régua do razão (L8).
+  await autorizar(auditor, "auditor", ["read", "audit:read"]);
 
   conta = await criarConta(gestora.token, "Banco do Brasil", 5000);
 });

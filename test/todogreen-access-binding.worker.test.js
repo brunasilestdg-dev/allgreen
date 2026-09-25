@@ -284,3 +284,31 @@ describe("AG-SEP-04: ordem da negação e menor privilégio por tipo de vínculo
     expect(access?.role).not.toBe("admin");
   });
 });
+
+// O administrador global (TODOGREEN_ADMIN_EMAILS) resolve como "admin" com "*".
+// Isso não pode apagar um perfil de desenvolvedor dado a ele explicitamente:
+// a Central de Integrações ignora "*"/admin e só abre com `dev:access`.
+describe("administrador global com perfil de desenvolvedor explícito", () => {
+  const envAdmin = () => ({ ...env, TODOGREEN_ADMIN_EMAILS: "dev.admin@todogreen.test,so.admin@todogreen.test" });
+
+  beforeAll(async () => {
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_access_emails
+         (id,tenant_id,email,role,status,permissions_json,note,created_by,workspace_owner_id,created_at,updated_at)
+       VALUES (?,'todogreen','dev.admin@todogreen.test','desenvolvedor','active','["*","dev:access"]','','vin-dona','vin-dona',?,?)`,
+    ).bind(crypto.randomUUID(), agora, agora).run();
+  });
+
+  it("mantém `dev:access` quando a liberação dele é de desenvolvedor", async () => {
+    const { access } = await resolveTodoGreenAccess(envAdmin(), { id: "dev-admin", email: "dev.admin@todogreen.test" }, null);
+    expect(access?.role).toBe("admin");
+    expect(access?.permissions).toEqual(["*", "dev:access"]);
+  });
+
+  it("admin global sem perfil de desenvolvedor continua sem `dev:access`", async () => {
+    const { access } = await resolveTodoGreenAccess(envAdmin(), { id: "so-admin", email: "so.admin@todogreen.test" }, null);
+    expect(access?.role).toBe("admin");
+    expect(access?.permissions).toEqual(["*"]);
+  });
+});

@@ -237,8 +237,15 @@ export async function resolveTodoGreenAccess(env, user, requestedOwnerId, opcoes
   // permissões (mesmo vazia). Sem elas, as permissões derivam do papel mínimo do
   // vínculo — não podem ficar vazias, senão o portal do motorista/colaborador não
   // teria nem a própria permissão (driver:self / colaborador:self).
+  // O administrador global vira "admin" com "*", mas isso não pode apagar um
+  // perfil de desenvolvedor dado explicitamente a ele: a Central de Integrações
+  // ignora "*" e admin de propósito (`ehPerfilDesenvolvedor`), então sem este
+  // marcador quem está nas duas listas perdia a tela sem aviso.
+  const explicitos = [autorizado, vinculo].filter(Boolean);
+  const perfilDevExplicito = explicitos.some((item) =>
+    item.role === "desenvolvedor" || parse(item.permissions_json, []).includes?.("dev:access"));
   const permissions = ehAdministrador
-    ? ["*"]
+    ? (perfilDevExplicito ? ["*", "dev:access"] : ["*"])
     : autorizado || vinculo
       ? parse(autorizado?.permissions_json || vinculo?.permissions_json, [])
       : TODO_GREEN_PERMISSIONS[role] || [];
@@ -354,6 +361,21 @@ export const recorteDeCarteira = (access, email, alias, colunaCliente = "client_
     params: [String(email || "").trim().toLowerCase()],
   };
 };
+
+// Papéis que só alcançam o PRÓPRIO portal: nunca a vertical interna
+// (carteira, financeiro, compras, estoque, cadastros). O corte é pelo PAPEL, e
+// não pela permissão "read", de propósito: acessos sob medida de outros papéis,
+// com lista estreitada, continuam valendo. Até 24/09 só o motorista era barrado
+// — o colaborador PJ/CLT lia saldos, títulos, compras e estoque do espaço (L8
+// da matriz de prontidão). Toda rota interna pergunta aqui; os portais
+// (`/driver-portal`, `/employee-portal`) não passam por este corte.
+const PORTAL_DO_PAPEL = Object.freeze({
+  motorista: "Motoristas usam o portal do motorista (/portal-motorista).",
+  colaborador: "Colaboradores usam o portal do colaborador (/portal-colaborador).",
+});
+
+// A mensagem de recusa quando o papel é só de portal; "" quando pode seguir.
+export const recusaDoPortalDoPapel = (access) => PORTAL_DO_PAPEL[access?.role] || "";
 
 // Permissão de verdade, lida do vínculo — nunca de rótulo de tela. Delega para
 // a mesma regra que o front usa: uma divergência entre as duas seria um botão

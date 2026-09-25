@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   CalendarRange,
@@ -40,6 +40,7 @@ import {
   rotulosDoPlano,
 } from "../plannerDomain.js";
 import {
+  aplicarEdicaoPlannerNaTarefa,
   tarefaCanonicaPertenceAoPlano,
   tarefaTodoParaPlanner,
 } from "../plannerIntegrationDomain.js";
@@ -155,10 +156,9 @@ export default function PlannerPage({
   oportunidades = [],
   onNavigate,
   canonicalTasks = [],
-  onUpsertCanonicalTask,
   onDeleteCanonicalTask,
-  onDetachCanonicalPlanTasks,
-  onSyncPlanSharing,
+  espacoDoApp = "",
+  workspaceServerWrite,
   permissions = null,
 }) {
   const [planos, setPlanos] = useState([]);
@@ -167,6 +167,14 @@ export default function PlannerPage({
   // A tela esconde o que ele recusaria em vez de mostrar botão que dá 403.
   const podeGerir = hasTodoGreenPermission(role, "planner:manage", permissions);
   const pedir = (path, options) => request(path, authHeaders, options, espacoId);
+  // Toda escrita que mexe no quadro do espaço passa pelo app: se esta aba está
+  // com o mesmo workspace aberto, ele salva o pendente antes e adota a revisão
+  // devolvida depois (sem aviso de conflito). Fora dele, só executa.
+  const escrever = (run) => (workspaceServerWrite ? workspaceServerWrite(espacoId, run) : run());
+  // As ações (task canônica) de todos os planos que esta pessoa alcança, lidas
+  // do quadro do dono do espaço — não do workspace de quem está logado.
+  const [acoes, setAcoes] = useState([]);
+  const [acoesCarregadas, setAcoesCarregadas] = useState(false);
   const [planoAtivoId, setPlanoAtivoId] = useState("");
   const [pessoas, setPessoas] = useState([]);
   const [vista, setVista] = useState(() => {
@@ -218,14 +226,14 @@ export default function PlannerPage({
   );
   const baldes = useMemo(() => normalizarBaldes(planoAtivo?.buckets || []), [planoAtivo]);
   const tarefas = useMemo(
-    () => canonicalTasks
+    () => acoes
       .filter((task) => tarefaCanonicaPertenceAoPlano(task, planoAtivoId))
       .map((task) => tarefaTodoParaPlanner(task)),
-    [canonicalTasks, planoAtivoId],
+    [acoes, planoAtivoId],
   );
   const minhas = useMemo(() => {
     const planosVisiveis = new Set(planos.map((plano) => plano.id));
-    return canonicalTasks
+    return acoes
       .filter((task) =>
         task?.plannerPlanId &&
         planosVisiveis.has(task.plannerPlanId) &&
@@ -233,11 +241,42 @@ export default function PlannerPage({
         task?.deleted !== true
       )
       .map((task) => tarefaTodoParaPlanner(task));
-  }, [canonicalTasks, planos]);
+  }, [acoes, planos]);
   // Só o criador (ou a administração) mexe na estrutura do plano.
   const souDono = Boolean(
     planoAtivo && (["owner", "admin"].includes(role) || planoAtivo.ownerUserId === currentUserId),
   );
+
+  // Aplica à lista local o que o servidor gravou (upsert + remoções).
+  const aplicarEspaco = (espaco) => {
+    if (!espaco) return;
+    const alteradas = Array.isArray(espaco.tarefas) ? espaco.tarefas : [];
+    const removidas = new Set(Array.isArray(espaco.removidas) ? espaco.removidas : []);
+    if (!alteradas.length && !removidas.size) return;
+    setAcoes((lista) => {
+      const porId = new Map(alteradas.map((t) => [t.id, t]));
+      const vistos = new Set();
+      const mantidas = lista
+        .filter((t) => !removidas.has(t.id))
+        .map((t) => {
+          if (!porId.has(t.id)) return t;
+          vistos.add(t.id);
+          return porId.get(t.id);
+        });
+      return [...alteradas.filter((t) => !vistos.has(t.id) && t.plannerPlanId), ...mantidas]
+        .filter((t) => t.plannerPlanId);
+    });
+  };
+
+  const carregarAcoes = async () => {
+    try {
+      const { registros } = await pedir("/acoes");
+      setAcoes(registros || []);
+      setAcoesCarregadas(true);
+    } catch (motivo) {
+      if (motivo.status !== 403) setErro(motivo.message);
+    }
+  };
 
   const carregarPlanos = async (selecionar) => {
     setOcupado("carregando");
@@ -245,6 +284,7 @@ export default function PlannerPage({
     try {
       const { registros } = await pedir("/planos");
       setPlanos(registros || []);
+      carregarAcoes();
       const proximo = selecionar || planoAtivoId || (registros?.[0]?.id ?? "");
       setPlanoAtivoId(registros?.some((p) => p.id === proximo) ? proximo : registros?.[0]?.id || "");
       setOcupado("");
@@ -256,6 +296,47 @@ export default function PlannerPage({
   };
 
   useEffect(() => { carregarPlanos(); }, []);
+  // Quem divide o plano precisa ver o que o outro fez sem recarregar a página:
+  // ao voltar para a aba e, com ela visível, a cada 45 s.
+  useEffect(() => {
+    const aoVoltar = () => { if (document.visibilityState === "visible") carregarAcoes(); };
+    document.addEventListener("visibilitychange", aoVoltar);
+    const relogio = setInterval(() => { if (document.visibilityState === "visible") carregarAcoes(); }, 45000);
+    return () => { document.removeEventListener("visibilitychange", aoVoltar); clearInterval(relogio); };
+  }, [espacoId]);
+
+  // Resgate das ações antigas: antes desta correção, cada pessoa gravava as
+  // ações do plano no PRÓPRIO workspace, e os colegas nunca as viam. Quando o
+  // workspace aberto no app não é o do espaço da vertical, as ações de planos
+  // visíveis que só existem aqui sobem uma vez para o quadro do espaço e saem
+  // do workspace pessoal (senão apareceriam em dobro no To Do de quem criou).
+  const resgateFeito = useRef(false);
+  useEffect(() => {
+    if (resgateFeito.current || !acoesCarregadas || !podeGerir || !espacoId) return;
+    if (!espacoDoApp || espacoDoApp === espacoId) { resgateFeito.current = true; return; }
+    const visiveis = new Map(planos.map((p) => [p.id, p]));
+    const noServidor = new Set(acoes.map((t) => t.id));
+    const presas = canonicalTasks.filter((t) =>
+      t?.id && t.plannerPlanId && visiveis.has(t.plannerPlanId) && !noServidor.has(t.id)
+      && t.archived !== true && t.deleted !== true);
+    resgateFeito.current = true;
+    if (!presas.length) return;
+    (async () => {
+      let movidas = 0;
+      for (const t of presas) {
+        try {
+          const resposta = await pedir(`/planos/${t.plannerPlanId}/acoes/${encodeURIComponent(t.id)}`, {
+            method: "PUT",
+            body: JSON.stringify({ tarefa: tarefaTodoParaPlanner(t) }),
+          });
+          aplicarEspaco(resposta.espaco);
+          onDeleteCanonicalTask?.(t.id);
+          movidas += 1;
+        } catch { /* fica onde está; tenta de novo na próxima abertura */ }
+      }
+      if (movidas) avisar(`${movidas} ação(ões) antiga(s) agora estão visíveis para todos do plano.`, "sucesso");
+    })();
+  }, [acoesCarregadas, planos, acoes, canonicalTasks, podeGerir, espacoId, espacoDoApp]);
   useEffect(() => {
     let ativo = true;
     // Duas portas de "gente do espaço", exatamente as que o servidor aceita
@@ -304,10 +385,10 @@ export default function PlannerPage({
     setOcupado("salvando");
     try {
       if (modalPlano?.modo === "editar" && modalPlano.plano) {
-        await pedir(`/planos/${modalPlano.plano.id}`, {
+        await escrever(() => pedir(`/planos/${modalPlano.plano.id}`, {
           method: "PATCH",
           body: JSON.stringify({ revision: modalPlano.plano.revision, name: form.name, description: form.description, color: form.color }),
-        });
+        }));
         setModalPlano(null);
         await carregarPlanos(modalPlano.plano.id);
         avisar("Plano atualizado.", "sucesso");
@@ -321,7 +402,6 @@ export default function PlannerPage({
         const novo = await pedir("/planos", { method: "POST", body: JSON.stringify(corpo) });
         setModalPlano(null);
         setVendoMinhas(false);
-        onSyncPlanSharing?.(novo);
         await carregarPlanos(novo.id);
         avisar(avisoDePartilha("Plano criado.", novo), novo.membrosSemAcesso?.length ? "info" : "sucesso");
       }
@@ -337,12 +417,14 @@ export default function PlannerPage({
   const salvarPartilha = async ({ modo, members }) => {
     if (!partilhaEmEdicao) return;
     try {
-      const atualizado = await pedir(`/planos/${partilhaEmEdicao.id}`, {
+      // O servidor também desce a nova partilha para as ações do plano no
+      // quadro do espaço (To Do / Meu Dia de quem foi incluído).
+      const atualizado = await escrever(() => pedir(`/planos/${partilhaEmEdicao.id}`, {
         method: "PATCH",
         body: JSON.stringify({ revision: partilhaEmEdicao.revision, ...partilhaParaEnvio(modo, members) }),
-      });
+      }));
       setPartilhaEmEdicao(null);
-      onSyncPlanSharing?.(atualizado);
+      aplicarEspaco(atualizado.espaco);
       await carregarPlanos(partilhaEmEdicao.id);
       avisar(avisoDePartilha("Compartilhamento atualizado.", atualizado), atualizado.membrosSemAcesso?.length ? "info" : "sucesso");
     } catch (motivo) {
@@ -355,8 +437,8 @@ export default function PlannerPage({
     if (!planoAtivo || !souDono) return;
     if (typeof window !== "undefined" && !window.confirm(`Arquivar o plano "${planoAtivo.name}"? As tarefas continuarão disponíveis no To Do.`)) return;
     try {
-      await pedir(`/planos/${planoAtivo.id}`, { method: "DELETE" });
-      onDetachCanonicalPlanTasks?.(planoAtivo.id);
+      const resposta = await escrever(() => pedir(`/planos/${planoAtivo.id}`, { method: "DELETE" }));
+      aplicarEspaco(resposta.espaco);
       setPlanoAtivoId("");
       await carregarPlanos();
       avisar("Plano arquivado.", "sucesso");
@@ -369,10 +451,10 @@ export default function PlannerPage({
   const salvarBaldes = async (novos) => {
     if (!planoAtivo || !souDono) return false;
     try {
-      const atualizado = await pedir(`/planos/${planoAtivo.id}`, {
+      const atualizado = await escrever(() => pedir(`/planos/${planoAtivo.id}`, {
         method: "PATCH",
         body: JSON.stringify({ revision: planoAtivo.revision, buckets: novos }),
-      });
+      }));
       setPlanos((lista) => lista.map((p) => (p.id === atualizado.id ? atualizado : p)));
       return true;
     } catch (motivo) {
@@ -399,17 +481,35 @@ export default function PlannerPage({
     avisar("Balde excluído.", "sucesso");
   };
 
-  // ----- Tarefas (task canônica) -----
-  const gravarTarefa = (tarefa) => {
+  // ----- Tarefas (task canônica, gravada no quadro do espaço) -----
+  // A tela mostra a mudança na hora (otimista) e o servidor confirma; se ele
+  // recusar, a lista volta ao que está gravado e o motivo aparece.
+  const gravarTarefa = async (tarefa) => {
     if (!planoAtivo) return;
+    const plano = planoAtivo;
     const id = tarefa.rawTaskId || tarefa.id || gerarIdDeTarefa();
-    onUpsertCanonicalTask?.({ ...tarefa, id, rawTaskId: id, canonicalTaskId: tarefa.canonicalTaskId || id, planId: planoAtivo.id }, planoAtivo);
+    const pedido = { ...tarefa, id, rawTaskId: id, canonicalTaskId: tarefa.canonicalTaskId || id, planId: plano.id };
+    setAcoes((lista) => {
+      const existente = lista.find((t) => t.id === id);
+      const otimista = aplicarEdicaoPlannerNaTarefa(pedido, plano, existente || {});
+      return existente ? lista.map((t) => (t.id === id ? otimista : t)) : [otimista, ...lista];
+    });
+    try {
+      const resposta = await escrever(() => pedir(`/planos/${plano.id}/acoes/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ tarefa: pedido }),
+      }));
+      aplicarEspaco(resposta.espaco);
+    } catch (motivo) {
+      avisar([motivo.message, ...(motivo.detalhes || [])].join(" · "), "erro");
+      carregarAcoes();
+    }
   };
 
   const adicionarRapida = (bucketId, titulo) => {
     if (!titulo || !planoAtivo) return;
     const id = gerarIdDeTarefa();
-    onUpsertCanonicalTask?.({ ...tarefaVazia(bucketId), id, rawTaskId: id, canonicalTaskId: id, title: titulo, planId: planoAtivo.id }, planoAtivo);
+    gravarTarefa({ ...tarefaVazia(bucketId), id, rawTaskId: id, canonicalTaskId: id, title: titulo });
   };
 
   const salvarTarefa = (tarefa) => {
@@ -418,11 +518,19 @@ export default function PlannerPage({
     avisar("Tarefa salva.", "sucesso");
   };
 
-  const arquivarTarefa = (tarefa) => {
+  const arquivarTarefa = async (tarefa) => {
     if (!planoAtivo) return;
-    onDeleteCanonicalTask?.(tarefa.rawTaskId || tarefa.id);
+    const id = tarefa.rawTaskId || tarefa.id;
     setTarefaEmEdicao(null);
-    avisar("Tarefa arquivada.", "sucesso");
+    setAcoes((lista) => lista.filter((t) => t.id !== id));
+    try {
+      const resposta = await escrever(() => pedir(`/planos/${planoAtivo.id}/acoes/${encodeURIComponent(id)}`, { method: "DELETE" }));
+      aplicarEspaco(resposta.espaco);
+      avisar("Tarefa arquivada.", "sucesso");
+    } catch (motivo) {
+      avisar(motivo.message, "erro");
+      carregarAcoes();
+    }
   };
 
   const mudarProgresso = (tarefa, progress) => gravarTarefa({ ...tarefa, progress });

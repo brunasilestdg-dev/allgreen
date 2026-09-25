@@ -1,5 +1,5 @@
 import { handleTodoGreenWorkCenter } from "./todogreen-work-center.js";
-import { exigirAcessoTodoGreen } from "./todogreen-access.js";
+import { exigirAcessoTodoGreen, recusaDoPortalDoPapel } from "./todogreen-access.js";
 import { handleTodoGreenFleet } from "./todogreen-fleet.js";
 import { handleTodoGreenTracker } from "./todogreen-tracker.js";
 import { handleTodoGreenTrackerReadiness } from "./todogreen-tracker-readiness.js";
@@ -74,21 +74,17 @@ const guarded = async (label, message, handler) => {
 
 const internalAccess = (request, env) => exigirAcessoTodoGreen(request, env);
 
-// O papel `motorista` só alcança o próprio portal. Este é o único choke
+// Motorista e colaborador só alcançam o próprio portal. Este é o único choke
 // point — sem ele, cada handler GET precisaria repetir a checagem, e o
-// primeiro que esquecesse viraria a porta pela qual um motorista lê a
-// carteira, a folha ou o financeiro inteiros. O corte é pelo PAPEL (não pela
-// permissão "read"): listas estreitadas de outros papéis continuam valendo.
+// primeiro que esquecesse viraria a porta pela qual um motorista ou um
+// prestador lê a carteira, a folha ou o financeiro inteiros. O corte é pelo
+// PAPEL (não pela permissão "read"): listas estreitadas de outros papéis
+// continuam valendo. A regra mora em `recusaDoPortalDoPapel`.
 const internalReadAccess = async (request, env) => {
   const resolved = await exigirAcessoTodoGreen(request, env);
   if (resolved.response) return resolved;
-  if (resolved.access?.role === "motorista")
-    return {
-      response: new Response(
-        JSON.stringify({ error: "Motoristas usam o portal do motorista (/portal-motorista)." }),
-        { status: 403, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } },
-      ),
-    };
+  const recusa = recusaDoPortalDoPapel(resolved.access);
+  if (recusa) return { response: json({ error: recusa }, 403) };
   return resolved;
 };
 

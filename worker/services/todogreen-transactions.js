@@ -23,6 +23,10 @@ const allowedAny = (access, permissions) => permissions.some((permission) => all
 const canPlanOrder = (access) => allowedAny(access, ["planning:manage", "product:manage"]);
 const canOperateOrder = (access) => allowedAny(access, ["operations:manage", "operation:manage"]);
 const canManageCiot = (access) => allowedAny(access, ["ciot:manage", "planning:manage", "fiscal:manage", "finance:manage", "operations:manage"]);
+// Títulos e custos são dinheiro da empresa: lê quem abre as telas deles
+// (Títulos, Rateios) e o auditor — a mesma régua do razão (coleção
+// `financial`). Antes bastava o vínculo com o espaço (L8 da matriz).
+const canReadFinance = (access) => allowedAny(access, ["finance:manage", "revenue:manage", "cost:manage", "audit:read"]);
 
 // ===== Quem aponta o conector, e para onde =====
 //
@@ -1296,10 +1300,16 @@ export async function handleTodoGreenTransactions(request, env, access, user) {
   if (resource === "billing-items" && request.method === "GET") return listBilling(env, access, url);
   if (resource === "billing-items" && request.method === "POST" && id && action === "check") return checkBilling(env, access, user, id, body);
   if (resource === "billing-runs" && request.method === "POST" && !id) return closeBilling(env, access, user, body);
-  if (resource === "titles" && request.method === "GET" && !id) return listTitles(env, access, url);
+  if (resource === "titles" && request.method === "GET" && !id) {
+    if (!canReadFinance(access)) return json({ error: "Seu papel não pode consultar os títulos." }, 403);
+    return listTitles(env, access, url);
+  }
   if (resource === "titles" && request.method === "POST" && !id) return createTitle(env, access, user, body);
   if (resource === "titles" && request.method === "POST" && id && action === "settle") return settleTitle(env, access, user, id, body);
-  if (resource === "costs" && request.method === "GET" && !id) return listCosts(env, access, url);
+  if (resource === "costs" && request.method === "GET" && !id) {
+    if (!canReadFinance(access)) return json({ error: "Seu papel não pode consultar os custos." }, 403);
+    return listCosts(env, access, url);
+  }
   if (resource === "costs" && request.method === "POST" && !id) return createCost(env, access, user, body);
   return json({ error: "Rota transacional não encontrada." }, 404);
 }
