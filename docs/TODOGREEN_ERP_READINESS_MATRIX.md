@@ -61,6 +61,7 @@ ar** — não prova que um processo funciona com dado real.
 | --- | --- | --- |
 | 24/09/2026 19:18 UTC | `sha 6399f4a49f18`, build 14:09 UTC, `publishedBy: manual`, `branch: publish-tickets`, última migração `0144_client_requests_operation` | Publicação **manual**: o build não rodou no Workers Builds nem no GitHub Actions (`vite.config.js` só grava o provedor de CI quando há um), e sim a partir de um ramo local. A `main` estava em `49adc35` — o merge do PR #14 às 14:17 UTC ainda não estava no ar cinco horas depois, então **a produção não era a `main`**. O `/api/status` ainda devolvia o bloco `roadmap` fixo que este PR remove. |
 | 24/09/2026 20:19 UTC | a mesma resposta (`6399f4a49f18`, `manual`, `publish-tickets`, `0144`) | A `main` já estava em `13ac6f8`: a produção seguia sem os PRs #14 e #16 — entre outras coisas, a extensão instalável, o anti-robô e a migração `0145`. |
+| 25/09/2026 00:14 UTC | `sha f6b9548f6c84`, build 23:50 UTC de 24/09, `publishedBy: github-actions`, `branch: main`, última migração `0145_busca_vetores` | A produção passou a ser a `main` (merge do PR #21, com os PRs #14, #16, #17 e #19), publicada pelo botão manual "Publicar" do GitHub Actions (`deploy.yml`, `workflow_dispatch`, execução 3, 23:41–23:53 UTC); a execução 2 tinha publicado `f856e9f` (PR #17) às 23:30. O Workers Builds continua sem publicar sozinho. Este PR ainda não está no ar: o `/api/status` de produção segue com o bloco `roadmap` fixo. No mesmo `/api/status`, `antiRobo.configured` e `aiGateway.configured` vêm `false`: o Turnstile e o AI Gateway estão publicados, mas inertes, sem as chaves. |
 
 ## Comercial, cliente e receita
 
@@ -394,10 +395,12 @@ pendente "homologar com dados/volume reais em produção".
 - **P1 — reproduzir os achados de leitura (O1–O9)** e movê-los para a tabela
   certa, ou tirá-los daqui.
 - **P1 — publicação automática da `main`:** em 24/09 a produção veio de
-  publicação manual e continuava atrás da `main` depois de duas fusões. Depois
-  de um merge, `/api/system/version` deve responder o `sha` da `main` com
-  `publishedBy: cloudflare-workers-builds`; conferir a configuração do Workers
-  Builds (`docs/CLOUDFLARE_BUILDS_SETUP.md`).
+  publicação manual a partir de um ramo local e ficou horas atrás da `main`;
+  às 23:53 UTC alcançou a `main`, mas pelo botão manual do GitHub Actions
+  (`publishedBy: github-actions`). Depois de um merge, `/api/system/version`
+  deve responder o `sha` da `main` com `publishedBy: cloudflare-workers-builds`
+  sem ninguém apertar botão; conferir a configuração do Workers Builds
+  (`docs/CLOUDFLARE_BUILDS_SETUP.md`).
 - **P1 — proteger a `main`** por configuração do GitHub
   (`docs/GITHUB_MAIN_PROTECTION.md`, `scripts/github/protect-main.sh`); não é
   verificável pelo repositório.
