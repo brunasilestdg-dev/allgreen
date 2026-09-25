@@ -196,7 +196,7 @@ export default function BusinessProfileStudio({
             <span><Layers3 /></span>
             <div>
               <h2>2. Organização do menu</h2>
-              <p>Escolha foco ou visão completa. As funções continuam disponíveis.</p>
+              <p>Escolha foco ou visão completa. O que fica fora dos pacotes continua em “Todas as ferramentas” e na busca.</p>
             </div>
           </div>
           <div className="business-menu-mode" role="radiogroup" aria-label="Organização do menu">
