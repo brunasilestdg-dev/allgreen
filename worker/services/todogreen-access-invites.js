@@ -2,9 +2,12 @@ import {
   createSession,
   passwordHash,
   randomHex,
+  sameHash,
+  sessionUser,
   sha256,
   withSessionCookie,
 } from "../auth/credenciais.js";
+import { allowed, edgeIp } from "../lib/http.js";
 import { emailEnabled, escMail, sendEmail } from "../mensageria/envio.js";
 import { TENANT_ID } from "./todogreen-access.js";
 
@@ -32,7 +35,7 @@ const conviteHtml = ({ name, role, link }) => `<!doctype html>
     <div style="padding:30px 32px">
       <p style="margin:0 0 16px;font-size:16px">Olá, <strong>${escMail(name)}</strong>.</p>
       <p style="margin:0 0 16px;line-height:1.55">Você foi convidado(a) para a To Do Green como <strong>${escMail(String(role).replace(/_/g, " "))}</strong>.</p>
-      <p style="margin:0 0 24px;line-height:1.55">Neste primeiro acesso, você vai definir uma senha exclusiva. Se já tiver uma conta, poderá trocar a senha e entrar na sua própria sessão.</p>
+      <p style="margin:0 0 24px;line-height:1.55">Neste primeiro acesso, você vai definir uma senha exclusiva. Se já tiver uma conta, é só confirmar com a senha que você já usa — ela não muda.</p>
       <p style="margin:0 0 28px"><a href="${escMail(link)}" style="display:inline-block;padding:14px 22px;border-radius:9px;background:#16725c;color:#ffffff;text-decoration:none;font-weight:700">Definir minha senha e entrar</a></p>
       <p style="margin:0;color:#6b7d77;font-size:12px;line-height:1.45">Este convite é individual, expira em 7 dias e não concede acesso a quem não recebeu este e-mail. Se você não esperava esta mensagem, pode ignorá-la.</p>
     </div>
@@ -125,6 +128,14 @@ export async function handleTodoGreenAccessInvite(request, env, url) {
   if (invite.expires_at <= new Date().toISOString())
     return json({ error: "Este convite expirou. Peça um novo convite à To Do Green." }, 410);
 
+  // Quem já está com a sessão aberta NA CONTA convidada aceita sem digitar a
+  // senha — é o caminho de quem entrou pelo Google, que não tem senha própria.
+  const sessaoDaConta = async (contaId) => {
+    if (!contaId) return false;
+    const sessao = await sessionUser(request, env).catch(() => null);
+    return sessao?.id === contaId;
+  };
+
   if (request.method === "GET") {
     const account = await env.DB.prepare(
       "SELECT id FROM users WHERE lower(email)=? LIMIT 1",
@@ -134,30 +145,45 @@ export async function handleTodoGreenAccessInvite(request, env, url) {
       name: invite.name || "",
       role: invite.role,
       hasAccount: Boolean(account?.id),
+      signedIn: await sessaoDaConta(account?.id),
       expiresAt: invite.expires_at,
     });
   }
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
 
+  const ip = edgeIp(request);
+  if (ip && !allowed(`convite-tdg:${ip}`, 20))
+    return json({ error: "Muitas tentativas. Aguarde um minuto e tente novamente." }, 429);
   const password = String(body.password || "");
-  if (password.length < 8 || password.length > 128)
+  if (password.length > 128)
     return json({ error: "A senha precisa ter entre 8 e 128 caracteres." }, 400);
   const now = new Date().toISOString();
   const existing = await env.DB.prepare(
-    "SELECT id,name FROM users WHERE lower(email)=? LIMIT 1",
+    "SELECT id,name,password_hash,password_salt FROM users WHERE lower(email)=? LIMIT 1",
   ).bind(invite.email).first();
   const name = nomeLimpo(body.name, invite.name || existing?.name || invite.email.split("@")[0]);
   const salt = randomHex(16);
   let userId = existing?.id || crypto.randomUUID();
 
   if (existing) {
-    await env.DB.batch([
-      env.DB.prepare(
-        "UPDATE users SET password_hash=?, password_salt=? WHERE id=?",
-      ).bind(await passwordHash(password, salt), salt, userId),
-      env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(userId),
-    ]);
+    // O convite NUNCA redefine a senha de uma conta que já existe. O link
+    // volta na resposta para quem convidou (entrega manual); se ele trocasse a
+    // senha, quem gerou o convite entraria na conta da pessoa — e em todos os
+    // espaços dela. Quem já tem conta confirma com a senha que já usa, sob o
+    // mesmo limite por conta do login (`auth-account:`), e as outras sessões
+    // continuam valendo.
+    const jaEntrou = await sessaoDaConta(existing.id);
+    if (!jaEntrou && !allowed(`auth-account:${invite.email}`, 8))
+      return json({ error: "Muitas tentativas para esta conta. Aguarde um minuto e tente novamente." }, 429);
+    const confere = jaEntrou || (password && existing.password_hash && existing.password_salt &&
+      sameHash(await passwordHash(password, existing.password_salt), existing.password_hash));
+    if (!confere)
+      return json({
+        error: "Senha incorreta. Use a senha com que você já entra no app. Se não lembrar, use “Esqueci minha senha” na tela de acesso e depois abra este convite de novo.",
+      }, 401);
   } else {
+    if (password.length < 8)
+      return json({ error: "A senha precisa ter entre 8 e 128 caracteres." }, 400);
     await env.DB.prepare(
       "INSERT INTO users (id,name,email,password_hash,password_salt,created_at) VALUES (?,?,?,?,?,?)",
     ).bind(userId, name, invite.email, await passwordHash(password, salt), salt, now).run();
