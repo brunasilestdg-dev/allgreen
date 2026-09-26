@@ -48,12 +48,22 @@ export const carimboDeViabilidade = (snap) => ({
   liberadaEm: new Date().toISOString(),
 });
 
-export const proposalLiberada = async (env, access, cenarioId) => {
+export const proposalLiberada = async (env, access, cenarioId, { liberando = true } = {}) => {
+  const cenario = await env.DB.prepare(
+    `SELECT result_json FROM pricing_scenarios
+      WHERE tenant_id=? AND workspace_owner_id=? AND id=?`,
+  ).bind(TENANT_ID, access.ownerId, cenarioId).first();
   const { results } = await env.DB.prepare(
     "SELECT * FROM todogreen_deal_desk_requests WHERE workspace_owner_id = ? AND scenario_id = ?",
   )
     .bind(access.ownerId, cenarioId)
     .all();
+  if (liberando && cenario && !(results || []).length) {
+    let resultado = {};
+    try { resultado = JSON.parse(cenario.result_json || "{}"); } catch { resultado = {}; }
+    if (resultado.approval?.required)
+      return { liberada: false, motivo: "Esta simulação exige aprovação comercial antes da proposta. Abra o pedido ao Deal Desk." };
+  }
   return liberacaoDaProposta(cenarioId, (results || []).map(pedidoDoBanco));
 };
 
@@ -122,7 +132,7 @@ export const juridicoConcluido = async (env, access, { contractId = "", proposal
   // Legado: fluxo jurídico do painel empresarial.
   const { results } = await env.DB
     .prepare(
-      `SELECT data_json, approval_json FROM todogreen_enterprise_workflows
+      `SELECT data_json, approval_json, status FROM todogreen_enterprise_workflows
         WHERE tenant_id=? AND workspace_owner_id=? AND domain='legal' AND archived_at IS NULL`,
     )
     .bind(TENANT_ID, access.ownerId)
@@ -138,7 +148,8 @@ export const juridicoConcluido = async (env, access, { contractId = "", proposal
       (pid && texto(data.proposalId, 120) === pid);
     if (!refereEsteContrato) continue;
     const aprovacoes = Array.isArray(approval.approvals) ? approval.approvals : [];
-    if (aprovacoes.some((a) => a.stepId === "juridico" && ["approved", "ressalva"].includes(a.decision)))
+    if (row.status === "approved" && ["juridico", "dono-negocio"].every((stepId) =>
+      aprovacoes.some((a) => a.stepId === stepId && ["approved", "ressalva"].includes(a.decision))))
       return true;
   }
   return false;
@@ -153,7 +164,8 @@ const temAnexoNoCofre = async (env, access, contextType, ids) => {
     .prepare(
       `SELECT id FROM todogreen_internal_files
         WHERE tenant_id=? AND workspace_owner_id=? AND context_type=?
-          AND context_id IN (${marcadores}) AND archived_at IS NULL LIMIT 1`,
+          AND context_id IN (${marcadores}) AND archived_at IS NULL
+          AND source='internal_upload' AND byte_size>0 LIMIT 1`,
     )
     .bind(TENANT_ID, access.ownerId, contextType, ...ids)
     .first()

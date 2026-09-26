@@ -88,7 +88,7 @@ export function useTdgLegalRecords({ authHeaders, enabled = true, setToast } = {
       if (!enabled || !authHeaders) {
         throw new Error("Jurídico canônico do TDG indisponível nesta sessão.");
       }
-      const payload = contractToTdgLegal(contract);
+      const payload = { ...contractToTdgLegal(contract), situacao: "rascunho" };
       const body = await post("/api/todogreen/records/legal", payload, "POST");
       const row = body?.registro || body?.record;
       const traduzido = row ? tdgLegalToContract(row) : null;
@@ -113,8 +113,11 @@ export function useTdgLegalRecords({ authHeaders, enabled = true, setToast } = {
       // 409 quando a revisão local está atrás — recarregamos e mostramos
       // mensagem clara para o usuário aplicar o patch de novo.
       const current = recordsRef.current.find((r) => r.id === id);
+      if (Object.hasOwn(patch, "status") && patch.status !== current?.status)
+        throw new Error("Mude a situação pelas ações da linha do tempo do Jurídico.");
       const currentRevision = current?.revision;
       const partial = contractToTdgLegal({ ...patch, id, revision: currentRevision });
+      partial.situacao = current?.tdgStatus || "rascunho";
       const res = await fetch(`/api/todogreen/records/legal/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: {

@@ -216,6 +216,30 @@ describe("gestão do RH/financeiro: analisar, ajustar, aprovar, pagar", () => {
     expect(conta.paid_amount).toBe(4000);
   });
 
+  it("não aprova nota PJ em competência financeira fechada", async () => {
+    const criada = await pedir("/api/todogreen/employee-portal/nota", {
+      method: "POST", token: pjA.token,
+      body: { numero: "NF-COMP-FECHADA", competencia: "2027-11", valor: 3000 },
+    });
+    expect(criada.status).toBe(201);
+    const notas = await (await pedir("/api/todogreen/employee-portal/gestao/notas", { token: dona.token })).json();
+    const nota = notas.notas.find((item) => item.numero === "NF-COMP-FECHADA");
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_financial_periods
+       (id,tenant_id,workspace_owner_id,reference_month,status,totals_json,closed_by,closed_at,created_at,updated_at)
+       VALUES (?,'todogreen',?,'2027-11','fechado','{}',?,?,?,?)`,
+    ).bind(crypto.randomUUID(), dona.id, dona.id, agora, agora, agora).run();
+    const resposta = await pedir(`/api/todogreen/employee-portal/gestao/notas/${nota.id}/aprovar`, {
+      method: "POST", token: dona.token,
+    });
+    expect(resposta.status).toBe(409);
+    const entry = await env.DB.prepare(
+      "SELECT id FROM todogreen_financial_entries WHERE json_extract(fields_json, '$.sourcePjInvoiceId')=?",
+    ).bind(nota.id).first();
+    expect(entry).toBeNull();
+  });
+
   it("colaborador comum não alcança os chamados da gestão (403)", async () => {
     const r = await pedir("/api/todogreen/employee-portal/gestao/chamados", { token: clt.token });
     expect(r.status).toBe(403);

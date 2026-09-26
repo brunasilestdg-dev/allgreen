@@ -33,7 +33,7 @@ const canWrite = (access, domain) => {
 
 const approvalPlan = (domain, data = {}) => {
   if (domain === "legal") return [
-    { id: "juridico", label: "Jurídico", permission: "deal:review" },
+    { id: "juridico", label: "Jurídico", permission: "compliance:manage" },
     { id: "dono-negocio", label: "Dono do negócio / liderança", permission: "deal:approve" },
   ];
   if (domain === "marketing") {
@@ -106,8 +106,8 @@ const create = async (env, access, user, body) => {
   const data = obj(body.data);
   const recurrence = obj(body.recurrence);
   const approval = normalizeApproval(domain, { ...data, kind: body.kind }, {});
-  const wantsApproval = body.requireApproval !== false && approval.plan.length > 0;
-  const status = wantsApproval ? "pending" : (STATUSES.has(body.status) ? body.status : "in_progress");
+  // Etapas obrigatórias não são uma preferência enviada pelo navegador.
+  const status = approval.plan.length ? "pending" : "in_progress";
   const id = crypto.randomUUID(); const now = new Date().toISOString();
   await env.DB.prepare(`INSERT INTO todogreen_enterprise_workflows
     (id,tenant_id,workspace_owner_id,domain,kind,title,description,client_id,owner_user_id,priority,status,due_at,data_json,approval_json,recurrence_json,source_template_id,revision,created_by,updated_by,created_at,updated_at,archived_at)
@@ -127,8 +127,21 @@ const update = async (env, access, user, id, body) => {
   const before = mapRow(row);
   const data = { ...obj(row.data_json), ...obj(body.data) };
   const currentApproval = obj(row.approval_json);
-  const recalculated = normalizeApproval(row.domain, { ...data, kind: body.kind ?? row.kind }, currentApproval);
-  const status = body.status && STATUSES.has(body.status) ? body.status : row.status;
+  const mudouConteudo = Object.keys(obj(body.data)).length > 0 ||
+    ["kind", "title", "description", "clientId"].some((campo) => Object.hasOwn(body, campo));
+  const recalculated = normalizeApproval(row.domain, { ...data, kind: body.kind ?? row.kind },
+    mudouConteudo ? {} : currentApproval);
+  let status = row.status;
+  if (recalculated.plan.length && mudouConteudo) status = "pending";
+  const solicitado = text(body.status, 30);
+  if (solicitado && solicitado !== status) {
+    const transicoes = recalculated.plan.length
+      ? { pending: ["cancelled"], approved: ["in_progress", "cancelled"], in_progress: ["blocked", "done", "cancelled"], blocked: ["in_progress", "cancelled"] }
+      : { draft: ["in_progress", "cancelled"], in_progress: ["blocked", "done", "cancelled"], blocked: ["in_progress", "cancelled"] };
+    if (!transicoes[status]?.includes(solicitado))
+      return json({ error: "Conclua as aprovações e siga as etapas do processo antes de mudar a situação." }, 409);
+    status = solicitado;
+  }
   const now = new Date().toISOString();
   await env.DB.prepare(`UPDATE todogreen_enterprise_workflows SET kind=?,title=?,description=?,client_id=?,owner_user_id=?,priority=?,status=?,due_at=?,data_json=?,approval_json=?,recurrence_json=?,revision=revision+1,updated_by=?,updated_at=? WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND revision=?`)
     .bind(text(body.kind ?? row.kind,60),text(body.title ?? row.title,240),text(body.description ?? row.description,4000),text(body.clientId ?? row.client_id,120)||null,text(body.ownerUserId ?? row.owner_user_id,120)||null,PRIORITIES.has(body.priority)?body.priority:row.priority,status,text(body.dueAt ?? row.due_at,40)||null,JSON.stringify(data),JSON.stringify({ plan: recalculated.plan, approvals: recalculated.approvals }),JSON.stringify(body.recurrence ? obj(body.recurrence) : obj(row.recurrence_json)),user.id,now,id,TENANT_ID,access.ownerId,row.revision).run();

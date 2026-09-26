@@ -271,6 +271,33 @@ describe("aprovação do pedido", () => {
     expect(depois.totais.total).toBe(50000);
     expect(depois.approvedTotal).toBe(1000);
     expect(depois.aprovacaoValida).toBe(false);
+    expect(depois.status).toBe("rascunho");
+    expect(depois.approvalStatus).toBe("pendente");
+    const envio = await pedir(`/api/todogreen/purchasing/pedidos/${pedido.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { status: "enviado", revision: depois.revision },
+    });
+    expect(envio.status).toBe(409);
+  });
+
+  it("trocar as linhas pelo mesmo total também exige nova aprovação", async () => {
+    const criado = await pedir("/api/todogreen/purchasing/pedidos", {
+      metodo: "POST", token: gestora.token,
+      corpo: { supplierPartyId: fornecedor.id, linhas: [{ itemId: material.id, quantity: 10, unitPrice: 100 }] },
+    });
+    let pedido = (await criado.json()).registro;
+    pedido = (await (await pedir(`/api/todogreen/purchasing/pedidos/${pedido.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { status: "aprovado", revision: pedido.revision },
+    })).json()).registro;
+    const editado = await pedir(`/api/todogreen/purchasing/pedidos/${pedido.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { linhas: [{ itemId: material.id, quantity: 5, unitPrice: 200 }], revision: pedido.revision },
+    });
+    expect(editado.status).toBe(200);
+    const depois = (await editado.json()).registro;
+    expect(depois.totais.total).toBe(1000);
+    expect(depois.status).toBe("rascunho");
+    expect(depois.aprovacaoValida).toBe(false);
   });
 
   it("pedido encerrado é terminal", async () => {
@@ -337,6 +364,12 @@ describe("recebimento: o ponto com efeito", () => {
       invoice_status: "pending",
       kind: "cost",
     });
+    const baixaDuplicada = await pedir(`/api/todogreen/records/financial/${resultado.registro.financialEntryId}/payments`, {
+      metodo: "POST", token: gestora.token,
+      corpo: { revision: 1, valor: 100 },
+    });
+    expect(baixaDuplicada.status).toBe(409);
+    expect((await baixaDuplicada.json()).error).toMatch(/título a pagar/);
 
     // O movimento aponta para o recebimento, o que torna o lançamento auditável.
     const movimento = await env.DB.prepare(
@@ -346,6 +379,17 @@ describe("recebimento: o ponto com efeito", () => {
     expect(movimento).toMatchObject({
       kind: "entrada", quantity: 4, unit_cost: 200, origin_type: "recebimento",
     });
+
+    const repetido = await pedir("/api/todogreen/purchasing/recebimentos", {
+      metodo: "POST", token: gestora.token,
+      corpo: {
+        orderId: pedido.id, warehouseId: deposito.id, receivedAt: "2026-03-10",
+        invoiceNumber: "998877", linhas: [{ orderItemId: pedido.linhas[0].id, quantidade: 4 }],
+      },
+    });
+    expect(repetido.status).toBe(200);
+    expect((await repetido.json()).registro.id).toBe(resultado.registro.id);
+    expect(await saldoDe(gestora.token, material.id, deposito.id)).toBe(antes + 4);
   });
 
   it("recusa receber mais do que falta", async () => {
@@ -431,6 +475,30 @@ describe("recebimento: o ponto com efeito", () => {
     expect(await saldoDe(gestora.token, material.id, deposito.id)).toBe(antes - 2);
   });
 
+  it("recusa devolver mercadoria já consumida do estoque", async () => {
+    const pedido = await pedidoPronto(gestora.token, [{ itemId: material.id, quantity: 2, unitPrice: 50 }]);
+    const saldoAnterior = await saldoDe(gestora.token, material.id, deposito.id);
+    const recebido = await pedir("/api/todogreen/purchasing/recebimentos", {
+      metodo: "POST", token: gestora.token,
+      corpo: { orderId: pedido.id, warehouseId: deposito.id, receivedAt: "2026-04-01",
+        gerarConta: false, linhas: [{ orderItemId: pedido.linhas[0].id, quantidade: 2 }] },
+    });
+    expect(recebido.status).toBe(201);
+    const saida = await pedir("/api/todogreen/stock/movimentos", {
+      metodo: "POST", token: gestora.token,
+      corpo: { itemId: material.id, warehouseId: deposito.id, kind: "saida",
+        quantity: saldoAnterior + 2, occurredAt: "2026-04-02" },
+    });
+    expect(saida.status).toBe(201);
+    const devolucao = await pedir("/api/todogreen/purchasing/recebimentos", {
+      metodo: "POST", token: gestora.token,
+      corpo: { orderId: pedido.id, warehouseId: deposito.id, receivedAt: "2026-04-03",
+        kind: "devolucao", linhas: [{ orderItemId: pedido.linhas[0].id, quantidade: 1 }] },
+    });
+    expect(devolucao.status).toBe(409);
+    expect((await devolucao.json()).error).toMatch(/estoque insuficiente/i);
+  });
+
   it("linha de serviço não gera movimento de estoque", async () => {
     // Forçar movimento criaria saldo de algo que não existe fisicamente.
     const pedido = await pedidoPronto(gestora.token, [
@@ -512,6 +580,24 @@ describe("recebimento: o ponto com efeito", () => {
       expect((await r.json()).error).toMatch(/devolução/i);
     }
   });
+
+  it("competência fechada recusa conta a pagar sem movimentar o estoque", async () => {
+    const pedido = await pedidoPronto(gestora.token, [{ itemId: material.id, quantity: 1, unitPrice: 50 }]);
+    const antes = await saldoDe(gestora.token, material.id, deposito.id);
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_financial_periods
+       (id,tenant_id,workspace_owner_id,reference_month,status,totals_json,closed_by,closed_at,created_at,updated_at)
+       VALUES (?,'todogreen',?,'2027-11','fechado','{}',?,?,?,?)`,
+    ).bind(crypto.randomUUID(), gestora.id, gestora.id, agora, agora, agora).run();
+    const resposta = await pedir("/api/todogreen/purchasing/recebimentos", {
+      metodo: "POST", token: gestora.token,
+      corpo: { orderId: pedido.id, warehouseId: deposito.id, receivedAt: "2027-11-12",
+        linhas: [{ orderItemId: pedido.linhas[0].id, quantidade: 1 }] },
+    });
+    expect(resposta.status).toBe(409);
+    expect(await saldoDe(gestora.token, material.id, deposito.id)).toBe(antes);
+  });
 });
 
 describe("permissão e escopo", () => {
@@ -574,6 +660,21 @@ describe("permissão e escopo", () => {
 // primeira aprovação. A dona operando o PRÓPRIO espaço fica fora da trava —
 // os cenários acima, todos de um ator só, são exatamente esse caso.
 describe("alçada com segregação para a equipe", () => {
+  it("quem cria em nome de outra pessoa não aprova a própria requisição", async () => {
+    const comprador = await criarUsuario("compras-delegado", "delegado@compras.test");
+    await autorizar(comprador, "gestor", ["purchase:manage"], gestora.id);
+    const criada = await pedir("/api/todogreen/purchasing/requisicoes", {
+      metodo: "POST", token: comprador.token,
+      corpo: { title: "Compra delegada", requisitanteId: gestora.id, items: [{ itemId: material.id, quantidade: 1, precoUnitario: 100 }] },
+    });
+    expect(criada.status).toBe(201);
+    const { registro } = await criada.json();
+    const propria = await pedir(`/api/todogreen/purchasing/requisicoes/${registro.id}`, {
+      metodo: "PATCH", token: comprador.token,
+      corpo: { status: "aprovada", revision: registro.revision },
+    });
+    expect(propria.status).toBe(403);
+  });
   it("colaborador em espaço alheio não aprova a própria requisição; a dona aprova", async () => {
     const assistente = await criarUsuario("compras-assistente", "assistente@compras.test");
     await autorizar(assistente, "gestor", ["purchase:manage"], gestora.id);

@@ -55,6 +55,15 @@ async function criarCliente(usuario, id, nome = id) {
   ).bind(id, usuario.id, nome, usuario.id, usuario.id, agora, agora).run();
 }
 
+async function semearCenario(id, { ownerId = gestora.id, clientId = "", opportunityId = "" } = {}) {
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO pricing_scenarios
+      (id,tenant_id,workspace_owner_id,product_id,client_id,opportunity_id,created_by,
+       rule_version,inputs_json,result_json,approvals_json,status,created_at)
+     VALUES (?,'todogreen',?,'last-mile',?,?,?,'teste','{}','{}','{}','draft',?)`,
+  ).bind(id, ownerId, clientId, opportunityId, ownerId, new Date().toISOString()).run();
+}
+
 async function vincularPortal(clientId, email) {
   const agora = new Date().toISOString();
   await env.DB.prepare(
@@ -247,6 +256,7 @@ describe("paginação e filtro no servidor", () => {
   it("limit e offset recortam a página, e o total conta a lista inteira", async () => {
     const dono = await criarUsuario("rec-pag-dono", "pag-dono@parceiro.com.br");
     await autorizar(dono);
+    await semearCenario("cen-pag", { ownerId: dono.id });
     for (let i = 0; i < 5; i += 1) {
       await pedir("/api/todogreen/records/proposals", {
         metodo: "POST",
@@ -462,7 +472,13 @@ describe("proposta precisa da simulação que gerou o preço", () => {
     expect((await r.json()).error).toMatch(/simulação/i);
   });
 
-  it("com cenário, salva", async () => {
+  it("recusa cenário inexistente e salva apenas com simulação do espaço", async () => {
+    const inexistente = await pedir("/api/todogreen/records/proposals", {
+      metodo: "POST", token: gestora.token,
+      corpo: { cliente: "Alfa", titulo: "Proposta sem cenário real", cenarioId: "cen-inexistente" },
+    });
+    expect(inexistente.status).toBe(404);
+    await semearCenario("cen-1");
     const r = await pedir("/api/todogreen/records/proposals", {
       metodo: "POST",
       token: gestora.token,
@@ -477,6 +493,7 @@ describe("contrato nasce de proposta aceita", () => {
   it("preserva cliente, oportunidade e simulação e impede duplicidade", async () => {
     const clienteId = `cli-contrato-${crypto.randomUUID()}`;
     await criarCliente(gestora, clienteId, "Cliente Contrato");
+    await semearCenario("cen-c", { clientId: clienteId, opportunityId: "opp-c" });
     // A proposta nasce ACEITA e ligada à oportunidade: o gate de viabilidade
     // (seções 47–50) exige o snapshot sem faltas antes — o caminho correto.
     const viabilidade = await pedir("/api/todogreen/viability-snapshots", {
@@ -502,6 +519,7 @@ describe("contrato nasce de proposta aceita", () => {
   it("versiona alterações e preserva a trilha do ciclo contratual", async () => {
     const clienteId = `cli-ciclo-${crypto.randomUUID()}`;
     await criarCliente(gestora, clienteId, "Cliente Ciclo");
+    await semearCenario("cen-ciclo", { clientId: clienteId });
     const proposta = (await (await pedir("/api/todogreen/records/proposals", {
       metodo: "POST", token: gestora.token,
       corpo: { clientId: clienteId, cliente: "Cliente Ciclo", titulo: "Proposta ciclo", cenarioId: "cen-ciclo", situacao: "accepted" },
@@ -536,12 +554,38 @@ describe("contrato nasce de proposta aceita", () => {
       gestora.id, gestora.id, agora, agora,
     ).run();
 
+    // O gate legado não aceita só a etapa jurídica, mesmo com status forjado.
+    const parcial = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: contrato.revision, aprovacao: "approved" },
+    });
+    expect(parcial.status).toBe(409);
+    await env.DB.prepare(
+      "UPDATE todogreen_enterprise_workflows SET approval_json=? WHERE id=?",
+    ).bind(JSON.stringify({ approvals: [
+      { stepId: "juridico", decision: "approved", decidedAt: agora },
+      { stepId: "dono-negocio", decision: "approved", decidedAt: agora },
+    ] }), workflowId).run();
+
     // Com Jurídico, mas sem o documento assinado anexado, a assinatura ainda é recusada.
     const semDocumento = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
       metodo: "PATCH", token: gestora.token,
       corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14" },
     });
     expect(semDocumento.status).toBe(409);
+
+    // Um link externo sem bytes não prova que há contrato assinado no cofre.
+    await env.DB.prepare(
+      `INSERT INTO todogreen_internal_files
+        (id,tenant_id,workspace_owner_id,client_id,workflow_id,context_type,context_id,file_name,content_type,
+         byte_size,sha256,version,source,external_url,folder_id,created_by,created_at,archived_at)
+       VALUES (?,'todogreen',?,?,?,'workflow',?,'referencia.pdf','text/uri-list',0,'',1,'client_reference','https://example.test/contrato','',?,?,NULL)`,
+    ).bind(crypto.randomUUID(), gestora.id, clienteId, workflowId, workflowId, gestora.id, agora).run();
+    const soReferencia = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
+      metodo: "PATCH", token: gestora.token,
+      corpo: { revision: contrato.revision, assinatura: "signed", assinadoEm: "2026-08-14" },
+    });
+    expect(soReferencia.status).toBe(409);
 
     // Contrato assinado anexado ao fluxo jurídico (cofre interno).
     await env.DB.prepare(
@@ -566,6 +610,7 @@ describe("contrato nasce de proposta aceita", () => {
   it("conclui o gate pela página do Jurídico (sistema unificado), não só pelo fluxo empresarial", async () => {
     const clienteId = `cli-jur-uni-${crypto.randomUUID()}`;
     await criarCliente(gestora, clienteId, "Cliente Jurídico Unificado");
+    await semearCenario("cen-uni", { clientId: clienteId });
     const proposta = (await (await pedir("/api/todogreen/records/proposals", {
       metodo: "POST", token: gestora.token,
       corpo: { clientId: clienteId, cliente: "Cliente Jurídico Unificado", titulo: "Proposta unificada", cenarioId: "cen-uni", situacao: "accepted" },
@@ -584,11 +629,28 @@ describe("contrato nasce de proposta aceita", () => {
 
     // Documento na PÁGINA DO JURÍDICO, aprovado e amarrado à proposta pelo
     // campos.proposalId — a fonte única que a titular escolheu.
+    const criacaoDiretaAprovada = await pedir("/api/todogreen/records/legal", {
+      metodo: "POST", token: gestora.token,
+      corpo: { titulo: "Aprovação sem decisão", situacao: "aprovado", campos: { proposalId: proposta.id } },
+    });
+    expect(criacaoDiretaAprovada.status).toBe(409);
     const legal = (await (await pedir("/api/todogreen/records/legal", {
       metodo: "POST", token: gestora.token,
-      corpo: { titulo: "Contrato unificado — minuta", situacao: "aprovado", clientId: clienteId, campos: { proposalId: proposta.id } },
+      corpo: { titulo: "Contrato unificado — minuta", clientId: clienteId, campos: { proposalId: proposta.id } },
     })).json()).registro;
-    expect(legal.situacao).toBe("aprovado");
+    const edicaoDiretaAprovada = await pedir(`/api/todogreen/records/legal/${legal.id}`, {
+      metodo: "PATCH", token: gestora.token, corpo: { revision: legal.revision, situacao: "aprovado" },
+    });
+    expect(edicaoDiretaAprovada.status).toBe(409);
+    const submissao = await pedir(`/api/todogreen/records/legal/${legal.id}/events`, {
+      metodo: "POST", token: gestora.token, corpo: { acao: "submeter", mensagem: "Revisar a minuta." },
+    });
+    expect(submissao.status).toBe(200);
+    const aprovacao = await pedir(`/api/todogreen/records/legal/${legal.id}/events`, {
+      metodo: "POST", token: gestora.token, corpo: { acao: "aprovar" },
+    });
+    expect(aprovacao.status).toBe(200);
+    expect((await aprovacao.json()).situacao).toBe("aprovado");
 
     // Jurídico aprovado libera a aprovação; a assinatura ainda exige o anexo.
     const semAnexo = await pedir(`/api/todogreen/records/contracts/${contrato.id}`, {
@@ -729,6 +791,7 @@ async function pedidoDeDealDesk(cenarioId, { situacao = "pendente" } = {}) {
 describe("proposta não sai por cima de uma aprovação comercial pendente", () => {
   it("pedido pendente para a simulação bloqueia a proposta direto no servidor", async () => {
     const cenarioId = `cen-dd-pendente-${crypto.randomUUID()}`;
+    await semearCenario(cenarioId);
     await pedidoDeDealDesk(cenarioId);
     const r = await pedir("/api/todogreen/records/proposals", {
       metodo: "POST",
@@ -741,6 +804,7 @@ describe("proposta não sai por cima de uma aprovação comercial pendente", () 
 
   it("pedido aprovado libera a proposta", async () => {
     const cenarioId = `cen-dd-aprovado-${crypto.randomUUID()}`;
+    await semearCenario(cenarioId);
     await pedidoDeDealDesk(cenarioId, { situacao: "aprovado" });
     const r = await pedir("/api/todogreen/records/proposals", {
       metodo: "POST",
@@ -752,6 +816,38 @@ describe("proposta não sai por cima de uma aprovação comercial pendente", () 
 });
 
 describe("lançamentos financeiros", () => {
+  it("o D1 bloqueia até escrita direta no razão de competência fechada", async () => {
+    const agora = new Date().toISOString();
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_financial_entries
+       (id,tenant_id,workspace_owner_id,kind,amount,reference_month,created_by,updated_by,created_at,updated_at)
+       VALUES (?,'todogreen',?,'cost',100,'2027-10',?,?,?,?)`,
+    ).bind(id, gestora.id, gestora.id, gestora.id, agora, agora).run();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_financial_periods
+       (id,tenant_id,workspace_owner_id,reference_month,status,totals_json,closed_by,closed_at,created_at,updated_at)
+       VALUES (?,'todogreen',?,'2027-10','fechado','{}',?,?,?,?)`,
+    ).bind(crypto.randomUUID(), gestora.id, gestora.id, agora, agora, agora).run();
+    await expect(env.DB.prepare("UPDATE todogreen_financial_entries SET amount=200 WHERE id=?")
+      .bind(id).run()).rejects.toThrow(/Competência financeira fechada/);
+    await expect(env.DB.prepare("DELETE FROM todogreen_financial_entries WHERE id=?")
+      .bind(id).run()).rejects.toThrow(/Competência financeira fechada/);
+    // Baixa de caixa é posterior ao reconhecimento e pode acontecer depois do
+    // fechamento, sem alterar o resultado da competência.
+    await env.DB.prepare("UPDATE todogreen_financial_entries SET paid_amount=20 WHERE id=?")
+      .bind(id).run();
+    await expect(env.DB.prepare(
+      `INSERT INTO todogreen_financial_entries
+       (id,tenant_id,workspace_owner_id,kind,amount,reference_month,created_by,updated_by,created_at,updated_at)
+       VALUES (?,'todogreen',?,'cost',50,'2027-10',?,?,?,?)`,
+    ).bind(crypto.randomUUID(), gestora.id, gestora.id, gestora.id, agora, agora).run())
+      .rejects.toThrow(/Competência financeira fechada/);
+    await env.DB.prepare("UPDATE todogreen_financial_periods SET status='reaberto' WHERE workspace_owner_id=? AND reference_month='2027-10'")
+      .bind(gestora.id).run();
+    await env.DB.prepare("UPDATE todogreen_financial_entries SET amount=200 WHERE id=?").bind(id).run();
+    expect((await env.DB.prepare("SELECT amount FROM todogreen_financial_entries WHERE id=?").bind(id).first()).amount).toBe(200);
+  });
   it("receita, custo e comissão convivem na mesma coleção", async () => {
     for (const tipo of ["revenue", "cost", "commission"]) {
       const r = await pedir("/api/todogreen/records/financial", {
@@ -965,15 +1061,17 @@ describe("a simulação é retrato, não cadastro", () => {
     expect(r.status).toBe(201);
     const { registro } = await r.json();
     expect(registro.premissas.confirmadas).toBe(true);
-    expect(registro.result.recommendedPrice).toBe(90000);
-    expect(registro.ruleVersion).toBe("v3");
+    expect(registro.result.recommendedPrice).not.toBe(90000);
+    expect(registro.result).toHaveProperty("approval");
+    expect(registro.ruleVersion).not.toBe("v3");
+    expect(registro.premissas.confirmadasPor).toBe(gestora.id);
   });
 
-  it("simulação sem resultado calculado não entra", async () => {
+  it("simulação sem dados não entra", async () => {
     const r = await pedir("/api/todogreen/records/scenarios", {
       metodo: "POST",
       token: gestora.token,
-      corpo: { productId: "middle-mile", inputs: { distanceKm: 1 } },
+      corpo: { productId: "middle-mile", inputs: {} },
     });
     expect(r.status).toBe(400);
   });
@@ -992,7 +1090,8 @@ describe("a simulação é retrato, não cadastro", () => {
     await pedir("/api/todogreen/records/scenarios", {
       metodo: "POST",
       token: colega.token,
-      corpo: { productId: "last-mile", result: { recommendedPrice: 1 }, clientId: "so-do-colega" },
+      corpo: { productId: "last-mile", inputs: { distanceKm: 30, deliveriesPerMonth: 30 },
+        result: { recommendedPrice: 1 }, clientId: "so-do-colega" },
     });
     const lista = await pedir("/api/todogreen/records/scenarios", { token: gestora.token });
     const clientes = (await lista.json()).registros.map((r) => r.clientId);
@@ -1738,13 +1837,13 @@ describe("jurídico: minutas e contratos saem da página de orientação para da
     const lista = await pedir("/api/todogreen/records/legal", { token: dona.token });
     expect((await lista.json()).registros.map((r) => r.titulo)).toContain("Contrato de operação · Rede Alfa");
 
-    const atualizada = await pedir(`/api/todogreen/records/legal/${registro.id}`, {
-      metodo: "PATCH",
+    const atualizada = await pedir(`/api/todogreen/records/legal/${registro.id}/events`, {
+      metodo: "POST",
       token: dona.token,
-      corpo: { situacao: "em_analise", revision: 1 },
+      corpo: { acao: "submeter", mensagem: "Revisar o contrato." },
     });
     expect(atualizada.status).toBe(200);
-    expect((await atualizada.json()).registro.situacao).toBe("em_analise");
+    expect((await atualizada.json()).situacao).toBe("em_analise");
 
     const semTitulo = await pedir("/api/todogreen/records/legal", {
       metodo: "POST",
@@ -1757,10 +1856,15 @@ describe("jurídico: minutas e contratos saem da página de orientação para da
   it("valores fora da lista caem no padrão em vez de gravar lixo", async () => {
     const dona = await criarUsuario(`j-norm-${n}`, `j-norm-${n}@parceiro.com.br`);
     await autorizar(dona);
-    const criada = await pedir("/api/todogreen/records/legal", {
+    const situacaoInvalida = await pedir("/api/todogreen/records/legal", {
       metodo: "POST",
       token: dona.token,
       corpo: { titulo: "Documento estranho", tipo: "foguete", risco: "catastrofico", situacao: "inventada" },
+    });
+    expect(situacaoInvalida.status).toBe(409);
+    const criada = await pedir("/api/todogreen/records/legal", {
+      metodo: "POST", token: dona.token,
+      corpo: { titulo: "Documento estranho", tipo: "foguete", risco: "catastrofico" },
     });
     const { registro } = await criada.json();
     expect(registro.tipo).toBe("minuta");
@@ -1844,6 +1948,12 @@ describe("operação de recarga: sessão medida e reserva sem conflito", () => {
     const { registro } = await criada.json();
     expect(registro).toMatchObject({ energiaKwh: 120, status: "concluida", fonte: "manual", segmento: "b2b" });
 
+    const origemForjada = await pedir("/api/todogreen/records/chargingSessions", {
+      metodo: "POST", token: gestora.token,
+      corpo: { pontoNome: "Pátio", inicioEm: "2026-09-13T05:00", energiaKwh: 12, fonte: "ocpp" },
+    });
+    expect((await origemForjada.json()).registro.fonte).toBe("manual");
+
     const invalida = await pedir("/api/todogreen/records/chargingSessions", {
       metodo: "POST",
       token: gestora.token,
@@ -1926,10 +2036,14 @@ describe("o contrato não troca de proposta nem de cliente por fora do gate", ()
     await criarCliente(gestora, clienteId, "Cliente do par");
     await criarCliente(gestora, outroCliente, "Outro cliente");
     let sequencia = 0;
-    const proposta = async (situacao, cliente = clienteId) => (await (await pedir("/api/todogreen/records/proposals", {
-      metodo: "POST", token: gestora.token,
-      corpo: { clientId: cliente, cliente: "Cliente do par", titulo: `Proposta ${situacao}`, cenarioId: `cen-par-${++sequencia}`, situacao },
-    })).json()).registro;
+    const proposta = async (situacao, cliente = clienteId) => {
+      const cenarioId = `cen-par-${++sequencia}`;
+      await semearCenario(cenarioId, { clientId: cliente });
+      return (await (await pedir("/api/todogreen/records/proposals", {
+        metodo: "POST", token: gestora.token,
+        corpo: { clientId: cliente, cliente: "Cliente do par", titulo: `Proposta ${situacao}`, cenarioId, situacao },
+      })).json()).registro;
+    };
     const aceita = await proposta("accepted");
     const rascunho = await proposta("draft");
     const outraAceita = await proposta("accepted");

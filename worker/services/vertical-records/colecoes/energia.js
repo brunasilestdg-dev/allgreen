@@ -137,7 +137,8 @@ export const COLECOES_DE_ENERGIA = {
         meter_start: s.medidorInicial,
         meter_end: s.medidorFinal,
         status: s.status,
-        source: s.fonte,
+        // Sem telemetria OCPP autenticada, a origem da API é sempre manual.
+        source: "manual",
         note: s.observacao,
         fields_json: JSON.stringify({ ...objeto(corpo.campos), segmento: s.segmento }),
       };

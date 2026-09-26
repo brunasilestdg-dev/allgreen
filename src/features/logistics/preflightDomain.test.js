@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decisaoDoPreflight, routeFingerprint, runPreflight, SEVERITY } from "./preflightDomain.js";
+import { __test__, decisaoDoPreflight, routeFingerprint, runPreflight, SEVERITY } from "./preflightDomain.js";
 import { estimateRouteEnergy } from "./energyEstimationDomain.js";
 
 const vanOk = {
@@ -44,6 +44,12 @@ describe("pré-flight — severidades e status geral", () => {
 });
 
 describe("pré-flight — autonomia e sugestões calculadas (seção 20)", () => {
+  it("SOC zero representa bateria vazia nas sugestões", () => {
+    const budget = __test__.energyBudget({ batteryCapacityKwh: 100, socPercent: 0, reservePercent: 15 },
+      { estimatedEnergyKwh: 20 });
+    expect(budget.startKwh).toBe(0);
+    expect(budget.deficitKwh).toBe(35);
+  });
   it("rota longa sem recarga disponível → BLOCK com sugestões", () => {
     const energyEstimate = estimateRouteEnergy({ vehicle: vanOk, route: { distanceKm: 180 } });
     expect(energyEstimate.chargingRequired).toBe(true);

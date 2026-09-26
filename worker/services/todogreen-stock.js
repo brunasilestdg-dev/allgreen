@@ -81,7 +81,7 @@ const SOMA_ASSINADA = `SUM(CASE
     ELSE 0
   END)`;
 
-const saldoDisponivel = async (env, ownerId, itemId, warehouseId) => {
+export const saldoDisponivel = async (env, ownerId, itemId, warehouseId) => {
   const row = await env.DB.prepare(
     `SELECT COALESCE(${SOMA_ASSINADA}, 0) AS saldo
        FROM todogreen_stock_movements
