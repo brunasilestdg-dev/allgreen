@@ -1,5 +1,6 @@
 import {
   LOGISTICS_PRODUCTS,
+  PAPEIS_DE_ADMINISTRACAO,
   TODO_GREEN_MODULE_CATALOG,
   TODO_GREEN_PERMISSION_KEYS,
   TODO_GREEN_PERMISSIONS,
@@ -7,11 +8,12 @@ import {
   TODO_GREEN_TENANT,
   centralPricingEngine,
   createPricingScenarioSnapshot,
+  motivoParaNaoConceder,
   summarizeTodoGreenDashboard,
 } from "../../src/features/logistics/logisticsVerticalDomain.js";
 import { parametrosResolvidos } from "./todogreen-pricing-parameters.js";
 import { reguaEsgEmVigor } from "./todogreen-environmental-parameters.js";
-import { podeNaVertical, recusaDoPortalDoPapel, resolveTodoGreenAccess } from "./todogreen-access.js";
+import { administradoresDaEnv, podeNaVertical, recusaDoPortalDoPapel, resolveTodoGreenAccess } from "./todogreen-access.js";
 import { handleTodoGreenGoals } from "./todogreen-goals.js";
 import { registrarAuditoriaTodoGreen } from "./todogreen-governance.js";
 import { routeTodoGreenApi } from "./todogreen-router.js";
@@ -114,6 +116,31 @@ const contaPorEmail = (env, alvo) => env.DB
   .bind(email(alvo))
   .first()
   .catch(() => null);
+
+// O papel que a pessoa JÁ tem neste espaço, para a regra de concessão
+// (`motivoParaNaoConceder`) saber se ela administra a To Do Green — e então só
+// um administrador mexe no acesso dela. Conta o dono do espaço, os
+// administradores globais da env e as duas fontes de vínculo.
+async function papelAtualNoEspaco(env, access, alvo) {
+  const espaco = espacoDaConcessao(access);
+  const normalizado = email(alvo);
+  if (administradoresDaEnv(env).includes(normalizado)) return "admin";
+  const conta = await contaPorEmail(env, normalizado);
+  if (conta?.id && conta.id === espaco) return "owner";
+  const liberado = await env.DB.prepare(
+    "SELECT role FROM todogreen_access_emails WHERE tenant_id=? AND workspace_owner_id=? AND email=? AND status='active'",
+  ).bind(TODO_GREEN_TENANT.id, espaco, normalizado).first().catch(() => null);
+  const vinculo = conta?.id
+    ? await env.DB.prepare(
+      "SELECT role FROM tenant_users WHERE tenant_id=? AND workspace_owner_id=? AND user_id=? AND status='active'",
+    ).bind(TODO_GREEN_TENANT.id, espaco, conta.id).first().catch(() => null)
+    : null;
+  const papeis = [liberado?.role, vinculo?.role].filter(Boolean);
+  return papeis.find((papel) => PAPEIS_DE_ADMINISTRACAO.includes(papel)) || papeis[0] || "";
+}
+
+const recusaDaConcessao = async (env, access, pedido) =>
+  motivoParaNaoConceder(access, { ...pedido, papelAtual: await papelAtualNoEspaco(env, access, pedido.email) });
 
 const MASTER_PERMISSIONS = Object.freeze({
   "company-profiles": ["fiscal:manage", "finance:manage"],
@@ -342,6 +369,13 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
         ).bind(TODO_GREEN_TENANT.id, espacoDaConcessao(access), normalized).first();
         if (!existing || existing.status !== "active")
           return response({ error:"Só é possível reenviar convite para um acesso ativo." },404);
+        // O link do convite volta para quem reenvia; para um e-mail ainda sem
+        // conta, ele é a própria credencial. Reenviar o convite de um acesso que
+        // a pessoa não poderia conceder entregaria esse acesso a ela.
+        const recusaDoReenvio = await recusaDaConcessao(env, access, {
+          email: normalized, role: existing.role, permissions: parse(existing.permissions_json, []),
+        });
+        if (recusaDoReenvio) return response({ error: recusaDoReenvio }, 403);
         try {
           const convite = await enviarConviteDeAcessoTodoGreen({
             env, access, user, email: normalized, role: existing.role,
@@ -364,6 +398,8 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       const permissions = Array.isArray(body.permissions)
         ? [...new Set(body.permissions.map((item) => String(item).slice(0,80)).filter((item) => permitidas.has(item)))].slice(0,60)
         : TODO_GREEN_PERMISSIONS[role] || ["read"];
+      const recusa = await recusaDaConcessao(env, access, { email: normalized, role, permissions });
+      if (recusa) return response({ error: recusa }, 403);
       const now = new Date().toISOString();
       const ativo = body.status !== "inactive";
       // A autorização não depende do provedor de e-mail. Se o envio falhar,
@@ -436,6 +472,15 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
            FROM todogreen_access_emails
           WHERE tenant_id=? AND workspace_owner_id=? AND email=?`,
       ).bind(TODO_GREEN_TENANT.id,espacoDaConcessao(access),normalized).first();
+      // Revogar segue a mesma régua de conceder: quem só cuida da fila não
+      // derruba o acesso de quem administra, nem o próprio.
+      // O DELETE também desfaz o vínculo em `tenant_users`: sem linha de
+      // liberação, o papel que vale é o do vínculo.
+      const papelAtual = await papelAtualNoEspaco(env, access, normalized);
+      const recusaDaRevogacao = motivoParaNaoConceder(access, {
+        email: normalized, role: current?.role || papelAtual, papelAtual,
+      });
+      if (recusaDaRevogacao) return response({ error: recusaDaRevogacao }, 403);
       const now = new Date().toISOString();
       await env.DB.prepare(
         "UPDATE todogreen_access_emails SET status='inactive',revoked_at=?,updated_at=? WHERE tenant_id=? AND workspace_owner_id=? AND email=?",
@@ -498,6 +543,10 @@ export async function handleTodoGreenCore(request, env, user, url, dependencies 
       const role = TODO_GREEN_ROLES.includes(body.role) ? body.role : "auditor";
       const permissions = TODO_GREEN_PERMISSIONS[role] || ["read"];
       const alvo = email(pedido.email);
+      // Aprovar concede pelo mesmo caminho da liberação manual — e com a mesma
+      // régua de quem concede o quê.
+      const recusa = await recusaDaConcessao(env, access, { email: alvo, role, permissions });
+      if (recusa) return response({ error: recusa }, 403);
       // Aprovar o pedido cria o acesso mesmo durante indisponibilidade do
       // provedor de e-mail; o convite é tentado abaixo e seu resultado volta na resposta.
       await env.DB.prepare(

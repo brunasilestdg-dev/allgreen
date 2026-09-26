@@ -59,7 +59,7 @@ export async function authenticatedUser(request, env) {
   return sessionUser(request, env).catch(() => null);
 }
 
-const administradoresDaEnv = (env) =>
+export const administradoresDaEnv = (env) =>
   String(env.TODOGREEN_ADMIN_EMAILS || "")
     .split(",")
     .map((item) => item.trim().toLowerCase())

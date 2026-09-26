@@ -233,6 +233,59 @@ export const verticalPermite = (role, permissions, permissao = "read") => {
 export const hasTodoGreenPermission = (role, permission = "read", permissions = null) =>
   verticalPermite(role, permissions, permission);
 
+// Nome de cada papel na tela. O código do papel (`lideranca_comercial`) não é
+// texto para pessoa ler.
+export const TODO_GREEN_ROLE_LABELS = Object.freeze({
+  owner: "Proprietário", admin: "Administração", lideranca_comercial: "Liderança Comercial",
+  vendedor: "Comercial", pricing: "Precificação", produtos: "Produtos", planejamento: "Planejamento",
+  financeiro: "Financeiro", operacoes: "Operações", marketing: "Marketing",
+  sustentabilidade: "Sustentabilidade", auditor: "Auditoria", rh: "DP/RH",
+  motorista: "Motorista", colaborador: "Colaborador", desenvolvedor: "Desenvolvedor",
+});
+export const rotuloDoPapel = (role) => TODO_GREEN_ROLE_LABELS[role] || String(role || "").replace(/_/g, " ");
+
+// ===== Quem concede o quê — a mesma regra na tela de Acessos e no worker =====
+//
+// Owner, admin e quem tem "*" administram o acesso inteiro (o papel de
+// proprietário, só o proprietário concede). Os demais que gerenciam acesso — a
+// liderança e quem recebeu `access:manage` — cuidam da FILA de acesso
+// (decisão da titular: "adms ou gestores podem aprová-los"), e isso não pode
+// virar porta para a administração. A API aceitava qualquer papel do corpo,
+// inclusive admin e desenvolvedor ("*"): uma liderança comercial se promovia
+// com uma requisição. Agora quem não administra tudo só concede papel e
+// permissões que ele mesmo tem, nunca um papel de administração, e não mexe no
+// próprio acesso nem no de quem administra.
+//
+// `quem` = { role, permissions, email } de quem concede (permissions null = deriva
+// do papel, como no front). `pedido` = { role, permissions, email, papelAtual }
+// do acesso concedido; `papelAtual` é o papel que a pessoa já tem no espaço.
+// Devolve "" quando pode, ou o motivo em português.
+export const PAPEIS_DE_ADMINISTRACAO = Object.freeze(["owner", "admin", "desenvolvedor"]);
+export const motivoParaNaoConceder = (quem = {}, pedido = {}) => {
+  const papel = pedido.role;
+  const lista = Array.isArray(pedido.permissions) ? pedido.permissions : TODO_GREEN_PERMISSIONS[papel] || [];
+  if (papel === "owner" && quem.role !== "owner") return "Só o proprietário concede o papel de proprietário.";
+  if (verticalPermite(quem.role, quem.permissions ?? null, "*")) return "";
+  const alvo = String(pedido.email || "").trim().toLowerCase();
+  if (alvo && alvo === String(quem.email || "").trim().toLowerCase())
+    return "Você não pode alterar o seu próprio acesso. Peça a um administrador.";
+  if (PAPEIS_DE_ADMINISTRACAO.includes(papel)) return "Só um administrador concede esse papel.";
+  if (PAPEIS_DE_ADMINISTRACAO.includes(pedido.papelAtual))
+    return "Só um administrador altera o acesso de quem administra a To Do Green.";
+  // "O que você tem" soma a lista gravada e o perfil do papel — o mesmo
+  // critério de `canManage` no worker, que decide pelo papel para não depender
+  // do snapshot de permissões de vínculos antigos.
+  const tem = (item) =>
+    verticalPermite(quem.role, quem.permissions ?? null, item) || verticalPermite(quem.role, null, item);
+  if (lista.some((item) => item === "*" || !tem(item)))
+    return "Você só pode conceder o que você mesmo pode fazer. Para este perfil, peça a um administrador.";
+  return "";
+};
+// Papéis que aparecem no seletor de quem concede (o proprietário nunca é
+// oferecido na tela: ele não é concedido por lá).
+export const papeisConcediveis = (quem = {}) =>
+  TODO_GREEN_ROLES.filter((papel) => papel !== "owner" && !motivoParaNaoConceder(quem, { role: papel }));
+
 // A Central de Integrações (telas técnicas: cascata de IA, automações
 // auto-hospedadas, chaves por ambiente) é invisível para todos e visível só no
 // perfil de desenvolvedor — decisão da titular. Por isso esta checagem é

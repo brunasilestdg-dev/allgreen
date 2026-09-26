@@ -5,17 +5,26 @@ import { AlertTriangle, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-reac
 import {
   TODO_GREEN_PERMISSION_CATALOG,
   TODO_GREEN_PERMISSIONS,
-  TODO_GREEN_ROLES,
   hasTodoGreenPermission,
+  motivoParaNaoConceder,
+  papeisConcediveis,
+  rotuloDoPapel,
 } from "../logisticsVerticalDomain.js";
 import { ownerId } from "../shell/acesso.js";
 
 export default function AccessPanel({ role, permissions, authHeaders, setToast }) {
+  // Só aparecem os papéis e funcionalidades que ESTA pessoa pode conceder — a
+  // mesma régua do servidor (`motivoParaNaoConceder`). A tela abria com
+  // "admin" já escolhido e oferecia qualquer papel a qualquer gestor.
+  const quemConcede = { role, permissions };
+  const papeis = papeisConcediveis(quemConcede);
+  const papelPadrao = papeis.includes("auditor") ? "auditor" : papeis.includes("vendedor") ? "vendedor" : papeis[0] || "auditor";
+  const podeConcederPermissao = (permission) => !motivoParaNaoConceder(quemConcede, { permissions: [permission] });
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadedAt, setLoadedAt] = useState(0);
-  const [form, setForm] = useState({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
+  const [form, setForm] = useState({ email: "", role: papelPadrao, note: "", expiresAt: "", customPermissions: false, permissions: [] });
   // Quando o e-mail não está configurado (ou o envio falha), o convite continua
   // válido e o link volta na resposta. Guardamos aqui para o administrador
   // copiar e entregar manualmente (WhatsApp, etc.) — o acesso nunca fica preso
@@ -60,7 +69,7 @@ export default function AccessPanel({ role, permissions, authHeaders, setToast }
     setDecidindo(pedido.id);
     try {
       const body = { id: pedido.id, decisao };
-      if (decisao === "aprovar") body.role = papelDoPedido[pedido.id] || "auditor";
+      if (decisao === "aprovar") body.role = papelDoPedido[pedido.id] || papelPadrao;
       const response = await fetch(`/api/todogreen/access-requests?owner=${encodeURIComponent(ownerId())}`, {
         method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body),
       });
@@ -107,14 +116,16 @@ export default function AccessPanel({ role, permissions, authHeaders, setToast }
         role: form.role,
         note: form.note,
         ...(form.customPermissions ? { permissions: form.permissions } : {}),
-        expiresAt: form.expiresAt ? new Date(`${form.expiresAt}T23:59:59.999Z`).toISOString() : "",
+        // Fim do dia escolhido no horário de quem usa, não em UTC: com o "Z",
+        // um acesso "válido até 30/09" vencia às 20h59 em São Paulo.
+        expiresAt: form.expiresAt ? new Date(`${form.expiresAt}T23:59:59.999`).toISOString() : "",
       };
       const response = await fetch(`/api/todogreen/access-list?owner=${encodeURIComponent(ownerId())}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Não foi possível salvar o acesso.");
       if (payload.inviteLink)
         setConviteManual({ email: payload.email, link: payload.inviteLink, expiresAt: payload.inviteExpiresAt, emailSent: payload.invitationSent });
-      setForm({ email: "", role: "admin", note: "", expiresAt: "", customPermissions: false, permissions: [] });
+      setForm({ email: "", role: papelPadrao, note: "", expiresAt: "", customPermissions: false, permissions: [] });
       setToast?.(
         payload.invitationSent
           ? `Acesso salvo e convite enviado para ${payload.email}.`
@@ -135,7 +146,7 @@ export default function AccessPanel({ role, permissions, authHeaders, setToast }
   }));
   const selecionarPerfilAtual = () => setForm((current) => ({
     ...current,
-    permissions: (TODO_GREEN_PERMISSIONS[current.role] || []).filter((item) => item !== "*"),
+    permissions: (TODO_GREEN_PERMISSIONS[current.role] || []).filter((item) => item !== "*" && podeConcederPermissao(item)),
   }));
   const remove = async (email) => {
     const headers = authHeaders?.() || {};
@@ -176,7 +187,7 @@ export default function AccessPanel({ role, permissions, authHeaders, setToast }
       setToast?.(error.message);
     }
   };
-  if (!canManage) return <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Você tem acesso, mas não pode gerenciar usuários.</h2></div><strong>{role || "sem papel"}</strong></div></section>;
+  if (!canManage) return <section className="tdg-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Você tem acesso, mas não pode gerenciar usuários.</h2></div><strong>{role ? rotuloDoPapel(role) : "sem papel"}</strong></div></section>;
   return (
     <section className="tdg-panel tdg-access-panel"><div className="tdg-section-head"><div><span className="tdg-kicker">ACESSOS</span><h2>Autorize usuários por perfil pronto ou selecione cada funcionalidade.</h2></div><strong>{loading ? "carregando" : `${emails.length} e-mail(s)`}</strong></div>
       {conviteManual && (
@@ -212,10 +223,10 @@ export default function AccessPanel({ role, permissions, authHeaders, setToast }
                 <div className="tdg-access-request-acoes">
                   <label><span>Perfil ao aprovar</span>
                     <select
-                      value={papelDoPedido[pedido.id] || "auditor"}
+                      value={papelDoPedido[pedido.id] || papelPadrao}
                       onChange={(e) => setPapelDoPedido((atual) => ({ ...atual, [pedido.id]: e.target.value }))}
                     >
-                      {TODO_GREEN_ROLES.filter((item) => item !== "owner").map((item) => <option value={item} key={item}>{item.replace(/_/g, " ")}</option>)}
+                      {papeis.map((item) => <option value={item} key={item}>{rotuloDoPapel(item)}</option>)}
                     </select>
                   </label>
                   <div className="tdg-access-request-botoes">
@@ -235,7 +246,7 @@ export default function AccessPanel({ role, permissions, authHeaders, setToast }
                 {decididos.map((pedido) => (
                   <div className="tdg-access-request-decidido" key={pedido.id}>
                     <span><strong>{pedido.name || pedido.email}</strong><small>{pedido.email}</small></span>
-                    <span className={pedido.status === "approved" ? "good" : ""}>{pedido.status === "approved" ? `aprovado · ${(pedido.decidedRole || "").replace(/_/g, " ")}` : "recusado"}</span>
+                    <span className={pedido.status === "approved" ? "good" : ""}>{pedido.status === "approved" ? `aprovado · ${rotuloDoPapel(pedido.decidedRole)}` : "recusado"}</span>
                     <small>{pedido.decidedAt ? new Date(pedido.decidedAt).toLocaleDateString("pt-BR") : ""}</small>
                   </div>
                 ))}
@@ -246,15 +257,15 @@ export default function AccessPanel({ role, permissions, authHeaders, setToast }
       })()}
       <form className="tdg-access-form" onSubmit={save}>
         <label><span>E-mail da pessoa</span><input value={form.email} type="email" required placeholder="nome@empresa.com.br" onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><small>Ela receberá um convite para criar a própria senha.</small></label>
-        <label><span>Perfil base</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{TODO_GREEN_ROLES.filter((item) => item !== "owner").map((item) => <option value={item} key={item}>{item.replace(/_/g, " ")}</option>)}</select></label>
-        <label><span>Tipo de acesso</span><select value={form.customPermissions ? "custom" : "profile"} onChange={(event) => setForm((current) => ({ ...current, customPermissions: event.target.value === "custom", permissions: event.target.value === "custom" ? (TODO_GREEN_PERMISSIONS[current.role] || []).filter((item) => item !== "*") : [] }))}><option value="profile">Perfil pronto</option><option value="custom">Funcionalidades selecionadas</option></select></label>
+        <label><span>Perfil base</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{papeis.map((item) => <option value={item} key={item}>{rotuloDoPapel(item)}</option>)}</select></label>
+        <label><span>Tipo de acesso</span><select value={form.customPermissions ? "custom" : "profile"} onChange={(event) => setForm((current) => ({ ...current, customPermissions: event.target.value === "custom", permissions: event.target.value === "custom" ? (TODO_GREEN_PERMISSIONS[current.role] || []).filter((item) => item !== "*" && podeConcederPermissao(item)) : [] }))}><option value="profile">Perfil pronto</option><option value="custom">Funcionalidades selecionadas</option></select></label>
         <label><span>Validade</span><input type="date" value={form.expiresAt} onChange={(event) => setForm((current) => ({ ...current, expiresAt: event.target.value }))} /><small>Vazio mantém o acesso sem expiração.</small></label>
         <label><span>Observação</span><input value={form.note} placeholder="Ex.: implantação, auditor externo" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label>
-        {form.customPermissions && <div className="tdg-permission-editor"><div className="tdg-permission-editor-head"><strong>Funcionalidades liberadas</strong><button type="button" onClick={selecionarPerfilAtual}>Restaurar perfil base</button></div>{TODO_GREEN_PERMISSION_CATALOG.map((group) => <fieldset key={group.group}><legend>{group.group}</legend>{group.items.map(([permission, label]) => <label className="tdg-check-field" key={permission}><input type="checkbox" checked={form.permissions.includes(permission)} onChange={() => alternarPermissao(permission)} /><span>{label}</span></label>)}</fieldset>)}</div>}
+        {form.customPermissions && <div className="tdg-permission-editor"><div className="tdg-permission-editor-head"><strong>Funcionalidades liberadas</strong><button type="button" onClick={selecionarPerfilAtual}>Restaurar perfil base</button></div>{TODO_GREEN_PERMISSION_CATALOG.filter((group) => group.items.some(([permission]) => podeConcederPermissao(permission))).map((group) => <fieldset key={group.group}><legend>{group.group}</legend>{group.items.filter(([permission]) => podeConcederPermissao(permission)).map(([permission, label]) => <label className="tdg-check-field" key={permission}><input type="checkbox" checked={form.permissions.includes(permission)} onChange={() => alternarPermissao(permission)} /><span>{label}</span></label>)}</fieldset>)}</div>}
         <button className="tdg-action" type="submit" disabled={saving || (form.customPermissions && !form.permissions.includes("read"))}><Plus size={17} />{saving ? "Enviando..." : "Autorizar e enviar convite"}</button>
       </form>
       {form.customPermissions && !form.permissions.includes("read") && <div className="tdg-alert"><AlertTriangle size={17} />Selecione “Acessar a vertical” para liberar a entrada.</div>}
-      <div className="tdg-access-list">{emails.length === 0 && <div className="tdg-empty-access"><ShieldCheck size={18} />Nenhum e-mail autorizado ainda.</div>}{emails.map((item) => { const expired = item.expiresAt && loadedAt > 0 && Date.parse(item.expiresAt) <= loadedAt; const active = item.status === "active" && !item.revokedAt && !expired; const defaults = TODO_GREEN_PERMISSIONS[item.role] || []; const customized = !defaults.includes("*") && JSON.stringify([...(item.permissions || [])].sort()) !== JSON.stringify([...defaults].sort()); return <div className="tdg-access-row" key={item.email}><span><strong>{item.email}</strong><small>{item.note || "sem observação"}{item.lastAccessAt ? ` · último acesso ${new Date(item.lastAccessAt).toLocaleString("pt-BR")}` : ""}</small></span><span>{item.role.replace(/_/g, " ")}<small>{customized ? `${item.permissions?.length || 0} funcionalidades` : "perfil pronto"}</small></span><span className={active ? "good" : ""}>{active ? item.expiresAt ? `ativo até ${new Date(item.expiresAt).toLocaleDateString("pt-BR")}` : "ativo" : item.revokedAt ? "revogado" : expired ? "expirado" : "inativo"}</span>{active && <><button type="button" onClick={() => resend(item.email)} aria-label={`Reenviar convite para ${item.email}`}><RefreshCw size={17} /></button><button type="button" onClick={() => remove(item.email)} aria-label={`Revogar ${item.email}`}><Trash2 size={17} /></button></>}</div>; })}</div>
+      <div className="tdg-access-list">{emails.length === 0 && <div className="tdg-empty-access"><ShieldCheck size={18} />Nenhum e-mail autorizado ainda.</div>}{emails.map((item) => { const expired = item.expiresAt && loadedAt > 0 && Date.parse(item.expiresAt) <= loadedAt; const active = item.status === "active" && !item.revokedAt && !expired; const defaults = TODO_GREEN_PERMISSIONS[item.role] || []; const customized = !defaults.includes("*") && JSON.stringify([...(item.permissions || [])].sort()) !== JSON.stringify([...defaults].sort()); const gerenciavel = !motivoParaNaoConceder(quemConcede, { role: item.role, permissions: item.permissions, papelAtual: item.role }); return <div className="tdg-access-row" key={item.email}><span><strong>{item.email}</strong><small>{item.note || "sem observação"}{item.lastAccessAt ? ` · último acesso ${new Date(item.lastAccessAt).toLocaleString("pt-BR")}` : ""}</small></span><span>{rotuloDoPapel(item.role)}<small>{customized ? `${item.permissions?.length || 0} funcionalidades` : "perfil pronto"}</small></span><span className={active ? "good" : ""}>{active ? item.expiresAt ? `ativo até ${new Date(item.expiresAt).toLocaleDateString("pt-BR")}` : "ativo" : item.revokedAt ? "revogado" : expired ? "expirado" : "inativo"}</span>{active && gerenciavel && <><button type="button" onClick={() => resend(item.email)} aria-label={`Reenviar convite para ${item.email}`}><RefreshCw size={17} /></button><button type="button" onClick={() => remove(item.email)} aria-label={`Revogar ${item.email}`}><Trash2 size={17} /></button></>}</div>; })}</div>
     </section>
   );
 }

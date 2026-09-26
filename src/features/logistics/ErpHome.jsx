@@ -19,6 +19,7 @@ import "./ErpHome.css";
 import { comRotulo } from "./rotulosDomain.js";
 import WidgetChart from "./pages/DashboardCharts.jsx";
 import { WORKDAY_FILTERS, WORKDAY_ROUTES, origemDaTarefa, workdayTasks } from "./workdayDomain.js";
+import { TODO_GREEN_ROLE_LABELS } from "./logisticsVerticalDomain.js";
 
 // Os gráficos do painel da home: puro SVG (CSP-safe), alimentados pelos mesmos
 // dados da vertical. Dão o "dashboard" e o dinamismo que faltavam — um número
@@ -58,13 +59,6 @@ const painelDaArea = (areaId) =>
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const NUM = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
-const ROLE_LABEL = {
-  owner: "Proprietário", admin: "Administração", lideranca_comercial: "Liderança Comercial",
-  vendedor: "Comercial", pricing: "Precificação", produtos: "Produtos", planejamento: "Planejamento",
-  financeiro: "Financeiro", operacoes: "Operações", marketing: "Marketing",
-  sustentabilidade: "Sustentabilidade", auditor: "Auditoria", rh: "DP/RH",
-  colaborador: "Colaborador", desenvolvedor: "Desenvolvedor",
-};
 
 const dueLabel = (task) => {
   const value = task.due || task.dueDate || task.deadline;
@@ -272,7 +266,7 @@ export default function ErpHome({ role, user, data, dashboard, tasks, products =
         <p>{profile.functionLabel}. Sua entrada reúne o que exige ação na sua rotina, sem misturar o trabalho das outras áreas.</p>
       </div>
       <div className="tdg-home-identity">
-        <span>{comRotulo(ROLE_LABEL, role)}</span>
+        <span>{comRotulo(TODO_GREEN_ROLE_LABELS, role)}</span>
         <button type="button" onClick={() => onNavigate?.("/portal-tms")}><MapPinned size={16} />Abrir Torre TMS</button>
         <button type="button" onClick={() => { setDraft(profile); setEditing(true); }}><Settings2 size={16} />Configurar meu início</button>
       </div>
