@@ -15,4 +15,18 @@ describe("publicação segura de sites", () => {
     expect(result).toContain("<main>");
     expect(result).toContain("Oi");
   });
+
+  it("remove o manipulador separado por barra, que o navegador também executa", () => {
+    // O navegador trata "/" como separador de atributo: estes rodavam o
+    // handler porque a regra antiga exigia espaço antes do "on".
+    expect(sanitizeSiteHtml("<svg/onload=alert(1)>")).toBe("<svg>");
+    expect(sanitizeSiteHtml("<img/onerror=alert(1) src=x>")).toBe("<img src=x>");
+    expect(sanitizeSiteHtml('<img src="x"/onerror=alert(1)>')).toBe('<img src="x">');
+    expect(sanitizeSiteHtml("<img src='x' /onerror=alert(1)>")).toBe("<img src='x'>");
+  });
+
+  it("não corta um caminho de URL que só se parece com manipulador", () => {
+    const links = '<a href="/online=1">A</a><a href="https://exemplo.com/onboarding=2">B</a>';
+    expect(sanitizeSiteHtml(links)).toBe(links);
+  });
 });

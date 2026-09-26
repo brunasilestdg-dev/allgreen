@@ -24,6 +24,14 @@ export const siteSlug = (value) =>
     .replace(/(^-|-$)/g, "")
     .slice(0, 80);
 
+// Atributo de evento (onclick, onerror…). O navegador aceita "/" como
+// separador de atributo — "<svg/onload=…>" e '<img src="x"/onerror=…>' rodam
+// o handler —, então o separador é espaço OU barra. A barra sem espaço antes
+// só conta logo depois do nome da tag ou do fecho de um valor entre aspas,
+// para não cortar um caminho de URL como href="/online=1".
+const ATRIBUTO_DE_EVENTO =
+  /(?:\s[\s/]*|(?:(?<=<[a-z][a-z0-9-]*)|(?<==\s*"[^"]*")|(?<==\s*'[^']*'))\/[\s/]*)on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+
 export function sanitizeSiteHtml(value) {
   let html = String(value || "").slice(0, 300_000);
   html = html
@@ -37,7 +45,7 @@ export function sanitizeSiteHtml(value) {
       /<meta\b[^>]*http-equiv\s*=\s*["']?(?:refresh|content-security-policy)["']?[^>]*>/gi,
       "",
     )
-    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(ATRIBUTO_DE_EVENTO, "")
     .replace(/javascript\s*:/gi, "");
   return html;
 }
