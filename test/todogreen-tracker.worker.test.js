@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../worker-entry.js";
 
 async function sha256(value) {
@@ -200,5 +200,48 @@ describe("ponte rastreador → operação", () => {
     // Rodar de novo não re-carimba (a leitura não é mais nova): 0 atualizações.
     const res2 = await request("/api/todogreen/tracker/sync-operations", { method: "POST", token: manager.token });
     expect((await res2.json()).operacoesAtualizadas).toBe(0);
+  });
+});
+
+describe("segredos do cofre que a integração pode ler", () => {
+  // O token é lido do cofre e vai no cabeçalho para a `baseUrl` escolhida por
+  // quem configura. Se o nome pudesse ser qualquer um, bastava apontar para
+  // BREVO_API_KEY (ou o cofre das chaves de IA) e um host próprio para
+  // receber o segredo no servidor de quem configurou.
+  it("recusa apontar o token para um segredo que não é do rastreador", async () => {
+    for (const tokenEnvKey of ["BREVO_API_KEY", "WORKSPACE_AI_VAULT_KEY", "TODOGREEN_TRACKER_WEBHOOK_SECRET"]) {
+      const response = await request("/api/todogreen/tracker/config", {
+        method: "PUT",
+        token: manager.token,
+        body: {
+          name: "Sistemas Tracker",
+          baseUrl: "https://tracker.example.com/api/",
+          authMode: "bearer",
+          tokenEnvKey,
+          webhookSecretEnvKey: "TODOGREEN_TRACKER_WEBHOOK_SECRET",
+          syncMode: "manual",
+          providerConfig: { vehiclesPath: "v1/positions" },
+        },
+      });
+      expect({ tokenEnvKey, status: response.status }).toEqual({ tokenEnvKey, status: 400 });
+    }
+  });
+
+  it("config antiga que aponta para outro segredo não o envia para fora", async () => {
+    await env.DB.prepare(
+      "UPDATE todogreen_tracker_integrations SET token_env_key = 'BREVO_API_KEY' WHERE id = ?",
+    ).bind(integrationId).run();
+    const upstream = vi.spyOn(globalThis, "fetch");
+    try {
+      const response = await request("/api/todogreen/tracker/test", { method: "POST", token: manager.token });
+      expect(response.status).toBe(422);
+      expect((await response.json()).error).toMatch(/TODOGREEN_TRACKER_/);
+      expect(upstream).not.toHaveBeenCalled();
+    } finally {
+      upstream.mockRestore();
+      await env.DB.prepare(
+        "UPDATE todogreen_tracker_integrations SET token_env_key = 'TODOGREEN_TRACKER_API_TOKEN' WHERE id = ?",
+      ).bind(integrationId).run();
+    }
   });
 });

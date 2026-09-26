@@ -1,3 +1,4 @@
+import { isBlockedHost } from "../lib/net.js";
 import { podeNaVertical } from "./todogreen-access.js";
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -12,21 +13,14 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 const PROVIDER = "mcp";
 const text = (value, max = 500) => String(value ?? "").trim().slice(0, max);
 
+// O filtro de host é o de worker/lib/net.js (a fonte única contra SSRF): a
+// versão local comparava prefixos de texto e deixava passar 0.0.0.0, CGNAT,
+// `.internal` e o IPv6 que embrulha um IPv4 (metadados da nuvem inclusive).
 const publicHttpsUrl = (value) => {
   try {
     const url = new URL(String(value || "").trim());
-    if (url.protocol !== "https:") return "";
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-    const blocked = host === "localhost" ||
-      host === "::1" ||
-      host.endsWith(".local") ||
-      host.startsWith("127.") ||
-      host.startsWith("10.") ||
-      host.startsWith("169.254.") ||
-      host.startsWith("192.168.") ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-      /^(fc|fd|fe8|fe9|fea|feb)/.test(host);
-    return blocked ? "" : url.href;
+    if (url.protocol !== "https:" || url.username || url.password) return "";
+    return isBlockedHost(url.hostname) ? "" : url.href;
   } catch {
     return "";
   }
@@ -91,6 +85,9 @@ export const probeMcpServer = async ({ url, token = "" }) => {
     const response = await fetch(endpoint, {
       method: "POST",
       signal: controller.signal,
+      // A checagem do endereço só vale para o primeiro salto: um host público
+      // que responde 302 para 127.0.0.1 a driblaria. Redireção é recusa.
+      redirect: "manual",
       headers: {
         "content-type": "application/json",
         accept: "application/json, text/event-stream",
@@ -107,6 +104,8 @@ export const probeMcpServer = async ({ url, token = "" }) => {
         },
       }),
     });
+    if (response.status >= 300 && response.status < 400)
+      return { ok: false, error: "O servidor MCP tentou redirecionar para outro endereço. Informe a URL final do servidor." };
     const raw = await response.text();
     if (!response.ok)
       return { ok: false, error: `Servidor MCP respondeu ${response.status}: ${raw.slice(0, 220)}` };

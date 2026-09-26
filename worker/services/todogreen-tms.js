@@ -21,7 +21,7 @@
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
 import { autenticarTokenWebhookTrack3r, estadoTokensWebhookTrack3r, TRACK3R_WEBHOOK_TOKEN_KEYS } from "./todogreen-track3r-webhook-auth.js";
 import { allowed as limitarTaxa, edgeIp } from "../lib/http.js";
-import { safeExternalUrl, isTrack3rEnvKey, isSafeHeaderName } from "../lib/net.js";
+import { safeExternalUrl, isTrack3rEnvKey, isTrack3rOutboundTokenKey, isSafeHeaderName } from "../lib/net.js";
 import { aplicarEventoNaOperacaoPorId } from "./todogreen-vertical-records.js";
 import {
   PERGUNTAS_AO_TRACK3R,
@@ -215,6 +215,8 @@ const salvarConfiguracao = async (env, access, user, corpo, request) => {
   const authHeaderName = texto(corpo.authHeaderName, 60) || "authorization";
   if (!isTrack3rEnvKey(tokenEnvKey) || !isTrack3rEnvKey(webhookSecretEnvKey))
     return json({ error: "As chaves de segredo devem começar com TODOGREEN_TRACK3R_." }, 400);
+  if (!isTrack3rOutboundTokenKey(tokenEnvKey))
+    return json({ error: "O token da API não pode ser um segredo de entrada (webhooks ou ponte local). Use TODOGREEN_TRACK3R_API_TOKEN ou outro nome próprio para a API." }, 400);
   if (!isSafeHeaderName(authHeaderName))
     return json({ error: "Nome de cabeçalho de autenticação inválido." }, 400);
 
@@ -449,7 +451,7 @@ const sincronizarApi = async (env, access, user, corpo) => {
 
   // Defesa em profundidade: mesmo que uma config antiga guarde uma chave fora do
   // padrão, nunca lemos do cofre um segredo que não seja do conector TRACK3R.
-  if (!isTrack3rEnvKey(integracao.tokenEnvKey))
+  if (!isTrack3rOutboundTokenKey(integracao.tokenEnvKey))
     return json({ error: "A chave de token da integração é inválida. Reconfigure a integração." }, 400);
 
   // `safeExternalUrl` exige HTTPS, host público, caminho relativo e MESMA origem

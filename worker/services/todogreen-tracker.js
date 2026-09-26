@@ -8,7 +8,7 @@ import {
   leituraDeTelemetriaEletrica,
   normalizePlate,
 } from "../../src/features/logistics/todoGreenFleetDomain.js";
-import { isBlockedHost } from "../lib/net.js";
+import { isBlockedHost, isTrackerEnvKey, isTrackerOutboundTokenKey } from "../lib/net.js";
 
 const TENANT_ID = "todogreen";
 const MAX_PROVIDER_ITEMS = 1000;
@@ -153,6 +153,11 @@ const safeExternalUrl = (baseUrl, path) => {
 
 const providerHeaders = (integration, env) => {
   const config = normalizeProviderConfig(parse(integration.provider_config_json, {}));
+  // Defesa em profundidade: uma config gravada antes da trava pode apontar para
+  // qualquer segredo do cofre. Esse valor iria no cabeçalho para fora.
+  if (!isTrackerOutboundTokenKey(integration.token_env_key)) {
+    throw new Error("O nome do segredo da API precisa começar com TODOGREEN_TRACKER_. Ajuste a configuração da integração.");
+  }
   const token = clean(env[integration.token_env_key], 5000);
   if (!token) {
     throw new Error(`Cadastre o segredo ${integration.token_env_key} no cofre do Cloudflare Worker.`);
@@ -535,8 +540,8 @@ const mapIntegration = (row, env) => {
     authMode: row.auth_mode,
     tokenEnvKey: row.token_env_key,
     webhookSecretEnvKey: row.webhook_secret_env_key,
-    tokenConfigured: Boolean(env[row.token_env_key]),
-    webhookConfigured: Boolean(env[row.webhook_secret_env_key]),
+    tokenConfigured: isTrackerOutboundTokenKey(row.token_env_key) && Boolean(env[row.token_env_key]),
+    webhookConfigured: isTrackerEnvKey(row.webhook_secret_env_key) && Boolean(env[row.webhook_secret_env_key]),
     status: row.status,
     syncMode: row.sync_mode,
     pollingIntervalMinutes: row.polling_interval_minutes,
@@ -649,8 +654,13 @@ async function saveConfig(request, env, access, user, current) {
     : "manual";
   const tokenEnvKey = clean(body.tokenEnvKey, 120) || "TODOGREEN_TRACKER_API_TOKEN";
   const webhookSecretEnvKey = clean(body.webhookSecretEnvKey, 120) || "TODOGREEN_TRACKER_WEBHOOK_SECRET";
-  if (!/^[A-Z][A-Z0-9_]{2,119}$/.test(tokenEnvKey) || !/^[A-Z][A-Z0-9_]{2,119}$/.test(webhookSecretEnvKey)) {
-    return response({ error: "Os nomes dos segredos devem usar letras maiúsculas, números e sublinhado." }, 400);
+  // O token é LIDO do cofre e enviado no cabeçalho para a `baseUrl`. Se o nome
+  // pudesse ser qualquer um, quem configura a integração apontaria para
+  // BREVO/GEMINI/SEFAZ/cofre e receberia o valor no próprio servidor.
+  if (!isTrackerOutboundTokenKey(tokenEnvKey) || !isTrackerEnvKey(webhookSecretEnvKey)) {
+    return response({
+      error: "Os nomes dos segredos devem começar com TODOGREEN_TRACKER_ e usar letras maiúsculas, números e sublinhado. O token da API não pode ser o segredo do webhook.",
+    }, 400);
   }
   const now = new Date().toISOString();
   const config = normalizeProviderConfig(body.providerConfig || {});
@@ -724,6 +734,8 @@ const secureEquals = (left, right) => {
 };
 
 async function verifyWebhook(rawBody, request, integration, env) {
+  if (!isTrackerEnvKey(integration.webhook_secret_env_key))
+    return { ok: false, status: 503, error: "O nome do segredo do webhook precisa começar com TODOGREEN_TRACKER_. Ajuste a configuração da integração." };
   const secret = clean(env[integration.webhook_secret_env_key], 5000);
   if (!secret) return { ok: false, status: 503, error: `Cadastre o segredo ${integration.webhook_secret_env_key}.` };
   const provided = clean(request.headers.get("x-tracker-signature"), 500)
@@ -814,8 +826,8 @@ export async function handleTodoGreenTracker(request, env) {
       access: { role: access.role, canManage: canManage(access) },
       requirements: {
         apiDocumentation: !integration?.base_url,
-        apiSecret: integration ? !env[integration.token_env_key] : true,
-        webhookSecret: integration ? !env[integration.webhook_secret_env_key] : true,
+        apiSecret: integration ? !(isTrackerOutboundTokenKey(integration.token_env_key) && env[integration.token_env_key]) : true,
+        webhookSecret: integration ? !(isTrackerEnvKey(integration.webhook_secret_env_key) && env[integration.webhook_secret_env_key]) : true,
       },
     });
   }

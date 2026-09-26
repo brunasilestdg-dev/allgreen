@@ -68,6 +68,23 @@ describe("endereço do webhook: barreira contra SSRF", () => {
     expect(isPrivateIpv6("2606:4700::1111")).toBe(false);
   });
 
+  it("recusa o IPv4 embutido também na forma que o `new URL()` devolve", () => {
+    // O navegador e o Worker reescrevem "[::ffff:127.0.0.1]" como
+    // "[::ffff:7f00:1]" antes de qualquer checagem. A regex antiga só
+    // procurava o IPv4 pontuado e deixava estes endereços passarem.
+    for (const alvo of [
+      "https://[::ffff:127.0.0.1]/x",
+      "https://[::ffff:169.254.169.254]/latest/meta-data/",
+      "https://[::ffff:10.0.0.5]/x",
+      "https://[0:0:0:0:0:ffff:c0a8:101]/x",
+      "https://[::127.0.0.1]/x",
+      "https://[64:ff9b::a9fe:a9fe]/x",
+      "https://[ff02::1]/x",
+    ])
+      expect({ alvo, ok: validateWebhookUrl(alvo).ok }).toEqual({ alvo, ok: false });
+    expect(validateWebhookUrl("https://[2606:4700:4700::1111]/x").ok).toBe(true);
+  });
+
   it("recusa nome que só existe dentro da rede", () => {
     for (const alvo of [
       "https://servidor.local/x",

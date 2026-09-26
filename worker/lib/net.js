@@ -38,18 +38,59 @@ const ipv4Privado = (pontuado) => {
   if (a === 192 && b === 168) return true; // privado
   if (a === 172 && b >= 16 && b <= 31) return true; // privado
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a >= 224) return true; // multicast, reservado e broadcast
   return false;
 };
 
+// Os 8 grupos de 16 bits de um IPv6 literal, ou null se não for um. Existe
+// porque `new URL()` reescreve o host ANTES de qualquer checagem:
+// "[::ffff:127.0.0.1]" chega aqui como "[::ffff:7f00:1]", e uma regex que só
+// procura o IPv4 pontuado nunca o encontra — era assim que loopback, rede
+// privada e metadados da nuvem passavam pelo filtro.
+const gruposIpv6 = (literal) => {
+  let h = literal.replace(/^\[|\]$/g, "").replace(/%.*$/, "");
+  const cauda = /(^|:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (cauda) {
+    const o = cauda.slice(2, 6).map(Number);
+    if (o.some((n) => n > 255)) return null;
+    const hexa = `${((o[0] << 8) | o[1]).toString(16)}:${((o[2] << 8) | o[3]).toString(16)}`;
+    h = h.slice(0, cauda.index + cauda[1].length) + hexa;
+  }
+  const metades = h.split("::");
+  if (metades.length > 2) return null;
+  const lado = (s) => (s ? s.split(":") : []);
+  const esquerda = lado(metades[0]);
+  const direita = lado(metades[1]);
+  const zeros = metades.length === 2 ? 8 - esquerda.length - direita.length : 0;
+  if (metades.length === 2 && zeros < 1) return null;
+  const grupos = [...esquerda, ...Array(zeros).fill("0"), ...direita];
+  if (grupos.length !== 8 || !grupos.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return null;
+  return grupos.map((g) => parseInt(g, 16));
+};
+
+const ipv4DosGrupos = (alto, baixo) => [alto >> 8, alto & 255, baixo >> 8, baixo & 255].join(".");
+
 const ipv6Privado = (host) => {
-  const h = host.replace(/^\[|\]$/g, "");
-  if (h === "::1" || h === "::") return true; // loopback / não especificado
-  if (/^fe[89ab][0-9a-f]:/.test(h)) return true; // fe80::/10 link-local
-  if (/^f[cd][0-9a-f]{2}:/.test(h)) return true; // fc00::/7 unique-local
-  const mapeado = h.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/); // IPv4 mapeado
-  if (mapeado) return ipv4Privado(mapeado[1]);
+  const g = gruposIpv6(host);
+  if (!g) return true; // não dá para entender: recusa em vez de chutar
+  const zerados = (ate) => g.slice(0, ate).every((n) => n === 0);
+  if (zerados(7) && g[7] <= 1) return true; // :: (não especificado) e ::1 (loopback)
+  if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local (obsoleto)
+  if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((g[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  // IPv6 que carrega um IPv4 dentro: o destino de verdade é o IPv4.
+  const embutido = ipv4DosGrupos(g[6], g[7]);
+  if (zerados(5) && (g[5] === 0xffff || g[5] === 0)) return ipv4Privado(embutido); // ::ffff:a.b.c.d e ::a.b.c.d
+  if (zerados(4) && g[4] === 0xffff && g[5] === 0) return ipv4Privado(embutido); // ::ffff:0:a.b.c.d
+  if (g[0] === 0x64 && g[1] === 0xff9b) return g[2] === 1 || ipv4Privado(embutido); // NAT64
+  if (g[0] === 0x2002) return ipv4Privado(ipv4DosGrupos(g[1], g[2])); // 6to4
   return false;
 };
+
+// IPv6 literal (com ou sem colchetes) que aponta para dentro da rede. Usado
+// também pelo webhook de saída, para as duas barreiras terem a mesma regra.
+export const isPrivateIpv6Literal = (host) => ipv6Privado(String(host || "").trim().toLowerCase());
 
 // Bloqueia hosts que não devem ser alcançados a partir do servidor (loopback,
 // redes privadas, link-local/metadata, domínios internos). Nome de domínio
@@ -94,6 +135,23 @@ export const safeExternalUrl = (baseUrl, path, { requireHttps = true } = {}) => 
 // só as do próprio conector. Sem isto, uma config apontaria `tokenEnvKey` para
 // qualquer segredo e o receberia no cabeçalho da chamada externa.
 export const isTrack3rEnvKey = (name) => /^TODOGREEN_TRACK3R_[A-Z0-9_]{1,100}$/.test(String(name || ""));
+
+// O token que VAI no cabeçalho da chamada externa. Dentro do prefixo do
+// conector também moram credenciais de ENTRADA — os tokens individuais dos
+// webhooks, o segredo do webhook e o da ponte local. Mandar qualquer uma delas
+// para a `baseUrl` configurada entregaria a quem configurou a integração o
+// poder de forjar eventos e faturas; por isso nunca servem como token de saída.
+const ENTRADA_TRACK3R = /^TODOGREEN_TRACK3R_(?:TOKEN_|LOCAL_BRIDGE|WEBHOOK_SECRET)/;
+export const isTrack3rOutboundTokenKey = (name) =>
+  isTrack3rEnvKey(name) && !ENTRADA_TRACK3R.test(String(name));
+
+// O mesmo para o rastreador (Sistemas Tracker). A config aceitava QUALQUER nome
+// de variável — BREVO_API_KEY, WORKSPACE_AI_VAULT_KEY, NFE_CERT_PASSWORD… — e o
+// valor ia no cabeçalho para o host que a pessoa escolheu. Agora só segredos do
+// próprio conector, e o do webhook (entrada) nunca sai.
+export const isTrackerEnvKey = (name) => /^TODOGREEN_TRACKER_[A-Z0-9_]{1,100}$/.test(String(name || ""));
+export const isTrackerOutboundTokenKey = (name) =>
+  isTrackerEnvKey(name) && !/^TODOGREEN_TRACKER_WEBHOOK_SECRET/.test(String(name));
 
 // Nome de cabeçalho HTTP válido (token RFC 7230), para `authHeaderName` não
 // injetar caractere de controle nem cabeçalho extra.

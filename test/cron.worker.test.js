@@ -77,7 +77,7 @@ async function semear(prefixo) {
        (id, workspace_owner_id, name, base_url, token_env_key, status, sync_mode,
         polling_interval_minutes, provider_config_json, created_by, updated_by,
         created_at, updated_at)
-     VALUES (?, ?, 'Rastreador', ?, 'TDG_TESTE_TOKEN_RASTREADOR', 'ready', 'polling', 60, ?, ?, ?,
+     VALUES (?, ?, 'Rastreador', ?, 'TODOGREEN_TRACKER_TESTE_TOKEN', 'ready', 'polling', 60, ?, ?, ?,
              '2020-01-01T00:00:00.000Z', '2020-01-01T00:00:00.000Z')`,
   ).bind(
     `${prefixo}-rastreador`,
@@ -108,7 +108,7 @@ async function estado(prefixo) {
   };
 }
 
-const ambiente = () => ({ ...env, TDG_TESTE_TOKEN_RASTREADOR: "token-de-teste" });
+const ambiente = () => ({ ...env, TODOGREEN_TRACKER_TESTE_TOKEN: "token-de-teste" });
 
 const originalFetch = globalThis.fetch;
 let chamadas;

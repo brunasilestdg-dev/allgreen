@@ -20,6 +20,8 @@
 // A redireção também é recusada: um endereço público que responde 302 para
 // 127.0.0.1 driblaria a checagem feita só na entrada.
 
+import { isPrivateIpv6Literal } from "../lib/net.js";
+
 const texto = (v) => String(v ?? "");
 
 // ---------------------------------------------------------------------------
@@ -93,13 +95,11 @@ export const isPrivateIpv4 = (host) => {
 export const isPrivateIpv6 = (host) => {
   const h = texto(host).toLowerCase().replace(/^\[|\]$/g, "");
   if (!h.includes(":")) return false;
-  if (h === "::1" || h === "::") return true; // a própria máquina
-  if (/^f[cd]/.test(h)) return true; // fc00::/7, endereço único local
-  if (/^fe[89ab]/.test(h)) return true; // fe80::/10, link-local
-  // IPv6 que embrulha um IPv4 (::ffff:127.0.0.1) driblaria a checagem acima.
-  const embrulhado = h.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (embrulhado) return isPrivateIpv4(embrulhado[1]);
-  return false;
+  // A regra mora em worker/lib/net.js, a fonte única. Ela entende o IPv4
+  // embutido também na forma que `new URL()` devolve: "::ffff:127.0.0.1" vira
+  // "::ffff:7f00:1" antes de chegar aqui, e a regex antiga, que só procurava o
+  // IPv4 pontuado, deixava esse endereço passar.
+  return isPrivateIpv6Literal(h);
 };
 
 const NOMES_INTERNOS = [
