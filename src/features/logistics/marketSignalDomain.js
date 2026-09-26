@@ -66,12 +66,15 @@ export function fingerprintDeSinal({ source = "", externalId = "", url = "", tit
   return `${fnv1a(base)}${fnv1a(`${base}|tdg`, 0x9747b28c)}`;
 }
 
-const iso = (value) => {
+const iso = (value, fuso = "Z") => {
   const s = clean(value, 40);
   if (!s) return "";
   const gdelt = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/.exec(s);
   if (gdelt) return `${gdelt[1]}-${gdelt[2]}-${gdelt[3]}T${gdelt[4]}:${gdelt[5]}:${gdelt[6]}.000Z`;
-  const t = Date.parse(s.length === 10 ? `${s}T00:00:00` : s);
+  // O PNCP publica horários civis de Brasília sem offset no texto. Nunca
+  // deixar o fuso da máquina que executa o Worker decidir o prazo.
+  const data = s.length === 10 ? `${s}T00:00:00` : s;
+  const t = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(data) ? data : `${data}${fuso}`);
   return Number.isFinite(t) ? new Date(t).toISOString() : "";
 };
 const positivo = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
@@ -108,7 +111,7 @@ export function normalizarContratacaoPncp(item = {}, { source = "pncp" } = {}) {
     orgao: clean(orgao, 160), uf: clean(uf, 2).toUpperCase(), municipio: clean(municipio, 80),
     esfera: clean(item.orgaoEntidade?.esferaId || item.orgaoEntidadeEsferaId, 2), modalidade: clean(modalidade, 60), situacao: clean(situacao, 60),
     valorEstimado: positivo(item.valorTotalEstimado),
-    publicadoEm: iso(item.dataPublicacaoPncp), prazoProposta: iso(item.dataEncerramentoProposta || item.dataEncerramentoPropostaPncp),
+    publicadoEm: iso(item.dataPublicacaoPncp, "-03:00"), prazoProposta: iso(item.dataEncerramentoProposta || item.dataEncerramentoPropostaPncp, "-03:00"),
   });
   return { ...sinal, fingerprint: fingerprintDeSinal(sinal) };
 }
@@ -124,7 +127,7 @@ export function normalizarBuscaPncp(item = {}) {
     orgao: clean(item.orgao_nome, 160), uf: clean(item.uf, 2).toUpperCase(), municipio: clean(item.municipio_nome, 80),
     esfera: clean(item.esfera_id, 2), modalidade: clean(item.modalidade_licitacao_nome, 60), situacao: clean(item.situacao_nome, 60),
     valorEstimado: positivo(item.valor_global),
-    publicadoEm: iso(item.data_publicacao_pncp), prazoProposta: iso(item.data_fim_vigencia),
+    publicadoEm: iso(item.data_publicacao_pncp, "-03:00"), prazoProposta: iso(item.data_fim_vigencia, "-03:00"),
   });
   return { ...sinal, fingerprint: fingerprintDeSinal(sinal) };
 }

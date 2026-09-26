@@ -38,11 +38,11 @@ const GDELT = { url: "https://www.exemplo.com.br/noticia/frota?utm_source=x", ti
 describe("normalização por fonte", () => {
   it("consulta PNCP e Compras.gov viram o mesmo formato, com URL do portal e fingerprint pelo número de controle", () => {
     const a = normalizarContratacaoPncp(CONSULTA_PNCP);
-    expect(a).toMatchObject({ source: "pncp", kind: "licitacao", externalId: "01612441000107-1-000131/2026", uf: "PR", municipio: "Bela Vista da Caroba", modalidade: "Pregão - Eletrônico", valorEstimado: 350000, publicadoEm: "2026-09-11T00:00:08.000Z", prazoProposta: "2026-09-25T08:00:01.000Z" });
+    expect(a).toMatchObject({ source: "pncp", kind: "licitacao", externalId: "01612441000107-1-000131/2026", uf: "PR", municipio: "Bela Vista da Caroba", modalidade: "Pregão - Eletrônico", valorEstimado: 350000, publicadoEm: "2026-09-11T03:00:08.000Z", prazoProposta: "2026-09-25T11:00:01.000Z" });
     expect(a.url).toBe("https://pncp.gov.br/app/editais/01612441000107/2026/131");
     expect(a.fingerprint).toMatch(/^[0-9a-f]{16}$/);
     const b = normalizarContratacaoPncp(COMPRAS_GOV, { source: "compras-gov" });
-    expect(b).toMatchObject({ source: "compras-gov", uf: "DF", orgao: "MINISTERIO DA SAUDE", modalidade: "Pregão - Eletrônico", valorEstimado: null, situacao: "Divulgada no PNCP", prazoProposta: "2026-09-24T09:00:00.000Z" });
+    expect(b).toMatchObject({ source: "compras-gov", uf: "DF", orgao: "MINISTERIO DA SAUDE", modalidade: "Pregão - Eletrônico", valorEstimado: null, situacao: "Divulgada no PNCP", prazoProposta: "2026-09-24T12:00:00.000Z" });
     expect(MODALIDADES_PNCP[8]).toBe("Dispensa");
     expect(SIGNAL_SOURCES["compras-gov"]).toBe("Compras.gov.br");
   });
@@ -57,8 +57,8 @@ describe("normalização por fonte", () => {
 
   it("busca do portal PNCP e artigo GDELT", () => {
     const s = normalizarBuscaPncp(BUSCA_PNCP);
-    expect(s).toMatchObject({ source: "pncp", externalId: "18241752000100-1-000053/2026", uf: "MG", municipio: "Alpinópolis", url: "https://pncp.gov.br/app/editais/18241752000100/2026/53", prazoProposta: "2026-09-26T08:00:00.000Z" });
-    expect(s.publicadoEm.startsWith("2026-09-12T10:37:56")).toBe(true);
+    expect(s).toMatchObject({ source: "pncp", externalId: "18241752000100-1-000053/2026", uf: "MG", municipio: "Alpinópolis", url: "https://pncp.gov.br/app/editais/18241752000100/2026/53", prazoProposta: "2026-09-26T11:00:00.000Z" });
+    expect(s.publicadoEm.startsWith("2026-09-12T13:37:56")).toBe(true);
     const g = normalizarArtigoGdelt(GDELT);
     expect(g).toMatchObject({ source: "gdelt", kind: "noticia", url: "https://www.exemplo.com.br/noticia/frota", dominio: "exemplo.com.br", publicadoEm: "2026-09-12T14:30:00.000Z", orgao: "Brazil" });
     expect(urlDoProcessoPncp("lixo", "https://origem.gov.br/x")).toBe("https://origem.gov.br/x");
