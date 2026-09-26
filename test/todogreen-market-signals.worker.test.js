@@ -96,7 +96,7 @@ describe("sincronizações", () => {
     expect(r.aceitos).toBe(1);
     expect(r.rejeitados).toEqual({ fora_do_escopo: 1, duplicado: 1 });
     const row = await env.DB.prepare("SELECT source, score, uf, prazo_proposta, seen_count, url FROM todogreen_market_signals WHERE external_id = '01612441000107-1-000131/2026'").first();
-    expect(row).toMatchObject({ source: "pncp", uf: "SP", prazo_proposta: "2026-09-30T08:00:00.000Z", seen_count: 1, url: "https://pncp.gov.br/app/editais/01612441000107/2026/131" });
+    expect(row).toMatchObject({ source: "pncp", uf: "SP", prazo_proposta: "2026-09-30T11:00:00.000Z", seen_count: 1, url: "https://pncp.gov.br/app/editais/01612441000107/2026/131" });
     expect(row.score).toBeGreaterThanOrEqual(90);
     // Segunda rodada: mesmo sinal, contagem sobe, nada duplicado.
     await sincronizarPncp(env, { fetcher: fetcher(), now: new Date(NOW.getTime() + 3600_000) });
@@ -108,7 +108,7 @@ describe("sincronizações", () => {
     const r = await sincronizarComprasGov(env, { fetcher: fetcher(), now: NOW });
     expect(r).toMatchObject({ ok: true, records: 1, aceitos: 1 });
     const row = await env.DB.prepare("SELECT source, modalidade, prazo_proposta, orgao FROM todogreen_market_signals WHERE external_id = '00394544000185-1-001941/2026'").first();
-    expect(row).toMatchObject({ source: "compras-gov", modalidade: "Pregão - Eletrônico", prazo_proposta: "2026-09-24T09:00:00.000Z", orgao: "MINISTERIO Y" });
+    expect(row).toMatchObject({ source: "compras-gov", modalidade: "Pregão - Eletrônico", prazo_proposta: "2026-09-24T12:00:00.000Z", orgao: "MINISTERIO Y" });
   });
 
   it("GDELT: notícia vira sinal 'noticia' com URL canônica; limite de taxa vira erro honesto", async () => {
