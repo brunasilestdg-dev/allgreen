@@ -16,7 +16,7 @@
 //
 //   2) A concessão é só para o e-mail da PRÓPRIA sessão. Mesmo se a primeira
 //      trava falhasse por algum motivo, este endpoint não dá a ninguém
-//      acesso à conta de outra pessoa — só республica o vínculo de quem já
+//      acesso à conta de outra pessoa — só republica o vínculo de quem já
 //      provou identidade com sessão válida.
 
 import { sessionUser } from "../auth/credenciais.js";
