@@ -69,7 +69,7 @@ beforeAll(async () => {
   juridico = await criarUsuario("ew-jur", "jur@ew.com.br");
   await autorizar(dona); // admin no próprio espaço, cria o contrato
   // Jurídico atua no espaço da dona, com poder de revisão jurídica.
-  await autorizar(juridico, "gestor", ["deal:review", "deal:approve"], dona.id);
+  await autorizar(juridico, "gestor", ["compliance:manage", "deal:approve"], dona.id);
 });
 
 describe("Jurídico: aprovar contrato com ressalva", () => {
@@ -119,5 +119,26 @@ describe("Jurídico: aprovar contrato com ressalva", () => {
     });
     expect(r.status).toBe(200);
     expect((await r.json()).workflow.status).toBe("rejected");
+  });
+
+  it("não permite dispensar aprovação, concluir por PATCH ou manter decisão após alterar conteúdo", async () => {
+    const criada = await pedir("/api/todogreen/enterprise-workflows", {
+      metodo: "POST", token: dona.token,
+      corpo: { domain: "legal", kind: "contract", title: "Minuta controlada", requireApproval: false, status: "done" },
+    });
+    const fluxo = (await criada.json()).workflow;
+    expect(fluxo.status).toBe("pending");
+    const atalho = await pedir(`/api/todogreen/enterprise-workflows/${fluxo.id}`, {
+      metodo: "PATCH", token: dona.token, corpo: { revision: fluxo.revision, status: "approved" },
+    });
+    expect(atalho.status).toBe(409);
+    await pedir(`/api/todogreen/enterprise-workflows/${fluxo.id}/decision`, {
+      metodo: "POST", token: juridico.token, corpo: { decision: "approve" },
+    });
+    const alteracao = await pedir(`/api/todogreen/enterprise-workflows/${fluxo.id}`, {
+      metodo: "PATCH", token: dona.token, corpo: { revision: 2, data: { risk: "alto" } },
+    });
+    expect(alteracao.status).toBe(200);
+    expect((await alteracao.json()).workflow.approval.approvals).toHaveLength(0);
   });
 });

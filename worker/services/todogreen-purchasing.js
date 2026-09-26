@@ -20,6 +20,8 @@
 // ganha de uma completa.
 
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
+import { bloqueioDeCompetencia } from "./vertical-records/gates.js";
+import { saldoDisponivel } from "./todogreen-stock.js";
 // `exigeAprovacao` existe e está testado em purchaseDomain.js, mas ainda não é
 // aplicado aqui: a alçada precisa de um LIMITE configurado, e o limite não pode
 // vir do corpo do pedido — quem compra escolheria o próprio teto. O lugar dele é
@@ -476,6 +478,24 @@ const atualizarPedido = async (env, access, user, id, corpo) => {
     linhas,
   );
 
+  // Um pedido editado após a aprovação volta para rascunho. Só comparar o
+  // total não basta: trocar item/fornecedor pelo mesmo valor também altera o
+  // objeto da aprovação. A nova rodada começa sem as etapas antigas.
+  const alterouPedidoAprovado = atual.status === "aprovado" && (
+    mexeNasLinhas
+    || Math.abs(totais.total - numero(atual.approved_total)) > 0.01
+    || texto(corpo.supplierPartyId ?? atual.supplier_party_id, 120) !== atual.supplier_party_id
+    || texto(corpo.warehouseId ?? atual.warehouse_id, 120) !== atual.warehouse_id
+    || texto(corpo.costCenterId ?? atual.cost_center_id, 120) !== atual.cost_center_id
+  );
+  if (novoStatus === "enviado" && (
+    alterouPedidoAprovado
+    || !aprovacaoAindaVale(pedidoDaLinha(atual), linhas)
+  )) return json({ error: "O pedido mudou após a aprovação. Reenvie para a alçada antes de enviar ao fornecedor." }, 409);
+  const statusGravado = alterouPedidoAprovado ? "rascunho" : novoStatus;
+  const camposGravados = objeto(corpo.campos ?? parse(atual.fields_json, {}));
+  if (alterouPedidoAprovado) delete camposGravados.purchaseApprovalFlow;
+
   // Aprovar grava o total do momento. É esse retrato que `aprovacaoAindaVale`
   // usa depois para denunciar pedido editado após a aprovação.
   const aprovando = novoStatus === "aprovado" && atual.status !== "aprovado";
@@ -492,10 +512,10 @@ const atualizarPedido = async (env, access, user, id, corpo) => {
       texto(corpo.supplierPartyId ?? atual.supplier_party_id, 120),
       texto(corpo.warehouseId ?? atual.warehouse_id, 120),
       texto(corpo.costCenterId ?? atual.cost_center_id, 120),
-      novoStatus,
-      aprovando ? "aprovada" : atual.approval_status,
-      aprovando ? user.id : atual.approved_by,
-      aprovando ? agora : atual.approved_at,
+      statusGravado,
+      alterouPedidoAprovado ? "pendente" : (aprovando ? "aprovada" : atual.approval_status),
+      alterouPedidoAprovado ? null : (aprovando ? user.id : atual.approved_by),
+      alterouPedidoAprovado ? null : (aprovando ? agora : atual.approved_at),
       aprovando ? totais.total : atual.approved_total,
       texto(corpo.notaDecisao ?? atual.decision_note, 2000),
       Math.max(0, numero(corpo.freight ?? atual.freight)),
@@ -504,7 +524,7 @@ const atualizarPedido = async (env, access, user, id, corpo) => {
       Math.max(0, Math.trunc(numero(corpo.paymentTermDays ?? atual.payment_term_days))),
       texto(corpo.esperadoEm ?? atual.expected_at, 20) || null,
       texto(corpo.notas ?? atual.notes, 4000),
-      JSON.stringify(objeto(corpo.campos ?? parse(atual.fields_json, {}))),
+      JSON.stringify(camposGravados),
       user.id, agora, id, TENANT_ID, access.ownerId, revisao,
     ),
   ];
@@ -531,12 +551,33 @@ const atualizarPedido = async (env, access, user, id, corpo) => {
 // Recebimento — o ponto com efeito
 // ---------------------------------------------------------------------------
 
+const fingerprintDoRecebimento = async (pedidoId, corpo) => {
+  const linhas = lista(corpo.linhas).map((linha) => ({
+    id: texto(linha.orderItemId, 120), quantidade: Number(linha.quantidade ?? linha.quantity),
+  })).sort((a, b) => a.id.localeCompare(b.id));
+  const dados = JSON.stringify([pedidoId, texto(corpo.warehouseId, 120),
+    texto(corpo.kind) === "devolucao" ? "devolucao" : "recebimento",
+    texto(corpo.receivedAt, 40), texto(corpo.numeroDocumento, 60),
+    texto(corpo.invoiceNumber, 60), texto(corpo.invoiceKey, 44), linhas]);
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(dados));
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
 const criarRecebimento = async (env, access, user, corpo) => {
   const erro = validateReceipt(corpo);
   if (erro) return json({ error: erro }, 400);
 
   const pedido = await lerPedido(env, access.ownerId, texto(corpo.orderId, 120));
   if (!pedido) return json({ error: "Pedido não encontrado neste espaço." }, 404);
+  const fingerprint = await fingerprintDoRecebimento(pedido.id, corpo);
+  const buscarRecebimentoRepetido = () => env.DB.prepare(
+    `SELECT * FROM todogreen_goods_receipts
+      WHERE tenant_id=? AND workspace_owner_id=? AND order_id=?
+        AND json_extract(fields_json,'$.requestFingerprint')=? AND archived_at IS NULL`,
+  ).bind(TENANT_ID, access.ownerId, pedido.id, fingerprint).first();
+  const jaGravado = await buscarRecebimentoRepetido();
+  if (jaGravado) return json({ registro: recebimentoDaLinha(jaGravado),
+    movimentos: 0, contaGerada: Boolean(jaGravado.financial_entry_id), pedido }, 200);
   // Receber contra pedido em rascunho significaria que a mercadoria chegou antes
   // de alguém aprovar a compra. Isso acontece na vida real, mas tem de ser
   // resolvido aprovando o pedido, não ignorando a aprovação.
@@ -544,6 +585,8 @@ const criarRecebimento = async (env, access, user, corpo) => {
     return json({
       error: `Não é possível receber contra um pedido ${pedido.status}. Aprove e envie o pedido primeiro.`,
     }, 409);
+  if (!pedido.aprovacaoValida)
+    return json({ error: "O pedido mudou após a aprovação. Reenvie para a alçada antes de receber." }, 409);
 
   const kind = texto(corpo.kind) === "devolucao" ? "devolucao" : "recebimento";
   const linhasErro = validarLinhasDoRecebimento(
@@ -572,12 +615,27 @@ const criarRecebimento = async (env, access, user, corpo) => {
   };
 
   const movimentos = recebimentoParaMovimentos(recebimento, pedido.linhas);
+  if (kind === "devolucao") {
+    const porItem = new Map();
+    for (const movimento of movimentos) {
+      porItem.set(movimento.itemId, (porItem.get(movimento.itemId) || 0) + movimento.quantity);
+    }
+    for (const [itemId, quantidade] of porItem) {
+      const saldo = await saldoDisponivel(env, access.ownerId, itemId, deposito);
+      if (saldo + 0.0001 < quantidade)
+        return json({ error: `Estoque insuficiente para devolver. Saldo disponível: ${saldo}.` }, 409);
+    }
+  }
   // O título só é criado quando quem recebe pede. Conta a pagar nascendo sozinha
   // é dinheiro aparecendo sem decisão — o mesmo princípio do `postToFinance` do
   // pedido de venda no monólito.
   const conta = corpo.gerarConta === false
     ? null
     : recebimentoParaConta(recebimento, pedido, pedido.linhas, { categoria: corpo.categoria });
+  if (conta) {
+    const bloqueio = await bloqueioDeCompetencia(env, access, { mesReferencia: conta.mesReferencia });
+    if (bloqueio) return json({ error: bloqueio }, 409);
+  }
   const contaId = conta ? crypto.randomUUID() : "";
 
   const gravacoes = [
@@ -595,7 +653,7 @@ const criarRecebimento = async (env, access, user, corpo) => {
       // Marcado na mesma gravação dos movimentos: é o que torna o lançamento
       // idempotente e auditável.
       movimentos.length ? agora : null,
-      contaId, texto(corpo.notas, 4000), JSON.stringify(objeto(corpo.campos)),
+      contaId, texto(corpo.notas, 4000), JSON.stringify({ ...objeto(corpo.campos), requestFingerprint: fingerprint }),
       user.id, user.id, agora, agora,
     ),
   ];
@@ -639,7 +697,15 @@ const criarRecebimento = async (env, access, user, corpo) => {
     );
   }
 
-  await env.DB.batch(gravacoes);
+  try {
+    await env.DB.batch(gravacoes);
+  } catch (error) {
+    // A restrição única também protege duas tentativas simultâneas do mesmo POST.
+    const existente = await buscarRecebimentoRepetido();
+    if (!existente) throw error;
+    return json({ registro: recebimentoDaLinha(existente), movimentos: 0,
+      contaGerada: Boolean(existente.financial_entry_id), pedido: await lerPedido(env, access.ownerId, pedido.id) }, 200);
+  }
 
   const row = await env.DB.prepare("SELECT * FROM todogreen_goods_receipts WHERE id = ?").bind(id).first();
   return json({

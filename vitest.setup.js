@@ -12,3 +12,7 @@ import { configure } from "@testing-library/dom";
 // asserção nenhuma — o que era exigido continua sendo exigido, só cabe uma
 // máquina lenta no meio.
 configure({ asyncUtilTimeout: 5000 });
+
+// jsdom não implementa rolagem da janela. Os testes montam o App centenas de
+// vezes e o efeito de navegação deve poder chamá-la sem poluir o gate.
+if (typeof window !== "undefined") window.scrollTo = () => {};

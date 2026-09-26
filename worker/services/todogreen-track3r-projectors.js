@@ -11,6 +11,7 @@
 // atualiza o mesmo registro em vez de duplicar receita/custo.
 
 import { TENANT_ID } from "./todogreen-access.js";
+import { bloqueioDeCompetencia } from "./vertical-records/gates.js";
 import { normalizeVehicleClass } from "../../src/features/logistics/vehicleClassDomain.js";
 
 const texto = (v, max = 500) => String(v ?? "").trim().slice(0, max);
@@ -672,6 +673,13 @@ async function projetarFaturaCliente(env, integracao, corpo) {
   const emissao = isoData(detalhes?.data_geracao) || competencia;
   const vencimento = isoData(detalhes?.data_vencimento) || competencia;
   const titleId = idSeguro("track3r-receivable", integracao.id, codigo);
+  const entradaAnterior = await env.DB.prepare(
+    `SELECT reference_month AS mesReferencia FROM todogreen_financial_entries
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(`entry-${titleId}`, TENANT_ID, integracao.workspace_owner_id).first();
+  const bloqueio = await bloqueioDeCompetencia(env, { ownerId: integracao.workspace_owner_id },
+    entradaAnterior, { mesReferencia: competencia });
+  if (bloqueio) throw new Error(bloqueio);
   const number = idSeguro("TR3R-REC", integracao.id.slice(0, 8), codigo).slice(0, 120);
   const actor = ator(integracao);
   const agora = new Date().toISOString();
@@ -782,9 +790,12 @@ async function projetarCusto(env, integracao, tipo, corpo) {
   ).slice(0, 120);
 
   const existente = await env.DB.prepare(
-    `SELECT paid_amount,paid_at FROM todogreen_financial_entries
+    `SELECT paid_amount,paid_at,reference_month AS mesReferencia FROM todogreen_financial_entries
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(entryId, TENANT_ID, integracao.workspace_owner_id).first();
+  const bloqueio = await bloqueioDeCompetencia(env, { ownerId: integracao.workspace_owner_id },
+    existente, { mesReferencia: competencia });
+  if (bloqueio) throw new Error(bloqueio);
   const pago = numero(existente?.paid_amount);
   const estado = statusTitulo({ valor, pago, vencimento });
 

@@ -21,6 +21,7 @@
 //      mudou o status, quando e por quê.
 
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
+import { bloqueioDeCompetencia } from "./vertical-records/gates.js";
 import {
   calcularImpostosCte,
   calcularImpostosNfse,
@@ -828,6 +829,12 @@ const transitarDocumento = async (env, access, user, docId, corpo) => {
   // estornamos se o título ainda não teve baixa: se já houve pagamento, o
   // caixa recebido é real e a baixa precisa ser estornada antes, à mão.
   if (statusNovo === "cancelado" && row.invoice_id) {
+    const espelho = await env.DB.prepare(
+      `SELECT reference_month AS mesReferencia FROM todogreen_financial_entries
+        WHERE id = 'entry-' || ? AND tenant_id = ? AND workspace_owner_id = ?`,
+    ).bind(row.invoice_id, TENANT_ID, access.ownerId).first();
+    const bloqueio = espelho && await bloqueioDeCompetencia(env, access, espelho);
+    if (bloqueio) return json({ error: bloqueio }, 409);
     const titulo = await env.DB.prepare(
       `SELECT id, status, original_amount, open_amount FROM todogreen_financial_titles
         WHERE invoice_id = ? AND tenant_id = ? AND workspace_owner_id = ? AND kind = 'receivable' AND archived_at IS NULL`,

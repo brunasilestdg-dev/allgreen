@@ -16,6 +16,7 @@
 // paga as notas em /gestao/* — atrás de finance:manage ou hr:manage.
 
 import { TENANT_ID, podeNaVertical } from "./todogreen-access.js";
+import { bloqueioDeCompetencia } from "./vertical-records/gates.js";
 import { validarChavePix, TIPOS_CHAVE_PIX } from "../../src/features/logistics/pixDomain.js";
 import {
   validarNotaPj,
@@ -330,6 +331,8 @@ const aprovarNota = async (env, ownerId, user, id) => {
   const nota = await notaPorId(env, ownerId, id);
   if (!nota) return json({ error: "Nota não encontrada." }, 404);
   if (!podeAprovar(nota.status)) return json({ error: "Só uma nota em análise pode ser aprovada." }, 409);
+  const bloqueio = await bloqueioDeCompetencia(env, { ownerId }, { mesReferencia: nota.competencia });
+  if (bloqueio) return json({ error: bloqueio }, 409);
   const agora = new Date().toISOString();
   const entryId = nota.financial_entry_id || crypto.randomUUID();
   if (!nota.financial_entry_id) {

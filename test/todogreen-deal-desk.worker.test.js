@@ -520,6 +520,15 @@ describe("a fila", () => {
 // alçada no servidor. Sem oportunidade vinculada, um 409 aqui só pode ser o
 // Deal Desk (o gate de viabilidade nem roda), o que isola o que estamos testando.
 describe("o gate do Deal Desk vale ao criar E ao liberar a proposta por PATCH", () => {
+  it("não libera cenário que exige alçada sem sequer abrir o pedido", async () => {
+    const id = await cenario({ margem: 11, preco: 200000, dono: vendedor });
+    const resposta = await pedir("/api/todogreen/records/proposals", {
+      metodo: "POST", token: dona.token,
+      corpo: { cenarioId: id, titulo: "Proposta sem pedido", situacao: "sent" },
+    });
+    expect(resposta.status).toBe(409);
+    expect((await resposta.json()).error).toMatch(/aprovação comercial/);
+  });
   it("cenário com pedido pendente bloqueia CRIAR proposta já enviada (409)", async () => {
     const id = await cenario({ margem: 11, preco: 200000, dono: vendedor });
     const abrir = await pedir("/api/todogreen/deal-desk", {

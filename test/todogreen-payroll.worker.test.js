@@ -99,6 +99,22 @@ describe("colaboradores e CPF", () => {
 });
 
 describe("fechamento da folha trava", () => {
+  it("recusa fechar folha quando a competência financeira está fechada", async () => {
+    const run = await (await pedir("/api/todogreen/payroll/folhas", {
+      metodo: "POST", token: rh.token, corpo: { competencia: "2027-11", tipo: "mensal" },
+    })).json();
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO todogreen_financial_periods
+       (id,tenant_id,workspace_owner_id,reference_month,status,totals_json,closed_by,closed_at,created_at,updated_at)
+       VALUES (?,'todogreen',?,'2027-11','fechado','{}',?,?,?,?)`,
+    ).bind(crypto.randomUUID(), rh.id, rh.id, agora, agora, agora).run();
+    const resposta = await pedir(`/api/todogreen/payroll/folhas/${run.id}/fechar`, {
+      metodo: "POST", token: rh.token,
+    });
+    expect(resposta.status).toBe(409);
+    expect((await resposta.json()).error).toMatch(/competência 2027-11 está fechada/);
+  });
   it("fecha calculando o holerite e não fecha de novo", async () => {
     // Garante ao menos um colaborador ativo.
     await pedir("/api/todogreen/payroll/colaboradores", {

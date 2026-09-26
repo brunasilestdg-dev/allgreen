@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import AnexosContexto from "../logistics/pages/AnexosContexto.jsx";
 import {
   AlarmClock,
   BarChart3,
@@ -1310,6 +1311,7 @@ function ContractsTab({
                 </div>
               </footer>
               {timelineId === c.id && (
+                <>
                 <TdgContractTimeline
                   contract={c}
                   fallbackRecord={c}
@@ -1320,6 +1322,9 @@ function ContractsTab({
                   setEventsCache={setTdgEvents}
                   setToast={setToast}
                 />
+                {tdgPostEvent && <AnexosContexto contextType="legal" contextId={c.id}
+                  titulo="Contrato assinado e anexos" setToast={setToast} />}
+                </>
               )}
               {selectedId === c.id && (
                 <div className="lgl-approval-flow">

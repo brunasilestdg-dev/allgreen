@@ -165,7 +165,9 @@ const approve = async (request, env, access, user, resource, id, body) => {
   // numa operação de uma pessoa não existe segundo aprovador, e bloquear a dona
   // deixaria toda compra presa para sempre.
   const donaDoProprioEspaco = user.id === access.ownerId || access.viaAdministradorGlobal === true;
-  const creator = row.requester_user_id || row.created_by || "";
+  // O requisitante pode ser informado no corpo para uma compra delegada;
+  // a segregação usa quem efetivamente criou o registro, carimbado pela sessão.
+  const creator = row.created_by || row.requester_user_id || "";
   if (!donaDoProprioEspaco && flow.approvals.length === 0 && creator && creator === user.id)
     return json({ error: "Quem abriu a compra não pode fazer a primeira aprovação do próprio pedido.", approval: flow }, 403);
 

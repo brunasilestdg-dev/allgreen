@@ -14,6 +14,15 @@ import { noAlcanceDaCarteira } from "./acesso.js";
 import { COLECOES } from "./colecoes/index.js";
 import { json, numero, texto } from "./util.js";
 
+const tituloDeCompra = async (env, access, entryId, lancamento) => {
+  if (lancamento?.kind !== "cost") return false;
+  const titulo = await env.DB.prepare(
+    `SELECT id FROM todogreen_financial_titles
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND kind='payable' AND archived_at IS NULL`,
+  ).bind(`payable-${entryId}`, TENANT_ID, access.ownerId).first();
+  return Boolean(titulo);
+};
+
 export const listarPagamentos = async (env, access, user, entryId) => {
   if (!(await noAlcanceDaCarteira(env, COLECOES.financial, access, user.email, entryId)))
     return json({ error: "Lançamento não encontrado." }, 404);
@@ -38,6 +47,8 @@ export const registrarPagamento = async (env, access, user, entryId, corpo) => {
     `SELECT * FROM todogreen_financial_entries
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(entryId, TENANT_ID, access.ownerId).first();
+  if (await tituloDeCompra(env, access, entryId, lancamento))
+    return json({ error: "Esta compra tem título a pagar. Registre a baixa em Faturamento › Títulos para atualizar também o razão." }, 409);
   // Recebível que nasceu de um título faturado (ponte 0069, id 'entry-<titleId>')
   // tem baixa SÓ pela via do título (Faturamento › Títulos): dar baixa aqui no
   // razão não reduziria o open_amount do título e abriria dupla baixa do mesmo
@@ -141,6 +152,8 @@ export const estornarPagamento = async (env, access, user, entryId, paymentId) =
       WHERE id=? AND tenant_id=? AND workspace_owner_id=? AND archived_at IS NULL`,
   ).bind(entryId, TENANT_ID, access.ownerId).first();
   if (!lancamento) return json({ error: "Lançamento não encontrado." }, 404);
+  if (await tituloDeCompra(env, access, entryId, lancamento))
+    return json({ error: "Estorne a baixa deste título pela Tesouraria para manter o razão e o saldo em acordo." }, 409);
 
   const valor = numero(pagamento.amount);
   const novoPago = Math.max(0, numero(lancamento.paid_amount) - valor);

@@ -38,9 +38,9 @@ const check = (id, label, severity, reason = "", extra = {}) => ({ id, label, se
 // Energia disponível (start→reserva) e déficit para concluir a rota.
 function energyBudget(vehicle, energy) {
   const capacity = num(vehicle.batteryCapacityKwh, 0) || 0;
-  const soh = num(vehicle.sohPercent ?? vehicle.batterySohPercent, 100) || 100;
-  const soc = num(vehicle.socPercent, 100) || 100;
-  const reserve = num(vehicle.reservePercent ?? vehicle.minReservePercent, 15) || 15;
+  const soh = num(vehicle.sohPercent ?? vehicle.batterySohPercent, 100);
+  const soc = num(vehicle.socPercent, 100);
+  const reserve = num(vehicle.reservePercent ?? vehicle.minReservePercent, 15);
   const usable = capacity * (soh / 100);
   const startKwh = usable * (soc / 100);
   const reserveKwh = usable * (reserve / 100);

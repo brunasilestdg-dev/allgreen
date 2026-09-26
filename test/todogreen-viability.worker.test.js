@@ -58,6 +58,16 @@ beforeAll(async () => {
          (id, tenant_id, workspace_owner_id, name, status, portal_enabled, created_by, updated_by, created_at, updated_at)
        VALUES ('cli-viab', 'todogreen', ?, 'Cliente Viabilidade', 'ativo', 1, ?, ?, ?, ?)`,
     ).bind(dono.id, dono.id, dono.id, agora, agora).run();
+    for (const [id, oportunidadeId] of (dono === vendedor
+      ? [["cen-gate", "opp-gate"], ["cen-livre", ""]]
+      : [["cen-patch", "opp-patch"]])) {
+      await env.DB.prepare(
+        `INSERT INTO pricing_scenarios
+         (id,tenant_id,workspace_owner_id,product_id,client_id,opportunity_id,created_by,
+          rule_version,inputs_json,result_json,approvals_json,status,created_at)
+         VALUES (?,'todogreen',?,'middle-mile','cli-viab',?,?,'test','{}','{}','{}','draft',?)`,
+      ).bind(id, dono.id, oportunidadeId, dono.id, agora).run();
+    }
   }
 });
 
@@ -180,7 +190,7 @@ describe("gate server-side da proposta", () => {
   it("PATCH de rascunho para liberada passa pelo mesmo gate", async () => {
     // Editar exige alcance de carteira (o vendedor sem vínculo recebe 404 no
     // PATCH, regra já existente); o admin do espaço edita.
-    const draft = (await (await call("/api/todogreen/records/proposals", { method: "POST", token: admin.token, body: proposta({ oportunidadeId: "opp-patch", situacao: "draft" }) })).json()).registro;
+    const draft = (await (await call("/api/todogreen/records/proposals", { method: "POST", token: admin.token, body: proposta({ oportunidadeId: "opp-patch", cenarioId: "cen-patch", situacao: "draft" }) })).json()).registro;
     const bloqueado = await call(`/api/todogreen/records/proposals/${draft.id}`, { method: "PATCH", token: admin.token, body: { revision: draft.revision, situacao: "sent" } });
     expect(bloqueado.status).toBe(409);
     await call("/api/todogreen/viability-snapshots", { method: "POST", token: admin.token, body: { opportunityId: "opp-patch", cost: 900, distanceKm: 40, vehicleClass: "van", energyKwh: 14 } });

@@ -14,6 +14,7 @@
 // Reabrir é possível (rh/admin/owner), mas fica no registro.
 
 import { TENANT_ID, paginacao, podeNaVertical } from "./todogreen-access.js";
+import { bloqueioDeCompetencia } from "./vertical-records/gates.js";
 import {
   TABELAS_2025,
   calcularDecimoTerceiro,
@@ -442,6 +443,8 @@ const fecharRun = async (env, access, user, runId) => {
   ).bind(runId, TENANT_ID, access.ownerId).first();
   if (!run) return json({ error: "Folha não encontrada." }, 404);
   if (run.status === "fechada") return json({ error: "Esta folha já está fechada." }, 409);
+  const bloqueio = await bloqueioDeCompetencia(env, access, { mesReferencia: run.competencia });
+  if (bloqueio) return json({ error: bloqueio }, 409);
 
   const { results: colaboradores } = await env.DB.prepare(
     `SELECT * FROM todogreen_employees
@@ -707,6 +710,8 @@ const pagarFerias = async (env, access, user, id, corpo) => {
     { tabela: TABELAS_2025 },
   );
   const competencia = String(ferias.gozo_inicio).slice(0, 7);
+  const bloqueio = await bloqueioDeCompetencia(env, access, { mesReferencia: competencia });
+  if (bloqueio) return json({ error: bloqueio }, 409);
   const lancamentos = await lancarVerbasNoFinanceiro(env, access, user, {
     origem: "ferias", chaveNome: "feriasId", chaveValor: ferias.id, competencia,
     obrigacoes: [
@@ -770,6 +775,8 @@ const rescindirColaborador = async (env, access, user, id, corpo) => {
   }, { tabela: TABELAS_2025 });
 
   const competencia = desligamentoEm.slice(0, 7);
+  const bloqueio = await bloqueioDeCompetencia(env, access, { mesReferencia: competencia });
+  if (bloqueio) return json({ error: bloqueio }, 409);
   const lancamentos = await lancarVerbasNoFinanceiro(env, access, user, {
     origem: "rescisao", chaveNome: "rescisaoId", chaveValor: c.id, competencia,
     obrigacoes: [

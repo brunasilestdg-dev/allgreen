@@ -6,9 +6,7 @@ import { AlertTriangle, Plus, ShieldCheck } from "lucide-react";
 import {
   LOGISTICS_PRODUCTS,
   DEFAULT_PRICING_ASSUMPTIONS,
-  TODO_GREEN_TENANT,
   centralPricingEngine,
-  createPricingScenarioSnapshot,
   getProductPricingBlueprint,
   hasTodoGreenPermission,
   productSpecificOutputs,
@@ -333,43 +331,27 @@ export default function PricingPanel({ role, criar, db, authHeaders, setToast, o
       setToast?.(situacao.resumo);
       return;
     }
-    // A simulação salva nasce com a MESMA régua exibida na tela — snapshot e
-    // resultado mostrado nunca podem divergir.
-    const snapshot = createPricingScenarioSnapshot(
-      productId,
-      inputs,
-      { userId: db?.user?.id || "local", tenantId: TODO_GREEN_TENANT.id, justification: `Simulação criada pela calculadora To Do Green (régua ${regua?.versao || "padrão"}${houveOverride ? ", com custos ajustados na simulação" : ""}).` },
-      // O snapshot leva os MESMOS custos que a tela mostrou — incluindo os
-      // ajustes manuais. Salvar a régua pura enquanto a tela usou outro custo
-      // faria o histórico divergir do que a pessoa viu.
-      { assumptions: assumptionsComOverride, parameterVersion: (regua?.versao || "padrão") + (houveOverride ? " · custo ajustado" : "") },
-    );
-    // A simulação vai para o banco, não para o JSON do espaço. Era daqui que
-    // saía a gravação genérica que sobrescrevia o trabalho de quem estivesse
-    // no mesmo espaço — e que o portal do cliente nunca enxergava.
-    //
-    // Aqui também ficava `tenantAccess.todogreen = { role: role || "admin" }`:
-    // salvar simulação concedia acesso a quem salvou.
+    // O servidor resolve a régua vigente e recalcula o resultado; o preview
+    // pode estar defasado se a régua mudou enquanto o formulário estava aberto.
     setSalvando(true);
     criar("scenarios", {
-      id: snapshot.id,
       productId,
-      clientId: snapshot.clientId || inputs.clientId || "",
+      clientId: inputs.clientId || "",
       opportunityId: sourceOpportunity?.id || "",
-      ruleVersion: regua?.versao || "padrao",
       inputs,
-      result: snapshot.result,
-      approvals: snapshot.result?.approval || {},
+      costOverrides: Object.fromEntries(Object.entries(custosManuais)
+        .filter(([, valor]) => valor !== "" && valor != null)
+        .map(([campo, valor]) => [campo, Number(valor)])),
       premissas: registroDaConfirmacao(situacao, { userId: db?.user?.id || "" }),
     })
-      .then(() => {
-        setCenarioSalvoId(snapshot.id);
+      .then((registro) => {
+        setCenarioSalvoId(registro.id);
         fetch(`/api/todogreen/audit?owner=${encodeURIComponent(ownerId())}`, {
           method: "POST",
           headers: { "content-type": "application/json", ...(authHeaders?.() || {}) },
-          body: JSON.stringify({ action: "pricing_snapshot_created", target: snapshot.id, details: `Simulação ${product?.name || productId} salva.` }),
+          body: JSON.stringify({ action: "pricing_snapshot_created", target: registro.id, details: `Simulação ${product?.name || productId} salva.` }),
         }).catch(() => {});
-        setToast?.("Simulação To Do Green salva");
+        setToast?.("Simulação salva com preço recalculado no servidor. Confira o resultado no histórico.");
       })
       // A falha aparece. Antes a chamada ao servidor era só auditoria e o
       // `.catch(() => {})` engolia qualquer erro — a tela dizia "salvo" mesmo

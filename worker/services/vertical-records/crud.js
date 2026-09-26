@@ -107,9 +107,29 @@ const conferirParDoContrato = async (env, access, { propostaId, clientId, contra
   return { proposta };
 };
 
+const conferirCenarioDaProposta = async (env, access, corpo) => {
+  const cenario = await env.DB.prepare(
+    `SELECT id,client_id,opportunity_id FROM pricing_scenarios
+      WHERE id=? AND tenant_id=? AND workspace_owner_id=?`,
+  ).bind(texto(corpo.cenarioId, 120), TENANT_ID, access.ownerId).first();
+  if (!cenario) return json({ error: "Simulação não encontrada neste espaço." }, 404);
+  if (texto(corpo.clientId, 120) && texto(cenario.client_id, 120) !== texto(corpo.clientId, 120))
+    return json({ error: "A simulação pertence a outro cliente ou não está vinculada a este cliente." }, 409);
+  if (texto(corpo.oportunidadeId, 120) && texto(cenario.opportunity_id, 120) !== texto(corpo.oportunidadeId, 120))
+    return json({ error: "A simulação não corresponde à oportunidade da proposta." }, 409);
+  return null;
+};
+
 export const criar = async (env, colecao, access, user, corpo, email = "") => {
   const erro = colecao.exigido(corpo);
   if (erro) return json({ error: erro }, 400);
+
+  // A situação jurídica só avança pela linha do tempo, que valida a ação e
+  // registra o autor. O CRUD cria apenas rascunhos.
+  if (colecao === COLECOES.legal &&
+      texto(corpo.situacao || corpo.status, 40) !== "" &&
+      texto(corpo.situacao || corpo.status, 40) !== "rascunho")
+    return json({ error: "Crie o documento como rascunho e use as ações do Jurídico para mudar a situação." }, 409);
 
   // O autor do comentário é a sessão, nunca o corpo — assinatura não se
   // escolhe pelo navegador.
@@ -123,12 +143,15 @@ export const criar = async (env, colecao, access, user, corpo, email = "") => {
   }
 
   if (colecao === COLECOES.proposals) {
-    const liberacao = await proposalLiberada(env, access, texto(corpo.cenarioId, 120));
+    const cenarioInvalido = await conferirCenarioDaProposta(env, access, corpo);
+    if (cenarioInvalido) return cenarioInvalido;
+    const situacaoInicial = (texto(corpo.situacao, 40) || "draft").toLowerCase();
+    const liberacao = await proposalLiberada(env, access, texto(corpo.cenarioId, 120),
+      { liberando: STATUS_DE_LIBERACAO.has(situacaoInicial) });
     if (!liberacao.liberada) return json({ error: liberacao.motivo }, 409);
     // Viabilidade operacional (seções 47–50): proposta ligada a uma
     // oportunidade só NASCE liberada (sent/approved/accepted) com snapshot sem
     // faltas. Rascunho segue livre — o gate é na liberação, e é no servidor.
-    const situacaoInicial = (texto(corpo.situacao, 40) || "draft").toLowerCase();
     const oportunidadeDaProposta = texto(corpo.oportunidadeId, 120);
     if (STATUS_DE_LIBERACAO.has(situacaoInicial) && oportunidadeDaProposta) {
       const viab = await viabilidadeDaProposta(env, access, { opportunityId: oportunidadeDaProposta, scenarioId: texto(corpo.cenarioId, 120) });
@@ -245,6 +268,10 @@ export const atualizar = async (env, colecao, access, user, id, corpo, email = "
     return json({ error: "Informe a revisão do registro que você leu." }, 400);
 
   const proximo = { ...colecao.daLinha(atual), ...corpo };
+  if (colecao === COLECOES.legal &&
+      ((Object.hasOwn(corpo, "situacao") && texto(corpo.situacao, 40) !== texto(atual.status, 40)) ||
+       (Object.hasOwn(corpo, "status") && texto(corpo.status, 40) !== texto(atual.status, 40))))
+    return json({ error: "Use as ações do Jurídico para mudar a situação do documento." }, 409);
   // Editar um comentário não troca a assinatura: o autor original permanece.
   if (colecao === COLECOES.comments || colecao === COLECOES.interactions)
     proximo.autorEmail = atual.author_email || "";
@@ -286,6 +313,8 @@ export const atualizar = async (env, colecao, access, user, id, corpo, email = "
     }
   }
   if (colecao === COLECOES.proposals) {
+    const cenarioInvalido = await conferirCenarioDaProposta(env, access, proximo);
+    if (cenarioInvalido) return cenarioInvalido;
     // Os gates só valem na TRANSIÇÃO para liberada (não a cada PATCH de uma
     // proposta que já está liberada) — a mesma disciplina do gate jurídico.
     const situacaoNova = texto(proximo.situacao, 40).toLowerCase();
